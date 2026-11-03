@@ -343,17 +343,18 @@ export const databaseLayer = (
       // A failed read logs and retries; `version` moves once its commit is read.
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
-          Stream.runForEach(() =>
-            Effect.gen(function* () {
-              const next = (yield* query(execOne(dataVersion, [])))
-                ?.data_version;
-              if (next !== version) {
-                const commit = yield* query(currentCommit);
-                version = next;
-                yield* observe(commit);
-                yield* SubscriptionRef.update(level, (wake) => wake + 1);
-              }
-            }).pipe(
+          Stream.runForEach(
+            Effect.fnUntraced(
+              function* () {
+                const next = (yield* query(execOne(dataVersion, [])))
+                  ?.data_version;
+                if (next !== version) {
+                  const commit = yield* query(currentCommit);
+                  version = next;
+                  yield* observe(commit);
+                  yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                }
+              },
               Effect.tapError((error) =>
                 Effect.logWarning(
                   'The session database change poll failed; retrying.',

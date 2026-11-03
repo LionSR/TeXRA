@@ -313,14 +313,14 @@ const openProjectSession = Effect.fn('openProjectSession')(function* (
  * Build the registry with its no-workspace session open, so a window always
  * has a session to show even before the first folder opens.
  */
-export function openDesktopProjectRegistry(
+export const openDesktopProjectRegistry: (
   options: DesktopProjectRegistryOptions,
-): Effect.Effect<
+) => Effect.Effect<
   DesktopProjectRegistry,
   Error,
   DesktopProjectRecords | StateStores | Sessions | HostWindows
-> {
-  return Effect.gen(function* () {
+> = Effect.fn('openDesktopProjectRegistry')(
+  function* (options: DesktopProjectRegistryOptions) {
     // The process's sessions: each project's session is opened through them.
     const sessions = yield* Sessions;
     const hosts = yield* HostWindows;
@@ -511,5 +511,7 @@ export function openDesktopProjectRegistry(
           ),
         ),
     } satisfies DesktopProjectRegistry;
-  }).pipe(Effect.uninterruptible, Effect.mapError(ensureError));
-}
+  },
+  Effect.uninterruptible,
+  Effect.mapError(ensureError),
+);

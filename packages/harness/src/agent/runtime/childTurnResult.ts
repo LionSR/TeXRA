@@ -230,46 +230,48 @@ export const parentAdmission = (
  * holding the result (`heldFor`, its end not yet written) for `deliverHeld`.
  * Any other refusal is a warning once the job commits.
  */
-export const deliverIn = (
+export const deliverIn: (
   { to, item, end }: ChildDelivery,
   trace: AgentTrace | undefined,
-): TransactionPart =>
-  Effect.gen(function* () {
-    const child = item.from.runId;
-    if ((yield* persistedParentRunId(child)) !== to) {
-      yield* warnOnCommit(
-        trace,
-        'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
-        { runId: child },
-      );
-      return { rows: [] };
-    }
-    const { rows, sent } = yield* parentAdmission(to, item, {}, trace);
-    if (sent.kind === 'refused' && sent.reason === 'ownedElsewhere') {
-      yield* warnOnCommit(trace, 'Result waiting: parent is open elsewhere.', {
-        parentRunId: to,
-      });
-      return {
-        rows: [
-          {
-            type: 'child.park' as const,
-            aggregateId: qualifyAggregateId('run', child),
-            phase: 'parked' as const,
-            heldFor: item.deliveryId,
-            ...(end !== undefined && { ends: end }),
-          },
-        ],
-        held: true,
-      };
-    }
-    if (sent.kind === 'refused')
-      yield* warnOnCommit(
-        trace,
-        `Turn result not delivered: parent run is unavailable (${sent.reason}). The result remains in the run report.`,
-        { parentRunId: to, reason: sent.reason },
-      );
-    return { rows };
-  });
+) => TransactionPart = Effect.fn('deliverIn')(function* (
+  { to, item, end }: ChildDelivery,
+  trace: AgentTrace | undefined,
+) {
+  const child = item.from.runId;
+  if ((yield* persistedParentRunId(child)) !== to) {
+    yield* warnOnCommit(
+      trace,
+      'Turn result not delivered: child was detached from its orchestrator. The result remains in the run report.',
+      { runId: child },
+    );
+    return { rows: [] };
+  }
+  const { rows, sent } = yield* parentAdmission(to, item, {}, trace);
+  if (sent.kind === 'refused' && sent.reason === 'ownedElsewhere') {
+    yield* warnOnCommit(trace, 'Result waiting: parent is open elsewhere.', {
+      parentRunId: to,
+    });
+    return {
+      rows: [
+        {
+          type: 'child.park' as const,
+          aggregateId: qualifyAggregateId('run', child),
+          phase: 'parked' as const,
+          heldFor: item.deliveryId,
+          ...(end !== undefined && { ends: end }),
+        },
+      ],
+      held: true,
+    };
+  }
+  if (sent.kind === 'refused')
+    yield* warnOnCommit(
+      trace,
+      `Turn result not delivered: parent run is unavailable (${sent.reason}). The result remains in the run report.`,
+      { parentRunId: to, reason: sent.reason },
+    );
+  return { rows };
+});
 
 /**
  * One turn result, whole, as the rows of the append that ends its turn: the

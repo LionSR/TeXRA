@@ -179,8 +179,8 @@ export class SessionInbox {
     this.readers.delete(runId);
     input.end();
     if (!terminal) return;
-    this.port.detach(() =>
-      Effect.gen({ self: this }, function* () {
+    this.port.detach(
+      Effect.fnUntraced({ self: this }, function* () {
         if (
           this.readers.has(runId) ||
           queued(yield* this.read(runId), this.port.run)
@@ -270,18 +270,27 @@ export class SessionInbox {
     this.observers.clear();
   }
 
-  private admit(
+  private readonly admit: (
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
     append: Append,
-  ): Effect.Effect<Sent, ClaimError | Conflict> {
-    return Effect.gen({ self: this }, function* () {
+  ) => Effect.Effect<Sent, ClaimError | Conflict> = Effect.fn(
+    'SessionInbox.admit',
+  )(
+    { self: this },
+    function* (
+      runId: RunId,
+      item: InboxItem,
+      options: SendOptions,
+      append: Append,
+    ) {
       const { rows, sent } = yield* this.admission(runId, item, options);
       if (rows.length > 0) yield* append(rows);
       return sent;
-    }).pipe(Effect.scoped);
-  }
+    },
+    Effect.scoped,
+  );
 
   /** One send decided in the caller's job under the run's claim: the row
    *  the job appends with its own, and how it landed (see {@link send}). */

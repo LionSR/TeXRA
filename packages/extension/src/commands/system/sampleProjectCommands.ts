@@ -31,10 +31,12 @@ const reportFailure = (err: unknown) =>
  * activation, so the regular onboarding takes over). Must not touch a
  * session — the no-workspace activation path returns before one exists.
  */
-export function createSampleProjectWithoutWorkspace(
+export const createSampleProjectWithoutWorkspace: (
   extensionPath: string,
-): Effect.Effect<void, never, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, never, FileSystem.FileSystem> = Effect.fn(
+  'createSampleProjectWithoutWorkspace',
+)(
+  function* (extensionPath: string) {
     const fs = yield* FileSystem.FileSystem;
     const parentPath = yield* selectFolder({
       openLabel: 'Create sample project here',
@@ -58,12 +60,11 @@ export function createSampleProjectWithoutWorkspace(
     yield* executeVscodeCommand('vscode.openFolder', vscode.Uri.file(dest), {
       forceNewWindow: false,
     });
-  }).pipe(
-    Effect.catch((error: PlatformError.PlatformError | Error) =>
-      reportFailure(error),
-    ),
-  );
-}
+  },
+  Effect.catch((error: PlatformError.PlatformError | Error) =>
+    reportFailure(error),
+  ),
+);
 
 /**
  * Copy the bundled sample into the session's workspace and open its
@@ -72,10 +73,12 @@ export function createSampleProjectWithoutWorkspace(
  * session root, so the tree copy runs at the two absolute paths, with the
  * options the replaced facade used.
  */
-export function createSampleProject(
+export const createSampleProject: (
   extensionPath: string,
-): Effect.Effect<void, never, ProcessServices | WorkspaceFs> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, never, ProcessServices | WorkspaceFs> = Effect.fn(
+  'createSampleProject',
+)(
+  function* (extensionPath: string) {
     const fs = yield* FileSystem.FileSystem;
     const workspaceFs = yield* WorkspaceFs;
     if (!workspaceFs.root) {
@@ -116,5 +119,6 @@ export function createSampleProject(
     // One terminal boundary for the whole creation, as the single
     // `Effect.catch` over the async body it replaces was: a failed workspace
     // read, a failed tree copy and a failed editor open are reported alike.
-  }).pipe(Effect.catchCause((cause) => reportFailure(Cause.squash(cause))));
-}
+  },
+  Effect.catchCause((cause) => reportFailure(Cause.squash(cause))),
+);

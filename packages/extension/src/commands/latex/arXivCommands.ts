@@ -31,10 +31,12 @@ const CHANNEL = 'arXivCommands';
  * replaces was: a typed failure and a rejected prompt alike are squashed to
  * the value that `catch` clause bound, so the message is unchanged.
  */
-export function downloadArXivSource(
+export const downloadArXivSource: (
   roots: WorkspaceRoots,
-): Effect.Effect<void, never, ProcessServices> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, never, ProcessServices> = Effect.fn(
+  'downloadArXivSource',
+)(
+  function* (roots: WorkspaceRoots) {
     const arxivId = yield* inputBox({
       placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
       prompt: 'Enter arXiv ID or URL',
@@ -132,19 +134,18 @@ export function downloadArXivSource(
         CHANNEL,
       );
     }
-  }).pipe(
-    Effect.catchCause((cause) =>
-      // Shutdown interrupts this fiber while it waits on a host prompt or on
-      // the download. That is a cancellation, not a download failure, and the
-      // `Effect.catch` this replaces never saw it, so it must not become a
-      // notification now that the download runs on this fiber.
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.interrupt
-        : showLoggedErrorMessage(
-            CHANNEL,
-            'Failed to download arXiv source',
-            Cause.squash(cause),
-          ).pipe(Effect.asVoid),
-    ),
-  );
-}
+  },
+  Effect.catchCause((cause) =>
+    // Shutdown interrupts this fiber while it waits on a host prompt or on
+    // the download. That is a cancellation, not a download failure, and the
+    // `Effect.catch` this replaces never saw it, so it must not become a
+    // notification now that the download runs on this fiber.
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.interrupt
+      : showLoggedErrorMessage(
+          CHANNEL,
+          'Failed to download arXiv source',
+          Cause.squash(cause),
+        ).pipe(Effect.asVoid),
+  ),
+);

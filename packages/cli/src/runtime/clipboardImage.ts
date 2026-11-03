@@ -74,21 +74,22 @@ type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
 /** The PNG a platform reader wrote, or the size refusal. A failure here is
  *  the probe's failure, not "no image": it reaches the caller's error hook,
  *  worded by the errno text. */
-function readPngFileWithinLimit(
+const readPngFileWithinLimit: (
   outFile: string,
-): Effect.Effect<
+) => Effect.Effect<
   ClipboardRead,
   ClipboardImageProbeFailed,
   FileSystem.FileSystem
-> {
-  return Effect.gen(function* () {
+> = Effect.fn('readPngFileWithinLimit')(
+  function* (outFile: string) {
     const fs = yield* FileSystem.FileSystem;
     const { size } = yield* fs.stat(outFile);
     if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
     const bytes = yield* fs.readFile(outFile);
     return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  }).pipe(Effect.mapError((error) => probeFailed(error.reason.cause ?? error)));
-}
+  },
+  Effect.mapError((error) => probeFailed(error.reason.cause ?? error)),
+);
 
 /** Whether a platform reader ran to success and left no 'NO_IMAGE' mark. */
 function readerWrote(

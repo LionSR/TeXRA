@@ -101,30 +101,29 @@ export function createDesktopOnboardingIpc(
   // The guard keeps a double-click of "Run Setup" from launching a second
   // concurrent run while the first still resolves its model, before its run
   // shows in the session view the shared launch checks.
-  const runSetup = (): OnboardingAction =>
-    Effect.gen(function* () {
-      if (!setupKickoffStarted) {
-        setupKickoffStarted = true;
-        // Fire-and-forget: the host kickoff runs the setup conversation to
-        // completion, which must NOT block the serialized funnel-refresh
-        // chain — otherwise a later "skip setup" / sign-out /
-        // credential-removal refresh would queue behind the entire setup run,
-        // leaving the card stuck on 'setup'. Detached, so the run outlives
-        // the card action that started it.
-        yield* options.kickoffSetup().pipe(
-          // Clear the guard once the run finishes (success or failure): while
-          // it's in flight the guard blocks a concurrent second run, but
-          // afterwards another manual "Run Setup" click must launch again.
-          Effect.ensuring(
-            Effect.sync(() => {
-              setupKickoffStarted = false;
-            }),
-          ),
-          Effect.forkDetach,
-        );
-      }
-      return yield* funnel.run();
-    });
+  const runSetup: () => OnboardingAction = Effect.fn('runSetup')(function* () {
+    if (!setupKickoffStarted) {
+      setupKickoffStarted = true;
+      // Fire-and-forget: the host kickoff runs the setup conversation to
+      // completion, which must NOT block the serialized funnel-refresh
+      // chain — otherwise a later "skip setup" / sign-out /
+      // credential-removal refresh would queue behind the entire setup run,
+      // leaving the card stuck on 'setup'. Detached, so the run outlives
+      // the card action that started it.
+      yield* options.kickoffSetup().pipe(
+        // Clear the guard once the run finishes (success or failure): while
+        // it's in flight the guard blocks a concurrent second run, but
+        // afterwards another manual "Run Setup" click must launch again.
+        Effect.ensuring(
+          Effect.sync(() => {
+            setupKickoffStarted = false;
+          }),
+        ),
+        Effect.forkDetach,
+      );
+    }
+    return yield* funnel.run();
+  });
 
   const signInWithChatGpt = (): OnboardingAction<
     HostCallFailed | RequestRefusal,

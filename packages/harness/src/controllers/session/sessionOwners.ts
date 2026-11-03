@@ -230,8 +230,9 @@ const consumersLayer = (open: SessionHandleInit) =>
       // waiters read `RunView.status` once the view holds a row's state.
       // Host notices go to the author. `log.settled` waits for this reader.
       const announce = announceWrites(factKindsOf(plugins.entries.values()));
-      yield* Stream.runForEach(store.folded, (event) =>
-        Effect.gen(function* () {
+      yield* Stream.runForEach(
+        store.folded,
+        Effect.fnUntraced(function* (event) {
           yield* onHeldResult(event, consumers);
           yield* announce(event);
           if (store.closed()) return;

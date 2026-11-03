@@ -68,32 +68,31 @@ export const listWorkspaceFiles = Effect.fn(
     // Results are sorted at the end, so entries are handled concurrently.
     yield* Effect.forEach(
       entries,
-      ([name, entryType]) =>
-        Effect.gen(function* () {
-          const relativePath = normalizeFilePath(
-            relativeDirectory ? `${relativeDirectory}/${name}` : name,
-          );
-          const absolutePath = join(directory, name);
-          const type =
-            entryType === 'SymbolicLink'
-              ? yield* followLink(absolutePath)
-              : entryType;
+      Effect.fnUntraced(function* ([name, entryType]) {
+        const relativePath = normalizeFilePath(
+          relativeDirectory ? `${relativeDirectory}/${name}` : name,
+        );
+        const absolutePath = join(directory, name);
+        const type =
+          entryType === 'SymbolicLink'
+            ? yield* followLink(absolutePath)
+            : entryType;
 
-          if (type === 'Directory') {
-            const visiting = active.filter((i) =>
-              shouldVisitDirectory(relativePath, filters[i]),
+        if (type === 'Directory') {
+          const visiting = active.filter((i) =>
+            shouldVisitDirectory(relativePath, filters[i]),
+          );
+          if (visiting.length > 0) {
+            yield* visit(absolutePath, relativePath, visiting).pipe(
+              Effect.catchIf(absentReason, () => Effect.void),
             );
-            if (visiting.length > 0) {
-              yield* visit(absolutePath, relativePath, visiting).pipe(
-                Effect.catchIf(absentReason, () => Effect.void),
-              );
-            }
-          } else if (type === 'File') {
-            for (const i of active)
-              if (passesFileFilters(relativePath, filters[i]))
-                results[i].push(relativePath);
           }
-        }),
+        } else if (type === 'File') {
+          for (const i of active)
+            if (passesFileFilters(relativePath, filters[i]))
+              results[i].push(relativePath);
+        }
+      }),
       { concurrency: 8, discard: true },
     );
   });

@@ -117,38 +117,37 @@ const resizeImageIfNeeded = Effect.fn('img.resizeImageIfNeeded')(function* (
   const ext = path.extname(imagePath);
   return yield* Effect.acquireUseRelease(
     fs.makeTempFile({ prefix: 'texra-resized-', suffix: ext }),
-    (tempPath) =>
-      Effect.gen(function* () {
-        // ImageMagick v7+: magick input -resize ... output
-        // GraphicsMagick: gm convert input -resize ... output
-        const convertArgs = [
-          tool,
-          ...(tool === 'gm' ? ['convert'] : []),
-          imagePath,
-          '-resize',
-          `${maxDimension}x${maxDimension}>`,
-          tempPath,
-        ];
-        const result = yield* executeCommand(convertArgs, {
-          channel: CHANNEL,
-          // Both operands are absolute paths, so the conversion is
-          // independent of where it runs: the process cwd is the honest
-          // root rather than a workspace this module never receives, and
-          // there are no workspace settings to carry with it.
-          cwd: process.cwd(),
-          settings: undefined,
+    Effect.fnUntraced(function* (tempPath) {
+      // ImageMagick v7+: magick input -resize ... output
+      // GraphicsMagick: gm convert input -resize ... output
+      const convertArgs = [
+        tool,
+        ...(tool === 'gm' ? ['convert'] : []),
+        imagePath,
+        '-resize',
+        `${maxDimension}x${maxDimension}>`,
+        tempPath,
+      ];
+      const result = yield* executeCommand(convertArgs, {
+        channel: CHANNEL,
+        // Both operands are absolute paths, so the conversion is
+        // independent of where it runs: the process cwd is the honest
+        // root rather than a workspace this module never receives, and
+        // there are no workspace settings to carry with it.
+        cwd: process.cwd(),
+        settings: undefined,
+      });
+      if (!result.success) {
+        return yield* new MediaConversionFailed({
+          message: result.stderr || 'Failed to resize image',
         });
-        if (!result.success) {
-          return yield* new MediaConversionFailed({
-            message: result.stderr || 'Failed to resize image',
-          });
-        }
+      }
 
-        yield* Effect.logDebug(
-          `Resized image ${imagePath} (${width}x${height}) to fit within ${maxDimension}px`,
-        ).pipe(withLogChannel(CHANNEL));
-        return yield* fs.readFile(tempPath);
-      }),
+      yield* Effect.logDebug(
+        `Resized image ${imagePath} (${width}x${height}) to fit within ${maxDimension}px`,
+      ).pipe(withLogChannel(CHANNEL));
+      return yield* fs.readFile(tempPath);
+    }),
     (tempPath) => removeTemporary(fs, tempPath, 'temporary file'),
   );
 });

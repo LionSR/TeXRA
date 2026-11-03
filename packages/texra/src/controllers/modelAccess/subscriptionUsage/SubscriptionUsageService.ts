@@ -190,17 +190,13 @@ export class SubscriptionUsageService {
           adapter.resolveVariant?.() ?? Effect.succeed(undefined),
       ),
       {
-        onFailure: (cause) =>
-          Effect.gen({ self: this }, function* () {
-            const error = Cause.squash(cause);
-            yield* Effect.logWarning(
-              `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            );
-            return yield* this.unavailable(provider, 'request_failed');
-          }),
+        onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {
+          const error = Cause.squash(cause);
+          yield* Effect.logWarning(
+            `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+          return yield* this.unavailable(provider, 'request_failed');
+        }),
         onSuccess: (variant) => this.coalesced(provider, variant, options),
       },
     );
@@ -293,8 +289,8 @@ export class SubscriptionUsageService {
         }
         return this.available(provider, parsed);
       }),
-      Effect.catchCause((cause) =>
-        Effect.gen({ self: this }, function* () {
+      Effect.catchCause(
+        Effect.fnUntraced({ self: this }, function* (cause) {
           // The reason a failed fetch maps to, most specific cause first. The
           // failure classes are disjoint, so at most one of these checks
           // holds. The reason alone cannot tell a routine refusal from an

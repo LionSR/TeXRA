@@ -212,8 +212,8 @@ class ArxivSourceProcessor {
       // Retry the whole ordinary failure, never a mixed cleanup cause. Effect's
       // typed-error retry otherwise selects one failure and drops its siblings.
       Effect.catchCause((cause) => Effect.fail(cause)),
-      Effect.tapError((cause) =>
-        Effect.gen(function* () {
+      Effect.tapError(
+        Effect.fnUntraced(function* (cause) {
           // A permanent failure ends the retry unobserved, since it never had
           // retries left to report.
           const reason = cause.reasons[0];
@@ -368,67 +368,67 @@ class ArxivSourceProcessor {
    * rejection stays observable. The join is unbounded; a rejection need not
    * mean every write closed.
    */
-  private extractTarFile(
+  private readonly extractTarFile: (
     tarPath: string,
     destDir: string,
-  ): Effect.Effect<void, ArxivSourcePermanentError> {
-    return Effect.gen(function* () {
-      yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
-      let pending: Promise<void> | undefined;
-      let signal: AbortSignal | undefined;
-      let primary: { error: unknown } | undefined;
-      yield* Effect.tryPromise({
-        try: (requestSignal) => {
-          signal = requestSignal;
-          pending = tar.x({
-            file: tarPath,
-            cwd: destDir,
-            filter: () => !requestSignal.aborted,
-          });
-          return pending;
-        },
-        catch: (error) => error,
-      }).pipe(
-        Effect.timeout(Duration.millis(EXTRACT_TIMEOUT_MS)),
-        Effect.catch((cause) => {
-          primary = { error: cause };
-          const error = Cause.isTimeoutError(cause)
-            ? 'Extraction timed out'
-            : toErrorMessage(cause);
-          return Effect.logError(`Failed to extract tar file: ${error}`).pipe(
-            Effect.andThen(
-              Effect.fail(
-                new ArxivSourcePermanentError({
-                  message: `Failed to extract arXiv source: ${error}`,
-                }),
-              ),
+  ) => Effect.Effect<void, ArxivSourcePermanentError> = Effect.fn(
+    'ArxivSourceProcessor.extractTarFile',
+  )(function* (tarPath: string, destDir: string) {
+    yield* Effect.logDebug(`Extracting tar file: ${tarPath} to ${destDir}`);
+    let pending: Promise<void> | undefined;
+    let signal: AbortSignal | undefined;
+    let primary: { error: unknown } | undefined;
+    yield* Effect.tryPromise({
+      try: (requestSignal) => {
+        signal = requestSignal;
+        pending = tar.x({
+          file: tarPath,
+          cwd: destDir,
+          filter: () => !requestSignal.aborted,
+        });
+        return pending;
+      },
+      catch: (error) => error,
+    }).pipe(
+      Effect.timeout(Duration.millis(EXTRACT_TIMEOUT_MS)),
+      Effect.catch((cause) => {
+        primary = { error: cause };
+        const error = Cause.isTimeoutError(cause)
+          ? 'Extraction timed out'
+          : toErrorMessage(cause);
+        return Effect.logError(`Failed to extract tar file: ${error}`).pipe(
+          Effect.andThen(
+            Effect.fail(
+              new ArxivSourcePermanentError({
+                message: `Failed to extract arXiv source: ${error}`,
+              }),
             ),
-          );
-        }),
-        Effect.onExit(() =>
-          Effect.promise(
-            () =>
-              pending?.then(
-                () => {},
-                (error: unknown) => {
-                  if (primary !== undefined && primary.error === error) return;
-                  if (
-                    signal?.aborted &&
-                    (error === signal.reason ||
-                      (error instanceof Error &&
-                        error.name === 'AbortError' &&
-                        error.cause === signal.reason))
-                  )
-                    return;
-                  // A distinct late tar failure must survive interruption.
-                  throw error;
-                },
-              ) ?? Promise.resolve(),
           ),
+        );
+      }),
+      Effect.onExit(() =>
+        Effect.promise(
+          () =>
+            pending?.then(
+              () => {},
+              (error: unknown) => {
+                if (primary !== undefined && primary.error === error) return;
+                if (
+                  signal?.aborted &&
+                  (error === signal.reason ||
+                    (error instanceof Error &&
+                      error.name === 'AbortError' &&
+                      error.cause === signal.reason))
+                )
+                  return;
+                // A distinct late tar failure must survive interruption.
+                throw error;
+              },
+            ) ?? Promise.resolve(),
         ),
-      );
-    }).pipe(withLogChannel(ARXIV_CHANNEL));
-  }
+      ),
+    );
+  }, withLogChannel(ARXIV_CHANNEL));
 
   public readonly downloadSource = Effect.fn('arxivProcessor.downloadSource')(
     { self: this },

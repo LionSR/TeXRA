@@ -79,12 +79,19 @@ class GeneratedRootRedirected extends Schema.TaggedError<GeneratedRootRedirected
  * native addon performed: a root replaced in the window *between* the resolve
  * and the removal is no longer detected.
  */
-const removeRunDirectories = (
+const removeRunDirectories: (
   fs: FileSystem.FileSystem,
   storage: string,
   runIds: readonly RunId[],
-): Effect.Effect<void, PlatformError.PlatformError | GeneratedRootRedirected> =>
-  Effect.gen(function* () {
+) => Effect.Effect<
+  void,
+  PlatformError.PlatformError | GeneratedRootRedirected
+> = Effect.fn('removeRunDirectories')(
+  function* (
+    fs: FileSystem.FileSystem,
+    storage: string,
+    runIds: readonly RunId[],
+  ) {
     const runs = path.join(
       yield* fs.realPath(storage),
       WORKSPACE_STORAGE_LAYOUT.runs,
@@ -109,10 +116,10 @@ const removeRunDirectories = (
       },
       { concurrency: 8, discard: true },
     );
-  }).pipe(
-    Effect.uninterruptible,
-    Effect.catchIf(absentReason, () => Effect.void),
-  );
+  },
+  Effect.uninterruptible,
+  Effect.catchIf(absentReason, () => Effect.void),
+);
 
 /**
  * The session's deletion collector, bound to the caller's scope: each run

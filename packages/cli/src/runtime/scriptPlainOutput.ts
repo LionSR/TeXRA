@@ -95,8 +95,9 @@ export const attachScriptPlainOutput = Effect.fn('attachScriptPlainOutput')(
     /** Holds the current subscription's interest; released with this scope. */
     const interest = yield* ScopedRef.make<void>(() => undefined);
     yield* Effect.forkScoped(
-      Stream.runForEach(session.view.changes, (view) =>
-        Effect.gen(function* () {
+      Stream.runForEach(
+        session.view.changes,
+        Effect.fnUntraced(function* (view) {
           for (const runId of [...previous.keys()]) {
             if (!view.runs.has(runId)) previous.delete(runId);
           }

@@ -235,8 +235,9 @@ export function liveProtocol(spec: LiveProtocol): void {
 
   describe.skipIf(bound === null)(spec.protocol, () => {
     describe('a text turn', () => {
-      it.live('streams assistant text into a completed result', () =>
-        Effect.gen(function* () {
+      it.live(
+        'streams assistant text into a completed result',
+        Effect.fnUntraced(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           expect(result.finishReason).toBe('stop');
           expect(assistantText(result).length).toBeGreaterThan(0);
@@ -245,8 +246,9 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('a tool call round trip', () => {
-      it.live('calls the tool, then answers from the result it is given', () =>
-        Effect.gen(function* () {
+      it.live(
+        'calls the tool, then answers from the result it is given',
+        Effect.fnUntraced(function* () {
           const configured = model();
           const called = yield* completeTurn(configured, TOOL_REQUEST);
           expect(called.finishReason).toBe('tool-calls');
@@ -261,8 +263,9 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('an abort mid-stream', () => {
-      it.live('interrupts the reader while the response is still open', () =>
-        Effect.gen(function* () {
+      it.live(
+        'interrupts the reader while the response is still open',
+        Effect.fnUntraced(function* () {
           const configured = model();
           const turn = yield* configured.prepareTurn(TEXT_REQUEST);
           assert(turn.mode === 'foreground');
@@ -294,8 +297,9 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('the usage shape', () => {
-      it.live('reports the counts this route bills on', () =>
-        Effect.gen(function* () {
+      it.live(
+        'reports the counts this route bills on',
+        Effect.fnUntraced(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           const usage = result.usage;
           // Every principal count in `UsageSchema` is nullable, and the
@@ -315,8 +319,9 @@ export function liveProtocol(spec: LiveProtocol): void {
 
     describe('a continuation', () => {
       if (spec.continuation === 'supported') {
-        it.live('chains the next turn on the anchor the first left', () =>
-          Effect.gen(function* () {
+        it.live(
+          'chains the next turn on the anchor the first left',
+          Effect.fnUntraced(function* () {
             const configured = model();
             const first = yield* completeTurn(configured, TEXT_REQUEST);
             const continuation = first.continuation;
@@ -330,8 +335,9 @@ export function liveProtocol(spec: LiveProtocol): void {
           }),
         );
       } else {
-        it.live('refuses an authored continuation', () =>
-          Effect.gen(function* () {
+        it.live(
+          'refuses an authored continuation',
+          Effect.fnUntraced(function* () {
             const error = yield* Effect.flip(
               model().prepareTurn({
                 ...TEXT_REQUEST,

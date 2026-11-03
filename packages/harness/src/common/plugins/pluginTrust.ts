@@ -311,63 +311,64 @@ export interface InstalledPluginLoad {
  * what the user trusted. Never fails: an unreadable record or plugin loads
  * nothing and says why, so a store fault fails closed.
  */
-export function readInstalledPluginLoad(
+export const readInstalledPluginLoad: (
   stores: Pick<SettingsStores, 'globalState'>,
-): Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const enabled = (yield* readInstalled(stores)).filter(
-      (record) => record.enabled,
-    );
-    const loadable: LoadablePlugin[] = [];
-    const withheld: { plugin: string; reason: string }[] = [];
-    const withhold = (plugin: string, reason: string) =>
-      withheld.push({ plugin, reason });
-    if (enabled.length === 0) return { loadable, withheld };
-    const envKey = yield* envKeyOf(stores);
-    // Each plugin is read and digested at once, then judged in order.
-    const reads = yield* Effect.forEach(
-      enabled,
-      (record) =>
-        Effect.map(
-          Effect.result(
-            Effect.gen(function* () {
-              const plugin = yield* rereadPlugin(record);
-              return { plugin, key: yield* trustKey(record, plugin, envKey) };
-            }),
+) => Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem> =
+  Effect.fn('readInstalledPluginLoad')(
+    function* (stores: Pick<SettingsStores, 'globalState'>) {
+      const enabled = (yield* readInstalled(stores)).filter(
+        (record) => record.enabled,
+      );
+      const loadable: LoadablePlugin[] = [];
+      const withheld: { plugin: string; reason: string }[] = [];
+      const withhold = (plugin: string, reason: string) =>
+        withheld.push({ plugin, reason });
+      if (enabled.length === 0) return { loadable, withheld };
+      const envKey = yield* envKeyOf(stores);
+      // Each plugin is read and digested at once, then judged in order.
+      const reads = yield* Effect.forEach(
+        enabled,
+        (record) =>
+          Effect.map(
+            Effect.result(
+              Effect.gen(function* () {
+                const plugin = yield* rereadPlugin(record);
+                return { plugin, key: yield* trustKey(record, plugin, envKey) };
+              }),
+            ),
+            (read) => ({ record, read }),
           ),
-          (read) => ({ record, read }),
-        ),
-      { concurrency: 4 },
-    );
-    for (const { record, read } of reads) {
-      if (Result.isFailure(read)) {
-        withhold(
-          record.name,
-          `Plugin ${record.name} is not loaded: ${read.failure.message}`,
-        );
-        continue;
+        { concurrency: 4 },
+      );
+      for (const { record, read } of reads) {
+        if (Result.isFailure(read)) {
+          withhold(
+            record.name,
+            `Plugin ${record.name} is not loaded: ${read.failure.message}`,
+          );
+          continue;
+        }
+        const { plugin, key } = read.success;
+        if (plugin.code.length > 0) {
+          withhold(record.name, codeRefusal(record.name, plugin));
+          continue;
+        }
+        if (!trusts(record, key)) {
+          let change = 'what it ships or runs changed since you trusted it';
+          if (record.trust === undefined)
+            change = 'it is enabled but was never trusted';
+          else if (record.trust.version !== key.version)
+            change = `its version changed (${record.trust.version ?? 'none'} -> ${key.version ?? 'none'}) since you trusted it`;
+          withhold(
+            record.name,
+            `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it (Settings > Plugins, \`/plugins\`, or \`texra plugin enable ${record.name}\`).`,
+          );
+          continue;
+        }
+        loadable.push({ record, plugin, trust: key });
       }
-      const { plugin, key } = read.success;
-      if (plugin.code.length > 0) {
-        withhold(record.name, codeRefusal(record.name, plugin));
-        continue;
-      }
-      if (!trusts(record, key)) {
-        let change = 'what it ships or runs changed since you trusted it';
-        if (record.trust === undefined)
-          change = 'it is enabled but was never trusted';
-        else if (record.trust.version !== key.version)
-          change = `its version changed (${record.trust.version ?? 'none'} -> ${key.version ?? 'none'}) since you trusted it`;
-        withhold(
-          record.name,
-          `Plugin ${record.name} is not loaded: ${change}. Enable it again to review it (Settings > Plugins, \`/plugins\`, or \`texra plugin enable ${record.name}\`).`,
-        );
-        continue;
-      }
-      loadable.push({ record, plugin, trust: key });
-    }
-    return { loadable, withheld, envKey };
-  }).pipe(
+      return { loadable, withheld, envKey };
+    },
     Effect.catch((error: PluginError | PluginRequestError) =>
       Effect.succeed({
         loadable: [],
@@ -380,4 +381,3 @@ export function readInstalledPluginLoad(
       }),
     ),
   );
-}

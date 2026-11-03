@@ -200,21 +200,20 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // refresher runs.
       hasCredential: () => Effect.sync(() => this.credentialUsable),
       flags: globalState,
-      apply: (transition) =>
-        Effect.gen({ self: this }, function* () {
-          yield* this.snapshot.setOnboarding(transition.state);
-          if (!transition.selectSetupAgent) return;
-          // Resolve the registry key so the dropdown matches by value.
-          const catalog = Context.get(
-            yield* this.runtime.contextEffect,
-            AgentCatalog,
-          );
-          const entry = catalog.get('setup');
-          this.bridge.surfaceAction({
-            kind: 'launch',
-            patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
-          });
-        }),
+      apply: Effect.fn('apply')({ self: this }, function* (transition) {
+        yield* this.snapshot.setOnboarding(transition.state);
+        if (!transition.selectSetupAgent) return;
+        // Resolve the registry key so the dropdown matches by value.
+        const catalog = Context.get(
+          yield* this.runtime.contextEffect,
+          AgentCatalog,
+        );
+        const entry = catalog.get('setup');
+        this.bridge.surfaceAction({
+          kind: 'launch',
+          patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
+        });
+      }),
     });
 
     const runSession = windowSession.session;

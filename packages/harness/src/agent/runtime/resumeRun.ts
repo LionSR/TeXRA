@@ -120,8 +120,8 @@ export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
 ): Effect.Effect<ResumeHandOff, Error, SessionServices> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+  Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
       const runs = registryOf(yield* Runs);
       // Counted among the attempt's waiters as `openResume` returned it.
       const attempt = yield* openResume(runId, options, false);

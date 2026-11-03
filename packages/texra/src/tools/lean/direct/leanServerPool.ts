@@ -264,18 +264,17 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     return yield* serverFor(root).pipe(
       Effect.catchIf(
         (error) => isFileTableExhausted(error),
-        (error) =>
-          Effect.gen(function* () {
-            const others = [...(yield* liveEntries).keys()].some(
-              (other) => other !== root,
-            );
-            if (!others) return yield* Effect.fail(error);
-            yield* Effect.logWarning(
-              `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
-            ).pipe(withLogChannel(LOG_CHANNEL));
-            yield* evictOthersForExhausted(root);
-            return yield* serverFor(root);
-          }),
+        Effect.fnUntraced(function* (error) {
+          const others = [...(yield* liveEntries).keys()].some(
+            (other) => other !== root,
+          );
+          if (!others) return yield* Effect.fail(error);
+          yield* Effect.logWarning(
+            `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
+          ).pipe(withLogChannel(LOG_CHANNEL));
+          yield* evictOthersForExhausted(root);
+          return yield* serverFor(root);
+        }),
       ),
     );
   });

@@ -1859,7 +1859,10 @@ wrong shape is one warning and no servers. The Plugins page lists them
 read-only from here, and the CLI warns of a broken file at startup.
 
 ```ts
-const readMcpConfig: (fs: FileSystem, file: string) => Effect<{ servers: McpServerConfig[]; warnings: string[]; } | null, never, never>
+const readMcpConfig: (
+  fs: FileSystem.FileSystem,
+  file: string,
+) => Effect.Effect<ReturnType<typeof parseMcpServers> | null>
 ```
 
 ## readModelOptions

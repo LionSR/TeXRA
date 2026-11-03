@@ -354,32 +354,34 @@ export function registerBuiltinSlashCommands(options: {
 
   /** `/plugins add <source>`: the install `texra plugin install` runs; the
    *  plugin stays off until it is switched on and trusted in `/plugins`. */
-  const addPlugin = (
+  const addPlugin: (
     remainder: string,
     context: SlashCommandContext,
-  ): SlashCommandEffect =>
-    Effect.gen(function* () {
-      // The source is the rest of the line, so a folder may hold spaces; a
-      // trailing `--plugin <name>` picks one plugin of a marketplace.
-      const [, verb, rest] = /^(\S+)\s+(.+)$/.exec(remainder.trim()) ?? [];
-      const [, source, pick] =
-        /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
-      if (verb?.toLowerCase() !== 'add' || !source)
-        return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
-      const { roots } = options.runSession;
-      const origin = InstalledPlugins.origin(
-        source,
-        roots.workspace ?? context.cliContext.cwd,
-        undefined,
-      );
-      if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
-      const added = yield* InstalledPlugins.install(
-        origin.success,
-        pick === undefined ? [] : [pick],
-        roots,
-      );
-      appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
-    });
+  ) => SlashCommandEffect = Effect.fn('addPlugin')(function* (
+    remainder: string,
+    context: SlashCommandContext,
+  ) {
+    // The source is the rest of the line, so a folder may hold spaces; a
+    // trailing `--plugin <name>` picks one plugin of a marketplace.
+    const [, verb, rest] = /^(\S+)\s+(.+)$/.exec(remainder.trim()) ?? [];
+    const [, source, pick] =
+      /^(.+?)(?:\s+--plugin\s+(\S+))?$/.exec(rest ?? '') ?? [];
+    if (verb?.toLowerCase() !== 'add' || !source)
+      return yield* Effect.fail(new Error(PLUGINS_TUI.addUsage));
+    const { roots } = options.runSession;
+    const origin = InstalledPlugins.origin(
+      source,
+      roots.workspace ?? context.cliContext.cwd,
+      undefined,
+    );
+    if (Result.isFailure(origin)) return yield* Effect.fail(origin.failure);
+    const added = yield* InstalledPlugins.install(
+      origin.success,
+      pick === undefined ? [] : [pick],
+      roots,
+    );
+    appendLocalNotice(PLUGINS_TUI.added(added.map(({ name }) => name)));
+  });
 
   function configContribution(
     configRoots: WorkspaceRoots,

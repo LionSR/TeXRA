@@ -146,25 +146,24 @@ export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
     // Each candidate resolves at once; the found files keep their order.
     const found = yield* Effect.forEach(
       candidates,
-      ([role, candidate]) =>
-        Effect.gen(function* () {
-          // An argument that names nothing is not a file; any other failure is.
-          const real = yield* fs
-            .realPath(candidate)
-            .pipe(Effect.catchIf(absentReason, () => Effect.void));
-          if (real === undefined || isPathWithin(realRoot, real)) return [];
-          const info = yield* fs.stat(real);
-          return info.type === 'File'
-            ? [
-                {
-                  role,
-                  path: real,
-                  size: Number(info.size),
-                  mtimeMs: Option.getOrUndefined(info.mtime)?.getTime() ?? null,
-                } satisfies ExternalFile,
-              ]
-            : [];
-        }),
+      Effect.fnUntraced(function* ([role, candidate]) {
+        // An argument that names nothing is not a file; any other failure is.
+        const real = yield* fs
+          .realPath(candidate)
+          .pipe(Effect.catchIf(absentReason, () => Effect.void));
+        if (real === undefined || isPathWithin(realRoot, real)) return [];
+        const info = yield* fs.stat(real);
+        return info.type === 'File'
+          ? [
+              {
+                role,
+                path: real,
+                size: Number(info.size),
+                mtimeMs: Option.getOrUndefined(info.mtime)?.getTime() ?? null,
+              } satisfies ExternalFile,
+            ]
+          : [];
+      }),
       { concurrency: 8 },
     );
     return found.flat();

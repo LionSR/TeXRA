@@ -156,8 +156,8 @@ export function filesApiUploads(provider: {
     inFlight.add(digest);
     // Only the request is interruptible: once it answers, the id has one
     // owner at every instant, `owned` (a release reports it) or this fiber.
-    yield* Effect.uninterruptibleMask((restore) =>
-      Effect.gen(function* () {
+    yield* Effect.uninterruptibleMask(
+      Effect.fnUntraced(function* (restore) {
         const uploaded = yield* restore(send(parsed.success)).pipe(
           Effect.ensuring(Effect.sync(() => inFlight.delete(digest))),
         );

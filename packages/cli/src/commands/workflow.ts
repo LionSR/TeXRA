@@ -173,66 +173,65 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     init.contextFiles,
     context.cwd,
     {},
-    ({ inputFiles, contextFiles, stdinInputPath }) =>
-      Effect.gen(function* () {
-        const classified = classifyInputFiles(inputFiles);
-        if (init.output && classified.inputFiles.length > 1) {
-          return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
-        }
+    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
+      const classified = classifyInputFiles(inputFiles);
+      if (init.output && classified.inputFiles.length > 1) {
+        return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
+      }
 
-        const model = yield* selectCliRunModel(
-          context,
-          init.model,
-          'run',
-          services,
-        );
-        const runContext = buildHeadlessRunContext(context);
-        // Only the input-derived names: the task's declared outputs are
-        // stamped on the config below, from the entry resolved above, and
-        // read back from the recorded config at finalization.
-        const expectedOutputFiles = init.outputDir
-          ? inputDerivedOutputFiles(classified.inputFiles, stdinInputPath)
-          : undefined;
-        // Persist CLI destinations absolutely so resumption has one path
-        // representation and never reconstructs output locations.
-        const cliOutputFile = init.output
-          ? path.resolve(runContext.cwd, init.output)
-          : undefined;
-        const cliOutputDirectory = init.outputDir
-          ? path.resolve(runContext.cwd, init.outputDir)
-          : undefined;
-        const launch = {
-          agent: init.agent,
-          agentSource: source,
-          model,
-          ...classified,
-          contextFiles,
-          outputFiles: [],
-          ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
-            ? {
-                cli: {
-                  outputFile: cliOutputFile,
-                  outputDirectory: cliOutputDirectory,
-                  expectedOutputFiles: expectedOutputFiles
-                    ? [...expectedOutputFiles]
-                    : undefined,
-                },
-              }
-            : {}),
-          instruction,
-          workingDirectory: runContext.cwd,
-        };
-        // The entry resolved above has a task, so the patch is never null.
-        const config: AgentConfigPayload = {
-          ...launch,
-          ...documentTaskPatch(launch, agent, { reflect: init.reflect }),
-        };
+      const model = yield* selectCliRunModel(
+        context,
+        init.model,
+        'run',
+        services,
+      );
+      const runContext = buildHeadlessRunContext(context);
+      // Only the input-derived names: the task's declared outputs are
+      // stamped on the config below, from the entry resolved above, and
+      // read back from the recorded config at finalization.
+      const expectedOutputFiles = init.outputDir
+        ? inputDerivedOutputFiles(classified.inputFiles, stdinInputPath)
+        : undefined;
+      // Persist CLI destinations absolutely so resumption has one path
+      // representation and never reconstructs output locations.
+      const cliOutputFile = init.output
+        ? path.resolve(runContext.cwd, init.output)
+        : undefined;
+      const cliOutputDirectory = init.outputDir
+        ? path.resolve(runContext.cwd, init.outputDir)
+        : undefined;
+      const launch = {
+        agent: init.agent,
+        agentSource: source,
+        model,
+        ...classified,
+        contextFiles,
+        outputFiles: [],
+        ...(cliOutputFile !== undefined || cliOutputDirectory !== undefined
+          ? {
+              cli: {
+                outputFile: cliOutputFile,
+                outputDirectory: cliOutputDirectory,
+                expectedOutputFiles: expectedOutputFiles
+                  ? [...expectedOutputFiles]
+                  : undefined,
+              },
+            }
+          : {}),
+        instruction,
+        workingDirectory: runContext.cwd,
+      };
+      // The entry resolved above has a task, so the patch is never null.
+      const config: AgentConfigPayload = {
+        ...launch,
+        ...documentTaskPatch(launch, agent, { reflect: init.reflect }),
+      };
 
-        return yield* executeCliWorkflowConfig(config, runContext, {
-          services,
-          recoveryInputIsDurable: stdinInputPath === undefined,
-        });
-      }),
+      return yield* executeCliWorkflowConfig(config, runContext, {
+        services,
+        recoveryInputIsDurable: stdinInputPath === undefined,
+      });
+    }),
   );
 });
 
@@ -273,38 +272,37 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
       allowEmptyInput: true,
       requireWorkspaceFiles: true,
     },
-    ({ inputFiles, contextFiles, stdinInputPath }) =>
-      Effect.gen(function* () {
-        const classified = classifyInputFiles(inputFiles);
-        const config: AgentConfigPayload = {
-          agent: init.agent,
-          agentSource,
-          model,
-          ...classified,
+    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
+      const classified = classifyInputFiles(inputFiles);
+      const config: AgentConfigPayload = {
+        agent: init.agent,
+        agentSource,
+        model,
+        ...classified,
+        contextFiles,
+        instruction: formatToolUseAgentRunInstruction({
+          inputFiles: classified.inputFiles,
           contextFiles,
-          instruction: formatToolUseAgentRunInstruction({
-            inputFiles: classified.inputFiles,
-            contextFiles,
-            instruction,
-          }),
-          displayInstruction: instruction,
-          workingDirectory: runContext.cwd,
-        };
+          instruction,
+        }),
+        displayInstruction: instruction,
+        workingDirectory: runContext.cwd,
+      };
 
-        const run = yield* executeCliToolUseConfig(config, runContext, {
-          services,
-          recoveryInputIsDurable: stdinInputPath === undefined,
-        });
-        if (!run.ok) return run.exitCode;
+      const run = yield* executeCliToolUseConfig(config, runContext, {
+        services,
+        recoveryInputIsDurable: stdinInputPath === undefined,
+      });
+      if (!run.ok) return run.exitCode;
 
-        emitCliResult(runContext, {
-          json: run.result,
-          ndjson: { kind: 'agent-result', result: run.result },
-          text: toolUseResultText(run.result),
-        });
+      emitCliResult(runContext, {
+        json: run.result,
+        ndjson: { kind: 'agent-result', result: run.result },
+        text: toolUseResultText(run.result),
+      });
 
-        return run.exitCode;
-      }),
+      return run.exitCode;
+    }),
   );
 });
 

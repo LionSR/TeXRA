@@ -79,11 +79,13 @@ const readConfigText = (
  * wrong shape is one warning and no servers. The Plugins page lists them
  * read-only from here, and the CLI warns of a broken file at startup.
  */
-export const readMcpConfig = (
+export const readMcpConfig: (
   fs: FileSystem.FileSystem,
   file: string,
-): Effect.Effect<ReturnType<typeof parseMcpServers> | null> =>
-  Effect.gen(function* () {
+) => Effect.Effect<ReturnType<typeof parseMcpServers> | null> = Effect.fn(
+  'readMcpConfig',
+)(
+  function* (fs: FileSystem.FileSystem, file: string) {
     const text = yield* readConfigText(fs, file);
     if (text === null) return null;
     const json = yield* Effect.try({
@@ -102,11 +104,11 @@ export const readMcpConfig = (
       ),
     );
     return parseMcpServers(file, config.mcpServers);
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({ servers: [], warnings: [error.message] }),
-    ),
-  );
+  },
+  Effect.catch((error) =>
+    Effect.succeed({ servers: [], warnings: [error.message] }),
+  ),
+);
 
 /** What a server answers once up: its tools, or why none. */
 export interface LoadedPluginTools {

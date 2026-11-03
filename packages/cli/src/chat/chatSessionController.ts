@@ -918,8 +918,8 @@ export function createChatSessionController(
             }),
             // `match` recovers only the typed refusal; a defect is read the
             // way `SessionBridge` answers `Internal`: logged and worded.
-            Effect.catchCause((cause) =>
-              Effect.gen(function* () {
+            Effect.catchCause(
+              Effect.fnUntraced(function* (cause) {
                 if (Cause.hasInterruptsOnly(cause)) {
                   return { kind: 'interrupted' as const };
                 }

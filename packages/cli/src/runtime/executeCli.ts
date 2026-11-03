@@ -191,12 +191,18 @@ function launchOn(
  * failures) is genuinely unexpected and is rethrown so the crash handler
  * still reports it.
  */
-export function executeCliConfig(
+export const executeCliConfig: (
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
-  return Effect.gen(function* () {
+) => Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> = Effect.fn(
+  'executeCliConfig',
+)(
+  function* (
+    config: AgentConfigPayload,
+    runContext: CliContext,
+    options: CliExecuteOptions,
+  ) {
     const parsed = yield* Effect.result(decodeLaunchConfig(config));
     if (Result.isFailure(parsed)) {
       writeTextStderr(parsed.failure.reason);
@@ -584,7 +590,6 @@ export function executeCliConfig(
 
     yield* detachPresentation;
     return { ok: true as const, result: { ...runResult.result, plugins } };
-  }).pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-  );
-}
+  },
+  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+);

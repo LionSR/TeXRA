@@ -296,8 +296,8 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
             .showCloneSucceeded(label)
             .pipe(Effect.as<OverleafCloneOutcome>({ status: 'success' })),
         ),
-        Effect.catch((error) =>
-          Effect.gen(function* () {
+        Effect.catch(
+          Effect.fnUntraced(function* (error) {
             const authError = isCloneAuthError(error);
             if (authError) {
               yield* ports.secrets.delete(overleafTokenSpec(remote).tokenKey);
