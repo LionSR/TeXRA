@@ -4,7 +4,7 @@ Date: 2026-11-03
 Status: proposed — a read-only review of the storage layer against the 1.0
 design (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md`),
 with the post-1.0 compatibility policy stated as rules and the pre-freeze
-changes those rules need. Baseline: `main` at `b411a6d`.
+changes those rules need. Baseline: `main` at `171aa36`.
 
 ## Summary
 
@@ -168,7 +168,7 @@ Sources: the `openai/codex` tree (`codex-rs/state/src/{runtime,sqlite,migrations
 
 ## 5. Verified
 
-- Every path and symbol above was read in the tree at `b411a6d`.
+- Every path and symbol above was read in the tree at `b411a6d`; `171aa36` changed no storage file.
 - `config/storage/frozen/` does not exist; `rowVersions.vitest.ts` has
   nothing to compare until `storage:freeze` runs.
 - `src/test-kernel/fixtures/storage/golden-1.0.sql` exists (690 KB, written
