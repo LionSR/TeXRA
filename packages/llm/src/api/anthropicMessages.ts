@@ -47,6 +47,7 @@ import {
   StopSchema,
   UsageSchema,
 } from './anthropicMessagesWire.js';
+import { messageThreads } from './anthropicThreads.js';
 import type { InputPart, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
@@ -654,15 +655,22 @@ export function anthropicMessagesModel(
       (turn) => invocationBody(turn, origin, config, uploads),
     );
 
+  const threads = messageThreads({
+    endpoint: config.deployment.endpoint,
+    open: (body, headers) =>
+      Effect.flatMap(Effect.abortSignal, (signal) =>
+        Effect.tryPromise({
+          try: () => client.messages.create(body, { signal, headers }),
+          catch: sdkFailure,
+        }),
+      ),
+    lower: (turn) => invocationBody(turn, origin, config, uploads),
+  });
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const body = yield* invocationBody(input, origin, config, uploads);
-        const signal = yield* Effect.abortSignal;
-        const source = yield* Effect.tryPromise({
-          try: () => client.messages.create(body, { signal }),
-          catch: sdkFailure,
-        });
+        const { source, finalize } = yield* threads.send(input, body);
         const wire = anthropicWire();
         const chunks = yield* sdkStream(source, sdkFailure);
         return assembleTurn(
@@ -671,7 +679,7 @@ export function anthropicMessagesModel(
             // message_stop finishes the response; HTTP EOF is not an additional condition.
             Stream.takeUntil(() => wire.stopped()),
           ),
-          { origin, provider: 'Anthropic' },
+          { origin, provider: 'Anthropic', ...(finalize ? { finalize } : {}) },
         );
       }).pipe(
         Effect.mapError((error) =>

@@ -807,6 +807,16 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **Long Claude runs start answering sooner.** On Anthropic's own API,
+  each request after the first now sends only the new messages and the id
+  of the previous response (message threads, beta), instead of the whole
+  conversation; Anthropic reports about 35% less time to first token on
+  conversations of 500k tokens and more. Token usage and price are
+  unchanged. A thread lasts 5 minutes between requests; after a longer
+  pause, or if the account cannot use threads, the whole conversation is
+  sent as before. A custom Anthropic endpoint is never threaded. Anthropic
+  holds a thread encrypted in memory, never on disk, for at most an hour;
+  threads are not eligible for zero data retention.
 - **A message typed while a run works is answered at its next model
   request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
   model inside the turn; since then it waited for the turn to end. A message

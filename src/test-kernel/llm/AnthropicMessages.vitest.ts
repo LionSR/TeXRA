@@ -5,7 +5,11 @@ import assert from 'node:assert/strict';
 import { it } from '@effect/vitest';
 import { Effect, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { completedTurn, type TurnRequest } from '@texra-ai/llm';
+import {
+  assistantMessageFromResult,
+  completedTurn,
+  type TurnRequest,
+} from '@texra-ai/llm';
 import { anthropicMessagesModel } from '../../../packages/llm/src/api/anthropicMessages.js';
 import type { AnthropicMessagesConfiguration } from '../../../packages/llm/src/turn.js';
 
@@ -474,4 +478,136 @@ describe('canonical Anthropic Messages protocol', () => {
       expect.objectContaining({ _tag: 'ModelError', kind: 'unsupported' }),
     );
   });
+});
+
+/*
+ * Message threads. Failure modes:
+ * - a turn that extends the stored response resends the whole history, or
+ *   sends system/tools a continue must leave out;
+ * - the server no longer holds the thread (expired, already continued) and
+ *   the turn fails instead of resending the conversation;
+ * - the account cannot use threads and every turn keeps failing.
+ */
+describe('Anthropic message threads', () => {
+  const fetchModel = vi.fn<typeof fetch>();
+  const model = () =>
+    anthropicMessagesModel(
+      {
+        ...CONFIG,
+        deployment: {
+          ...CONFIG.deployment,
+          endpoint: 'https://api.anthropic.com',
+        },
+      },
+      { apiKey: 'selected-key', fetch: fetchModel },
+    );
+  const rejected = (status: number, code: string) =>
+    new Response(
+      JSON.stringify({
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message: code,
+          details: { error_code: code },
+        },
+      }),
+      { status, headers: { 'content-type': 'application/json' } },
+    );
+  const sent = (call: number) => {
+    const init = fetchModel.mock.calls[call]![1]!;
+    return {
+      body: JSON.parse(init.body as string) as Record<string, unknown>,
+      beta: new Headers(init.headers).get('anthropic-beta'),
+    };
+  };
+  // Two turns: the tool calls the first returns, then their results.
+  const twoTurns = Effect.fn(function* (bound: ReturnType<typeof model>) {
+    const first = yield* bound.prepareTurn(REQUEST);
+    assert(first.mode === 'foreground');
+    const result = yield* completedTurn(bound.streamTurn(first));
+    const second = yield* bound.prepareTurn({
+      ...REQUEST,
+      messages: [
+        ...REQUEST.messages,
+        assistantMessageFromResult(result),
+        {
+          role: 'tool',
+          results: [0, 1].map((callOrdinal) => ({
+            callOrdinal,
+            status: 'success' as const,
+            content: [{ kind: 'text' as const, text: `result ${callOrdinal}` }],
+          })),
+        },
+      ],
+    });
+    assert(second.mode === 'foreground');
+    yield* completedTurn(bound.streamTurn(second));
+  });
+  const toolResults = [
+    {
+      role: 'user',
+      content: [0, 1].map((ordinal) => ({
+        type: 'tool_result',
+        tool_use_id: `call_${ordinal}`,
+        is_error: false,
+        content: [{ type: 'text', text: `result ${ordinal}` }],
+      })),
+    },
+  ];
+  beforeEach(() => {
+    vi.stubEnv('ANTHROPIC_CUSTOM_HEADERS', '');
+    fetchModel.mockReset();
+    fetchModel.mockImplementation(async () => response(signedEvents()));
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.effect('continues the stored response with only the new messages', () =>
+    Effect.gen(function* () {
+      yield* twoTurns(model());
+      const create = sent(0);
+      expect(create.beta).toBe('message-threads-2026-08-12');
+      expect(create.body.thread).toStrictEqual({ type: 'create' });
+      expect(create.body.system).toBeDefined();
+      const next = sent(1);
+      expect(next.beta).toBe('message-threads-2026-08-12');
+      expect(next.body.thread).toStrictEqual({
+        type: 'continue',
+        previous_message_id: 'msg_1',
+      });
+      expect(next.body).not.toHaveProperty('system');
+      expect(next.body).not.toHaveProperty('tools');
+      expect(next.body.messages).toStrictEqual(toolResults);
+    }),
+  );
+
+  it.effect('resends the whole conversation when the thread is gone', () =>
+    Effect.gen(function* () {
+      fetchModel
+        .mockImplementationOnce(async () => response(signedEvents()))
+        .mockImplementationOnce(async () => rejected(404, 'thread_not_found'));
+      yield* twoTurns(model());
+      expect(fetchModel).toHaveBeenCalledTimes(3);
+      const replay = sent(2);
+      expect(replay.body.thread).toStrictEqual({ type: 'create' });
+      expect(replay.body.system).toBeDefined();
+      expect((replay.body.messages as unknown[]).at(-1)).toStrictEqual(
+        toolResults[0],
+      );
+    }),
+  );
+
+  it.effect('stops threading when the account cannot use threads', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementationOnce(async () =>
+        rejected(400, 'thread_unsupported_request'),
+      );
+      yield* twoTurns(model());
+      expect(fetchModel).toHaveBeenCalledTimes(3);
+      for (const call of [1, 2]) {
+        expect(sent(call).beta).toBeNull();
+        expect(sent(call).body).not.toHaveProperty('thread');
+      }
+      expect((sent(2).body.messages as unknown[]).length).toBe(3);
+    }),
+  );
 });
