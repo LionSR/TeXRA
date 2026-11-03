@@ -186,3 +186,66 @@ test('a picked document agent hidden in Settings is no agent to the form or the 
     cleanupDirectory(profile.userDataPath);
   }
 });
+
+// A launch whose run cannot start, for want of a key for the form's model,
+// is told once: by the window's notice, not again by the form, which keeps
+// the instruction to send once a key is set.
+test('a launch that cannot start is told once, by its notice', async () => {
+  let launched: LaunchedApp | undefined;
+  try {
+    launched = await launchTexraApp({
+      // The profile holds no key; a key in this environment would start a
+      // real run.
+      env: Object.fromEntries(
+        Object.keys(process.env)
+          .filter((name) => name.endsWith('_API_KEY'))
+          .map((name) => [name, '']),
+      ),
+    });
+    const { app, page } = launched;
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    // The window's message boxes are recorded and dismissed.
+    await app.evaluate(({ dialog }) => {
+      const shown: string[] = [];
+      Object.assign(globalThis, { shownMessageBoxes: shown });
+      dialog.showMessageBox = async (...args: unknown[]) => {
+        const options = args.at(-1) as { message: string; cancelId?: number };
+        shown.push(options.message);
+        return { response: options.cancelId ?? 0, checkboxChecked: false };
+      };
+    });
+    const shownMessageBoxes = () =>
+      app.evaluate(
+        () =>
+          (globalThis as { shownMessageBoxes?: string[] }).shownMessageBoxes,
+      );
+    await dismissOnboarding(page);
+    await showLauncher(launched);
+
+    const instruction = 'Summarize this project.';
+    await page.locator('#composer-text').fill(instruction);
+    await page.locator('#composer-send').click();
+    await expect
+      .poll(shownMessageBoxes)
+      .toEqual(['API key not found. Set your API key and run again.']);
+    // The launch has its answer once the Send is no longer busy.
+    await expect(
+      page.locator('session-composer .action-busy-spinner'),
+    ).toHaveCount(0);
+    await expect(page.locator('progress-app .request-notice')).toHaveCount(0);
+    await expect(page.locator('#composer-text')).toHaveValue(instruction);
+    const shown = await shownMessageBoxes();
+    expect(shown).toHaveLength(1);
+    writeFileSync(
+      test.info().outputPath('message-boxes.json'),
+      `${JSON.stringify(shown, null, 2)}\n`,
+    );
+    await page.screenshot({
+      path: test.info().outputPath('launch-told-once.png'),
+    });
+    expect(errors).toEqual([]);
+  } finally {
+    if (launched) await closeTexraApp(launched);
+  }
+});
