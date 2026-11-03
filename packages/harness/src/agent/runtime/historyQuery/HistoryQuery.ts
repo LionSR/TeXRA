@@ -299,7 +299,7 @@ export class HistoryQueryStore implements Context.Service.Shape<
       if (target > store.cursor || runs !== store.runs) {
         yield* this.feed(store, runs, target);
         store.cursor = target;
-        yield* append(store, replaceRuns(runs, store.callIds));
+        yield* append(store, replaceRuns(runs, store));
         store.runs = runs;
       }
       const reply = yield* request(store, {
@@ -330,6 +330,7 @@ export class HistoryQueryStore implements Context.Service.Shape<
       for (const id of store.fed.keys()) {
         if (runs.has(id)) continue;
         store.fed.delete(id);
+        store.unreadable.delete(id);
         yield* append(store, [
           ['removeTools', id],
           ['removeModels', id],
@@ -349,11 +350,13 @@ export class HistoryQueryStore implements Context.Service.Shape<
               (error) =>
                 Effect.logWarning(
                   `History query leaves out the calls of run ${run.id}: ${error.message}`,
-                ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+                ).pipe(withLogChannel(CHANNEL), Effect.as(error.message)),
             ),
           );
-        // An unreadable run is read no further; its row in runs stays.
-        if (rows === null) {
+        // A run whose rows do not decode in this build never will: its row
+        // in runs says why its calls are missing, and it is not read again.
+        if (typeof rows === 'string') {
+          store.unreadable.set(run.id, rows);
           store.fed.set(run.id, { view: run, seq: Number.MAX_SAFE_INTEGER });
           continue;
         }

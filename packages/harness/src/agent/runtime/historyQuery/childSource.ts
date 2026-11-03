@@ -134,6 +134,8 @@ export interface Store {
   readonly fed: Map<RunId, { readonly view: RunView; readonly seq: number }>;
   /** Each tool card's call id: what a child's `parent_call_id` reads. */
   readonly callIds: Map<string, string>;
+  /** Why a run's calls are missing: its history does not decode here. */
+  readonly unreadable: Map<RunId, string>;
 }
 
 /** Replaces an effect's failure with a `HistoryQueryFailed` carrying it. */
@@ -232,6 +234,7 @@ export const openStore = Effect.fn('HistoryQuery.open')(function* (
       cursor: 0,
       fed: new Map(),
       callIds: new Map(),
+      unreadable: new Map(),
     };
     yield* request(store, {
       kind: 'init',

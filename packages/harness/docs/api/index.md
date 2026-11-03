@@ -251,7 +251,7 @@ new name. `position` is load order, not the database's commit ordinal: a
 rebuilt store renumbers it.
 
 ```ts
-const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_id", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "purpose", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
+const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_id", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "purpose", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
 ```
 
 ## HostRequestFailure
