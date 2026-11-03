@@ -26,6 +26,7 @@ ruling and argues against it explicitly.
 | Non-run current-value state                                | [current-value SQLite rows](./implemented/architecture/2026-09-22-current-value-state-decision.md)                                 |
 | Errors, failure ownership, event channels                  | [error pipeline and ownership](./implemented/architecture/2026-06-10-error-pipeline-and-ownership.md)                              |
 | Liveness and single ownership of a run                     | [single owner liveness and one fold](./implemented/architecture/2026-09-20-single-owner-liveness-and-one-fold.md)                  |
+| One fact, one representation: stop, resume and neighbours  | [one fact, one representation](./proposed/architecture/2026-11-03-one-fact-one-representation.md)                                  |
 | Run-to-run messaging, subagent reports                     | [session messaging](./implemented/architecture/2026-09-25-session-messaging.md)                                                    |
 | Child-run concurrency                                      | [child run concurrency budget](./implemented/architecture/2026-08-15-child-run-concurrency-budget.md)                              |
 | Claude plan as a model route (gated)                       | [Claude Agent model route](./proposed/feature/2026-10-31-claude-agent-model-route.md)                                              |
