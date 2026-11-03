@@ -163,7 +163,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [], listing: 'request' },
   'approval.policy': { ...V1, listing: 'own' },
-  'run.position': { ...V1, listing: 'own' },
+  // v2: a `turn.end` carries the turn's `outcome` (no upcaster, as
+  // `run.config`: a v1 `turn.end` would fail its check).
+  'run.position': { version: 2, upcast: [], listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both (no upcaster, as `run.config`).
   // v3: a user message names its attached media by blob address (`media`),

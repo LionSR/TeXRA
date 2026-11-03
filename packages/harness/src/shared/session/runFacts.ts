@@ -5,18 +5,18 @@
  * and where its turn policy stands (the final-tool nudge, the finalized
  * answer). The row handlers in `runState.ts` and `turnRowHandlers.ts` set these
  * fields, so the loop reads them off the same state on the live path and on
- * resume. The consumed follow-up is here too, as its writers commit it and as a
- * reader learns its receipt from `RunRows`; the rules for which pending rows a
- * run reads are the reader's (`agent/followUp/RunInput.ts`). The lifecycle rows
- * a run is registered, activated and ended with are built here, beside the
- * readers of their facts; `agent/storage/runLifecycle.ts` commits them.
+ * resume. The consumed follow-up is here too, as its writers commit it (its
+ * receipt is `followUpReceipt`, in `runRowReads.ts`); the rules for which
+ * pending rows a run reads are the reader's (`agent/followUp/RunInput.ts`).
+ * The lifecycle rows a run is registered, activated and ended with are
+ * built here, beside the readers of their facts;
+ * `agent/storage/runLifecycle.ts` commits them.
  */
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
-  type CommitOrdinal,
   type DispatchFacts,
   emptyRunEndOutput,
   type FollowUpContent,
@@ -188,59 +188,6 @@ export const consumedRow = (
   followUpId,
   disposition,
 });
-
-/**
- * Where one follow-up stands: `accepted` while queued; `incorporated` once it
- * is part of a turn's message and that turn has not ended; `terminal` once
- * something answered it (`answer`: the commit of the row that took it, written
- * in the transaction that answered it: a child's report, a control's edit or
- * config, or the turn's own rows) or nothing will (`answer` null, `reason`: a
- * dropped row's, or the error or outcome that ended the run before its turn
- * finished). Every message of one turn shares that turn's answer.
- */
-type FollowUpReceipt =
-  | { readonly state: 'accepted' }
-  | { readonly state: 'incorporated'; readonly turn: number }
-  | {
-      readonly state: 'terminal';
-      readonly answer: CommitOrdinal | null;
-      readonly reason?: string;
-    };
-
-/** The receipt of `followUpId` as `rows` say it; an id no row named has left
- *  no receipt. A turn ends when the loop rests at it (`waiting`, or `turn.ready`
- *  once the next input is taken at the same turn number), moves past it, or
- *  the run ends. */
-export function followUpReceipt(
-  rows: RunRows,
-  followUpId: string,
-): FollowUpReceipt | undefined {
-  if (rows.followUps.some((f) => f.followUpId === followUpId))
-    return { state: 'accepted' };
-  const taken = rows.taken.get(followUpId);
-  if (taken === undefined) return undefined;
-  const { disposition, commit } = taken;
-  switch (disposition.kind) {
-    case 'answered':
-    case 'applied':
-      return { state: 'terminal', answer: commit };
-    case 'dropped':
-      return { state: 'terminal', answer: null, reason: disposition.reason };
-    case 'turn': {
-      const { turn } = disposition;
-      const rested = rows.at === 'waiting' || rows.at === 'turn.ready';
-      if (rows.turn > turn || (rows.turn === turn && rested))
-        return { state: 'terminal', answer: commit };
-      if (rows.end === null) return { state: 'incorporated', turn };
-      const { error, outcome } = rows.end;
-      return {
-        state: 'terminal',
-        answer: null,
-        reason: error?.message ?? outcome,
-      };
-    }
-  }
-}
 
 /** Run `runId`'s rows among `rows`, folded (a shared row left out, so a
  *  partial read, a listing's, folds too). */

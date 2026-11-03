@@ -37,21 +37,38 @@
  *   crash runs, after a plugin's module changed, the new module source
  *   instead of the one it started with; or a step started after the
  *   change keeps the old one.
+ * - R18: a `/compact` sent while a resume runs its turn is answered only
+ *   once the run rests, not when its input takes it.
+ * - R20: a message retried under its id once the run's input closed is
+ *   refused, sent again or resumes the run, instead of answering with the
+ *   first send's receipt; or a different message under that id is sent.
+ * - R21: messages merged into one turn read as answered by different rows,
+ *   or a turn that failed reads as answered.
  */
 import { existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { layer } from '@effect/vitest';
-import { Cause, Effect, Fiber, Context, Layer, Schema, Stream } from 'effect';
+import {
+  Cause,
+  Deferred,
+  Effect,
+  Fiber,
+  Context,
+  Layer,
+  Schema,
+  Stream,
+} from 'effect';
 import { describe, expect } from 'vitest';
 
 import {
+  ModelError,
   originOf,
   type Model,
   type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm';
-import { defineTool, Sessions } from '@texra-ai/harness';
+import { Conflict, defineTool, Sessions } from '@texra-ai/harness';
 import { ValidationModel } from '@texra-ai/harness/host';
 import { definePlugin } from '@texra-ai/harness/plugins';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
@@ -69,6 +86,7 @@ import {
   answersOf,
   claimHolder,
   crashedCopy,
+  parkedAfter,
   parkedRunAfterCrash,
   sessionStoreFaults,
   storedRows,
@@ -536,6 +554,60 @@ describe(
           );
 
           it.effect(
+            'R20: a message retried under its id after its run took no more input answers with its receipt; a different message under it is a conflict',
+            () =>
+              Effect.gen(function* () {
+                const { session, runId, storage } =
+                  yield* parkedRunAfterCrash();
+                const sdk = yield* packageSession(session);
+                const message = {
+                  kind: 'followUp.send',
+                  runId,
+                  id: 'note-1',
+                  text: 'Add the lemma.',
+                } as const;
+                expect(yield* sdk.request(message)).toMatchObject({
+                  kind: 'followUp',
+                  id: 'note-1',
+                });
+                const { receipt } = yield* sdk.request({
+                  kind: 'followUp.receipt',
+                  runId,
+                  id: 'note-1',
+                  wait: true,
+                });
+                expect(receipt).toEqual({
+                  state: 'answered',
+                  turn: 2,
+                  answer: expect.any(Number),
+                });
+                // The acknowledgement is lost, and the run's input closes.
+                yield* Context.get(session, Inbox).closeInput(runId);
+                yield* untilStored(
+                  storage,
+                  () => endsOf(storage, runId).at(-1) === 'cancelled',
+                );
+
+                expect(yield* sdk.request(message)).toEqual({
+                  kind: 'followUp',
+                  id: 'note-1',
+                  status: 'sent',
+                  receipt,
+                });
+                const conflict = yield* Effect.flip(
+                  sdk.request({ ...message, text: 'Drop the lemma.' }),
+                );
+                expect(conflict).toBeInstanceOf(Conflict);
+                expect(conflict).toMatchObject({ runId, id: 'note-1' });
+                const queued = storedRows(storage).filter(
+                  (row) => row.run === runId && row.type === 'followup.queued',
+                );
+                expect(queued).toHaveLength(1);
+                expect(activations(storage, runId)).toBe(2);
+              }),
+          );
+
+          it.effect(
             'a run the crash left untitled is titled once by its resume',
             () =>
               Effect.gen(function* () {
@@ -780,3 +852,246 @@ describe(
     });
   },
 );
+
+/** The text of the user messages after the model's last answer. */
+const askedSinceAnswer = (
+  messages: Parameters<Model['streamTurn']>[0]['messages'],
+): string =>
+  messages
+    .slice(messages.findLastIndex((m) => m.role === 'assistant') + 1)
+    .flatMap((m) =>
+      m.role === 'user'
+        ? m.content.flatMap((part) => (part.kind === 'text' ? [part.text] : []))
+        : [],
+    )
+    .join('\n');
+
+/**
+ * The model of the receipt cases, behind the validation route: it answers
+ * each turn with what it was asked since its last answer, once the gate a
+ * `WAIT<n>` there names opens, and refuses, for good, a turn that asks
+ * `FAIL`. A gate tells a case when a turn reached it.
+ */
+const receiptModel = () => {
+  const gates = new Map<
+    string,
+    { reached: Deferred.Deferred<void>; open: Deferred.Deferred<void> }
+  >();
+  const gate = (name: string) => {
+    const found = gates.get(name);
+    if (found !== undefined) return found;
+    const made = {
+      reached: Deferred.makeUnsafe<void>(),
+      open: Deferred.makeUnsafe<void>(),
+    };
+    gates.set(name, made);
+    return made;
+  };
+  const layer = Layer.succeed(ValidationModel)({
+    enabled: Effect.succeed(true),
+    bind: (config) => {
+      const origin = originOf({
+        protocol: 'openai-responses',
+        requestedModel: config.id,
+        deployment: {
+          endpoint: 'https://validation.invalid/v1',
+          credentialScope: 'validation',
+        },
+      });
+      const model: Model = {
+        prepareTurn: (request) =>
+          Effect.succeed({
+            ...origin,
+            mode: 'foreground',
+            system: request.system,
+            messages: request.messages,
+            tools: request.tools ?? [],
+            transport: { kind: 'http' },
+            controls: {
+              temperature: 0,
+              maxOutputTokens:
+                request.maxOutputTokens ?? config.maxOutputTokens,
+              store: false,
+              parallelToolCalls: true,
+              toolChoice: request.toolChoice ?? 'auto',
+              reasoning: null,
+              serviceTier: null,
+            },
+          }),
+        streamTurn: (turn) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const asked = askedSinceAnswer(turn.messages);
+              const waits = /WAIT\d/.exec(asked)?.[0];
+              if (waits !== undefined) {
+                yield* Deferred.succeed(gate(waits).reached, undefined);
+                yield* Deferred.await(gate(waits).open);
+              }
+              const refused: Stream.Stream<TurnEvent, ModelError> = Stream.fail(
+                new ModelError({
+                  kind: 'invalid-request',
+                  message: 'The request was refused.',
+                  retryable: false,
+                }),
+              );
+              if (asked.includes('FAIL')) return refused;
+              return Stream.succeed<TurnEvent>({
+                kind: 'completed',
+                result: {
+                  kind: 'http',
+                  providerResponseId: `response-${asked.length}`,
+                  requestedOrigin: origin,
+                  returnedModel: config.id,
+                  modelFingerprint: null,
+                  content: [
+                    {
+                      kind: 'message',
+                      content: [{ kind: 'text', text: `Answered: ${asked}` }],
+                    },
+                  ],
+                  finishReason: 'stop',
+                  usage: null,
+                },
+              });
+            }),
+          ),
+      };
+      return { origin, model };
+    },
+  });
+  return { process: SessionGraph.with([], layer), gate };
+};
+
+/** The persona the receipt cases run. */
+const NOTES_AGENT = {
+  name: 'note_taker',
+  description: 'Answers each message.',
+  prompt: 'Answer each message.',
+  tools: [],
+};
+
+describe('input receipts', { timeout: REAL_RUN_TIMEOUT }, () => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-receipt-'), { buildPerTest: true })((it) => {
+      it.effect(
+        'R21: messages merged into one turn share its answer; those of a turn that fails are unanswered for it',
+        () => {
+          const { process, gate } = receiptModel();
+          return Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const sessions = yield* Sessions;
+            const session = yield* sessions.open(roots, {
+              persistent: true,
+              host: {},
+            });
+            const run = yield* session.start({
+              agent: NOTES_AGENT,
+              instruction: 'WAIT1 Start the notes.',
+              model: 'openai/gpt-5.6-sol',
+              interactive: true,
+            });
+            const { runId } = run;
+            const send = (id: string, text: string) =>
+              session.request({ kind: 'followUp.send', runId, id, text });
+            const receipt = (id: string) =>
+              Effect.map(
+                session.request({
+                  kind: 'followUp.receipt',
+                  runId,
+                  id,
+                  wait: true,
+                }),
+                (answer) => answer.receipt,
+              );
+            // Two messages typed while a turn runs become the next turn's.
+            yield* Deferred.await(gate('WAIT1').reached);
+            yield* send('a', 'WAIT2 First point.');
+            yield* send('b', 'Second point.');
+            yield* Deferred.succeed(gate('WAIT1').open, undefined);
+            yield* Deferred.await(gate('WAIT2').reached);
+            yield* send('c', 'FAIL Third point.');
+            yield* send('d', 'Fourth point.');
+            yield* Deferred.succeed(gate('WAIT2').open, undefined);
+
+            const answered = yield* receipt('a');
+            expect(answered).toEqual({
+              state: 'answered',
+              turn: 2,
+              answer: expect.any(Number),
+            });
+            expect(yield* receipt('b')).toEqual(answered);
+            const failed = {
+              state: 'unanswered',
+              turn: 3,
+              reason: 'failed',
+            } as const;
+            expect(yield* receipt('c')).toEqual(failed);
+            expect(yield* receipt('d')).toEqual(failed);
+            yield* sessions.close(roots);
+          }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+        },
+      );
+
+      it.effect(
+        'R18: a /compact sent while a resume runs its turn is answered once the run takes it',
+        () => {
+          const { process, gate } = receiptModel();
+          return Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            // The first process parks the run, then dies.
+            const { runId, storage } = yield* Effect.scoped(
+              Effect.gen(function* () {
+                const sessions = yield* Sessions;
+                const session = yield* sessions.open(roots, {
+                  persistent: true,
+                  host: {},
+                });
+                const run = yield* session.start({
+                  agent: NOTES_AGENT,
+                  instruction: 'Start the notes.',
+                  model: 'openai/gpt-5.6-sol',
+                  interactive: true,
+                });
+                yield* untilStored(
+                  roots.storage,
+                  parkedAfter(run.runId, 1, roots.storage),
+                );
+                const storage = crashedCopy(roots.storage);
+                yield* sessions.close(roots);
+                return { runId: run.runId, storage };
+              }),
+            );
+            const sessions = yield* Sessions;
+            const session = yield* sessions.open(
+              { ...roots, storage },
+              { persistent: true, host: {} },
+            );
+            // The message resumes the run, whose turn holds its model call.
+            yield* session.request({
+              kind: 'followUp.send',
+              runId,
+              text: 'WAIT1 Go on.',
+            });
+            yield* Deferred.await(gate('WAIT1').reached);
+
+            expect(
+              yield* session
+                .request({ kind: 'run.compact', runId })
+                .pipe(Effect.timeout('10 seconds')),
+            ).toEqual({ kind: 'done' });
+            expect(
+              storedRows(storage).some(
+                (row) =>
+                  row.run === runId &&
+                  row.type === 'followup.queued' &&
+                  row.data.includes('"control":{"kind":"compact"}'),
+              ),
+            ).toBe(true);
+            yield* Deferred.succeed(gate('WAIT1').open, undefined);
+            yield* sessions.close({ ...roots, storage });
+          }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+        },
+      );
+    });
+  });
+});

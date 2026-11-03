@@ -185,11 +185,9 @@ export {
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 // A request a host sends a session, the outcome or the error class it is
-// answered with, a run's start as data, and a tool edit's hunks as
-// unified-diff lines.
+// answered with, and a run's start as data.
 export {
   Cancelled,
-  formatHunkLines,
   Invalid,
   OutcomeSchema,
   Rejected,
@@ -293,6 +291,7 @@ export {
   fileLocationShortDisplayPath,
   // A fresh run id, for a caller that names a run before a session launches it.
   generateRunId,
+  formatHunkLines,
   getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
   GOAL_STRATEGY_SETTING,

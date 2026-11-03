@@ -17,6 +17,7 @@ import {
 } from '@shared/schemas';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
+import { sentBefore } from './followUpMessages';
 import type { InboxItem, SessionInbox } from './Inbox';
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
@@ -120,14 +121,11 @@ export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {
   if (result.status === 'failed') {
-    return {
-      severity: 'warning',
-      message: describeFollowUpFailure(result.reason),
-    };
+    const message = describeFollowUpFailure(result.reason);
+    return { severity: 'warning', message };
   }
-  if (result.status === 'queued' && result.wake === 'failed') {
+  if (result.status === 'queued' && result.wake === 'failed')
     return { severity: 'info', message: FOLLOW_UP_WAKE_FAILED_MESSAGE };
-  }
   return { severity: 'none' };
 }
 
@@ -325,6 +323,8 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
+    if (yield* sentBefore(runId, item, hold, attach))
+      return { status: 'sent' } as const;
     const live = runs.get(runId);
     if (live !== undefined) {
       if (!live.readsMessages)

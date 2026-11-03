@@ -41,7 +41,11 @@ export type RunPosition = {
   readonly requests: Readonly<Record<string, RequestState>>;
 };
 
-type RowOf<T extends SessionEvent['type']> = Extract<SessionEvent, { type: T }>;
+/** The row of kind `T`. */
+export type RowOf<T extends SessionEvent['type']> = Extract<
+  SessionEvent,
+  { type: T }
+>;
 
 /**
  * What these rows say about one run: its position and the input it has not

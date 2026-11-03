@@ -647,7 +647,12 @@ const TURN_ROWS: readonly RunHistoryRow[] = [
   position('results.ready', 1),
   {
     type: 'run.position',
-    payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
+    payload: {
+      family: 'toolUse',
+      at: 'turn.end',
+      turn: 1,
+      outcome: 'completed',
+    },
   },
 ].map((draft, index) => runHistoryRow(index + 1, draft));
 

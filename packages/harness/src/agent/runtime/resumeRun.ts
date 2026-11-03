@@ -40,7 +40,6 @@ import {
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { followUpReceipt } from '@shared/session/runFacts';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -217,10 +216,9 @@ export const decideResume = Effect.fn('decideResume')(function* (
   return yield* resumeQueuedToolUse(runId, config, options, activated);
 }, Effect.scoped);
 
-/** Whether every follow-up of `batch` has left the queue `rows` hold: its
- *  receipt is past `accepted`. */
+/** Whether every follow-up of `batch` has left the queue `rows` hold. */
 const taken = (rows: RunRows, batch: ReadonlySet<string>): boolean =>
-  [...batch].every((id) => followUpReceipt(rows, id)?.state !== 'accepted');
+  !rows.followUps.some(({ followUpId }) => batch.has(followUpId));
 
 /**
  * Whether `runId` rests with every follow-up of `batch` taken: its rows

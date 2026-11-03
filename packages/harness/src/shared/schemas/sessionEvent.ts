@@ -36,7 +36,7 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
-import { FollowUpContentSchema, FollowUpDispositionSchema } from './followUp';
+import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runFacts';
@@ -276,21 +276,7 @@ const DisplayRowDraftSchema = Schema.Union([
    *  queued without consumed. */
   durable('followup.queued', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
-    content: FollowUpContentSchema,
-    /** When the row may be read; the rules are `readableMessages`. */
-    holdUntil: Schema.optional(
-      Schema.Literals(['instruction', 'turn', 'generation']),
-    ),
-    /** A request of the run's own, consumed by the batch that applies it. */
-    control: Schema.optional(
-      Schema.Union([
-        Schema.Struct({ kind: Schema.Literal('compact') }),
-        Schema.Struct({
-          kind: Schema.Literal('model'),
-          model: Schema.String.check(Schema.isMinLength(1)),
-        }),
-      ]),
-    ),
+    ...FollowUpRequestSchema.fields,
   }),
   /** The follow-up left the queue, in the batch of the rows that took it,
    *  and why (`disposition`: part of a turn's message, answered, applied,

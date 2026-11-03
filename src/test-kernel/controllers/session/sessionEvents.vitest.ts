@@ -2291,7 +2291,12 @@ describe('RunHistory', () => {
         {
           type: 'run.position',
           aggregateId: AGGREGATE,
-          payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
+          payload: {
+            family: 'toolUse',
+            at: 'turn.end',
+            turn: 1,
+            outcome: 'completed',
+          },
         },
       ]);
       expect(state.messages.map((m) => m.role)).toEqual([
