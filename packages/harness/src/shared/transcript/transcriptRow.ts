@@ -115,11 +115,9 @@ export interface ErrorRow extends TranscriptRowBase {
   readonly kind: 'error';
   /** The failure headline. */
   readonly summary: TranscriptText;
-  /** Canonical detail field set, in display order. */
+  /** Canonical detail field set, in display order: a host shows each as a
+   *  `key: value` line. */
   readonly details: readonly ErrorRowDetail[];
-  /** The detail block as one text, for copy affordances and full-output
-   *  readers. */
-  readonly detailText: TranscriptText;
   /** The classified failure the row records: an app with words of its own
    *  for the classification shows them where the row shows `message` (the
    *  summary, or the `message` detail). */

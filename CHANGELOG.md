@@ -45,8 +45,9 @@ All notable changes to this project will be documented in this file.
   `errorDetails` (no `errorMessage`). A `requestShowError` notice carries
   the failure's classification beside its message
   (`RequestShowErrorPayloadSchema`), an error row the classified failure it
-  records (`ErrorRow.failure`), and a classified failure's run end names its
-  cause without "Error executing agent …:". `getSdkErrorMessage` (`./host`)
+  records (`ErrorRow.failure`, and no `detailText`: a host joins `details`),
+  and a classified failure's run end names its cause without "Error
+  executing agent …:". `getSdkErrorMessage` (`./host`)
   is `normalizeProviderError`, which returns the message with its
   classification (`ProviderError`). Conversations saved by an earlier build
   show as written by that build and cannot be resumed by this one.

@@ -115,25 +115,27 @@ export function modelFailureText({
 }
 
 /**
- * An error row as a person reads it: a classified failure in
- * {@link modelFailureText}'s words wherever the row shows the harness's
- * message for it (its headline, or its `message` detail); any other row as
- * the harness wrote it.
+ * An error row as a person reads it: its headline, and its details as one
+ * `key: value` line each (the block a copy or a full-output reader takes). A
+ * classified failure reads in {@link modelFailureText}'s words wherever the
+ * row shows the harness's message for it: its headline, or its `message`
+ * detail.
  */
-export function errorRowText(row: ErrorRow): {
+export function errorRowText({ summary, details, failure }: ErrorRow): {
   readonly summary: string;
   readonly detailText: TranscriptText;
 } {
-  const plain = { summary: row.summary.full, detailText: row.detailText };
-  if (row.failure === undefined) return plain;
-  const { message } = row.failure;
-  const words = modelFailureText(row.failure);
-  if (words === message) return plain;
+  const words = failure === undefined ? undefined : modelFailureText(failure);
+  const worded = (text: string): string =>
+    words !== undefined && text === failure?.message ? words : text;
   return {
-    summary: row.summary.full === message ? words : row.summary.full,
+    summary: worded(summary.full),
     detailText: transcriptText(
-      row.details
-        .map(({ key, value }) => `${key}: ${key === 'message' ? words : value}`)
+      details
+        .map(
+          ({ key, value }) =>
+            `${key}: ${key === 'message' ? worded(value) : value}`,
+        )
         .join('\n'),
     ),
   };
