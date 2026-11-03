@@ -461,7 +461,7 @@ function pluralize(
 
 ## ProgressStatusRow
 
-A status note: its message alone, which no payload rides beside.
+A status note: its message, and no untyped payload beside it.
 
 ```ts
 interface ProgressStatusRow extends TranscriptRowBase {

@@ -180,7 +180,7 @@ export interface ContextManagementRow extends TranscriptRowBase {
   readonly items: readonly StatItem[];
 }
 
-/** A status note: its message alone, which no payload rides beside. */
+/** A status note: its message, and no untyped payload beside it. */
 export interface ProgressStatusRow extends TranscriptRowBase {
   readonly kind: 'progressStatus';
   readonly summary: TranscriptText;
