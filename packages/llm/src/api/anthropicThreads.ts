@@ -23,9 +23,10 @@ import type { BetaMessageThreadParam } from '@anthropic-ai/sdk/resources/beta/me
  */
 const MESSAGE_THREADS_BETA = 'message-threads-2026-08-12';
 
-/** A request body, with the thread it creates or continues. */
-type ThreadedBody = MessageCreateParamsStreaming & {
+/** A request body, with the thread it creates or continues and its beta. */
+export type ThreadedBody = MessageCreateParamsStreaming & {
   readonly thread?: BetaMessageThreadParam;
+  readonly betas?: Array<typeof MESSAGE_THREADS_BETA>;
 };
 
 // The server keeps a thread 5 minutes after its last stored response; the
@@ -61,11 +62,13 @@ const ThreadErrorSchema = Schema.Struct({
 
 /**
  * How a rejected threaded request recovers, from the API error body:
- * `replay` sends the full conversation as a new thread, `unsupported` sends
- * it without one. The API rejects these before the model runs, so nothing
- * was generated or billed.
+ * `replay` and `not-found` send the full conversation as a new thread,
+ * `unsupported` sends it without one. The API rejects these before the
+ * model runs, so nothing was generated or billed.
  */
-function threadRejection(error: ModelError): 'replay' | 'unsupported' | null {
+function threadRejection(
+  error: ModelError,
+): 'replay' | 'not-found' | 'unsupported' | null {
   if (!(error.cause instanceof APIError)) return null;
   const decoded = Schema.decodeUnknownResult(ThreadErrorSchema)(
     error.cause.error,
@@ -73,6 +76,7 @@ function threadRejection(error: ModelError): 'replay' | 'unsupported' | null {
   if (Result.isFailure(decoded)) return null;
   switch (decoded.success.error.details.error_code) {
     case 'thread_not_found':
+      return 'not-found';
     case 'thread_fingerprint_mismatch':
     case 'thread_already_continued':
     case 'thread_continue_in_flight':
@@ -84,15 +88,28 @@ function threadRejection(error: ModelError): 'replay' | 'unsupported' | null {
   }
 }
 
+/**
+ * How a conversation's next request goes out: continuing `responseId`, or
+ * with no thread (`null`) once the API could not store it.
+ */
 interface StoredThread {
-  readonly responseId: string;
-  /** How many lowered messages the thread holds, its response included. */
+  readonly responseId: string | null;
+  /** The response came from a replay: a full create after a lost thread. */
+  readonly replayed: boolean;
+  /** How many lowered messages the conversation holds, its response included. */
   readonly length: number;
   readonly expiresAtMs: number;
 }
+/** How a request went out, and so what its response stores. */
+type Sent = Pick<StoredThread, 'replayed'> & { readonly threaded: boolean };
+
+/** An SDK event stream, plain or beta: the codec reads either. */
+export type SdkSource = AsyncIterable<unknown> & {
+  readonly controller: AbortController;
+};
 
 /** What a binding sends its requests through. */
-interface MessageThreads<Source> {
+interface MessageThreads {
   /**
    * Opens the turn's request, continuing the thread its messages extend
    * where one is live, and the completion step that stores the response's
@@ -103,7 +120,7 @@ interface MessageThreads<Source> {
     body: MessageCreateParamsStreaming,
   ) => Effect.Effect<
     {
-      readonly source: Source;
+      readonly source: SdkSource;
       readonly finalize?: (
         result: TurnResult,
       ) => Effect.Effect<TurnResult, ModelError>;
@@ -119,20 +136,20 @@ interface MessageThreads<Source> {
  * without the history. A response id continues once, so taking a thread
  * removes it; the response that continuation produces is stored next.
  */
-export function messageThreads<Source>(options: {
+export function messageThreads(options: {
   readonly endpoint: string;
+  /** Sends a threaded body (one with `thread`) on the beta endpoint. */
   readonly open: (
     body: ThreadedBody,
-    headers: Record<string, string>,
-  ) => Effect.Effect<Source, ModelError, Scope.Scope>;
+  ) => Effect.Effect<SdkSource, ModelError, Scope.Scope>;
   /** The request body a turn lowers to. */
   readonly lower: (
     turn: ResolvedTurn,
   ) => Effect.Effect<MessageCreateParamsStreaming, ModelError>;
-}): MessageThreads<Source> {
+}): MessageThreads {
   const live = new Map<string, StoredThread>();
   let supported = URL.parse(options.endpoint)?.hostname === 'api.anthropic.com';
-  const beta = { 'anthropic-beta': MESSAGE_THREADS_BETA };
+  const betas: Array<typeof MESSAGE_THREADS_BETA> = [MESSAGE_THREADS_BETA];
 
   const prune = (nowMs: number) => {
     for (const [key, stored] of live)
@@ -147,18 +164,11 @@ export function messageThreads<Source>(options: {
       )
         continue;
       live.delete(key);
-      // Undefined fields are not serialized; an explicit null is refused.
-      return {
-        ...body,
-        system: undefined,
-        tools: undefined,
-        messages: body.messages.slice(stored.length),
-        thread: { type: 'continue', previous_message_id: stored.responseId },
-      } satisfies ThreadedBody;
+      return stored;
     }
     return null;
   };
-  const store = (turn: ResolvedTurn, result: TurnResult) =>
+  const store = (turn: ResolvedTurn, result: TurnResult, sent: Sent) =>
     Effect.gen(function* () {
       const responseId = result.providerResponseId;
       if (
@@ -176,7 +186,8 @@ export function messageThreads<Source>(options: {
       prune(nowMs);
       const key = threadKey(held, held.messages);
       live.set(key, {
-        responseId,
+        responseId: sent.threaded ? responseId : null,
+        replayed: sent.replayed,
         length: held.messages.length,
         expiresAtMs: nowMs + THREAD_LIFETIME_MS,
       });
@@ -188,12 +199,32 @@ export function messageThreads<Source>(options: {
       return result;
     });
 
-  const send: MessageThreads<Source>['send'] = (turn, body) =>
+  const send: MessageThreads['send'] = (turn, body) =>
     Effect.gen(function* () {
-      if (!supported) return { source: yield* options.open(body, {}) };
-      const create = { ...body, thread: { type: 'create' } } as const;
-      const continued = take(body, yield* Clock.currentTimeMillis);
-      const source = yield* options.open(continued ?? create, beta).pipe(
+      if (!supported) return { source: yield* options.open(body) };
+      const create = { ...body, thread: { type: 'create' }, betas } as const;
+      const stored = take(body, yield* Clock.currentTimeMillis);
+      let sent: Sent = { threaded: true, replayed: false };
+      const unthreaded = (replayed: boolean) => {
+        sent = { threaded: false, replayed };
+        return options.open(body);
+      };
+      // A new conversation creates a thread; a stored one continues it with
+      // only the new messages, or goes out whole if the API cannot hold it.
+      const first = () => {
+        if (stored === null) return options.open(create);
+        if (stored.responseId === null) return unthreaded(false);
+        return options.open({
+          ...body,
+          // Undefined fields are not serialized; an explicit null is refused.
+          system: undefined,
+          tools: undefined,
+          messages: body.messages.slice(stored.length),
+          thread: { type: 'continue', previous_message_id: stored.responseId },
+          betas,
+        });
+      };
+      const source = yield* first().pipe(
         Effect.catch((error) => {
           const rejection = threadRejection(error);
           if (rejection === 'unsupported') {
@@ -201,18 +232,25 @@ export function messageThreads<Source>(options: {
             live.clear();
             return Effect.logWarning(
               `Anthropic refused message threads; sending whole conversations: ${error.message}`,
-            ).pipe(Effect.andThen(options.open(body, {})));
+            ).pipe(Effect.andThen(options.open(body)));
           }
-          if (rejection === 'replay' && continued !== null)
+          if (rejection === null || stored?.responseId == null)
+            return Effect.fail(error);
+          // Lost again right after a replay: the API cannot store this
+          // conversation, so it goes out whole from now on.
+          if (rejection === 'not-found' && stored.replayed)
             return Effect.logDebug(
-              `Anthropic thread not continued; resending the conversation: ${error.message}`,
-            ).pipe(Effect.andThen(options.open(create, beta)));
-          return Effect.fail(error);
+              `Anthropic cannot hold this conversation's thread; sending it whole: ${error.message}`,
+            ).pipe(Effect.andThen(unthreaded(true)));
+          sent = { threaded: true, replayed: true };
+          return Effect.logDebug(
+            `Anthropic thread not continued; resending the conversation: ${error.message}`,
+          ).pipe(Effect.andThen(options.open(create)));
         }),
       );
       return {
         source,
-        finalize: (result: TurnResult) => store(turn, result),
+        finalize: (result: TurnResult) => store(turn, result, sent),
       };
     });
   return { send };

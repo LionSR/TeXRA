@@ -47,7 +47,7 @@ import {
   StopSchema,
   UsageSchema,
 } from './anthropicMessagesWire.js';
-import { messageThreads } from './anthropicThreads.js';
+import { messageThreads, type SdkSource } from './anthropicThreads.js';
 import type { InputPart, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
@@ -657,10 +657,13 @@ export function anthropicMessagesModel(
 
   const threads = messageThreads({
     endpoint: config.deployment.endpoint,
-    open: (body, headers) =>
+    open: (body) =>
       Effect.flatMap(Effect.abortSignal, (signal) =>
         Effect.tryPromise({
-          try: () => client.messages.create(body, { signal, headers }),
+          try: (): PromiseLike<SdkSource> =>
+            body.thread === undefined
+              ? client.messages.create(body, { signal })
+              : client.beta.messages.create(body, { signal }),
           catch: sdkFailure,
         }),
       ),

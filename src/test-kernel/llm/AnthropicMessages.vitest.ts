@@ -486,7 +486,9 @@ describe('canonical Anthropic Messages protocol', () => {
  *   sends system/tools a continue must leave out;
  * - the server no longer holds the thread (expired, already continued) and
  *   the turn fails instead of resending the conversation;
- * - the account cannot use threads and every turn keeps failing.
+ * - the account cannot use threads and every turn keeps failing;
+ * - the API cannot store a conversation, so each turn pays a failed
+ *   continue before its replay.
  */
 describe('Anthropic message threads', () => {
   const fetchModel = vi.fn<typeof fetch>();
@@ -520,15 +522,18 @@ describe('Anthropic message threads', () => {
       beta: new Headers(init.headers).get('anthropic-beta'),
     };
   };
-  // Two turns: the tool calls the first returns, then their results.
-  const twoTurns = Effect.fn(function* (bound: ReturnType<typeof model>) {
-    const first = yield* bound.prepareTurn(REQUEST);
-    assert(first.mode === 'foreground');
-    const result = yield* completedTurn(bound.streamTurn(first));
-    const second = yield* bound.prepareTurn({
-      ...REQUEST,
-      messages: [
-        ...REQUEST.messages,
+  // Turns that each answer the previous turn's tool calls.
+  const turns = Effect.fn(function* (
+    bound: ReturnType<typeof model>,
+    count = 2,
+  ) {
+    let messages = REQUEST.messages;
+    for (let turn = 0; turn < count; turn++) {
+      const prepared = yield* bound.prepareTurn({ ...REQUEST, messages });
+      assert(prepared.mode === 'foreground');
+      const result = yield* completedTurn(bound.streamTurn(prepared));
+      messages = [
+        ...messages,
         assistantMessageFromResult(result),
         {
           role: 'tool',
@@ -538,10 +543,8 @@ describe('Anthropic message threads', () => {
             content: [{ kind: 'text' as const, text: `result ${callOrdinal}` }],
           })),
         },
-      ],
-    });
-    assert(second.mode === 'foreground');
-    yield* completedTurn(bound.streamTurn(second));
+      ];
+    }
   });
   const toolResults = [
     {
@@ -563,7 +566,7 @@ describe('Anthropic message threads', () => {
 
   it.effect('continues the stored response with only the new messages', () =>
     Effect.gen(function* () {
-      yield* twoTurns(model());
+      yield* turns(model());
       const create = sent(0);
       expect(create.beta).toBe('message-threads-2026-08-12');
       expect(create.body.thread).toStrictEqual({ type: 'create' });
@@ -585,7 +588,7 @@ describe('Anthropic message threads', () => {
       fetchModel
         .mockImplementationOnce(async () => response(signedEvents()))
         .mockImplementationOnce(async () => rejected(404, 'thread_not_found'));
-      yield* twoTurns(model());
+      yield* turns(model());
       expect(fetchModel).toHaveBeenCalledTimes(3);
       const replay = sent(2);
       expect(replay.body.thread).toStrictEqual({ type: 'create' });
@@ -596,12 +599,32 @@ describe('Anthropic message threads', () => {
     }),
   );
 
+  it.effect('sends a conversation the API cannot hold whole', () =>
+    Effect.gen(function* () {
+      const lost = async () => rejected(404, 'thread_not_found');
+      fetchModel
+        .mockImplementationOnce(async () => response(signedEvents()))
+        .mockImplementationOnce(lost)
+        .mockImplementationOnce(async () => response(signedEvents()))
+        .mockImplementationOnce(lost);
+      yield* turns(model(), 4);
+      // Turn 3's continue is lost right after turn 2's replay: from then on
+      // the conversation goes out whole, with no continue to fail first.
+      expect(fetchModel).toHaveBeenCalledTimes(6);
+      expect(sent(2).body.thread).toStrictEqual({ type: 'create' });
+      for (const call of [4, 5]) {
+        expect(sent(call).beta).toBeNull();
+        expect(sent(call).body).not.toHaveProperty('thread');
+      }
+    }),
+  );
+
   it.effect('stops threading when the account cannot use threads', () =>
     Effect.gen(function* () {
       fetchModel.mockImplementationOnce(async () =>
         rejected(400, 'thread_unsupported_request'),
       );
-      yield* twoTurns(model());
+      yield* turns(model());
       expect(fetchModel).toHaveBeenCalledTimes(3);
       for (const call of [1, 2]) {
         expect(sent(call).beta).toBeNull();
