@@ -3,8 +3,8 @@ import { BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { RouteUnavailable } from '@texra-ai/harness/host';
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
-import { RouteUnavailable } from '@common/errors/agentErrors';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
