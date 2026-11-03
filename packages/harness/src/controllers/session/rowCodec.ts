@@ -36,6 +36,7 @@ import {
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
+  unavailableFactReason,
   type AggregateId,
   type JsonValue,
   type SessionEvent,
@@ -265,22 +266,16 @@ function parseData(data: string, blobs: Blobs): unknown {
   });
 }
 
-/** A plugin row whose plugin this build lacks: kept as written and left
- *  out of every read, named by its `plugin/kind`. */
-interface LeftOut {
-  readonly _tag: 'leftOut';
-  readonly kind: string;
-}
-
-/** A selected row as its event, or {@link LeftOut}: another build's kind
- *  or version fails as {@link rowUpcasts} says, and an undecodable row
- *  `DatabaseRowCorrupt`, naming it. */
+/** A selected row as its event: another build's kind or version fails as
+ *  {@link rowUpcasts} says, and an undecodable row `DatabaseRowCorrupt`,
+ *  naming it. A plugin fact whose kind this build lacks reads as written,
+ *  its value unchecked and not upcast, with why (`unavailable`). */
 export function decodeRow(
   input: SqlRow,
   factKinds: FactKinds,
   blobs: Blobs,
 ): Result.Result<
-  SessionEvent | LeftOut,
+  SessionEvent,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = Schema.decodeUnknownSync(RowSchema)(input);
@@ -324,7 +319,10 @@ export function decodeRow(
   const factKind = factKindOf(event, row.commit, factKinds);
   if (Result.isFailure(factKind)) return Result.fail(factKind.failure);
   if (factKind.success === undefined)
-    return Result.succeed({ _tag: 'leftOut', kind: name });
+    return Result.succeed({
+      ...event,
+      unavailable: unavailableFactReason(event),
+    });
   const value = factKind.success.upcasters
     .slice(event.version - pluginFactFloor(factKind.success))
     .reduce((current, step) => step(current), event.value);
@@ -337,7 +335,7 @@ export function decodeRow(
 /**
  * A stored plugin fact's header, its row's top-level `plugin`, `kind` and
  * `version`, against its fact kind: the fact kind, none when this build
- * lacks the plugin (the row is left out), or a newer or an earlier build's
+ * lacks it (the row reads unavailable), or a newer or an earlier build's
  * version.
  * `decodeRow` and the reader's earlier-run scan both ask it.
  */
@@ -372,7 +370,7 @@ export const pluginKind = (plugin: string, kind: string): string =>
 export const CURRENT_VALUE_KIND = 'current_value';
 
 /** The highest version of a `stored_kind` entry this build reads: `Infinity`
- *  for a plugin kind it lacks (left out), 0 for a core kind it lacks. */
+ *  for a plugin kind it lacks (read unavailable), 0 for a core kind it lacks. */
 function readableVersion(type: string, factKinds: FactKinds): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))

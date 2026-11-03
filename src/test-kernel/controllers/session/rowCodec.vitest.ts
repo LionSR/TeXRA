@@ -5,6 +5,33 @@ import { qualifyAggregateId, RunIdSchema } from '@texra-ai/harness/schemas';
 import { decodeRow, encodeDraft } from '@controllers/session/rowCodec';
 import type { FactKinds } from '@tools/plugins';
 
+/** A stored `example/count` fact of `version`, read over `factKinds`. */
+const read = (factKinds: FactKinds, version: number, value: number) =>
+  decodeRow(
+    {
+      ...encodeDraft(
+        {
+          type: 'plugin.fact',
+          aggregateId: qualifyAggregateId('run', RunIdSchema.make('aa0001')),
+          plugin: 'example',
+          kind: 'count',
+          version,
+          value,
+          parent: null,
+        },
+        [],
+      ),
+      commit: 1,
+      kind: 'run',
+      logicalId: 'aa0001',
+      seq: 1,
+      origin: '["test",1,"process-1"]',
+      at: 0,
+    },
+    factKinds,
+    new Map(),
+  );
+
 // Failure modes: a compatibility chain starting after version 1 skips steps,
 // a current value is converted twice, or an unsupported version is accepted.
 it('reads every supported version from the start of its compatibility chain', () => {
@@ -21,46 +48,33 @@ it('reads every supported version from the start of its compatibility chain', ()
       ],
     },
   };
-  const read = (version: number, value: number) =>
-    decodeRow(
-      {
-        ...encodeDraft(
-          {
-            type: 'plugin.fact',
-            aggregateId: qualifyAggregateId('run', RunIdSchema.make('aa0001')),
-            plugin: 'example',
-            kind: 'count',
-            version,
-            value,
-            parent: null,
-          },
-          [],
-        ),
-        commit: 1,
-        kind: 'run',
-        logicalId: 'aa0001',
-        seq: 1,
-        origin: '["test",1,"process-1"]',
-        at: 0,
-      },
-      factKinds,
-      new Map(),
-    );
-
   for (const [version, value] of [
     [2, 2],
     [3, 12],
     [4, 24],
   ]) {
-    const result = read(version, value);
+    const result = read(factKinds, version, value);
     expect(Result.getOrThrow(result)).toMatchObject({ version: 4, value: 24 });
   }
   for (const [version, tag] of [
     [1, 'DatabaseRowEarlier'],
     [5, 'DatabaseStoreNewer'],
   ] as const) {
-    const result = read(version, 2);
+    const result = read(factKinds, version, 2);
     expect(Result.isFailure(result)).toBe(true);
     if (Result.isFailure(result)) expect(result.failure._tag).toBe(tag);
   }
+});
+
+// Failure modes: a fact whose plugin is absent is dropped from the read, or
+// read as interpreted (upcast, or with no reason it is not).
+it('reads a fact of an absent plugin as written, saying why', () => {
+  expect(Result.getOrThrow(read({}, 3, 7))).toMatchObject({
+    type: 'plugin.fact',
+    plugin: 'example',
+    kind: 'count',
+    version: 3,
+    value: 7,
+    unavailable: expect.stringContaining('Plugin "example" is unavailable'),
+  });
 });

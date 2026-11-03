@@ -271,7 +271,6 @@ const DisplayRowDraftSchema = Schema.Union([
     description: Schema.String,
     by: Schema.Literals(['model', 'user']),
   }),
-  PluginFactDraftSchema,
   /** Input a run has not taken yet, whole, so a crash loses nothing;
    *  `followUpId` is the producer's delivery id or minted. Pending is
    *  queued without consumed. */
@@ -331,6 +330,7 @@ const DisplayRowDraftSchema = Schema.Union([
 const DisplaySessionEventDraftSchema = Schema.Union([
   RunStartDraftSchema,
   RunRemovedDraftSchema,
+  PluginFactDraftSchema,
   ...DisplayRowDraftSchema.members,
 ]);
 /** The run's private records, read by the runtime and never by a renderer
@@ -380,6 +380,11 @@ const withEnvelope = Tuple.map(Schema.fieldsAssign(envelope));
 export const DisplaySessionEventSchema = Schema.Union([
   RunStartEventSchema.mapFields(Struct.assign(envelope)),
   RunRemovedEventSchema.mapFields(Struct.assign(envelope)),
+  /** As read: `unavailable` says why this process leaves `value` as
+   *  written, uninterpreted (`unavailableFactReason`); never stored. */
+  PluginFactDraftSchema.mapFields(
+    Struct.assign({ ...envelope, unavailable: Schema.optional(Schema.String) }),
+  ),
   ...DisplayRowDraftSchema.mapMembers(withEnvelope).members,
 ]);
 export type DisplaySessionEvent = typeof DisplaySessionEventSchema.Type;

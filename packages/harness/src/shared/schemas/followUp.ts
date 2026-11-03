@@ -107,9 +107,10 @@ export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
  * owner, or one not provably dead, holds its claim), `blocked`
  * ({@link ResumeBlockedSchema}), `unusableCheckpoint` (its saved state is
  * there but cannot be continued: never `finished`, which would say it ended
- * normally), `earlierBuild` (an earlier build wrote its rows), or
- * `notResumable` (it is running here, it was deleted, or its input is
- * closed).
+ * normally), `earlierBuild` (an earlier build wrote its rows),
+ * `pluginUnavailable` (it holds a fact of `plugin`, which this process does
+ * not load: it continues once a process loads it), or `notResumable` (it is
+ * running here, it was deleted, or its input is closed).
  */
 export const ResumeRefusalSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('finished') }),
@@ -120,6 +121,10 @@ export const ResumeRefusalSchema = Schema.Union([
   ResumeBlockedSchema,
   Schema.Struct({ kind: Schema.Literal('unusableCheckpoint') }),
   Schema.Struct({ kind: Schema.Literal('earlierBuild'), cause: Schema.String }),
+  Schema.Struct({
+    kind: Schema.Literal('pluginUnavailable'),
+    plugin: Schema.String,
+  }),
   Schema.Struct({ kind: Schema.Literal('notResumable') }),
 ]);
 /** One reason a resume is refused ({@link ResumeRefusalSchema}). */

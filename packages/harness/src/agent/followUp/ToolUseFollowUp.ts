@@ -94,6 +94,8 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
   earlierBuild:
     'This run was written by an earlier build, and this build cannot continue it.',
+  pluginUnavailable:
+    'This run holds facts of a plugin this process does not load. It can continue once the plugin is back.',
   readFailed: "This run couldn't be read right now. Try again in a moment.",
   ownedElsewhere:
     'This run is live in another process. Send the message there.',

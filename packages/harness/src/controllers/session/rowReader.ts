@@ -162,7 +162,7 @@ export interface RowReader<E> {
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
    *  wide read (tail, listing, projections) with one warning, so one bad row
-   *  never costs the session. An absent plugin's kind is left out, warned.
+   *  never costs the session. An absent plugin's fact reads unavailable.
    *  A strict read of a run an earlier build wrote fails as that build's,
    *  whichever of its rows it selected. */
   /** The strings stored under `digests`, inflated and verified; a digest
@@ -293,12 +293,7 @@ export function rowReader<E>(
       for (const row of rows) {
         const decoded = decodeRow(row, factKinds, texts);
         if (Result.isSuccess(decoded)) {
-          if (!('_tag' in decoded.success)) events.push(decoded.success);
-          else
-            yield* warnOnce(
-              decoded.success.kind,
-              `${path} holds rows of the plugin kind ${decoded.success.kind}, whose plugin this build lacks; they stay in the store and are left out of every read.`,
-            );
+          events.push(decoded.success);
           continue;
         }
         if (whole || decoded.failure._tag === 'DatabaseStoreNewer')

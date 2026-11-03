@@ -81,6 +81,16 @@ export const pluginFactFloor = (factKind: {
   readonly upcasters: readonly unknown[];
 }): number => factKind.version - factKind.upcasters.length;
 
+/** Why a plugin fact is read uninterpreted: no plugin of this process
+ *  registers its kind. Its row stays as written; the store and an imported
+ *  trace read it with this reason (`unavailable`), its value and version
+ *  unchanged, and a run holding one does not resume here. */
+export const unavailableFactReason = (fact: {
+  readonly plugin: string;
+  readonly kind: string;
+}): string =>
+  `Plugin "${fact.plugin}" is unavailable: nothing loaded here registers its fact kind ${fact.kind}, so the fact is kept as written and not interpreted.`;
+
 /** The version every current-value family writes and reads
  *  (each `ValueFamily`), until one gains an upcaster. */
 export const CURRENT_VALUE_VERSION = 1;
