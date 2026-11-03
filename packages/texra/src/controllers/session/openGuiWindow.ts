@@ -26,6 +26,7 @@ import {
 } from 'effect';
 
 import {
+  Cancelled,
   Rejected,
   Unavailable,
   type HostRequestFailure,
@@ -78,7 +79,6 @@ import {
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
-import { hostFailure } from './hostCallFailure';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -596,18 +596,17 @@ function answerShared(
         }
         return { kind: 'files', paths: attached.paths };
       }
-      case 'launch':
+      case 'launch': {
         yield* host.admitLaunch(request.launch);
-        yield* prepareSurfaceLaunch(request, parts.roots).pipe(
-          Effect.flatMap((prepared) =>
-            parts.runActions
-              .runValidated(prepared, launchApprovalOptions(request))
-              .pipe(
-                Effect.mapError((cause) => hostFailure('runValidated', cause)),
-              ),
-          ),
-        );
+        const config = yield* prepareSurfaceLaunch(request, parts.roots);
+        // The launcher has told, in this window, why a run did not start:
+        // `Cancelled` is the answer the form shows nothing for, and it keeps
+        // the instruction to send again.
+        yield* parts.runActions
+          .runValidated(config, launchApprovalOptions(request))
+          .pipe(Effect.mapError(() => new Cancelled()));
         return done;
+      }
       case 'resume':
         yield* parts.runActions.resume(request.runId);
         return done;

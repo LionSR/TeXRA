@@ -400,7 +400,9 @@ const blocksCaller: (payload: { readonly kind: "toolEdit"; readonly data: { read
 
 ## Cancelled
 
-The user cancelled the operation. No refusal notice is needed.
+Nothing is left to tell the user: they cancelled the operation, or the
+host has already told them why it did not go through. No refusal notice
+is needed.
 
 ```ts
 class Cancelled extends Schema.TaggedError<Cancelled>()(
