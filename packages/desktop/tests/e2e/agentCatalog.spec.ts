@@ -205,21 +205,17 @@ test('a launch that cannot start is told once, by its notice', async () => {
     const { app, page } = launched;
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
-    // The window's message boxes are recorded and dismissed.
-    await app.evaluate(({ dialog }) => {
+    // The window's message boxes are recorded and dismissed. The record is
+    // this test's handle, not a global of the app.
+    const shownMessageBoxes = await app.evaluateHandle(({ dialog }) => {
       const shown: string[] = [];
-      Object.assign(globalThis, { shownMessageBoxes: shown });
       dialog.showMessageBox = async (...args: unknown[]) => {
         const options = args.at(-1) as { message: string; cancelId?: number };
         shown.push(options.message);
         return { response: options.cancelId ?? 0, checkboxChecked: false };
       };
+      return shown;
     });
-    const shownMessageBoxes = () =>
-      app.evaluate(
-        () =>
-          (globalThis as { shownMessageBoxes?: string[] }).shownMessageBoxes,
-      );
     await dismissOnboarding(page);
     await showLauncher(launched);
 
@@ -227,7 +223,7 @@ test('a launch that cannot start is told once, by its notice', async () => {
     await page.locator('#composer-text').fill(instruction);
     await page.locator('#composer-send').click();
     await expect
-      .poll(shownMessageBoxes)
+      .poll(() => shownMessageBoxes.jsonValue())
       .toEqual(['API key not found. Set your API key and run again.']);
     // The launch has its answer once the Send is no longer busy.
     await expect(
@@ -235,7 +231,7 @@ test('a launch that cannot start is told once, by its notice', async () => {
     ).toHaveCount(0);
     await expect(page.locator('progress-app .request-notice')).toHaveCount(0);
     await expect(page.locator('#composer-text')).toHaveValue(instruction);
-    const shown = await shownMessageBoxes();
+    const shown = await shownMessageBoxes.jsonValue();
     expect(shown).toHaveLength(1);
     writeFileSync(
       test.info().outputPath('message-boxes.json'),
