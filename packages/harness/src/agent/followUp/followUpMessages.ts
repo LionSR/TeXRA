@@ -19,7 +19,10 @@ import {
   type RunRelation,
   type ScriptDeliverySummary,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
+import {
+  claimStanding,
+  type DatabaseReadFailed,
+} from '@shared/session/database';
 import {
   followUpReceipt,
   RECEIPT_ROW_TYPES,
@@ -27,7 +30,11 @@ import {
 } from '@shared/session/runRowReads';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runRelation } from '@shared/session/runRelation';
-import { Conflict, Unavailable } from '@shared/session/runtimeRequest';
+import {
+  Conflict,
+  NotOwner,
+  Unavailable,
+} from '@shared/session/runtimeRequest';
 import { isInstruction } from '@shared/session/runFacts';
 import type { WithBlobs } from '@shared/session/historyTurns';
 import type { QueuedFollowUp } from '@shared/session/runRows';
@@ -195,8 +202,11 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   hold: QueuedFollowUp['holdUntil'],
   attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>,
 ): Effect.fn.Return<boolean, Error, SessionLog | SessionViewAccess> {
+  const log = yield* SessionLog;
+  // Another live owner's run: the send is refused as any is, past this.
+  if (yield* heldElsewhere(log, runId)) return false;
   const deliveryId = sentFollowUpId(id);
-  const first = yield* readFollowUp(yield* SessionLog, runId, deliveryId);
+  const first = yield* readFollowUp(log, runId, deliveryId);
   if (Option.isNone(first)) return false;
   const media = attach === undefined ? {} : yield* attach;
   const view = yield* SessionViewAccess;
@@ -208,28 +218,34 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   return true;
 });
 
+/** Whether a live process other than this one holds run `runId`: its
+ *  messages and their receipts are that process's to answer. */
+const heldElsewhere = (
+  log: Pick<SessionLog['Service'], 'owner'>,
+  runId: RunId,
+) =>
+  Effect.map(log.owner(runId), (claim) => claimStanding(claim).kind === 'held');
+
 /** The receipt of the message sent to run `runId` under the caller's `id`;
  *  with `wait`, once it is answered or unanswered. */
-export const sentReceipt = (
-  log: Pick<SessionLog['Service'], 'rows' | 'now' | 'tail'>,
+export const sentReceipt = Effect.fn('sentReceipt')(function* (
+  log: Pick<SessionLog['Service'], 'rows' | 'now' | 'tail' | 'owner'>,
   req: {
     readonly runId: RunId;
     readonly id: string;
     readonly wait?: boolean | null;
   },
-): Effect.Effect<FollowUpReceipt, Unavailable> =>
-  readFollowUp(log, req.runId, sentFollowUpId(req.id), req.wait === true).pipe(
-    Effect.orDie,
-    Effect.flatMap(
-      Option.match({
-        onNone: () =>
-          Effect.fail(
-            new Unavailable({
-              runId: req.runId,
-              reason: 'No message under that id.',
-            }),
-          ),
-        onSome: (found) => Effect.succeed(found.receipt),
-      }),
-    ),
+): Effect.fn.Return<FollowUpReceipt, Unavailable | NotOwner> {
+  const { runId } = req;
+  if (yield* Effect.orDie(heldElsewhere(log, runId)))
+    return yield* new NotOwner({ runId });
+  const found = yield* Effect.orDie(
+    readFollowUp(log, runId, sentFollowUpId(req.id), req.wait === true),
   );
+  if (Option.isNone(found))
+    return yield* new Unavailable({
+      runId,
+      reason: 'No message under that id.',
+    });
+  return found.value.receipt;
+});
