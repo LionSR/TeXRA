@@ -216,11 +216,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         openingSystem = yield* buildOpeningSystemPrompt(
           run.persona.prompt,
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
-          {
-            workspace: roots.workspace,
-            settings: roots,
-            textOnly: bound.textOnly,
-          },
+          { roots, textOnly: bound.textOnly },
         );
         // The first step renders the prompt, and stores its base text.
         const step = yield* openStep(opening, 'request');
