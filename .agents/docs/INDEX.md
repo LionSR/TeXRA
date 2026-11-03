@@ -32,6 +32,7 @@ ruling and argues against it explicitly.
 | GitHub Copilot (removed; options parked)                   | [Copilot possibilities](./proposed/feature/2026-10-26-copilot-possibilities.md)                                                    |
 | `packages/llm`                                             | [`packages/llm/README.md`](../../packages/llm/README.md)                                                                           |
 | Observability and the trace plane                          | [observability plane](./implemented/architecture/2026-09-09-observability-plane.md)                                                |
+| Processing options: decide, don't ask                      | [fewer processing options](./proposed/simplification/2026-11-03-fewer-processing-options.md)                                       |
 | Dual systems and Promise/Effect seams                      | [effect round trips and dual systems](./implemented/simplification/2026-09-17-effect-round-trips-and-dual-systems.md)              |
 | Which Effect facility replaces what                        | [effect facility adoption](./implemented/simplification/2026-09-20-effect-facility-adoption.md)                                    |
 | Test estate, tiers and the registry                        | [shared module registry](./implemented/testing/2026-09-10-shared-module-registry.md)                                               |
