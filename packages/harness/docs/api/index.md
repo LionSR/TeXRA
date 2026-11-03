@@ -105,8 +105,9 @@ interface AgentRunListingEntry {
    *  loadability are settled when the run is opened. */
   resumable: boolean;
   /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, or an earlier build wrote them.
-   *  Absent when it resumes or simply has nothing to continue from. */
+   *  continue from: they could not be read, an earlier build wrote them, or
+   *  they hold a fact of a plugin this process does not load. Absent when
+   *  it resumes or simply has nothing to continue from. */
   resumeBlocked?: string;
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;
@@ -241,6 +242,17 @@ interface HeldRun {
     model: string,
   ) => Effect.Effect<string | undefined, Error>;
 }
+```
+
+## HISTORY_TABLES
+
+The tables a history query reads and their columns, in order: the public
+contract of `executions` `query`. A column changes meaning only with a
+new name. `position` is load order, not the database's commit ordinal: a
+rebuilt store renumbers it.
+
+```ts
+const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "purpose", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
 ```
 
 ## HostRequestFailure
@@ -828,8 +840,8 @@ interface RunRecords {
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere` or `earlierBuild`), or null when it may
-   *  go ahead; a fact that cannot be read fails. */
+   *  (`finished`, `ownedElsewhere`, `earlierBuild` or `pluginUnavailable`),
+   *  or null when it may go ahead; a fact that cannot be read fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
@@ -1076,7 +1088,8 @@ interface WorkspaceRoots {
   /**
    * The storage root this process opened (a host's per-user directory, an
    * SDK embedder's `storageDir`): every storage path below derives from it, and
-   * the files a person keeps there (the MCP config) are found beside it.
+   * the files a person keeps there (the MCP config, their skills and the
+   * `AGENTS.md` a workspace without one falls back to) are found in it.
    */
   readonly storageRoot: string;
   /** Application-owned storage for this project's state. Custom hosts must

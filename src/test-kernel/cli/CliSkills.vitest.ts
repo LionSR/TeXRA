@@ -46,7 +46,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       '.texra',
       'skills',
     );
-    const sources = foldSkillSources(hostSkillContributions([]), {
+    const sources = foldSkillSources(hostSkillContributions([], '.texra'), {
       cwd: path.resolve(path.sep, 'tmp', 'project'),
       home: path.resolve(path.sep, 'tmp', 'home'),
       storageRoot: path.resolve(path.sep, 'tmp', 'home', '.texra'),

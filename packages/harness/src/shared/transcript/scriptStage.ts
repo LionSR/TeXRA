@@ -6,7 +6,8 @@
  * popup and a headless run; a host only decides how a row looks.
  *
  * Nothing here is a fact of its own: a status is the card's, read with its
- * settlement (`reusedFrom`, a `Skipped` error) and whether a child exists;
+ * settlement (`reusedFrom`, a `Skipped` error, a cut by the run's end) and
+ * whether a child exists;
  * a row's agent, model, files and attempt are its input's and its card's;
  * its answer is its card's delivery (`deliveredResponse`); its duration and
  * cost are its child's rows.
@@ -31,10 +32,6 @@ import { getBasename } from '@utils/core';
 import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
-
-/** What a card the run's end failed while it was open says: the call never
- *  settled, so nothing records how it ended. */
-export const TOOL_CUT_BY_RUN_END = 'The task ended before this tool completed.';
 
 /** An `agent` call's agent as the card shows it: a recipe names its
  *  agents by `source:name` key, and the card shows the name. */
@@ -152,7 +149,7 @@ function statusOf(
       return stringOf(output.reusedFrom) === undefined ? 'finished' : 'reused';
     case TOOL_CALL_STATUS.FAILED:
       if (output.name === 'Skipped') return 'skipped';
-      if (row.toolUse.errorText === TOOL_CUT_BY_RUN_END)
+      if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';
       return 'failed';
     default:

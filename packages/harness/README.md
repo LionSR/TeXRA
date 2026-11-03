@@ -418,11 +418,13 @@ composes (the agent directories, secrets and the resume
 port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under.
+`mcp.json` at the storage root that global storage lies under, and a run's
+system prompt carries the workspace's `AGENTS.md`, or the storage root's when
+the workspace has none.
 `nodePlatform()` supplies all of them: process-local config and state,
 the ordinary storage layout under the `storageDir` you name (required; the
-package never falls back to a per-user directory), that directory's `mcp.json`,
-and environment-variable secrets (so provider API keys are read from
+package never falls back to a per-user directory), that directory's `mcp.json`
+and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
 go to it as `nodePlatform({ settings })`, a catalog built with
 `settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which

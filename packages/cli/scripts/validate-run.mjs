@@ -888,8 +888,8 @@ prompt: |
     );
     const response = String(agentResult?.result?.output?.response ?? '');
     assert(
-      response.includes('name | kind | lifecycle') &&
-        response.includes('history_query_validation | agent | activated'),
+      response.includes('name | kind | status') &&
+        response.includes('history_query_validation | agent | running'),
       `history query run should return the query page for its own run (artifact: ${artifactPath})\nresponse:\n${response}`,
     );
   } finally {

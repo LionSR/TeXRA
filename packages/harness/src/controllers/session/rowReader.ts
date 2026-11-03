@@ -15,6 +15,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_EVENT_TYPES,
   pluginFactFloor,
+  RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   type AggregateId,
   type JsonValue,
@@ -162,7 +163,7 @@ export interface RowReader<E> {
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
    *  wide read (tail, listing, projections) with one warning, so one bad row
-   *  never costs the session. An absent plugin's kind is left out, warned.
+   *  never costs the session. An absent plugin's fact reads unavailable.
    *  A strict read of a run an earlier build wrote fails as that build's,
    *  whichever of its rows it selected. */
   /** The strings stored under `digests`, inflated and verified; a digest
@@ -215,10 +216,11 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  // Only a fact kind with a floor can hold an earlier build's fact.
-  const floored = Object.values(factKinds).some(
-    (factKind) => pluginFactFloor(factKind) > 1,
-  );
+  // Only a retired fact kind, or one with a floor, can hold an earlier
+  // build's fact.
+  const floored =
+    RETIRED_PLUGIN_FACTS.size > 0 ||
+    Object.values(factKinds).some((factKind) => pluginFactFloor(factKind) > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
@@ -293,12 +295,7 @@ export function rowReader<E>(
       for (const row of rows) {
         const decoded = decodeRow(row, factKinds, texts);
         if (Result.isSuccess(decoded)) {
-          if (!('_tag' in decoded.success)) events.push(decoded.success);
-          else
-            yield* warnOnce(
-              decoded.success.kind,
-              `${path} holds rows of the plugin kind ${decoded.success.kind}, whose plugin this build lacks; they stay in the store and are left out of every read.`,
-            );
+          events.push(decoded.success);
           continue;
         }
         if (whole || decoded.failure._tag === 'DatabaseStoreNewer')

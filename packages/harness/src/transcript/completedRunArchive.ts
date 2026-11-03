@@ -20,6 +20,11 @@ import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 // Conversation
 // ============================================================================
 
+/** The result a call the run's end cut short (`ToolRow.cutByRunEnd`)
+ *  reads with, for a model reading the run through `executions` and for an
+ *  export: nothing records how the call ended. */
+const CUT_BY_RUN_END_RESULT = 'The task ended before this tool completed.';
+
 /**
  * A call's `tool-result` node, when it has a result: the text the model read
  * and the structured `value` the call recorded, if any. Deliberate non-goal
@@ -95,7 +100,9 @@ function conversationNodesForRow(
           name: row.log.toolName ?? 'unknown',
           input: row.log.input ?? {},
         },
-        ...toolResultNodes(row.log),
+        ...(row.cutByRunEnd === true
+          ? [{ kind: 'tool-result' as const, text: CUT_BY_RUN_END_RESULT }]
+          : toolResultNodes(row.log)),
       ];
     case 'webSearch':
       return row.query ? [{ kind: 'web-search', query: row.query }] : [];
