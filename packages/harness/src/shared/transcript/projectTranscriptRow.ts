@@ -184,13 +184,14 @@ const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 export type ToolCallFacts = Pick<ToolRow, 'phase' | 'attempt' | 'cutByRunEnd'>;
 
 /** A tool card from its decoded payload; `output` is the live text a running
- *  card printed, which paints in place of the durable output. */
+ *  card printed, which paints in place of the durable output, and `call` is
+ *  what its slot holds beyond the payload, which every repaint carries. */
 export function toolRow(
   base: TranscriptRowBase,
   log: ToolUseLog,
   output: string | undefined,
   runLabels: ToolRowModelContext['runLabels'],
-  call: ToolCallFacts = {},
+  call: ToolCallFacts,
 ): ToolRow {
   const shown = output === undefined ? log : { ...log, output };
   const toolUse = normalizeToolUse(shown);
