@@ -171,8 +171,9 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
                   OpenAI.Responses.FunctionTool,
                   'strict'
                 > = { type: 'function', ...tool };
-                // cast: the vendor endpoints take no `strict`, which the
-                // OpenAI typings require; the SDK sends the body as written.
+                // The vendor endpoints take no `strict`, which the OpenAI
+                // typings require; the SDK sends the body as written.
+                // cast: a FunctionTool without `strict`.
                 return vendorTool as OpenAI.Responses.FunctionTool;
               }),
             ),

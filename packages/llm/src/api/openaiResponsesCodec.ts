@@ -210,41 +210,29 @@ const RESPONSES_IMAGE_MIME_TYPES: ReadonlySet<string> = new Set([
 function gifFrameCount(bytes: Uint8Array): number | null {
   const header = String.fromCharCode(...bytes.subarray(0, 6));
   const screenFlags = bytes.at(10);
-  if (
-    bytes.length < 13 ||
-    screenFlags === undefined ||
-    (header !== 'GIF87a' && header !== 'GIF89a')
-  )
-    return null;
+  const gif = header === 'GIF87a' || header === 'GIF89a';
+  if (bytes.length < 13 || screenFlags === undefined || !gif) return null;
   const tableSize = (flags: number): number =>
     flags & 0x80 ? 3 * 2 ** ((flags & 0x07) + 1) : 0;
   let offset = 13 + tableSize(screenFlags);
-  // `offset` never goes negative, so `at(offset)` is absent exactly when
-  // `offset` has run past the end.
   const skipSubBlocks = (): boolean => {
-    for (
-      let size = bytes.at(offset);
-      size !== undefined;
-      size = bytes.at(offset)
-    ) {
+    for (;;) {
+      const size = bytes.at(offset);
+      if (size === undefined) return false;
       offset += 1;
       if (size === 0) return true;
       offset += size;
     }
-    return false;
   };
   let frames = 0;
-  for (
-    let block = bytes.at(offset);
-    block !== undefined;
-    block = bytes.at(offset)
-  ) {
+  for (;;) {
+    const block = bytes.at(offset);
+    if (block === undefined) return null;
     if (block === 0x3b) return frames;
     if (block === 0x21) {
       offset += 2;
       if (!skipSubBlocks()) return null;
     } else if (block === 0x2c) {
-      // Present exactly when the 10-byte image descriptor fits.
       const imageFlags = bytes.at(offset + 9);
       if (imageFlags === undefined) return null;
       frames += 1;
@@ -254,7 +242,6 @@ function gifFrameCount(bytes: Uint8Array): number | null {
       return null;
     }
   }
-  return null;
 }
 
 /**

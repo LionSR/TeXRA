@@ -60,9 +60,10 @@ const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
  * undici's `fetch` under the DOM signature the rest of the codebase speaks,
  * plus undici's `dispatcher` option.
  */
-// cast: undici implements the DOM fetch; its `RequestInfo`, `RequestInit` and
+// undici implements the DOM fetch, but its `RequestInfo`, `RequestInit` and
 // `Response` typings lag the DOM lib's (a `Headers` iterator without
 // `Symbol.dispose`, other `BodyInit` view types), so they are not assignable.
+// cast: the same function, under the DOM typings it implements.
 const domUndiciFetch = undiciFetch as unknown as (
   input: Parameters<typeof fetch>[0],
   init: RequestInit & { readonly dispatcher: Dispatcher },

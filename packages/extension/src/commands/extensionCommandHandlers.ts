@@ -168,8 +168,5 @@ export const EXTENSION_COMMAND_HANDLERS = {
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,
-  // Typed handlers carry their own argument tuples via `definedHandler`.
-  // Matching the registry map's per-entry TArgs widening (`any`) keeps
-  // inference per entry without unifying every entry on `unknown`.
-  CommandHandler<ExtensionCommandActions, any, CommandProgram<unknown>>
+  CommandHandler<ExtensionCommandActions, CommandProgram<unknown>>
 >;

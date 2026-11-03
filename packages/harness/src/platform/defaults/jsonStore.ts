@@ -235,10 +235,8 @@ export class JsonStore {
     return new JsonStore(storePath, data, options.follow === true);
   });
 
-  get<T>(key: string): T | undefined {
-    // cast: the `ConfigStore` port lets the reader name the value's type
-    // (`get<T>`); nothing here checks it, so the reader owns that claim.
-    return this.current()[key] as T | undefined;
+  get(key: string): unknown {
+    return this.current()[key];
   }
 
   /**

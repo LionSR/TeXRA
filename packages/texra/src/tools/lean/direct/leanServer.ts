@@ -146,12 +146,12 @@ export class LeanServer extends Context.Service<
      * position-scoped LSP request. Position requests like `$/lean/plainGoal`
      * return stale data if the elaborator hasn't finished.
      */
-    readonly requestSettled: <T>(
+    readonly requestSettled: (
       filePath: string,
       line: number,
       column: number,
       method: string,
-    ) => Effect.Effect<T, LeanSessionError>;
+    ) => Effect.Effect<unknown, LeanSessionError>;
     /** Drop the cached open state and re-open with fresh contents. */
     readonly restartFile: (
       filePath: string,
@@ -586,7 +586,7 @@ const make = ({
       return { diagnostics: state.diagnostics, complete };
     });
 
-    const requestSettled = Effect.fn('LeanServer.requestSettled')(function* <T>(
+    const requestSettled = Effect.fn('LeanServer.requestSettled')(function* (
       filePath: string,
       line: number,
       column: number,
@@ -594,7 +594,7 @@ const make = ({
     ) {
       const { absolute } = yield* openAndSettle(filePath);
       const live = yield* requireRpc;
-      return yield* live.request<T>(method, {
+      return yield* live.request(method, {
         textDocument: { uri: pathToUri(absolute) },
         position: { line, character: column },
       });

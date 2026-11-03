@@ -148,11 +148,13 @@ export class LeanServerPool extends Context.Service<
       void,
       LeanProjectCommandError | LeanStartError | LeanUnavailable
     >;
+    /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
     readonly positionRequest: <T>(
       filePath: string,
       line: number,
       column: number,
       method: string,
+      reply: Schema.Codec<T, unknown>,
       runId: RunId | undefined,
     ) => Effect.Effect<LspResult<T>>;
     /** See {@link LeanLanguageServices.stopSessionsForRun}. */
@@ -561,11 +563,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       line: number,
       column: number,
       method: string,
+      reply: Schema.Codec<T, unknown>,
       runId: RunId | undefined,
     ) {
       return yield* withServer(filePath, runId, (server) =>
-        server.requestSettled<T | null>(filePath, line, column, method),
+        server.requestSettled(filePath, line, column, method),
       ).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
         Effect.map((data): LspResult<T> =>
           data
             ? { data }

@@ -136,9 +136,10 @@ export function loadApiKeyStatusMap(
     { concurrency: 'unbounded' },
   ).pipe(
     Effect.map(
+      // `entries` holds one pair per id in API_KEY_PROVIDER_IDS, which lists
+      // every ApiKeyProviderId, so the record is total.
       (entries) =>
-        // cast: `entries` holds one pair per id in API_KEY_PROVIDER_IDS, which
-        // lists every ApiKeyProviderId, so the record is total.
+        // cast: total over ApiKeyProviderId, per the note above.
         Object.fromEntries(entries) as Record<ApiKeyProviderId, ApiKeyStatus>,
     ),
   );

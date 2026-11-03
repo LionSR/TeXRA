@@ -742,7 +742,7 @@ export default tseslint.config(
         },
       ],
 
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       'no-useless-escape': 'off',
       'no-useless-assignment': 'error',
       'preserve-caught-error': 'off',
@@ -787,14 +787,22 @@ export default tseslint.config(
     },
   },
 
-  // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
-  // rather than a ratchet row. No disable comment reaches past the core's
-  // lint errors, so a site cannot hide behind one.
+  // The core holds no `any`, no `!` and no asserted object literal, so they
+  // are lint errors rather than ratchet rows; an unexplained `as` is held at
+  // zero by scripts/check-core-quality.mjs. No disable comment reaches past
+  // the core's lint errors, so a site cannot hide behind one.
   {
     files: CORE_QUALITY_GLOBS,
     ignores: ['**/*.vitest.ts'],
     linterOptions: { noInlineConfig: true },
-    rules: { '@typescript-eslint/no-explicit-any': 'error' },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/consistent-type-assertions': [
+        'error',
+        { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' },
+      ],
+    },
   },
 
   // Tests run separately so their application-wide program is not retained

@@ -196,9 +196,10 @@ const rejection = Effect.fn('toolUse.guard')(function* (
           `it rewrote the call to an input ${definition.name} does not take.\n${parsed.failure.message}`,
         )
       : undefined;
-  // cast: `ITool` erases the guard's input type to `never`; the guard was
-  // declared (`defineTool`) against the type `definition.schema` decodes, and
-  // a pass-through-schema tool's against the JSON object it checks.
+  // `ITool` erases the guard's input type to `never`. The guard was declared
+  // (`defineTool`) against the type `definition.schema` decodes, and a
+  // pass-through-schema tool's against the JSON object it checks.
+  // cast: the guard's declared input, per the note above.
   const decoded = (parsed ? parsed.success : input) as never;
   const call = yield* ToolContext;
 
