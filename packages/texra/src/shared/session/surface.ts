@@ -316,22 +316,6 @@ type RunKeyedMapField = {
 }[keyof Surface];
 
 /**
- * The list `pruneSurface` reads, a `Record` so `satisfies` checks both
- * directions: a new stream-keyed `Surface` map is a compile error here until
- * it is listed, rather than a silent leak of deleted streams' entries.
- */
-const PER_STREAM_MAP_FIELDS = {
-  drafts: true,
-  expanded: true,
-  groups: true,
-  rejected: true,
-  seen: true,
-} as const satisfies Record<RunKeyedMapField, true>;
-const PER_STREAM_MAPS = Object.keys(
-  PER_STREAM_MAP_FIELDS,
-) as readonly RunKeyedMapField[];
-
-/**
  * Where a selection lands against the view, applied by `pruneSurface`. The
  * default browses the whole project: a run that left the view moves to the
  * first top-level run, else `null`; an explicit `null` (New task) stays.
@@ -359,31 +343,37 @@ export function pruneSurface(
   view: SessionView,
   select: SelectionRule = projectSelection(view),
 ): Surface {
-  // `retain` only ever drops entries, never changes a value, so each pruned
-  // map keeps its field's element type; the maps are read through the common
-  // read-only supertype and the once-narrowed patch is cast back at the end.
-  const patch: Partial<
-    Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<RunId, unknown>>
-  > & { selected?: RunId | null; editing?: null } = {};
-  for (const key of PER_STREAM_MAPS) {
-    const current: ReadonlyMap<RunId, unknown> = surface[key];
-    const next = retain(current, view);
-    if (next !== current) patch[key] = next;
-  }
+  // The annotation lists every stream-keyed map: a new one is a compile
+  // error here until it is pruned, rather than a silent leak of deleted
+  // streams' entries.
+  const maps: Pick<Surface, RunKeyedMapField> = {
+    drafts: retain(surface.drafts, view),
+    expanded: retain(surface.expanded, view),
+    groups: retain(surface.groups, view),
+    rejected: retain(surface.rejected, view),
+    seen: retain(surface.seen, view),
+  };
   const selected = select(surface.selected);
-  if (selected !== surface.selected) patch.selected = selected;
   const { editing } = surface;
-  if (
+  const editingGone =
     editing !== null &&
     !view.requests.some(
       (request) =>
         request.runId === editing.runId &&
         request.requestId === editing.requestId,
-    )
+    );
+  if (
+    selected === surface.selected &&
+    !editingGone &&
+    Struct.keys(maps).every((key) => maps[key] === surface[key])
   )
-    patch.editing = null;
-  if (Object.keys(patch).length === 0) return surface;
-  return { ...surface, ...patch } as Surface;
+    return surface;
+  return {
+    ...surface,
+    ...maps,
+    selected,
+    ...(editingGone && { editing: null }),
+  };
 }
 
 /**

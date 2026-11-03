@@ -188,9 +188,9 @@ function renderAnsiTable(
   return table.toString();
 }
 
-/** `cell` with the protected LaTeX restored by the function the processor
- *  puts on the render env (`MarkdownProcessorRenderEnv`), which reaches here
- *  through markdown-it's untyped env bag, so both ends are checked. */
+/** `cell` with the protected LaTeX restored by the `restoreProtectedLatex`
+ *  function the markdown processor puts on the render env, which reaches here
+ *  through markdown-it's untyped env bag, so it is checked here. */
 function restoreProtectedLatexInCell(cell: string, env: unknown): string {
   if (!Predicate.hasProperty(env, 'restoreProtectedLatex')) return cell;
   const restore = env.restoreProtectedLatex;

@@ -27,6 +27,7 @@ import {
   LayerMap,
   RcMap,
   Ref,
+  Predicate,
   Result,
   Schema,
 } from 'effect';
@@ -235,14 +236,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   )(function* (exceptRoot: string) {
     const live = yield* liveEntries;
     yield* Effect.forEach(
-      [...live].filter(
-        ([root, entry]) =>
-          root !== exceptRoot && entry.leases === 0 && entry.server,
+      [...live].flatMap(([root, { leases, server }]) =>
+        root !== exceptRoot && leases === 0 && server ? [{ root, server }] : [],
       ),
-      ([root, entry]) =>
+      ({ root, server }) =>
         servers
           .invalidate(root)
-          .pipe(Effect.andThen(Deferred.await(entry.server!.closed))),
+          .pipe(Effect.andThen(Deferred.await(server.closed))),
       { concurrency: 'unbounded', discard: true },
     );
   });
@@ -598,9 +598,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 function isFileTableExhausted(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; current != null && depth < 4; depth += 1) {
-    const code = (current as NodeJS.ErrnoException).code;
+    const code = Predicate.hasProperty(current, 'code')
+      ? current.code
+      : undefined;
     if (code === 'EMFILE' || code === 'ENFILE') return true;
-    current = (current as { cause?: unknown }).cause;
+    current = Predicate.hasProperty(current, 'cause')
+      ? current.cause
+      : undefined;
   }
   return false;
 }

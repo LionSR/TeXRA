@@ -787,6 +787,14 @@ export default tseslint.config(
     },
   },
 
+  // No package's source asserts a value present with `!`: a lookup that may
+  // miss says what happens when it does.
+  {
+    files: ['packages/*/src/**/*.{ts,mts}', 'packages/*/src/**/*.tsx'],
+    ignores: ['**/*.vitest.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'error' },
+  },
+
   // The core holds no `any`, no `!` and no asserted object literal, so they
   // are lint errors rather than ratchet rows; an unexplained `as` is held at
   // zero by scripts/check-core-quality.mjs. No disable comment reaches past

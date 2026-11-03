@@ -17,7 +17,11 @@
  * run's history only through the tool result that used it.
  */
 import { randomUUID } from 'node:crypto';
-import { isPathWithin } from '@texra-ai/harness/host';
+import {
+  isPathWithin,
+  type PresentationEventHandlers,
+  type RuntimePresentationEventPayloads,
+} from '@texra-ai/harness/host';
 
 import {
   Clock,
@@ -55,6 +59,20 @@ import {
 import type { ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
 import type { Session, SessionHost } from '@texra-ai/harness';
+
+/** Each runtime notice as the window call that carries it. */
+const NOTICE_OF: PresentationEventHandlers<
+  RuntimePresentationEventPayloads,
+  Notice
+> = {
+  openFile: (payload) => ({ event: 'openFile', payload }),
+  requestShowInstruction: (payload) => ({
+    event: 'requestShowInstruction',
+    payload,
+  }),
+  agentNotFound: (payload) => ({ event: 'agentNotFound', payload }),
+  requestShowError: (payload) => ({ event: 'requestShowError', payload }),
+};
 
 /** Why a call a run waited on got no answer from a window. */
 class WindowCallFailed extends Schema.TaggedError<WindowCallFailed>()(
@@ -221,8 +239,7 @@ const make = (editors: EditorHostShape) =>
       return {
         emit: (event, payload) => {
           const window = target(key, 'notices');
-          // The notice's own schema checks it on the window's side of the wire.
-          const notice = { event, payload } as Notice;
+          const notice = NOTICE_OF[event](payload);
           return window === undefined
             ? Effect.logWarning(`Host notice ${event}`).pipe(
                 Effect.annotateLogs({ data: payload }),

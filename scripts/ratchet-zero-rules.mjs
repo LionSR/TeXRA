@@ -24,6 +24,8 @@ export const ZERO_RULES = Object.freeze({
     'eslint.config.mjs, @typescript-eslint/consistent-type-assertions over the core',
   'config/ratchets/core-quality/type-assertions.json':
     'scripts/check-core-quality.mjs',
+  'config/ratchets/core-quality/type-assertions-outside-core.json':
+    'scripts/check-core-quality.mjs',
   'config/ratchets/core-quality/promise-then.json':
     'eslint.config.mjs, no-restricted-syntax over the core',
   'config/ratchets/core-quality/try-catch-effect.json':

@@ -312,8 +312,11 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY, discard: true },
       );
 
-      while (worklist.length > 0) {
-        const file = worklist.shift()!;
+      for (
+        let file = worklist.shift();
+        file !== undefined;
+        file = worklist.shift()
+      ) {
         if (visited.has(file.absolutePath)) continue;
         visited.add(file.absolutePath);
 

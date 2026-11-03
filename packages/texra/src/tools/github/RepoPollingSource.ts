@@ -112,7 +112,7 @@ export interface RepoSubscribeInput {
 }
 
 export function repoKeyToString(repo: RepoSubscribeInput): RepoKey {
-  return `${repo.owner}/${repo.repo}` as RepoKey;
+  return `${repo.owner}/${repo.repo}`;
 }
 
 interface SubscriptionState extends BasePollSubscriptionState {
