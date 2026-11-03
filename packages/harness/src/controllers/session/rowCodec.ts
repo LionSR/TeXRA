@@ -371,8 +371,8 @@ export const pluginKind = (plugin: string, kind: string): string =>
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
 
-/** The highest version of a `stored_kind` entry this build reads: `Infinity`
- *  for a plugin kind it lacks (read unavailable), 0 for a core kind it lacks. */
+/** The highest `stored_kind` version this build reads: `Infinity` for a
+ *  plugin kind it lacks (`factKindOf` reads its rows), 0 for a core one. */
 function readableVersion(type: string, factKinds: FactKinds): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))
