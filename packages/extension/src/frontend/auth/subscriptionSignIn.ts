@@ -28,7 +28,10 @@ const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
 /** Dismissing the browser-choice dialog cancels sign-in, matching this
  * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
-class SubscriptionSignInCancelled extends Error {}
+class SubscriptionSignInCancelled extends Schema.TaggedError<SubscriptionSignInCancelled>()(
+  'SubscriptionSignInCancelled',
+  {},
+) {}
 
 /**
  * The OAuth leg's failure, carrying whatever the transport threw so the same
@@ -118,7 +121,7 @@ function vscodePresenter(
           return;
         }
         if (choice !== OPEN_DEFAULT_BROWSER) {
-          return yield* Effect.fail(new SubscriptionSignInCancelled());
+          return yield* new SubscriptionSignInCancelled();
         }
         yield* externalOpener.openExternal(url);
       },
