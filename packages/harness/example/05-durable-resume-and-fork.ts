@@ -67,28 +67,22 @@ const program = Effect.gen(function* () {
   });
 
   // Send a follow-up to the forked run; sending to a stopped interactive run
-  // resumes it from its committed history in SQLite. Its reply ends on a
-  // wait later than any it holds now.
-  const forkedWait = session.view.current().runs.get(forkedRunId)?.forkPoint;
+  // resumes it from its committed history in SQLite. Its receipt says when
+  // the turn it starts has answered it.
   const sendOutcome = yield* session.request({
     kind: 'followUp.send',
     runId: forkedRunId,
     text: 'Replace the sketch with Lemma 1 and a formal proof.',
   });
   console.log('[05] fork followUp:', sendOutcome.status);
-
-  yield* Stream.runHead(
-    Stream.filter(session.view.changes, (view) => {
-      const forked = view.runs.get(forkedRunId);
-      const pendingFollowUps =
-        view.queuedFollowUps.get(forkedRunId)?.length ?? 0;
-      return (
-        forked?.status === 'waiting' &&
-        pendingFollowUps === 0 &&
-        forked.forkPoint !== forkedWait
-      );
-    }),
-  );
+  const { receipt } = yield* session.request({
+    kind: 'followUp.receipt',
+    runId: forkedRunId,
+    id: sendOutcome.id,
+    wait: true,
+  });
+  if (receipt.state !== 'answered')
+    throw new Error(`The fork's follow-up was not answered: ${receipt.state}`);
 
   yield* session.request({
     kind: 'run.stop',

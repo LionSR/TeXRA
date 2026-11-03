@@ -44,7 +44,7 @@ import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
-import type { SettingsStores } from '@shared/config/settings';
+import { SessionRoots } from '@platform/rootedFs';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import {
@@ -95,11 +95,6 @@ export interface StepToolInputs {
   /** Whether the installed plugins' tools join (step 2): a top-level run's,
    *  unless it is a plugin agent that names its own tools. */
   readonly injectInstalled: boolean;
-  /** The run's stores, which the injections' settings read. */
-  readonly stores: SettingsStores;
-  /** The run's workspace root: the tool-availability probes answer per
-   *  workspace. */
-  readonly workspaceRoot: string | undefined;
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
 }
@@ -110,21 +105,20 @@ export const declaredToolNames = (tools: Persona['tools']): readonly string[] =>
     typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
   );
 
-/** Resolve the tools one step offers from the catalog entries it pinned. */
+/** Resolve the tools one step offers from the catalog entries it pinned,
+ *  reading the settings and the probes of the session it runs in. */
 export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   catalog: ReadonlyMap<string, ToolEntry>,
   input: StepToolInputs,
 ) {
   const table = yield* ToolRegistry;
+  const roots = yield* SessionRoots;
   const warnings: string[] = [];
   const injected: string[] = [];
   if (input.injectTools) {
     for (const { injectedWhen } of table.entries.values()) {
       for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (
-          setting === true ||
-          (yield* Settings.get<boolean>(input.stores, setting))
-        )
+        if (setting === true || (yield* Settings.get<boolean>(roots, setting)))
           injected.push(name);
       }
     }
@@ -137,7 +131,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // withheld on its account.
   const probed =
     (yield* SubscriptionRef.get((yield* ToolAvailability).results)).get(
-      input.workspaceRoot,
+      roots.workspace,
     ) ?? [];
   const probedOff = new Map(
     probed.flatMap((result) =>
@@ -287,7 +281,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
   const scriptAlone =
     [...resolvedNames].some(isScript) &&
-    (yield* Settings.get<boolean>(input.stores, GlobalStateKey.SCRIPT_ONLY));
+    (yield* Settings.get<boolean>(roots, GlobalStateKey.SCRIPT_ONLY));
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];

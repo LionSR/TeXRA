@@ -272,8 +272,6 @@ export const agentRunLayer = (
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        stores: roots,
-        workspaceRoot: roots.workspace,
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).

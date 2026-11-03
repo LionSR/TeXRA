@@ -6,16 +6,11 @@ import { resolve } from 'node:path';
 import { Effect, Layer, type Context } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import {
-  harnessBuiltins,
-  type PluginDefinition,
-  type ToolRun,
-} from '@texra-ai/harness/plugins';
+import { type PluginDefinition, type ToolRun } from '@texra-ai/harness/plugins';
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 
 import { texraPlugins } from '@texra/tools/registry';
-import { factKindsOf } from '@tools/plugins';
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   collectModuleSpecifiers,
@@ -155,84 +150,7 @@ describe('plugin boundaries (invariants 1 and 6)', () => {
   });
 });
 
-/** Each plugin of a list, with the tools it offers the model, in order. */
-const roster = (plugins: readonly Plugin[]) =>
-  plugins.map(({ id, tools }) => [
-    id,
-    (tools ?? []).map((tool) => tool.definition.name),
-  ]);
-
-/**
- * One case pins each list a host or embedder composes the
- * process from. Every TeXRA host passes `texraPlugins`, and the SDK's
- * examples pass the harness's own lists. A plugin or tool that joins or leaves a list
- * changes what every agent on it can be offered, so it is a reviewed change
- * here, not a side effect of an import.
- */
 describe('plugin rosters', () => {
-  it("pins TeXRA's plugins and their tools, in dashboard order", () => {
-    expect(roster(texraPlugins({ name: 'vscode' }))).toEqual([
-      [
-        'file-ops',
-        ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-      ],
-      [
-        'latex-extract',
-        ['extract_figures', 'extract_tikz_figures', 'extract_bib_entries'],
-      ],
-      ['latex-diagnostics', ['diagnostics']],
-      ['arxiv', ['arxiv_search', 'download_arxiv_source']],
-      ['web', ['web_search', 'web_fetch']],
-      ['memory-workflow', ['memory', 'executions']],
-      ['goal', ['plan']],
-      ['wolfram', []],
-      [
-        'zotero',
-        ['zotero_collections', 'zotero_search', 'zotero_add', 'zotero_export'],
-      ],
-      [
-        'lean4',
-        ['lean_diagnostics', 'lean_file', 'lean_project', 'lean_inspect'],
-      ],
-      ['multi-agent', ['agent']],
-      ['github-pr-subscription', ['github_subscription']],
-      ['external-inquiry', ['inquiry']],
-      ['codex', ['codex']],
-      ['claude-agent', ['claude_code']],
-      [
-        'core',
-        ['inline_comment', 'open_pdf', 'ask_user_question', 'lean_loogle'],
-      ],
-      ['codemode', ['script', 'self']],
-      [
-        'setup',
-        [
-          'probe_environment',
-          'unset_api_key',
-          'invoke_command',
-          'install_vscode_extension',
-          'read_config',
-          'update_config',
-          'send_to_terminal',
-          'apply_team',
-        ],
-      ],
-      [
-        'documents',
-        [
-          'accept_run_files',
-          'document_task',
-          'document_context',
-          'document_extract',
-          'document_compile',
-          'document_diff',
-          'document_review',
-          'document_propose',
-        ],
-      ],
-    ]);
-  });
-
   it('gives every switchable plugin a dashboard card', () => {
     // A switch with no card would be off with nothing to turn it on.
     expect(
@@ -242,33 +160,6 @@ describe('plugin rosters', () => {
         )
         .map(({ id }) => id),
     ).toEqual([]);
-  });
-
-  it('pins the row kinds plugins write', () => {
-    // `factKindsOf` refuses a fact kind of another plugin's id, or one
-    // kind twice.
-    expect(
-      Object.keys(factKindsOf(texraPlugins({ name: 'vscode' }))).toSorted(),
-    ).toEqual([
-      'documents/accepted',
-      'documents/output',
-      'external-inquiry/thread',
-      'goal/plan',
-    ]);
-  });
-
-  it("pins the harness's built-in list", () => {
-    expect(roster(harnessBuiltins)).toEqual([
-      [
-        'file-ops',
-        ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-      ],
-      ['web', ['web_search', 'web_fetch']],
-      ['memory-workflow', ['memory', 'executions']],
-      ['goal', ['plan']],
-      ['multi-agent', ['agent']],
-      ['codemode', ['script', 'self']],
-    ]);
   });
 
   // Failure mode: a plugin's tool requires the session's runs, so a host

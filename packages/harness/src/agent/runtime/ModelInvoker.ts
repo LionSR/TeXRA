@@ -52,8 +52,8 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
+import { quotaFallbackMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
-import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
@@ -626,13 +626,14 @@ export const modelInvokerLayer = (): Layer.Layer<
         const automatic =
           credentialSwitch?.kind === 'decline-route' &&
           credentialSwitch.automatic
-            ? quotaFallbackRouteFor(credentialSwitch.route)
+            ? credentialSwitch
             : null;
         if (automatic !== null) {
-          logProgressStatus(
-            logger,
-            `${automatic.retrySourceName} usage limit reached; retrying with ${automatic.retryFallbackName}.`,
-          );
+          // The notice records the route it moved off; an app words it.
+          logger.info(quotaFallbackMessage(automatic), {
+            messageType: MESSAGE_TYPES.QUOTA_FALLBACK,
+            data: { route: automatic.route },
+          });
         }
         const payload = {
           kind: 'retry',
@@ -641,7 +642,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             runId,
             operation: 'Model request',
             model: bound.modelId,
-            errorMessage: error.message,
             errorDetails: error,
             credentialSwitch,
           },

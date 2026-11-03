@@ -71,7 +71,7 @@ const MISSING_API_KEY_MESSAGE =
 /** Map a classified error to host guidance, with no notification for aborts. */
 export function agentErrorPresentation(error: {
   kind: AgentErrorKind;
-  message?: string;
+  message: string;
   /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
    *  beside the error so the host's dialog keeps the guide affordance. */
   docsPage?: string;
@@ -88,35 +88,10 @@ export function agentErrorPresentation(error: {
         },
       };
     case 'context-window':
-      // A supplied message already carries the run's specific remediation.
-      return {
-        type: 'error',
-        payload: {
-          message:
-            error.message ??
-            'Conversation exceeds the model context window. Start a new ' +
-              'session, or reduce attached files and tool output.',
-          ...docs,
-        },
-      };
     case 'disk-full':
-      return {
-        type: 'error',
-        payload: { message: error.message ?? 'Disk full.', ...docs },
-      };
     case 'result-lost':
-      return {
-        type: 'error',
-        payload: { message: error.message ?? 'The result was lost.', ...docs },
-      };
     case 'unexpected':
-      return {
-        type: 'error',
-        payload: {
-          message: error.message ?? 'Unexpected error executing agent.',
-          ...docs,
-        },
-      };
+      return { type: 'error', payload: { message: error.message, ...docs } };
     case 'abort':
       return null;
     default: {

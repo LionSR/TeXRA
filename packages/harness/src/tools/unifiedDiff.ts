@@ -4,7 +4,7 @@ import { Effect, Number as Num } from 'effect';
 
 // Local imports - common
 import { withLogChannel } from '@logger/effectLog';
-import { formatHunkLines } from '@shared/session/runtimeRequest';
+import { formatHunkLines } from '@shared/schemas';
 import { countLines } from '@utils/text/stringUtils';
 
 const CHANNEL = 'unifiedDiff';

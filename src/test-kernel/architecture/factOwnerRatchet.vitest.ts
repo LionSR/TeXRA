@@ -71,10 +71,12 @@ const VOCABULARY = new Set([
   'packages/harness/src/shared/schemas/rowVersions.ts',
 ]);
 
-/** The store layer: the codec, the row reader, the publisher and the
- *  history query dispatch on a row's type to encode, decode, version and
- *  index it. They decide no fact; the reducers above do. Exempt by name
- *  (owner, 2026-10-30), so the baseline lists application readers only. */
+/** Storage-boundary readers are excluded from the application-reader count.
+ *  They encode, decode, version and index rows, enforce atomic write
+ *  preconditions, and reconstruct persisted data for reading. Those decisions
+ *  remain at the storage boundary; this exclusion does not prove that every
+ *  interpretation of a row lives in a reducer. Fact ownership is checked
+ *  separately by OWNERS below. */
 const STORE_LAYER = new Set([
   'packages/harness/src/agent/runtime/SessionEvents.ts',
   'packages/harness/src/agent/runtime/historyQuery/HistoryQuery.ts',

@@ -3,7 +3,6 @@
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
-import { when } from 'lit/directives/when.js';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
@@ -11,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
 import { getModelLabel, type RetryPermission } from '@texra-ai/harness/schemas';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -60,11 +60,9 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
     return this.renderCard(
       html`
-        ${when(
-          data.errorMessage,
-          () =>
-            html`<div class="retry-request__error">${data.errorMessage}</div>`,
-        )}
+        <div class="retry-request__error">
+          ${modelFailureText(data.errorDetails)}
+        </div>
         ${
           detailsText
             ? html`
@@ -106,8 +104,6 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   private formatRetryDetails(
     details: RetryPermission['errorDetails'],
   ): string | null {
-    if (!details) return null;
-
     const lines = [
       details.provider && `provider: ${details.provider}`,
       details.requestId && `requestId: ${details.requestId}`,

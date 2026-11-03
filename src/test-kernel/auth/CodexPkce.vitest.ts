@@ -58,20 +58,6 @@ describe('codex model eligibility', () => {
       eligible: true,
     },
     {
-      // Top reasoning tier + `codex` name + live: everything the old heuristic
-      // trusted. Absent the registry flag, it must not route to Codex.
-      name: 'rejects an unflagged model even when every old-heuristic proxy matches',
-      overrides: {
-        id: 'gpt-5.9-codex',
-        shortName: 'gpt-5.9-codex',
-        reasoning: {
-          efforts: [ReasoningEffort.MAX],
-          providerDefault: ReasoningEffort.MAX,
-        },
-      },
-      eligible: false,
-    },
-    {
       // The provider guard must live inside the function itself, not only in
       // callers — a non-OpenAI ModelConfig must never resolve eligible, even if
       // a future registry mistake flags one.

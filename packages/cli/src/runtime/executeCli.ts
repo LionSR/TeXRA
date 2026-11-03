@@ -25,7 +25,7 @@ import {
   type StartInput,
 } from '@texra-ai/harness';
 import {
-  hasErrorPresentationClaimed,
+  launchNoticeOf,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -489,15 +489,20 @@ export function executeCliConfig(
       } else if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
-        // A failure before the run opened is the caller's to present (the
-        // session presents none); one after it carries the session
-        // presenter's receipt, and one that presented itself through a
-        // targeted notification is marked claimed at its throw site.
+        // A launch that failed before its run opened is the caller's to
+        // present (the session presents none): a refused launch by the
+        // notice it carries, any other by its message. A run that opened
+        // never fails its launch: its end is its `run.end` row's.
         if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
-        else if (!failurePresented && !hasErrorPresentationClaimed(err))
-          presentationHost.emit('requestShowError', {
-            message: toErrorMessage(err),
-          });
+        else if (!failurePresented) {
+          const notice = launchNoticeOf(err);
+          if (notice !== undefined)
+            presentationHost.emit(notice.event, notice.payload);
+          else
+            presentationHost.emit('requestShowError', {
+              message: toErrorMessage(err),
+            });
+        }
       }
     }
 

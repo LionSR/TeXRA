@@ -105,8 +105,9 @@ interface AgentRunListingEntry {
    *  loadability are settled when the run is opened. */
   resumable: boolean;
   /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, or an earlier build wrote them.
-   *  Absent when it resumes or simply has nothing to continue from. */
+   *  continue from: they could not be read, an earlier build wrote them, or
+   *  they hold a fact of a plugin this process does not load. Absent when
+   *  it resumes or simply has nothing to continue from. */
   resumeBlocked?: string;
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;
@@ -159,6 +160,17 @@ interface Composition {
   readonly plugins: readonly Plugin[];
   readonly skills?: HostSkillOptions;
 }
+```
+
+## Conflict
+
+A `followUp.send` under an `id` the run holds another message under.
+
+```ts
+class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
+  runId: RunIdSchema,
+  id: Schema.String,
+})
 ```
 
 ## DatabaseOpenFailed
@@ -243,9 +255,20 @@ interface HeldRun {
 }
 ```
 
+## HISTORY_TABLES
+
+The tables a history query reads and their columns, in order: the public
+contract of `executions` `query`. A column changes meaning only with a
+new name. `position` is load order, not the database's commit ordinal: a
+rebuilt store renumbers it.
+
+```ts
+const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call_position", "kind", "name", "model", "description", "started_at", "status", "outcome", "cost", "input_tokens", "output_tokens", "calls_unreadable"]; run_tree: readonly ["ancestor_id", "id", "depth"]; tool_calls: readonly ["position", "run_id", "call_id", "script_call_id", "tool", "input", "attempt", "status", "output", "value", "error", "issued_at", "started_at", "ended_at"]; model_calls: readonly ["position", "run_id", "invocation_id", "attempt", "purpose", "model", "status", "output", "error", "input_tokens", "output_tokens", "cost", "started_at", "ended_at"]; }>
+```
+
 ## HostRequestFailure
 
-How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds
+How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
 onto the wire ({@link RequestRefusal}); every other tag is a defect it
 logs and answers `Internal` — but it is a *named* defect, so the log says
 which capability produced it. The bound is structural because the tags a
@@ -276,12 +299,12 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly status: "sent" | "queued"; readonly wake?: "failed" | null | undefined; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "stale" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; readonly wake?: "failed" | null | undefined; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "stale" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## isRequestRefusal
 
-Whether a failure is one of the three the bridge answers on the wire.
+Whether a failure is one of the four the bridge answers on the wire.
 
 ```ts
 function isRequestRefusal(error: unknown): error is RequestRefusal
@@ -415,11 +438,12 @@ interface LocalSession extends Session {
      * new one as it is written. `drained`, if given, is updated to the
      * position each read reached.
      *
-     * Another process writing to the same store is seen here as soon as its
-     * commit is read, while `current` and `changes` take it up on the
-     * store's next poll (about 250 ms). A caller that acts on an event here
-     * and then needs the snapshot to show it waits on `changes` rather than
-     * reading `current` once.
+     * Another process's commit reaches this stream and the view on the same
+     * poll of the store (about 250 ms), but the view applies it on its own
+     * update fiber, so `current` read right after an event here can still
+     * be the snapshot before it. A caller that acts on an event and then
+     * needs the snapshot to show it waits on `changes` rather than reading
+     * `current` once.
      */
     readonly events: (
       from: CommitOrdinal,
@@ -651,12 +675,12 @@ type RequestError = typeof RequestErrorSchema.Type;
 
 ## RequestRefusal
 
-A request's refusal, as opposed to its defect: the three a handler may
+A request's refusal, as opposed to its defect: the four a handler may
 answer the surface with. The bridge folds these onto the wire; every other
 tag is `Internal`.
 
 ```ts
-type RequestRefusal = Cancelled | Unavailable | Rejected;
+type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
 ```
 
 ## responseText
@@ -827,8 +851,8 @@ interface RunRecords {
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere` or `earlierBuild`), or null when it may
-   *  go ahead; a fact that cannot be read fails. */
+   *  (`finished`, `ownedElsewhere`, `earlierBuild` or `pluginUnavailable`),
+   *  or null when it may go ahead; a fact that cannot be read fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
@@ -896,7 +920,9 @@ interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host.
+   * returned to you and shown to no host: a launch refused for an unknown
+   * model, or for a `config` naming an unknown agent, carries the notice a
+   * host shows for it (`launchNoticeOf` in `./host`).
    */
   readonly start: (
     input: StartInput,
@@ -1073,7 +1099,8 @@ interface WorkspaceRoots {
   /**
    * The storage root this process opened (a host's per-user directory, an
    * SDK embedder's `storageDir`): every storage path below derives from it, and
-   * the files a person keeps there (the MCP config) are found beside it.
+   * the files a person keeps there (the MCP config, their skills and the
+   * `AGENTS.md` a workspace without one falls back to) are found in it.
    */
   readonly storageRoot: string;
   /** Application-owned storage for this project's state. Custom hosts must

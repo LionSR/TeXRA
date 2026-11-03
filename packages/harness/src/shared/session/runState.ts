@@ -153,7 +153,7 @@ export type RunState = RunPosition &
 /** Display rows a batch commits together with run history rows; the run
  *  state ignores them. */
 type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
-type CardType = 'tool.start' | 'tool.end' | 'stream.end';
+type CardType = 'tool.start' | 'tool.end' | 'stage.start' | 'stream.end';
 type ResultType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
 type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
 /** The row types the run state reads, each with a handler in

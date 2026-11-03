@@ -4,14 +4,12 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import {
-  attachErrorPresentationClaimed,
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
+import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   aggregateTarget,
+  type LaunchNotice,
   type LocalRuntimeState,
   type RunId,
   type SessionEvent,
@@ -338,30 +336,52 @@ export class Interactions extends Context.Service<
     );
 }
 
+/** The failure a run's raw error stands for: a `Session` start's
+ *  `RunFailure` by the failure it carries, an aggregate by its first. */
+const primaryFailure = (error: unknown): unknown =>
+  primaryAgentError(
+    Predicate.isTagged(error, 'RunFailure') && 'cause' in error
+      ? error.cause
+      : error,
+  );
+
 /**
- * Present a failed run from its raw error: the primary failure, classified,
- * worded as `prefix` plus its text (a `Rejected` request's reason), and
- * replayed to a surface that attaches later, then marked presented. A
- * failure already presented (here, by the terminal-result presenter, or
- * through a targeted notice) presents nothing. A `Session` start's
- * `RunFailure` is presented as the failure it carries.
+ * The notice a refused launch carries for its caller to show
+ * (`AgentError.notice`), read through a `Session` start's `RunFailure`;
+ * undefined for any other failure, which its caller words itself.
+ */
+export function launchNoticeOf(error: unknown): LaunchNotice | undefined {
+  const primary = primaryFailure(error);
+  return primary instanceof AgentError ? primary.notice : undefined;
+}
+
+/**
+ * Present a failed run from its raw error, replayed to a surface that
+ * attaches later: a refused launch's notice ({@link launchNoticeOf}), or
+ * else the primary failure, classified and worded as `prefix` plus its text
+ * (a `Rejected` request's reason). A host that throws on the notice shows
+ * that text as an error instead. It presents whatever it is given, so each
+ * failure has one presenter: a launch that failed before its run opened is
+ * its caller's, and a run's end is the session's
+ * ({@link presentTerminalResult}).
  */
 export function presentRunFailure(
   interactions: Pick<SessionHostInteractions, 'emit'>,
   error: unknown,
   prefix = '',
 ): Effect.Effect<void> {
-  if (hasErrorPresentationClaimed(error)) return Effect.void;
-  attachErrorPresentationClaimed(error);
-  const primary = primaryAgentError(
-    Predicate.isTagged(error, 'RunFailure') && 'cause' in error
-      ? error.cause
-      : error,
-  );
-  const text =
+  const primary = primaryFailure(error);
+  const reason =
     primary instanceof Rejected ? primary.reason : toErrorMessage(primary);
+  const text = `${prefix}${reason}`;
+  const notice = launchNoticeOf(primary);
+  if (notice !== undefined)
+    return interactions.emit(notice.event, notice.payload, {
+      replayWhenAttached: true,
+      fallbackMessage: text,
+    });
   return presentAgentFailure(interactions, {
     kind: classifyAgentError(primary),
-    message: `${prefix}${text}`,
+    message: text,
   });
 }
