@@ -862,10 +862,10 @@ function jitteredExponentialBackoffMs(
 
 ```ts
 interface JsonRpcConnection {
-  readonly request: <T>(
+  readonly request: (
     method: string,
     params?: unknown,
-  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  ) => Effect.Effect<unknown, JsonRpcRequestError | JsonRpcConnectionDisposed>;
   /** Send a notification; after `close` it is dropped. */
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */

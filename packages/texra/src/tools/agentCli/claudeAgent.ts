@@ -349,9 +349,7 @@ function handleToolResults(
 
     const isError = block.is_error === true;
     const update: Partial<ToolUseLog> = {
-      ...(block.content !== undefined && {
-        output: block.content as ToolUseLog['output'],
-      }),
+      ...(block.content !== undefined && { output: block.content }),
       ...(isError && {
         error: extractToolErrorMessage(block.content) ?? 'Tool error',
       }),

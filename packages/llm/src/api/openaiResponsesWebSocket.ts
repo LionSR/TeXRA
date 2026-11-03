@@ -105,10 +105,11 @@ const connect = Effect.fnUntraced(function* (
       socket.once('close', () => {
         invalid ??= closed;
       });
+      const iterator: AsyncIterator<unknown> = reader[Symbol.asyncIterator]();
       return {
         socket,
         reader,
-        iterator: reader[Symbol.asyncIterator]() as AsyncIterator<unknown>,
+        iterator,
       };
     }),
     Effect.fnUntraced(function* ({ socket, reader, iterator }, exit) {
@@ -244,9 +245,10 @@ const connect = Effect.fnUntraced(function* (
       const chunks = Stream.fromPull(
         Effect.succeed(
           Effect.gen(function* () {
-            pendingRead = iterator.next();
+            const read = iterator.next();
+            pendingRead = read;
             const next = yield* Effect.tryPromise({
-              try: () => pendingRead!,
+              try: () => read,
               catch: failure,
             });
             pendingRead = undefined;

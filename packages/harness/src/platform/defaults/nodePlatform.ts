@@ -217,11 +217,13 @@ const supervisedSpawner = Layer.effect(
         } catch (error) {
           // ESRCH: already gone. Anything else means this child survives the
           // parent, and an exit listener can only write synchronously.
-          const code = (error as NodeJS.ErrnoException).code;
+          const code = Predicate.hasProperty(error, 'code')
+            ? error.code
+            : undefined;
           if (code !== 'ESRCH') {
             writeSync(
               2,
-              `Could not stop child process ${pid} at exit: ${code ?? ensureError(error).message}\n`,
+              `Could not stop child process ${pid} at exit: ${typeof code === 'string' ? code : ensureError(error).message}\n`,
             );
           }
         }

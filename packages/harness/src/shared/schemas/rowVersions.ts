@@ -144,7 +144,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v3: the error's classification as `model.message` v9.
   // v4: an error always carries its `message` (no upcaster: an earlier
   // build's error without one would fail as damaged).
-  'run.end': { version: 4, upcast: [], listing: 'own' },
+  // v5: the error's classification as `model.message` v10 (no upcaster: an
+  // earlier build would fail a subscription's failure as damaged).
+  'run.end': { version: 5, upcast: [], listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   'run.description': { ...V1, listing: 'own' },
@@ -191,7 +193,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // used-up plan's automatic retry is a `quotaFallback` row recording the
   // route it moved off (no upcaster: an earlier build's GLM exhaustion
   // would be refused as a damaged payload).
-  log: { version: 4, upcast: [], listing: 'none' },
+  // v5: an error row's classification as `model.message` v10 (no upcaster:
+  // an earlier build would refuse a subscription's failure as a damaged
+  // payload).
+  log: { version: 5, upcast: [], listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its
   // run as damaged rather than read as that build's).
@@ -235,7 +240,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // (`planType`, `resetsInMs`), and the GLM Coding Plan's exhaustion is
   // named by its route, `glm-coding-plan-subscription` (no upcaster: an
   // earlier build's GLM exhaustion would fail as damaged).
-  'model.message': { version: 9, upcast: [], listing: 'none' },
+  // v10: a subscription that could not bill is classified as
+  // `subscription-session`, with its route, whether it needs a sign-in, and
+  // the session's own failure (no upcaster: an earlier build would fail the
+  // classification as damaged).
+  'model.message': { version: 10, upcast: [], listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).

@@ -83,14 +83,14 @@ export const readCliModelAccessStatus = Effect.fn(
     ] as const,
     { concurrency: 'unbounded' },
   );
-  return {
-    subscriptions: Object.fromEntries(
-      subscriptionEntries,
-    ) as CliModelAccessStatus['subscriptions'],
-    codingPlans: Object.fromEntries(
-      codingPlanEntries,
-    ) as CliModelAccessStatus['codingPlans'],
-  } satisfies CliModelAccessStatus;
+  type Access = CliModelAccessStatus;
+  const subscriptions =
+    // cast: one entry per SUBSCRIPTION_AUTH_PROVIDERS member, the record's keys.
+    Object.fromEntries(subscriptionEntries) as Access['subscriptions'];
+  const codingPlans =
+    // cast: one runtime per coding plan, so the plan ids are the record's keys.
+    Object.fromEntries(codingPlanEntries) as Access['codingPlans'];
+  return { subscriptions, codingPlans } satisfies Access;
 });
 
 // ---------------------------------------------------------------------------

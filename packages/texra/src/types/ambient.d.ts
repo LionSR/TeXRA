@@ -52,6 +52,14 @@ declare module 'highlightjs-lean' {
 }
 
 declare module 'markdown-it-texmath' {
+  import type { MarkdownIt } from 'markdown-it';
+
+  interface TexmathOptions {
+    engine: unknown;
+    delimiters?: string | string[];
+    katexOptions?: Record<string, unknown>;
+  }
+
   interface TexmathRule {
     name: string;
     rex: RegExp;
@@ -74,7 +82,9 @@ declare module 'markdown-it-texmath' {
     };
   }
 
+  /** A markdown-it plugin (`md.use(texmath, options)`) with its rule tables. */
   interface Texmath {
+    (md: MarkdownIt, options?: TexmathOptions): void;
     block: (rule: TexmathRule) => MarkdownItBlockRule;
     rules: TexmathRules;
   }

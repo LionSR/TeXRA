@@ -148,7 +148,9 @@ const settlementOf = (
       _tag: 'Value',
       value:
         op.name === `${SEARCH_TOOLS}()`
-          ? (JSON.parse(result.output ?? '[]') as unknown)
+          ? Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(
+              result.output ?? '[]',
+            )
           : result.output,
     });
   if (result.endTurn === true) return Effect.fail(new EndedTurn({ result }));

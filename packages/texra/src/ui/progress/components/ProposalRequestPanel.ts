@@ -319,7 +319,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // ===========================================================================
 
   private handleFileClick = (event: MouseEvent): void => {
-    const file = (event.target as HTMLElement).dataset.file;
+    if (!(event.target instanceof HTMLElement)) return;
+    const { file } = event.target.dataset;
     if (file) this.openFile(file);
   };
 
@@ -333,9 +334,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   // mirroring FileList.ts's handleFileKey delegate for the same job.
   private handleFileKey = (event: KeyboardEvent): void => {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    const fileEl = getComposedPathElement<HTMLElement>(
+    const fileEl = getComposedPathElement(
       event,
       '.workflow-proposal__file-name[data-file]',
+      HTMLElement,
     );
     if (!fileEl) return;
     event.preventDefault();

@@ -149,7 +149,7 @@ const readToolBytes = Effect.fn('readToolBytes')(function* (
   });
   const chunks = yield* handle.stdout.pipe(
     Stream.runFoldEffect(
-      () => ({ chunks: [] as Uint8Array[], size: 0 }),
+      (): { chunks: Uint8Array[]; size: number } => ({ chunks: [], size: 0 }),
       (acc, chunk) => {
         const size = acc.size + chunk.length;
         if (size > MAX_IMAGE_BYTES) {

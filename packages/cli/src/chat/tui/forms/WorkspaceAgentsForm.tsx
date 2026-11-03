@@ -151,9 +151,9 @@ export function WorkspaceAgentsForm(
       </Text>
     ) : null,
   ].filter(Predicate.isNotNull);
-  const frame = (
-    items: readonly SelectItem<string>[],
-    onSelect: (value: string) => void,
+  const frame = <T extends string>(
+    items: readonly SelectItem<T>[],
+    onSelect: (value: T) => void,
     onCancel: () => void,
   ) => (
     <ListForm
@@ -196,7 +196,7 @@ export function WorkspaceAgentsForm(
               : `${data.record.agentKeys.length} agents`,
         },
       ],
-      (value) => setMode(value as WorkspaceAgentsFormMode),
+      setMode,
       props.onClose,
     );
   }

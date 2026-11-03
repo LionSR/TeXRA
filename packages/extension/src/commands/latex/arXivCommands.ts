@@ -49,17 +49,19 @@ export const downloadArXivSource: (
 
     const paperId = ArxivProcessor.getPaperDirName(arxivId);
 
-    const destinationPick = yield* quickPick(
+    const destinationPick = yield* quickPick<
+      vscode.QuickPickItem & { value: ArxivDownloadDestination }
+    >(
       [
         {
           label: `References/${paperId}`,
           description: 'Download into References folder',
-          value: 'references' as ArxivDownloadDestination,
+          value: 'references',
         },
         {
           label: 'Workspace root',
           description: 'Download directly into the workspace root',
-          value: 'root' as ArxivDownloadDestination,
+          value: 'root',
         },
       ],
       {

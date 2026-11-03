@@ -14,7 +14,7 @@ import { hash } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, PlatformError, Result } from 'effect';
+import { Effect, FileSystem, PlatformError, Predicate, Result } from 'effect';
 
 import { type DatabaseReadFailed } from '@texra-ai/harness';
 import { type DatabaseWriteFailed, GlobalValues } from '@texra-ai/harness/host';
@@ -240,6 +240,6 @@ function processAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'EPERM';
+    return Predicate.hasProperty(error, 'code') && error.code === 'EPERM';
   }
 }

@@ -7,9 +7,11 @@ import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages'
 
 type Push = typeof DesktopOutboundMessageSchema.Type;
 
+type PushByCommand = { [P in Push as P['command']]: P };
+
 /** One handler per main-process push, keyed by its command. */
 type DesktopPushRoutes = {
-  [P in Push as P['command']]: (message: P) => void;
+  [C in keyof PushByCommand]: (message: PushByCommand[C]) => void;
 };
 
 /**
@@ -21,6 +23,11 @@ type DesktopPushRoutes = {
 export function createMessageRoutes(
   routes: DesktopPushRoutes,
 ): (data: unknown) => void {
+  // Generic over the command so the route and its message stay correlated.
+  const run = <C extends keyof PushByCommand>(
+    command: C,
+    message: PushByCommand[C],
+  ): void => routes[command](message);
   return (data) => {
     if (
       !Predicate.hasProperty(data, 'command') ||
@@ -35,7 +42,6 @@ export function createMessageRoutes(
       console.warn(`Dropped a malformed ${data.command} push`, parsed.failure);
       return;
     }
-    const route = routes[parsed.success.command] as (message: Push) => void;
-    route(parsed.success);
+    run(parsed.success.command, parsed.success);
   };
 }

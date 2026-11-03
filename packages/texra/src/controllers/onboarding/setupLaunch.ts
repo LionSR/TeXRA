@@ -34,8 +34,8 @@ const SETUP_INSTRUCTION =
 export const launchSetup = Effect.fn('launchSetup')(function* <E>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
-  /** This host's launch path for the setup request, which shows a failure
-   *  to start (`HostRunActions.runValidated`). */
+  /** This host's launch path for the setup request, which logs and shows a
+   *  failure to start (`HostRunActions.runValidated`). */
   readonly start: (config: AgentConfig) => Effect.Effect<Run, E>;
 }) {
   // A second setup conversation, however it was started, would race the
@@ -59,12 +59,7 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E>(options: {
     instruction: SETUP_INSTRUCTION,
   }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
   const started = yield* Effect.result(options.start(config));
-  if (Result.isFailure(started)) {
-    yield* Effect.logWarning('The setup conversation did not start').pipe(
-      Effect.annotateLogs({ data: started.failure }),
-    );
-    return 'not-started' as const;
-  }
+  if (Result.isFailure(started)) return 'not-started' as const;
   const run = started.success;
   yield* run.result.pipe(
     Effect.asVoid,

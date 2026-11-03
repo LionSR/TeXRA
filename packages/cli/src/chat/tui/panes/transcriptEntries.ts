@@ -8,7 +8,7 @@ import {
 import { ANSI_ESCAPE_START, ansiEscapeEnd } from '@cli/runtime/ansiEscapes';
 import { safeTerminalText } from '@cli/runtime/terminalText';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
-import { quotaFallbackNoticeText } from '@ui/copy/modelAccess';
+import { errorRowText, quotaFallbackNoticeText } from '@ui/copy/modelAccess';
 
 import { normalizeKnownHtmlForCliMarkdown } from '../render/htmlMarkdownNormalize';
 
@@ -105,7 +105,7 @@ function deriveTranscriptRowHeadline(row: TranscriptRow): string {
         ),
       );
     case 'error':
-      return safeTerminalText(row.summary.full);
+      return safeTerminalText(errorRowText(row).summary);
     case 'progressStatus':
       return safeTerminalText(
         row.quotaFallback === undefined
@@ -201,10 +201,13 @@ function inSettlementOrder<
     readonly key: readonly [number, number];
   },
 >(items: readonly T[]): readonly T[] {
-  return items.every(
-    (c, i) =>
-      i === 0 || compareTranscriptOrderKeys(items[i - 1]!.key, c.key) <= 0,
-  )
+  return items.every((c, i) => {
+    const previous = items[i - 1];
+    return (
+      previous === undefined ||
+      compareTranscriptOrderKeys(previous.key, c.key) <= 0
+    );
+  })
     ? items
     : items.toSorted(
         (l, r) => compareTranscriptOrderKeys(l.key, r.key) || l.index - r.index,

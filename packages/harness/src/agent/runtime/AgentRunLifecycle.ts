@@ -209,15 +209,21 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
       // type omits and a bare object spread would smuggle past the check.
       const info = toRetryErrorInfo(normalizeProviderError(err));
       const { message: sdkMsg, ...providerErrorInfo } = info;
-      const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
+      // An unexpected failure is named by the agent it stopped, unless it
+      // is classified (a used-up plan, a subscription that cannot bill):
+      // that one names its own cause, as the other kinds do, and a host may
+      // word it from its classification in place of this message.
+      const message =
+        kind === 'unexpected' && info.classification === undefined
+          ? `Error executing agent ${agentIdentifier}: ${sdkMsg}`
+          : sdkMsg;
       // Root failures are logged here; a subagent's is delivered to its
       // orchestrator, so a second wrapper error would blame the parent.
       if (kind !== 'abort' && parentRunId === null) {
-        yield* logSdkError(ctx.logger, errorMsg, err, {
+        yield* logSdkError(ctx.logger, message, err, {
           operation: `execute ${agentIdentifier}`,
         });
       }
-      const message = kind === 'unexpected' ? errorMsg : sdkMsg;
       // `abort`/`disk-full` never carry provider or credential fields:
       // narrow them so runRecords' union stays honest.
       const error: NonNullable<ResultEvent['error']> =
@@ -229,11 +235,11 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
               partialText: providerErrorInfo.partialText,
             }
           : { kind, message, ...providerErrorInfo };
-      return { kind, errorMsg, error, info };
+      return { kind, message, error, info };
     }),
   );
   const fallbackMsg = `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`;
-  const { kind, errorMsg, error, info } = Exit.isSuccess(prologue)
+  const { kind, message, error, info } = Exit.isSuccess(prologue)
     ? prologue.value
     : yield* logLifecycleWarning('Run failure prologue failed', {
         runId,
@@ -241,7 +247,7 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
       }).pipe(
         Effect.as({
           kind: 'unexpected' as const,
-          errorMsg: fallbackMsg,
+          message: fallbackMsg,
           error: { kind: 'unexpected' as const, message: fallbackMsg },
           info: { message: fallbackMsg, userRetryable: false },
         }),
@@ -270,7 +276,7 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   // presenter shows that row (`presentTerminalResult`), and a launch that
   // waits for the run's opening answers with the opening, not this; a run
   // that never opened has no row, so its launch's caller presents this.
-  return yield* new AgentError({ message: errorMsg, cause: err });
+  return yield* new AgentError({ message, cause: err });
 });
 
 /**

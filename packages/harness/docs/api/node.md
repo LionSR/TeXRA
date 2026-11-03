@@ -79,7 +79,7 @@ the effect itself, so this port's members compose into any caller's program.
 
 ```ts
 interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 ```

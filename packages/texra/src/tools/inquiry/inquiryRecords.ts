@@ -91,9 +91,8 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['recordOpenQuestion']
     >[0],
   ) {
-    const threadId =
-      params.threadId ??
-      (`ei_${randomBytes(6).toString('hex')}` as InquiryThreadId);
+    const threadId: InquiryThreadId =
+      params.threadId ?? `ei_${randomBytes(6).toString('hex')}`;
 
     return changeThread(threadId, (existing, timestamp) => {
       if (params.threadId && !existing) {
@@ -163,16 +162,13 @@ function inquiryOperations(
     >[0],
   ) {
     return changeThread(params.threadId, (existing, timestamp) => {
+      if (!existing || existing.status !== 'open') return null;
+      const lastTurn = existing.turns.at(-1);
       if (
-        !existing ||
-        existing.status !== 'open' ||
-        existing.turns.length === 0
+        lastTurn === undefined ||
+        lastTurn.kind !== 'open' ||
+        lastTurn.turnIndex !== params.turnIndex
       )
-        return null;
-
-      // Safe: the length check above guarantees at least one turn.
-      const lastTurn = existing.turns.at(-1)!;
-      if (lastTurn.kind !== 'open' || lastTurn.turnIndex !== params.turnIndex)
         return null;
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 

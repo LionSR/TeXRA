@@ -97,7 +97,7 @@ describe('JsonRpcConnection', () => {
         const { connection, serverSends, collectClientFrames } =
           yield* makePair;
         const pending = yield* Effect.forkChild(
-          connection.request<{ ok: boolean }>('test/method', { x: 1 }),
+          connection.request('test/method', { x: 1 }),
         );
         const frames = yield* collectClientFrames;
         expect(frames).toEqual([

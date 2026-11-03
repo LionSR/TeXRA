@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -49,13 +49,15 @@ export function handleFixCompilation(
       );
 
       // This is a "run latexFixer" command, so prefer the helper model.
-      // The command settles when the run ends.
+      // The command finishes when the run ends. A run that does not start
+      // finishes it too: the launcher has told why, so the guard's error
+      // would tell it again.
       const config = yield* decodeLaunchConfig({
         agent: 'latexFixer',
         instruction,
       });
-      const run = yield* launch(config, { helperModel: true });
-      yield* run.result;
+      const run = yield* Effect.option(launch(config, { helperModel: true }));
+      if (Option.isSome(run)) yield* run.value.result;
     }),
   );
 }

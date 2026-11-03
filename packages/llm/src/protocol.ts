@@ -45,7 +45,18 @@ export const TurnProtocolSchema = Schema.Literals([
 export const ModelOriginSchema = BindingSchema.mapFields(
   Struct.assign({
     protocol: TurnProtocolSchema,
-    codecVersion: Schema.Literal(1),
+    /**
+     * What the provider-specific state a turn stores means (reasoning
+     * signatures, encrypted reasoning, provider evidence). It changes only
+     * when a codec would read that stored state differently; adding a field
+     * or changing how a request is built keeps it. A stored turn of another
+     * version decodes, and is not the same origin (`sameModelOrigin`), so it
+     * is sent as plain content without its reasoning and evidence, as after
+     * a model switch. This build writes the version `originOf` stamps. A
+     * change to the stored shape of that state, one an older build could
+     * not decode, bumps the store's row version instead.
+     */
+    codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
 );
 /** The binding a turn was requested on: model, deployment and protocol. */

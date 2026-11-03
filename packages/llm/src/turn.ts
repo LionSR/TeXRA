@@ -613,7 +613,7 @@ export const completedTurn = Effect.fn('llm.generateTurn')(function* (
 ) {
   const result = yield* Stream.runFold(
     events,
-    () => null as TurnResult | null,
+    (): TurnResult | null => null,
     (current, event) => (event.kind === 'completed' ? event.result : current),
   );
   if (result === null)

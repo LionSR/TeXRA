@@ -29,10 +29,10 @@ import {
   type LeanDiagnostic,
   type LeanFileCommand,
   type LeanProjectCommand,
-  type LspHover,
+  LspHoverSchema,
   type LspResult,
-  type PlainGoal,
-  type PlainTermGoal,
+  PlainGoalSchema,
+  PlainTermGoalSchema,
 } from '@texra/tools/lean/leanTypes';
 import {
   createLeanServerRoster,
@@ -348,6 +348,7 @@ const sendPositionRequest = Effect.fn('sendPositionRequest')(function* <T>(
   line: number,
   column: number,
   method: string,
+  reply: Schema.Codec<T, unknown>,
 ): Effect.fn.Return<LspResult<T>> {
   const leanUri = createLeanFileUri(absolutePath);
 
@@ -408,7 +409,19 @@ const sendPositionRequest = Effect.fn('sendPositionRequest')(function* <T>(
         cause,
       }),
   ).pipe(
-    Effect.map((result) => ({ data: result as T })),
+    Effect.flatMap((result) =>
+      Schema.decodeUnknownEffect(Schema.NullOr(reply))(result).pipe(
+        Effect.mapError(
+          (cause) =>
+            new LspRequestFailed({
+              method,
+              message: `LSP request ${method} returned an unexpected reply: ${cause.message}`,
+              cause,
+            }),
+        ),
+      ),
+    ),
+    Effect.map((data): LspResult<T> => ({ data })),
     Effect.catchTag('LspRequestFailed', (failure) =>
       Effect.succeed({ data: null, error: failure.message }),
     ),
@@ -511,31 +524,34 @@ export function createVscodeLeanLanguageServices(
     // Positions are 0-indexed line and column; each of the three position
     // queries below names the Lean 4 extension's own LSP method.
     getGoalState: (filePath, line, column) =>
-      sendPositionRequest<PlainGoal>(
+      sendPositionRequest(
         globalState,
         roster,
         filePath,
         line,
         column,
         '$/lean/plainGoal',
+        PlainGoalSchema,
       ),
     getTermGoal: (filePath, line, column) =>
-      sendPositionRequest<PlainTermGoal>(
+      sendPositionRequest(
         globalState,
         roster,
         filePath,
         line,
         column,
         '$/lean/plainTermGoal',
+        PlainTermGoalSchema,
       ),
     getHoverInfo: (filePath, line, column) =>
-      sendPositionRequest<LspHover>(
+      sendPositionRequest(
         globalState,
         roster,
         filePath,
         line,
         column,
         'textDocument/hover',
+        LspHoverSchema,
       ),
     fetchDiagnosticsForFile: (filePath) =>
       fetchDiagnosticsForFile(roster, filePath),

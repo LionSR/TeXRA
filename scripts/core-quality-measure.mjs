@@ -118,17 +118,20 @@ export const RULES = {
     'The shallow-modules rule over the source outside the core (the rest of the harness, the app, the hosts).',
   'wide-records-outside-core':
     'The wide-records rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'type-assertions-outside-core':
+    'The type-assertions rule over the source outside the core (the rest of the harness, the app, the hosts).',
 };
 
 /**
- * The depth rules, which hold everywhere: the source outside the core is
- * measured by the same code under its own rule name, so the core's rows and
- * the rest are budgeted apart.
+ * The rules that hold everywhere (the depth rules and unexplained `as`): the
+ * source outside the core is measured by the same code under its own rule
+ * name, so the core's rows and the rest are budgeted apart.
  */
 const OUTSIDE_CORE_RULES = {
   'pass-through': 'pass-through-outside-core',
   'shallow-modules': 'shallow-modules-outside-core',
   'wide-records': 'wide-records-outside-core',
+  'type-assertions': 'type-assertions-outside-core',
 };
 
 /** Every package's source; the part outside the core takes the depth rules. */

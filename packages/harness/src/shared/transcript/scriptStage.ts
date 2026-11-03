@@ -310,10 +310,12 @@ export function scriptStages(
   if (stages.length === 0) return [];
   const byStage = Map.groupBy(
     rows.filter(
-      (row: ReadonlyDeep<TranscriptRow>): row is ToolRow =>
+      (
+        row: ReadonlyDeep<TranscriptRow>,
+      ): row is ToolRow & { readonly groupId: string } =>
         row.kind === 'tool' && row.groupId !== undefined,
     ),
-    (row) => row.groupId!,
+    (row) => row.groupId,
   );
   return stages.map((stage) => {
     const calls = (byStage.get(stage.id) ?? [])

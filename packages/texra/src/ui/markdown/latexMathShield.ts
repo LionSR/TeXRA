@@ -87,8 +87,7 @@ export function protectRenderInlineDollarSpans(
       index++;
       continue;
     }
-    const closer =
-      index + 2 < content.length ? nextValidDollar[index + 2]! : -1;
+    const closer = index + 2 < content.length ? nextValidDollar[index + 2] : -1;
     if (closer === -1) {
       index++;
       continue;

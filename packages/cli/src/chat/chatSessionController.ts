@@ -23,6 +23,7 @@ import {
 import {
   describeFollowUpFailure,
   launchNoticeOf,
+  normalizeProviderError,
   presentFollowUpResult,
   type ProcessRuntime,
   type ProcessServices,
@@ -55,6 +56,7 @@ import { readCliTeamName } from '@cli/runtime/cliTeams';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { launchApproval, type CliContext } from '@cli/runtime/cliContext';
 import { resumeRun } from '@texra/controllers/session/runActionPolicy';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
@@ -417,7 +419,11 @@ export function createChatSessionController(
       session.runExitCode = CliExitCode.Success;
       return;
     }
-    showFailure(error, toErrorMessage(error));
+    const { classification } = normalizeProviderError(error);
+    showFailure(
+      error,
+      modelFailureText({ message: toErrorMessage(error), classification }),
+    );
     session.runExitCode = CliExitCode.AgentError;
   };
 

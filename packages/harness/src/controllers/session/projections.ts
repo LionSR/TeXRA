@@ -102,6 +102,10 @@ function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   return usage;
 }
 
+/** The projections this build maintains; {@link PROJECTORS} has one each. */
+const PROJECTION_NAMES = ['listing', 'usage', 'model'] as const;
+type ProjectionName = (typeof PROJECTION_NAMES)[number];
+
 const PROJECTORS = {
   listing: {
     version: 1,
@@ -187,10 +191,8 @@ const PROJECTORS = {
       ];
     },
   },
-} as const satisfies Record<string, Projector>;
+} as const satisfies Record<ProjectionName, Projector>;
 
-type ProjectionName = keyof typeof PROJECTORS;
-const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
 const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );

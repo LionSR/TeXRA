@@ -26,6 +26,7 @@ import {
 } from '@texra-ai/harness';
 import {
   launchNoticeOf,
+  normalizeProviderError,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
@@ -497,17 +498,21 @@ export const executeCliConfig: (
       } else {
         // A launch that failed before its run opened is the caller's to
         // present (the session presents none): a refused launch by the
-        // notice it carries, any other by its message. A run that opened
-        // never fails its launch: its end is its `run.end` row's.
+        // notice it carries, any other by its message and classification,
+        // which the host words. A run that opened never fails its launch:
+        // its end is its `run.end` row's.
         if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
         else if (!failurePresented) {
           const notice = launchNoticeOf(err);
           if (notice !== undefined)
             presentationHost.emit(notice.event, notice.payload);
-          else
+          else {
+            const { classification } = normalizeProviderError(err);
             presentationHost.emit('requestShowError', {
               message: toErrorMessage(err),
+              ...(classification && { classification }),
             });
+          }
         }
       }
     }

@@ -107,6 +107,17 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
         }[traceResult.status],
       });
     const { trace, record } = traceResult;
+    // The first row, the creation row when the run has one, carries the
+    // launch time the filename is stamped with.
+    const firstEvent = trace.events.at(0);
+    if (firstEvent === undefined) {
+      const cause = new Error(`The assembled trace of run ${runId} is empty.`);
+      return yield* new TranscriptExportFailed({
+        step: 'assembleTrace',
+        message: cause.message,
+        cause,
+      });
+    }
 
     // The bundle path is absolute and host-supplied, so the process
     // filesystem reads it. Missing bundles give the host a rebuild hint.
@@ -126,9 +137,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     const html = injectStandaloneTrace(template, trace);
     const filename = generateExportFilename(
       {
-        // The assembler guarantees a non-empty document whose first row,
-        // the creation row when the run has one, carries the launch time.
-        timestamp: new Date(trace.events[0]!.at).toISOString(),
+        timestamp: new Date(firstEvent.at).toISOString(),
         config: record,
       },
       'html',

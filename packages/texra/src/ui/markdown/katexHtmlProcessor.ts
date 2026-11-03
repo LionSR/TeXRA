@@ -61,11 +61,10 @@ function addDisplayMathParagraphInterruptions(md: MarkdownItInstance): void {
 export function createKatexHtmlProcessor(
   options: KatexHtmlProcessorOptions,
 ): MarkdownProcessor {
-  type TexmathFn = Parameters<MarkdownItInstance['use']>[0];
   const renderer = createMarkdownRenderer({
     highlight: highlightCode,
     usePlugin: (md) => {
-      const configured = md.use(texmath as unknown as TexmathFn, {
+      const configured = md.use(texmath, {
         engine: katex,
         delimiters: [...DELIMITERS],
         katexOptions: {

@@ -46,45 +46,41 @@ function stripAnsiSgrChunk(text: string, state: SgrStripState): string {
   return output;
 }
 
-function chunkText(chunk: unknown): string | undefined {
-  if (typeof chunk === 'string') return chunk;
-  if (Buffer.isBuffer(chunk)) return chunk.toString('utf8');
-  if (chunk instanceof Uint8Array) {
-    return Buffer.from(chunk).toString('utf8');
-  }
-  return undefined;
+function chunkText(chunk: string | Uint8Array): string {
+  return typeof chunk === 'string'
+    ? chunk
+    : Buffer.from(chunk).toString('utf8');
 }
 
-function writeCallback(args: readonly unknown[]): (() => void) | undefined {
-  const callback = args.at(-1);
-  return typeof callback === 'function' ? (callback as () => void) : undefined;
-}
+type WriteCallback = (error?: Error | null) => void;
 
 function sgrStrippingWriteStream<T extends NodeJS.WriteStream>(stream: T): T {
   const state: SgrStripState = { pending: '' };
-  const write = stream.write.bind(stream) as (
+  const write = stream.write.bind(stream);
+  // Node's two `write` signatures: `(chunk, callback?)` and
+  // `(chunk, encoding?, callback?)`.
+  const strippedWrite = (
     chunk: string | Uint8Array,
-    ...args: unknown[]
-  ) => boolean;
+    encodingOrCallback?: BufferEncoding | WriteCallback,
+    callback?: WriteCallback,
+  ): boolean => {
+    const output = stripAnsiSgrChunk(chunkText(chunk), state);
+    if (typeof encodingOrCallback === 'function') {
+      if (output !== '') return write(output, encodingOrCallback);
+      encodingOrCallback();
+      return true;
+    }
+    if (output !== '') return write(output, encodingOrCallback, callback);
+    callback?.();
+    return true;
+  };
   return new Proxy(stream, {
     get(target, prop, receiver) {
-      if (prop === 'write') {
-        return (chunk: unknown, ...args: unknown[]) => {
-          const text = chunkText(chunk);
-          if (text === undefined) return write(chunk as Uint8Array, ...args);
-
-          const output = stripAnsiSgrChunk(text, state);
-          if (output === '') {
-            writeCallback(args)?.();
-            return true;
-          }
-          return write(output, ...args);
-        };
-      }
+      if (prop === 'write') return strippedWrite;
       const value = Reflect.get(target, prop, receiver);
       return typeof value === 'function' ? value.bind(target) : value;
     },
-  }) as T;
+  });
 }
 
 // Session color mode, set by tuiOutputStreamForColor (sole decision point).

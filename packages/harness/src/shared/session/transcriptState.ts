@@ -190,8 +190,9 @@ export function writableArray<K extends keyof DraftArrays>(
   key: K,
 ): DraftArrays[K] {
   const current = transcript[key];
-  // cast: an array in `owned` is the copy this function made for the current
-  // call, so writing it reaches no published transcript.
+  // An array in `owned` is the copy this function made for the current call,
+  // so writing it reaches no published transcript.
+  // cast: an owned array is this key's own writable copy.
   if (work.owned.has(current)) return current as DraftArrays[K];
   // cast: a spread of `transcript[key]` is that key's array, writable.
   const copy = [...current] as DraftArrays[K];
@@ -362,11 +363,12 @@ export function paint(d: Draft, slot: Slot): void {
   const live = streamingText || runningTool ? ix.live.get(id) : undefined;
   const row = rowOf(slot, live, d.ctx);
   if (row) upsertRow(d, next, row);
-  const current = rowById(next, ix, id);
-  if (current?.kind === 'thinking') {
+  const at = ix.rowIndex.get(id);
+  const current = at === undefined ? undefined : next.rows[at];
+  if (at !== undefined && current?.kind === 'thinking') {
     const newest = ix.thinkingRowId;
-    const at = ix.rowIndex.get(id)!;
-    if (newest === undefined || ix.rowIndex.get(newest)! <= at) {
+    const newestAt = newest === undefined ? undefined : ix.rowIndex.get(newest);
+    if (newest === undefined || (newestAt !== undefined && newestAt <= at)) {
       ix.thinkingRowId = id;
     }
   }

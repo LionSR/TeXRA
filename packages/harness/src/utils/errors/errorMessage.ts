@@ -18,7 +18,7 @@ export function causeChain(err: unknown): unknown[] {
     chain.push(current);
     if (current instanceof AggregateError)
       for (const error of current.errors) visit(error);
-    visit((current as { cause?: unknown }).cause);
+    if ('cause' in current) visit(current.cause);
   };
   visit(err);
   return chain;

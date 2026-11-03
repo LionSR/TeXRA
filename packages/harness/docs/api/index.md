@@ -132,7 +132,9 @@ type ApprovalHandler = (
 
 ## Cancelled
 
-The user cancelled the operation. No refusal notice is needed.
+Nothing is left to tell the user: they cancelled the operation, or the
+host has already told them why it did not go through. No refusal notice
+is needed.
 
 ```ts
 class Cancelled extends Schema.TaggedError<Cancelled>()(
@@ -218,6 +220,13 @@ type DefinedTool<T, R = never, Name extends string = string> = Omit<
 Define a tool: validate the model's input against `schema`, run `execute`,
 and turn ordinary failures into `{ status: 'error' }` feedback.
 Interruption, run history refusals and database write failures propagate.
+
+A tool whose `execute` succeeds with a `ToolResult` carrying a `value`
+hands a script that value in place of `{ output, summary }`. Declare its
+TypeScript type in `scriptReturns`, which is what a script is told the
+call resolves to. Nothing derives one from the other: a tool that returns
+a `value` without `scriptReturns` is declared to scripts as resolving to
+`ToolOutput`, so change the two together.
 
 ```ts
 function defineTool<T, R = never, const Name extends string = string>(
@@ -352,7 +361,7 @@ interface ITool<E = Error, R = never> {
    * field as the first argument and the rest as the second:
    * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
    * `withScript`: a function of scripts alone (`self()`), offered whenever
-   * the script tool is.
+   * the script tool is and never sent to the model as a tool of its own.
    */
   readonly scriptGlobal?: {
     readonly positional: string;

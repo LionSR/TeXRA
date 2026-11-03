@@ -91,6 +91,7 @@ interface ArxivSearchResult {
 
 /** A fresh client: the default export is a shared, stateful builder. */
 function createArxivClient(): typeof arxivClient {
+  // cast: the package exports only an instance; its class takes no required arguments.
   const ClientCtor = arxivClient.constructor as {
     new (): typeof arxivClient;
   };
