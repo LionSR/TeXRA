@@ -40,6 +40,7 @@ import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import {
   generateSessionDescription,
   getDisplayedInstruction,
+  RunLabels,
   settleDescriptionOnExit,
 } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
@@ -280,23 +281,26 @@ export function executeAgent(
       ),
     );
 
-    // Start description generation concurrently with the run, and settle
-    // it before the run ends (`settleDescriptionOnExit`), so the metadata
-    // write cannot recreate a run deleted by another host. A resumed run
-    // whose process died before its description was written gets one now.
-    // A child of the run's fiber, so the run's stop interrupts it, as it
-    // interrupts the run.
+    // A root run of a session that labels its runs gets its description
+    // concurrently with the run, settled before the run ends
+    // (`settleDescriptionOnExit`), so the metadata write cannot recreate a
+    // run deleted by another host. A resumed run whose process died before
+    // its description was written gets one now. A child of the run's fiber,
+    // so the run's stop interrupts it, as it interrupts the run.
+    const labelled = launch.entry.parent === null && (yield* RunLabels);
     const sessionDescription = yield* Effect.forkChild(
-      Deferred.await(opened).pipe(
-        Effect.andThen(
-          generateSessionDescription(
-            runId,
-            config,
-            definition.agentEntry.description,
-            resume,
-          ),
-        ),
-      ),
+      labelled
+        ? Deferred.await(opened).pipe(
+            Effect.andThen(
+              generateSessionDescription(
+                runId,
+                config,
+                definition.agentEntry.description,
+                resume,
+              ),
+            ),
+          )
+        : Effect.void,
     );
     const flow = resume
       ? loop

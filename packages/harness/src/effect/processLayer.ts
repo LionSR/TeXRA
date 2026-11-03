@@ -9,6 +9,7 @@ import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { RunLabels } from '@agent/runtime/sessionDescription';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import {
   ownerProcessLayer,
@@ -61,6 +62,10 @@ export interface ProcessLayerOptions extends Omit<
   /** Seed the first-install tool switches (opt-in plugins off) unless the
    *  user's list exists; `false` for a store that refuses every write. */
   readonly seedToolSwitches?: boolean;
+  /** Label each root run with a short title from the helper model (its
+   *  `run.description`), for an app that shows one: an extra model request
+   *  per root run, outside the run's usage. Absent, no run is labelled. */
+  readonly labelRuns?: boolean;
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
@@ -124,7 +129,9 @@ export class Sessions extends Context.Service<
    * open. A list the harness cannot compose fails with
    * {@link PluginsRefused}, as {@link processLayer} says, and the
    * first-install tool switches are seeded into the platform's global
-   * state.
+   * state. The harness logs with `Effect.log*` through the loggers, level
+   * and tracer the embedder's program provides (`Logger.layer`,
+   * `References.MinimumLogLevel`), and installs none of its own.
    *
    * Build it once per process, as any Effect layer is memoized: a second
    * live build that opens a root the first holds is refused at open
@@ -146,9 +153,8 @@ export class Sessions extends Context.Service<
         platform.agentDirectories,
       ),
       commandDirs: platform.commandDirs,
-      // An embedder's console has no live level filter of its own, so
-      // the package speaks at the informational level, not flooding it.
-      minimumLogLevel: 'Info',
+      // No logger of the harness's own: the embedder's logger layer,
+      // level and tracer decide where the harness's lines go.
     });
   }
 }
@@ -233,6 +239,9 @@ function sessionsLayer(
       options.commandDirs === undefined
         ? Layer.empty
         : Layer.succeed(CommandDirs)(options.commandDirs),
+    ),
+    Layer.provideMerge(
+      options.labelRuns === true ? Layer.succeed(RunLabels)(true) : Layer.empty,
     ),
   );
   return Layer.unwrap(

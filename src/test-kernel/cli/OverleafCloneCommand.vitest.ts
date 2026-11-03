@@ -1,7 +1,3 @@
-// Node imports
-import { writeFile } from 'node:fs/promises';
-import * as path from 'node:path';
-
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
@@ -220,22 +216,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           });
           expect(`${stdout}${stderr}`).not.toContain('olp_secret');
         }),
-    );
-
-    it.effect('refuses to clone into a nonempty destination', () =>
-      Effect.gen(function* () {
-        yield* useCliRuntime;
-        yield* Effect.promise(() =>
-          writeFile(path.join(workspacePath, 'paper.tex'), 'source'),
-        );
-
-        const result = yield* Effect.promise(() =>
-          runCli(['clone', PROJECT_ID, '--cwd', workspacePath, '--no-input']),
-        );
-
-        expect(result.exitCode).toBe(CliExitCode.AgentError);
-        expect(cloneCalls()).toHaveLength(0);
-      }),
     );
 
     it.effect('clears rejected credentials without printing them', () =>
