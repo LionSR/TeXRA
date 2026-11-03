@@ -1381,6 +1381,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A DeepSeek account out of credit reads as out of credit.** A request
+  DeepSeek refuses for an empty balance (HTTP 402, "Insufficient Balance")
+  is now reported as the account running out of credit, with the same
+  choice to replace the key that an OpenAI or Anthropic account out of
+  credit gets. Before, it read as an unexpected error.
 - **A lost durable fact is a row or a failure, never a warning.** A
   subagent's result held for a parent open in another process is delivered
   under a claim its park let go, so the delivery no longer polls for the
