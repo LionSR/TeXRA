@@ -1,7 +1,7 @@
 # Storage, errors and stop paths: one vocabulary per fact
 
 Date: 2026-11-03
-Status: proposed
+Status: accepted (owner, 2026-11-04)
 Origin: the deeper pass the owner asked for after
 [fewer processing options](./2026-11-03-fewer-processing-options.md), over the
 SQLite and storage layer, error definitions and catch sites, interruption and

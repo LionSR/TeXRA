@@ -1,7 +1,7 @@
 # Fewer processing options: decide, don't ask
 
 Date: 2026-11-03
-Status: proposed
+Status: accepted (owner, 2026-11-04)
 Origin: owner's observation that the code keeps growing options for special
 processing, including declarative ones, against the design philosophy the
 repo follows (Ousterhout, _A Philosophy of Software Design_, chapter 19
@@ -51,9 +51,12 @@ site, each a two-path branch inside the model layer.
 
 The catalog itself says most of these "have no settings-view row and live in
 `.texra/config.json`" (`packages/harness/src/shared/state/stateSettings.ts:199-204`).
-One description disagrees with the code: `useGoogleBackgroundResponses`
-promises an automatic fallback, but with server state off the request fails at
-`packages/llm/src/api/googleInteractions.ts:579-585`.
+With server state off, `useGoogleBackgroundResponses` is silently ignored:
+`backgroundCapable` (`packages/llm/src/protocol.ts:104`) answers false, the
+bind reports no background, and the turn runs in the foreground, so the
+`store` guard at `packages/llm/src/api/googleInteractions.ts:579-585` is
+unreachable from the harness. The description promises a fallback the code
+performs without saying so.
 
 All of them reach the llm package as `BindSpec.options`
 (`packages/llm/src/node.ts:56-76`), whose single producer
@@ -77,11 +80,13 @@ with the background decision. The route decides each from facts it holds:
   ("models that require sequential tool run") is a capability, not a user
   preference.
 - Server state on Google: keep the one real user choice, data retention, as
-  the only survivor, and make background delivery require it in code rather
-  than in a description.
-- `codeMode.scriptOnly`: the comparison it was added for either ran or it did
-  not. Pick the winner and delete the flag and its `injectedWhen` branch
-  (`packages/harness/src/tools/builtinPlugins.ts:119`).
+  the only survivor. Background delivery already requires it in code
+  (`backgroundCapable`); only the description said otherwise.
+- `codeMode.scriptOnly`: decided 2026-11-04, script-only wins (the owner's
+  code-mode direction; the 2026-10-24 evaluation ran at 0.85x to 0.87x of the
+  wall clock at 18% to 66% less cost). Delete the flag and its `injectedWhen`
+  branch (`packages/harness/src/tools/builtinPlugins.ts:119`); the two
+  journeys that evaluation left (GLM, `agent()`) are the slice's acceptance.
 
 **Give up.** A per-user override of a transport. Nobody has a settings-view
 row for one today.
@@ -95,12 +100,12 @@ producers: `vendorRoute`, the ChatGPT case and `firstPartyResponses`
 (`packages/llm/src/api/responsesConfiguration.ts:38-159`). Columns that carry
 no information across them:
 
-| Column                                                                                 | Values across the 3 producers                                                       | Reader                                                                                                        |
-| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `webSocketStreamParameter`                                                             | `'implicit'`, `'implicit'`, `'implicit'`                                            | the `'required'` branch at `packages/llm/src/api/openaiResponsesWebSocket.ts:240` is dead                     |
-| `instructions`                                                                         | `{kind:'optional'}` ×3                                                              | the `'required'` and fallback branches at `packages/llm/src/api/openaiResponsesRequest.ts:49-50,104` are dead |
-| `supportsStorage`                                                                      | always equals `defaults.store` (`:46/:59`, `:100/:114`, `:135/:150`)                | `openaiResponsesRequest.ts:102`, `packages/llm/src/api/openaiResponsesLower.ts:302`                           |
-| `requestDialect`, `openaiEndpoint`, `toolNamespace: null`, `background: 'unsupported'` | `'compatible'` exactly when `vendorRoute` built the row; the others co-vary with it | `openaiResponsesRequest.ts:66,119,168`                                                                        |
+| Column                                                               | Values across the 3 producers                                                                                                                                                                  | Reader                                                                                                        |
+| -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `webSocketStreamParameter`                                           | `'implicit'`, `'implicit'`, `'implicit'`                                                                                                                                                       | the `'required'` branch at `packages/llm/src/api/openaiResponsesWebSocket.ts:240` is dead                     |
+| `instructions`                                                       | `{kind:'optional'}` ×3                                                                                                                                                                         | the `'required'` and fallback branches at `packages/llm/src/api/openaiResponsesRequest.ts:49-50,104` are dead |
+| `supportsStorage`                                                    | always equals `defaults.store` (`:46/:59`, `:100/:114`, `:135/:150`)                                                                                                                           | `openaiResponsesRequest.ts:102`, `packages/llm/src/api/openaiResponsesLower.ts:302`                           |
+| `requestDialect`, `toolNamespace: null`, `background: 'unsupported'` | `'compatible'` exactly when `vendorRoute` built the row; the others co-vary with it. `openaiEndpoint` does not: it is the bind's own endpoint test (`responsesConfiguration.ts:143`) and stays | `openaiResponsesRequest.ts:66,119,168`                                                                        |
 
 Two model-id string tests stand in for capabilities the catalog should carry:
 `config.id.startsWith('gpt-5')` (`responsesConfiguration.ts:84`) and
@@ -129,13 +134,13 @@ Smaller instances of the same shape:
 branches; replace the two id-prefix tests with llm-zoo capability flags
 (`supportsBackground`, and no GPT-5 summary exception at all once §1 lands);
 narrow the reasoning literals to what is produced; delete `TurnRequest.store`
-and `strict`; keep one route-kind discriminator from which `requestDialect`,
-`openaiEndpoint` and `toolNamespace` follow.
+and `strict`; keep one route-kind discriminator from which `requestDialect` and
+`toolNamespace` follow.
 
 **Give up.** Nothing observable. Every deleted value has one producer value.
 
 **Acceptance.** `ResponsesConfiguration` loses `webSocketStreamParameter`,
-`instructions`, `supportsStorage`, `requestDialect` and `openaiEndpoint`;
+`instructions`, `supportsStorage` and `requestDialect`;
 `rg "startsWith\('gpt" packages/llm` is empty.
 
 ## 3. One approval decision
