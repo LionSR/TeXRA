@@ -114,8 +114,8 @@ export class ModelRetryGate {
     options: RouteOptions,
   ): <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
     return (attempt) =>
-      Effect.uninterruptibleMask(
-        Effect.fnUntraced({ self: this }, function* (restore) {
+      Effect.uninterruptibleMask((restore) =>
+        Effect.gen({ self: this }, function* () {
           const acquired = yield* restore(
             this.acquireAll(routes, options.onWait),
           );
@@ -232,8 +232,8 @@ export class ModelRetryGate {
     route: string,
     onWait: RouteOptions['onWait'],
   ): Effect.Effect<RetryPermit> {
-    return Effect.uninterruptibleMask(
-      Effect.fnUntraced({ self: this }, function* (restore) {
+    return Effect.uninterruptibleMask((restore) =>
+      Effect.gen({ self: this }, function* () {
         if (this.scope.state._tag === 'Closed') return yield* Effect.interrupt;
         const healthyPermit = this.acquireHealthy(route);
         if (healthyPermit) return healthyPermit;
@@ -287,16 +287,13 @@ export class ModelRetryGate {
     };
   }
 
-  private readonly markRouteFailure = Effect.fn(
-    'ModelRetryGate.markRouteFailure',
-  )(
-    { self: this },
-    function* (
-      route: string,
-      permit: RetryPermit,
-      baseBackoffMs: number,
-      failure: RouteFailure,
-    ): Effect.fn.Return<void> {
+  private markRouteFailure(
+    route: string,
+    permit: RetryPermit,
+    baseBackoffMs: number,
+    failure: RouteFailure,
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
       const state = this.routes.get(route);
       if (!state || permit.version !== state.version) return;
       if (state.phase !== 'healthy' && !permit.probe) return;
@@ -316,8 +313,8 @@ export class ModelRetryGate {
           failure.retryAfterMs ?? 0,
         );
       yield* this.scheduleProbe(state);
-    },
-  );
+    });
+  }
 
   private markReachable(
     route: string,
@@ -377,9 +374,11 @@ export class ModelRetryGate {
   }
 
   /** An unused probe permit reopens cooling so the next waiter probes at once. */
-  private readonly abandonRoute = Effect.fn('ModelRetryGate.abandonRoute')(
-    { self: this },
-    function* (state: RouteState, permit: RetryPermit): Effect.fn.Return<void> {
+  private abandonRoute(
+    state: RouteState,
+    permit: RetryPermit,
+  ): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
       if (
         !permit.probe ||
         permit.version !== state.version ||
@@ -390,8 +389,8 @@ export class ModelRetryGate {
       state.phase = 'cooling';
       state.retryAt = yield* Clock.currentTimeMillis;
       yield* this.scheduleProbe(state);
-    },
-  );
+    });
+  }
 
   private cancelProbe(state: RouteState): Effect.Effect<void> {
     const probe = state.probe;
