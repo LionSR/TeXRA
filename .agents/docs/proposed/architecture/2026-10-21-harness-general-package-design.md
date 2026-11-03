@@ -498,7 +498,8 @@ CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
   `rowVersions.vitest.ts:104`; and the line counts of `validationModel.ts`
   (547), `agentPresets.ts` (192), `common/teams` (372), `iconNames.ts` (138),
   `copilotRouting.ts` (225, since deleted with Copilot support) and
-  `quotaFallbackRoutes.ts` (71).
+  `quotaFallbackRoutes.ts` (71, since deleted: its words moved to the app's
+  copy).
 - The import graph was computed by resolving every `tsconfig.json` alias over
   about 1,400 files and 10,000 import statements at `08455c8` (the exact figures
   depend on the file filter). The harness deep-import set matches

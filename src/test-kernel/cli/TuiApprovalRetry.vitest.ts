@@ -200,9 +200,9 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
     requestId: `retry-${label}`,
     runId: runIdFor(label),
     operation: 'model request',
-    errorMessage: message,
     errorDetails: {
       message,
+      userRetryable: true,
       classification: { kind: 'chatgpt-subscription' },
       provider: 'openai',
     },
@@ -341,7 +341,9 @@ layer(
 
         yield* waitForApproval('retry', {
           runId: runIdFor('s3'),
-          errorMessage: 'ChatGPT subscription usage limit reached.',
+          errorDetails: {
+            message: 'ChatGPT subscription usage limit reached.',
+          },
         });
         expect(openAiKeyChecks()).toBe(0);
 

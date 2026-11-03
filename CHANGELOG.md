@@ -27,6 +27,24 @@ All notable changes to this project will be documented in this file.
   gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
   account id; `SubscriptionCoordinator.buildAuthorizeRequest` is an Effect
   and `loginWithCode` takes the authorize request and its callback.
+- **SDK: a used-up plan and an unusable subscription carry their facts;
+  the app words them.** `SUBSCRIPTION_AUTH_NAMES` (`./schemas`) and
+  `quotaFallbackRouteFor`, `QuotaFallbackRoute` and
+  `QuotaFallbackExhaustionReason` are gone: the harness words these failures
+  plainly, naming a plan by the provider it bills ("Usage limit reached on
+  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA's retry card,
+  `texra run`'s retry prompt and the automatic-fallback notice word the
+  facts as before. A used-up plan's classification carries its tier and
+  reset (`planType`, `resetsInMs`), and the GLM Coding Plan's is named by its
+  route, `glm-coding-plan-subscription`; a subscription that cannot bill the
+  call is `RouteUnavailable.session` (`route`, `needsReauth`), with the
+  session's own failure as its message; an automatic fallback is a
+  `quotaFallback` log row recording the route
+  (`ProgressStatusRow.quotaFallback`), and a status row has no `detail`.
+  `RetryPermission` carries the failure once and whole as `errorDetails` (no
+  `errorMessage`). The end-of-run notice and the transcript's error details
+  show the harness's words. Conversations saved by an earlier build show as
+  written by that build and cannot be resumed by this one.
 - **SDK: a refused launch is its caller's to show.** `session.start` and
   `session.resume` no longer show the unknown-model instruction or the
   missing-agent notice through the session's host, at once or to a host

@@ -87,9 +87,8 @@ function logErrorData(
 
 /**
  * Emit a user-visible progress/status note. A status note is its message
- * alone and takes no payload: the transcript stringifies a `progressStatus`
- * row's `data` verbatim into its detail, and an arbitrary payload (a request,
- * headers, config) could write a secret there.
+ * alone and takes no payload: its row's schema refuses one, so an arbitrary
+ * payload (a request, headers, config) cannot reach the transcript there.
  */
 export function logProgressStatus(trace: AgentTrace, message: string): void {
   trace.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });

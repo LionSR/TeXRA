@@ -120,10 +120,9 @@ export const RetryPermissionSchema = Schema.Struct({
   runId: RunIdSchema,
   operation: Schema.String,
   model: Schema.optional(Schema.String),
-  errorMessage: Schema.optional(Schema.String),
-  errorDetails: Schema.optional(
-    RetryErrorInfoSchema.mapFields(Struct.map(Schema.optional)),
-  ),
+  /** The failure as the run recorded it: the harness's plain message and
+   *  the facts a host words it from (its classification). */
+  errorDetails: RetryErrorInfoSchema,
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
 });

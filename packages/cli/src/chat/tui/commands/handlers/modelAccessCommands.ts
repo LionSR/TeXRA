@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { type ApiKeyProviderId } from '@texra-ai/llm';
-import { quotaFallbackRouteFor } from '@texra-ai/harness/host';
 import { loadCliDetailedAccountStatusLines } from '@cli/runtime/apiStatus';
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
@@ -9,6 +8,7 @@ import { type CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '@cli/runtime/modelAccessSelection';
 
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
+import { planFallbackName } from '@ui/copy/modelAccess';
 import {
   type SlashCommandOutput,
   type SlashCommandContext,
@@ -28,7 +28,7 @@ export const applyCliProviderApiKey = Effect.fn('applyCliProviderApiKey')(
     const codingPlan = CODING_PLAN_BY_API_PROVIDER.get(provider);
     if (!codingPlan) return undefined;
     if (!codingPlan.exclusiveCredential) {
-      return `Tip: ${quotaFallbackRouteFor(codingPlan.usageRoute).retryFallbackName} is the default; enable '${codingPlan.preferenceLabel}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;
+      return `Tip: ${planFallbackName(codingPlan.usageRoute)} is the default; enable '${codingPlan.preferenceLabel}' in \`/login\` or \`/config\` to use ${codingPlan.displayName}.`;
     }
     // The coding-only models route through the subscription automatically;
     // dual-backend K3 needs the opt-in switch, which is only discoverable if

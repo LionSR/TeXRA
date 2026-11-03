@@ -126,7 +126,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'run.detach': { ...V1, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
   // as `run.config`).
-  'run.end': { version: 2, upcast: [], listing: 'own' },
+  // v3: the error's classification as `model.message` v9.
+  'run.end': { version: 3, upcast: [], listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   'run.description': { ...V1, listing: 'own' },
@@ -153,7 +154,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v6: no `externalInquiry` kind; a plugin's request is `kind: 'plugin'`,
   // declaring whether it blocks its caller and what it is answered with (no
   // upcaster: an earlier build's inquiry would fail as damaged).
-  'request.opened': { version: 6, upcast: [], listing: 'request' },
+  // v7: a retry carries its failure once and whole (`errorDetails`, no
+  // `errorMessage`), classified as `model.message` v9, and a host words a
+  // used-up plan from that classification (no upcaster: an earlier build's
+  // retry would read without the tier and reset its text named).
+  'request.opened': { version: 7, upcast: [], listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [], listing: 'request' },
@@ -163,7 +168,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // holds both (no upcaster, as `run.config`).
   // v3: a user message names its attached media by blob address (`media`),
   // not by `mediaFiles` paths (no upcaster, as `followup.queued`).
-  log: { version: 3, upcast: [], listing: 'none' },
+  // v4: an error row's classification as `model.message` v9, and a
+  // used-up plan's automatic retry is a `quotaFallback` row recording the
+  // route it moved off (no upcaster: an earlier build's GLM exhaustion
+  // would be refused as a damaged payload).
+  log: { version: 4, upcast: [], listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its
   // run as damaged rather than read as that build's).
@@ -203,7 +212,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // (`cacheWriteTokens`, `toolUsePromptTokens`) beside its cache reads, and
   // the priced usage names them so (no upcaster: an earlier build's
   // `cacheCreationTokens` would read as absent).
-  'model.message': { version: 8, upcast: [], listing: 'none' },
+  // v9: a failure's used-up plan carries its tier and reset
+  // (`planType`, `resetsInMs`), and the GLM Coding Plan's exhaustion is
+  // named by its route, `glm-coding-plan-subscription` (no upcaster: an
+  // earlier build's GLM exhaustion would fail as damaged).
+  'model.message': { version: 9, upcast: [], listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).

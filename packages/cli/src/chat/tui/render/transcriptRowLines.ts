@@ -104,7 +104,6 @@ export function transcriptRowBodyLines(
       case 'contextManagement':
         return row.items.map((item) => `${item.label}: ${item.value}`);
       case 'progressStatus':
-        return row.detail ? elidedTextLines(row.detail, elide) : [];
       case 'assistant':
       case 'user':
       case 'tool':

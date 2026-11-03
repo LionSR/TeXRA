@@ -25,7 +25,7 @@ import {
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
-import { stringifyPayload, transcriptText } from './transcriptText';
+import { transcriptText } from './transcriptText';
 import type {
   ErrorRow,
   ErrorRowDetail,
@@ -329,15 +329,20 @@ export function logPayloadRow(
       };
     }
 
-    case MESSAGE_TYPES.PROGRESS_STATUS: {
-      const detail = stringifyPayload(payload.data).text;
+    case MESSAGE_TYPES.PROGRESS_STATUS:
       return {
         ...base,
         kind: 'progressStatus',
         summary: transcriptText(text.trim() || 'Status update'),
-        ...(detail.full ? { detail } : {}),
       };
-    }
+
+    case MESSAGE_TYPES.QUOTA_FALLBACK:
+      return {
+        ...base,
+        kind: 'progressStatus',
+        summary: transcriptText(text),
+        quotaFallback: payload.data.route,
+      };
 
     case MESSAGE_TYPES.DEFAULT:
       return plainLogRow(base, text);

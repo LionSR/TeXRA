@@ -1,12 +1,27 @@
 /**
- * How a renderer words a size and a moment: English
+ * How a renderer words a size, a wait and a moment: English
  * copy every host prints the same way.
  */
 import prettyBytes from 'pretty-bytes';
+import prettyMilliseconds from 'pretty-ms';
 
 /** Human-readable byte size in binary units (`1.5 MiB`, `1023 B`). */
 export function formatBytes(bytes: number): string {
   return prettyBytes(bytes, { binary: true });
+}
+
+/**
+ * A coarse wait (`1d 20h`, `20h 22m`, `5m`), as a used-up plan's reset is
+ * worded: two units at most, whole minutes, and no minutes once it reaches a
+ * day (`pretty-ms` would back-fill a zero hour with them, `1d 58m`); under a
+ * minute is `less than a minute`.
+ */
+export function formatResetDuration(durationMs: number): string {
+  const wholeMinutes = Math.floor(Math.max(0, durationMs) / 60_000);
+  if (wholeMinutes === 0) return 'less than a minute';
+  const flooredMinutes =
+    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
+  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
 }
 
 const relativeTimeFormat = new Intl.RelativeTimeFormat(undefined, {

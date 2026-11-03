@@ -165,8 +165,6 @@ export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
 export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
-// What a used-up plan falls back to, as the retry copy names it.
-export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 // The rooted file systems plugins read, and their layers outside a run.
 export {
   GlobalStorageFs,
