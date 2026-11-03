@@ -92,9 +92,9 @@ export const readToolEditContent = (
     const text = held.get(address);
     if (text === undefined)
       throw new Error(`The store holds no tool edit proposal at ${address}`);
-    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
-      JSON.parse(text),
-    );
+    return Schema.decodeUnknownSync(
+      Schema.fromJsonString(StoredToolEditContentSchema),
+    )(text);
   });
 
 export const BashPermissionSchema = PermissionBaseSchema.mapFields(

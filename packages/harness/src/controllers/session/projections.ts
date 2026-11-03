@@ -220,6 +220,9 @@ const isCurrent = (
     : state.version === PROJECTORS[name].version && state.through >= top;
 
 const RunUsageSchema = Schema.Struct({ usage: TokenUsageStatsSchema });
+const decodeStoredUsage = Schema.decodeUnknownSync(
+  Schema.fromJsonString(RunUsageSchema),
+);
 const RunModelSchema = Schema.Struct({
   model: Schema.String,
   commit: Schema.NullOr(Schema.Int),
@@ -311,9 +314,7 @@ export function projectionUpkeep<E>(
                 ))[0];
           let prior: ProjectionPrior = {};
           if (row !== undefined && projector.prior === 'run_usage')
-            prior = Schema.decodeUnknownSync(RunUsageSchema)(
-              JSON.parse(String(row.usage)),
-            );
+            prior = decodeStoredUsage(String(row.usage));
           if (row !== undefined && projector.prior === 'run_model')
             prior = { model: Schema.decodeUnknownSync(RunModelSchema)(row) };
           for (const op of projector.project(event, prior))

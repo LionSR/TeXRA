@@ -103,11 +103,14 @@ const BlobRowSchema = Schema.Struct({
   digest: Schema.String,
   value: Schema.instanceOf(Uint8Array),
 });
+const decodeBlobText = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.String),
+);
 /** One blob's string, verified against its address. */
 function inflateBlob(value: Uint8Array, digest: string): string {
   const text = zstdDecompressSync(value).toString('utf8');
   if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
-  return Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
+  return decodeBlobText(text);
 }
 /** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
  *  the data of the rows this build decodes. A payload's own `$b` key is
