@@ -109,7 +109,8 @@ export type ResumeBlocked = typeof ResumeBlockedSchema.Type;
  * there but cannot be continued: never `finished`, which would say it ended
  * normally), `earlierBuild` (an earlier build wrote its rows),
  * `pluginUnavailable` (it holds a fact of `plugin`, which this process does
- * not load: it continues once a process loads it), or `notResumable` (it is
+ * not load, `cause` the fact's reason: it continues once a process loads
+ * it), or `notResumable` (it is
  * running here, it was deleted, or its input is closed).
  */
 export const ResumeRefusalSchema = Schema.Union([
@@ -124,6 +125,7 @@ export const ResumeRefusalSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('pluginUnavailable'),
     plugin: Schema.String,
+    cause: Schema.String,
   }),
   Schema.Struct({ kind: Schema.Literal('notResumable') }),
 ]);

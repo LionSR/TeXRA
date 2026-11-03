@@ -105,8 +105,9 @@ interface AgentRunListingEntry {
    *  loadability are settled when the run is opened. */
   resumable: boolean;
   /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, or an earlier build wrote them.
-   *  Absent when it resumes or simply has nothing to continue from. */
+   *  continue from: they could not be read, an earlier build wrote them, or
+   *  they hold a fact of a plugin this process does not load. Absent when
+   *  it resumes or simply has nothing to continue from. */
   resumeBlocked?: string;
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;

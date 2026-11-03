@@ -60,12 +60,10 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     })
   )
     return { kind: 'finished' };
-  const unavailable = Object.values(facts.facts).find(
-    (fact) => fact.unavailable !== undefined,
-  );
-  return unavailable === undefined
-    ? { kind: 'checkpoint' }
-    : { kind: 'pluginUnavailable', plugin: unavailable.plugin };
+  for (const { plugin, unavailable } of Object.values(facts.facts))
+    if (unavailable !== undefined)
+      return { kind: 'pluginUnavailable', plugin, cause: unavailable };
+  return { kind: 'checkpoint' };
 });
 
 /**
