@@ -164,16 +164,17 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         ? {
             tools: groupedTools(
               config.toolNamespace,
-              turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
-                config.requestDialect === 'openai'
-                  ? { type: 'function', ...tool, strict: false }
-                  : // The vendor endpoints take no `strict`, which the
-                    // OpenAI typings require.
-                    ({
-                      type: 'function',
-                      ...tool,
-                    } as OpenAI.Responses.FunctionTool),
-              ),
+              turn.tools.map((tool): OpenAI.Responses.FunctionTool => {
+                if (config.requestDialect === 'openai')
+                  return { type: 'function', ...tool, strict: false };
+                const vendorTool: Omit<
+                  OpenAI.Responses.FunctionTool,
+                  'strict'
+                > = { type: 'function', ...tool };
+                // cast: the vendor endpoints take no `strict`, which the
+                // OpenAI typings require; the SDK sends the body as written.
+                return vendorTool as OpenAI.Responses.FunctionTool;
+              }),
             ),
             parallel_tool_calls: turn.controls.parallelToolCalls,
             tool_choice:
