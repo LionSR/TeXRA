@@ -35,6 +35,7 @@ import {
 import { COLOR_ERROR, COLOR_HINT, COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { STATUS_DOT, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { ToolRow } from '@cli/chat/tui/state/sessionView';
+import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 
 // Local imports - CLI TUI rendering
 import {
@@ -158,11 +159,16 @@ function toolStatusColor(model: ToolRow['model']): string | undefined {
     : undefined;
 }
 
-/** The failure block: the error text when there is one, and a bare marker when
- *  a call failed without saying why. A user-feedback rejection has no error of
- *  its own — its `Feedback:` block is the whole story. */
-function toolErrorLines(model: ToolRow['model'], elide: boolean): string[] {
+/** The failure block: the error text when there is one, the note for a call
+ *  the run's end cut short, and a bare marker when a call failed without
+ *  saying why. A user-feedback rejection has no error of its own — its
+ *  `Feedback:` block is the whole story. */
+function toolErrorLines(
+  { model, cutByRunEnd }: ToolRow,
+  elide: boolean,
+): string[] {
   if (model.errorPreview) return elidedLines(model.errorPreview, elide);
+  if (cutByRunEnd === true) return [TOOL_CUT_BY_RUN_END_NOTE];
   return model.isError && !model.isUserFeedback ? ['(error)'] : [];
 }
 
@@ -318,9 +324,10 @@ function patchTextLines(
 // ---------------------------------------------------------------------------
 
 function buildStyledLines(
-  { model, toolUse }: ToolRow,
+  toolRow: ToolRow,
   options: DisplayLineOptions,
 ): readonly ToolDisplayLine[] {
+  const { model, toolUse } = toolRow;
   const { headerPreview } = model;
   const elide = options.elide !== false;
   const isBashKind = toolDisplayKind(toolUse.toolName) === 'bash';
@@ -349,7 +356,7 @@ function buildStyledLines(
     ? cornerRows(elidedLines(model.output, elide))
     : [];
   const exitCode = model.isError ? model.exitCode : undefined;
-  const errorRows = cornerRows(toolErrorLines(model, elide), COLOR_ERROR);
+  const errorRows = cornerRows(toolErrorLines(toolRow, elide), COLOR_ERROR);
   const feedbackRows = model.userInstruction
     ? cornerRows(labeledLines('Feedback:', model.userInstruction, elide))
     : [];
