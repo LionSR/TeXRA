@@ -89,6 +89,45 @@ export const FollowUpDispositionSchema = Schema.Union([
 /** A `followup.consumed` row's `disposition`. */
 export type FollowUpDisposition = typeof FollowUpDispositionSchema.Type;
 
+const TurnSchema = Schema.Int.check(Schema.isGreaterThan(0));
+
+/**
+ * Where one input to a run stands, as the run's rows say it: `accepted`
+ * while queued; `incorporated` into the message of turn `turn` while that
+ * turn runs; `answered`, where `answer` is the `seq` of the run's row that
+ * answered it (the turn's end, which every input of one turn shares; for a
+ * child's prompt, a `/compact` or a `/model`, the rows that answered it
+ * commit beside its consumption, at that seq); or `unanswered`, why nothing
+ * will: the turn failed, the run ended before the turn did (`error`: the
+ * end's), or the input left the queue unread (a dropped disposition's
+ * reason). An input that joins a turn keeps that turn's number.
+ */
+export const FollowUpReceiptSchema = Schema.Union([
+  Schema.Struct({ state: Schema.Literal('accepted') }),
+  Schema.Struct({ state: Schema.Literal('incorporated'), turn: TurnSchema }),
+  Schema.Struct({
+    state: Schema.Literal('answered'),
+    turn: Schema.optional(TurnSchema),
+    answer: Schema.Int.check(Schema.isGreaterThan(0)),
+  }),
+  Schema.Struct({
+    state: Schema.Literal('unanswered'),
+    turn: Schema.optional(TurnSchema),
+    reason: Schema.Literals([
+      'failed',
+      'cancelled',
+      'completed',
+      'stale',
+      'noop',
+      'ended',
+      'closed',
+    ]),
+    error: Schema.optional(Schema.String),
+  }),
+]);
+/** Where one input to a run stands ({@link FollowUpReceiptSchema}). */
+export type FollowUpReceipt = typeof FollowUpReceiptSchema.Type;
+
 /** A run this process cannot continue until its agent, or its agent's
  *  plugin, is back: a fact about this build's catalog, never a row's. */
 export const ResumeBlockedSchema = Schema.Struct({

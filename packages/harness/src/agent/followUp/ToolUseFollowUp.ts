@@ -17,6 +17,7 @@ import {
 } from '@shared/schemas';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
+import { sentBefore } from './followUpMessages';
 import type { InboxItem, SessionInbox } from './Inbox';
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
@@ -86,6 +87,10 @@ interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
   /** The message's media, read in the run's send lane once the message is
    *  accepted, so a slow read never lets a later message commit first. */
   readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;
+  /** The id a caller named the message by (`followUp.send`, the item's
+   *  `deliveryId` its `sentFollowUpId`): a retry under it is `sent`
+   *  before any other check (`sentBefore`). */
+  readonly caller?: string;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -318,13 +323,18 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, fromParent, attach } = options;
+  const { hold, fromParent, attach, caller } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
+    if (
+      caller !== undefined &&
+      (yield* sentBefore(runId, caller, item, hold, attach))
+    )
+      return { status: 'sent' } as const;
     const live = runs.get(runId);
     if (live !== undefined) {
       if (!live.readsMessages)

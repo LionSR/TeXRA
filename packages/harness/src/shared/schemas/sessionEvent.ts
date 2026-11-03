@@ -66,6 +66,26 @@ export const CommitOrdinalSchema = Schema.Int.check(
 );
 export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
 
+/** What a follow-up asks of its run, as its `followup.queued` row stores
+ *  it: a caller's retry under the same id must ask the same. */
+export const FollowUpRequestSchema = Schema.Struct({
+  content: FollowUpContentSchema,
+  /** When the row may be read; the rules are `readableMessages`. */
+  holdUntil: Schema.optional(
+    Schema.Literals(['instruction', 'turn', 'generation']),
+  ),
+  /** A request of the run's own, consumed by the batch that applies it. */
+  control: Schema.optional(
+    Schema.Union([
+      Schema.Struct({ kind: Schema.Literal('compact') }),
+      Schema.Struct({
+        kind: Schema.Literal('model'),
+        model: Schema.String.check(Schema.isMinLength(1)),
+      }),
+    ]),
+  ),
+});
+
 /**
  * The envelope every durable arm rides, in the event table's own columns. A
  * run-scoped fact's aggregate is its run; a plugin's own aggregate is the
@@ -276,21 +296,7 @@ const DisplayRowDraftSchema = Schema.Union([
    *  queued without consumed. */
   durable('followup.queued', {
     followUpId: Schema.String.check(Schema.isMinLength(1)),
-    content: FollowUpContentSchema,
-    /** When the row may be read; the rules are `readableMessages`. */
-    holdUntil: Schema.optional(
-      Schema.Literals(['instruction', 'turn', 'generation']),
-    ),
-    /** A request of the run's own, consumed by the batch that applies it. */
-    control: Schema.optional(
-      Schema.Union([
-        Schema.Struct({ kind: Schema.Literal('compact') }),
-        Schema.Struct({
-          kind: Schema.Literal('model'),
-          model: Schema.String.check(Schema.isMinLength(1)),
-        }),
-      ]),
-    ),
+    ...FollowUpRequestSchema.fields,
   }),
   /** The follow-up left the queue, in the batch of the rows that took it,
    *  and why (`disposition`: part of a turn's message, answered, applied,

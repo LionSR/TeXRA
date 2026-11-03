@@ -115,6 +115,7 @@ export type { SessionOpenError } from '@shared/session/database';
 // What `session.request` answers, and why it refuses.
 export {
   Cancelled,
+  Conflict,
   HostRequestFailure,
   Internal,
   isRequestRefusal,

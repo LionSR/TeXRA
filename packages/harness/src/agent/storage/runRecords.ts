@@ -19,7 +19,11 @@ import {
   unloadable,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { applyRunRows, type RunState } from '@shared/session/runState';
+import {
+  applyRunRows,
+  RUN_STATE_ROW_TYPES,
+  type RunState,
+} from '@shared/session/runState';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import {
@@ -58,7 +62,10 @@ const rowsOf = (runId: RunId) => {
   const id = qualifyAggregateId('run', runId);
   return Effect.flatMap(SessionLog, (log) =>
     Effect.map(
-      Effect.all([log.runRows(id, 'lifecycle'), log.history(id)]),
+      Effect.all([
+        log.runRows(id, 'lifecycle'),
+        log.rows(id, RUN_STATE_ROW_TYPES),
+      ]),
       ([rows, history]) => ({ lifecycles: rows.lifecycles, history }),
     ),
   );

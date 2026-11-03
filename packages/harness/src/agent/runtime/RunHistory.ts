@@ -30,6 +30,7 @@ import {
   freshRunState,
   isRunStateRow,
   RunHistoryInconsistent,
+  RUN_STATE_ROW_TYPES,
   unboundRequests,
   type RunHistoryDraft,
   type RunState,
@@ -309,10 +310,10 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
  * transaction that activates it.
  */
 export function makeRunHistory(
-  sessionLog: Pick<SessionLogShape, 'transact' | 'history'>,
+  sessionLog: Pick<SessionLogShape, 'transact' | 'rows'>,
 ): RunHistory['Service'] {
   const stored = (run: RunId) =>
-    sessionLog.history(qualifyAggregateId('run', run));
+    sessionLog.rows(qualifyAggregateId('run', run), RUN_STATE_ROW_TYPES);
 
   /** `load`, and a read inside a job (`prepared` false: a batch that
    *  changes the history is checked from where it changes). */

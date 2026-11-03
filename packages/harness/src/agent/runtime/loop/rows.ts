@@ -45,16 +45,34 @@ export const finalizedRows = (
   },
 ];
 
-/** Where the loop stands; a run's first one opens it. */
+/** Where the loop stands; a run's first one opens it. A turn's end says
+ *  how the turn ended. */
+export function positionRow(
+  runId: RunId,
+  state: Pick<RunState, 'turn'>,
+  at: Exclude<PositionAt, 'halted' | 'turn.end'>,
+): RunHistoryDraft;
+export function positionRow(
+  runId: RunId,
+  state: Pick<RunState, 'turn'>,
+  at: 'turn.end',
+  outcome: Exclude<RunOutcome, 'cancelled'>,
+): RunHistoryDraft;
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,
   at: Exclude<PositionAt, 'halted'>,
+  outcome?: RunOutcome,
 ): RunHistoryDraft {
   return {
     type: 'run.position',
     aggregateId: qualifyAggregateId('run', runId),
-    payload: { family: 'toolUse', at, turn: state.turn },
+    payload: {
+      family: 'toolUse',
+      at,
+      turn: state.turn,
+      ...(outcome !== undefined && { outcome }),
+    },
   };
 }
 

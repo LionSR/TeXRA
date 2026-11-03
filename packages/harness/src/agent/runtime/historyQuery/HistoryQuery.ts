@@ -47,6 +47,7 @@ import {
   SessionViewAccess,
   unloadable,
 } from '@shared/session/runHistory';
+import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import { type SessionView } from '@shared/session/sessionView';
 
 import {
@@ -356,7 +357,11 @@ export class HistoryQueryStore implements Context.Service.Shape<
         if (fed?.view === run && run.durableOutcome !== null) continue;
         const after = fed?.seq ?? 0;
         const rows = yield* this.session.log
-          .history(qualifyAggregateId('run', run.id), after + 1)
+          .rows(
+            qualifyAggregateId('run', run.id),
+            RUN_STATE_ROW_TYPES,
+            after + 1,
+          )
           .pipe(
             Effect.catchIf(
               (error) => unloadable(error),

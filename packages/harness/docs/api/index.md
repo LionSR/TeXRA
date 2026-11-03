@@ -162,6 +162,17 @@ interface Composition {
 }
 ```
 
+## Conflict
+
+A `followUp.send` under an `id` the run holds another message under.
+
+```ts
+class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
+  runId: RunIdSchema,
+  id: Schema.String,
+})
+```
+
 ## DatabaseOpenFailed
 
 The database could not be opened, or its schema could not be applied.
@@ -257,7 +268,7 @@ const HISTORY_TABLES: Readonly<{ runs: readonly ["id", "parent_id", "parent_call
 
 ## HostRequestFailure
 
-How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds
+How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
 onto the wire ({@link RequestRefusal}); every other tag is a defect it
 logs and answers `Internal` — but it is a *named* defect, so the log says
 which capability produced it. The bound is structural because the tags a
@@ -288,12 +299,12 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly status: "sent" | "queued"; readonly wake?: "failed" | null | undefined; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "stale" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; readonly wake?: "failed" | null | undefined; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "stale" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## isRequestRefusal
 
-Whether a failure is one of the three the bridge answers on the wire.
+Whether a failure is one of the four the bridge answers on the wire.
 
 ```ts
 function isRequestRefusal(error: unknown): error is RequestRefusal
@@ -664,12 +675,12 @@ type RequestError = typeof RequestErrorSchema.Type;
 
 ## RequestRefusal
 
-A request's refusal, as opposed to its defect: the three a handler may
+A request's refusal, as opposed to its defect: the four a handler may
 answer the surface with. The bridge folds these onto the wire; every other
 tag is `Internal`.
 
 ```ts
-type RequestRefusal = Cancelled | Unavailable | Rejected;
+type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
 ```
 
 ## responseText

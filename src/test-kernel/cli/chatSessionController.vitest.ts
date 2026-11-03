@@ -629,7 +629,12 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
             Effect.sync((): Outcome => {
               if (req.kind === 'followUp.send')
                 sent.push(`${req.runId} ${req.text}`);
-              return { kind: 'followUp', status: 'queued' };
+              return {
+                kind: 'followUp',
+                id: 'sent-1',
+                status: 'queued',
+                receipt: { state: 'accepted' },
+              };
             }),
           );
 
@@ -694,7 +699,12 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
                     }),
                   ]),
                 );
-              return { kind: 'followUp', status: 'sent' };
+              return {
+                kind: 'followUp',
+                id: 'sent-1',
+                status: 'sent',
+                receipt: { state: 'accepted' },
+              };
             }),
           );
 

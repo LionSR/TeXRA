@@ -47,7 +47,6 @@ import {
   RUN_ROW_READS,
   runRowsFrom,
 } from '@shared/session/runRowReads';
-import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import type {
   SessionLogShape,
   SessionTransaction,
@@ -325,8 +324,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       settled,
       afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
-      history: (id, fromSeq = 1) =>
-        database.readAggregate(id, fromSeq, RUN_STATE_ROW_TYPES),
+      rows: (id, types, fromSeq = 1) =>
+        database.readAggregate(id, fromSeq, types),
       runRows: (id, read, through) =>
         database
           .readAggregate(id, 1, RUN_ROW_READS[read], through)

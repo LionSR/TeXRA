@@ -470,7 +470,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ? yield* start.turns.finishTurn(result(turn.outcome, state))
             : null;
         const ending = [
-          positionRow(runId, state, 'turn.end'),
+          positionRow(runId, state, 'turn.end', turn.outcome),
           ...log.closure(runId),
           positionRow(runId, state, 'waiting'),
           ...(childTurn?.rows ?? []),

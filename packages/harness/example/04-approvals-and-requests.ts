@@ -5,8 +5,10 @@
  * 2. Attaches a `SessionHost` (`session.attach({ approve })`) that inspects
  *    `PendingRequest` and approves the tool call.
  * 3. Starts an `interactive: true` run, waits for its first cycle to reach
- *    `waiting`, sends a follow-up via `session.request({ kind: 'followUp.send' })`,
- *    and stops the interactive run cleanly via `session.request({ kind: 'run.stop' })`,
+ *    `waiting`, sends a follow-up under an id of its own via
+ *    `session.request({ kind: 'followUp.send' })`, waits for that follow-up's
+ *    receipt to say it was answered (`followUp.receipt`), and stops the
+ *    interactive run cleanly via `session.request({ kind: 'run.stop' })`,
  *    after which its `result` is the `cancelled` end it stored.
  */
 import { Effect, Layer, Schema, Stream } from 'effect';
@@ -42,7 +44,7 @@ const preprintPlugin = definePlugin({
   tools: [publishPreprintTool],
 });
 
-const { platform, requests, route } = await makeExampleWorkspace([
+const { platform, route } = await makeExampleWorkspace([
   {
     toolCalls: [
       {
@@ -91,32 +93,31 @@ const program = Effect.gen(function* () {
       (view) => view.runs.get(run.runId)?.status === 'waiting',
     ),
   );
-  console.log('[04] cycle 1 status=waiting modelTurns=', requests.length);
-  // The wait the first cycle ended on (its row's seq): the second cycle
-  // ends on a later one, on the scripted model and a real route alike.
-  const firstWait = session.view.current().runs.get(run.runId)?.forkPoint;
+  console.log('[04] cycle 1 status=waiting');
 
-  // Send a follow-up message through the runtime command protocol
+  // Send a follow-up under an id of our own: a retry under the same id
+  // answers with this message's receipt instead of sending it twice.
   const followUpOutcome = yield* session.request({
     kind: 'followUp.send',
     runId: run.runId,
+    id: 'tag-release',
     text: 'Tag release v1.',
   });
-  console.log('[04] followUp status:', followUpOutcome.status);
-
-  // Wait for the second cycle to consume the follow-up and return to waiting
-  yield* Stream.runHead(
-    Stream.filter(run.view, (view) => {
-      const current = view.runs.get(run.runId);
-      const pendingFollowUps = view.queuedFollowUps.get(run.runId)?.length ?? 0;
-      return (
-        current?.status === 'waiting' &&
-        pendingFollowUps === 0 &&
-        current.forkPoint !== firstWait
-      );
-    }),
+  console.log(
+    `[04] followUp ${followUpOutcome.id}: ${followUpOutcome.receipt.state}`,
   );
-  console.log('[04] cycle 2 status=waiting modelTurns=', requests.length);
+
+  // Wait for the turn that takes the follow-up to answer it
+  const { receipt } = yield* session.request({
+    kind: 'followUp.receipt',
+    runId: run.runId,
+    id: 'tag-release',
+    wait: true,
+  });
+  if (receipt.state !== 'answered') {
+    throw new Error(`Expected the follow-up answered, got ${receipt.state}`);
+  }
+  console.log(`[04] followUp answered by turn ${receipt.turn}`);
 
   // Stop the interactive run cleanly; `run.stop` awaits settlement
   yield* session.request({
