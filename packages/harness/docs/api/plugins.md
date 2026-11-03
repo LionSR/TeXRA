@@ -614,10 +614,11 @@ function executed(
 One row kind a plugin owns (`plugin.fact`): the version it writes, the
 schema of that version's value, and adjacent upcasters from
 `version - upcasters.length` to `version`, oldest first.
-The store checks every row of the kind against its fact kind, and keeps a row
-whose fact kind the process's plugins lack (its plugin removed, or not listed
-here) without reading it. Fact kinds live beside their readers, in modules
-webviews can import.
+The store checks every row of the kind against its fact kind, and reads a
+row whose fact kind the process's plugins lack (its plugin removed, or not
+listed here) as written, marked `unavailable`; a run holding one does not
+resume. Fact kinds live beside their readers, in modules webviews can
+import.
 
 ```ts
 interface FactKind {

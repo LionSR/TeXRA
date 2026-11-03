@@ -32,10 +32,12 @@ import {
   aggregateTarget,
   CURRENT_VALUE_VERSION,
   pluginFactFloor,
+  RETIRED_PLUGIN_FACTS,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
+  unavailableFactReason,
   type AggregateId,
   type JsonValue,
   type SessionEvent,
@@ -265,22 +267,15 @@ function parseData(data: string, blobs: Blobs): unknown {
   });
 }
 
-/** A plugin row whose plugin this build lacks: kept as written and left
- *  out of every read, named by its `plugin/kind`. */
-interface LeftOut {
-  readonly _tag: 'leftOut';
-  readonly kind: string;
-}
-
-/** A selected row as its event, or {@link LeftOut}: another build's kind
- *  or version fails as {@link rowUpcasts} says, and an undecodable row
- *  `DatabaseRowCorrupt`, naming it. */
+/** A selected row as its event, or why not ({@link rowUpcasts}, or an
+ *  undecodable row's `DatabaseRowCorrupt`); a plugin fact whose kind this
+ *  build lacks reads as written, unchecked, with why (`unavailable`). */
 export function decodeRow(
   input: SqlRow,
   factKinds: FactKinds,
   blobs: Blobs,
 ): Result.Result<
-  SessionEvent | LeftOut,
+  SessionEvent,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = Schema.decodeUnknownSync(RowSchema)(input);
@@ -320,26 +315,28 @@ export function decodeRow(
   if (!Result.isSuccess(parsed)) return corrupt(parsed.failure);
   const event = parsed.success;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
-  const name = `${event.plugin}/${event.kind}`;
   const factKind = factKindOf(event, row.commit, factKinds);
   if (Result.isFailure(factKind)) return Result.fail(factKind.failure);
   if (factKind.success === undefined)
-    return Result.succeed({ _tag: 'leftOut', kind: name });
+    return Result.succeed({
+      ...event,
+      unavailable: unavailableFactReason(event),
+    });
   const value = factKind.success.upcasters
     .slice(event.version - pluginFactFloor(factKind.success))
     .reduce((current, step) => step(current), event.value);
   const checked = Schema.decodeUnknownResult(factKind.success.schema)(value);
   if (Result.isFailure(checked))
-    return corrupt(checked.failure, `plugin.fact/${name}`);
+    return corrupt(checked.failure, pluginKind(event.plugin, event.kind));
   return Result.succeed({ ...event, version: factKind.success.version, value });
 }
 
 /**
- * A stored plugin fact's header, its row's top-level `plugin`, `kind` and
- * `version`, against its fact kind: the fact kind, none when this build
- * lacks the plugin (the row is left out), or a newer or an earlier build's
- * version.
- * `decodeRow` and the reader's earlier-run scan both ask it.
+ * A stored plugin fact's header (its row's top-level `plugin`, `kind` and
+ * `version`) against its fact kind: the fact kind; none when this build
+ * lacks it (the row reads unavailable); or a newer or an earlier build's
+ * version, a retired kind's being an earlier build's. `decodeRow` and the
+ * reader's earlier-run scan both ask it.
  */
 export function factKindOf(
   fact: {
@@ -353,8 +350,11 @@ export function factKindOf(
   FactKinds[string] | undefined,
   DatabaseStoreNewer | DatabaseRowEarlier
 > {
+  const name = `${fact.plugin}/${fact.kind}`;
   const type = pluginKind(fact.plugin, fact.kind);
-  const factKind = factKinds[`${fact.plugin}/${fact.kind}`];
+  const factKind = factKinds[name];
+  if (factKind === undefined && RETIRED_PLUGIN_FACTS.has(name))
+    return Result.fail(new DatabaseRowEarlier({ commit, type }));
   if (factKind === undefined) return Result.succeed(undefined);
   if (fact.version > factKind.version)
     return Result.fail(new DatabaseStoreNewer({ type, version: fact.version }));
@@ -371,8 +371,8 @@ export const pluginKind = (plugin: string, kind: string): string =>
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
 
-/** The highest version of a `stored_kind` entry this build reads: `Infinity`
- *  for a plugin kind it lacks (left out), 0 for a core kind it lacks. */
+/** The highest `stored_kind` version this build reads: `Infinity` for a
+ *  plugin kind it lacks (`factKindOf` reads its rows), 0 for a core one. */
 function readableVersion(type: string, factKinds: FactKinds): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))

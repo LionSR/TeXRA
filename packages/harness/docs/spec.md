@@ -189,7 +189,8 @@ highest version each kind was written at
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
 (`controllers/session/rowCodec.ts:372-398`). A plugin kind whose plugin this
-build lacks passes the gate; its rows are left out of every read (below). The
+build lacks passes the gate; its rows read as written, marked unavailable
+(below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
 writes beside them (`controllers/session/Database.ts:276`, `:429-445`).
@@ -212,8 +213,12 @@ classified by the reader (`controllers/session/rowCodec.ts:268-334`):
   earlier build's (`controllers/session/rowCodec.ts:292-295`)
 - **readable, payload fails parse**: `DatabaseRowCorrupt`, naming its commit
   (`controllers/session/rowCodec.ts:308-320`)
-- **a plugin kind this build lacks**: left out of every read, kept in the store
-  (`controllers/session/rowCodec.ts:326-327`)
+- **a plugin kind this build lacks**: read as written, its value neither
+  upcast nor checked, with `unavailable` saying why; the row is unchanged, and
+  a run holding one is refused resume as `pluginUnavailable`, naming the plugin
+  (`controllers/session/rowCodec.ts`, `agent/storage/resumability.ts`); a
+  retired built-in kind (`RETIRED_PLUGIN_FACTS`) is an earlier build's
+  (`DatabaseRowEarlier`) instead
 
 A read of one run's whole history MUST fail on any row of the aggregate that
 does not decode; a read of its records fails on any undecodable row among the
@@ -231,8 +236,8 @@ kinds, a listing of listing rows) can still succeed, while writes and projection
 catch-up stay gated (`controllers/session/rowReader.ts:296-297`). Reads do not
 run the gate: a row of a core kind this build lacks, written by a newer build
 after this one opened the store, reads as corrupt until the next write's gate
-refuses the store; a plugin kind whose plugin this build lacks is left out of
-reads and passes the gate (`controllers/session/rowCodec.ts:287`,
+refuses the store; a plugin kind whose plugin this build lacks reads
+unavailable and passes the gate (`controllers/session/rowCodec.ts:287`,
 `controllers/session/Database.ts:434-445`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:145-151`,
 `agent/runtime/resumeRun.ts:267-275`).

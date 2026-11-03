@@ -105,8 +105,9 @@ interface AgentRunListingEntry {
    *  loadability are settled when the run is opened. */
   resumable: boolean;
   /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, or an earlier build wrote them.
-   *  Absent when it resumes or simply has nothing to continue from. */
+   *  continue from: they could not be read, an earlier build wrote them, or
+   *  they hold a fact of a plugin this process does not load. Absent when
+   *  it resumes or simply has nothing to continue from. */
   resumeBlocked?: string;
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;
@@ -839,8 +840,8 @@ interface RunRecords {
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere` or `earlierBuild`), or null when it may
-   *  go ahead; a fact that cannot be read fails. */
+   *  (`finished`, `ownedElsewhere`, `earlierBuild` or `pluginUnavailable`),
+   *  or null when it may go ahead; a fact that cannot be read fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
