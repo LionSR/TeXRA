@@ -11,17 +11,15 @@ updates:
     ignore:
       - dependency-name: '@types/node'
       - dependency-name: '@types/vscode'
-      # openai stays on the patched line: patches/openai@7.10.0.patch teaches
-      # the Responses accumulator response.metadata, and the shipped bundles
-      # carry that patched realization. A bump must port the patch and
-      # re-verify the accumulator contract (7.18.0 broke
-      # OpenaiResponses.vitest's cleanup-defect retention).
+      # openai stays on the patched line: the patch named under
+      # patchedDependencies in pnpm-workspace.yaml teaches the Responses
+      # accumulator response.metadata, and the shipped bundles carry that
+      # patched realization. A bump must port the patch and re-verify the
+      # accumulator contract (OpenaiResponses.vitest).
       - dependency-name: 'openai'
     # Aggregate routine updates into as few PRs as possible: one grouped PR for
     # all production minor/patch bumps, one for all dev minor/patch bumps. Major
-    # bumps stay individual (reviewed one at a time). Replaces the old narrow
-    # eslint/prettier-only group, which the development-dependencies group now
-    # subsumes.
+    # bumps stay individual (reviewed one at a time).
     groups:
       # Effect shipped prerelease versions (4.0.0-rc.N) until 4.0.0, and a prerelease bump was
       # neither 'minor' nor 'patch', so the groups below never caught it, and
