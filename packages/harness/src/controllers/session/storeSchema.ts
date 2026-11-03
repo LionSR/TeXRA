@@ -17,6 +17,7 @@ import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
   cannotOpen,
   freeName,
+  inImmediateTransaction,
   isDamaged,
   pragmaValue,
   retryBusy,
@@ -268,7 +269,6 @@ const prepareStore = Effect.fnUntraced(function* (
     if (stored === SCHEMA_VERSION) break;
     if (!pre1) {
       if (mode === 'persistent') yield* incrementalVacuum(sql);
-      yield* run(sql, 'BEGIN IMMEDIATE');
       yield* Effect.gen(function* () {
         // Another process stamped the file while this one waited: the
         // loop checks it again.
@@ -277,8 +277,7 @@ const prepareStore = Effect.fnUntraced(function* (
           yield* run(sql, statement);
         yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
         yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }).pipe(Effect.onError(() => run(sql, 'ROLLBACK').pipe(Effect.ignore)));
-      yield* run(sql, 'COMMIT');
+      }).pipe(inImmediateTransaction(sql));
       continue;
     }
     // Off outside the transaction (a no-op inside one): a drop then

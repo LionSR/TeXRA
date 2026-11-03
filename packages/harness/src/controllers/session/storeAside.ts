@@ -13,11 +13,12 @@ import {
   Context,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Predicate,
   Schedule,
 } from 'effect';
-import { isSqlError } from 'effect/sql/SqlError';
+import { isSqlError, type SqlError } from 'effect/sql/SqlError';
 import type { OwnerId, OwnerLiveness } from '@shared/schemas';
 import { DatabaseClaimRefused } from '@shared/session/database';
 import type * as SqlClient from 'effect/sql/SqlClient';
@@ -25,6 +26,28 @@ import type * as SqlClient from 'effect/sql/SqlClient';
 export type Sql = SqlClient.SqlClient;
 
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
+
+/** Run `body` in a `BEGIN IMMEDIATE` transaction. The ending is
+ *  uninterruptible, so the transaction never stays open: a body that
+ *  succeeds commits when `keep` holds its value and rolls back otherwise;
+ *  a body that fails, or a COMMIT that fails, rolls back and keeps its own
+ *  failure. */
+export const inImmediateTransaction =
+  <A>(sql: Sql, keep: (value: A) => boolean = () => true) =>
+  <E, R>(body: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqlError, R> =>
+    Effect.acquireUseRelease(
+      run(sql, 'BEGIN IMMEDIATE'),
+      () => body,
+      (_, exit) => {
+        const rollback = run(sql, 'ROLLBACK');
+        const abandon = rollback.pipe(
+          Effect.ignore({ log: 'Warn', message: 'A ROLLBACK failed' }),
+        );
+        if (Exit.isFailure(exit)) return abandon;
+        if (!keep(exit.value)) return rollback;
+        return run(sql, 'COMMIT').pipe(Effect.onError(() => abandon));
+      },
+    );
 
 export const pragmaValue = (sql: Sql, pragma: string) =>
   sql
@@ -150,7 +173,7 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   const version = yield* pragmaValue(sql, 'data_version');
   const staged = `${base}.${randomUUID()}.partial`;
   yield* sql.unsafe('VACUUM INTO ?', [staged]);
-  yield* run(sql, 'BEGIN IMMEDIATE');
+  // A move commits; a store that changed since the copy rolls back.
   const moved = yield* Effect.gen(function* () {
     if (
       (yield* pragmaValue(sql, 'user_version')) !== stamp ||
@@ -163,24 +186,17 @@ export const underCopy = Effect.fnUntraced(function* <E>(
     yield* body;
     return aside;
   }).pipe(
+    inImmediateTransaction(sql, (aside: string | null) => aside !== null),
     Effect.onError(() =>
-      Effect.all([
-        run(sql, 'ROLLBACK').pipe(Effect.ignore),
-        fs.remove(staged, { force: true }).pipe(
-          Effect.ignore({
-            log: 'Warn',
-            message: `A staged store copy stays behind: ${staged}`,
-          }),
-        ),
-      ]),
+      fs.remove(staged, { force: true }).pipe(
+        Effect.ignore({
+          log: 'Warn',
+          message: `A staged store copy stays behind: ${staged}`,
+        }),
+      ),
     ),
   );
-  if (moved === null) {
-    yield* run(sql, 'ROLLBACK');
-    yield* fs.remove(staged, { force: true });
-    return null;
-  }
-  yield* run(sql, 'COMMIT');
+  if (moved === null) yield* fs.remove(staged, { force: true });
   return moved;
 });
 
