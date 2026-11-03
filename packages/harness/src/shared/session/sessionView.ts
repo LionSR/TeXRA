@@ -435,11 +435,11 @@ export function descendantRuns(
 ): readonly RunId[] {
   if (rootRunId === undefined) return [];
   const out: RunId[] = [];
-  // The array iterator reads `pending` as it grows, and walking it forward
-  // instead of `Array.shift()` keeps a large fan-out's walk linear.
+  // An index cursor, not `Array.shift()`, keeps a large fan-out's walk linear.
   const pending = [rootRunId];
   const seen = new Set<RunId>();
-  for (const id of pending) {
+  for (let cursor = 0; cursor < pending.length; cursor++) {
+    const id = pending[cursor];
     const run = view.runs.get(id);
     if (!run || seen.has(id)) continue;
     seen.add(id);
