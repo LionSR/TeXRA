@@ -58,8 +58,8 @@ export const T = {
   rootDone: BOARD_NOW - sec(8),
 } as const;
 
-export const ROOT_IDENTITY: RunIdentity = { kind: 'script', title: 'review' };
-export const CHILD_IDENTITY: RunIdentity = {
+const ROOT_IDENTITY: RunIdentity = { kind: 'script', title: 'review' };
+const CHILD_IDENTITY: RunIdentity = {
   kind: 'agent',
   agent: 'custom:search',
 };
