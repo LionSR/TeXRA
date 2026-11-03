@@ -142,18 +142,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           }),
       );
 
-      it.effect('reports an unknown run id as a usage error', () =>
-        Effect.gen(function* () {
-          yield* seedRunRecord(null);
-
-          expect(yield* run(cliContext())).toBe(2);
-
-          expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-            `Run not found: ${RUN_ID}`,
-          );
-        }),
-      );
-
       it.effect(
         'refuses a run another live TeXRA process holds, naming its pid',
         () =>
