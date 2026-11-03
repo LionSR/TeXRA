@@ -449,8 +449,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const { attempt, raised, own: standing } = entered;
   // Whether this attempt's intent is committed: a re-entered attempt's is.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
-  // A tool the step offers but did not send (script-only tools on) is
-  // reached from inside a script alone: a response's call to it has no body.
+  // A tool the step offers but did not send (a script's own function, or any
+  // tool while script-only tools are on) is reached from inside a script
+  // alone: a response's call to it has no body.
   const unsent =
     script === null &&
     step.offered.some((t) => t.name === fact.toolName && !t.sent);
