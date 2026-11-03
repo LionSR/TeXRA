@@ -1,36 +1,39 @@
 /**
  * A session's history query store: the model's SQL runs against a separate
- * in-memory database that holds only the session's display rows and the
- * view's runs, both as of the first view that applied the commit the query
- * was asked at. Nothing a statement names can reach the session database, a
- * run history row, a private run record or an envelope column.
+ * in-memory database that holds the session's runs, as the view has them,
+ * and their call facts (each model request and each tool call), all as of
+ * the first view that applied the commit the query was asked at. The tables
+ * are `views.ts`'s, each cell filled from a decoded value, so nothing a
+ * statement names reaches the session database or a stored row's encoding.
  *
  * The store is a child process (`childSource.ts`), started on the first
- * query and closed with the session's scope. Queries run one at a time; a
+ * query and closed with the session's scope. Each query first feeds it the
+ * rows each run committed since the last one. Queries run one at a time; a
  * query past its deadline, or one whose caller is interrupted, kills the
  * process, and the next query rebuilds the store from the start.
  */
 import {
-  Cause,
+  Array as Arr,
   type Context,
   Effect,
   Exit,
   Option,
-  Queue,
   Schema,
   Scope,
   Semaphore,
   Stream,
-  SubscriptionRef,
 } from 'effect';
-import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
+  qualifyAggregateId,
   type CommitOrdinal,
-  type DisplaySessionEvent,
+  type DispatchFacts,
+  type InvocationRef,
+  type NormalizedUsage,
+  type RunId,
+  type SessionEvent,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import {
@@ -42,20 +45,24 @@ import {
   type HistoryPage,
   type HistoryQuery,
   SessionViewAccess,
+  unloadable,
 } from '@shared/session/runHistory';
-import { recordOf } from '@shared/session/runRowReads';
 import { type SessionView } from '@shared/session/sessionView';
 
-import { HISTORY_QUERY_CHILD_SOURCE } from './childSource';
 import {
-  HISTORY_WRITE_SQL,
-  HISTORY_SCHEMA_SQL,
-  HISTORY_ROW_LIMIT,
+  failedStep,
+  failedWith,
+  openStore,
+  request,
+  type Store,
+} from './childSource';
+import {
+  cutJson,
   cutText,
   replaceRuns,
+  statementRefusal,
   type HistoryWrite,
 } from './views';
-import type { PlatformError } from 'effect/PlatformError';
 
 const CHANNEL = 'HistoryQuery';
 const QUERY_DEADLINE = '5 seconds';
@@ -63,181 +70,150 @@ const QUERY_DEADLINE = '5 seconds';
 const HISTORY_QUERY_ROW_CAP = 200;
 /** Serialized page ceiling before a result leaves the query process. */
 const HISTORY_QUERY_PAGE_LIMIT_BYTES = 4 * 1024 * 1024;
-/** SQLite's own memory ceiling in the store, rows and sorts together. */
-const STORE_HEAP_LIMIT_BYTES = 1024 * 1024 * 1024;
-/** Capped rows per append keep requests bounded for any history length. */
-const APPEND_ROWS = 500;
+/** Capped writes per append keep requests bounded for any history length. */
+const APPEND_OPS = 500;
 
-/** A reply line: the request's value, or the refusal the process reports. */
-const ReplySchema = Schema.Union([
-  Schema.Struct({ ok: Schema.Literal(true), value: Schema.Unknown }),
-  HistoryQueryRefused,
-]);
-const ReplyLineSchema = Schema.fromJsonString(ReplySchema);
-
-/** The session a store reads: its display tail, current commit and view. */
+/** The session a store reads: its run history rows, current commit and view. */
 interface HistorySession {
   readonly log: SessionLog['Service'];
   readonly view: SessionViewAccess['Service'];
 }
 
-interface Store {
-  readonly scope: Scope.Closeable;
-  readonly requests: Queue.Queue<string>;
-  readonly replies: Queue.Queue<string, Cause.Done | PlatformError>;
-  cursor: CommitOrdinal;
-  /** The view's `runs` the store's `runs` table was last filled from. */
-  runs?: SessionView['runs'];
-}
+type ModelMessage = Extract<SessionEvent, { type: 'model.message' }>;
 
-const ENVELOPE_KEYS = new Set([
-  'type',
-  'aggregateId',
-  'seq',
-  'commit',
-  'origin',
-  'at',
-  'stageId',
-]);
+/** A priced call's token counts and cost, as the tables hold them. */
+const spend = (usage: NormalizedUsage | null | undefined) =>
+  [usage?.inputTokens, usage?.outputTokens, usage?.cost].map((n) => n ?? null);
 
-/** One `SELECT`, `WITH`, `EXPLAIN` or `VALUES` statement, read with its
- *  comments and quoted text blanked so neither can hide structure. */
-function statementRefusal(sql: string): string | null {
-  const shape = sql.replaceAll(
-    /--[^\n]*|\/\*[\s\S]*?(?:\*\/|$)|'(?:[^']|'')*'?|"(?:[^"]|"")*"?|`[^`]*`?|\[[^\]]*\]?/g,
-    ' ',
-  );
-  if (!/^\s*(?:select|with|explain|values)\b/i.test(shape)) {
-    return 'Only a read is allowed: one SELECT, WITH, EXPLAIN or VALUES statement.';
-  }
-  if (shape.trim().replace(/;\s*$/, '').includes(';')) {
-    return 'Send one statement per query; this one has more than one.';
-  }
-  return null;
-}
+/** The write that ends request `invocation` of `runId`. */
+const modelEnd = (
+  runId: RunId,
+  at: string,
+  { invocationId, attempt }: InvocationRef,
+  status: 'completed' | 'failed' | 'cancelled',
+  end: { output?: string; error?: string; usage?: NormalizedUsage | null },
+): HistoryWrite => [
+  'modelEnd',
+  status,
+  end.output ?? null,
+  end.error ?? null,
+  ...spend(end.usage),
+  at,
+  runId,
+  invocationId,
+  attempt,
+];
 
-function storeOps(rows: readonly DisplaySessionEvent[]): HistoryWrite[] {
-  const ops: HistoryWrite[] = [];
-  for (const row of rows) {
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') continue;
-    const { removed } = recordOf(row);
-    if (removed !== null) {
-      for (const id of new Set([target.id, ...removed.runIds])) {
-        ops.push(['remove', id]);
-      }
-      continue;
+/** The writes one `model.message` row makes: a request sent or ended, and
+ *  the tool calls a response or a hand-down issues. */
+function modelWrites(
+  callIds: Map<string, string>,
+  runId: RunId,
+  { payload: p }: ModelMessage,
+  at: string,
+): HistoryWrite[] {
+  const issue = (call: DispatchFacts, input: string): HistoryWrite => {
+    callIds.set(call.logId, call.callId);
+    const { callId, toolName } = call;
+    return ['toolCall', runId, callId, null, toolName, cutText(input), at];
+  };
+  switch (p.kind) {
+    case 'attempt': {
+      const { invocationId, attempt } = p.invocation;
+      const model = p.origin.requestedModel;
+      return [
+        ['modelAttempt', runId, invocationId, attempt, p.purpose, model, at],
+      ];
     }
-    const payload = Object.fromEntries(
-      Object.entries(row).filter(([key]) => !ENVELOPE_KEYS.has(key)),
-    );
-    const data = JSON.stringify(payload, (_key, value: unknown) =>
-      cutText(value),
-    );
-    ops.push([
-      'insert',
-      target.id,
-      row.type,
-      new Date(row.at).toISOString(),
-      data.length > HISTORY_ROW_LIMIT
-        ? JSON.stringify({ cut: data.length })
-        : data,
-    ]);
+    case 'failed': {
+      const { message } = p.error;
+      return [modelEnd(runId, at, p.invocation, 'failed', { error: message })];
+    }
+    case 'cancelled':
+      return [modelEnd(runId, at, p.invocation, 'cancelled', {})];
+    case 'response': {
+      const parts = p.turn.content;
+      const text = parts
+        .flatMap((part) => (part.kind === 'message' ? part.content : []))
+        .map((part) => part.text)
+        .join('');
+      const args = parts.flatMap((part) =>
+        part.kind === 'local-call' ? [part.argumentsText] : [],
+      );
+      return [
+        modelEnd(runId, at, p.invocation, 'completed', {
+          output: cutText(text),
+          usage: p.usage,
+        }),
+        // A response's dispatch facts follow its local calls in order.
+        ...p.calls.map((call, index) => issue(call, args[index] ?? '')),
+      ];
+    }
+    case 'handed-down':
+      return [issue(p.call, p.argumentsText)];
+    // Provider identity, an accepted remote operation and the messages a
+    // run appends end no request and issue no call.
+    case 'identified':
+    case 'accepted':
+    case 'append':
+      return [];
   }
-  return ops;
 }
 
-/** Replaces an effect's failure with a `HistoryQueryFailed` carrying it. */
-const failedWith = (message: string) =>
-  Effect.mapError(
-    (cause: unknown) => new HistoryQueryFailed({ message, cause }),
-  );
+/** The writes one of `runId`'s history rows makes, from its decoded
+ *  payload; `callIds` learns each issued call's tool card. */
+function callWrites(
+  callIds: Map<string, string>,
+  runId: RunId,
+  row: SessionEvent,
+): HistoryWrite[] {
+  const at = new Date(row.at).toISOString();
+  if (row.type === 'model.message') return modelWrites(callIds, runId, row, at);
+  if (row.type === 'script.call') {
+    const { callId, scriptCallId, toolName, input, logId } = row.payload;
+    callIds.set(logId, callId);
+    return [
+      ['toolCall', runId, callId, scriptCallId, toolName, cutJson(input), at],
+    ];
+  }
+  if (row.type === 'tool.intent') {
+    return [['toolStart', row.payload.attempt, at, runId, row.payload.callId]];
+  }
+  if (row.type === 'tool.result') {
+    const { attempt, disposition, result, callId } = row.payload;
+    const done = result.status === 'executed';
+    return [
+      [
+        'toolEnd',
+        attempt,
+        disposition,
+        done ? cutText(result.output ?? null) : null,
+        done ? cutJson(result.value) : null,
+        done ? null : cutText(result.error),
+        at,
+        runId,
+        callId,
+      ],
+    ];
+  }
+  if (row.type === 'context.edit' && row.payload.cause === 'compaction') {
+    return [['summaryEnd', ...spend(row.payload.usage), at, runId]];
+  }
+  // A run's other history rows (positions, requests, offered tools, blobs,
+  // hook outcomes, a fork's seed) record no call fact.
+  return [];
+}
 
-const request = Effect.fn('HistoryQuery.request')(function* (
-  store: Store,
-  message: Record<string, unknown>,
-) {
-  yield* Queue.offer(store.requests, JSON.stringify(message));
-  const line = yield* Queue.take(store.replies).pipe(
-    failedWith('The history query process exited.'),
+/** Send `ops` to the store, a bounded request at a time. */
+const append = (store: Store, ops: readonly HistoryWrite[]) =>
+  Effect.forEach(
+    Arr.chunksOf(ops, APPEND_OPS),
+    (chunk) =>
+      request(store, { kind: 'append', ops: chunk }).pipe(
+        Effect.flatMap(failedStep('rows')),
+      ),
+    { discard: true },
   );
-  return yield* Schema.decodeUnknownEffect(ReplyLineSchema)(line).pipe(
-    failedWith('The history query process sent an unreadable reply.'),
-  );
-});
-
-const failedStep =
-  (step: string) =>
-  (reply: typeof ReplySchema.Type): Effect.Effect<void, HistoryQueryFailed> =>
-    reply instanceof HistoryQueryRefused
-      ? Effect.fail(
-          new HistoryQueryFailed({
-            message: `The history query store refused its ${step}: ${reply.message}`,
-          }),
-        )
-      : Effect.void;
-
-const openStore = Effect.fn('HistoryQuery.open')(function* (
-  parent: Scope.Scope,
-  spawner: ChildProcessSpawner['Service'],
-) {
-  const scope = yield* Scope.fork(parent);
-  return yield* Effect.gen(function* () {
-    const handle = yield* spawner
-      .spawn(
-        ChildProcess.make(
-          process.execPath,
-          ['-e', HISTORY_QUERY_CHILD_SOURCE],
-          {
-            // An Electron host (the desktop app, the VS Code extension
-            // host) runs its own binary as plain Node only when asked.
-            env: { ELECTRON_RUN_AS_NODE: '1' },
-            extendEnv: true,
-            stdin: 'pipe',
-            stdout: 'pipe',
-            stderr: 'ignore',
-            killSignal: 'SIGKILL',
-          },
-        ),
-      )
-      .pipe(
-        Scope.provide(scope),
-        Effect.mapError(
-          (cause) =>
-            new HistoryQueryFailed({
-              message: 'The history query process could not start.',
-              cause,
-            }),
-        ),
-      );
-    const requests = yield* Queue.unbounded<string>();
-    const replies = yield* Queue.unbounded<
-      string,
-      Cause.Done | PlatformError
-    >();
-    // A failed write ends the reply queue with its cause, so the request
-    // waiting on a reply fails as `HistoryQueryFailed` instead of hanging.
-    yield* Stream.fromQueue(requests).pipe(
-      Stream.map((line) => `${line}\n`),
-      Stream.encodeText,
-      Stream.run(handle.stdin),
-      Effect.catch((error) => Queue.fail(replies, error)),
-      Effect.forkIn(scope),
-    );
-    yield* Stream.runIntoQueue(
-      handle.stdout.pipe(Stream.decodeText(), Stream.splitLines),
-      replies,
-    ).pipe(Effect.forkIn(scope));
-    const store: Store = { scope, requests, replies, cursor: 0 };
-    yield* request(store, {
-      kind: 'init',
-      schema: HISTORY_SCHEMA_SQL,
-      writes: HISTORY_WRITE_SQL,
-      heapLimit: STORE_HEAP_LIMIT_BYTES,
-    }).pipe(Effect.flatMap(failedStep('schema')));
-    return store;
-  }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
-});
 
 /** The session's {@link HistoryQuery}, over its log and view. */
 export class HistoryQueryStore implements Context.Service.Shape<
@@ -304,8 +280,8 @@ export class HistoryQueryStore implements Context.Service.Shape<
     return Effect.gen({ self: this }, function* () {
       const { log, view } = this.session;
       const now = log.now();
-      // One watermark for both tables: the first view that applied every row
-      // committed by this call, and `events` through that view's cursor.
+      // One watermark for every table: the first view that applied every
+      // row committed by this call, and call facts through its cursor.
       const { cursor: target, runs } = yield* view.changes.pipe(
         Stream.filter(({ cursor }) => cursor >= now),
         Stream.runHead,
@@ -318,34 +294,12 @@ export class HistoryQueryStore implements Context.Service.Shape<
       }
       const store = this.store ?? (yield* openStore(this.scope, this.spawner));
       this.store = store;
-      if (target > store.cursor) {
-        // The display rows committed after the store's cursor, through
-        // `target`: the tail stops once its reads covered `target`.
-        const drained = yield* SubscriptionRef.make(store.cursor);
-        const reached = SubscriptionRef.changes(drained).pipe(
-          Stream.filter((commit) => commit >= target),
-          Stream.runHead,
-        );
-        yield* log.tail(store.cursor, drained).pipe(
-          Stream.interruptWhen(reached),
-          Stream.takeWhile((row) => row.commit <= target),
-          Stream.grouped(APPEND_ROWS),
-          Stream.runForEach((rows) => {
-            const ops = storeOps(rows);
-            return ops.length === 0
-              ? Effect.void
-              : request(store, { kind: 'append', ops }).pipe(
-                  Effect.flatMap(failedStep('rows')),
-                );
-          }),
-        );
+      // View snapshots are immutable: the same `runs` at the same cursor is
+      // already in the store.
+      if (target > store.cursor || runs !== store.runs) {
+        yield* this.feed(store, runs, target);
         store.cursor = target;
-      }
-      // View snapshots are immutable: the same `runs` is already in the store.
-      if (runs !== store.runs) {
-        yield* request(store, { kind: 'append', ops: replaceRuns(runs) }).pipe(
-          Effect.flatMap(failedStep('runs')),
-        );
+        yield* append(store, replaceRuns(runs, store.callIds));
         store.runs = runs;
       }
       const reply = yield* request(store, {
@@ -366,6 +320,50 @@ export class HistoryQueryStore implements Context.Service.Shape<
       return yield* Schema.decodeUnknownEffect(HistoryPageSchema)(
         reply.value.value,
       ).pipe(failedWith('The history query process sent an unreadable page.'));
+    });
+  }
+
+  /** Feed `store` the call facts each of `runs` committed through `target`
+   *  since the last feed, and drop the runs the view no longer holds. */
+  private feed(store: Store, runs: SessionView['runs'], target: CommitOrdinal) {
+    return Effect.gen({ self: this }, function* () {
+      for (const id of store.fed.keys()) {
+        if (runs.has(id)) continue;
+        store.fed.delete(id);
+        yield* append(store, [
+          ['removeTools', id],
+          ['removeModels', id],
+        ]);
+      }
+      for (const run of runs.values()) {
+        const fed = store.fed.get(run.id);
+        // An ended run takes no row before its next activation, which
+        // replaces its view.
+        if (fed?.view === run && run.durableOutcome !== null) continue;
+        const after = fed?.seq ?? 0;
+        const rows = yield* this.session.log
+          .history(qualifyAggregateId('run', run.id), after + 1)
+          .pipe(
+            Effect.catchIf(
+              (error) => unloadable(error),
+              (error) =>
+                Effect.logWarning(
+                  `History query leaves out the calls of run ${run.id}: ${error.message}`,
+                ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+            ),
+          );
+        // An unreadable run is read no further; its row in runs stays.
+        if (rows === null) {
+          store.fed.set(run.id, { view: run, seq: Number.MAX_SAFE_INTEGER });
+          continue;
+        }
+        const kept = rows.filter((row) => row.commit <= target);
+        yield* append(
+          store,
+          kept.flatMap((row) => callWrites(store.callIds, run.id, row)),
+        );
+        store.fed.set(run.id, { view: run, seq: kept.at(-1)?.seq ?? after });
+      }
     });
   }
 
