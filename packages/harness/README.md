@@ -493,16 +493,21 @@ transport carries the requests.
 [`example/_support.ts`](./example/_support.ts) answers with an in-memory
 Anthropic Messages stream this way.
 
-The harness's log entries (a store that failed, a plugin that did not load, a
-run's warnings) print to the console until you name another destination:
-`setLogSink({ write(entry) { … } })` from `@texra-ai/harness/node` receives
-each `LogEntry`, Effect's structured record (level, message, cause,
-annotations), and `entryChannel` / `entryMessage` read its channel and text
-as the console prints them. Setting a sink disposes the one it replaces (its optional
-`dispose`), and `setLogSink(null)` restores the console. Entries reach the sink
-with secrets redacted, unless you pass `{ trusted: true }`. `Sessions.layer`
-logs at `Info` and above; `effectDiagnosticsLayer(level)`, from the same
-entry, sets the level for a program you run outside it.
+The harness logs with `Effect.log*`, and `Sessions.layer` installs no logger
+of its own: its entries (a store that failed, a plugin that did not load, a
+run's warnings) go through the loggers, minimum level and tracer your program
+provides. Effect's default logger prints `Info` and above to the console;
+provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
+them. To send them through the harness's sink instead, which redacts secrets,
+provide `effectDiagnosticsLayer(level)` from `@texra-ai/harness/node` around
+the program and name a destination with `setLogSink({ write(entry) { … } })`:
+it receives each `LogEntry`, Effect's structured record (level, message,
+cause, annotations), and `entryChannel` / `entryMessage` read its channel and
+text. Setting a sink disposes the one it replaces (its optional `dispose`),
+and `setLogSink(null)` restores the console. Entries reach the sink with
+secrets redacted, unless you pass `{ trusted: true }`. The few lines written
+outside any fiber (a trace sink that threw, a stored setting that does not
+read) always go to the sink, the console until you set one.
 
 The platform is **process-wide** for the layer's lifetime: create one and
 reuse it for every run, with the one `Sessions.layer` built over it.

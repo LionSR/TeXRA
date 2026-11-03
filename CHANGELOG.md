@@ -1388,6 +1388,12 @@ show` print the same notice, and the new `texra agents customize`,
   composition asks (`processLayer({ labelRuns: true })`, as every TeXRA app
   does); `Sessions.layer` titles none, so an embedder's runs make only the
   requests their agents do.
+- **SDK: the harness logs through your program's own logger.**
+  `Sessions.layer` no longer replaces the Effect loggers, minimum level and
+  tracer of the program that provides it, so the harness's lines go where
+  your `Logger.layer` sends them instead of straight to the console.
+  `effectDiagnosticsLayer` with `setLogSink` still routes them through the
+  harness's redacting sink.
 - **A DeepSeek account out of credit reads as out of credit.** A request
   DeepSeek refuses for an empty balance (HTTP 402, "Insufficient Balance")
   is now reported as the account running out of credit, with the same
