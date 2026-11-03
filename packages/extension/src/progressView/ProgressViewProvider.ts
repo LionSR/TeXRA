@@ -382,7 +382,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               showProgressView: () => this.showProgressView(),
               revealProgress: (config) => revealProgressView(config, this),
               globalState,
-              presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
               // The launcher is bound once the window has opened
               // (`gui.runValidated` below): read when the setup assistant
               // starts, not here.
@@ -758,14 +757,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     if (newest !== undefined)
       this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
   });
-
-  /** Select a stream this window just launched (the host's
-   *  `runs.launched` port): the launching surface selects it, and a
-   *  resolved agent retires the missing-agent warning. */
-  public presentLaunchedRun(runId: RunId): void {
-    this.bridge.surfaceAction({ kind: 'select', runId });
-    this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
-  }
 
   public readonly revealRun = Effect.fn('ProgressViewProvider.revealRun')(
     { self: this },

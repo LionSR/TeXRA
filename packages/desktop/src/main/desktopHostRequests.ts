@@ -6,7 +6,7 @@
 // `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import { Cancelled, Rejected, type Run, type RunEnd } from '@texra-ai/harness';
+import { Cancelled, Rejected, type RunEnd } from '@texra-ai/harness';
 import {
   AgentDirectories,
   AppSignals,
@@ -35,7 +35,6 @@ import type {
   OwnHostRequest,
   SharedHostRequestBindings,
 } from '@texra/controllers/session/openGuiWindow';
-import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { instructionActions } from '@ui/copy/instructionActions';
@@ -59,8 +58,7 @@ interface DesktopHostRequestsOptions {
   /** The project this window serves: its runs run in its session, here or
    *  in the service. */
   project: DesktopProject;
-  /** The window's bridge and snapshot. */
-  bridge: SessionBridge;
+  /** The window's host snapshot. */
   snapshot: HostSnapshotSource;
   host: DesktopAgentRunHost;
   files: DesktopFileSelection;
@@ -85,7 +83,7 @@ const CHANNEL = 'DesktopHostRequests';
 /** The desktop's half of a project's window, for the window's scope. */
 export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
   function* (options: DesktopHostRequestsOptions) {
-    const { project, host, runtime, bridge, snapshot } = options;
+    const { project, host, runtime, snapshot } = options;
     const { roots } = project;
     const signals = yield* AppSignals;
     // A shared controller's notice IS the refusal the request answers with.
@@ -293,12 +291,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       showInfoMessage: host.showInfoMessage,
       showWarningMessage: host.showWarningMessage,
       runs: {
-        // Select the run and retire the missing-agent warning its agent
-        // resolved.
-        launched: (run: Run) =>
-          Effect.sync(() =>
-            bridge.surfaceAction({ kind: 'select', runId: run.runId }),
-          ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.
         openFinalOutput: (config: AgentConfig, result: RunEnd) =>

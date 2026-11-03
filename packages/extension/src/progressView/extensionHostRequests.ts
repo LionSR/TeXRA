@@ -18,7 +18,6 @@ import {
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
-  type Run,
   type RunEnd,
   type Session,
   type WorkspaceRoots,
@@ -36,11 +35,7 @@ import {
   pathToLocationIn,
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -140,8 +135,6 @@ interface ExtensionHostRequestsOptions {
   /** Reveal the task list for a run this window just started, or name the
    *  run in a toast when it cannot (the run actions' `revealProgress`). */
   readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
-  /** Select a run this window just launched (the run actions' `launched`). */
-  presentLaunchedRun(runId: RunId): void;
   /** The window's launcher (`HostRunActions.runValidated`), which the setup
    *  assistant's run starts through; bound once the window has opened, so
    *  read as that run starts. */
@@ -544,8 +537,6 @@ export const createExtensionHostRequests = Effect.fn(
     showInfoMessage: vscodeUi.showInfoMessage,
     showWarningMessage: vscodeUi.showWarningMessage,
     runs: {
-      launched: (run: Run) =>
-        Effect.sync(() => options.presentLaunchedRun(run.runId)),
       revealProgress: options.revealProgress,
       openFinalOutput: (config: AgentConfig, result: RunEnd) =>
         withProcessServices(
