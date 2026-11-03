@@ -27,6 +27,14 @@ All notable changes to this project will be documented in this file.
   gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
   account id; `SubscriptionCoordinator.buildAuthorizeRequest` is an Effect
   and `loginWithCode` takes the authorize request and its callback.
+- **SDK: a refused launch is its caller's to show.** `session.start` and
+  `session.resume` no longer show the unknown-model instruction or the
+  missing-agent notice through the session's host, at once or to a host
+  that attaches later: the failure carries it as `AgentError.notice`
+  (`LaunchNoticeSchema` in `./schemas`), `launchNoticeOf` (`./host`) reads
+  it through the `RunFailure`, and `presentRunFailure` shows it in place of
+  the generic error. `attachErrorPresentationClaimed` and
+  `hasErrorPresentationClaimed` are gone.
 - **SDK: a tool edit's proposal is the request's, not the session's.**
   `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
   address in the session's blob store, written with the `request.opened`

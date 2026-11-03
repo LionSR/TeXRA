@@ -118,9 +118,9 @@ export const resumeRun = (
   Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
       const runs = registryOf(yield* Runs);
+      // Counted among the attempt's waiters as `openResume` returned it.
       const attempt = yield* openResume(runId, options, false);
       if (attempt === undefined) return REFUSED;
-      attempt.waiters += 1;
       const handOff = (activation: CommitOrdinal): ResumeHandOff => ({
         activation,
       });

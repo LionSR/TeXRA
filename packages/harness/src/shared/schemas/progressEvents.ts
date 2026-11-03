@@ -1,3 +1,5 @@
+import { Schema } from 'effect';
+
 import type { FileLocation } from './output';
 
 /**
@@ -41,6 +43,32 @@ export interface RequestShowInstructionPayload {
 export interface AgentNotFoundPayload {
   agentName: string;
 }
+
+/**
+ * The notice a refused launch carries for its caller to show
+ * (`AgentError.notice`), as the presentation event and payload a host's
+ * `emit` takes: the instruction for a model the build does not recognize,
+ * or the agent the launch named that the catalog does not hold. The launch
+ * shows nothing itself; the caller shows this where it shows the failure.
+ */
+export const LaunchNoticeSchema = Schema.Union([
+  Schema.Struct({
+    event: Schema.Literal('requestShowInstruction'),
+    payload: Schema.Struct({
+      key: Schema.String,
+      message: Schema.String,
+      showSuppress: Schema.optional(Schema.Boolean),
+    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
+  }),
+  Schema.Struct({
+    event: Schema.Literal('agentNotFound'),
+    payload: Schema.Struct({
+      agentName: Schema.String,
+    }) satisfies Schema.Codec<AgentNotFoundPayload, unknown>,
+  }),
+]);
+/** A refused launch's notice ({@link LaunchNoticeSchema}). */
+export type LaunchNotice = typeof LaunchNoticeSchema.Type;
 
 /** Show an error message via a host notification. */
 export interface RequestShowErrorPayload {

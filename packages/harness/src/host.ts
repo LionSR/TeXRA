@@ -91,20 +91,18 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-// Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
+// Follow-up delivery helpers hosts share.
 export {
   describeFollowUpFailure,
   presentFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-export {
-  attachErrorPresentationClaimed,
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
 // A host's presentation surface: session and sessionless interactions, the
-// emit handlers (one per event), and a failed run's presentation claim.
+// emit handlers (one per event), and a failed run's presentation, with the
+// notice a refused launch carries.
 export {
   SessionHostInteractions,
   type HostInteractions,
+  launchNoticeOf,
   presentRunFailure,
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.

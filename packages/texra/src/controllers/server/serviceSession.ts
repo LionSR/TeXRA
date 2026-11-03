@@ -37,10 +37,10 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
+  AgentError,
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  attachErrorPresentationClaimed,
   describeFollowUpFailure,
   replayTrace,
 } from '@texra-ai/harness/host';
@@ -54,7 +54,11 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import { TaskRecordsFailed, type ProjectStateFailed } from './protocol';
+import {
+  TaskRecordsFailed,
+  type ProjectStateFailed,
+  type TaskFailed,
+} from './protocol';
 import type {
   CommitOrdinal,
   TranscriptSubscription,
@@ -267,6 +271,21 @@ export const serviceProjectState = (
 /** A failure of a call to the service, as a run's own. */
 const runFailure = (message: string, cause: Error = new Error(message)) =>
   new RunFailure({ cause, message });
+
+/** The service's answer to a start or resume it did not run, worded
+ *  `message`, as this window's own refused launch: its notice
+ *  (`TaskFailed.notice`) rides it, for this window's presenter to show. */
+const refusedByService = (
+  message: string,
+  error: TaskFailed | { readonly _tag: 'RpcClientError' },
+) =>
+  runFailure(
+    message,
+    new AgentError({
+      message,
+      notice: error._tag === 'TaskFailed' ? error.notice : undefined,
+    }),
+  );
 
 /**
  * The session of `workspace` in the service, keyed by `roots.storage` (the
@@ -577,15 +596,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
         client['task.start']({ workspace, start }).pipe(
-          Effect.mapError((error) => {
-            const cause = new Error(
+          Effect.mapError((error) =>
+            refusedByService(
               `The TeXRA service could not start the task: ${error.message}`,
-            );
-            // The service presented it to this window already.
-            if ('presented' in error && error.presented === true)
-              attachErrorPresentationClaimed(cause);
-            return runFailure(cause.message, cause);
-          }),
+              error,
+            ),
+          ),
         ),
       ).pipe(Effect.flatMap(runOf));
     },
@@ -594,7 +610,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
         client['task.resume']({ workspace, runId }).pipe(
-          Effect.mapError((error) => runFailure(error.message)),
+          Effect.mapError((error) => refusedByService(error.message, error)),
         ),
       ).pipe(
         Effect.flatMap((resumed) =>

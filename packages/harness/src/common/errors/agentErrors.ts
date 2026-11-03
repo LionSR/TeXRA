@@ -1,5 +1,7 @@
 import { Schema } from 'effect';
 
+import { LaunchNoticeSchema } from '@shared/schemas';
+
 /**
  * A runtime failure of the agent layer: a launch it refuses or a run that
  * ended failed.
@@ -12,6 +14,9 @@ import { Schema } from 'effect';
 export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
+  /** A refused launch's notice (an unknown model, an unknown agent), which
+   *  the launch's caller shows in place of the generic error. */
+  notice: Schema.optional(LaunchNoticeSchema),
 }) {}
 
 /**

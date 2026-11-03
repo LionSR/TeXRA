@@ -143,7 +143,7 @@ export interface RunAttempt {
   readonly answer: Effect.Effect<ResumeAttempt, Error>;
   /** The commit of the `run.activate` it admitted the run at. */
   readonly admitted: Deferred.Deferred<CommitOrdinal>;
-  /** The callers waiting on its answer. */
+  /** The callers waiting on its answer, counted as they join (`openResume`). */
   waiters: number;
   /** A caller holds the activated run, or none holds the resume (a wake):
    *  only a stop or the session's close ends the run now. */
@@ -190,7 +190,8 @@ export const wakeIfOwed = (
  * Join `runId`'s resume in flight here, or open one as its activation,
  * deciding on the session's fork. The registry opens one per activation
  * (`RunRegistry.start`): a caller that lost the race joins the winner.
- * Undefined while a launch that is no resume holds the run.
+ * Undefined while a launch that is no resume holds the run. A caller that
+ * is no wake is a waiter from the step that joins (seen by `answered`).
  */
 export const openResume = (
   runId: RunId,
@@ -202,13 +203,16 @@ export const openResume = (
     Effect.gen(function* () {
       const runs = registryOf(yield* Runs);
       const found = runs.attemptOf(runId);
-      if (found) return found;
+      if (found) {
+        if (!wake) found.waiters += 1;
+        return found;
+      }
       if (runs.get(runId) !== undefined) return undefined;
       const done = yield* Deferred.make<ResumeAttempt, Error>();
       const attempt: RunAttempt = {
         answer: Deferred.await(done),
         admitted: yield* Deferred.make<CommitOrdinal>(),
-        waiters: 0,
+        waiters: wake ? 0 : 1,
         handedOff: wake,
       };
       // Built as it runs: a stop before it decides nothing (`start`).
@@ -276,11 +280,19 @@ const answered = <R>(
         if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
           return Effect.void;
         const error = Cause.squash(cause);
+        // Shown once, by its one presenter: a run the resume opened shows
+        // its own end (`presentTerminalResult`), and a caller still waiting
+        // on the answer (a host's resume that joined this one) shows what it
+        // receives.
+        const shownElsewhere =
+          Deferred.isDoneUnsafe(attempt.admitted) || attempt.waiters > 0;
         return Effect.logError(`Failed to resume run ${runId}`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
           Effect.andThen(
-            presentRunFailure(interactions, error, 'Resume failed: '),
+            shownElsewhere
+              ? Effect.void
+              : presentRunFailure(interactions, error, 'Resume failed: '),
           ),
         );
       }),

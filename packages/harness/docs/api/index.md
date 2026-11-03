@@ -897,7 +897,9 @@ interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host.
+   * returned to you and shown to no host: a launch refused for an unknown
+   * model, or for a `config` naming an unknown agent, carries the notice a
+   * host shows for it (`launchNoticeOf` in `./host`).
    */
   readonly start: (
     input: StartInput,

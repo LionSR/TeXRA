@@ -314,6 +314,8 @@ export {
   isRunId,
   isTaskConfig,
   JsonValueSchema,
+  type LaunchNotice,
+  LaunchNoticeSchema,
   LineCountSchema,
   listingTypeOf,
   type McpToolOutput,

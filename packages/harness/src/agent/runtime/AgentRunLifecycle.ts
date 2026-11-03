@@ -13,14 +13,10 @@ import {
 } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
-  agentErrorPresentation,
   classifyAgentError,
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import {
-  attachErrorPresentationClaimed,
-  attachProviderError,
-} from '@common/errors/sdkError/errorMetadata';
+import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
@@ -270,15 +266,11 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   }
   if (kind === 'abort') return emptyReport(ctx, resolvedOutcome);
 
-  const failure = new AgentError({ message: errorMsg, cause: err });
-  // Receipt for a root run's failure once its `run.end` row committed: the
-  // session's presenter shows that row's guidance, so the failure thrown
-  // past it is marked presented. A run that never opened has no row: its
-  // launch presents it (`session.start`).
-  const recorded = finalized.event.error;
-  if (finalized.recorded && recorded && agentErrorPresentation(recorded))
-    attachErrorPresentationClaimed(failure);
-  return yield* failure;
+  // A root run's failure. Once its `run.end` row committed, the session's
+  // presenter shows that row (`presentTerminalResult`), and a launch that
+  // waits for the run's opening answers with the opening, not this; a run
+  // that never opened has no row, so its launch's caller presents this.
+  return yield* new AgentError({ message: errorMsg, cause: err });
 });
 
 /**

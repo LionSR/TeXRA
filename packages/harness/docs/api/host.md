@@ -321,6 +321,9 @@ catcher exist for it — anything else duplicates the existing
 class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
+  /** A refused launch's notice (an unknown model, an unknown agent), which
+   *  the launch's caller shows in place of the generic error. */
+  notice: Schema.optional(LaunchNoticeSchema),
 })
 ```
 
@@ -600,22 +603,6 @@ type AssembleTraceResult =
       readonly record: RunRecord;
     }
   | { readonly status: 'config_missing' | 'streamLogs_missing' };
-```
-
-## attachErrorPresentationClaimed
-
-Marks that this failure was presented, so no later presenter (a generic
-handler on the same call stack, a host's own fallback) shows it again.
-Attached when a targeted notification owns its presentation (its emit
-confirmed delivery, or no host was attached and it was retained for
-replay), when the session's presenter showed a run's failure from its
-`run.end` row (`presentRunFailure`, the run's terminal `endRun`), and when
-another process (a service) showed it to this window. Never for a
-fire-and-forget or declined emit, so a host that could not render a
-targeted notification leaves the generic surface free to fire.
-
-```ts
-const attachErrorPresentationClaimed: (err: unknown) => void
 ```
 
 ## AvailabilityResults
@@ -1090,15 +1077,6 @@ class GlobalValues extends Context.Service<
 >()('@texra-ai/harness/GlobalValues')
 ```
 
-## hasErrorPresentationClaimed
-
-Whether the claim is on `err` or anywhere in its rethrow chain, so a
-wrapper that preserves `{ cause }` stays classifiable.
-
-```ts
-const hasErrorPresentationClaimed: (err: unknown) => boolean
-```
-
 ## hasExtension
 
 Check if a file path has a specific extension (case-insensitive).
@@ -1274,6 +1252,16 @@ True if `err` is an `AbortController` abort (a DOM `AbortError`).
 
 ```ts
 function isUserAbort(err: unknown): boolean
+```
+
+## launchNoticeOf
+
+The notice a refused launch carries for its caller to show
+(`AgentError.notice`), read through a `Session` start's `RunFailure`;
+undefined for any other failure, which its caller words itself.
+
+```ts
+function launchNoticeOf(error: unknown): LaunchNotice | undefined
 ```
 
 ## listRunGeneratedFiles
@@ -1678,12 +1666,14 @@ function presentFollowUpResult(
 
 ## presentRunFailure
 
-Present a failed run from its raw error: the primary failure, classified,
-worded as `prefix` plus its text (a `Rejected` request's reason), and
-replayed to a surface that attaches later, then marked presented. A
-failure already presented (here, by the terminal-result presenter, or
-through a targeted notice) presents nothing. A `Session` start's
-`RunFailure` is presented as the failure it carries.
+Present a failed run from its raw error, replayed to a surface that
+attaches later: a refused launch's notice ({@link launchNoticeOf}), or
+else the primary failure, classified and worded as `prefix` plus its text
+(a `Rejected` request's reason). A host that throws on the notice shows
+that text as an error instead. It presents whatever it is given, so each
+failure has one presenter: a launch that failed before its run opened is
+its caller's, and a run's end is the session's
+({@link presentTerminalResult}).
 
 ```ts
 function presentRunFailure(

@@ -1,8 +1,5 @@
 // Third-party imports
-import {
-  hasErrorPresentationClaimed,
-  withLogChannel,
-} from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import { Cause, Effect } from 'effect';
 
 // Local imports
@@ -23,11 +20,12 @@ const CHANNEL = SETUP_ASSISTANT_CHANNEL;
 
 /**
  * The launch program the command surface runs on the process runtime: it
- * turns every failure — a failed host call, a failed model resolution, a
- * failed root launch — into one error report and a `not-started` result,
- * which is the contract its host caller relies on. An interrupted launch is
- * not a failure: the cause is re-raised so a runtime disposal stays a
- * cancellation instead of a launch-failure notice.
+ * turns every failure — a failed host call, a failed model resolution — into
+ * one error report and a `not-started` result, which is the contract its
+ * host caller relies on; a failed root launch is `not-started` too, reported
+ * by the window's launcher. An interrupted launch is not a failure: the
+ * cause is re-raised so a runtime disposal stays a cancellation instead of a
+ * launch-failure notice.
  */
 export function launchSetupAssistant(
   roots: WorkspaceRoots,
@@ -72,23 +70,22 @@ export function launchSetupAssistant(
       // error notification appears during teardown.
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
       const error = Cause.squash(cause);
-      // A launch failure the window's launcher presented is not shown
-      // again; one before the launch (no model, a request refused) is.
+      // A failure before the launch (no model, a request refused): the
+      // window's launcher shows its own refusal, which `launchSetup`
+      // answers as `not-started`.
       return Effect.logError('Setup assistant failed to launch.').pipe(
         Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.andThen(
-          hasErrorPresentationClaimed(error)
-            ? Effect.void
-            : Effect.forkDetach(
-                announce(
-                  CHANNEL,
-                  vscodeUi.showErrorMessage(
-                    `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-                  ),
-                  undefined,
-                ),
+          Effect.forkDetach(
+            announce(
+              CHANNEL,
+              vscodeUi.showErrorMessage(
+                `Failed to launch setup assistant: ${toErrorMessage(error)}`,
               ),
+              undefined,
+            ),
+          ),
         ),
         Effect.as('not-started' as const),
       );
