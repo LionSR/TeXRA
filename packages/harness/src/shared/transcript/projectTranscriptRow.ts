@@ -133,6 +133,14 @@ function errorRow(
     detailText: transcriptText(
       details.map((detail) => `${detail.key}: ${detail.value}`).join('\n'),
     ),
+    ...(data?.classification === undefined
+      ? {}
+      : {
+          failure: {
+            message: data.message,
+            classification: data.classification,
+          },
+        }),
   };
 }
 

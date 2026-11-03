@@ -120,6 +120,13 @@ export interface ErrorRow extends TranscriptRowBase {
   /** The detail block as one text, for copy affordances and full-output
    *  readers. */
   readonly detailText: TranscriptText;
+  /** The classified failure the row records: an app with words of its own
+   *  for the classification shows them where the row shows `message` (the
+   *  summary, or the `message` detail). */
+  readonly failure?: {
+    readonly message: string;
+    readonly classification: NonNullable<ErrorLogData['classification']>;
+  };
 }
 
 export interface ToolRow extends TranscriptRowBase {

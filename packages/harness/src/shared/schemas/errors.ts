@@ -20,10 +20,16 @@ const ExhaustionReasonSchema = Schema.Union([
 ]);
 export type ExhaustionReason = typeof ExhaustionReasonSchema.Type;
 
+/** A route that bills a signed-in subscription session (ChatGPT, Grok). */
+export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick([
+  'chatgpt-subscription',
+  'xai-subscription',
+]);
+
 /** Mutually exclusive provider-error classifications. The two runtime kinds
  * share AgentErrorKind's spelling; exhaustion members retain the actionable
  * route reason as the discriminant itself. */
-const ProviderErrorClassificationSchema = Schema.Union([
+export const ProviderErrorClassificationSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Union([
       Schema.Literals(['missing-api-key', 'context-window']),
@@ -39,6 +45,15 @@ const ProviderErrorClassificationSchema = Schema.Union([
     resetsInMs: Schema.optional(
       Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
     ),
+  }),
+  /** A signed-in subscription that could not bill the call: its route,
+   *  whether only a fresh sign-in can help (else it may recover), and the
+   *  session's own failure. */
+  Schema.Struct({
+    kind: Schema.Literal('subscription-session'),
+    route: SubscriptionSessionRouteSchema,
+    needsReauth: Schema.Boolean,
+    sessionError: Schema.String,
   }),
 ]);
 export type ProviderErrorClassification =

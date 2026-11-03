@@ -5,6 +5,7 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
@@ -359,11 +360,11 @@ export function launchNoticeOf(error: unknown): LaunchNotice | undefined {
  * Present a failed run from its raw error, replayed to a surface that
  * attaches later: a refused launch's notice ({@link launchNoticeOf}), or
  * else the primary failure, classified and worded as `prefix` plus its text
- * (a `Rejected` request's reason). A host that throws on the notice shows
- * that text as an error instead. It presents whatever it is given, so each
- * failure has one presenter: a launch that failed before its run opened is
- * its caller's, and a run's end is the session's
- * ({@link presentTerminalResult}).
+ * (a `Rejected` request's reason), with its classification beside the
+ * text. A host that throws on the notice shows that text as an error
+ * instead. It presents whatever it is given, so each failure has one
+ * presenter: a launch that failed before its run opened is its caller's,
+ * and a run's end is the session's ({@link presentTerminalResult}).
  */
 export function presentRunFailure(
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -383,5 +384,6 @@ export function presentRunFailure(
   return presentAgentFailure(interactions, {
     kind: classifyAgentError(primary),
     message: text,
+    classification: normalizeProviderError(primary).classification,
   });
 }

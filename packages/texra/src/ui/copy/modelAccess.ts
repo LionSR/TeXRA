@@ -7,14 +7,19 @@
  * which stay wire identifiers and never reach the screen.
  */
 
-import { formatCostUsd } from '@texra-ai/harness/transcript';
+import {
+  formatCostUsd,
+  transcriptText,
+  type ErrorRow,
+  type TranscriptText,
+} from '@texra-ai/harness/transcript';
 import { absurd, String as Str } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { formatResetDuration } from '@ui/copy/format';
 import type {
   DeclinableUsageRoute,
-  RetryPermission,
+  ErrorLogData,
   TokenUsageStats,
   UsageRoute,
 } from '@texra-ai/harness/schemas';
@@ -63,24 +68,38 @@ export function planFallbackName(route: DeclinableUsageRoute): string {
   return PLAN_NAMES[route].fallback;
 }
 
+/** The account each subscription session signs in to, by the route it
+ *  bills: its switch and its sign-in, which a lapsed session names. */
+const SESSION_ACCOUNTS = Object.freeze({
+  'chatgpt-subscription': CHATGPT_AUTH,
+  'xai-subscription': GROK_AUTH,
+});
+
 /**
- * A model call's failure as a person reads it: a used-up plan in these
- * words, from the facts the run recorded (the plan, its tier and when it
- * resets); any other failure as the harness worded it.
+ * A model call's failure as a person reads it, from the facts the run
+ * recorded: a used-up plan (the plan, its tier and when it resets), or a
+ * subscription that could not bill (the session's failure, and whether a
+ * sign-in fixes it), in these words; any other failure as the harness
+ * worded it.
  */
 export function modelFailureText({
   message,
   classification,
-}: Pick<
-  RetryPermission['errorDetails'],
-  'message' | 'classification'
->): string {
+}: Pick<ErrorLogData, 'message' | 'classification'>): string {
   if (classification === undefined) return message;
   switch (classification.kind) {
     case 'missing-api-key':
     case 'context-window':
     case 'upstream-credit':
       return message;
+    case 'subscription-session': {
+      const { subscriptionLabel, signInLabel } =
+        SESSION_ACCOUNTS[classification.route];
+      const remedy = classification.needsReauth
+        ? `${signInLabel} again`
+        : 'Try again in a moment';
+      return `${subscriptionLabel} unavailable: ${classification.sessionError} ${remedy}, or turn off "${subscriptionLabel}".`;
+    }
     default: {
       const { plan, fallback } = PLAN_NAMES[classification.kind];
       const tier = classification.planType
@@ -93,6 +112,31 @@ export function modelFailureText({
       return `${plan} usage limit reached${tier}.${reset} Switch to ${fallback} to keep working, or wait until the limit resets.`;
     }
   }
+}
+
+/**
+ * An error row as a person reads it: a classified failure in
+ * {@link modelFailureText}'s words wherever the row shows the harness's
+ * message for it (its headline, or its `message` detail); any other row as
+ * the harness wrote it.
+ */
+export function errorRowText(row: ErrorRow): {
+  readonly summary: string;
+  readonly detailText: TranscriptText;
+} {
+  const plain = { summary: row.summary.full, detailText: row.detailText };
+  if (row.failure === undefined) return plain;
+  const { message } = row.failure;
+  const words = modelFailureText(row.failure);
+  if (words === message) return plain;
+  return {
+    summary: row.summary.full === message ? words : row.summary.full,
+    detailText: transcriptText(
+      row.details
+        .map(({ key, value }) => `${key}: ${key === 'message' ? words : value}`)
+        .join('\n'),
+    ),
+  };
 }
 
 /** The notice of a used-up plan's automatic retry on the model's own key. */

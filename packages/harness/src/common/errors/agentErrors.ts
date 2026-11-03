@@ -1,8 +1,8 @@
 import { Schema } from 'effect';
 
 import {
-  DeclinableUsageRouteSchema,
   LaunchNoticeSchema,
+  SubscriptionSessionRouteSchema,
 } from '@shared/schemas';
 
 /**
@@ -29,8 +29,8 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
  * harness's own model access, never a vendor's (that is llm's `ModelError`).
  * `missing-api-key` is the one reason a host acts on (it offers the key
  * setting); every other reason is read as its message, which for a
- * subscription session is the session's own failure, worded with its route
- * and remedy by `providerErrorOf`.
+ * subscription session is the session's own failure, classified with its
+ * route and remedy (`subscription-session`) by `providerErrorOf`.
  */
 export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   'RouteUnavailable',
@@ -41,10 +41,7 @@ export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
      *  and whether only a fresh sign-in can help (else it may recover). */
     session: Schema.optional(
       Schema.Struct({
-        route: DeclinableUsageRouteSchema.pick([
-          'chatgpt-subscription',
-          'xai-subscription',
-        ]),
+        route: SubscriptionSessionRouteSchema,
         needsReauth: Schema.Boolean,
       }),
     ),
