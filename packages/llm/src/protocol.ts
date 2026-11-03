@@ -50,11 +50,11 @@ export const ModelOriginSchema = BindingSchema.mapFields(
      * signatures, encrypted reasoning, provider evidence). It changes only
      * when a codec would read that stored state differently; adding a field
      * or changing how a request is built keeps it. A stored turn of another
-     * version is not the same origin (`sameModelOrigin`), so it is sent as
-     * plain content without its reasoning and evidence, as after a model
-     * switch.
+     * version decodes, and is not the same origin (`sameModelOrigin`), so it
+     * is sent as plain content without its reasoning and evidence, as after
+     * a model switch. This build writes the version `originOf` stamps.
      */
-    codecVersion: Schema.Literal(1),
+    codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
 );
 /** The binding a turn was requested on: model, deployment and protocol. */
