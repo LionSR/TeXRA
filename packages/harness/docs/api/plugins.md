@@ -801,6 +801,10 @@ interface InboxItem {
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
+  /** The id a caller named the message by (`followUp.send`; `deliveryId`
+   *  is its `sentFollowUpId`): a retry under it answers with the first
+   *  send's receipt, another message under it fails `Conflict`. */
+  readonly caller?: string;
 }
 ```
 

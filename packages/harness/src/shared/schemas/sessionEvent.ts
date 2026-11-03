@@ -36,7 +36,7 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
-import { FollowUpContentSchema, FollowUpDispositionSchema } from './followUp';
+import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import { RunBindingSchema } from './runFacts';
@@ -65,26 +65,6 @@ export const CommitOrdinalSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
 export type CommitOrdinal = typeof CommitOrdinalSchema.Type;
-
-/** What a follow-up asks of its run, as its `followup.queued` row stores
- *  it: a caller's retry under the same id must ask the same. */
-export const FollowUpRequestSchema = Schema.Struct({
-  content: FollowUpContentSchema,
-  /** When the row may be read; the rules are `readableMessages`. */
-  holdUntil: Schema.optional(
-    Schema.Literals(['instruction', 'turn', 'generation']),
-  ),
-  /** A request of the run's own, consumed by the batch that applies it. */
-  control: Schema.optional(
-    Schema.Union([
-      Schema.Struct({ kind: Schema.Literal('compact') }),
-      Schema.Struct({
-        kind: Schema.Literal('model'),
-        model: Schema.String.check(Schema.isMinLength(1)),
-      }),
-    ]),
-  ),
-});
 
 /**
  * The envelope every durable arm rides, in the event table's own columns. A

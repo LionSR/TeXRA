@@ -53,7 +53,7 @@ export type FollowUpSender = typeof FollowUpSenderSchema.Type;
  * a child's delivery envelope is summarized for the transcript. A loop's own
  * maintenance wake is never a follow-up row.
  */
-export const FollowUpContentSchema = Schema.Struct({
+const FollowUpContentSchema = Schema.Struct({
   text: Schema.String,
   /** What the transcript and the queued list show instead of `text`. */
   displayText: Schema.optional(Schema.NullOr(Schema.String)),
@@ -63,6 +63,26 @@ export const FollowUpContentSchema = Schema.Struct({
   from: FollowUpSenderSchema,
 });
 export type FollowUpContent = typeof FollowUpContentSchema.Type;
+
+/** What a follow-up asks of its run, as its `followup.queued` row stores
+ *  it: a caller's retry under the same id must ask the same. */
+export const FollowUpRequestSchema = Schema.Struct({
+  content: FollowUpContentSchema,
+  /** When the row may be read; the rules are `readableMessages`. */
+  holdUntil: Schema.optional(
+    Schema.Literals(['instruction', 'turn', 'generation']),
+  ),
+  /** A request of the run's own, consumed by the batch that applies it. */
+  control: Schema.optional(
+    Schema.Union([
+      Schema.Struct({ kind: Schema.Literal('compact') }),
+      Schema.Struct({
+        kind: Schema.Literal('model'),
+        model: Schema.String.check(Schema.isMinLength(1)),
+      }),
+    ]),
+  ),
+});
 
 /**
  * Why a follow-up left the queue, stated by the writer of its

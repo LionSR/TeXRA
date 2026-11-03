@@ -46,7 +46,7 @@ export interface InboxPort {
   /** The session's log: a send is one transaction under the run's claim. */
   readonly log: Pick<
     SessionLogShape,
-    'transact' | 'runRows' | 'rows' | 'hold' | 'settled'
+    'transact' | 'runRows' | 'history' | 'hold' | 'settled'
   >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
@@ -70,6 +70,10 @@ export interface InboxItem {
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
+  /** The id a caller named the message by (`followUp.send`; `deliveryId`
+   *  is its `sentFollowUpId`): a retry under it answers with the first
+   *  send's receipt, another message under it fails `Conflict`. */
+  readonly caller?: string;
 }
 
 /** How a send landed. `queued.read`: a reader here takes it (else: `wake`). */
@@ -88,9 +92,6 @@ export interface SendOptions {
   readonly fromParent?: boolean;
   /** No generation here reads the row: the input with it queued must owe a wake (`needsWake`). */
   readonly wakesOnly?: boolean;
-  /** The id a caller named the message by: a replay under it that asks
-   *  something else fails `Conflict`. */
-  readonly caller?: string;
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
@@ -335,8 +336,8 @@ export class SessionInbox {
         };
       }
       // Judged again under the claim: another process may have sent first.
-      if (options.caller !== undefined)
-        yield* sameAsFirst(this.port.log, runId, row, options.caller);
+      if (item.caller !== undefined)
+        yield* sameAsFirst(this.port.log, runId, row, item.caller);
       return queuedStill
         ? { rows: [], sent: yield* landed(true) }
         : only({ kind: 'duplicate' });

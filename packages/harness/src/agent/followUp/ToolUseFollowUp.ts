@@ -87,10 +87,6 @@ interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
   /** The message's media, read in the run's send lane once the message is
    *  accepted, so a slow read never lets a later message commit first. */
   readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;
-  /** The id a caller named the message by (`followUp.send`, the item's
-   *  `deliveryId` its `sentFollowUpId`): a retry under it is `sent`
-   *  before any other check (`sentBefore`). */
-  readonly caller?: string;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -125,14 +121,11 @@ export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {
   if (result.status === 'failed') {
-    return {
-      severity: 'warning',
-      message: describeFollowUpFailure(result.reason),
-    };
+    const message = describeFollowUpFailure(result.reason);
+    return { severity: 'warning', message };
   }
-  if (result.status === 'queued' && result.wake === 'failed') {
+  if (result.status === 'queued' && result.wake === 'failed')
     return { severity: 'info', message: FOLLOW_UP_WAKE_FAILED_MESSAGE };
-  }
   return { severity: 'none' };
 }
 
@@ -323,17 +316,14 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   item: InboxItem,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, FollowUpServices> {
-  const { hold, fromParent, attach, caller } = options;
+  const { hold, fromParent, attach } = options;
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
-    if (
-      caller !== undefined &&
-      (yield* sentBefore(runId, caller, item, hold, attach))
-    )
+    if (yield* sentBefore(runId, item, hold, attach))
       return { status: 'sent' } as const;
     const live = runs.get(runId);
     if (live !== undefined) {
@@ -364,7 +354,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     return yield* inbox.send(
       runId,
       { ...item, ...media },
-      { hold, fromParent, wakesOnly: live === undefined, caller },
+      { hold, fromParent, wakesOnly: live === undefined },
     );
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if ('status' in sent) return sent;

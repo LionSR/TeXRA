@@ -143,7 +143,7 @@ function recordedFollowUps(
           ),
         );
       }),
-    rows: (id, types) =>
+    history: (id, _from, types = []) =>
       Effect.sync(() =>
         rows.filter(
           (row) => row.aggregateId === id && types.includes(row.type),

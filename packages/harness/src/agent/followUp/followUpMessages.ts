@@ -93,7 +93,7 @@ export function queuedRow(
   hold: QueuedFollowUp['holdUntil'],
   relationOf: (sender: RunId) => RunRelation,
 ): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
-  const { from, deliveryId, media, blobs, control, ...content } = item;
+  const { from, deliveryId, media, blobs, control, caller, ...content } = item;
   return {
     followUpId: deliveryId ?? randomUUID(),
     ...(hold ? { holdUntil: hold } : {}),
@@ -139,7 +139,7 @@ const finished = ({ state }: FollowUpReceipt): boolean =>
  * A wait the session's close ends is interrupted: nothing answered it.
  */
 const readFollowUp = Effect.fn('readFollowUp')(function* (
-  log: Pick<SessionLog['Service'], 'rows' | 'now' | 'tail'>,
+  log: Pick<SessionLog['Service'], 'history' | 'now' | 'tail'>,
   runId: RunId,
   followUpId: string,
   wait = false,
@@ -148,7 +148,7 @@ const readFollowUp = Effect.fn('readFollowUp')(function* (
   DatabaseReadFailed
 > {
   const run = qualifyAggregateId('run', runId);
-  const read = Effect.map(log.rows(run, RECEIPT_ROW_TYPES), (rows) =>
+  const read = Effect.map(log.history(run, 1, RECEIPT_ROW_TYPES), (rows) =>
     followUpReceipt(rows, followUpId),
   );
   const done = (found: Effect.Success<typeof read>) =>
@@ -177,13 +177,13 @@ const sameRequest = Schema.toEquivalence(FollowUpRequestSchema);
 /** Fail `Conflict` unless `row` asks what the message first sent under the
  *  caller's id `caller` asked, as the run's rows say it. */
 export const sameAsFirst = (
-  log: Pick<SessionLog['Service'], 'rows'>,
+  log: Pick<SessionLog['Service'], 'history'>,
   runId: RunId,
   row: Omit<QueuedFollowUp, 'commit'>,
   caller: string,
 ): Effect.Effect<void, Conflict | DatabaseReadFailed> =>
   Effect.flatMap(
-    log.rows(qualifyAggregateId('run', runId), RECEIPT_ROW_TYPES),
+    log.history(qualifyAggregateId('run', runId), 1, RECEIPT_ROW_TYPES),
     (rows) => {
       const first = followUpReceipt(rows, row.followUpId);
       return typeof first === 'string' || sameRequest(first.queued, row)
@@ -193,17 +193,19 @@ export const sameAsFirst = (
   );
 
 /**
- * Whether run `runId` already holds `item`, a caller's message under its id
- * `id`, whatever its input takes now: a different message under that id
- * fails {@link Conflict}. Its media is read (`attach`) to compare as stored.
+ * Whether run `runId` already holds `item`, a message under the id its
+ * caller named it by (`InboxItem.caller`; false with none), whatever the
+ * run's input takes now: a different message under that id fails
+ * {@link Conflict}. Its media is read (`attach`) to compare as stored.
  */
 export const sentBefore = Effect.fn('sentBefore')(function* (
   runId: RunId,
-  id: string,
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>,
 ): Effect.fn.Return<boolean, Error, SessionLog | SessionViewAccess> {
+  const id = item.caller;
+  if (id === undefined) return false;
   const log = yield* SessionLog;
   // Another live owner's run: the send is refused as any is, past this.
   if (yield* heldElsewhere(log, runId)) return false;
@@ -232,7 +234,7 @@ const heldElsewhere = (
 /** The receipt of the message sent to run `runId` under the caller's `id`;
  *  with `wait`, once it is answered or unanswered. */
 export const sentReceipt = Effect.fn('sentReceipt')(function* (
-  log: Pick<SessionLog['Service'], 'rows' | 'now' | 'tail' | 'owner'>,
+  log: Pick<SessionLog['Service'], 'history' | 'now' | 'tail' | 'owner'>,
   req: {
     readonly runId: RunId;
     readonly id: string;

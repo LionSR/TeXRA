@@ -96,13 +96,13 @@ export interface SessionLogShape {
   afterCommit(action: Effect.Effect<void>): Effect.Effect<void>;
   /** The current commit ordinal: where a new reader starts its {@link tail}. */
   now(): CommitOrdinal;
-  /** An aggregate's rows of the kinds `types` names, in seq order (with
-   *  `fromSeq`, only those from that seq on): a run's history
-   *  (`RUN_STATE_ROW_TYPES`), or what one input became. */
-  rows(
+  /** A run's history rows, the kinds its state reads, in seq order; with
+   *  `fromSeq`, only those from that seq on; with `types`, those kinds
+   *  instead (what one input became: `RECEIPT_ROW_TYPES`). */
+  history(
     id: AggregateId,
-    types: readonly SessionEvent['type'][],
     fromSeq?: number,
+    types?: readonly SessionEvent['type'][],
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
   /** The `RunRows` of the kinds one read names (`RUN_ROW_READS`), read
    *  through the type index of a run's aggregate or a plugin's own; with
