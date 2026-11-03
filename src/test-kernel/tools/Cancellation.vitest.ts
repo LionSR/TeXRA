@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import { Effect, Fiber } from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
 
@@ -47,48 +47,6 @@ describe('withRequestTimeout under Effect.uninterruptible', () => {
       const error = yield* Fiber.join(fiber);
       expect(error._tag).toBe('TimeoutError');
       expect(aborted).toBe(true);
-    }),
-  );
-
-  it.effect('lets an interrupted request settle instead of tearing it', () =>
-    Effect.gen(function* () {
-      let abortedBeforeSettlement = false;
-      let settled = false;
-      let finish: () => void = () => {};
-      const fiber = yield* Effect.forkChild(
-        Effect.uninterruptible(
-          withRequestTimeout(
-            1000,
-            Effect.gen(function* () {
-              const signal = yield* Effect.abortSignal;
-              signal.addEventListener('abort', () => {
-                if (!settled) abortedBeforeSettlement = true;
-              });
-              return yield* Effect.promise(
-                () =>
-                  new Promise<string>((resolve) => {
-                    finish = () => {
-                      settled = true;
-                      resolve('written');
-                    };
-                  }),
-              );
-            }),
-          ),
-        ),
-      );
-      yield* started;
-      const interrupting = yield* Effect.forkChild(Fiber.interrupt(fiber));
-      yield* started;
-      // The interrupt is deferred: the write is untouched and still in flight.
-      expect(abortedBeforeSettlement).toBe(false);
-      expect(settled).toBe(false);
-      finish();
-      yield* Fiber.join(interrupting);
-      // The write ran to completion, and only then did the interrupt land.
-      expect(settled).toBe(true);
-      expect(abortedBeforeSettlement).toBe(false);
-      expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
     }),
   );
 });

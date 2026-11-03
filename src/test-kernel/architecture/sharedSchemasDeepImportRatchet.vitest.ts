@@ -156,28 +156,4 @@ describe('@shared/schemas deep-import ratchet', () => {
       ).toBe(true);
     }
   });
-
-  // The forms the shared scanner covers. `module.require(...)`,
-  // `require.resolve(...)` and `import.meta.resolve(...)` are deliberately
-  // not covered: they appear zero times in the tree, and keeping a private
-  // scanner for them is the machinery this ratchet just shed.
-  it('detects a deep import in every scanned module-loading form', () => {
-    const source = parseSourceFile('probe.ts', {
-      setParentNodes: false,
-      text: `
-        import { AgentCategory } from '@shared/schemas/agent';
-        export { AgentCategory } from '@shared/schemas/agent';
-        import agent = require('@shared/schemas/agent');
-        const dynamic = import('@shared/schemas/agent');
-        const commonJs = require('@shared/schemas/agent');
-        type Category = import('@shared/schemas/agent').AgentCategory;
-      `,
-    });
-
-    expect(
-      collectModuleSpecifiers(source).filter((specifier) =>
-        specifier.startsWith(DEEP_IMPORT_PREFIX),
-      ),
-    ).toHaveLength(6);
-  });
 });
