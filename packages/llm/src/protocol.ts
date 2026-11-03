@@ -52,7 +52,9 @@ export const ModelOriginSchema = BindingSchema.mapFields(
      * or changing how a request is built keeps it. A stored turn of another
      * version decodes, and is not the same origin (`sameModelOrigin`), so it
      * is sent as plain content without its reasoning and evidence, as after
-     * a model switch. This build writes the version `originOf` stamps.
+     * a model switch. This build writes the version `originOf` stamps. A
+     * change to the stored shape of that state, one an older build could
+     * not decode, bumps the store's row version instead.
      */
     codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
