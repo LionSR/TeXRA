@@ -165,8 +165,7 @@ describe('MCP server plugins', () => {
               resolveTestStep({
                 tools: [{ name: 'mcp__fixture__*' }],
                 injectTools: false,
-                stores: installedHost().roots,
-                workspaceRoot: undefined,
+                roots: installedHost().roots,
               }).pipe(Scope.provide(pin), Effect.provideContext(services));
             const pin = yield* Scope.make();
             const resolved = yield* open(pin);
@@ -266,8 +265,7 @@ describe('MCP server plugins', () => {
           const resolved = yield* resolveTestStep({
             tools: [{ name: 'mcp__fixture__*' }],
             injectTools: false,
-            stores: installedHost().roots,
-            workspaceRoot: undefined,
+            roots: installedHost().roots,
           }).pipe(Effect.provideContext(services));
           const tool = resolved.registry.get('mcp__fixture__echo')!;
 

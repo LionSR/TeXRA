@@ -22,7 +22,6 @@ import {
 } from '@agent/runtime/ToolServices';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { sessionFsLayer } from '@platform/rootedFs';
-import type { SettingsStores } from '@shared/config/settings';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import { RunHistory } from '@shared/session/runHistory';
 import { NO_FACTS } from '@shared/session/runFacts';
@@ -53,7 +52,6 @@ export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
 /** A run fixture's step fields: no step opened yet, and every step offers
  *  exactly `tools`, as the run's own tools over an empty catalog. */
 export const testRunTools = (
-  stores: SettingsStores,
   tools: Readonly<Record<string, ITool<Error, PluginToolServices>>> = {},
 ): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
   toolInputs: {
@@ -61,8 +59,6 @@ export const testRunTools = (
     runTools: Object.values(tools),
     injectTools: false,
     injectInstalled: false,
-    stores,
-    workspaceRoot: undefined,
     held: { warnings: [], loaded: new Map(), entries: new Map() },
   },
   steps: noStep(),
