@@ -198,8 +198,11 @@ Releasing claims is the one write it skips: it writes no row and only gives back
 this process's claims (`controllers/session/Database.ts:429-433`, `:976-984`). A
 core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts:374-380`). Kinds a build deleted are listed as
-retired; their rows fail only their own run's reads
-(`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:287`).
+retired, each with what its rows fed (`RETIRED_ROW_KINDS`,
+`shared/schemas/rowVersions.ts`): a `display` row is skipped on read, logged
+once, and its run still resumes; an `execution` row makes its run an earlier
+build's (`DatabaseRowEarlier`), failing only that run's reads
+(`controllers/session/rowCodec.ts`, `rowUpcasts`).
 
 Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
 older build's row would read wrong (`shared/schemas/rowVersions.ts:72-197`). A

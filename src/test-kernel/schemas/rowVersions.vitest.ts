@@ -155,7 +155,7 @@ describe('row versions', () => {
       'a deleted row kind moves to RETIRED_ROW_KINDS',
     ).toEqual([]);
     expect(
-      [...RETIRED_ROW_KINDS].filter((kind) => !kinds.includes(kind)),
+      [...RETIRED_ROW_KINDS.keys()].filter((kind) => !kinds.includes(kind)),
       'a retired row kind stays in config/storage/row-kinds-ever.json',
     ).toEqual([]);
   });

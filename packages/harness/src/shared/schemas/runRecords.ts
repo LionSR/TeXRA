@@ -38,27 +38,30 @@ export const recipeBlockOf = (
     ? config.script.block
     : null;
 
-/** Terminal errors keep the classified kind beside the provider detail. */
+/** Terminal errors keep the classified kind beside the provider detail,
+ *  and always say what went wrong (`message`). */
 const RunEndErrorSchema = Schema.Union([
-  RetryErrorInfoSchema.mapFields(
-    Struct.pick(['message', 'userRetryable', 'partialText']),
-  )
+  RetryErrorInfoSchema.mapFields(Struct.pick(['userRetryable', 'partialText']))
     .mapFields(Struct.map(Schema.optional))
     .mapFields(
       Struct.assign({
+        message: RetryErrorInfoSchema.fields.message,
         kind: Schema.Literals(['abort', 'disk-full', 'result-lost']),
       }),
     ),
 
-  RetryErrorInfoSchema.mapFields(Struct.map(Schema.optional)).mapFields(
-    Struct.assign({
-      kind: Schema.Literals([
-        'context-window',
-        'missing-api-key',
-        'unexpected',
-      ]),
-    }),
-  ),
+  RetryErrorInfoSchema.mapFields(Struct.omit(['message']))
+    .mapFields(Struct.map(Schema.optional))
+    .mapFields(
+      Struct.assign({
+        message: RetryErrorInfoSchema.fields.message,
+        kind: Schema.Literals([
+          'context-window',
+          'missing-api-key',
+          'unexpected',
+        ]),
+      }),
+    ),
 ]);
 
 /**
