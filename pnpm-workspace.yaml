@@ -55,9 +55,9 @@ catalog:
 # `catalog` versions above); raise both together.
 catalogs:
   peers:
-    '@effect/platform-node': '^4.1.0'
-    '@effect/sql-sqlite-node': '^4.1.0'
-    effect: '^4.1.0'
+    '@effect/platform-node': '^4.1.1'
+    '@effect/sql-sqlite-node': '^4.1.1'
+    effect: '^4.1.1'
 supportedArchitectures:
   os:
     - current
