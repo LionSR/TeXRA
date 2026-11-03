@@ -194,7 +194,9 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
     return outcome;
   };
   const model: Model = {
-    prepareTurn: () => Effect.succeed(PREPARED),
+    // The history it is asked for: the invoker checks the prepared turn
+    // against the run's rows, whatever the run opened with.
+    prepareTurn: ({ messages }) => Effect.succeed({ ...PREPARED, messages }),
     streamTurn: () =>
       Stream.unwrap(
         Effect.sync(() => {
@@ -309,12 +311,16 @@ interface InvokerKit {
 }
 
 /**
- * Open a run aggregate the way the tool-use loop does, and build the invoker
- * that writes to it.
+ * Open a run aggregate the way the tool-use loop does, with its `opening`
+ * messages, and build the invoker that writes to it over `binding`.
  */
 const openRun = Effect.fn('openRun')(function* (
   session: Context.Context<SessionServices>,
   model: Model,
+  opening: Parameters<typeof appendRow>[1] = [
+    { role: 'user', content: [{ kind: 'text', text: 'go' }] },
+  ],
+  binding: Partial<BoundModel> = {},
 ): Effect.fn.Return<
   InvokerKit,
   RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
@@ -326,9 +332,7 @@ const openRun = Effect.fn('openRun')(function* (
     activation: () => Effect.succeed([]),
   });
   yield* cell.append([
-    appendRow(runId, [
-      { role: 'user', content: [{ kind: 'text', text: 'go' }] },
-    ]),
+    appendRow(runId, opening),
     positionRow(runId, freshState(), 'turn.ready'),
   ]);
   // The retries the binding carries, read from the session as `bindModel`
@@ -338,7 +342,7 @@ const openRun = Effect.fn('openRun')(function* (
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);
   const bound = yield* SynchronizedRef.make(
-    boundModel(model, { automaticRetries }),
+    boundModel(model, { automaticRetries, ...binding }),
   );
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
@@ -575,6 +579,41 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ).toBe(RUN_PHASE.RUNNING);
             expect(stub.attempts()).toBe(1);
           }),
+      );
+
+      // Failure mode (#14259): media added since the last counted response
+      // estimated 0 tokens, so a PDF the window cannot hold was sent, and
+      // billed, for the provider to refuse.
+      it.effect('refuses, unsent, a PDF the context window cannot hold', () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession();
+          const stub = stubModel([{ ok: completedTurn('read') }]);
+          const pdf = Buffer.from('%PDF-1.7').toString('base64');
+
+          const kit = yield* openRun(
+            session,
+            stub.model,
+            [
+              {
+                role: 'user',
+                content: [
+                  { kind: 'text', text: 'Summarize this.' },
+                  {
+                    kind: 'document',
+                    mimeType: 'application/pdf',
+                    base64: pdf,
+                  },
+                ],
+              },
+            ],
+            { config: { ...MODEL_CONFIGS[GPT54], contextWindow: 1_000 } },
+          );
+          yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+          const outcome = yield* invokeOn(kit);
+
+          expect(outcome.kind).toBe('failed');
+          expect(stub.attempts()).toBe(0);
+        }),
       );
     });
     it.layer(caseHost(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue), {
