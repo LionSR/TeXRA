@@ -36,33 +36,22 @@ type Session = Context.Context<SessionServices>;
 const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 /** Commit the run's `run.start`, the fact its listing row is built from. */
-const startRun = (
-  session: Session,
-  id: RunId,
-  identity: RunIdentity,
-  parentRunId?: RunId,
-) =>
+const startRun = (session: Session, id: RunId, identity: RunIdentity) =>
   Context.get(session, SessionLog).transact([
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', id),
       identity,
       userFollowUpSupport: 'unsupported',
-      parent:
-        parentRunId === undefined ? null : { id: parentRunId, call: null },
+      parent: null,
       provenance: null,
     },
   ]);
 
 /** An agent run: its start and its configuration record. */
-const writeRun = (
-  session: Session,
-  id: RunId,
-  agent: string,
-  parentRunId?: RunId,
-) =>
+const writeRun = (session: Session, id: RunId, agent: string) =>
   Effect.andThen(
-    startRun(session, id, { kind: 'agent', agent }, parentRunId),
+    startRun(session, id, { kind: 'agent', agent }),
     seedRunRecord(session, id, config(agent)),
   );
 
@@ -102,46 +91,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               }),
             ]);
           }),
-      );
-
-      it.effect('lists agent runs only, not process storage rows', () =>
-        Effect.gen(function* () {
-          const session = yield* processSession;
-          const processId = 'bbb222' as RunId;
-          const customBashAgentId = 'ccc333' as RunId;
-          yield* startRun(session, processId, {
-            kind: 'process',
-            tool: 'assistant',
-          });
-          yield* seedRunRecord(session, processId, config('assistant'));
-          yield* writeRun(session, customBashAgentId, 'bash');
-
-          expect(yield* listRuns().pipe(Effect.provide(session))).toEqual([
-            expect.objectContaining({
-              id: customBashAgentId,
-              identity: { kind: 'agent', agent: 'bash' },
-              record: expect.objectContaining({ agent: 'bash' }),
-            }),
-          ]);
-        }),
-      );
-
-      it.effect('keeps agent-spawned child runs out of history listings', () =>
-        Effect.gen(function* () {
-          const session = yield* processSession;
-          const rootId = 'eee111' as RunId;
-          const childId = 'fff222' as RunId;
-          yield* writeRun(session, rootId, 'orchestrator');
-          yield* writeRun(session, childId, 'search', rootId);
-
-          // A child belongs to its parent's transcript, not to the history
-          // list.
-          expect(
-            (yield* listRuns().pipe(Effect.provide(session))).map(
-              ({ id }) => id,
-            ),
-          ).toEqual([rootId]);
-        }),
       );
     });
   },

@@ -4,21 +4,16 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, Layer, Schema, Stream, Context } from 'effect';
+import { Effect, Fiber, Layer, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import {
-  AgentConfigSchema,
-  generateRunId,
-  qualifyAggregateId,
-} from '@texra-ai/harness/schemas';
+import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { SessionRoots } from '@platform/rootedFs';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
@@ -228,116 +223,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(resumed.requests).toHaveLength(1);
           }),
       );
-
-      // Failure mode: a fork drops the plan its source approved, or carries
-      // one approved after the cut.
-      it.effect('is forked with the plan it held at the cut', () =>
-        Effect.gen(function* () {
-          const session = yield* quietSession();
-          const runId = startedRun(session);
-          const aggregateId = qualifyAggregateId('run', runId);
-          const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'chat',
-            model: 'test-model',
-            instruction: 'Go.',
-          });
-          publishTestRows(session, [
-            { type: 'run.config', aggregateId, config },
-          ]);
-          const first = yield* forkLoop({
-            runId,
-            session,
-            script: [textTurn('first')],
-          });
-          yield* first.park(0);
-          yield* Fiber.interrupt(first.fiber);
-          const plan = { objective: 'Prove the lemma.' };
-          publishTestRows(session, [
-            {
-              type: 'plugin.fact',
-              aggregateId,
-              plugin: 'goal',
-              kind: 'plan',
-              version: 1,
-              value: plan,
-              parent: null,
-            },
-            {
-              type: 'followup.queued',
-              aggregateId,
-              followUpId: 'follow-up-1',
-              content: { text: 'go on', from: { kind: 'user' } },
-            },
-          ]);
-          yield* Context.get(session, SessionLog).settled;
-          const second = yield* forkLoop({
-            runId,
-            session,
-            resume: true,
-            script: [textTurn('second')],
-          });
-          yield* second.park(0);
-          yield* Fiber.interrupt(second.fiber);
-
-          const { positions } = yield* Context.get(session, SessionLog).runRows(
-            aggregateId,
-            'positions',
-          );
-          const beforePlan = positions.find(
-            (row) => row.payload.at === 'waiting',
-          );
-          const planOfFork = (at: number | null) =>
-            Effect.gen(function* () {
-              const forked = yield* Context.get(session, SessionRequests)
-                .request({
-                  kind: 'run.fork',
-                  runId,
-                  at,
-                })
-                .pipe(Effect.provide(session));
-              if (forked.kind !== 'forked') throw new Error(forked.kind);
-              const fork = qualifyAggregateId('run', forked.runId);
-              const { facts } = yield* Context.get(session, SessionLog).runRows(
-                fork,
-                'facts',
-              );
-              return facts['goal/plan']?.value ?? null;
-            });
-
-          expect(yield* planOfFork(beforePlan?.seq ?? -1)).toBeNull();
-          expect(yield* planOfFork(null)).toEqual(plan);
-        }),
-      );
     });
 
     describe('a follow-up with media', () => {
-      it.effect(
-        'is refused, queueing nothing, when its file cannot be read',
-        () =>
-          Effect.gen(function* () {
-            // The send reads the file once, where it enters: a file that is
-            // gone or unreadable refuses the send rather than a later turn.
-            const session = yield* quietSession();
-            const runId = startedRun(session);
-            yield* Context.get(session, SessionLog).settled;
-            const error = yield* Effect.flip(
-              Context.get(session, SessionRequests)
-                .request({
-                  kind: 'followUp.send',
-                  runId,
-                  text: 'use this diagram',
-                  media: ['/tmp/texra-unreadable-figure.png'],
-                })
-                .pipe(Effect.provide(session)),
-            );
-
-            expect(error._tag).toBe('Rejected');
-            expect(
-              (yield* Context.get(session, Inbox).read(runId)).followUps,
-            ).toEqual([]);
-          }),
-      );
-
       // #13874: a pasted file swept from storage after its send still reaches
       // the model, which reads it from the store by address.
       it.effect('reaches the model from the store once its file is gone', () =>

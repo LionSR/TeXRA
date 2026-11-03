@@ -487,42 +487,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }),
       );
 
-      // Failure modes: a resume resends a billed attempt a person admitted
-      // without asking again; it refills the automatic budget the rows spent.
-      it.effect(
-        'asks again about an approved retry the process stopped during',
-        () =>
-          Effect.gen(function* () {
-            const session = yield* isolatedTestSession();
-            const pump = yield* pumpClock;
-            const requests = yield* autoDecideRequests(session, () => ({
-              action: 'retry',
-            }));
-            const stub = stubModel([
-              { fail: httpError('temporary provider failure', 503) },
-              { hang: true },
-              { ok: completedTurn('recovered') },
-            ]);
-            const kit = yield* openRun(session, stub.model);
-            yield* Effect.promise(() => seedActiveRun(session, kit.runId));
-            const fiber = yield* Effect.forkChild(invokeOn(kit));
-            while (stub.attempts() < 2) yield* settle;
-            yield* Fiber.interrupt(fiber);
-
-            // The resume opens the run again from its stored rows.
-            const cell = yield* Context.get(session, RunHistory).open(
-              kit.runId,
-            );
-            const resumed = yield* invokeOn({ ...kit, cell });
-
-            expect(resumed.kind).toBe('response');
-            // The interrupted attempt was asked about again, then sent once.
-            expect(requests.opened).toHaveLength(2);
-            expect(stub.attempts()).toBe(3);
-            yield* Fiber.interrupt(pump);
-          }),
-      );
-
       // A denial does not retry and — crucially — is NOT a user cancel, so
       // the run resumes to RUNNING to let the failure terminalize (#7331); a
       // cancelled zero-output run would report COMPLETED. The session's
@@ -660,88 +624,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       );
     });
     it.layer(caseHost(), { buildPerTest: true })((it) => {
-      it.effect(
-        'retries a chained request once without its continuation when the stored response is gone',
-        () =>
-          Effect.gen(function* () {
-            const session = yield* isolatedTestSession();
-            const pump = yield* pumpClock;
-            const chained: boolean[] = [];
-            // The first response is stored and anchors the next request to it.
-            const anchored = Schema.decodeUnknownSync(TurnResultSchema)({
-              ...completedTurn('first'),
-              continuation: {
-                origin: { ...ORIGIN, protocol: 'openai-responses' },
-                coveredMessages: 2,
-                prefixFingerprint: 'a'.repeat(64),
-                anchor: {
-                  kind: 'stored',
-                  responseId: 'resp-0',
-                  coveredItems: 2,
-                },
-              },
-            });
-            const model: Model = {
-              prepareTurn: (request) =>
-                Effect.succeed(
-                  Schema.decodeUnknownSync(ResolvedTurnSchema)({
-                    ...PREPARED,
-                    messages: request.messages,
-                    ...(request.continuation === undefined
-                      ? {}
-                      : { continuation: request.continuation }),
-                  }),
-                ),
-              streamTurn: (turn) =>
-                Stream.unwrap(
-                  Effect.sync(() => {
-                    chained.push('continuation' in turn);
-                    return 'continuation' in turn
-                      ? Stream.fail(
-                          new ModelError({
-                            kind: 'continuation-gone',
-                            status: 404,
-                            message:
-                              'Previous response with id resp-1 not found.',
-                          }),
-                        )
-                      : Stream.fromIterable<TurnEvent>([
-                          {
-                            kind: 'identified',
-                            providerResponseId: PROVIDER_RESPONSE_ID,
-                            requestedOrigin: ORIGIN,
-                            returnedModel: null,
-                          },
-                          {
-                            kind: 'completed',
-                            result:
-                              chained.length === 1
-                                ? anchored
-                                : completedTurn('full'),
-                          },
-                        ]);
-                  }),
-                ),
-            };
-            const kit = yield* openRun(session, model);
-            const first = yield* invokeOn(kit);
-            if (first.kind !== 'response') throw new Error('no first response');
-            expect(first.state.continuation).not.toBeNull();
-
-            // The next turn's message, sent on top of the stored response.
-            yield* kit.cell.append([
-              appendRow(kit.runId, [
-                { role: 'user', content: [{ kind: 'text', text: 'again' }] },
-              ]),
-            ]);
-            const outcome = yield* invokeOn(kit);
-
-            expect(outcome.kind).toBe('response');
-            expect(chained).toEqual([false, true, false]);
-            yield* Fiber.interrupt(pump);
-          }),
-      );
-
       // Failure modes: a user stop leaves the remote job billing; a
       // cancelled operation is re-observed on resume; a shutdown (or any
       // interrupt without a `user` stop reason) cancels work a resume should

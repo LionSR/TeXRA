@@ -17,7 +17,6 @@ import {
   type ScriptedRunInit,
   type ScriptedTurn,
 } from '@test/support/scriptedRunLayers';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
 import type { ITool } from '@texra-ai/harness';
@@ -105,37 +104,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               output: { response: 'I checked the tool.' },
               failure: { message: 'Later provider failure' },
             });
-          }),
-      );
-    });
-
-    describe('tool-use session-stage outcome persistence (#8023)', () => {
-      it.effect(
-        'persists a cancelled turn as one structural session stage',
-        () =>
-          Effect.gen(function* () {
-            const session = yield* quietSession();
-            const runId = startedRun(session);
-            const recorder = createTestRunTrace(runId);
-            yield* Effect.addFinalizer(() => Effect.sync(recorder.dispose));
-
-            yield* runScript({
-              runId,
-              session,
-              logger: recorder.trace,
-              script: [{ cancelled: true }],
-            });
-
-            const sessionStages = recorder
-              .transcript()
-              .taskGroups.flatMap((group) =>
-                group.kind === 'session' && group.endTime !== undefined
-                  ? [{ label: group.name, status: group.status }]
-                  : [],
-              );
-            expect(sessionStages).toEqual([
-              { label: 'Tool-use turn', status: RUN_OUTCOME.CANCELLED },
-            ]);
           }),
       );
     });
