@@ -18,7 +18,8 @@ import type { RunState } from '@shared/session/runState';
  *   megapixels down, so one costs at most about 1,600.
  * - document: a PDF is sent as an image of each page plus the page's text,
  *   1,500 to 3,000 tokens a page on Anthropic. With no page count it counts
- *   as one page, so a long PDF counts for far less than it costs.
+ *   as one page, so a long PDF counts for far less than it costs. A PDF sent
+ *   as page images instead counts per page, as images.
  * - audio and video: they cost more the longer they run (Gemini counts 32
  *   tokens a second of audio). With no length, they count as one image.
  * A provider's count holds the media its request carried: while there is

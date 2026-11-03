@@ -1947,10 +1947,9 @@ view` on a sub-agent the parent waited for shows its report instead of
   definitions) never reached the compaction trigger; the trigger, the context
   gauge and the output-length limit now all read the last response's reported
   input plus output tokens and add an estimate for what was added since. The
-  gauge therefore counts the model's reply too. Images, PDFs and audio
-  attached since the model's last reply count toward compaction and the
-  output-length limit, about 1,600 tokens each (a PDF as one page), where
-  they counted as nothing.
+  gauge therefore counts the model's reply too. An estimate for images, PDFs
+  and audio attached since the model's last reply now counts toward
+  compaction and the output-length limit, where they counted as nothing.
 
 - **Long histories stay usable.** With a few thousand runs in a workspace,
   starting a session no longer stalls for minutes, and an agent's history
