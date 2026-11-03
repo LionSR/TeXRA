@@ -20,7 +20,8 @@
  *      MCP servers'), which the plugin's enablement offers every top-level
  *      tool-use run but a plugin agent that names its tools. The script-only
  *      functions (`scriptGlobal.withScript`, `self()`) come with the script
- *      tool (the one that has `describe`).
+ *      tool (the one that has `describe`), recorded as offered and never
+ *      sent: the script's declarations describe them.
  *   3. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
@@ -314,7 +315,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         shown: toolDigests({ definition }).shown,
         plugin: entry.plugin,
         revision: entry.revision,
-        sent: !scriptAlone || isScript(name),
+        // A script's own function (`self`) is reached from a script alone.
+        sent: !scriptOnly(name) && (!scriptAlone || isScript(name)),
       });
     }
   }

@@ -145,6 +145,10 @@ const program = Effect.gen(function* () {
   const fromFile = shape(requests[1]);
   if (config?.agent !== PERSONA.name || fromFile !== shape(requests[0]))
     throw new Error(`file persona differs from inline: ${fromFile}`);
+  // `self` comes with the script tool, but only a script calls it: the
+  // model is sent the script's declaration of it, never a tool of its own.
+  if (fromFile.includes('"self"'))
+    throw new Error(`the model was sent self as a tool: ${fromFile}`);
   console.log(`[07] agent file ${config.agent} = inline persona`);
 
   // 2-4. What the script returned, read back from the stored conversation.
