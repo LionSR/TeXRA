@@ -191,6 +191,8 @@ function goldenTurn(
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
     // The goal's round (`self()`): a command its grant approves, a verdict.
+    // Its first call is held, so the chat that started the goal finishes
+    // its turn before the round goes on.
     const round = turn.tools.some(({ name }) => name === 'submit_output');
     const step = round
       ? [
@@ -198,8 +200,10 @@ function goldenTurn(
           call('submit_output', { status: 'done', report: ANSWERED }),
         ]
       : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
-    if (round || results.length === 0)
-      return Effect.succeed(step.slice(results.length, results.length + 1));
+    const next = step.slice(results.length, results.length + 1);
+    if (round && results.length === 0)
+      return gate('golden-round.release').pipe(Effect.as(next));
+    if (round || results.length === 0) return Effect.succeed(next);
     if (said.includes('After the model switch.'))
       return Effect.succeed(text('Answered after the model switch.'));
     return Effect.succeed(
