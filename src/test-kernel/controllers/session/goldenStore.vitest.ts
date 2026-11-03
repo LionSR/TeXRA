@@ -11,10 +11,10 @@
  * whole history; a store a newer build wrote that opens, or is rewritten;
  * a stored protocol unavailable for execution being treated as damaged history,
  * or a malformed protocol being accepted; a resume of a run holding an
- * earlier build's row or a response on an unavailable protocol that fails
- * untyped, sends the model a request, or adds a row; and the durable
- * harness's row
- * shapes read back other than written: a fork
+ * earlier build's row, or a response on an unavailable protocol or on one
+ * its binding no longer speaks, that fails untyped, sends the model a
+ * request, or adds a row; and the durable harness's row shapes read back
+ * other than written: a fork
  * whose `run.start` does not name its source, a fork's seed
  * `context.edit` missing, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
@@ -865,6 +865,13 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
             'a response on an unavailable protocol',
             `UPDATE event SET data = json_set(data,
                '$.payload.turn.requestedOrigin.protocol', 'unavailable-protocol')
+             WHERE "commit" = ${RESPONSE}`,
+            { kind: 'unusableCheckpoint' },
+          ],
+          [
+            'a response on a protocol its binding no longer speaks',
+            `UPDATE event SET data = json_set(data,
+               '$.payload.turn.requestedOrigin.protocol', 'anthropic-messages')
              WHERE "commit" = ${RESPONSE}`,
             { kind: 'unusableCheckpoint' },
           ],

@@ -1543,6 +1543,9 @@ Which arms are reachable, and from where:
   `load`, and from `RunCell.append` before it publishes: a batch is applied
   first and refused with nothing committed, because a published row the
   row handlers reject is a run no later `load` can read.
+- `foreign-protocol`: from a resume's activation, before its rows: a turn
+  the history replays was recorded on another protocol than the run's
+  binding speaks now, so no request could replay it.
 A violated `RunCell.append` precondition is a caller defect
 (`Effect.die`), not an arm: the loop must not handle it.
 
@@ -1555,6 +1558,7 @@ class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
       'unsafe-endpoint',
       'unprepared-history',
       'inconsistent',
+      'foreign-protocol',
     ]),
     runId: RunIdSchema,
     detail: Schema.String,
