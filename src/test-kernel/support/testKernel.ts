@@ -180,6 +180,8 @@ const composedProcess = (
         toolAvailability: unprobedToolAvailability,
         // The process reports no usage; the telemetry suite starts its own.
         usageLog: UsageLog.disabled,
+        // As every TeXRA host does.
+        labelRuns: true,
         // The suite's captured entries are the assertion surface: emit every
         // level the programs run and let each test filter what it reads.
         minimumLogLevel: 'Trace',

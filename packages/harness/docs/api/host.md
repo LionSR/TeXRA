@@ -1737,6 +1737,10 @@ interface ProcessLayerOptions extends Omit<
   /** Seed the first-install tool switches (opt-in plugins off) unless the
    *  user's list exists; `false` for a store that refuses every write. */
   readonly seedToolSwitches?: boolean;
+  /** Label each root run with a short title from the helper model (its
+   *  `run.description`), for an app that shows one: an extra model request
+   *  per root run, outside the run's usage. Absent, no run is labelled. */
+  readonly labelRuns?: boolean;
 }
 ```
 

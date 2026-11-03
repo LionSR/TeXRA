@@ -1381,6 +1381,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **No model request runs only to title a subagent, and the SDK sends none
+  you did not ask for.** A subagent or a script's `self()` round keeps its
+  agent name instead of a generated title, so a loop of rounds no longer
+  doubles its requests. SDK: a session titles its runs only when the
+  composition asks (`processLayer({ labelRuns: true })`, as every TeXRA app
+  does); `Sessions.layer` titles none, so an embedder's runs make only the
+  requests their agents do.
 - **A DeepSeek account out of credit reads as out of credit.** A request
   DeepSeek refuses for an empty balance (HTTP 402, "Insufficient Balance")
   is now reported as the account running out of credit, with the same
