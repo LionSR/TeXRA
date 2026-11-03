@@ -83,8 +83,7 @@
  * temporary paths, the process identities, the clock, the random ids, and
  * the date and platform in a system prompt. A content address over a
  * normalized value is recomputed, so every digest still names its value.
- * Two generations of one tree give the same file on any macOS or Linux
- * machine.
+ * Two generations on one tree give the same file.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -693,12 +692,12 @@ async function generate(root) {
     tty,
   );
   writeFileSync(path.join(root, 'plan.release'), '');
-  await until('the chat waiting on its goal', () => waitingTurn() === 1, tty);
+  let turn = await waitingAfter('the chat waiting on its goal', 0);
   writeFileSync(path.join(root, 'golden-round.release'), '');
   // The goal's result, delivered once its round has verified it, opens the
   // chat's turn that reports it.
   await shows("the goal's result", 'Golden chat goal complete.');
-  let turn = await waitingAfter('the chat waiting on the goal result', 1);
+  turn = await waitingAfter('the chat waiting on the goal result', turn);
   await send('/model google/gemini-3.8-flash@medium');
   await shows(
     'the model switch notice',
