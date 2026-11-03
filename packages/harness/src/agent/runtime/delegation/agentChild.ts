@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 
 // Third-party imports
-import { Effect, FileSystem, Stream } from 'effect';
+import { Context, type Deferred, Effect, FileSystem, Stream } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
@@ -47,6 +47,10 @@ import { resumeSubagentInBand } from './inBandSubagentRun';
 /** Most children one script may launch, by `agent()` and `self()` together. */
 const AGENT_CALL_LIMIT = 1000;
 
+/** The key of the children a script has launched (`ScriptScope.shared`). */
+const AgentLaunches =
+  Context.Service<Deferred.Deferred<{ count: number }>>('agent:launches');
+
 /**
  * Counts the child `script` is about to launch, or returns the error result
  * once it has launched `AGENT_CALL_LIMIT`. Called just before a launch: a
@@ -59,7 +63,7 @@ export const countLaunch = (
 ): Effect.Effect<ToolResult | null> =>
   Effect.map(
     script.shared(
-      'agent:launches',
+      AgentLaunches,
       Effect.sync(() => ({ count: 0 })),
     ),
     (launches) => {
@@ -272,6 +276,11 @@ const spentBy = (call: RunToolCall) =>
     (view) => treeCostOf(view, call.run.runId),
   );
 
+/** The key of the reuse keys a script's calls claimed, each with the call
+ *  that claimed it (`ScriptScope.shared`). */
+const AgentKeys =
+  Context.Service<Deferred.Deferred<Map<string, string>>>('agent:keys');
+
 /**
  * A completed call in the reuse scope whose key is `key`, or a rejection when
  * one of this same script holds it: two calls of one script that would
@@ -284,7 +293,7 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   key: string,
 ) {
   const siblings = yield* script.shared(
-    'agent:keys',
+    AgentKeys,
     Effect.sync(() => new Map<string, string>()),
   );
   const { callId } = call;
