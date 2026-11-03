@@ -7,7 +7,7 @@ import { classMap } from 'lit/directives/class-map.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
-import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
@@ -26,6 +26,7 @@ import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -138,15 +139,11 @@ export class FileSelectGroup extends LitElement {
    * (preventDefault), patch the launcher field the item names, and react to
    * the auto-toggle wa-dropdown applies before this fires.
    */
-  private handleMenuSelect = (
-    event: CustomEvent<{ item: HTMLElement }>,
-  ): void => {
+  private handleMenuSelect = (event: WaSelectEvent): void => {
     event.preventDefault();
-    const item = event.detail?.item as
-      (HTMLElement & { value?: string; checked?: boolean }) | undefined;
-    const id = item?.value;
-    if (!id) return;
-    this.patchLaunch({ [id]: Boolean(item.checked) });
+    const { item } = event.detail;
+    if (!(item instanceof WaDropdownItem) || !item.value) return;
+    this.patchLaunch({ [item.value]: item.checked });
   };
 
   /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */

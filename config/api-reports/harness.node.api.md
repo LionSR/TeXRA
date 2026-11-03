@@ -7,7 +7,7 @@ Exports: 52
 - `absentReason` — `const absentReason: (error: unknown) => boolean`
 - `canonicalizeWorkspacePath` — `function canonicalizeWorkspacePath: (workspacePath: string) => string`
 - `CommandDirs` — `const CommandDirs: Reference<() => readonly string[]>`
-- `ConfigStore` — `interface ConfigStore { get<T>(key: string): T | undefined; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
+- `ConfigStore` — `interface ConfigStore { get(key: string): unknown; set(key: string, value: unknown): Effect.Effect<void, Error>; }`
 - `createNodeWorkspaceRoots` — `function createNodeWorkspaceRoots: (init: NodeWorkspaceRootsInit) => WorkspaceRoots`
 - `effectDiagnosticsLayer` — `const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>`
 - `entryChannel` — `function entryChannel: (entry: { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }) => string | undefined`
@@ -26,7 +26,7 @@ Exports: 52
 - `INPUT_HISTORY_LIMIT` — `const INPUT_HISTORY_LIMIT: 1000`
 - `JsonConfigProvider` — `class JsonConfigProvider { constructor: new ({ workspace, global, local, catalog, }: JsonConfigProviderOptions) => JsonConfigProvider; static: ; instance: catalog: SettingsCatalog; get: <T>(key: string) => T; inspect: <T = unknown>(key: string) => Partial<Record<"globalValue" | "workspaceValue", T>>; update: <T>(key: string, value: T, target?: ConfigTarget) => Effect<void, ConfigWriteFailed, never> }`
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
-- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, follow: boolean) => JsonStore; static: open: (filePath: string, options?: JsonStoreOptions | undefined) => Effect<JsonStore, SyntaxError, FileSystem | Path>; instance: filePath: string; get: <T>(key: string) => T | undefined; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
+- `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, follow: boolean) => JsonStore; static: open: (filePath: string, options?: JsonStoreOptions | undefined) => Effect<JsonStore, Error, FileSystem | Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
 - `JsonStoreOptions` — `interface JsonStoreOptions { onUnreadable?: (error: Error) => void; follow?: boolean; }`
 - `LOG_CHANNEL` — `const LOG_CHANNEL: "channel"`
 - `LogEntry` — `type LogEntry = ReturnType<typeof Logger.formatStructured.log>; ≡ { readonly annotations: Record<string, unknown>; readonly cause: string | undefined; readonly fiberId: string; readonly level: string; readonly message: unknown; readonly spans: Record<string, number>; readonly timestamp: string; }`

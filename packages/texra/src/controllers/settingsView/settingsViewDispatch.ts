@@ -26,11 +26,10 @@ export function settingsViewProgram<R>(
         new UnsupportedCommandError(message.command, handler.unsupported),
       );
     }
-    // The discriminant selects exactly this handler's member of the union.
-    return (
-      handler as (
-        message: SettingsViewInboundMessage,
-      ) => ReturnType<Exclude<typeof handler, { unsupported: string }>>
-    )(message);
+    // cast: the discriminant selects exactly this handler's member of the union.
+    const run = handler as (
+      message: SettingsViewInboundMessage,
+    ) => ReturnType<Exclude<typeof handler, { unsupported: string }>>;
+    return run(message);
   });
 }

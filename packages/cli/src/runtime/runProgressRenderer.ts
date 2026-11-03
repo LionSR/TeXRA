@@ -274,7 +274,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         nameOnlySubagents,
         elapsed,
       );
-      parts.push(formatActiveChildren(children, descriptionColumns)!);
+      parts.push(
+        formatActiveChildren(children, descriptionColumns) ?? nameOnlySubagents,
+      );
     }
     const toolCallCount = finishedToolCalls(root);
     if (toolCallCount && !nameOnlySubagents) {

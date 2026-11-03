@@ -241,15 +241,15 @@ export class RunTab extends LitElement {
                   .value=${runTitle}
                   @keydown=${(event: KeyboardEvent) => {
                     event.stopPropagation();
-                    if (event.key === 'Enter')
-                      this.finishRename(event.target as HTMLInputElement, true);
-                    if (event.key === 'Escape')
-                      this.finishRename(
-                        event.target as HTMLInputElement,
-                        false,
-                      );
+                    const input = event.target;
+                    if (!(input instanceof HTMLInputElement)) return;
+                    if (event.key === 'Enter') this.finishRename(input, true);
+                    if (event.key === 'Escape') this.finishRename(input, false);
                   }}
-                  @blur=${(event: FocusEvent) => this.finishRename(event.target as HTMLInputElement, true)}
+                  @blur=${(event: FocusEvent) => {
+                    if (event.target instanceof HTMLInputElement)
+                      this.finishRename(event.target, true);
+                  }}
                 />`
               : nothing
           }

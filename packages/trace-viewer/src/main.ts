@@ -13,9 +13,8 @@ import './traceHostBridge';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
-import '@ui/progress/ProgressApp';
 import { mountProgressWebview } from '@ui/progress/progressWebview';
-import type { ProgressApp } from '@ui/progress/ProgressApp';
+import { ProgressApp } from '@ui/progress/ProgressApp';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 
 import { setTraceCut, trace } from './traceHostBridge';
@@ -86,14 +85,17 @@ function installScrubber(loaded: TraceDocument, remount: () => void): void {
   scrubber.hidden = false;
 }
 
-const app = document.querySelector<ProgressApp>('progress-app');
-if (!app) throw new Error('The trace viewer HTML carries no <progress-app>');
+const app = document.querySelector('progress-app');
+if (!(app instanceof ProgressApp))
+  throw new Error('The trace viewer HTML carries no <progress-app>');
 let mounted = { app, unmount: mountProgressWebview(app) };
 
 /** Replace the shell with a fresh one: a new graph, generation, and session view. */
 function remount(): void {
   mounted.unmount();
-  const fresh = mounted.app.cloneNode(false) as ProgressApp;
+  const fresh = mounted.app.cloneNode(false);
+  if (!(fresh instanceof ProgressApp))
+    throw new Error('A cloned <progress-app> is a ProgressApp');
   mounted.app.replaceWith(fresh);
   mounted = { app: fresh, unmount: mountProgressWebview(fresh) };
 }

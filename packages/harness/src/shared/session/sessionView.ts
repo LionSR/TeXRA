@@ -439,7 +439,7 @@ export function descendantRuns(
   const pending = [rootRunId];
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {
-    const id = pending[cursor]!;
+    const id = pending[cursor];
     const run = view.runs.get(id);
     if (!run || seen.has(id)) continue;
     seen.add(id);

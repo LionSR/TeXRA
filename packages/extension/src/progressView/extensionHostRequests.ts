@@ -337,7 +337,10 @@ export const createExtensionHostRequests = Effect.fn(
             ));
           if (sourceExists) {
             yield* snapshot.refreshFiles;
-            return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
+            return {
+              kind: 'files',
+              paths: [parsed.sourcePath],
+            } satisfies HostOutcome;
           }
           yield* Effect.forkDetach(
             announce(
@@ -350,7 +353,10 @@ export const createExtensionHostRequests = Effect.fn(
           );
         }
       }
-      return { kind: 'files', paths: [currentOpenFile] } as HostOutcome;
+      return {
+        kind: 'files',
+        paths: [currentOpenFile],
+      } satisfies HostOutcome;
     });
   }
 

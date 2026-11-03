@@ -80,9 +80,7 @@ export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
 /** The fixed vocabulary as a runtime list; its reader builds a map from it,
  *  so its order is irrelevant. */
-const TEMPLATE_INPUT_TOKENS = Object.keys(
-  TemplateInputsSchema.fields,
-) as (keyof TemplateInputs)[];
+const TEMPLATE_INPUT_TOKENS = Object.keys(TemplateInputsSchema.fields);
 
 /**
  * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.

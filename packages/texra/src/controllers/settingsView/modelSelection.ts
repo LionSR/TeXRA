@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, Predicate, Result } from 'effect';
 
 // Local imports
 import {
@@ -73,8 +73,8 @@ export function setReasoningLevel(
   // `reasoningEffortOverrides`.
   return globalState
     .modify(GlobalStateKey.REASONING_LEVELS, (stored) => {
-      const overrides = {
-        ...(stored as Record<string, string> | undefined),
+      const overrides: Record<string, unknown> = {
+        ...(Predicate.isObject(stored) && stored),
       };
       if (input.level == null) {
         delete overrides[input.modelName];

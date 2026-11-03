@@ -61,6 +61,7 @@ export function settingEnumChoices<T extends string = string>(
   const values = settingEnumOptions(entry);
   if (!values) return undefined;
   return values.map((value, index) => ({
+    // cast: `T` is the caller's name for this entry's literal union, read here off its AST.
     value: value as T,
     label: entry.enumLabels?.[index] ?? value,
     ...(entry.enumDescriptions?.[index] && {

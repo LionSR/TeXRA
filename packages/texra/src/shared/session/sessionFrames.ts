@@ -205,6 +205,14 @@ interface FrameRead {
   readonly queue: Queue.Queue<EventsFrame, Cause.Done>;
 }
 
+/** What a feed holds between frames: the inputs not yet published, and
+ *  whether the replay has completed with its debug flag known. */
+interface FrameInputs {
+  debug?: boolean;
+  pending: SessionViewInput[];
+  complete: boolean;
+}
+
 export class SessionFrames extends Context.Service<
   SessionFrames,
   {
@@ -233,12 +241,11 @@ export class SessionFrames extends Context.Service<
             Effect.map(SubscriptionRef.get(current), ({ queue }) =>
               Stream.fromQueue(queue).pipe(
                 Stream.mapAccum(
-                  (): {
-                    debug?: boolean;
-                    pending: SessionViewInput[];
-                    complete: boolean;
-                  } => ({ pending: [], complete: false }),
-                  (state, frame) => {
+                  (): FrameInputs => ({ pending: [], complete: false }),
+                  (
+                    state,
+                    frame,
+                  ): readonly [FrameInputs, readonly SessionViewInput[][]] => {
                     if (!state.complete && frame.debug !== null)
                       state.debug = frame.debug;
                     state.pending.push(...frame.events, ...frame.chunks);
@@ -259,7 +266,7 @@ export class SessionFrames extends Context.Service<
                     }
                     if (!state.complete) {
                       if (!frame.replayComplete || state.debug === undefined)
-                        return [state, []] as const;
+                        return [state, []];
                       const reset = state.debug !== previousDebug;
                       const prefix: SessionViewInput[] = [
                         { _tag: 'debug', enabled: state.debug },
@@ -272,19 +279,12 @@ export class SessionFrames extends Context.Service<
                         },
                       ];
                       return [
-                        {
-                          ...state,
-                          pending: [] as SessionViewInput[],
-                          complete: true,
-                        },
+                        { ...state, pending: [], complete: true },
                         [[...prefix, ...state.pending]],
-                      ] as const;
+                      ];
                     }
-                    if (frame.existence === null) return [state, []] as const;
-                    return [
-                      { ...state, pending: [] as SessionViewInput[] },
-                      [state.pending],
-                    ] as const;
+                    if (frame.existence === null) return [state, []];
+                    return [{ ...state, pending: [] }, [state.pending]];
                   },
                 ),
               ),

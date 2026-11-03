@@ -995,11 +995,13 @@ function applyEvent(
   const known = u.view.runs.get(runId);
   // Only `run.start` creates a run, once. A fact for a run without one
   // changes nothing and leaves no entry (its publisher logs it).
-  if (!known && event.type !== 'run.start') return false;
+  let before: RunView;
+  if (known) before = known;
+  else if (event.type === 'run.start') before = createRun(u, event, runId);
+  else return false;
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return removeRun(u, runId);
   const created = !known;
-  const before = known ?? createRun(u, event as RunStartEvent, runId);
 
   // The rows the run loop's state is also built from are applied once, in
   // `runRows.ts`; every other row is the view's own.
@@ -1034,7 +1036,9 @@ function applyEvent(
     relink(u, next, created ? null : before.parentId);
     if (!created) walkUp(u, before.parentId);
   }
-  next = u.view.runs.get(next.id)!;
+  const linked = u.view.runs.get(next.id);
+  if (!linked) throw new Error(`Run ${next.id} left the view while relinking`);
+  next = linked;
   const statusMoved = own.status !== before.status;
   const aggregated = statusMoved
     ? withAggregates(u, withTranscriptFacts(u, next))

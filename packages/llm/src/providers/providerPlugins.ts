@@ -163,6 +163,15 @@ export type ApiKeyProviderId = Extract<
   { readonly apiKey: true }
 >['id'];
 
+/**
+ * Provider IDs where users can configure direct API keys — the single source
+ * for direct key-provider enumeration, derived from the plugin manifest.
+ * Order = display order in the settings key rows.
+ */
+export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
+  MANIFEST.flatMap((plugin) => ('apiKey' in plugin ? [plugin.id] : [])),
+);
+
 /** Providers with an HTTP endpoint of their own, which a host may override. */
 export type EndpointProviderId = Extract<
   (typeof MANIFEST)[number],

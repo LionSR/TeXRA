@@ -163,8 +163,9 @@ export function openaiResponsesModel(
         const iterator = yield* Effect.acquireRelease(
           Effect.sync(() => source[Symbol.asyncIterator]()),
           (iterator, exit) => {
-            const close = iterator.return
-              ? Effect.promise(() => iterator.return!())
+            const returnIterator = iterator.return?.bind(iterator);
+            const close = returnIterator
+              ? Effect.promise(() => returnIterator())
               : Effect.void;
             const abort = Effect.sync(() => source.controller.abort());
             // After the single read no next() is pending, so an accepted

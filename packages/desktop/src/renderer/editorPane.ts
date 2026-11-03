@@ -224,9 +224,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
    * unopenable from the tree.
    */
   function handleTreeClick(event: MouseEvent): void {
-    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      'wa-tree-item',
-    );
+    if (!(event.target instanceof Element)) return;
+    const row = event.target.closest<HTMLElement>('wa-tree-item');
     if (row?.hasAttribute('selected')) requestOpenFromRow(row);
   }
 

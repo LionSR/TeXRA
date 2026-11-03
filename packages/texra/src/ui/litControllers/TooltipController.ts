@@ -112,12 +112,12 @@ function handleOver(e: Event): void {
   showTimer.schedule();
 }
 
-function handleOut(e: Event): void {
+function handleOut(e: MouseEvent): void {
   if (!currentTarget) return;
 
   // Check if mouse moved to a child of the current target (still inside)
-  const related = (e as MouseEvent).relatedTarget as Node | null;
-  if (related && currentTarget.contains(related)) return;
+  const related = e.relatedTarget;
+  if (related instanceof Node && currentTarget.contains(related)) return;
 
   hide();
 }

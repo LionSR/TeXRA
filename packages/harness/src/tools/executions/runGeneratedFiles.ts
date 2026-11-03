@@ -88,14 +88,14 @@ function walkRunStorage(
       // The run directory itself has no rest to keep: its failure propagates
       // rather than reading as "no generated files".
       Effect.catch((error) => {
-        if (absentReason(error)) return Effect.succeed([] as string[]);
+        if (absentReason(error)) return Effect.succeed<string[]>([]);
         if (relativePath === '') return Effect.fail(error);
         return Effect.logWarning(
           `Unreadable run directory '${fullPath}'; listing it as empty`,
         ).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
-          Effect.as([] as string[]),
+          Effect.as<string[]>([]),
         );
       }),
     );

@@ -6,7 +6,7 @@ import { Schema, Struct } from 'effect';
  * `usageProvider` in the llm catalog is passed where this type is expected,
  * so a plan it lacks does not compile.
  */
-export const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
+const SUBSCRIPTION_USAGE_PROVIDERS = Object.freeze([
   'kimiCode',
   'glmCodingPlan',
 ] as const);

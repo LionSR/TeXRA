@@ -10,6 +10,8 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerEndpointKey } from '@texra-ai/harness/schemas';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
@@ -35,8 +37,6 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import './SubscriptionUsageRow';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('provider-key-list')
 export class ProviderKeyList extends LitElement {
@@ -126,7 +126,8 @@ export class ProviderKeyList extends LitElement {
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
-                const value = (e.target as WaInput).value?.trim() ?? '';
+                if (!(e.target instanceof WaInput)) return;
+                const value = e.target.value?.trim() ?? '';
                 const key = providerEndpointKey(entry.provider);
                 if (key) postStateSetting(key, value);
               }}
@@ -155,15 +156,16 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderProviderSetting(setting: ProviderSetting): TemplateResult {
+    const { warningUrl } = setting;
     const warningLink =
-      setting.warningUrl && setting.warningUrlLabel
+      warningUrl && setting.warningUrlLabel
         ? html` <wa-button
             class="provider-setting-link btn-ghost is-link"
             appearance="plain"
             size="s"
             @click=${() =>
               postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
-                url: setting.warningUrl!,
+                url: warningUrl,
               })}
           >
             ${setting.warningUrlLabel}
@@ -180,8 +182,10 @@ export class ProviderKeyList extends LitElement {
       <div class="provider-setting provider-setting--block">
         <wa-switch
           ?checked=${setting.value}
-          @change=${(e: Event) =>
-            postStateSetting(setting.key, (e.target as WaSwitch).checked)}
+          @change=${(e: Event) => {
+            if (e.target instanceof WaSwitch)
+              postStateSetting(setting.key, e.target.checked);
+          }}
         >
           ${setting.label}
         </wa-switch>

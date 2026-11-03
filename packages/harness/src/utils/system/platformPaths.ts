@@ -134,14 +134,12 @@ export function withExtendedPath<T extends NodeJS.ProcessEnv>(
   // meant; it is written under the first spelling, which is the platform's.
   const keys = Object.keys(env).filter((name) => name.toLowerCase() === 'path');
   const key = keys[0] ?? 'PATH';
-  const extended: Record<string, string | undefined> = {
+  const extended = {
     ...env,
     [key]: extendEnvPath(env[keys.at(-1) ?? key], appDirs),
   };
   for (const shadowed of keys.slice(1)) delete extended[shadowed];
-  // The computed key defeats inference; every other entry is carried through
-  // unchanged and the one written is a string, so the shape is T's.
-  return extended as T;
+  return extended;
 }
 
 /** `env` on the PATH extended with the app's {@link CommandDirs}. */
