@@ -1107,6 +1107,26 @@ same contract instead of re-declaring it per module.
 const JsonValueSchema: Codec<Json, Json, never, never>
 ```
 
+## LaunchNotice
+
+A refused launch's notice ({@link LaunchNoticeSchema}).
+
+```ts
+type LaunchNotice = typeof LaunchNoticeSchema.Type;
+```
+
+## LaunchNoticeSchema
+
+The notice a refused launch carries for its caller to show
+(`AgentError.notice`), as the presentation event and payload a host's
+`emit` takes: the instruction for a model the build does not recognize,
+or the agent the launch named that the catalog does not hold. The launch
+shows nothing itself; the caller shows this where it shows the failure.
+
+```ts
+const LaunchNoticeSchema: Union<readonly [Struct<{ readonly event: Literal<"requestShowInstruction">; readonly payload: Struct<{ readonly key: String; readonly message: String; readonly showSuppress: optional<Boolean>; }>; }>, Struct<{ readonly event: Literal<"agentNotFound">; readonly payload: Struct<{ readonly agentName: String; }>; }>]>
+```
+
 ## LineCountSchema
 
 Nonnegative line-count schema shared by tool results, approvals, and output

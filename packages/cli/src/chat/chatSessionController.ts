@@ -21,7 +21,7 @@ import {
 } from '@texra-ai/harness';
 import {
   describeFollowUpFailure,
-  hasErrorPresentationClaimed,
+  launchNoticeOf,
   presentFollowUpResult,
   type PerKeyLane,
   type ProcessRuntime,
@@ -398,23 +398,24 @@ export function createChatSessionController(
     runtime.runFork(request({ kind: 'run.stop', runId, reason }));
   };
 
-  // Shared tail of the run/resume failure recovery: surface the error to
-  // the local transcript unless the run was stopped intentionally, and set
-  // the exit code accordingly. A run whose claim the slot no longer holds
-  // (a fork or a new task replaced it) says nothing to the chat.
+  // Shared tail of the run/resume failure recovery: surface the error
+  // unless the run was stopped intentionally, and set the exit code
+  // accordingly. A run whose claim the slot no longer holds (a fork or a
+  // new task replaced it) says nothing to the chat.
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     if (session.stopRequested) {
       session.runExitCode = CliExitCode.Success;
       return;
     }
-    // A launch failure already rendered through a targeted presentation
-    // (e.g. the model-not-recognized instruction), or presented already (by
-    // the service, to this chat) is marked -- skip the generic transcript
-    // line so the TUI doesn't show the same failure twice.
-    if (!hasErrorPresentationClaimed(error)) {
-      appendLocalErrorTranscript(toErrorMessage(error));
-    }
+    // A refused launch shows the notice it carries (an unknown model's
+    // instruction, an unknown agent) where the chat's runtime notices
+    // show; any other failure is a transcript line. The session shows
+    // neither: a launch's failure is its caller's to show.
+    const notice = launchNoticeOf(error);
+    if (notice !== undefined)
+      presentationHost.emit(notice.event, notice.payload);
+    else appendLocalErrorTranscript(toErrorMessage(error));
     session.runExitCode = CliExitCode.AgentError;
   };
 

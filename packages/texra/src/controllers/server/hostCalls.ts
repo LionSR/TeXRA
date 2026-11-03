@@ -13,11 +13,10 @@ import {
   ApprovalPolicySchema,
   type ApprovalPolicyDenial,
   FileLocationSchema,
+  LaunchNoticeSchema,
   RunIdSchema,
-  type AgentNotFoundPayload,
   type OpenFilePayload,
   type RequestShowErrorPayload,
-  type RequestShowInstructionPayload,
 } from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
@@ -81,7 +80,8 @@ const ApprovalPolicyDenialSchema = Schema.Union([
   }),
 ]) satisfies Schema.Codec<ApprovalPolicyDenial, unknown>;
 
-/** The runtime's notices, by event, as a window presents them. */
+/** The runtime's notices, by event, as a window presents them: the two a
+ *  refused launch carries among them. */
 const NoticeSchema = Schema.Union([
   Schema.Struct({
     event: Schema.Literal('openFile'),
@@ -90,20 +90,7 @@ const NoticeSchema = Schema.Union([
       preserveFocus: Schema.Boolean,
     }) satisfies Schema.Codec<OpenFilePayload, unknown>,
   }),
-  Schema.Struct({
-    event: Schema.Literal('requestShowInstruction'),
-    payload: Schema.Struct({
-      key: Schema.String,
-      message: Schema.String,
-      showSuppress: Schema.optional(Schema.Boolean),
-    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
-  }),
-  Schema.Struct({
-    event: Schema.Literal('agentNotFound'),
-    payload: Schema.Struct({
-      agentName: Schema.String,
-    }) satisfies Schema.Codec<AgentNotFoundPayload, unknown>,
-  }),
+  ...LaunchNoticeSchema.members,
   Schema.Struct({
     event: Schema.Literal('requestShowError'),
     payload: Schema.Struct({

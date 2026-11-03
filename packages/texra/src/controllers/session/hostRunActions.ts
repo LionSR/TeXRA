@@ -283,7 +283,8 @@ export const createHostRunActions = Effect.fn(
 
   const runValidated: HostRunActions['runValidated'] = (config, options) =>
     session.start({ config, ...options, interactive: true }).pipe(
-      // A failure before the run opens has no row to show it.
+      // A failure before the run opens has no row to show it: it shows
+      // here, in this window, by the notice a refused launch carries.
       Effect.tapError((error) => presentRunFailure(ports.present, error)),
       // The reveal, and the toast it falls back to, outlive the launch
       // request: nothing waits on a person dismissing a notice, and a failed

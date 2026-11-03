@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
 import {
@@ -27,13 +27,15 @@ const SETUP_INSTRUCTION =
  * host's setup entry point comes through here. `already-running` when the
  * session holds a live setup run, `no-model` when the user's credentials
  * can call no setup model (the missing-credential case; a check that cannot
- * be answered fails). A failure once the run started is its result row's to
- * show, not a failure to launch.
+ * be answered fails), `not-started` when the launch path refused the run.
+ * That refusal is the launch path's to show, and a failure once the run
+ * started is its result row's: neither is a failure here.
  */
 export const launchSetup = <E>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
-  /** This host's launch path for the setup request. */
+  /** This host's launch path for the setup request, which shows a failure
+   *  to start (`HostRunActions.runValidated`). */
   readonly start: (config: AgentConfig) => Effect.Effect<Run, E>;
 }) =>
   Effect.gen(function* () {
@@ -57,7 +59,14 @@ export const launchSetup = <E>(options: {
       model,
       instruction: SETUP_INSTRUCTION,
     }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
-    const run = yield* options.start(config);
+    const started = yield* Effect.result(options.start(config));
+    if (Result.isFailure(started)) {
+      yield* Effect.logWarning('The setup conversation did not start').pipe(
+        Effect.annotateLogs({ data: started.failure }),
+      );
+      return 'not-started' as const;
+    }
+    const run = started.success;
     yield* run.result.pipe(
       Effect.asVoid,
       Effect.catch((failure) =>
@@ -74,9 +83,9 @@ export const launchSetup = <E>(options: {
  * first suspension: the run and its presentation belong to it even when the
  * window moves to another project while the model resolves.
  * Setup continues after its initiating request has completed, so a failure
- * is presented here; the kickoff finishes with the setup run, so a second
- * Run Setup waits for it. A setup run already live in the project is left
- * to run alone.
+ * before the launch is presented here (the launch path presents its own);
+ * the kickoff finishes with the setup run, so a second Run Setup waits for
+ * it. A setup run already live in the project is left to run alone.
  */
 export const kickoffDesktopSetup = (options: {
   readonly project: {

@@ -219,8 +219,11 @@ Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
 surface names (`AgentNotFound`, `ToolsRefused`); a launch that fails
 before its run enters the session fails `start` with `RunFailure`, whose
-`cause` is exactly what the launch path threw. A run that fails after
-entering stores a failed end, which `run.result` returns.
+`cause` is exactly what the launch path threw. No host is shown such a
+failure: a launch refused for an unknown model, or for a `config` naming an
+unknown agent, carries the notice to show for it (`AgentError.notice`, read
+with `launchNoticeOf` from `./host`). A run that fails after entering stores
+a failed end, which `run.result` returns.
 
 `run.view` is the derived session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than

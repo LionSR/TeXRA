@@ -276,11 +276,19 @@ const answered = <R>(
         if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
           return Effect.void;
         const error = Cause.squash(cause);
+        // Shown once, by its one presenter: a run the resume opened shows
+        // its own end (`presentTerminalResult`), and a caller still waiting
+        // on the answer (a host's resume that joined this one) shows what it
+        // receives.
+        const shownElsewhere =
+          Deferred.isDoneUnsafe(attempt.admitted) || attempt.waiters > 0;
         return Effect.logError(`Failed to resume run ${runId}`).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
           Effect.andThen(
-            presentRunFailure(interactions, error, 'Resume failed: '),
+            shownElsewhere
+              ? Effect.void
+              : presentRunFailure(interactions, error, 'Resume failed: '),
           ),
         );
       }),
