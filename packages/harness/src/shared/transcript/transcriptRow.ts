@@ -13,6 +13,7 @@ import { absurd } from 'effect';
 import {
   TOOL_CALL_STATUS,
   type ContextManagementData,
+  type DeclinableUsageRoute,
   type ErrorLogData,
   type FileListEntry,
   type LoadedMediaMetadata,
@@ -177,10 +178,14 @@ export interface ContextManagementRow extends TranscriptRowBase {
   readonly items: readonly StatItem[];
 }
 
+/** A status note: its message alone, which no payload rides beside. */
 export interface ProgressStatusRow extends TranscriptRowBase {
   readonly kind: 'progressStatus';
   readonly summary: TranscriptText;
-  readonly detail?: TranscriptText;
+  /** The used-up plan's route a quota fallback notice reports: the run
+   *  retried on the model's own key without asking. An app words it; the
+   *  summary is the harness's plain wording of the same fact. */
+  readonly quotaFallback?: DeclinableUsageRoute;
 }
 
 export interface CompactionActivityRow extends TranscriptRowBase {

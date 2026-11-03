@@ -1,13 +1,12 @@
 import { getReasonPhrase } from 'http-status-codes';
-import prettyMilliseconds from 'pretty-ms';
 import { Result, String as Str } from 'effect';
-import { ModelError } from '@texra-ai/llm';
+import { ModelError, PLAN_ROUTES, providerDisplayName } from '@texra-ai/llm';
 
-import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import type {
+  CredentialSwitch,
+  DeclinableUsageRoute,
   ErrorContext,
   ErrorLogData,
-  ExhaustionReason,
   ProviderError,
   ProviderErrorClassification,
 } from '@shared/schemas';
@@ -15,6 +14,7 @@ import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { RouteUnavailable } from '../agentErrors';
 import {
@@ -24,23 +24,11 @@ import {
 } from '../errorPredicates';
 import { attachProviderError, detectProviderError } from './errorMetadata';
 
-/**
- * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
- * Day+hour, hour+minute, or minute granularity is plenty for a reset-window
- * hint; sub-minute collapses to a friendly phrase. Pure (no clock read), so it
- * stays usable from this synchronous formatter. Backed by `pretty-ms` (top 2
- * units) rather than hand-rolled day/hour/minute math — minutes are truncated
- * once the duration reaches a day, matching the "day granularity drops
- * minutes" rule of the original hand-rolled formatter (pretty-ms would
- * otherwise back-fill a zero hour component with minutes, e.g. "1d 58m").
- */
-function formatResetDuration(totalSeconds: number): string {
-  const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-  if (wholeMinutes === 0) return 'less than a minute';
-  const flooredMinutes =
-    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
-  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
-}
+/** A used-up plan as the failure records it. */
+type UsedUpPlan = Extract<
+  ProviderErrorClassification,
+  { readonly kind: DeclinableUsageRoute }
+>;
 
 /** An HTTP status's reason phrase; undefined for an unknown code (`getReasonPhrase` throws). */
 function safeGetReasonPhrase(statusCode: number): string | undefined {
@@ -63,12 +51,15 @@ function httpErrorMessage(
     : message;
 }
 
-/** The exhaustion a quota verdict names: its plan's, else the account's credit. */
-function exhaustionOf(error: ModelError): ExhaustionReason | undefined {
-  const { quota } = error;
-  if (quota === undefined) return undefined;
-  if (quota.plan === null) return 'upstream-credit';
-  return quotaFallbackRouteFor(quota.plan).exhaustionReason;
+/** The plan a quota verdict says ran out, with the tier and reset the
+ *  provider stated; none for the account's own credit. */
+function usedUpPlan({ quota }: ModelError): UsedUpPlan | undefined {
+  if (quota === undefined || quota.plan === null) return undefined;
+  return {
+    kind: quota.plan,
+    ...(quota.planType ? { planType: quota.planType } : {}),
+    ...(quota.resetsInMs === undefined ? {} : { resetsInMs: quota.resetsInMs }),
+  };
 }
 
 /** The retry panel's classification: an overflowed window, a used-up credential, a missing key. */
@@ -81,31 +72,62 @@ function classificationOf(
       : undefined;
   }
   if (error.kind === 'context-overflow') return { kind: 'context-window' };
-  const exhaustion = exhaustionOf(error);
-  return exhaustion === undefined ? undefined : { kind: exhaustion };
+  if (error.quota?.plan === null) return { kind: 'upstream-credit' };
+  return usedUpPlan(error);
 }
 
 /**
- * The copy of a vendor failure. A used-up plan names the switch the retry
- * offers; an overflowed window says why a retry cannot help; anything else
+ * The provider a plan bills, by its own name (`OpenAI` for a ChatGPT plan):
+ * how the plain words below name a plan, so an embedder without copy of its
+ * own reads what ran out. An app's switch and sign-in labels are its copy,
+ * worded from the same facts where it shows them.
+ */
+const planOwner = (plan: DeclinableUsageRoute): string =>
+  providerDisplayName(PLAN_ROUTES[plan].provider);
+
+/** A used-up plan: which, its tier, when it resets, and what to do. */
+function usedUpPlanMessage({ kind, planType, resetsInMs }: UsedUpPlan): string {
+  const tier = planType ? ` ${Str.capitalize(planType)}` : '';
+  const reset =
+    resetsInMs === undefined
+      ? ''
+      : ` Resets in ${formatCompactDuration(resetsInMs)}.`;
+  return (
+    `Usage limit reached on your ${planOwner(kind)}${tier} plan.${reset}` +
+    ' Switch to your own API key to keep working, or wait until the limit resets.'
+  );
+}
+
+/** The words of a route that cannot carry the call: a subscription's own
+ *  failure with its remedy, else the route's message. */
+function routeMessage({ message, session }: RouteUnavailable): string {
+  if (session === undefined) return message;
+  const remedy = session.needsReauth
+    ? 'Sign in again'
+    : 'Try again in a moment';
+  return `Your ${planOwner(session.route)} subscription is unavailable: ${message} ${remedy}, or turn the subscription off.`;
+}
+
+/**
+ * The notice of a used-up plan's automatic retry on the model's own key,
+ * the move its retry request records; the run records the route beside the
+ * notice for an app's words.
+ */
+export function quotaFallbackMessage({
+  route,
+  provider,
+}: Extract<CredentialSwitch, { readonly kind: 'decline-route' }>): string {
+  return `Usage limit reached on your ${planOwner(route)} plan; retrying on your own ${providerDisplayName(provider)} API key.`;
+}
+
+/**
+ * The words of a vendor failure. A used-up plan says what ran out and what
+ * to do; an overflowed window says why a retry cannot help; anything else
  * is the reply's message under its status.
  */
 function failureMessage(error: ModelError): string {
-  const { quota } = error;
-  if (quota !== undefined && quota.plan !== null) {
-    const route = quotaFallbackRouteFor(quota.plan);
-    const plan = quota.planType
-      ? ` (${Str.capitalize(quota.planType)} plan)`
-      : '';
-    const reset =
-      quota.resetsInMs === undefined
-        ? ''
-        : ` Resets in ${formatResetDuration(quota.resetsInMs / 1000)}.`;
-    return (
-      `${route.retrySourceName} usage limit reached${plan}.${reset}` +
-      ` Switch to ${route.retryFallbackName} to keep working, or wait until the limit resets.`
-    );
-  }
+  const plan = usedUpPlan(error);
+  if (plan !== undefined) return usedUpPlanMessage(plan);
   if (error.kind === 'context-overflow')
     return (
       `${error.message} Retrying would resend the same oversized request. ` +
@@ -144,7 +166,8 @@ export function providerErrorOf(
     status === undefined ? undefined : safeGetReasonPhrase(status);
   const classification = classificationOf(error);
   return {
-    message: vendor === undefined ? error.message : failureMessage(vendor),
+    message:
+      error instanceof ModelError ? failureMessage(error) : routeMessage(error),
     userRetryable: offersRetry(error),
     ...(status !== undefined && { statusCode: status }),
     ...(statusText !== undefined && { statusText }),

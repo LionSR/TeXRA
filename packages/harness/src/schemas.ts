@@ -32,10 +32,8 @@ export type {
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-// The subscriptions a model call can route through, and each one's switch
-// and sign-in names.
+// The subscriptions a model call can route through, by provider id.
 export {
-  SUBSCRIPTION_AUTH_NAMES,
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
@@ -80,11 +78,6 @@ export type {
 } from '@shared/session/database';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
-// The plan a used-up subscription falls back to (`quotaFallbackRouteFor`).
-export type {
-  QuotaFallbackExhaustionReason,
-  QuotaFallbackRoute,
-} from '@shared/quotaFallbackRoutes';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
