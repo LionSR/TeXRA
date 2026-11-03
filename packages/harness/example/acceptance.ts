@@ -189,6 +189,13 @@ const codemode = (dir: string) =>
         (child) => child.durableOutcome === 'completed',
       ).length;
       const returned = scriptReturnsOf(evidence.conversation).at(-1);
+      // Each finished round's structured verdict, as its run ended with it.
+      const verdicts: unknown[] = [];
+      for (const child of children)
+        if (child.durableOutcome === 'completed')
+          verdicts.push(
+            (yield* session.records(child.id).readRunEnd())?.output.structured,
+          );
       const ok = (tool: string, input?: (input: unknown) => boolean) =>
         evidence.calls.some(
           (call) =>
@@ -215,6 +222,14 @@ const codemode = (dir: string) =>
             'two self() rounds completed',
             completed >= 2,
             `${completed} of ${children.length}`,
+          ),
+          check(
+            'each round ended with a structured verdict naming a section',
+            verdicts.length >= 2 &&
+              verdicts.every((verdict) =>
+                TITLES.some((title) => has(verdict, title)),
+              ),
+            verdicts,
           ),
           check(
             'an executions SQL query succeeded',
@@ -499,8 +514,8 @@ const crashResume = (dir: string) =>
         [
           check('killed by SIGKILL', signal === 'SIGKILL', signal),
           check(
-            'a child result was committed before the kill',
-            Option.isSome(finished) && before.size > 0,
+            'exactly one round was committed before the kill',
+            Option.isSome(finished) && before.size === 1,
             before.size,
           ),
           check(
@@ -514,10 +529,12 @@ const crashResume = (dir: string) =>
             { before: Object.fromEntries(before), unchanged },
           ),
           check(
-            'two self() rounds completed',
-            children.filter((run) => run.durableOutcome === 'completed')
-              .length >= 2,
-            children.map((run) => run.durableOutcome),
+            'a second round ran and completed after the resume',
+            children.some(
+              (run) =>
+                !before.has(run.id) && run.durableOutcome === 'completed',
+            ),
+            children.map((run) => `${run.id}:${run.durableOutcome}`),
           ),
           check(
             'the interrupted script finished from its saved source',
