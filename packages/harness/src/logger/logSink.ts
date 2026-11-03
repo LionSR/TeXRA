@@ -21,7 +21,11 @@ import { Logger } from 'effect';
 
 // Local imports
 import { formatLogData } from '@logger/formatLogData';
-import { redactDisplayValue, redactSecrets } from '@logger/redaction';
+import {
+  redactDisplayFields,
+  redactDisplayValue,
+  redactSecrets,
+} from '@logger/redaction';
 
 /**
  * One diagnostic record, shaped by Effect's own structured formatter rather
@@ -73,7 +77,7 @@ function redactEntry(entry: LogEntry): LogEntry {
     ...entry,
     message: redactDisplayValue(entry.message),
     cause: entry.cause === undefined ? undefined : redactSecrets(entry.cause),
-    annotations: redactDisplayValue(entry.annotations),
+    annotations: redactDisplayFields(entry.annotations),
   };
 }
 

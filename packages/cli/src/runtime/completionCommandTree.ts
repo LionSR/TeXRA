@@ -34,7 +34,7 @@ export type CompletionFlagVariant = Omit<
 >;
 
 function isCompletionShell(value: string): value is CliCompletionShell {
-  return (CLI_COMPLETION_SHELLS as readonly string[]).includes(value);
+  return CLI_COMPLETION_SHELLS.some((shell) => shell === value);
 }
 
 export function parseCompletionShell(value: string): CliCompletionShell {

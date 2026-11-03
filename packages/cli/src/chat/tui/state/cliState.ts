@@ -184,7 +184,8 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     rows.push({ kind: 'run', run, depth, expanded: open });
     if (open) {
       for (const id of run.childIds) {
-        if (included.has(id)) append(view.runs.get(id)!, depth + 1);
+        const child = view.runs.get(id);
+        if (child !== undefined && included.has(id)) append(child, depth + 1);
       }
     }
   };

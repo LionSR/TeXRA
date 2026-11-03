@@ -28,8 +28,9 @@ const closed = { stdout: false, stderr: false };
 type StreamKey = 'stdout' | 'stderr';
 
 function isCliPipeClosureError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const code = (error as { code?: unknown }).code;
+  if (typeof error !== 'object' || error === null || !('code' in error))
+    return false;
+  const code = error.code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 

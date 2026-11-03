@@ -26,6 +26,7 @@ export function truncatedHexId(source: BinaryLike, length: number): string {
  *  minting sites (`generateRunId` in `@shared/schemas` is the other), so
  *  the brand is applied here and nowhere downstream. */
 export function deriveRunId(identity: RunIdFields): RunId {
+  // cast: a minting site; 24 hex digits satisfy `RunIdSchema` by construction.
   return truncatedHexId(stableStringify(identity), 24) as RunId;
 }
 

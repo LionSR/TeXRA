@@ -111,8 +111,9 @@ const DEFAULT_CONFIGURE_KEY_ACTION =
   'add a provider API key with `texra setup`';
 
 function startSentence(text: string): string {
-  if (text.length === 0) return text;
-  return `${text.at(0)!.toUpperCase()}${text.slice(1)}`;
+  const first = text.at(0);
+  if (first === undefined) return text;
+  return `${first.toUpperCase()}${text.slice(1)}`;
 }
 
 function runnableCliModelAccessEntries(

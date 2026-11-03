@@ -240,10 +240,12 @@ export function optString(value: unknown): string | undefined {
  * `no-`-prefixed flag — the positive key set to `false` (citty rewrites
  * `--no-browser` into `browser: false` before parsing).
  */
-export function booleanArg(args: object, name: string): boolean {
-  const record = args as Record<string, unknown>;
-  if (record[name] === true) return true;
-  return name.startsWith('no-') && record[name.slice(3)] === false;
+export function booleanArg(
+  args: Readonly<Record<string, unknown>>,
+  name: string,
+): boolean {
+  if (args[name] === true) return true;
+  return name.startsWith('no-') && args[name.slice(3)] === false;
 }
 
 interface CommonAgentRunFlags {

@@ -179,8 +179,9 @@ export function mergeLocalNotices(
   const out: TranscriptRow[] = [];
   let next = 0;
   const flushThrough = (seq: number): void => {
-    while (next < rows.length && rowSeq(rows[next]) <= seq) {
-      out.push(rows[next]!);
+    for (const row of rows.slice(next)) {
+      if (rowSeq(row) > seq) return;
+      out.push(row);
       next += 1;
     }
   };
@@ -192,7 +193,7 @@ export function mergeLocalNotices(
       settlementSeqNo: notice.afterSeq,
     });
   }
-  for (; next < rows.length; next += 1) out.push(rows[next]!);
+  out.push(...rows.slice(next));
   return {
     rows: out,
     settledRows:

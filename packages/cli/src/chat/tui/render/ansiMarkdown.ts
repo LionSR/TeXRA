@@ -9,7 +9,7 @@
 // `highlight.js` grammars the webview already pulls — keeping fence rendering
 // consistent between hosts without dragging the HTML wrapper through.
 
-import { Number as Num } from 'effect';
+import { Number as Num, Predicate } from 'effect';
 import Table from 'cli-table3';
 import { highlight, supportsLanguage } from 'cli-highlight';
 import { LRUCache } from 'lru-cache';
@@ -22,7 +22,6 @@ import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import { isTuiColorEnabled } from '@cli/tui/noColorOutput';
 import {
   createMarkdownProcessor,
-  type MarkdownProcessorRenderEnv,
   type MarkdownProcessor,
 } from '@ui/markdown/createMarkdownProcessor';
 import {
@@ -189,10 +188,15 @@ function renderAnsiTable(
   return table.toString();
 }
 
+/** `cell` with the protected LaTeX restored by the function the processor
+ *  puts on the render env (`MarkdownProcessorRenderEnv`), which reaches here
+ *  through markdown-it's untyped env bag, so both ends are checked. */
 function restoreProtectedLatexInCell(cell: string, env: unknown): string {
-  const restore = (env as MarkdownProcessorRenderEnv | undefined)
-    ?.restoreProtectedLatex;
-  return restore ? restore(cell) : cell;
+  if (!Predicate.hasProperty(env, 'restoreProtectedLatex')) return cell;
+  const restore = env.restoreProtectedLatex;
+  if (!Predicate.isFunction(restore)) return cell;
+  const restored: unknown = restore(cell);
+  return typeof restored === 'string' ? restored : cell;
 }
 
 function configureAnsi(
@@ -403,60 +407,75 @@ function configureAnsi(
     listDepth = 0;
     linkHref = undefined;
     const collapsed: Token[] = [];
-    for (let i = 0; i < tokens.length; i++) {
-      if (tokens[i]?.type !== 'table_open') {
-        collapsed.push(tokens[i]!);
-        continue;
-      }
-      const head: string[] = [];
-      const rows: string[][] = [];
-      const aligns: ColumnAlign[] = [];
-      let cells: string[] = [];
-      let inHeader = false;
-      let col = 0;
-      let j = i + 1;
-      for (; j < tokens.length && tokens[j]?.type !== 'table_close'; j++) {
-        const token = tokens[j]!;
-        switch (token.type) {
-          case 'thead_open':
-            inHeader = true;
-            break;
-          case 'thead_close':
-            inHeader = false;
-            break;
-          case 'tr_open':
-            cells = [];
-            col = 0;
-            break;
-          case 'tr_close':
-            if (inHeader) head.push(...cells);
-            else rows.push(cells);
-            break;
-          case 'th_open':
-          case 'td_open': {
-            const alignAttr = token.attrGet('style');
-            if (inHeader)
-              aligns[col] = columnAlign(
-                typeof alignAttr === 'string' ? alignAttr : null,
-              );
-            col++;
-            break;
-          }
-          case 'inline':
-            cells.push(
-              restoreProtectedLatexInCell(
-                renderInline(token.children ?? [], options, env),
-                env,
-              ),
-            );
-            break;
-        }
-      }
+    // The table being collected, from its `table_open` to its `table_close`.
+    let inTable = false;
+    let head: string[] = [];
+    let rows: string[][] = [];
+    let aligns: ColumnAlign[] = [];
+    let cells: string[] = [];
+    let inHeader = false;
+    let col = 0;
+    const pushTable = (): void => {
       const tableToken = new MarkdownIt.Token('ansi_table', '', 0);
       tableToken.content = renderAnsiTable(head, rows, aligns, width, style);
       collapsed.push(tableToken);
-      i = j; // land on table_close; the loop's i++ skips it
+    };
+    for (const token of tokens) {
+      if (!inTable) {
+        if (token.type === 'table_open') {
+          inTable = true;
+          head = [];
+          rows = [];
+          aligns = [];
+          cells = [];
+          inHeader = false;
+          col = 0;
+        } else {
+          collapsed.push(token);
+        }
+        continue;
+      }
+      switch (token.type) {
+        case 'table_close':
+          pushTable();
+          inTable = false;
+          break;
+        case 'thead_open':
+          inHeader = true;
+          break;
+        case 'thead_close':
+          inHeader = false;
+          break;
+        case 'tr_open':
+          cells = [];
+          col = 0;
+          break;
+        case 'tr_close':
+          if (inHeader) head.push(...cells);
+          else rows.push(cells);
+          break;
+        case 'th_open':
+        case 'td_open': {
+          const alignAttr = token.attrGet('style');
+          if (inHeader)
+            aligns[col] = columnAlign(
+              typeof alignAttr === 'string' ? alignAttr : null,
+            );
+          col++;
+          break;
+        }
+        case 'inline':
+          cells.push(
+            restoreProtectedLatexInCell(
+              renderInline(token.children ?? [], options, env),
+              env,
+            ),
+          );
+          break;
+      }
     }
+    // A table the token stream never closes still renders, up to its end.
+    if (inTable) pushTable();
     try {
       return render(collapsed, options, env);
     } finally {
