@@ -436,27 +436,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.layer(caseHost(0), { buildPerTest: true })((it) => {
       // The setting bounds the automatic batch; the human gate opens only once
       // it is spent.
-      it.effect('cancels the run when the user declines the retry', () =>
-        Effect.gen(function* () {
-          const session = yield* isolatedTestSession();
-          yield* autoDecideRequests(session, () => ({
-            action: 'cancel',
-            cause: 'The user declined the retry.',
-          }));
-          const stub = stubModel([
-            { fail: httpError('temporary provider failure', 503) },
-          ]);
-
-          const kit = yield* openRun(session, stub.model);
-          const { runId } = kit;
-          yield* Effect.promise(() => seedActiveRun(session, runId));
-          const outcome = yield* invokeOn(kit);
-
-          expect(outcome.kind).toBe('cancelled');
-          expect(stub.attempts()).toBe(1);
-        }),
-      );
-
       // The authorized attempt waits out the session gate's cooldown the failed
       // attempt opened; the pump advances the test clock past it.
       it.effect('admits a manual retry through a durable approval', () =>

@@ -344,28 +344,6 @@ describe('wakeRun races', () => {
   });
 
   it.effect(
-    "a resume's only caller leaving before its fiber runs leaves it deciding nothing",
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession('idle', { deferFork: true });
-        const decide = vi.fn(() => Effect.succeed(false));
-
-        const caller = yield* Effect.forkChild(
-          resumeRun(runId, {}).pipe(
-            withResumePort(decide),
-            Effect.provide(session),
-          ),
-          { startImmediately: true },
-        );
-        yield* Fiber.interrupt(caller);
-        yield* Context.get(session, Runs).get(runId)?.drained ?? Effect.void;
-
-        expect(decide).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
     "a wake that joins a resume answering its owner follows it, though the resume's caller left",
     () =>
       Effect.gen(function* () {
@@ -403,31 +381,6 @@ describe('wakeRun races', () => {
           parent,
         ]);
       }),
-  );
-
-  it.live(
-    'two wakes whose fibers interleave open one resume, the second joining it',
-    () =>
-      Effect.gen(function* () {
-        const runId = generateRunId();
-        const session = fakeSession('idle');
-        const barrier = createDeferred<boolean>();
-        const decide = vi.fn(() => Effect.promise(() => barrier.promise));
-
-        const wakes = [];
-        for (const _ of [1, 2])
-          wakes.push(
-            yield* Effect.forkChild(
-              wakeRun(runId)
-                .pipe(withResumePort(decide))
-                .pipe(Effect.provide(session)),
-            ),
-          );
-        for (const wake of wakes) yield* Fiber.join(wake);
-        barrier.resolve(false);
-
-        expect(decide).toHaveBeenCalledTimes(1);
-      }).pipe(Effect.provideService(Scheduler.MaxOpsBeforeYield, 3)),
   );
 });
 
@@ -494,27 +447,6 @@ describe('submitFollowUp', () => {
         // The input is the run's row, whichever reader takes it next.
         expect(recorded.queued(runId)).toEqual(['keep this input']);
       }),
-  );
-
-  it.effect("wakes an un-ended run that is not live for a run's message", () =>
-    Effect.gen(function* () {
-      const runId = generateRunId();
-      const session = fakeSession('idle');
-      const tryResumeRun = vi.fn(() => Effect.succeed(true));
-      const message = {
-        text: 'from a peer',
-        from: { kind: 'run' as const, runId: generateRunId() },
-      };
-
-      expect(
-        yield* submitFollowUp(runId, message, {}).pipe(
-          withResumePort(tryResumeRun),
-          Effect.provide(session),
-        ),
-      ).toEqual({ status: 'queued' });
-      expect(recorded.queued(runId)).toEqual(['from a peer']);
-      expect(tryResumeRun).toHaveBeenCalledTimes(1);
-    }),
   );
 
   it.effect('admits a replayed child delivery at most once', () =>

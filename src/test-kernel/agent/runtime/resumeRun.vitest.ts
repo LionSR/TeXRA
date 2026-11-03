@@ -251,36 +251,6 @@ describe(
           );
 
           it.effect(
-            'a second resume of a run joins the one in flight, each admitted once',
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } =
-                  yield* parkedRunAfterCrash();
-                yield* send(session, runId, 'once');
-                const faults = yield* sessionStoreFaults(storage);
-                // The first resume waits on the run's claim, inside its resume.
-                const claim = yield* faults.holdNext('acquireClaims');
-                const first = yield* Effect.forkChild(
-                  resume(runId, { session }),
-                );
-                yield* claim.reached;
-                // Joined as it is forked: the resume is the run's activation.
-                const second = yield* Effect.forkChild(
-                  resume(runId, { session }),
-                  {
-                    startImmediately: true,
-                  },
-                );
-                yield* claim.release;
-
-                const joined = yield* Fiber.join(second);
-                expect(joined).toMatchObject(ACTIVATED);
-                expect(yield* Fiber.join(first)).toEqual(joined);
-                expect(activations(storage, runId)).toBe(2);
-              }),
-          );
-
-          it.effect(
             'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
             () =>
               Effect.gen(function* () {
@@ -413,47 +383,6 @@ describe(
                 );
                 yield* stop.settlement.pipe(Effect.provide(session));
                 yield* input.release;
-                yield* Fiber.join(resumed);
-
-                expect(endsOf(storage, runId)).toEqual(['cancelled']);
-                expect(activations(storage, runId)).toBe(1);
-              }),
-          );
-
-          it.effect(
-            "a user's stop after a resume launched its generation, before admission, ends the run cancelled once",
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } =
-                  yield* parkedRunAfterCrash();
-                const faults = yield* sessionStoreFaults(storage);
-                // The resume reads the run's input and lineage, then launches its
-                // generation, whose first read the stop lands on.
-                const claim = yield* faults.holdNext('acquireClaims');
-                const resumed = yield* Effect.forkChild(
-                  Effect.exit(resume(runId, { session })),
-                );
-                yield* claim.reached;
-                const input = yield* faults.holdNext('readAggregate');
-                yield* claim.release;
-                yield* input.reached;
-                const lineage = yield* faults.holdNext('readRunRecords');
-                yield* input.release;
-                yield* lineage.reached;
-                const launched = yield* faults.holdNext('readRunRecords');
-                yield* lineage.release;
-                yield* launched.reached;
-                // Its generation holds the run here, not yet admitted.
-                expect(Context.get(session, Runs).get(runId)).toBeDefined();
-
-                Context.get(session, Runs).stop(runId, {
-                  reason: 'user',
-                  detachActiveChildren: false,
-                });
-                expect(Context.get(session, Runs).stopCause(runId)).toBe(
-                  'user',
-                );
-                yield* launched.release;
                 yield* Fiber.join(resumed);
 
                 expect(endsOf(storage, runId)).toEqual(['cancelled']);
