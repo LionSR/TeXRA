@@ -108,11 +108,13 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
         ? { childTurn: { active: closes ? null : active, lastCompleted: turn } }
         : { childTurn: { active: turn, lastCompleted } };
     }
-    case 'run.description':
+    case 'run.description': {
+      const label = row.by === 'model' ? { label: row } : {};
       // A user's title stands until the user renames again.
       return row.by === 'model' && rows.title?.by === 'user'
-        ? {}
-        : { title: row };
+        ? label
+        : { title: row, ...label };
+    }
     case 'child.park': {
       const held = { park: row, text: rows.report ?? '' };
       return {

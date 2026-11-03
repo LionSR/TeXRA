@@ -148,6 +148,7 @@ export const freshRunRows = (): RunRows => ({
   config: null,
   position: null,
   title: null,
+  label: null,
   grants: null,
   facts: {},
   childTurn: { active: null, lastCompleted: null },

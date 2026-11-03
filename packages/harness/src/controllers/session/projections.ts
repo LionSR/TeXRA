@@ -10,9 +10,10 @@
  * - `listing`: per aggregate and listing key (`listingKeyOf`), the row a cold
  *   listing delivers; an open request and a queued follow-up are keys of
  *   their own (`pendingKeyOf`), deleted when their pair closes them.
- * - `usage`: a `usage` display row per priced `model.message` response and
- *   `context.edit` summary (a run with a run history stores its spend there,
- *   never as a `usage` row), and each run's spend summed by `sumUsageStats`.
+ * - `usage`: a `usage` display row per priced `model.message` response,
+ *   `context.edit` summary and model `run.description` label (a run with a
+ *   run history stores its spend there, never as a `usage` row), and each
+ *   run's spend summed by `sumUsageStats`.
  * - `model`: a `run.model` display row at each `run.config` whose model
  *   differs from the one before it, and each run's latest switch.
  *
@@ -97,6 +98,7 @@ function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   if (event.type === 'context.edit') priced = event.payload.usage;
   if (event.type === 'model.message' && event.payload.kind === 'response')
     priced = event.payload.usage;
+  if (event.type === 'run.description') priced = event.usage;
   if (priced == null) return null;
   const { provider, responseTimeMs, ...usage } = priced;
   return usage;
@@ -124,8 +126,9 @@ const PROJECTORS = {
   },
   usage: {
     // v2: the rows carry `TurnUsage`'s count names and no `elapsedTime`.
-    version: 2,
-    inputs: ['model.message', 'context.edit', 'usage'],
+    // v3: a model label's `run.description` is priced too.
+    version: 3,
+    inputs: ['model.message', 'context.edit', 'run.description', 'usage'],
     prior: 'run_usage',
     table: 'run_usage',
     projects: ['usage'],

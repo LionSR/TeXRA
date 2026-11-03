@@ -61,6 +61,10 @@ From the attempts and from checking the runner on the in-memory model:
    (`packages/harness/src/agent/runtime/sessionDescription.ts`) sends a helper
    request on the run's model for every run with an instruction, with no way to
    turn it off, and its spend is not in the run's `usage` or `runs.cost`.
+   Since #14607 only a root run of a composition that asks
+   (`processLayer({ labelRuns: true })`) is labelled, and the label's priced
+   request now rides its `run.description` row, so the run's `usage` and
+   `runs.cost` both count it and agree.
 2. **The harness writes its log lines to the embedder's stdout**
    (`[agentRegistry] Loaded 1 agents`, `[executeAgent] Starting run`, the
    route's effort substitution note), so a program printing its own output

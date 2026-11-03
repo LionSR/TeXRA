@@ -43,13 +43,13 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
   roots: WorkspaceRoots,
 ) {
   return yield* Effect.gen(function* () {
-    const responseText = yield* helperCall(
+    const { text: responseText } = yield* helperCall(
       roots,
       { userPrompt: POLISH_PROMPT_PREFIX + text },
       // A draft polish serves no run and no agent category.
       { agentName: 'polish', runId: null },
     );
-    if (typeof responseText !== 'string' || responseText.trim() === '') {
+    if (responseText.trim() === '') {
       return yield* Effect.fail(new Error('Model returned no text.'));
     }
     const corrected = extractTextFromTag(responseText, 'corrected_text');

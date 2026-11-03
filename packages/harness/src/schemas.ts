@@ -317,6 +317,7 @@ export {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   ModelAvailabilityKindSchema,
+  type NormalizedUsage,
   NullableFileFieldsSchema,
   ownerIdentity,
   type Plan,

@@ -1400,6 +1400,10 @@ show` print the same notice, and the new `texra agents customize`,
   the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
   the setup assistant and the guide say "OpenAI models" where they said
   "Codex models".
+- **A run's cost includes the request that titles it.** The short title a
+  run gets in the run list and history comes from one helper-model request,
+  which was billed but missing from the run's cost and token counts. It now
+  counts, and the run's result and the run list show the same total.
 - **No model request runs only to title a subagent, and the SDK sends none
   you did not ask for.** A subagent or a script's `self()` round keeps its
   agent name instead of a generated title, so a loop of rounds no longer
