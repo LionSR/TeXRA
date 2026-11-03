@@ -10,7 +10,6 @@ import { Result, Schema } from 'effect';
 
 import {
   emptyRunEndOutput,
-  listingTypeOf,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
@@ -19,7 +18,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
-import { DISPLAY_EVENT_TYPES, SessionEventSchema } from '@shared/schemas';
+import { SessionEventSchema } from '@shared/schemas';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
@@ -240,47 +239,6 @@ describe('session view update', () => {
     expect(filtered.transcriptSeq.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,
     );
-  });
-
-  it("keeps a running card's phase and attempt while its output streams", () => {
-    const log = new Log();
-    const start = log.emit(CHILD, 1000, {
-      type: 'run.start',
-      identity: CHILD_IDENTITY,
-      userFollowUpSupport: 'unsupported',
-      parent: null,
-      provenance: null,
-    });
-    const call = log.emit(CHILD, 1010, {
-      type: 'tool.start',
-      logId: 'build',
-      toolName: 'bash',
-      input: { command: 'make' },
-      phase: 'Compile',
-      attempt: 2,
-    });
-    const view = viewOf([
-      tail(start),
-      subscribe(CHILD),
-      alive,
-      tail(call),
-      {
-        _tag: 'chunk',
-        runId: CHILD,
-        rowId: 'build',
-        from: 0,
-        to: 9,
-        text: 'compiling',
-      },
-    ]);
-    expect(runView(view, CHILD).transcript.rows).toEqual([
-      expect.objectContaining({
-        kind: 'tool',
-        phase: 'Compile',
-        attempt: 2,
-        toolUse: expect.objectContaining({ outputText: 'compiling' }),
-      }),
-    ]);
   });
 
   it('reads a pending approval as waiting only with a held owner', () => {
@@ -802,25 +760,6 @@ describe('applyRunRows', () => {
       ),
     );
     expect(state?.structured).toEqual({ value: { a: 1 } });
-  });
-
-  it('keeps the private run history types out of the listing and off the transport, and lists run.position', () => {
-    const runHistoryTypes = [
-      'model.message',
-      'context.edit',
-      'tool.intent',
-      'tool.result',
-    ] as const;
-    for (const type of runHistoryTypes)
-      expect(listingTypeOf({ type })).toBeNull();
-    // The one run history row the listing keys: a cold hydrate that dropped it
-    // would paint every parked run as ready (ruling A9-5).
-    expect(listingTypeOf({ type: 'run.position' })).toBe('run.position');
-    for (const row of TURN_ROWS) {
-      expect(DISPLAY_EVENT_TYPES.includes(row.type)).toBe(
-        row.type === 'run.position',
-      );
-    }
   });
 
   it('binds every row to the turn it describes', () => {

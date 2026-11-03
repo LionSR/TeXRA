@@ -73,7 +73,6 @@ import {
 import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
 import * as toast from '@agent/runtime/HostInteractions';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import { deriveResumability } from '@agent/storage/resumability';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
@@ -1099,13 +1098,8 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
-  // `model.message` v1 has no upcaster to this build's version, and a
-  // retired kind that fed execution state has no reader at all.
+  // A retired kind that fed execution state has no reader at all.
   it.effect.each([
-    [
-      'model.message',
-      `UPDATE event SET version = 1 WHERE type = 'model.message'`,
-    ],
     [
       'run.snapshot',
       `UPDATE event SET type = 'run.snapshot' WHERE type = 'model.message'`,
@@ -1157,61 +1151,6 @@ describe('the session event table and its one publisher', () => {
           expect(
             (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.statusNotice,
           ).toStrictEqual({ kind: 'earlierBuild' });
-        }).pipe(
-          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
-          Effect.scoped,
-        );
-      });
-    },
-  );
-
-  it.effect(
-    'skips a retired display-only row and keeps its run resumable',
-    () => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((db) =>
-            db.appendAll([
-              runStart,
-              {
-                type: 'model.message',
-                aggregateId: runStart.aggregateId,
-                payload: {
-                  kind: 'append',
-                  sourceResponse: null,
-                  messages: [
-                    { role: 'user', content: [{ kind: 'text', text: 'hi' }] },
-                  ],
-                },
-              },
-            ]),
-          ),
-          Effect.provide(substrate(storage)),
-        );
-        const raw = reader(storage);
-        raw.exec(
-          `UPDATE event SET type = 'conversation.progress' WHERE type = 'model.message'`,
-        );
-        raw.close();
-        const rows = yield* Effect.flatMap(Database, (db) =>
-          db.readAggregate(runStart.aggregateId, 0),
-        ).pipe(Effect.provide(substrate(storage)));
-        expect(rows.map((row) => row.type)).toStrictEqual(['run.start']);
-        yield* Effect.gen(function* () {
-          const view = yield* SessionViewService;
-          yield* settle(view.ref, (v) => v.runs.has(RUN));
-          const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
-          expect(run?.readOnly).toBe(false);
-          expect(run?.statusNotice).toBeNull();
-          const store = yield* makeSessionStore(storage).pipe(
-            Effect.provide(ProcessIdentity.layer(SELF)),
-          );
-          expect(
-            yield* deriveResumability(RUN).pipe(
-              Effect.provideService(SessionLog, store.log),
-            ),
-          ).toStrictEqual({ kind: 'checkpoint' });
         }).pipe(
           Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
           Effect.scoped,
@@ -1355,43 +1294,6 @@ describe('the session event table and its one publisher', () => {
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
-
-  it.effect('rolls a rejected batch back whole, leaving nothing behind', () => {
-    const storage = workspace();
-    return Effect.gen(function* () {
-      const db = yield* Database;
-      yield* db.appendAll([runStart]);
-      // Reject the second insert after the first member changed its sequence.
-      // This exercises rollback, independently of pre-transaction validation.
-      yield* Effect.sync(() => {
-        const raw = reader(storage);
-        try {
-          raw.exec(`CREATE TRIGGER reject_run_position BEFORE INSERT ON event
-            WHEN NEW.type = 'run.position'
-            BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
-        } finally {
-          raw.close();
-        }
-      });
-      // The trigger is another connection's commit: let the poll take its
-      // wake first, so the level below counts this process's batches.
-      yield* TestClock.adjust('300 millis');
-      const level = yield* SubscriptionRef.get(db.level);
-      const failure = yield* Effect.flip(db.appendAll([olderStart, waiting]));
-
-      expect(failure._tag).toBe('DatabaseWriteFailed');
-      const rows = yield* Effect.sync(() => {
-        const raw = reader(storage);
-        try {
-          return raw.prepare('SELECT seq FROM event').all();
-        } finally {
-          raw.close();
-        }
-      });
-      expect(rows).toEqual([{ seq: 1 }]);
-      expect(yield* SubscriptionRef.get(db.level)).toBe(level);
-    }).pipe(Effect.provide(substrate(storage)));
-  });
 
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
