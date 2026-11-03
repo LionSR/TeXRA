@@ -69,12 +69,15 @@ export const HISTORY_TABLES = Object.freeze({
   ] as const),
 });
 
-/** A table's columns: `position` is its row id, every other column holds
- *  the value it is given (no type affinity). */
-const table = (name: 'runs' | 'tool_calls' | 'model_calls') =>
+/** A table's columns, `key` declared as its primary key; every other
+ *  column holds the value it is given (no type affinity). */
+const table = (
+  name: 'runs' | 'tool_calls' | 'model_calls',
+  key: { readonly column: string; readonly type: 'TEXT' | 'INTEGER' },
+) =>
   `CREATE TABLE ${name} (${HISTORY_TABLES[name]
     .map((column) =>
-      column === 'position' ? 'position INTEGER PRIMARY KEY' : column,
+      column === key.column ? `${column} ${key.type} PRIMARY KEY` : column,
     )
     .join(', ')});`;
 
@@ -92,9 +95,10 @@ SELECT ancestor_id, id, depth FROM tree;
 
 /** Everything the store runs once, before the first row arrives. */
 export const HISTORY_SCHEMA_SQL = [
-  table('runs'),
-  table('tool_calls'),
-  table('model_calls'),
+  // `runs` is keyed by id, which `run_tree` joins on at every step.
+  table('runs', { column: 'id', type: 'TEXT' }),
+  table('tool_calls', { column: 'position', type: 'INTEGER' }),
+  table('model_calls', { column: 'position', type: 'INTEGER' }),
   'CREATE INDEX tool_calls_call ON tool_calls(run_id, call_id);',
   'CREATE INDEX model_calls_attempt ON model_calls(run_id, invocation_id, attempt);',
   RUN_TREE,
@@ -166,8 +170,9 @@ export const HISTORY_WRITE_SQL = {
     WHERE run_id = ? AND invocation_id = ? AND attempt = ?`,
   // A summary's completion is the compaction it wrote: no row names its
   // attempt, so it closes the run's open summary attempt.
-  summaryEnd: `UPDATE model_calls SET status = 'completed', input_tokens = ?,
-    output_tokens = ?, cost = ?, ended_at = ? WHERE position = (
+  summaryEnd: `UPDATE model_calls SET status = 'completed', output = ?,
+    input_tokens = ?, output_tokens = ?, cost = ?, ended_at = ?
+    WHERE position = (
       SELECT max(position) FROM model_calls WHERE run_id = ?
         AND purpose = 'summary' AND status IN ('running', 'unknown'))`,
   removeTools: 'DELETE FROM tool_calls WHERE run_id = ?',
@@ -233,5 +238,5 @@ export const replaceRuns = (
 export const HISTORY_VIEW_SUMMARY = `- runs(${HISTORY_TABLES.runs.join(', ')}) - one row per run of this session. status is 'created', 'running', 'waiting', 'interrupted' (not ended, and no live process holds it) or 'ended'; outcome ('completed', 'failed', 'cancelled') is set only when ended. parent_id is NULL for a top-level or detached run; parent_call_position is the position of the parent's tool call that launched it (join tool_calls ON tool_calls.position = runs.parent_call_position for its input and result). cost/tokens are the run's own model calls so far. calls_unreadable is NULL, or why this run's calls are missing from tool_calls and model_calls (its stored history does not read in this build).
 - run_tree(${HISTORY_TABLES.run_tree.join(', ')}) - every ancestor of every run; depth 1 is the direct parent.
 - tool_calls(${HISTORY_TABLES.tool_calls.join(', ')}) - one row per tool call a model turn or a script issued; script_call_id is the issuing script call (NULL for a model's call). input and value are JSON text (value: the structured result a script reads). status is 'pending' (its body has not started), 'running', 'unknown' (its body started and its run stopped with no result recorded: it may or may not have taken effect), or how it ended: 'executed', 'failed', 'cancelled', 'skipped', 'duplicate'. output is an executed call's text, error a failed one's.
-- model_calls(${HISTORY_TABLES.model_calls.join(', ')}) - one row per model request sent: purpose 'turn' or 'summary' (compaction), attempt counts retries of one invocation. status is 'running', 'unknown' (sent, and its run stopped with no answer recorded), 'completed', 'failed' (error says why) or 'cancelled'. output is a completed turn's reply text.
+- model_calls(${HISTORY_TABLES.model_calls.join(', ')}) - one row per model request sent: purpose 'turn' or 'summary' (compaction), attempt counts retries of one invocation. status is 'running', 'unknown' (sent, and its run stopped with no answer recorded), 'completed', 'failed' (error says why) or 'cancelled'. output is a completed request's reply text; for a summary, the text that replaced the history (the model's summary under the heading the compaction adds). A stopped summary records no end, so it reads 'unknown', never 'cancelled'.
 Read only: a write or a second statement is refused. Times are ISO-8601 UTC text. Within a run, position is issue order. A text value longer than ${HISTORY_TEXT_LIMIT} characters is stored cut to its first ${HISTORY_TEXT_LIMIT}, followed by '… [cut: N characters in all]'; a JSON cell still longer than ${HISTORY_JSON_LIMIT} characters is stored as {"cut": N}.`;
