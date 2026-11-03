@@ -48,3 +48,22 @@ updates:
         update-types:
           - 'minor'
           - 'patch'
+
+  # Action versions drift by hand otherwise (checkout sat at v4, v6 and v7
+  # across workflows at once). One grouped PR a week covers every bump,
+  # majors included, for the workflows and the composite actions.
+  - package-ecosystem: 'github-actions'
+    # '/' covers .github/workflows; composite actions need their own entry.
+    directories:
+      - '/'
+      - '/.github/actions/*'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: 'chore'
+      include: 'scope'
+    groups:
+      github-actions:
+        patterns:
+          - '*'
