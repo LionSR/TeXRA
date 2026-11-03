@@ -32,19 +32,25 @@ All notable changes to this project will be documented in this file.
   `quotaFallbackRouteFor`, `QuotaFallbackRoute` and
   `QuotaFallbackExhaustionReason` are gone: the harness words these failures
   plainly, naming a plan by the provider it bills ("Usage limit reached on
-  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA's retry card,
-  `texra run`'s retry prompt and the automatic-fallback notice word the
-  facts as before. A used-up plan's classification carries its tier and
-  reset (`planType`, `resetsInMs`), and the GLM Coding Plan's is named by its
-  route, `glm-coding-plan-subscription`; a subscription that cannot bill the
-  call is `RouteUnavailable.session` (`route`, `needsReauth`), with the
-  session's own failure as its message; an automatic fallback is a
-  `quotaFallback` log row recording the route
-  (`ProgressStatusRow.quotaFallback`), and a status row has no `detail`.
-  `RetryPermission` carries the failure once and whole as `errorDetails` (no
-  `errorMessage`). The end-of-run notice and the transcript's error details
-  show the harness's words. Conversations saved by an earlier build show as
-  written by that build and cannot be resumed by this one.
+  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA words the facts
+  wherever it shows them, as before. A used-up plan's classification
+  carries its tier and reset (`planType`, `resetsInMs`), and the GLM Coding
+  Plan's is named by its route, `glm-coding-plan-subscription`; a
+  subscription that cannot bill the call is `RouteUnavailable.session`
+  (`route`, `needsReauth`), with the session's own failure as its message,
+  and is classified `subscription-session` (`route`, `needsReauth`,
+  `sessionError`); an automatic fallback is a `quotaFallback` log row
+  recording the route (`ProgressStatusRow.quotaFallback`), and a status row
+  has no `detail`. `RetryPermission` carries the failure once and whole as
+  `errorDetails` (no `errorMessage`). A `requestShowError` notice carries
+  the failure's classification beside its message
+  (`RequestShowErrorPayloadSchema`), an error row the classified failure it
+  records (`ErrorRow.failure`, and no `detailText`: a host joins `details`),
+  and a classified failure's run end names its cause without "Error
+  executing agent …:". `getSdkErrorMessage` (`./host`)
+  is `normalizeProviderError`, which returns the message with its
+  classification (`ProviderError`). Conversations saved by an earlier build
+  show as written by that build and cannot be resumed by this one.
 - **SDK: a refused launch is its caller's to show.** `session.start` and
   `session.resume` no longer show the unknown-model instruction or the
   missing-agent notice through the session's host, at once or to a host
@@ -1391,6 +1397,19 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A used-up plan or a lapsed subscription reads in TeXRA's words again
+  wherever a run's failure shows.** The end-of-run notice (the desktop and
+  VS Code message, `texra run`'s `ERROR` line), a launch that fails before
+  its run starts, and the transcript's error rows say which plan ran out
+  and which switch or sign-in to use, as before: "ChatGPT
+  subscription usage limit reached (Plus plan). Resets in 2h 5m. Switch to
+  your own OpenAI API key to keep working, or wait until the limit
+  resets." and "ChatGPT subscription unavailable: … Sign in with ChatGPT
+  again, or turn off "ChatGPT subscription"." Such a failure leads with its
+  cause, without "Error executing agent …:" in front. The ChatGPT sign-in,
+  the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
+  the setup assistant and the guide say "OpenAI models" where they said
+  "Codex models".
 - **No model request runs only to title a subagent, and the SDK sends none
   you did not ask for.** A subagent or a script's `self()` round keeps its
   agent name instead of a generated title, so a loop of rounds no longer
@@ -1426,7 +1445,13 @@ show` print the same notice, and the new `texra agents customize`,
   and shows the same diff. Before, both lived only in the process that
   opened the request, and a resume applied the tool's own proposal. A
   window that closes mid-review takes its unsent edits with it, as an
-  editor does.
+  editor does. Every window of the project shows the same proposal, and
+  changes made in one window go only with an approval from that window:
+  an approval sent after another window answered is refused. When the
+  request closes without the changes made in a window (another window or
+  the terminal answered it, or the task stopped), that window keeps them,
+  VS Code in a new editor and the desktop app in the file its editor
+  saved, and says they were not applied.
 - **A task interrupted by a crash is no longer held forever after the
   network changes.** On macOS the computer's name follows the network (a
   router-assigned name at home, `name.local` elsewhere), and a task whose

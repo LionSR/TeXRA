@@ -217,7 +217,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.subscriptionLabel,
-    preferDescription: 'Use the subscription for eligible Codex models.',
+    preferDescription: 'Use the subscription for eligible OpenAI models.',
     accountTitle: 'ChatGPT account',
     connectDescription:
       'Connect the ChatGPT account that owns your subscription.',

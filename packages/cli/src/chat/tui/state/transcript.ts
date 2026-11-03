@@ -84,7 +84,6 @@ function localTranscriptRow(
       kind: 'error',
       summary: body,
       details: [],
-      detailText: transcriptText(''),
     };
   }
   if (kind === 'user') {
