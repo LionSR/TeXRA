@@ -364,7 +364,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     return yield* inbox.send(
       runId,
       { ...item, ...media },
-      { hold, fromParent, wakesOnly: live === undefined },
+      { hold, fromParent, wakesOnly: live === undefined, caller },
     );
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if ('status' in sent) return sent;
