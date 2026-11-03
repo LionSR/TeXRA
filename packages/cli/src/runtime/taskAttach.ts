@@ -10,7 +10,15 @@
  * Attaching never steers the task: it ends when the task reaches a terminal
  * outcome, and an interrupt only detaches this client.
  */
-import { Effect, Fiber, LogLevel, Option, Schema, Stream } from 'effect';
+import {
+  Effect,
+  Fiber,
+  LogLevel,
+  Option,
+  Predicate,
+  Schema,
+  Stream,
+} from 'effect';
 import stripAnsi from 'strip-ansi';
 
 import {
@@ -169,7 +177,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
       writeProgress(frame, aggregate, includeDebugLogs);
   }).pipe(
     Stream.map((view) => view.runs.get(task.runId)),
-    Stream.filter((run): run is RunView => run !== undefined),
+    Stream.filter(Predicate.isNotUndefined),
     Stream.takeUntil((run) => isTerminalOutcomePhase(run.status)),
     Stream.tap((run) =>
       Effect.sync(() => printSettled(run, isTerminalOutcomePhase(run.status))),

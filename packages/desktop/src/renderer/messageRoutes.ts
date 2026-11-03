@@ -2,7 +2,7 @@
 // outbound union (`DesktopOutboundMessageSchema`), so a main-process push added
 // there without its renderer end fails to compile.
 
-import { Result, Schema } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages';
 
 type Push = typeof DesktopOutboundMessageSchema.Type;
@@ -22,8 +22,11 @@ export function createMessageRoutes(
   routes: DesktopPushRoutes,
 ): (data: unknown) => void {
   return (data) => {
-    if (typeof data !== 'object' || data === null) return;
-    if (!('command' in data) || typeof data.command !== 'string') return;
+    if (
+      !Predicate.hasProperty(data, 'command') ||
+      !Predicate.isString(data.command)
+    )
+      return;
     if (!data.command.startsWith('desktop:')) return;
     const parsed = Schema.decodeUnknownResult(DesktopOutboundMessageSchema)(
       data,

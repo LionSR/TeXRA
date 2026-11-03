@@ -3,7 +3,7 @@
 // names that project, since the window may be showing another.
 
 import { type BrowserWindow, dialog } from 'electron';
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { NotificationFailed, PromptFailed } from '@texra/hosts/uiHosts';
@@ -29,7 +29,7 @@ function inProject(project: string | undefined, detail?: string) {
   return {
     title: project,
     detail: [detail, `Project: ${project}`]
-      .filter((line) => line !== undefined)
+      .filter(Predicate.isNotUndefined)
       .join('\n\n'),
   };
 }

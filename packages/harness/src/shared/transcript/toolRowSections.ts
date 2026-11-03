@@ -53,7 +53,7 @@ function asString(value: unknown): string | undefined {
 
 function toStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value.filter((item): item is string => typeof item === 'string');
+  return value.filter(Predicate.isString);
 }
 
 /** The label of the section that carries an `agent` call's delivered answer. */

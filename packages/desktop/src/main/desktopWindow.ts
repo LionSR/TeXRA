@@ -15,7 +15,6 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -250,7 +249,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // reset claims it in `did-navigate`'s own step, so the new document's first
   // `subscribe` (or terminal) reaches the binding the reset makes, never the
   // one it is about to close.
-  const routing = withPerKeyLane(new Map<string, PerKeyLane>(), 'routing');
+  const routing = Semaphore.makeUnsafe(1).withPermit;
 
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler

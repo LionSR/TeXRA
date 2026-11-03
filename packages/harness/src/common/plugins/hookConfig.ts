@@ -5,7 +5,7 @@
 // (`2026-09-28-code-plugins-hooks-v1.md`).
 
 // Third-party imports
-import { Schema } from 'effect';
+import { Predicate, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
@@ -297,7 +297,7 @@ export function claudeToolCall(
 } {
   const tool = CLAUDE_TOOLS[name];
   // The hook saw the harness's own input, so its rewrite is one.
-  if (tool === undefined || typeof input !== 'object' || input === null)
+  if (tool === undefined || !Predicate.isObjectOrArray(input))
     return { toolName: name, toolInput: input, fromHook: (input) => input };
   // cast: an object, as checked above.
   const issued = input as Fields;

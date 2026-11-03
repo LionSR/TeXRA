@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, Layer, Stream } from 'effect';
+import { Effect, Layer, Schedule, Stream } from 'effect';
 import {
   type Model,
   type ModelConfig,
@@ -105,11 +105,13 @@ function goldenTurn(
   flagPath: string,
   call: (name: string, input: unknown) => TurnResult['content'][number],
 ): Effect.Effect<TurnResult['content'] | null> {
-  const gate = (name: string) =>
-    Effect.gen(function* () {
-      const file = path.join(path.dirname(flagPath), name);
-      while (!existsSync(file)) yield* Effect.sleep('20 millis');
-    });
+  const gate = (name: string) => {
+    const file = path.join(path.dirname(flagPath), name);
+    return Effect.sync(() => existsSync(file)).pipe(
+      Effect.repeat({ until: Boolean, schedule: Schedule.spaced('20 millis') }),
+      Effect.asVoid,
+    );
+  };
   const system = turn.system ?? '';
   const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);

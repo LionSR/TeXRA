@@ -1,3 +1,4 @@
+import { Predicate } from 'effect';
 import { Skills } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICIES,
@@ -288,9 +289,7 @@ export function rejectHeadlessOnlyFlags(
 ): void {
   const labels = [
     ...new Set(
-      rawArgs
-        .map(headlessOnlyFlagLabel)
-        .filter((label): label is string => label !== undefined),
+      rawArgs.map(headlessOnlyFlagLabel).filter(Predicate.isNotUndefined),
     ),
   ];
   if (labels.length === 0) return;

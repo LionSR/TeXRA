@@ -6,7 +6,7 @@
 // that names the hooks is `./hookConfig`'s.
 
 // Third-party imports
-import { Result, Schema } from 'effect';
+import { Predicate, Result, Schema } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
@@ -414,7 +414,7 @@ export function interpretHookRun(asked: HookAsked, run: HookRun): HookVerdict {
         ? `A SessionStart hook exited with code 2: ${firstLine(stderr)}`
         : null,
       ignoredWarning(event, ignored),
-    ].filter((line): line is string => line !== null);
+    ].filter(Predicate.isNotNull);
     return {
       status: 'blocked',
       // On `PreToolUse`, exit 2 denies whatever the output said.

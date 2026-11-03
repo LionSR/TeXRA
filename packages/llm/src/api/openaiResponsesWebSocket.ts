@@ -186,18 +186,17 @@ const connect = Effect.fnUntraced(function* (
     socket.once('unexpected-response', onUnexpected);
     return Effect.sync(remove);
   }).pipe(Effect.interruptible);
-  yield* Effect.gen(function* () {
-    while (!invalid) {
-      yield* Effect.sleep(30_000);
-      if (!invalid)
-        yield* Effect.callback<void>((resume) => {
-          socket.ping((cause: Error | undefined) => {
-            if (cause) invalidate(failure(cause));
-            resume(Effect.void);
-          });
-        });
-    }
-  }).pipe(Effect.forkScoped);
+  const ping = Effect.callback<void>((resume) => {
+    socket.ping((cause: Error | undefined) => {
+      if (cause) invalidate(failure(cause));
+      resume(Effect.void);
+    });
+  });
+  yield* Effect.suspend(() => (invalid ? Effect.void : ping)).pipe(
+    Effect.delay('30 seconds'),
+    Effect.repeat({ while: () => !invalid }),
+    Effect.forkScoped,
+  );
 
   /** Send one turn and stream its events; the caller's scope holds the turn. */
   const send = (input: Parameters<Model['streamTurn']>[0]) => {
