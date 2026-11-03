@@ -1,0 +1,59 @@
+[
+  {
+    "tool": "script",
+    "input": {
+      "code": "phase(\"Round 1: check Setup\");\nconst r1 = await self(\n  `You are reviewing a draft paper excerpt. Here it is:\n\n\\\\section{Setup}\nLet $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\n\\\\section{Main bound}\nWe claim $\\\\sup_K |f| \\\\le 1$. The proof is omitted.\n\\\\section{Discussion}\nThe bound is sharp for constant functions.\n\nTask: check ONLY the Setup section. Report whether it is well-posed / has any gap (missing hypotheses, undefined symbols, quantifiers, etc.). Do not review other sections; if an issue belongs to another section, note its location but do not analyze it. Be concise.`,\n  {\n    label: \"round 1: Setup verdict\",\n    schema: {\n      type: \"object\",\n      properties: {\n        verdict: { type: \"string\", description: \"One-line overall verdict on Setup\" },\n        gaps: {\n          type: \"array\",\n          items: {\n            type: \"object\",\n            properties: {\n              issue: { type: \"string\" },\n              section: { type: \"string\", description: \"Section the issue lives in\" },\n              why: { type: \"string\" }\n            },\n            required: [\"issue\", \"section\", \"why\"]\n          }\n        },\n        pointed_section: { type: \"string\", description: \"Section round 2 should examine next, or 'Main bound' if none\" }\n      },\n      required: [\"verdict\", \"gaps\", \"pointed_section\"]\n    }\n  }\n);\nconsole.log(\"ROUND 1:\", JSON.stringify(r1.structured ?? r1.response));\n\nconst v1 = r1.structured?.verdict ?? r1.response;\nconst signoff = await await_signoff({ verdict: v1 });\nconsole.log(\"SIGNOFF:\", signoff.output);\n\nphase(\"Round 2: check pointed section\");\nconst target = r1.structured?.pointed_section ?? \"Main bound\";\nconst r2 = await self(\n  `You are reviewing a draft paper excerpt. Here it is:\n\n\\\\section{Setup}\nLet $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\n\\\\section{Main bound}\nWe claim $\\\\sup_K |f| \\\\le 1$. The proof is omitted.\n\\\\section{Discussion}\nThe bound is sharp for constant functions.\n\nRound 1 reviewed only the Setup section and returned this verdict:\n${JSON.stringify(r1.structured ?? r1.response)}\n\nTask: check ONLY the section \"${target}\" — the one round 1's verdict points to. Report its gaps (e.g. unjustified claims, missing proof, unsupported sharpness statement). Do not re-review Setup. Be concise.`,\n  {\n    label: `round 2: ${target} verdict`,\n    schema: {\n      type: \"object\",\n      properties: {\n        section_reviewed: { type: \"string\" },\n        verdict: { type: \"string\" },\n        gaps: {\n          type: \"array\",\n          items: {\n            type: \"object\",\n            properties: {\n              issue: { type: \"string\" },\n              why: { type: \"string\" }\n            },\n            required: [\"issue\", \"why\"]\n          }\n        }\n      },\n      required: [\"section_reviewed\", \"verdict\", \"gaps\"]\n    }\n  }\n);\nconsole.log(\"ROUND 2:\", JSON.stringify(r2.structured ?? r2.response));\n\nreturn {\n  round1: r1.structured ?? r1.response,\n  signoff: signoff.output,\n  round2: r2.structured ?? r2.response\n};",
+      "title": "Two-round draft review"
+    },
+    "status": "open"
+  },
+  {
+    "tool": "self",
+    "input": {
+      "label": "round 1: Setup verdict",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "verdict": {
+            "type": "string",
+            "description": "One-line overall verdict on Setup"
+          },
+          "gaps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "issue": {
+                  "type": "string"
+                },
+                "section": {
+                  "type": "string",
+                  "description": "Section the issue lives in"
+                },
+                "why": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "issue",
+                "section",
+                "why"
+              ]
+            }
+          },
+          "pointed_section": {
+            "type": "string",
+            "description": "Section round 2 should examine next, or 'Main bound' if none"
+          }
+        },
+        "required": [
+          "verdict",
+          "gaps",
+          "pointed_section"
+        ]
+      },
+      "prompt": "You are reviewing a draft paper excerpt. Here it is:\n\n\\section{Setup}\nLet $K \\subset \\mathbb{R}^n$ be compact and $f\\colon K \\to \\mathbb{R}$ continuous.\n\\section{Main bound}\nWe claim $\\sup_K |f| \\le 1$. The proof is omitted.\n\\section{Discussion}\nThe bound is sharp for constant functions.\n\nTask: check ONLY the Setup section. Report whether it is well-posed / has any gap (missing hypotheses, undefined symbols, quantifiers, etc.). Do not review other sections; if an issue belongs to another section, note its location but do not analyze it. Be concise."
+    },
+    "status": "open"
+  }
+]

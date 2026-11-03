@@ -1,0 +1,53 @@
+{
+  "scenario": "codemode",
+  "passed": true,
+  "reason": null,
+  "runId": "dfe22503284f",
+  "checks": [
+    {
+      "name": "run completed",
+      "ok": true,
+      "detail": "completed"
+    },
+    {
+      "name": "a script finished",
+      "ok": true,
+      "detail": "[\"script:completed\",\"executions:completed\",\"script:completed\",\"script:completed\",\"outline_sections:completed\",\"self:completed\",\"self:completed\",\"executions:completed\",\"executions:completed\"]"
+    },
+    {
+      "name": "the module called the plugin tool",
+      "ok": true
+    },
+    {
+      "name": "two self() rounds completed",
+      "ok": true,
+      "detail": "2 of 2"
+    },
+    {
+      "name": "each round ended with a structured verdict naming a section",
+      "ok": true,
+      "detail": "[{\"section\":\"Setup\",\"claim\":\"The section's technical content is the stipulation that K is a compact subset of R^n and f: K -> R is continuous — the hypotheses on which the paper's sup bound rests.\",\"supported\":true,\"evidence\":\"The whole section reads: \\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\" It contains nothing else — no derivation, numbers, or citation.\",\"problem\":\"None inside this section: these are objects introduced by \\\"Let\\\", i.e. hypotheses, not assertoric claims, so no proof or citation is owed and nothing stated here lacks support. Th… [2039 chars]"
+    },
+    {
+      "name": "an executions SQL query succeeded",
+      "ok": true
+    },
+    {
+      "name": "the script returned every section title",
+      "ok": true,
+      "detail": "{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"round1\":{\"section\":\"Setup\",\"claim\":\"The section's technical content is the stipulation that K is a compact subset of R^n and f: K -> R is continuous — the hypotheses on which the paper's sup bound rests.\",\"supported\":true,\"evidence\":\"The whole section reads: \\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\" It contains nothing else — no derivation, numbers, or citation.\",\"problem\":\"None inside this section: these are objects introduced by \\\"Let\\\", i.e. hypotheses, not assertoric claims, so no proof … [2215 chars]"
+    },
+    {
+      "name": "the returned count matches the finished children",
+      "ok": true,
+      "detail": "{\"completed\":2,\"returned\":{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"round1\":{\"section\":\"Setup\",\"claim\":\"The section's technical content is the stipulation that K is a compact subset of R^n and f: K -> R is continuous — the hypotheses on which the paper's sup bound rests.\",\"supported\":true,\"evidence\":\"The whole section reads: \\\"Let $K \\\\subset \\\\mathbb{R}^n$ be compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ continuous.\\\" It contains nothing else — no derivation, numbers, or citation.\",\"problem\":\"None inside this section: these are objects introduced by \\\"Let\\\", i.e. hypotheses, not asser… [2242 chars]"
+    }
+  ],
+  "costUsd": 0.005568918,
+  "inputTokens": 57461,
+  "outputTokens": 5955,
+  "runs": 3,
+  "scripts": 3,
+  "failedScripts": 0,
+  "seconds": 40
+}

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "2701669016a1",
+    "parentId": null,
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 76698,
+      "outputTokens": 3313,
+      "cost": 0.0033318600000000007,
+      "cachedInputTokens": 69120,
+      "cacheMissInputTokens": 7578,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 1233,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "e70fec1f90d6d79e7399d489",
+    "parentId": "2701669016a1",
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 17151,
+      "outputTokens": 1769,
+      "cost": 0.001884162,
+      "cachedInputTokens": 11904,
+      "cacheMissInputTokens": 5247,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 1355,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "635cc379c82276ef453b5e67",
+    "parentId": "2701669016a1",
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 41675,
+      "outputTokens": 853,
+      "cost": 0.0008360100000000003,
+      "cachedInputTokens": 40320,
+      "cacheMissInputTokens": 1355,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 112,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "44cc4980082b740fb6eb099e",
+    "parentId": "2701669016a1",
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 44507,
+      "outputTokens": 1529,
+      "cost": 0.00138417,
+      "cachedInputTokens": 42240,
+      "cacheMissInputTokens": 2267,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 770,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "e97758d9ce2271c1caa32a13",
+    "parentId": "2701669016a1",
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 17827,
+      "outputTokens": 814,
+      "cost": 0.0006599220000000001,
+      "cachedInputTokens": 17024,
+      "cacheMissInputTokens": 803,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 386,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  }
+]

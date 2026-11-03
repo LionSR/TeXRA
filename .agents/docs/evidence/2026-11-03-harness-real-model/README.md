@@ -6,15 +6,33 @@ The real-model half of the 1.0 acceptance in
 2026-11-03, are Anthropic and DeepSeek. No budget is set, so only small manual
 runs are allowed and nothing runs in CI.
 
-**No route has passed yet.** As of 2026-11-03, no run has reached a model:
+**DeepSeek has passed; Anthropic has not run.** As of 2026-11-03:
 
-- DeepSeek: the account behind `DEEPSEEK_API_KEY` has no credit
-  (`/user/balance` reports `is_available: false`), so every request is refused
-  with HTTP 402.
+- DeepSeek (`deepseek/deepseek-flash`): every scenario passed, twice, on the
+  build of #(this PR). The first run that reached the model, on `171aa36b38`,
+  failed two of three; the fixes are in findings 4 and 5 below.
 - Anthropic: no `ANTHROPIC_API_KEY` is set; the run waits for the owner.
 
-Neither attempt is kept as evidence. The first run that reaches a model on a
-route writes its directory here.
+## Runs
+
+Each directory is one run. Its `summary.md` names `171aa36b38`, the commit the
+worktree was on; the runs after the first packed that commit with this PR's
+changes on top, uncommitted. Runs on intermediate versions of the fix are not
+kept.
+
+| Run                                                                       | Harness                 | codemode | plugin | crash-resume  | Spend (USD) |
+| ------------------------------------------------------------------------- | ----------------------- | -------- | ------ | ------------- | ----------- |
+| [`deepseek-deepseek-flash-1931`](deepseek-deepseek-flash-1931/summary.md) | `171aa36b38`            | fail     | pass   | fail          | 0.0144      |
+| [`deepseek-deepseek-flash-2016`](deepseek-deepseek-flash-2016/summary.md) | this PR, earlier runner | pass     | pass   | pass          | 0.0124      |
+| [`deepseek-deepseek-flash-2018`](deepseek-deepseek-flash-2018/summary.md) | this PR, earlier runner | pass     | pass   | fail (runner) | 0.0134      |
+| [`deepseek-deepseek-flash-2021`](deepseek-deepseek-flash-2021/summary.md) | this PR                 | pass     | pass   | pass          | 0.0129      |
+
+Run `2018`'s crash-resume failed on the runner's checks, not the harness's
+behavior: the model first tried `self()` out in a separate script, and the
+runner counted that probe's child as a round and judged the first script as
+the interrupted one. The resumed run completed, the committed children did not
+run again, and the interrupted script finished. The runner now follows the
+script that was open at the kill (finding 6).
 
 ## What the runner covers
 
@@ -56,18 +74,34 @@ to a git-ignored `store/`. The format is in the
 
 From the attempts and from checking the runner on the in-memory model:
 
-1. **Every run, each `self()` child included, sends an unrequested label
-   request, outside the run's usage.** `generateSessionDescription`
-   (`packages/harness/src/agent/runtime/sessionDescription.ts`) sends a helper
-   request on the run's model for every run with an instruction, with no way to
-   turn it off, and its spend is not in the run's `usage` or `runs.cost`.
-2. **The harness writes its log lines to the embedder's stdout**
-   (`[agentRegistry] Loaded 1 agents`, `[executeAgent] Starting run`, the
-   route's effort substitution note), so a program printing its own output
-   gets them mixed in.
+1. **Every run, each `self()` child included, sent an unrequested label
+   request, outside the run's usage.** Only a root run is labelled now, and
+   only when the composition asks for it (#14607); the label's spend is counted
+   in the run's usage (#14621).
+2. **The harness wrote its log lines to the embedder's stdout.** Fixed: an
+   embedder's logger decides where the harness logs (#14608).
 3. **A plugin tool that waits needs `slow: true` to be seen waiting.** Without
    it the call's card opens only when the call ends; `slow` is documented in
-   one line on `ToolDefinition` only.
+   one line on `ToolDefinition` only. Open.
+4. **A `self()` child could not tell its part from its parent's task.** Forked,
+   the child's first message was the parent's request with the `self()` prompt
+   appended as one more paragraph; fresh, it was the prompt alone, with the
+   parent's tools. On `171aa36b38` the crash-resume children each ran the whole
+   task again, `self()` rounds included, four levels deep, and one called the
+   parent's `await_signoff` itself. Fixed in this PR: the child reads its
+   prompt inside `<task>` under a note that a script of its own started it for
+   one part of the work (`selfTask`, `packages/harness/src/tools/codemode/SelfTool.ts`).
+5. **A plugin's script module was named nowhere the model reads.** The `script`
+   description said a module is imported by "the specifier a description
+   names", and nothing named `builtIn:notes`; a run passed only when the model
+   probed `import()` and read the error, which lists what is offered. Fixed in
+   this PR: the description lists the modules the step's scripts may import.
+6. **The runner's checks assumed the model writes one script.** DeepSeek tries
+   the functions out first, and sometimes runs a last script that only checks
+   a count. Codemode now judges the last script that returned the asked-for
+   object, and crash-resume the script open at the kill.
 
 DeepSeek's out-of-credit 402 was read as an unexpected error; that is fixed
-(#14606).
+(#14606). DeepSeek also tends to call `self()` with one object
+(`self({ prompt, schema })`) before the positional form; the call fails with a
+validation error naming `prompt` and the model recovers.

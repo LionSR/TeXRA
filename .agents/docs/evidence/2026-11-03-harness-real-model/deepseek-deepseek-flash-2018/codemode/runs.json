@@ -1,0 +1,68 @@
+[
+  {
+    "id": "dfe22503284f",
+    "parentId": null,
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 25140,
+      "outputTokens": 2536,
+      "cost": 0.002526648,
+      "cachedInputTokens": 18816,
+      "cacheMissInputTokens": 6324,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 1189,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "327c7dfc635de411c8aaa2cd",
+    "parentId": "dfe22503284f",
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 20181,
+      "outputTokens": 2694,
+      "cost": 0.00247971,
+      "cachedInputTokens": 14720,
+      "cacheMissInputTokens": 5461,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 2108,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "81fdc070d431dd02d76ba1ee",
+    "parentId": "dfe22503284f",
+    "identity": {
+      "kind": "agent",
+      "agent": "draft_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 12140,
+      "outputTokens": 725,
+      "cost": 0.00056256,
+      "cachedInputTokens": 11520,
+      "cacheMissInputTokens": 620,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 186,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  }
+]

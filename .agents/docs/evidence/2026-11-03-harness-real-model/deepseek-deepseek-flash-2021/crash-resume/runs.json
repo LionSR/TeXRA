@@ -1,0 +1,90 @@
+[
+  {
+    "id": "50a3cb273a4a",
+    "parentId": null,
+    "identity": {
+      "kind": "agent",
+      "agent": "two_round_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 41522,
+      "outputTokens": 6110,
+      "cost": 0.004531739999999999,
+      "cachedInputTokens": 36480,
+      "cacheMissInputTokens": 5042,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 2949,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "ff5da1198b8c5aa489f214ee",
+    "parentId": "50a3cb273a4a",
+    "identity": {
+      "kind": "agent",
+      "agent": "two_round_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 3107,
+      "outputTokens": 2,
+      "cost": 0.0003731699999999999,
+      "cachedInputTokens": 640,
+      "cacheMissInputTokens": 2467,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 0,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "c51ddea37c88c4a85dc6fe22",
+    "parentId": "50a3cb273a4a",
+    "identity": {
+      "kind": "agent",
+      "agent": "two_round_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 3747,
+      "outputTokens": 545,
+      "cost": 0.00047509799999999997,
+      "cachedInputTokens": 2816,
+      "cacheMissInputTokens": 931,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 371,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  },
+  {
+    "id": "006f3c4639b47539e28b0461",
+    "parentId": "50a3cb273a4a",
+    "identity": {
+      "kind": "agent",
+      "agent": "two_round_reviewer"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 3727,
+      "outputTokens": 1108,
+      "cost": 0.0007910819999999998,
+      "cachedInputTokens": 2944,
+      "cacheMissInputTokens": 783,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 725,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  }
+]

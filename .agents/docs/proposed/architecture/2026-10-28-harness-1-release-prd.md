@@ -480,7 +480,7 @@ TeXRA 强在耐久性（重试预算按行计、子结果与父投递同一事�
 
 确定性故障注入用于验证运行契约，真实模型用于验证接口是否能被正确使用，两类证据分别报告。真实模型验收至少覆盖两条受支持的模型路线，并记录模型、配置、脚本、调用历史、产物及失败原因；没有实际运行的项目不能标为通过。
 
-真实模型验收的运行器是 [`acceptance.ts`](../../../../packages/harness/example/acceptance.ts)（`example:acceptance`），状态与每次运行的证据在 [`2026-11-03-harness-real-model/`](../../evidence/2026-11-03-harness-real-model/README.md)。至今没有运行到达模型，两条路线均未通过：DeepSeek 账户没有余额，Anthropic 密钥尚未设置。
+真实模型验收的运行器是 [`acceptance.ts`](../../../../packages/harness/example/acceptance.ts)（`example:acceptance`），状态与每次运行的证据在 [`2026-11-03-harness-real-model/`](../../evidence/2026-11-03-harness-real-model/README.md)。DeepSeek 路线已通过（`deepseek/deepseek-flash`，2026-11-03，三个场景各两次通过）；首次运行暴露的 `self()` 子运行分不清自身任务、插件脚本模块无处列出两个问题已一并修复。Anthropic 路线未运行，密钥尚未设置。
 
 R12 的三种日常变更已在 main @ `6bf71c2fda` 上实际做过一遍（数字与文件见下方 Verified 的“2026-11-03 R12 改动范围实测”）。新增普通工具和改写 goal 都没有碰恢复、交接和存储版本，也不需要新的内部 import 或放宽 baseline，符合预期。更换执行 backend 的代码同样只改 llm 的两张表，但已有运行的续跑没有被任何检查覆盖：协议换掉后，旧运行照常通过续跑前的检查，到第一次准备请求时才被拒绝。R12 中“汇总 A 至 C、旧路径已删除”一项不在这次实测范围内，仍未判定。
 

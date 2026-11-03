@@ -1,0 +1,45 @@
+{
+  "scenario": "crash-resume",
+  "passed": true,
+  "reason": null,
+  "runId": "50a3cb273a4a",
+  "checks": [
+    {
+      "name": "killed by SIGKILL",
+      "ok": true,
+      "detail": "SIGKILL"
+    },
+    {
+      "name": "exactly one round was committed before the kill",
+      "ok": true,
+      "detail": "1"
+    },
+    {
+      "name": "resumed run completed",
+      "ok": true,
+      "detail": "completed"
+    },
+    {
+      "name": "committed children did not run again",
+      "ok": true,
+      "detail": "{\"before\":{\"ff5da1198b8c5aa489f214ee\":2,\"c51ddea37c88c4a85dc6fe22\":4},\"unchanged\":[\"ff5da1198b8c5aa489f214ee\",\"c51ddea37c88c4a85dc6fe22\"]}"
+    },
+    {
+      "name": "a second round ran and completed after the resume",
+      "ok": true,
+      "detail": "[\"ff5da1198b8c5aa489f214ee:completed\",\"c51ddea37c88c4a85dc6fe22:completed\",\"006f3c4639b47539e28b0461:completed\"]"
+    },
+    {
+      "name": "the interrupted script finished from its saved source",
+      "ok": true,
+      "detail": "completed"
+    }
+  ],
+  "costUsd": 0.006171089999999999,
+  "inputTokens": 52103,
+  "outputTokens": 7765,
+  "runs": 4,
+  "scripts": 5,
+  "failedScripts": 2,
+  "seconds": 47
+}

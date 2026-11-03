@@ -151,10 +151,11 @@ const runSelf = Effect.fn('self.call')(function* (
   // with the grants its parent holds now.
   const launched = yield* Effect.result(
     Effect.gen(function* () {
-      const forked =
-        input.fork && source !== null
-          ? yield* forkSeed(source, before, runId, input.prompt, boundAt)
-          : null;
+      const fork = input.fork && source !== null;
+      const task = selfTask(input.prompt, fork);
+      const forked = fork
+        ? yield* forkSeed(source, before, runId, task, boundAt)
+        : null;
       return yield* executeSubagentInBand({
         runId,
         parentRunId,
@@ -162,8 +163,8 @@ const runSelf = Effect.fn('self.call')(function* (
           ...(forked?.record ?? {
             ...launch,
             model: (yield* SynchronizedRef.get(run.model)).modelId,
-            instruction: input.prompt,
-            displayInstruction: null,
+            instruction: task,
+            displayInstruction: input.prompt,
             outputFiles: [],
             cli: null,
           }),
@@ -181,6 +182,20 @@ const runSelf = Effect.fn('self.call')(function* (
     ? failedResult(name, launched.failure)
     : yield* childResult(call, name, launched.success, undefined);
 });
+
+/**
+ * The message a run of you that `self()` started reads its prompt in. Without
+ * it the child cannot tell its part from the task its parent's script is
+ * doing: forked, the request above it is that task; either way it holds the
+ * same tools, and a child that takes on the whole task runs it again, its
+ * own `self()` calls and the parent's waits included.
+ */
+function selfTask(prompt: string, forked: boolean): string {
+  const context = forked
+    ? 'The request above is the one that script is already carrying out; this run does one part of it, the task below.'
+    : 'It does one part of the work that script is carrying out, the task below.';
+  return `A script of yours started this run of you with self(). ${context} Do only that task, without taking on the rest of the work or starting self() or agent() runs for it, and end with its result.\n\n<task>\n${prompt}\n</task>`;
+}
 
 /** The `self` function of a script. */
 export const SelfTool = defineTool({

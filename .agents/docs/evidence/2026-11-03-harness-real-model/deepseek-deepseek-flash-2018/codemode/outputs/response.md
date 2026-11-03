@@ -1,0 +1,1 @@
+The review found that "Setup" is unproblematic (it only states hypotheses), while "Main bound" asserts sup_K|f| ≤ 1 as an omitted-proof claim that is unsupported and, as stated, false — K = [0,1], f ≡ 2 gives sup = 2 — with "Discussion" the natural next check.

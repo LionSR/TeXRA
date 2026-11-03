@@ -1,0 +1,24 @@
+[
+  {
+    "id": "e88bc5c6e4ae",
+    "parentId": null,
+    "identity": {
+      "kind": "agent",
+      "agent": "note_taker"
+    },
+    "model": "deepseek/deepseek-flash",
+    "status": "completed",
+    "outcome": "completed",
+    "usage": {
+      "inputTokens": 16676,
+      "outputTokens": 671,
+      "cost": 0.001003584,
+      "cachedInputTokens": 12928,
+      "cacheMissInputTokens": 3748,
+      "cacheWriteTokens": 0,
+      "reasoningTokens": 228,
+      "toolUsePromptTokens": 0,
+      "usageRoute": "api-key"
+    }
+  }
+]

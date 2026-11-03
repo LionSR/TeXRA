@@ -1,0 +1,31 @@
+[
+  [
+    "add"
+  ],
+  [
+    {
+      "arg": "Lemma 2 needs a citation.",
+      "ok": {
+        "text": "Lemma 2 needs a citation."
+      }
+    }
+  ],
+  [
+    {
+      "name": "memory",
+      "line": "Manage persistent memory files under /memories (view, create, str_replace, insert, delete, rename, pin, unpin)."
+    },
+    {
+      "name": "note_add",
+      "line": "Keep a note about the draft."
+    }
+  ],
+  {
+    "Lemma 2 needs a citation.": {
+      "text": "Lemma 2 needs a citation."
+    },
+    "Section 3 is done.": {
+      "text": "Section 3 is done."
+    }
+  }
+]

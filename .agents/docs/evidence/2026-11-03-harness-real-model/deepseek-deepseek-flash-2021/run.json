@@ -1,0 +1,149 @@
+{
+  "route": "deepseek",
+  "model": "deepseek/deepseek-flash",
+  "started": "2026-11-03T19:21:59.274Z",
+  "harness": "0.1.0",
+  "commit": "171aa36b38b04b032b3bb6841b929af9c11fc43e",
+  "node": "v26.12.1",
+  "runLimit": "8 minutes",
+  "skipped": null,
+  "results": [
+    {
+      "scenario": "codemode",
+      "passed": true,
+      "reason": null,
+      "runId": "4fe7a174b904",
+      "checks": [
+        {
+          "name": "run completed",
+          "ok": true,
+          "detail": "completed"
+        },
+        {
+          "name": "a script finished",
+          "ok": true,
+          "detail": "[\"script:completed\",\"script:completed\",\"script:failed\",\"outline_sections:failed\",\"script:completed\",\"outline_sections:completed\",\"script:completed\",\"outline_sections:completed\",\"self:completed\",\"self:completed\",\"executions:completed\",\"executions:completed\"]"
+        },
+        {
+          "name": "the module called the plugin tool",
+          "ok": true
+        },
+        {
+          "name": "two self() rounds completed",
+          "ok": true,
+          "detail": "2 of 2"
+        },
+        {
+          "name": "each round ended with a structured verdict naming a section",
+          "ok": true,
+          "detail": "[{\"section\":\"Setup\",\"claim\":\"The section claims only that $K \\\\subset \\\\mathbb{R}^n$ is compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ is continuous; it asserts no substantive mathematical result of its own.\",\"supported\":false,\"reasoning\":\"The section is purely stipulative: it introduces a compact set $K$ and a continuous real-valued function $f$ on it, and stops there. Nothing is proved, bounded, or derived, so there is no substantive claim for the draft to support — a hypothesis-only setup makes no derivable claim. Note also that no compactness consequence (e.g. $f$ attains a finite maximum) is s… [1519 chars]"
+        },
+        {
+          "name": "an executions SQL query succeeded",
+          "ok": true
+        },
+        {
+          "name": "the script returned every section title",
+          "ok": true,
+          "detail": "{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"verdicts\":[{\"section\":\"Setup\",\"claim\":\"The section claims only that $K \\\\subset \\\\mathbb{R}^n$ is compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ is continuous; it asserts no substantive mathematical result of its own.\",\"supported\":false,\"reasoning\":\"The section is purely stipulative: it introduces a compact set $K$ and a continuous real-valued function $f$ on it, and stops there. Nothing is proved, bounded, or derived, so there is no substantive claim for the draft to support — a hypothesis-only setup makes no derivable claim. Note also that no … [1790 chars]"
+        },
+        {
+          "name": "the returned count matches the finished children",
+          "ok": true,
+          "detail": "{\"completed\":2,\"returned\":{\"sectionTitles\":[\"Setup\",\"Main bound\",\"Discussion\"],\"verdicts\":[{\"section\":\"Setup\",\"claim\":\"The section claims only that $K \\\\subset \\\\mathbb{R}^n$ is compact and $f\\\\colon K \\\\to \\\\mathbb{R}$ is continuous; it asserts no substantive mathematical result of its own.\",\"supported\":false,\"reasoning\":\"The section is purely stipulative: it introduces a compact set $K$ and a continuous real-valued function $f$ on it, and stops there. Nothing is proved, bounded, or derived, so there is no substantive claim for the draft to support — a hypothesis-only setup makes no derivable… [1817 chars]"
+        }
+      ],
+      "costUsd": 0.005271156,
+      "inputTokens": 61730,
+      "outputTokens": 5395,
+      "runs": 3,
+      "scripts": 5,
+      "failedScripts": 1,
+      "seconds": 35
+    },
+    {
+      "scenario": "plugin",
+      "passed": true,
+      "reason": null,
+      "runId": "e67241bf4814",
+      "checks": [
+        {
+          "name": "run completed",
+          "ok": true,
+          "detail": "completed"
+        },
+        {
+          "name": "a script imported the notes module",
+          "ok": true,
+          "detail": "[\"const notes = await import('builtIn:notes');\\nreturn Object.keys(notes);\",\"const notes = await import('builtIn:notes');\\nconst citations = await notes.add({ text: \\\"Lemma 2 needs a citation.\\\" });\\nconst section3 = await notes.add({ text: \\\"Section 3 is done.\\\" });\\nreturn { citations, section3 };\",\"const notes = await import('builtIn:notes');\\nconst attempts = [];\\nfor (const arg of [\\\"Lemma 2 needs a citation.\\\"]) {\\n  try { attempts.push({ arg, ok: await notes.add(arg) }); }\\n  catch (e) { attempts.push({ arg, err: String(e && e.message || e) }); }\\n}\\nreturn attempts;\",\"const found = awa… [929 chars]"
+        },
+        {
+          "name": "note_add ran from a script",
+          "ok": true
+        },
+        {
+          "name": "both notes are versioned facts of the plugin",
+          "ok": true,
+          "detail": "[\"Lemma 2 needs a citation.\",\"Lemma 2 needs a citation.\",\"Section 3 is done.\"]"
+        },
+        {
+          "name": "the script returned both notes",
+          "ok": true,
+          "detail": "{\"Lemma 2 needs a citation.\":{\"text\":\"Lemma 2 needs a citation.\"},\"Section 3 is done.\":{\"text\":\"Section 3 is done.\"}}"
+        }
+      ],
+      "costUsd": 0.0014685420000000002,
+      "inputTokens": 21597,
+      "outputTokens": 1376,
+      "runs": 1,
+      "scripts": 5,
+      "failedScripts": 1,
+      "seconds": 11
+    },
+    {
+      "scenario": "crash-resume",
+      "passed": true,
+      "reason": null,
+      "runId": "50a3cb273a4a",
+      "checks": [
+        {
+          "name": "killed by SIGKILL",
+          "ok": true,
+          "detail": "SIGKILL"
+        },
+        {
+          "name": "exactly one round was committed before the kill",
+          "ok": true,
+          "detail": "1"
+        },
+        {
+          "name": "resumed run completed",
+          "ok": true,
+          "detail": "completed"
+        },
+        {
+          "name": "committed children did not run again",
+          "ok": true,
+          "detail": "{\"before\":{\"ff5da1198b8c5aa489f214ee\":2,\"c51ddea37c88c4a85dc6fe22\":4},\"unchanged\":[\"ff5da1198b8c5aa489f214ee\",\"c51ddea37c88c4a85dc6fe22\"]}"
+        },
+        {
+          "name": "a second round ran and completed after the resume",
+          "ok": true,
+          "detail": "[\"ff5da1198b8c5aa489f214ee:completed\",\"c51ddea37c88c4a85dc6fe22:completed\",\"006f3c4639b47539e28b0461:completed\"]"
+        },
+        {
+          "name": "the interrupted script finished from its saved source",
+          "ok": true,
+          "detail": "completed"
+        }
+      ],
+      "costUsd": 0.006171089999999999,
+      "inputTokens": 52103,
+      "outputTokens": 7765,
+      "runs": 4,
+      "scripts": 5,
+      "failedScripts": 2,
+      "seconds": 47
+    }
+  ]
+}

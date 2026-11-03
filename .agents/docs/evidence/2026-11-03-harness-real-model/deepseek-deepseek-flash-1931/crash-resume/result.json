@@ -1,0 +1,20 @@
+{
+  "scenario": "crash-resume",
+  "passed": false,
+  "reason": "the script reached a committed self() result and a pending sign-off: self ended: false, sign-off started: true, crash process killed at the time limit",
+  "runId": "6ac135b450fa",
+  "checks": [
+    {
+      "name": "the script reached a committed self() result and a pending sign-off",
+      "ok": false,
+      "detail": "self ended: false, sign-off started: true, crash process killed at the time limit"
+    }
+  ],
+  "costUsd": 0.005237184,
+  "inputTokens": 21208,
+  "outputTokens": 6594,
+  "runs": 5,
+  "scripts": 1,
+  "failedScripts": 0,
+  "seconds": 481
+}

@@ -1,0 +1,18 @@
+{
+  "outcome": "completed",
+  "usage": {
+    "firstInputTokens": 2955,
+    "totalInputTokens": 16676,
+    "totalOutputTokens": 671,
+    "totalCost": 0.001003584,
+    "totalCachedInputTokens": 12928,
+    "totalCacheMissInputTokens": 3748,
+    "totalCacheWriteTokens": 0,
+    "totalReasoningTokens": 228,
+    "totalToolUsePromptTokens": 0
+  },
+  "output": {
+    "response": "Both notes are saved.\n\n- First (\"Lemma 2 needs a citation.\") returned `{ text: \"Lemma 2 needs a citation.\" }`\n- Second (\"Section 3 is done.\") returned `{ text: \"Section 3 is done.\" }`\n\nThe module's `add` takes the note text as a single string argument and echoes it back in a `{ text }` object.",
+    "files": []
+  }
+}

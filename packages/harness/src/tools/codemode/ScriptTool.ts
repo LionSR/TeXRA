@@ -342,7 +342,7 @@ const SURFACE = [
     '- `self(prompt, { fork, schema, label })` runs you again on `prompt` and resolves to its `{ response, structured?, cost, spent, … }`: forked (the default) from this conversation as it stood when the script started, or with `fork: false` from the prompt alone. A loop of `self()` calls that checks each reply is how a goal runs until it is met.',
     '- `phase(title)` labels the calls that follow; `console.log` lines stream to the card and the last 80 return with the result.',
   ].join('\n'),
-  '`const { name } = await import(specifier)` loads a module by the specifier a description names (`builtIn:<module>`); a static `import` line does not parse in a function body.',
+  '`const { name } = await import(specifier)` loads a module by its specifier (`builtIn:<module>`, listed below when you may import any); a static `import` line does not parse in a function body.',
   'There are no timers, no `Date.now()` and no `Math.random()`: the script replays exactly after an interruption, on the modules it first loaded, and calls that finished are not run again.',
 ].join('\n\n');
 
@@ -355,9 +355,15 @@ export const ScriptTool = defineTool({
   replay: 'safe',
   slow: true,
   description: SURFACE,
-  describe: (declared) =>
+  describe: (declared, modules) =>
     [
       SURFACE,
+      // A module no tool's description names is found only here.
+      ...(modules.length === 0
+        ? []
+        : [
+            `The modules you may import: ${modules.map((specifier) => `\`${specifier}\``).join(', ')}.`,
+          ]),
       'The tools you declared, as TypeScript (more are callable: `searchTools` finds them):',
       [
         '```ts',
