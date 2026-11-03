@@ -108,59 +108,58 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   // models, and an approval-policy write repaints the live session's policy
   // line (enforcement reads the config itself). `null` is the shared reset
   // convention (delete the key so the schema default reappears).
-  const applyUpdate = (
+  const applyUpdate = Effect.fn('applyUpdate')(function* (
     entry: TexraSettingRow,
     value: unknown,
-  ): Effect.Effect<void, Error> =>
-    Effect.gen(function* () {
-      const result = yield* applyStateSettingUpdate(entry.key, value, {
-        host: 'cli',
-        stores: roots,
-      });
-      const label = entry.title ?? entry.key;
-      switch (result.kind) {
-        case 'applied':
-          break;
-        case 'rejected':
-        case 'failed':
-          // ConfigForm rolls its optimistic value back on a failure and
-          // reports it, so a refused write must fail rather than read as
-          // applied.
-          return yield* Effect.fail(
-            new Error(
-              `Failed to update "${label}": ${toErrorMessage(result.error)}`,
-              { cause: result.error },
-            ),
-          );
-        case 'ignored':
-        case 'workspace-required':
-          return yield* Effect.fail(
-            new Error(
-              `Setting "${label}" is not writable from /config (${result.kind}).`,
-            ),
-          );
-      }
-      settings.reload();
-      if (entry.onWrite?.invalidatesModelOptions) {
-        bumpCodexPreferenceVersion();
-      }
-      if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
-        // The value is written: a failed repaint is reported, never rolled back.
-        yield* Settings.get<ApprovalPolicy>(roots, entry.key).pipe(
-          Effect.flatMap((policy) =>
-            Effect.try({
-              try: () => props.onApprovalPolicyChanged?.(policy),
-              catch: ensureError,
-            }),
-          ),
-          Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
-          Effect.ignore({
-            log: 'Warn',
-            message: 'Approval policy written; session repaint failed',
-          }),
-        );
-      }
+  ): Effect.fn.Return<void, Error> {
+    const result = yield* applyStateSettingUpdate(entry.key, value, {
+      host: 'cli',
+      stores: roots,
     });
+    const label = entry.title ?? entry.key;
+    switch (result.kind) {
+      case 'applied':
+        break;
+      case 'rejected':
+      case 'failed':
+        // ConfigForm rolls its optimistic value back on a failure and
+        // reports it, so a refused write must fail rather than read as
+        // applied.
+        return yield* Effect.fail(
+          new Error(
+            `Failed to update "${label}": ${toErrorMessage(result.error)}`,
+            { cause: result.error },
+          ),
+        );
+      case 'ignored':
+      case 'workspace-required':
+        return yield* Effect.fail(
+          new Error(
+            `Setting "${label}" is not writable from /config (${result.kind}).`,
+          ),
+        );
+    }
+    settings.reload();
+    if (entry.onWrite?.invalidatesModelOptions) {
+      bumpCodexPreferenceVersion();
+    }
+    if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
+      // The value is written: a failed repaint is reported, never rolled back.
+      yield* Settings.get<ApprovalPolicy>(roots, entry.key).pipe(
+        Effect.flatMap((policy) =>
+          Effect.try({
+            try: () => props.onApprovalPolicyChanged?.(policy),
+            catch: ensureError,
+          }),
+        ),
+        Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
+        Effect.ignore({
+          log: 'Warn',
+          message: 'Approval policy written; session repaint failed',
+        }),
+      );
+    }
+  });
 
   const transient = renderAsyncListFormTransient({
     loading: settings.data === undefined && settings.loading,

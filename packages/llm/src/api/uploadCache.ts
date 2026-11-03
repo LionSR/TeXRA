@@ -98,22 +98,21 @@ export function filesApiUploads(provider: {
   readonly create: (file: FileUpload, signal: AbortSignal) => Promise<unknown>;
   readonly remove: (fileId: string, signal: AbortSignal) => Promise<unknown>;
 }): UploadCache {
-  const send = (upload: FileUpload) =>
-    Effect.gen(function* () {
-      const created = yield* Effect.tryPromise({
-        try: (signal) => provider.create(upload, signal),
-        catch: provider.failure,
-      });
-      const parsed = provider.parseUploaded(created);
-      if (!Result.isSuccess(parsed))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: `${provider.providerName} returned an upload without a usable file id.`,
-          model: provider.model,
-          cause: parsed.failure,
-        });
-      return parsed.success;
+  const send = Effect.fnUntraced(function* (upload: FileUpload) {
+    const created = yield* Effect.tryPromise({
+      try: (signal) => provider.create(upload, signal),
+      catch: provider.failure,
     });
+    const parsed = provider.parseUploaded(created);
+    if (!Result.isSuccess(parsed))
+      return yield* new ModelError({
+        kind: 'malformed-output',
+        message: `${provider.providerName} returned an upload without a usable file id.`,
+        model: provider.model,
+        cause: parsed.failure,
+      });
+    return parsed.success;
+  });
   const remove = (fileId: string) =>
     Effect.tryPromise({
       try: (signal) => provider.remove(fileId, signal),

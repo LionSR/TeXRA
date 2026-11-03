@@ -83,7 +83,7 @@ Exports: 128
 - `RequestDecisionHook` — `interface RequestDecisionHook { readonly record: (request: { readonly payload: PluginRequest; readonly decision: RequestDecision; readonly inbox: (runId: RunId) => RunInbox; readonly commit: (facts: readonly (ToolFact & { readonly aggregate: string; })[]) => Effect.Effect<void, LogWriteError>; }) => Effect.Effect<void, Error, GlobalValues>; }`
 - `requestToolEditApproval` — `const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>`
 - `requireRun` — `const requireRun: (toolName: string) => Effect<ToolContextShape & { readonly requests: CallRequests; readonly run: ToolRun; }, ToolError, ToolContext>`
-- `resolveToolPath` — `function resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>`
+- `resolveToolPath` — `const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>`
 - `retryTransientFetch` — `const retryTransientFetch: <T, E extends Error, R>(request: Effect<T, E, R | Scope>, options: RetryTransientFetchOptions<E>) => Effect<T, E | TimeoutError, Exclude<R, Scope>>`
 - `RetryTransientFetchOptions` — `interface RetryTransientFetchOptions<E> { readonly retries: number; readonly minTimeout: number; readonly timeoutMs: number; readonly onFailedAttempt?: (error: E | Cause.TimeoutError, retriesLeft: number) => Effect.Effect<void>; }`
 - `RouteFailure` — `interface RouteFailure { readonly retryAfterMs?: number; }`

@@ -128,23 +128,22 @@ function fetchLatestCliVersion(): Effect.Effect<
   });
 }
 
-const readBrewStdout = (
+const readBrewStdout = Effect.fn('readBrewStdout')(function* (
   args: readonly string[],
   cwd: string,
-): Effect.Effect<string | undefined, Error, ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    // Runs before platform init (chat startup), so pass an
-    // explicit cwd — the wrapper's workspace-root default would throw — no
-    // setting slots, since none are open yet, and quiet: true so wrapper debug
-    // lines can't leak to the console sink.
-    const result = yield* executeCommand(['brew', ...args], {
-      timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
-      cwd,
-      settings: undefined,
-      quiet: true,
-    });
-    return result.success ? result.stdout : undefined;
+): Effect.fn.Return<string | undefined, Error, ChildProcessSpawner> {
+  // Runs before platform init (chat startup), so pass an
+  // explicit cwd — the wrapper's workspace-root default would throw — no
+  // setting slots, since none are open yet, and quiet: true so wrapper debug
+  // lines can't leak to the console sink.
+  const result = yield* executeCommand(['brew', ...args], {
+    timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
+    cwd,
+    settings: undefined,
+    quiet: true,
   });
+  return result.success ? result.stdout : undefined;
+});
 
 /**
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
@@ -195,24 +194,24 @@ function parseHomebrewFormulaVersion(
  * already be fresh enough to offer the right prompt — but report
  * `refreshed: false` so the caller knows the version may be stale.
  */
-function fetchLatestHomebrewFormulaVersion(
+const fetchLatestHomebrewFormulaVersion = Effect.fn(
+  'fetchLatestHomebrewFormulaVersion',
+)(function* (
   cwd: string,
-): Effect.Effect<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
-  return Effect.gen(function* () {
-    const refreshStdout = yield* readBrewStdout(['update', '--quiet'], cwd);
-    const stdout = yield* readBrewStdout(
-      ['info', '--json=v2', CLI_HOMEBREW_FORMULA],
-      cwd,
-    );
-    return {
-      version:
-        stdout == null
-          ? undefined
-          : parseHomebrewFormulaVersion(stdout, CLI_HOMEBREW_FORMULA),
-      refreshed: refreshStdout != null,
-    };
-  });
-}
+): Effect.fn.Return<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
+  const refreshStdout = yield* readBrewStdout(['update', '--quiet'], cwd);
+  const stdout = yield* readBrewStdout(
+    ['info', '--json=v2', CLI_HOMEBREW_FORMULA],
+    cwd,
+  );
+  return {
+    version:
+      stdout == null
+        ? undefined
+        : parseHomebrewFormulaVersion(stdout, CLI_HOMEBREW_FORMULA),
+    refreshed: refreshStdout != null,
+  };
+});
 
 function runCliUpdate(
   method: InstallMethod,

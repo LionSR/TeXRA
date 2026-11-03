@@ -167,79 +167,77 @@ const standIn = (candidate: Extract<PluginCandidate, { kind: 'dir' }>) => ({
     : {}),
 });
 
-function installFromRoot(
+const installFromRoot = Effect.fn('installFromRoot')(function* (
   root: string,
   fetched: Fetched,
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<
+): Effect.fn.Return<
   InstalledPlugin[],
   PluginError | PluginRequestError | Error,
   ChildProcessSpawner | FileSystem.FileSystem
 > {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const candidates: readonly PluginCandidate[] = yield* readPluginCandidates(
-      root,
-      only,
-    );
-    const records: InstalledPlugin[] = [];
-    for (const candidate of candidates) {
-      if (candidate.kind === 'git') {
-        if (nested) {
-          return yield* new PluginError({
-            message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
-          });
-        }
-        records.push(...(yield* installOrigin(candidate, [], run, true)));
-        continue;
-      }
-      const plugin = yield* readPlugin(candidate.dir, candidate.entry);
-      yield* claimName(run, plugin.name);
-      if (fetched.kind === 'local') {
-        records.push({
-          name: plugin.name,
-          source: candidate.dir,
-          path: candidate.dir,
-          skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
-          ...standIn(candidate),
-          enabled: false,
+  const fs = yield* FileSystem.FileSystem;
+  const candidates: readonly PluginCandidate[] = yield* readPluginCandidates(
+    root,
+    only,
+  );
+  const records: InstalledPlugin[] = [];
+  for (const candidate of candidates) {
+    if (candidate.kind === 'git') {
+      if (nested) {
+        return yield* new PluginError({
+          message: `${candidate.url} is listed by a marketplace that was itself listed by one; only one level is followed.`,
         });
-        continue;
       }
-      // Each fetched plugin gets its own managed copy of the checkout, so
-      // update and remove act on one plugin without touching another.
-      const dest = path.join(pluginsDir(run.env), plugin.name);
-      // A plain mkdir claims the directory: it fails if anything is there.
-      yield* fs.makeDirectory(dest).pipe(
-        Effect.mapError((error) =>
-          error.reason._tag === 'AlreadyExists'
-            ? new PluginError({
-                message: `${dest} already exists but no installed plugin records it. Delete it, then install again.`,
-              })
-            : ioError(error),
-        ),
-      );
-      run.created.push(dest);
-      // The checkout holds no symlinks (`checkoutDetached` writes them as
-      // plain files), so the copy has none to rewrite.
-      yield* fs.copy(root, dest).pipe(Effect.mapError(ioError));
-      const pluginPath = path.join(dest, path.relative(root, candidate.dir));
+      records.push(...(yield* installOrigin(candidate, [], run, true)));
+      continue;
+    }
+    const plugin = yield* readPlugin(candidate.dir, candidate.entry);
+    yield* claimName(run, plugin.name);
+    if (fetched.kind === 'local') {
       records.push({
         name: plugin.name,
-        source: fetched.url,
-        ...(fetched.ref ? { ref: fetched.ref } : {}),
-        commit: fetched.commit,
-        path: pluginPath,
-        skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
+        source: candidate.dir,
+        path: candidate.dir,
+        skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
         ...standIn(candidate),
         enabled: false,
       });
+      continue;
     }
-    return records;
-  });
-}
+    // Each fetched plugin gets its own managed copy of the checkout, so
+    // update and remove act on one plugin without touching another.
+    const dest = path.join(pluginsDir(run.env), plugin.name);
+    // A plain mkdir claims the directory: it fails if anything is there.
+    yield* fs.makeDirectory(dest).pipe(
+      Effect.mapError((error) =>
+        error.reason._tag === 'AlreadyExists'
+          ? new PluginError({
+              message: `${dest} already exists but no installed plugin records it. Delete it, then install again.`,
+            })
+          : ioError(error),
+      ),
+    );
+    run.created.push(dest);
+    // The checkout holds no symlinks (`checkoutDetached` writes them as
+    // plain files), so the copy has none to rewrite.
+    yield* fs.copy(root, dest).pipe(Effect.mapError(ioError));
+    const pluginPath = path.join(dest, path.relative(root, candidate.dir));
+    records.push({
+      name: plugin.name,
+      source: fetched.url,
+      ...(fetched.ref ? { ref: fetched.ref } : {}),
+      commit: fetched.commit,
+      path: pluginPath,
+      skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
+      ...standIn(candidate),
+      enabled: false,
+    });
+  }
+  return records;
+});
 
 function installOrigin(
   origin: PluginOrigin,
@@ -311,33 +309,31 @@ function installOrigin(
  * another install recorded meanwhile; a failure removes the managed
  * directories this install created and records nothing.
  */
-function installPlugins(
+const installPlugins = Effect.fn('installPlugins')(function* (
   origin: PluginOrigin,
   only: readonly string[],
   env: PluginEnv,
 ) {
-  return Effect.gen(function* () {
-    const installed = yield* readInstalled(env);
-    const run: InstallRun = {
-      env,
-      taken: new Set(installed.map((plugin) => plugin.name)),
-      created: [],
-    };
-    return yield* installOrigin(origin, only, run, false).pipe(
-      Effect.tap((records) =>
-        modifyInstalled(env, (current) => {
-          const clash = records.find((record) =>
-            current.some((plugin) => plugin.name === record.name),
-          );
-          return clash === undefined
-            ? Result.succeed([[...current, ...records], undefined] as const)
-            : Result.fail(nameTaken(clash.name));
-        }),
-      ),
-      Effect.onError(() => Effect.forEach(run.created, cleanupDir)),
-    );
-  });
-}
+  const installed = yield* readInstalled(env);
+  const run: InstallRun = {
+    env,
+    taken: new Set(installed.map((plugin) => plugin.name)),
+    created: [],
+  };
+  return yield* installOrigin(origin, only, run, false).pipe(
+    Effect.tap((records) =>
+      modifyInstalled(env, (current) => {
+        const clash = records.find((record) =>
+          current.some((plugin) => plugin.name === record.name),
+        );
+        return clash === undefined
+          ? Result.succeed([[...current, ...records], undefined] as const)
+          : Result.fail(nameTaken(clash.name));
+      }),
+    ),
+    Effect.onError(() => Effect.forEach(run.created, cleanupDir)),
+  );
+});
 
 /**
  * Forget a plugin, and the trust given to it (one write: the trust is in its
@@ -347,48 +343,49 @@ function installPlugins(
  * directory or `plugin-data/<name>` is deleted. What the plugin wrote to
  * history stays there, kept unread while it is absent.
  */
-function removePlugin(name: string, env: PluginEnv) {
-  return Effect.gen(function* () {
-    const dir = path.join(pluginsDir(env), name);
-    const dataDir = pluginDataDir(env.globalStorage, name);
-    const plugin = yield* modifyInstalled(env, (current) => {
-      const found = current.find((entry) => entry.name === name);
-      return Result.succeed([
-        current.filter((entry) => entry !== found),
-        found,
-      ] as const);
-    });
-    if (plugin === undefined) {
-      // Only a name a plugin could have had names a managed directory: `..`
-      // or `.` would name the plugins directory's parent or itself. The name
-      // must already be canonical: the schema collapses whitespace, and
-      // `notes ` is not the directory `notes`.
-      const canonical = Schema.decodeUnknownResult(SkillNameSchema)(name);
-      const leftover =
-        Result.isSuccess(canonical) &&
-        canonical.success === name &&
-        (yield* FileSystem.FileSystem.use((fs) =>
-          Effect.all([pathExists(fs, dir), pathExists(fs, dataDir)], {
-            concurrency: 2,
-          }),
-        ).pipe(
-          Effect.map((found) => found.some(Boolean)),
-          Effect.mapError(ioError),
-        ));
-      if (!leftover)
-        return yield* new PluginRequestError({
-          message: `No plugin named ${name} is installed, and nothing of it is left to remove.`,
-        });
-    }
-    // A local plugin's directory is the user's; a leftover one is managed.
-    const local = plugin !== undefined && plugin.commit === undefined;
-    if (!local) yield* removeDir(dir);
-    yield* removeDir(dataDir);
-    return plugin === undefined
-      ? { name, path: dir, local, leftover: true }
-      : { name, path: plugin.path, local, leftover: false };
+const removePlugin = Effect.fn('removePlugin')(function* (
+  name: string,
+  env: PluginEnv,
+) {
+  const dir = path.join(pluginsDir(env), name);
+  const dataDir = pluginDataDir(env.globalStorage, name);
+  const plugin = yield* modifyInstalled(env, (current) => {
+    const found = current.find((entry) => entry.name === name);
+    return Result.succeed([
+      current.filter((entry) => entry !== found),
+      found,
+    ] as const);
   });
-}
+  if (plugin === undefined) {
+    // Only a name a plugin could have had names a managed directory: `..`
+    // or `.` would name the plugins directory's parent or itself. The name
+    // must already be canonical: the schema collapses whitespace, and
+    // `notes ` is not the directory `notes`.
+    const canonical = Schema.decodeUnknownResult(SkillNameSchema)(name);
+    const leftover =
+      Result.isSuccess(canonical) &&
+      canonical.success === name &&
+      (yield* FileSystem.FileSystem.use((fs) =>
+        Effect.all([pathExists(fs, dir), pathExists(fs, dataDir)], {
+          concurrency: 2,
+        }),
+      ).pipe(
+        Effect.map((found) => found.some(Boolean)),
+        Effect.mapError(ioError),
+      ));
+    if (!leftover)
+      return yield* new PluginRequestError({
+        message: `No plugin named ${name} is installed, and nothing of it is left to remove.`,
+      });
+  }
+  // A local plugin's directory is the user's; a leftover one is managed.
+  const local = plugin !== undefined && plugin.commit === undefined;
+  if (!local) yield* removeDir(dir);
+  yield* removeDir(dataDir);
+  return plugin === undefined
+    ? { name, path: dir, local, leftover: true }
+    : { name, path: plugin.path, local, leftover: false };
+});
 
 /** One plugin's update: the commit it moved from and to, when fetched. */
 export interface PluginUpdate {
@@ -406,50 +403,51 @@ export interface PluginUpdate {
  * directory never disagree. An enabled plugin stays enabled; a new version,
  * or a change to what it runs, loads only once the user trusts it.
  */
-function updatePlugins(names: readonly string[], env: PluginEnv) {
-  return Effect.gen(function* () {
-    const installed = yield* readInstalled(env);
-    const targets =
-      names.length === 0
-        ? installed
-        : yield* Effect.forEach(names, (name) =>
-            Effect.fromResult(findInstalled(installed, name)),
-          );
-    const updates: PluginUpdate[] = [];
-    for (const plugin of targets) {
-      const dir = path.join(pluginsDir(env), plugin.name);
-      const commit =
+const updatePlugins = Effect.fn('updatePlugins')(function* (
+  names: readonly string[],
+  env: PluginEnv,
+) {
+  const installed = yield* readInstalled(env);
+  const targets =
+    names.length === 0
+      ? installed
+      : yield* Effect.forEach(names, (name) =>
+          Effect.fromResult(findInstalled(installed, name)),
+        );
+  const updates: PluginUpdate[] = [];
+  for (const plugin of targets) {
+    const dir = path.join(pluginsDir(env), plugin.name);
+    const commit =
+      plugin.commit === undefined
+        ? undefined
+        : yield* fetchPinned(dir, plugin.source, plugin.ref);
+    const skills = yield* rereadPlugin(plugin).pipe(
+      Effect.map((resolved) =>
+        resolved.skills.map((skill) => path.join(plugin.path, skill)),
+      ),
+      Effect.tapError(() =>
         plugin.commit === undefined
-          ? undefined
-          : yield* fetchPinned(dir, plugin.source, plugin.ref);
-      const skills = yield* rereadPlugin(plugin).pipe(
-        Effect.map((resolved) =>
-          resolved.skills.map((skill) => path.join(plugin.path, skill)),
-        ),
-        Effect.tapError(() =>
-          plugin.commit === undefined
-            ? Effect.void
-            : checkoutDetached(dir, plugin.commit).pipe(
-                // The reread failure is the one to report; a failed restore
-                // is named beside it.
-                Effect.catch((error) =>
-                  Effect.logWarning(
-                    `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
-                  ),
+          ? Effect.void
+          : checkoutDetached(dir, plugin.commit).pipe(
+              // The reread failure is the one to report; a failed restore
+              // is named beside it.
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  `Could not restore ${dir} to ${plugin.commit}: ${error.message}`,
                 ),
               ),
-        ),
-      );
-      yield* updateInstalled(env, plugin.name, (found) => ({
-        ...found,
-        ...(commit ? { commit } : {}),
-        skills,
-      }));
-      updates.push({ name: plugin.name, from: plugin.commit, to: commit });
-    }
-    return updates;
-  });
-}
+            ),
+      ),
+    );
+    yield* updateInstalled(env, plugin.name, (found) => ({
+      ...found,
+      ...(commit ? { commit } : {}),
+      skills,
+    }));
+    updates.push({ name: plugin.name, from: plugin.commit, to: commit });
+  }
+  return updates;
+});
 
 /**
  * The Claude Code and Codex plugins installed for every host: the one

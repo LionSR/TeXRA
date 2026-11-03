@@ -329,18 +329,17 @@ export const sendToParent = (
   });
 
 /** Commit a part in one transaction of its own. */
-export const commitPart = (
+export const commitPart = Effect.fn('commitPart')(function* (
   part: TransactionPart,
-): Effect.Effect<void, Error, PartServices> =>
-  Effect.gen(function* () {
-    const services = yield* partServices;
-    yield* Context.get(services, SessionLog).transact((tx) =>
-      Effect.gen(function* () {
-        const { rows } = yield* part;
-        yield* tx.append(rows);
-      }).pipe(Effect.scoped, Effect.provide(services)),
-    );
-  });
+): Effect.fn.Return<void, Error, PartServices> {
+  const services = yield* partServices;
+  yield* Context.get(services, SessionLog).transact((tx) =>
+    Effect.gen(function* () {
+      const { rows } = yield* part;
+      yield* tx.append(rows);
+    }).pipe(Effect.scoped, Effect.provide(services)),
+  );
+});
 
 /** After the transaction that queued `delivery` commits: resume the parent
  *  if the delivery obliges one and no generation here reads it

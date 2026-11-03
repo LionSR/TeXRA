@@ -369,7 +369,7 @@ function executeLeanInspectTool(
   // they render an answer that carries data. Resolving the model's file
   // against the run and ruling on an answer that carries none is the same
   // for all three, so it is stated here once.
-  const inspect = <T>(
+  const inspect = Effect.fn('inspect')(function* <T>(
     request: (
       services: LeanLanguageServicesShape,
       filePath: string,
@@ -377,19 +377,18 @@ function executeLeanInspectTool(
     ) => Effect.Effect<LspResult<T>>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
-  ): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolContext;
-      const services = yield* LeanLanguageServices;
-      const { data, error } = yield* request(
-        services,
-        yield* leanFilePath(file, call),
-        yield* leanRunId(services),
-      );
-      if (!data)
-        return noPositionData(empty.message, location, empty.summary, error);
-      return render(data);
-    });
+  ): Effect.fn.Return<ToolResult, Error, ToolContext | LeanLanguageServices> {
+    const call = yield* ToolContext;
+    const services = yield* LeanLanguageServices;
+    const { data, error } = yield* request(
+      services,
+      yield* leanFilePath(file, call),
+      yield* leanRunId(services),
+    );
+    if (!data)
+      return noPositionData(empty.message, location, empty.summary, error);
+    return render(data);
+  });
 
   // Each dispatch composes one program, run once below: a failed
   // language-server request finishes as this run's Exit and becomes the

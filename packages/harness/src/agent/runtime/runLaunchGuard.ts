@@ -217,42 +217,41 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
  * one is told to the person here, once: the parent's next resume delivers
  * the result again (`deliverHeld`).
  */
-export const onHeldResult = (
+export const onHeldResult = Effect.fn('onHeldResult')(function* (
   event: SessionEvent,
   scope: Scope.Scope,
-): Effect.Effect<unknown, never, SessionServices> =>
-  Effect.gen(function* () {
-    const target = aggregateTarget(event.aggregateId);
-    if (target.kind !== 'run') return;
-    const view = yield* SessionViewAccess;
-    const log = yield* SessionLog;
-    const record = recordOf(event);
-    const sent = record.followUps[0];
-    let work: Effect.Effect<void, Error, SessionServices> | undefined;
-    if (sent?.content.from.kind === 'run') {
-      const child = sent.content.from.runId;
-      if (view.run(child)?.substate === RUN_SUBSTATE.RESULT_WAITING)
-        work = clearHeld(log, child, sent.followUpId);
-    } else if (record.heldParks[0]?.park.heldFor !== undefined) {
-      const parent = view.run(target.id)?.parentId;
-      if (parent != null)
-        work = Effect.gen(function* () {
-          if (yield* log.owns(parent)) yield* deliverHeld(parent);
-        });
-    }
-    if (work === undefined) return;
-    const interactions = yield* Interactions;
-    yield* work.pipe(
-      Effect.catch((error) =>
-        presentRunFailure(
-          interactions,
-          error,
-          "A subagent's result could not be delivered: ",
-        ),
+): Effect.fn.Return<unknown, never, SessionServices> {
+  const target = aggregateTarget(event.aggregateId);
+  if (target.kind !== 'run') return;
+  const view = yield* SessionViewAccess;
+  const log = yield* SessionLog;
+  const record = recordOf(event);
+  const sent = record.followUps[0];
+  let work: Effect.Effect<void, Error, SessionServices> | undefined;
+  if (sent?.content.from.kind === 'run') {
+    const child = sent.content.from.runId;
+    if (view.run(child)?.substate === RUN_SUBSTATE.RESULT_WAITING)
+      work = clearHeld(log, child, sent.followUpId);
+  } else if (record.heldParks[0]?.park.heldFor !== undefined) {
+    const parent = view.run(target.id)?.parentId;
+    if (parent != null)
+      work = Effect.gen(function* () {
+        if (yield* log.owns(parent)) yield* deliverHeld(parent);
+      });
+  }
+  if (work === undefined) return;
+  const interactions = yield* Interactions;
+  yield* work.pipe(
+    Effect.catch((error) =>
+      presentRunFailure(
+        interactions,
+        error,
+        "A subagent's result could not be delivered: ",
       ),
-      Effect.forkIn(scope),
-    );
-  });
+    ),
+    Effect.forkIn(scope),
+  );
+});
 
 /** A child this process runs, whose held result `followUpId` was just
  *  delivered, parks plainly again: the card stops reading it as waiting. */

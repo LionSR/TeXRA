@@ -69,40 +69,39 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
     );
   // One directory entry: a link, a subdirectory, or a file. A directory's
   // entries are read at once; the list is sorted after the walk.
-  const entry = (
+  const entry = Effect.fn('entry')(function* (
     dir: string,
     name: string,
-  ): Effect.Effect<void, PlatformError.PlatformError> =>
-    Effect.gen(function* () {
-      const full = path.join(dir, name);
-      const relative = path.relative(root, full);
-      // One `lstat` per entry: a link is digested as its target text.
-      const info = yield* fs.lstat(full);
-      if (info.type === 'SymbolicLink') {
-        files.push([relative, `-> ${yield* fs.readLink(full)}`]);
-        return;
+  ): Effect.fn.Return<void, PlatformError.PlatformError> {
+    const full = path.join(dir, name);
+    const relative = path.relative(root, full);
+    // One `lstat` per entry: a link is digested as its target text.
+    const info = yield* fs.lstat(full);
+    if (info.type === 'SymbolicLink') {
+      files.push([relative, `-> ${yield* fs.readLink(full)}`]);
+      return;
+    }
+    if (info.type === 'Directory') {
+      if (name !== '.git') yield* walk(full);
+    } else if (info.type === 'File') {
+      const mtime = Option.getOrUndefined(info.mtime)?.getTime();
+      // git's racy rule: a file modified within RACY_MS of now may be
+      // written again under the same (rounded) mtime and size, so it is
+      // hashed fresh and not cached; nor is one with no mtime.
+      const cacheable =
+        mtime !== undefined &&
+        (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
+      const key = cacheable
+        ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
+        : undefined;
+      let hash = key === undefined ? undefined : hashes.get(key);
+      if (hash === undefined) {
+        hash = sha256Hex(yield* fs.readFile(full));
+        if (key !== undefined) hashes.set(key, hash);
       }
-      if (info.type === 'Directory') {
-        if (name !== '.git') yield* walk(full);
-      } else if (info.type === 'File') {
-        const mtime = Option.getOrUndefined(info.mtime)?.getTime();
-        // git's racy rule: a file modified within RACY_MS of now may be
-        // written again under the same (rounded) mtime and size, so it is
-        // hashed fresh and not cached; nor is one with no mtime.
-        const cacheable =
-          mtime !== undefined &&
-          (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
-        const key = cacheable
-          ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
-          : undefined;
-        let hash = key === undefined ? undefined : hashes.get(key);
-        if (hash === undefined) {
-          hash = sha256Hex(yield* fs.readFile(full));
-          if (key !== undefined) hashes.set(key, hash);
-        }
-        files.push([relative, hash]);
-      }
-    });
+      files.push([relative, hash]);
+    }
+  });
   yield* walk(root).pipe(
     Effect.mapError(
       (error) =>

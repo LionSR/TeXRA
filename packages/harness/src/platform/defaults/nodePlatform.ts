@@ -239,45 +239,44 @@ const supervisedSpawner = Layer.effect(
           // Close the child scope under the budget, on a detached fiber: a
           // close failure inside the budget is the caller's, a late one is
           // logged, and past the budget a running child is SIGKILLed.
-          const closeChild = (
+          const closeChild = Effect.fn('closeChild')(function* (
             handle: ChildProcessHandle | undefined,
             exit: Exit.Exit<unknown, unknown>,
-          ) =>
-            Effect.gen(function* () {
-              const budgetMs = teardownBudgetMillis(
-                command,
-                (stage) => stage.options,
-              );
-              const closing = yield* Scope.close(child, exit).pipe(
-                Effect.ensuring(
-                  Effect.sync(() => {
-                    if (handle !== undefined) forget(handle.pid);
-                  }),
-                ),
-                Effect.forkDetach,
-              );
-              const closed = yield* Fiber.await(closing).pipe(
-                Effect.timeoutOption(budgetMs),
-              );
-              if (Option.isSome(closed)) {
-                if (Exit.isFailure(closed.value)) {
-                  return yield* Effect.failCause(closed.value.cause);
-                }
-                return;
+          ) {
+            const budgetMs = teardownBudgetMillis(
+              command,
+              (stage) => stage.options,
+            );
+            const closing = yield* Scope.close(child, exit).pipe(
+              Effect.ensuring(
+                Effect.sync(() => {
+                  if (handle !== undefined) forget(handle.pid);
+                }),
+              ),
+              Effect.forkDetach,
+            );
+            const closed = yield* Fiber.await(closing).pipe(
+              Effect.timeoutOption(budgetMs),
+            );
+            if (Option.isSome(closed)) {
+              if (Exit.isFailure(closed.value)) {
+                return yield* Effect.failCause(closed.value.cause);
               }
-              yield* stopWaiting(handle, command, budgetMs, 'scope close');
-              yield* Fiber.await(closing).pipe(
-                Effect.flatMap((late) =>
-                  Exit.isFailure(late) && !Cause.hasInterruptsOnly(late.cause)
-                    ? Effect.logWarning(
-                        `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
-                      )
-                    : Effect.void,
-                ),
-                withLogChannel(CHANNEL),
-                Effect.forkDetach,
-              );
-            });
+              return;
+            }
+            yield* stopWaiting(handle, command, budgetMs, 'scope close');
+            yield* Fiber.await(closing).pipe(
+              Effect.flatMap((late) =>
+                Exit.isFailure(late) && !Cause.hasInterruptsOnly(late.cause)
+                  ? Effect.logWarning(
+                      `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
+                    )
+                  : Effect.void,
+              ),
+              withLogChannel(CHANNEL),
+              Effect.forkDetach,
+            );
+          });
           // A failed or interrupted spawn closes its child scope at once, so
           // nothing is left on the caller's scope; a live child's close is
           // registered only once it exists.

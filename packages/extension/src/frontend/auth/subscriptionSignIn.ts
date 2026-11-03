@@ -59,8 +59,8 @@ function vscodePresenter(
 ): SubscriptionSignInPresenter {
   const { displayName, sessionName, copyTarget } = provider;
   return {
-    presentDeviceCode: (prompt) =>
-      Effect.gen(function* () {
+    presentDeviceCode: Effect.fn('presentDeviceCode')(
+      function* (prompt) {
         const copied = yield* Effect.tryPromise({
           try: () => vscode.env.clipboard.writeText(prompt.userCode),
           catch: ensureError,
@@ -82,18 +82,16 @@ function vscodePresenter(
             prompt.verificationUrlComplete ?? prompt.verificationUrl,
           );
         }
-      }).pipe(
-        // The flow does not wait for this prompt, so its failure has no
-        // caller to reach: it is reported here, once.
-        Effect.catch((error) =>
-          showLoggedErrorMessage(
-            channel,
-            `${displayName} sign-in code could not be shown`,
-            error,
-          ),
+      },
+      Effect.catch((error) =>
+        showLoggedErrorMessage(
+          channel,
+          `${displayName} sign-in code could not be shown`,
+          error,
         ),
-        Effect.asVoid,
       ),
+      Effect.asVoid,
+    ),
     presentSignInUrl: Effect.fn('subscriptionSignIn.presentSignInUrl')(
       function* (url) {
         // `openExternal` always targets the system default browser. The

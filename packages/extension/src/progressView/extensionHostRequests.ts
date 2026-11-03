@@ -287,72 +287,70 @@ export const createExtensionHostRequests = Effect.fn(
   }
 
   /** The editor's current file into a launcher field. */
-  function useCurrentFile(
+  const useCurrentFile = Effect.fn('useCurrentFile')(function* (
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ) {
-    return Effect.gen(function* () {
-      const currentOpenFile = yield* getCurrentFile(roots);
-      if (!currentOpenFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason:
-              'No file is currently open or the file is not part of the workspace.',
-          }),
+    const currentOpenFile = yield* getCurrentFile(roots);
+    if (!currentOpenFile) {
+      return yield* Effect.fail(
+        new Rejected({
+          reason:
+            'No file is currently open or the file is not part of the workspace.',
+        }),
+      );
+    }
+    // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base
+    // file selects the file it was derived from instead, when that file is
+    // still on disk, and its commit rides onto the launcher.
+    if (request.fileType === 'base') {
+      const parsed = parseVersionControlDiffFilename(currentOpenFile);
+      if (parsed) {
+        const commitLabel = yield* runHandler(
+          'findCommitInHistory',
+          findCommitInHistory(roots, parsed.commitHash),
         );
-      }
-      // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base
-      // file selects the file it was derived from instead, when that file is
-      // still on disk, and its commit rides onto the launcher.
-      if (request.fileType === 'base') {
-        const parsed = parseVersionControlDiffFilename(currentOpenFile);
-        if (parsed) {
-          const commitLabel = yield* runHandler(
-            'findCommitInHistory',
-            findCommitInHistory(roots, parsed.commitHash),
-          );
-          if (commitLabel) {
-            options.bridge.surfaceAction({
-              kind: 'launch',
-              patch: { commit: parsed.commitHash },
-            });
-          } else {
-            yield* Effect.forkDetach(
-              announce(
-                CHANNEL,
-                vscodeUi.showInfoMessage(
-                  `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-                ),
-                undefined,
-              ),
-            );
-          }
-          const sourceLocation = pathToLocationIn(
-            roots.workspace,
-            parsed.sourcePath,
-          );
-          const sourceExists =
-            sourceLocation.kind === 'workspace' &&
-            (yield* Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
-              workspaceFs.exists(sourceLocation.relativePath),
-            ));
-          if (sourceExists) {
-            yield* snapshot.refreshFiles;
-            return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
-          }
+        if (commitLabel) {
+          options.bridge.surfaceAction({
+            kind: 'launch',
+            patch: { commit: parsed.commitHash },
+          });
+        } else {
           yield* Effect.forkDetach(
             announce(
               CHANNEL,
               vscodeUi.showInfoMessage(
-                `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+                `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
               ),
               undefined,
             ),
           );
         }
+        const sourceLocation = pathToLocationIn(
+          roots.workspace,
+          parsed.sourcePath,
+        );
+        const sourceExists =
+          sourceLocation.kind === 'workspace' &&
+          (yield* Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
+            workspaceFs.exists(sourceLocation.relativePath),
+          ));
+        if (sourceExists) {
+          yield* snapshot.refreshFiles;
+          return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
+        }
+        yield* Effect.forkDetach(
+          announce(
+            CHANNEL,
+            vscodeUi.showInfoMessage(
+              `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+            ),
+            undefined,
+          ),
+        );
       }
-      return { kind: 'files', paths: [currentOpenFile] } as HostOutcome;
-    });
-  }
+    }
+    return { kind: 'files', paths: [currentOpenFile] } as HostOutcome;
+  });
 
   function pickFiles(
     request: Extract<HostRequest, { kind: 'pickFiles' }>,
@@ -493,46 +491,45 @@ export const createExtensionHostRequests = Effect.fn(
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */
-  const own = (request: OwnHostRequest) =>
-    Effect.gen(function* () {
-      switch (request.kind) {
-        case 'popOut':
-          yield* options.popOutToEditor();
-          return done;
-        case 'popBack':
-          yield* options.showInSidebar();
-          return done;
-        case 'pickFiles':
-          return yield* pickFiles(request);
-        case 'useCurrentFile':
-          return yield* useCurrentFile(request);
-        case 'addOpenedFiles': {
-          const allowed = new Set(
-            getIncludedExtensions(request.fileType).map(
-              normalizeMainViewFileExtension,
-            ),
-          );
-          const opened = yield* getOpenedFiles();
-          const outcome: HostOutcome = {
-            kind: 'files',
-            paths:
-              allowed.size > 0
-                ? opened.filter((file) =>
-                    allowed.has(normalizeMainViewFileExtension(file)),
-                  )
-                : opened,
-          };
-          return outcome;
-        }
-        case 'gettingStarted':
-          yield* runHandler(request.action, gettingStarted(request.action));
-          return done;
-        case 'workspaceFile':
-          return yield* Effect.fail(
-            new Rejected({ reason: 'The file editor is a desktop feature.' }),
-          );
+  const own = Effect.fn('own')(function* (request: OwnHostRequest) {
+    switch (request.kind) {
+      case 'popOut':
+        yield* options.popOutToEditor();
+        return done;
+      case 'popBack':
+        yield* options.showInSidebar();
+        return done;
+      case 'pickFiles':
+        return yield* pickFiles(request);
+      case 'useCurrentFile':
+        return yield* useCurrentFile(request);
+      case 'addOpenedFiles': {
+        const allowed = new Set(
+          getIncludedExtensions(request.fileType).map(
+            normalizeMainViewFileExtension,
+          ),
+        );
+        const opened = yield* getOpenedFiles();
+        const outcome: HostOutcome = {
+          kind: 'files',
+          paths:
+            allowed.size > 0
+              ? opened.filter((file) =>
+                  allowed.has(normalizeMainViewFileExtension(file)),
+                )
+              : opened,
+        };
+        return outcome;
       }
-    });
+      case 'gettingStarted':
+        yield* runHandler(request.action, gettingStarted(request.action));
+        return done;
+      case 'workspaceFile':
+        return yield* Effect.fail(
+          new Rejected({ reason: 'The file editor is a desktop feature.' }),
+        );
+    }
+  });
 
   return {
     bindings,

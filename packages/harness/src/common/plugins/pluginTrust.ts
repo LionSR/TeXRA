@@ -176,36 +176,34 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
  * an accepted review is recorded, with the switch, in one write. A code
  * plugin is refused before anything is asked.
  */
-export function enablePlugin<E, R>(
+export const enablePlugin = Effect.fn('enablePlugin')(function* <E, R>(
   name: string,
   env: PluginEnv,
   confirm: (review: PluginReview) => Effect.Effect<boolean, E, R>,
 ) {
-  return Effect.gen(function* () {
-    const record = yield* Effect.fromResult(
-      findInstalled(yield* readInstalled(env), name),
-    );
-    const plugin = yield* rereadPlugin(record);
-    if (plugin.code.length > 0)
-      return yield* new PluginError({ message: codeRefusal(name, plugin) });
-    const key = yield* trustKey(record, plugin, yield* envKeyOf(env));
-    if (!trusts(record, key)) {
-      const accepted = yield* confirm({
-        name,
-        version: key.version,
-        lines: yield* reviewLines(record, plugin),
-      });
-      if (!accepted) return 'declined' as const;
-    }
-    // One decision per plugin: trusting it now replaces the last one.
-    yield* updateInstalled(env, name, (found) => ({
-      ...found,
-      enabled: true,
-      trust: key,
-    }));
-    return 'enabled' as const;
-  });
-}
+  const record = yield* Effect.fromResult(
+    findInstalled(yield* readInstalled(env), name),
+  );
+  const plugin = yield* rereadPlugin(record);
+  if (plugin.code.length > 0)
+    return yield* new PluginError({ message: codeRefusal(name, plugin) });
+  const key = yield* trustKey(record, plugin, yield* envKeyOf(env));
+  if (!trusts(record, key)) {
+    const accepted = yield* confirm({
+      name,
+      version: key.version,
+      lines: yield* reviewLines(record, plugin),
+    });
+    if (!accepted) return 'declined' as const;
+  }
+  // One decision per plugin: trusting it now replaces the last one.
+  yield* updateInstalled(env, name, (found) => ({
+    ...found,
+    enabled: true,
+    trust: key,
+  }));
+  return 'enabled' as const;
+});
 
 /** Disable a recorded plugin: it stays installed, pinned and trusted, and
  *  contributes nothing from each host's next step. */
@@ -231,56 +229,54 @@ export interface PluginListing extends InstalledPlugin {
   readonly problem?: string;
 }
 
-export function listPlugins(env: PluginEnv) {
-  return Effect.gen(function* () {
-    const installed = yield* readInstalled(env);
-    const envKey = yield* envKeyOf(env);
-    return yield* Effect.forEach(
-      installed,
-      (record): Effect.Effect<PluginListing, never, FileSystem.FileSystem> =>
-        Effect.gen(function* () {
-          const plugin = yield* rereadPlugin(record);
-          const key = yield* trustKey(record, plugin, envKey);
-          const counts = yield* Effect.forEach(
-            plugin.skills.map((skill) => path.join(record.path, skill)),
-            countSkills,
-            { concurrency: 'unbounded' },
-          );
-          return {
+export const listPlugins = Effect.fn('listPlugins')(function* (env: PluginEnv) {
+  const installed = yield* readInstalled(env);
+  const envKey = yield* envKeyOf(env);
+  return yield* Effect.forEach(
+    installed,
+    (record): Effect.Effect<PluginListing, never, FileSystem.FileSystem> =>
+      Effect.gen(function* () {
+        const plugin = yield* rereadPlugin(record);
+        const key = yield* trustKey(record, plugin, envKey);
+        const counts = yield* Effect.forEach(
+          plugin.skills.map((skill) => path.join(record.path, skill)),
+          countSkills,
+          { concurrency: 'unbounded' },
+        );
+        return {
+          ...record,
+          version: plugin.version,
+          description: plugin.description,
+          skillCount: counts.reduce((sum, count) => sum + count, 0),
+          commandCount: plugin.commands.length,
+          agentCount: plugin.agents.length,
+          mcpServers: plugin.mcpServers.map((server) => server.name),
+          trusted: trusts(record, key),
+          hooks: plugin.hooks.hooks,
+          unsupportedHooks: plugin.hooks.unsupported,
+          code: plugin.code,
+          ignored: plugin.ignored,
+        } satisfies PluginListing;
+      }).pipe(
+        Effect.catchTag('PluginError', (error) =>
+          Effect.succeed({
             ...record,
-            version: plugin.version,
-            description: plugin.description,
-            skillCount: counts.reduce((sum, count) => sum + count, 0),
-            commandCount: plugin.commands.length,
-            agentCount: plugin.agents.length,
-            mcpServers: plugin.mcpServers.map((server) => server.name),
-            trusted: trusts(record, key),
-            hooks: plugin.hooks.hooks,
-            unsupportedHooks: plugin.hooks.unsupported,
-            code: plugin.code,
-            ignored: plugin.ignored,
-          } satisfies PluginListing;
-        }).pipe(
-          Effect.catchTag('PluginError', (error) =>
-            Effect.succeed({
-              ...record,
-              skillCount: 0,
-              commandCount: 0,
-              agentCount: 0,
-              mcpServers: [],
-              trusted: false,
-              hooks: [],
-              unsupportedHooks: [],
-              code: [],
-              ignored: [],
-              problem: error.message,
-            } satisfies PluginListing),
-          ),
+            skillCount: 0,
+            commandCount: 0,
+            agentCount: 0,
+            mcpServers: [],
+            trusted: false,
+            hooks: [],
+            unsupportedHooks: [],
+            code: [],
+            ignored: [],
+            problem: error.message,
+          } satisfies PluginListing),
         ),
-      { concurrency: 4 },
-    );
-  });
-}
+      ),
+    { concurrency: 4 },
+  );
+});
 
 /** The id every installed Claude Code or Codex plugin's contributions
  *  carry, its tools and its skills alike: `plugin:<name>`. */
