@@ -1387,6 +1387,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **SDK: a stored turn of another codec version replays as plain content.**
+  `ModelOrigin.codecVersion` (`@texra-ai/llm`) is any positive integer, not
+  only `1`. A run holding a turn whose provider state another build encoded
+  continues without that turn's reasoning and evidence, as after a model
+  switch, instead of failing as an invalid turn request. This build still
+  writes version 1.
 - **A used-up plan or a lapsed subscription reads in TeXRA's words again
   wherever a run's failure shows.** The end-of-run notice (the desktop and
   VS Code message, `texra run`'s `ERROR` line), a launch that fails before
