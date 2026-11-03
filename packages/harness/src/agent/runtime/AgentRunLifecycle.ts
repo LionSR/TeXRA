@@ -309,8 +309,8 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
       attachProviderError(failure, result.failure);
       return yield* failedEnd(ctx, finish, failure, result);
     }
-    // The phase decides the verdict here exactly as on a failure: a stop
-    // that won on the phase must not let the caller observe COMPLETED.
+    // A completed flow supplies its outcome; an interrupted flow arrives
+    // as a failed Exit and is classified below.
     const { event, persistFailure: cause } = yield* endWith(ctx, finish, {
       outcome: result.outcome,
       output: result.output,
