@@ -20,6 +20,7 @@ import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequ
 import {
   DESKTOP_PROJECT_COMMANDS,
   DesktopCloseProjectMessageSchema,
+  DesktopOpenRecentProjectMessageSchema,
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
@@ -190,13 +191,16 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   });
 
   const postProjects = () => {
-    const { projects: open, activeKey } = SubscriptionRef.getUnsafe(
-      projects.state,
-    );
+    const {
+      projects: open,
+      activeKey,
+      recent,
+    } = SubscriptionRef.getUnsafe(projects.state);
     host.post({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
       open: open.flatMap(({ key, root }) => (root === undefined ? [] : [key])),
       activeKey,
+      recent,
     });
   };
   let menuRecent: readonly string[] | undefined;
@@ -302,6 +306,19 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       [DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT]: parsedRoute(
         DesktopCloseProjectMessageSchema,
         (message) => navigation.close(message.key, message.hasUnsavedChanges),
+      ),
+      // The renderer names a folder, so only one the recent list holds opens:
+      // a stale or forged root is dropped, never opened.
+      [DESKTOP_PROJECT_COMMANDS.OPEN_RECENT]: parsedRoute(
+        DesktopOpenRecentProjectMessageSchema,
+        (message) =>
+          SubscriptionRef.getUnsafe(projects.state).recent.includes(
+            message.root,
+          )
+            ? navigation.open(message.root)
+            : Effect.logWarning(
+                `Dropped ${message.command}: ${message.root} is not a recent project`,
+              ),
       ),
     },
     createDesktopLogIpc(

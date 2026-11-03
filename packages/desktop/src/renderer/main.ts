@@ -174,6 +174,8 @@ let shell: Shell = {
   collapsed: persistedShell.getState().collapsed,
 };
 let projectsKnown = false;
+/** The main process's recent list, as its last projects message sent it. */
+let recentProjects: readonly string[] = [];
 let applyingProjectList = false;
 // The no-workspace session is never among the open projects; how a project
 // is named is its host snapshot's.
@@ -540,6 +542,7 @@ function shellTemplate(): TemplateResult {
           ${shellSidebarTemplate(
             {
               projects: railProjects(),
+              recent: recentProjects,
               renamingProjectKey,
               shell,
               commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
@@ -550,6 +553,8 @@ function shellTemplate(): TemplateResult {
               onOpenCommands: () => palette.open(),
               onOpenFolder: () =>
                 postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+              onOpenRecent: (root) =>
+                postMessage(DESKTOP_PROJECT_COMMANDS.OPEN_RECENT, { root }),
               onSelectProject: selectProject,
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
@@ -792,6 +797,7 @@ const routeMessage = createMessageRoutes({
     applyingProjectList = true;
     try {
       projectsKnown = true;
+      recentProjects = message.recent;
       const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
       for (const [key, project] of projectWorkbenches) {

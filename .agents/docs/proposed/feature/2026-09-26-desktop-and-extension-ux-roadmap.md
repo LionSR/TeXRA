@@ -46,6 +46,11 @@ The UI should be quiet and should never mislead the user. In priority order:
   Auto-approve), never a second vocabulary. The composer's Approval chip
   offers the policy from Settings or Auto-approve for this task only, which
   can only loosen Ask; Block still blocks.
+- **Recent projects live in the empty rail**: with no project open, the
+  Projects section lists up to five recently closed folders under "Open a
+  project", the list File › Open Recent shows. The "Open a project to start"
+  card in `main.ts` shows only until the first project list arrives, so it
+  is not the place.
 - **Not doing:** a redesign of the shell layout (the three-column frame and
   the shared conversation surface are sound), and hover-only reveal for a
   live call's controls, which would hide the only control over it.
@@ -59,22 +64,19 @@ Each item is independent and small enough for one PR.
 2. **Saved prompts.** Save a composer prompt as a named entry that runs
    with one click; settings-backed, one list per project. Its home is the
    same open question as 1.
-3. **No-folder screen.** The desktop's "Open a project to start" card
-   (`packages/desktop/src/renderer/main.ts`) could list recent projects; the
-   data already feeds File › Open Recent.
-4. **Command palette reach.** The palette
-   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has no Open
-   Terminal / Files / Browser or switch-project commands.
-5. **Settings search.** Each settings catalog has its own search field
+3. **Command palette reach.** The palette
+   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has Show Terminal
+   and Show Files, but no Open Browser or switch-project commands.
+4. **Settings search.** Each settings catalog has its own search field
    (`SettingsCatalog.ts`); there is still no filter across the tabs.
    Paragraph-length descriptions that expose internals remain (for example
    "Interactions (submit + poll)" in `stateSettings.ts`). The owner has not
    decided whether the Agents › Advanced switches stay, so wait on that
    before polishing them.
-6. **Loading and failure placeholders.** "Error loading content"
+5. **Loading and failure placeholders.** "Error loading content"
    (`packages/extension/src/common/webview/BundledViewContentProvider.ts`)
    has no retry or log link.
-7. **Desktop pane polish.**
+6. **Desktop pane polish.**
    - Restart button on an exited terminal (`terminalPane.ts` prints only
      the exit code).
    - PDF error state and "Open externally" (`pdfPane.ts`).
