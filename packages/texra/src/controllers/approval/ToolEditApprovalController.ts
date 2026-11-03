@@ -47,6 +47,7 @@ import {
   type ToolEditContent,
   type ToolEditPermission,
 } from '@texra-ai/harness/schemas';
+import { HostCallFailed } from '@texra/controllers/session/hostCallFailure';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
@@ -304,14 +305,16 @@ export class ToolEditApprovalController {
    * The proposed content as the user left it in this window, when its
    * request ended without it: the session recorded no approval from here,
    * and the user changed the proposal. None while the view still lists the
-   * request, which is this window going; its edits go with it.
+   * request, which is this window going; its edits go with it. A copy that
+   * cannot be read may hold the user's edits, so the read fails the release
+   * before its dispose: the staged files stay, and the report names where.
    */
   private unapplied(
-    pending: PendingRequest,
+    pending: ToolEditRequest,
     preview: ToolEditPreview,
     proposal: string,
     applied: Ref.Ref<boolean>,
-  ): Effect.Effect<string | undefined, never, PreviewServices> {
+  ): PreviewCall<string | undefined> {
     return Effect.gen({ self: this }, function* () {
       if (yield* Ref.get(applied)) return undefined;
       const listed = this.options.session.view
@@ -321,12 +324,17 @@ export class ToolEditApprovalController {
         );
       if (listed) return undefined;
       const left = yield* preview.readProposedContent().pipe(
-        // Unread, the copy goes with the preview; the user hears why.
-        Effect.catch((error) => this.report(error).pipe(Effect.as(undefined))),
+        Effect.mapError(
+          (cause) =>
+            new HostCallFailed({
+              member: 'readProposedContent',
+              message: `${toErrorMessage(cause)} The proposed ${pending.payload.data.path} as you left it is kept at ${preview.proposedPath}.`,
+              cause,
+            }),
+        ),
       );
       // A host may read its copy back with CRLF line ends.
-      return left === undefined ||
-        left.replaceAll('\r\n', '\n') === proposal.replaceAll('\r\n', '\n')
+      return left.replaceAll('\r\n', '\n') === proposal.replaceAll('\r\n', '\n')
         ? undefined
         : left;
     });
