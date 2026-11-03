@@ -50,16 +50,17 @@ afterEach(() => {
 });
 
 describe('desktop package native CLI payload', () => {
-  it.each([
-    { cli: 'codex' as const, label: 'OpenAI Codex CLI' },
-  ])('fails when the $label platform package is bundled', ({ cli, label }) => {
-    const { packageRoot, resourcesDir } = createFakeDesktopPackage();
-    writeNativeCliPackage(resourcesDir, cli);
+  it.each([{ cli: 'codex' as const, label: 'OpenAI Codex CLI' }])(
+    'fails when the $label platform package is bundled',
+    ({ cli, label }) => {
+      const { packageRoot, resourcesDir } = createFakeDesktopPackage();
+      writeNativeCliPackage(resourcesDir, cli);
 
-    const result = runVerifier(packageRoot);
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain(label);
-  });
+      const result = runVerifier(packageRoot);
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain(label);
+    },
+  );
 });
 
 function createFakeDesktopPackage(): {

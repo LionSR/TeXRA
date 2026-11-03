@@ -68,9 +68,7 @@ function withGlobWorkspace(
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'GlobTool match metadata',
   (it) => {
-    it.effect.each([
-      { fileName: 'vanished.tex', tag: 'NotFound' as const },
-    ])(
+    it.effect.each([{ fileName: 'vanished.tex', tag: 'NotFound' as const }])(
       'omits a match whose metadata lookup fails with $tag',
       ({ fileName, tag }) =>
         Effect.gen(function* () {
