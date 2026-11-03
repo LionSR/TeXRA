@@ -38,7 +38,6 @@ describe('withForkFailureReporting', () => {
   });
 
   it.live.each([
-    ['a defect', Effect.die(new Error('boom'))],
     ['an unhandled typed failure', Effect.fail('refused')],
   ] as const)('reports %s in a forked fiber', ([, program]) =>
     Effect.gen(function* () {

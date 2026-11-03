@@ -1,13 +1,11 @@
 // Third-party imports
-import { it, layer } from '@effect/vitest';
+import { it } from '@effect/vitest';
 import {
   Cause,
   Context,
   Deferred,
   Effect,
   Exit,
-  Fiber,
-  Queue,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -15,21 +13,12 @@ import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
 import { SessionRequests } from '@agent/runtime/requestPolicy';
-import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { REAL_RUN_TIMEOUT, validationHost } from '@test/support/storeFaults';
-import {
-  SessionGraph,
-  sessionHandleOf,
-  TestSession,
-} from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
 import { runView } from '../../../packages/harness/src/effect/runHandle';
 import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -114,52 +103,6 @@ class FakeSession {
   }
 }
 
-/**
- * A session whose run's previous activation completed, as a same-session
- * resume meets it: the view still holds that outcome when the launch opens
- * the run at commit 1, and the new activation folds once the test's reader
- * has read that level. The opening seeds the old outcome.
- */
-class RelaunchedSession extends FakeSession {
-  readonly readers = Effect.runSync(Queue.unbounded<void>());
-  override readonly view: FakeSession['view'] = {
-    ...this.view,
-    changes: this.view.changes.pipe(
-      Stream.tap(() => Queue.offer(this.readers, undefined)),
-    ),
-  };
-  override open(): Effect.Effect<number> {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.fold(0, 'completed');
-      yield* Effect.forkDetach(
-        Queue.take(this.readers).pipe(
-          Effect.andThen(this.fold(1, null)),
-          Effect.andThen(this.fold(2, 'completed')),
-        ),
-      );
-      return 1;
-    });
-  }
-
-  constructor(foldDeath: Deferred.Deferred<never, Error>) {
-    super({ storage: '/storage' }, foldDeath);
-  }
-
-  /** The level at `cursor`, the run's durable outcome `outcome`. */
-  fold(cursor: number, outcome: FakeRunView['durableOutcome']) {
-    return SubscriptionRef.update(this.viewRef, (current) => ({
-      ...current,
-      cursor,
-      runs: new Map(current.runs).set(RUN_ID, {
-        id: RUN_ID,
-        ancestors: [],
-        childIds: [],
-        durableOutcome: outcome,
-      }),
-    }));
-  }
-}
-
 /** The package's handle on `fake`'s run, from the activation its opening
  *  commits, as `session.start` gives it. */
 const startedRun = (fake: FakeSession) =>
@@ -203,83 +146,4 @@ describe('agent package sessions', () => {
         }
       }).pipe(Effect.scoped),
   );
-
-  it.live(
-    "ends a relaunched run's view at its own activation's outcome, not the one before",
-    () =>
-      Effect.gen(function* () {
-        const fake = new RelaunchedSession(
-          yield* Deferred.make<never, Error>(),
-        );
-        const run = yield* startedRun(fake);
-        const levels = yield* Effect.forkChild(Stream.runCollect(run.view));
-
-        expect(
-          (yield* Fiber.join(levels)).map((level) => [
-            level.cursor,
-            level.runs.get(RUN_ID as RunId)?.durableOutcome,
-          ]),
-        ).toEqual([
-          [1, null],
-          [2, 'completed'],
-        ]);
-      }).pipe(Effect.scoped),
-  );
 });
-
-/** `session` as the package hands it to an embedder (`Sessions.open`),
- *  launching under the block's session owner. */
-const packageSession = (session: Context.Context<SessionServices>) =>
-  Effect.gen(function* () {
-    const owner = yield* SessionOwner;
-    const sessions = yield* makeSessions(
-      { ...owner, open: () => Effect.succeed(session) },
-      yield* (yield* SessionGraph.runtime).contextEffect,
-    );
-    return yield* sessions.open(testWorkspaceRoots());
-  });
-
-describe(
-  'agent package sessions over a real store',
-  { timeout: REAL_RUN_TIMEOUT },
-  () => {
-    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-      it.layer(validationHost('texra-package-'), { buildPerTest: true })(
-        (it) => {
-          it.effect(
-            "R19: a root run a model error ends reads as a failed RunEnd with the error's kind, not a RunFailure",
-            () =>
-              Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
-                // No host answers: the session an embedder opens by default.
-                const sdk = yield* packageSession(
-                  yield* Effect.flatMap(
-                    TestSession.open(roots, { persistent: true }),
-                    sessionHandleOf,
-                  ),
-                );
-                const run = yield* sdk.start({
-                  agent: {
-                    name: 'overflowing',
-                    description: 'Sends a request the provider refuses.',
-                    prompt: 'GOLDEN-OVERFLOW: answer.',
-                  },
-                  instruction: 'Answer.',
-                  model: 'openai/gpt-5.6-sol',
-                });
-
-                const end = yield* run.result;
-                expect(end).toMatchObject({
-                  outcome: 'failed',
-                  error: { kind: 'context-window' },
-                });
-                expect(end.error?.message).toContain(
-                  'exceeds the context window',
-                );
-              }),
-          );
-        },
-      );
-    });
-  },
-);

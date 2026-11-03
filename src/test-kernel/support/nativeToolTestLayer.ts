@@ -47,7 +47,7 @@ export const testModelCell = (modelId: string) =>
   SynchronizedRef.makeUnsafe({ modelId } as BoundModel);
 
 /** A run that has opened no step yet. */
-export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
+const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
 
 /** A run fixture's step fields: no step opened yet, and every step offers
  *  exactly `tools`, as the run's own tools over an empty catalog. */
