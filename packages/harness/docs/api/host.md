@@ -1834,8 +1834,9 @@ interface ProcessServicesOptions {
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   *  `--quiet` / `--verbose`; no live setting changes it. */
-  readonly minimumLogLevel: LogLevel.LogLevel;
+   *  `--quiet` / `--verbose`; no live setting changes it. Absent (an
+   *  embedder), no logger, level or tracer is installed: its own decide. */
+  readonly minimumLogLevel?: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }
