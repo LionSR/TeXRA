@@ -27,13 +27,16 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     const selected = selectModel(modelName);
     if (selected) return selected.config;
 
+    // One wording, so a surface that shows only text says what the notice
+    // says.
+    const message = `Model "${modelName}" is not recognized. Review the documentation for supported models.`;
     return yield* new AgentError({
-      message: `Model ${modelName} is not registered`,
+      message,
       notice: {
         event: 'requestShowInstruction',
         payload: {
           key: HARNESS_INSTRUCTION_KEY.MODEL_NOT_RECOGNIZED,
-          message: `Model "${modelName}" is not recognized. Review the documentation for supported models.`,
+          message,
           showSuppress: false,
         },
       },

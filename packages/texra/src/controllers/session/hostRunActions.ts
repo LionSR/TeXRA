@@ -21,6 +21,7 @@ import {
   type Secrets,
   StateReadFailed,
   withLogChannel,
+  launchNoticeOf,
   presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
@@ -481,17 +482,21 @@ export const createHostRunActions = Effect.fn(
      * it: it continues the run's own rows (a child's, with the parent
      * that owns it). A run that does not take it refuses the request (its
      * reason already told); one that waits for what blocks it is asked
-     * for, and its own line says what it waits for. A workflow settles
-     * with its whole run, whose output opens then.
+     * for, and its own line says what it waits for; one whose launch is
+     * refused (a model this build does not know) shows the notice the
+     * failure carries, in this window. A workflow settles with its whole
+     * run, whose output opens then.
      */
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
       yield* nativeAgentRun(runId, 'resume');
       const run = yield* resumeRun(session, runId).pipe(
         Effect.catchTag('RunFailure', (failure) =>
-          Effect.fail(new Unavailable({ runId, reason: failure.message })),
+          launchNoticeOf(failure) === undefined
+            ? Effect.fail(new Unavailable({ runId, reason: failure.message }))
+            : Effect.as(presentRunFailure(ports.present, failure), null),
         ),
       );
-      if (run === 'waiting') return;
+      if (run === null || run === 'waiting') return;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
       const result = yield* run.result.pipe(
@@ -630,9 +635,17 @@ export const createHostRunActions = Effect.fn(
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);
       // The fork waits for its host: continuing it waits on the user's
-      // next message. A refusal is told by the resume itself, and the fork
-      // keeps its Resume.
-      yield* resumeRun(session, forked).pipe(Effect.ignore({ log: 'Warn' }));
+      // next message. A refusal is told by the resume itself, a refused
+      // launch by the notice it carries, shown here; the fork keeps its
+      // Resume.
+      yield* resumeRun(session, forked).pipe(
+        Effect.tapError((error) =>
+          launchNoticeOf(error) === undefined
+            ? Effect.void
+            : presentRunFailure(ports.present, error),
+        ),
+        Effect.ignore({ log: 'Warn' }),
+      );
       return forked;
     }),
   };
