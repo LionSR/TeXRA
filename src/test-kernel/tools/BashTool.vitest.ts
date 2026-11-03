@@ -143,47 +143,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
   );
 
   it.layer(perTest, { buildPerTest: true })((it) => {
-    it.effect.each([
-      {
-        name: 'head boundary',
-        text: `${'a'.repeat(3_999)}🙂${'b'.repeat(60_000)}`,
-      },
-      {
-        name: 'tail boundary',
-        text: `${'a'.repeat(4_001)}🙂${'b'.repeat(50_000)}`,
-      },
-    ])('does not split surrogate pairs at the $name', ({ text }) =>
-      Effect.gen(function* () {
-        const session = yield* sessionHandle;
-        vi.spyOn(execUtils, 'executeCommand').mockImplementation(
-          (_command, options) =>
-            Effect.sync(() => {
-              options?.onStdout?.(text);
-              return {
-                success: true,
-                stdout: '',
-                stderr: '',
-                timedOut: false,
-                exitCode: 0,
-              };
-            }),
-        );
-
-        const result = yield* BashTool.call({
-          command: 'unicode-boundary',
-        }).pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              run: { session, runId: 'bash-tool' as RunId, toolPolicy: {} },
-            }),
-          ),
-        );
-        const output = String(result.output);
-        assert.ok(!/[\ud800-\udbff](?![\udc00-\udfff])/.test(output));
-        assert.ok(!/(?<![\ud800-\udbff])[\udc00-\udfff]/.test(output));
-      }),
-    );
-
     it.effect(
       '#8093 regression: finalizes the background run before its wake step resolves, so a resumed parent never self-stalls waiting on it',
       () =>

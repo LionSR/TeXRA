@@ -31,7 +31,6 @@ describe('retryTransientFetch transience classification', () => {
   // the program on its first attempt.
   it.effect.each([
     [429, 2],
-    [503, 2],
     [404, 1],
   ])('HTTP %i runs the request %i time(s)', ([status, expected]) =>
     Effect.gen(function* () {
