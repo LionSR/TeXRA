@@ -1,3 +1,6 @@
+import { Schema } from 'effect';
+
+import { ProviderErrorClassificationSchema } from './errors';
 import type { FileLocation } from './output';
 
 /**
@@ -42,10 +45,41 @@ export interface AgentNotFoundPayload {
   agentName: string;
 }
 
+/**
+ * The notice a refused launch carries for its caller to show
+ * (`AgentError.notice`), as the presentation event and payload a host's
+ * `emit` takes: the instruction for a model the build does not recognize,
+ * or the agent the launch named that the catalog does not hold. The launch
+ * shows nothing itself; the caller shows this where it shows the failure.
+ */
+export const LaunchNoticeSchema = Schema.Union([
+  Schema.Struct({
+    event: Schema.Literal('requestShowInstruction'),
+    payload: Schema.Struct({
+      key: Schema.String,
+      message: Schema.String,
+      showSuppress: Schema.optional(Schema.Boolean),
+    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
+  }),
+  Schema.Struct({
+    event: Schema.Literal('agentNotFound'),
+    payload: Schema.Struct({
+      agentName: Schema.String,
+    }) satisfies Schema.Codec<AgentNotFoundPayload, unknown>,
+  }),
+]);
+/** A refused launch's notice ({@link LaunchNoticeSchema}). */
+export type LaunchNotice = typeof LaunchNoticeSchema.Type;
+
 /** Show an error message via a host notification. */
-export interface RequestShowErrorPayload {
-  message: string;
+export const RequestShowErrorPayloadSchema = Schema.Struct({
+  message: Schema.String,
   /** Docs page of the refusing request (e.g. 'file-management'); the host
    *  offers it as a guide link or action beside the message. */
-  docsPage?: string;
-}
+  docsPage: Schema.optional(Schema.String),
+  /** The classification of the failure `message` words: a host with words
+   *  of its own for it shows them in place of `message`. */
+  classification: Schema.optional(ProviderErrorClassificationSchema),
+});
+/** {@link RequestShowErrorPayloadSchema}'s value. */
+export type RequestShowErrorPayload = typeof RequestShowErrorPayloadSchema.Type;

@@ -13,7 +13,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import {
@@ -27,7 +27,7 @@ import { elideText, rowHeadline } from '@texra-ai/harness/transcript';
 
 import { makeExampleWorkspace } from './_support.ts';
 
-const { workspace, platform } = await makeExampleWorkspace([
+const { workspace, platform, route } = await makeExampleWorkspace([
   {
     toolCalls: [
       {
@@ -74,7 +74,7 @@ const program = Effect.gen(function* () {
       tools: ['read_file'],
     },
     instruction: 'What is the title in paper.tex?',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
   });
 
   yield* run.result;
@@ -106,7 +106,11 @@ const program = Effect.gen(function* () {
   }
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(route.transport),
+    ),
+  ),
 );
 
 await Effect.runPromise(program);

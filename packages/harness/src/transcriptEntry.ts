@@ -83,7 +83,6 @@ export type {
   ProgressStatusRow,
   StatItem,
   StreamingTextRow,
-  ToolCallFacts,
   ToolRow,
   TranscriptRow,
   TranscriptRowBase,

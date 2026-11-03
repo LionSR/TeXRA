@@ -13,6 +13,7 @@ import { absurd } from 'effect';
 import {
   TOOL_CALL_STATUS,
   type ContextManagementData,
+  type DeclinableUsageRoute,
   type ErrorLogData,
   type FileListEntry,
   type LoadedMediaMetadata,
@@ -114,27 +115,34 @@ export interface ErrorRow extends TranscriptRowBase {
   readonly kind: 'error';
   /** The failure headline. */
   readonly summary: TranscriptText;
-  /** Canonical detail field set, in display order. */
+  /** Canonical detail field set, in display order: a host shows each as a
+   *  `key: value` line. */
   readonly details: readonly ErrorRowDetail[];
-  /** The detail block as one text, for copy affordances and full-output
-   *  readers. */
-  readonly detailText: TranscriptText;
+  /** The classified failure the row records: an app with words of its own
+   *  for the classification shows them where the row shows `message` (the
+   *  summary, or the `message` detail). */
+  readonly failure?: {
+    readonly message: string;
+    readonly classification: NonNullable<ErrorLogData['classification']>;
+  };
 }
 
-/** What a card's `tool.start` says of its call beyond the tool and input:
- *  a script's call's phase, and the attempt from the second on. */
-export interface ToolCallFacts {
-  readonly phase?: string;
-  readonly attempt?: number;
-}
-
-export interface ToolRow extends TranscriptRowBase, ToolCallFacts {
+export interface ToolRow extends TranscriptRowBase {
   readonly kind: 'tool';
   readonly toolUse: NormalizedToolUse;
   readonly model: ToolRowModel;
   /** The decoded durable payload the row was built from, without live
    *  output: what a conversation export formats. */
   readonly log: ToolUseLog;
+  /** A script's call's phase, as its card's `tool.start` names it. */
+  readonly phase?: string;
+  /** The call's attempt, from the second on (its card's `tool.start`). */
+  readonly attempt?: number;
+  /** The run waited or ended while the call was open: the call never
+   *  finished, so nothing records how it ended, and the row reads failed.
+   *  A result that lands once the run runs again replaces it. The row
+   *  holds no text for it; each reader words it. */
+  readonly cutByRunEnd?: true;
 }
 
 export interface WebSearchRow extends TranscriptRowBase {
@@ -177,10 +185,14 @@ export interface ContextManagementRow extends TranscriptRowBase {
   readonly items: readonly StatItem[];
 }
 
+/** A status note: its message, and no untyped payload beside it. */
 export interface ProgressStatusRow extends TranscriptRowBase {
   readonly kind: 'progressStatus';
   readonly summary: TranscriptText;
-  readonly detail?: TranscriptText;
+  /** The used-up plan's route a quota fallback notice reports: the run
+   *  retried on the model's own key without asking. An app words it; the
+   *  summary is the harness's plain wording of the same fact. */
+  readonly quotaFallback?: DeclinableUsageRoute;
 }
 
 export interface CompactionActivityRow extends TranscriptRowBase {

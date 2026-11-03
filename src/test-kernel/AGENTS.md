@@ -42,33 +42,45 @@ leaves a consequential contract or reproduced defect unprotected.
 
 ## Test tiers
 
-`vitest.config.mjs` runs suites in two projects, and a suite's cost is decided
-by what it reaches, not by how many tests it has:
+`vitest.config.mjs` runs suites in three projects, and a suite's cost is
+decided by what it reaches, not by how many tests it has:
 
 - **`pure`** — suites that reach no host: no setup file, no fake platform, no
-  DOM, one module registry shared between files. Several times cheaper per
-  suite than `kernel`, and deterministic, because nothing in it installs or replaces
-  anything.
-- **`kernel`** — everything that needs a host: the fake platform installed per
-  file, each file in its own module registry. The DOM suites (`progressView`,
-  `settings`, `frontend`, `desktop`) live here too; a Lit element
-  class is bound to the window that first loaded it.
+  DOM, one module registry shared between files. Deterministic, because
+  nothing in it installs or replaces anything.
+- **`kernel`** — suites over a host, one module registry shared between the
+  files a worker runs. A suite states what it runs over as layers its blocks
+  build with `@effect/vitest`'s `layer(...)` and `it.layer(...)`
+  (`support/testKernel.ts`: `FakeHost.layer`; `SessionGraph.layer` over the
+  block's host, or `SessionGraph.hosted` with a default one; and
+  `TestSession.layer`). No host is installed by default, and a block's scope
+  releases what it built, so nothing a file installs outlives it.
+- **`isolated`** — what a shared registry cannot serve, each file in its own
+  registry and its own worker, several times the cost per suite: a suite that
+  calls `vi.mock` / `vi.doMock` (its factory's module would be what the next
+  suite imports) or `vi.resetModules`, or brings its own DOM (`lit`, `jsdom`),
+  and every suite under `desktop`, `progressView` and `settings`, where
+  helpers a scan of the suite does not see bring a window or load modules
+  afresh. A Lit element class is bound to the window that first loaded it.
 
-Membership is computed from the suite's source, not declared. A suite under a
-`pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
-repository module, imports `@platform/*` or a support module that installs or
-reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`.
-Process-wide state a source scan cannot see (such as the environment chalk takes
-its color level from) is found by file-order shuffles and fixed in the suite:
-set the state on the instance it lives on and restore it after. There is no
-list of exempt suites. A module under test that reaches for an ambient host or
-the workspace roots itself is a production defect; make it take its host as a
-layer or a value. So for a new suite: test the module directly, provide
-dependencies as values or layers, and do not mock repository modules. A
-`vi.mock` is what moves your suite to the slow tier; the tier is not a target
-to opt into.
+Membership is computed from the suite's source, not declared: a suite that
+needs its own registry is `isolated`; otherwise a suite under a `pure`
+directory is `pure` unless it imports `@platform/*` or a support module that
+installs or reads a host, and every other suite is `kernel`. There is no list
+of exempt suites. A shared worker runs file after file, so process-wide state
+a source scan cannot see (the environment chalk takes its color level from, a
+stubbed global, a host left installed) is found by file-order shuffles
+(`--sequence.shuffle --sequence.seed=<n>`) and fixed in the suite: set the
+state on the instance it lives on and restore it after. The worker's fake
+root holds the files of the host installed now, and each new host empties
+it: touch it only under a host your block built. A module under test that
+reaches for an ambient host or the workspace roots itself is a production
+defect; make it take its host as a layer or a value. So for a new suite: test
+the module directly, provide dependencies as values or layers, and do not
+mock repository modules. A `vi.mock` is what moves your suite to the slow
+tier; the tier is not a target to opt into.
 
-`packages/llm` carries a third project, `packages/llm/vitest.live.config.mjs`:
+`packages/llm` carries a separate project, `packages/llm/vitest.live.config.mjs`:
 one suite per HTTP route (a vendor endpoint and the credential it takes), run
 against the real provider (`npm run test:live`). It is never part of `npm test`
 because it spends money and needs the network; each suite gates itself on its
@@ -126,7 +138,7 @@ testing guides.
 
 ## Test fixtures and fakes
 
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`.
+- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, where a module-scope `await` or `Effect.run*` is an ESLint error that no disable comment reaches: what a suite runs over is a layer its blocks build.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 

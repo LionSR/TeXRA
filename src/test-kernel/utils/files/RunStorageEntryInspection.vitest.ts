@@ -8,14 +8,11 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const runId = 'abcdef123456' as RunId;
 const storageRoot = path.resolve(path.sep, 'storage');
 const workspaceRoot = path.resolve(path.sep, 'workspace');
-
-setupPlatform({ storagePath: storageRoot, workspacePath: workspaceRoot });
 
 /** The absolute path the rooted helper probes for a run-relative entry. */
 function primaryEntry(...segments: string[]): string {

@@ -171,6 +171,24 @@
           "signature": "export function routeCredential( route: CredentialRoute, config: ModelConfig, facts: Pick<RouteFacts, 'endpoints'>, rejected: string | undefined, ): Effect.Effect< RouteCredential, RouteUnavailable, HttpClient.HttpClient | Secrets > {…}"
         }
       ]
+    },
+    {
+      "id": "SESSION-one-view-service",
+      "candidate": "merge SessionViewService (the view updater's ref and changes) into SessionViewAccess, so a session has one view service",
+      "why": "Two layers, not two copies. SessionViewService is the view updater: the session's own view and the cross-process RemoteSessionView (which has no store) are both built on it. SessionViewAccess is the session's view as runs and readers take it: local state, transcript subscriptions, marks, gated by the store's doors-shut flag. The store (folded is derived from ref) and ownerLiveness read the updater because they are built before the access. One service would need the doors-shut flag owned below the store as a new tag (one tag deleted, one added, no element removed) and would hand RemoteSessionView a store dependency it does not use. Measured on main e0ba9992b0 after #14546.",
+      "ruling": "https://github.com/LionSR/TeXRA/pull/14559",
+      "symbols": [
+        {
+          "file": "packages/harness/src/controllers/session/SessionView.ts",
+          "symbol": "SessionViewService",
+          "signature": "export class SessionViewService extends Context.Service< SessionViewService, { readonly ref: SubscriptionRef.SubscriptionRef<SessionView>; readonly changes: Stream.Stream<SessionView>; } >()('@texra-ai/harness/session/SessionView') { static readonly layer = Layer.effect( SessionViewService, Effect.gen(function* () {…}), ); }"
+        },
+        {
+          "file": "packages/harness/src/controllers/session/SessionView.ts",
+          "symbol": "makeSessionViewAccess",
+          "signature": "export const makeSessionViewAccess = Effect.fn( 'SessionView.makeSessionViewAccess', )(function* ( storage: string, closed: () => boolean, ): Effect.fn.Return< SessionViewAccessShape, DatabaseReadFailed, | Scope.Scope | SessionViewService | SessionInputs | TranscriptSubscriptions | LocalRuntimeSource > {…});"
+        }
+      ]
     }
   ]
 }

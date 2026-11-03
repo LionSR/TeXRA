@@ -103,16 +103,21 @@ export const RunPositionPayloadSchema = Schema.Struct({
   turn: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
   ),
-  /** The loop's own terminal word. The canonical terminal fact stays
-   *  `run.end`, which also covers failures before the runtime starts. */
+  /** A halt's: the loop's own terminal word (the canonical terminal fact
+   *  stays `run.end`, which also covers failures before the runtime
+   *  starts). A `turn.end`'s: how the turn ended, `completed` with its
+   *  answer or `failed` without one, which a follow-up's receipt reads. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
   /** `closed`: a clean session close forced the halt (`haltedPositionRow`). */
   reason: Schema.optional(Schema.Literal('closed')),
 }).check(
-  Schema.makeFilter((p) => (p.at === 'halted') === (p.outcome != null), {
-    message:
-      'Only a halted position carries an outcome, and it always carries one.',
-  }),
+  Schema.makeFilter(
+    (p) => (p.at === 'halted' || p.at === 'turn.end') === (p.outcome != null),
+    {
+      message:
+        'Only a halted or turn.end position carries an outcome, and it always carries one.',
+    },
+  ),
 );
 
 /* ---------------------------------------------------------- model.message */

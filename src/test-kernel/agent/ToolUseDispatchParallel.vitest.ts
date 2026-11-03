@@ -7,17 +7,12 @@
  * interrupted, off the run history it did or did not commit to.
  */
 
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
 
 import {
-  Cause,
   Context,
   Deferred,
   Effect,
-  Exit,
   Fiber,
   Layer,
   Schema,
@@ -25,9 +20,9 @@ import {
   Stream,
   SynchronizedRef,
 } from 'effect';
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 import {
   type Model,
   MODEL_CONFIGS,
@@ -44,17 +39,17 @@ import {
   type RunId,
   type ToolDefinition,
 } from '@texra-ai/harness/schemas';
-import {
-  DatabaseWriteFailed,
-  type PluginContext,
-} from '@texra-ai/harness/host';
+import { type PluginContext } from '@texra-ai/harness/host';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
 import type { Runs } from '@agent/runtime/runRegistry';
-import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type {
+  PluginToolServices,
+  RunServices,
+} from '@agent/runtime/ToolServices';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
@@ -65,14 +60,14 @@ import {
 } from '@shared/session/runHistory';
 import { freshRunState, type RunState } from '@shared/session/runState';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 import { ScriptTool } from '@tools/codemode/ScriptTool';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
@@ -87,8 +82,6 @@ const settledIds = (state: RunState | null | undefined): string[] =>
   Object.entries(state?.pendingResponse?.records ?? {}).flatMap(([id, call]) =>
     call.status.kind === 'settled' ? [id] : [],
   );
-
-setupPlatform({ workspacePath: '/workspace' });
 
 const ORIGIN = {
   protocol: 'openai-responses',
@@ -236,8 +229,14 @@ interface DispatchKit {
   readonly cell: RunCell;
   /** The tools the dispatch's step offers. */
   readonly tools: ResolvedTools['registry'];
+  /** The run's services and its calls', over the block's process services. */
   readonly layer: Layer.Layer<
-    AgentRun | RunHistory | Runs | Exclude<PluginToolServices, Scope.Scope>
+    | AgentRun
+    | RunHistory
+    | Runs
+    | Exclude<PluginToolServices, RunServices | Scope.Scope>,
+    never,
+    RunServices
   >;
 }
 
@@ -256,7 +255,7 @@ interface HarnessOptions {
 const openDispatch = Effect.fn('openDispatch')(function* (
   options: HarnessOptions,
 ) {
-  const session = yield* createTestSession();
+  const session = yield* isolatedTestSession();
   const runId = dispatchRunId();
   const tools = new Map(Object.entries(options.tools));
   publishTestRunStart(session, runId);
@@ -333,22 +332,27 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
     ).pipe(Effect.orDie),
   ).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
 
-describe('tool-use dispatch', () => {
-  // Failure modes: a SQL page reaches the guest as display text, losing its
-  // typed cells and pagination; display truncation changes a data value; or
-  // generated SQL values bypass the page's serialized byte limit.
-  it.live('delivers bounded SQL pages as data to a script', () =>
-    Effect.gen(function* () {
-      const text = `${'x'.repeat(3000)}|\nend`;
-      const kit = yield* openDispatch({
-        tools: {
-          // cast: the built-ins' services are the dispatch's.
-          script: ScriptTool as unknown as StepTool,
-          executions: ExecutionsTool,
-        },
-        calls: [
-          makeCall('query-script', 'script', {
-            code: `const page = await tools.executions({
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'tool-use dispatch',
+  (it) => {
+    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+      buildPerTest: true,
+    })((it) => {
+      // Failure modes: a SQL page reaches the guest as display text, losing its
+      // typed cells and pagination; display truncation changes a data value; or
+      // generated SQL values bypass the page's serialized byte limit.
+      it.effect('delivers bounded SQL pages as data to a script', () =>
+        Effect.gen(function* () {
+          const text = `${'x'.repeat(3000)}|\nend`;
+          const kit = yield* openDispatch({
+            tools: {
+              // cast: the built-ins' services are the dispatch's.
+              script: ScriptTool as unknown as StepTool,
+              executions: ExecutionsTool,
+            },
+            calls: [
+              makeCall('query-script', 'script', {
+                code: `const page = await tools.executions({
   path: '/executions', action: 'query',
   sql: 'WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 201) SELECT x AS number, ? AS text, NULL AS absent FROM n',
   params: [${JSON.stringify(text)}],
@@ -364,230 +368,211 @@ try {
 }
 return { columns: page.columns, count: page.rows.length,
   first: page.rows[0], last: page.rows.at(-1), more: page.more, oversized };`,
-          }),
-        ],
-      });
-      yield* Effect.addFinalizer(() => closeSessionOf(kit.session));
-      yield* dispatch(kit, [ExecutionsTool.definition]);
-      yield* Context.get(kit.session, SessionLog).settled;
-      const { results } = yield* Context.get(kit.session, SessionLog).runRows(
-        qualifyAggregateId('run', kit.runId),
-        'results',
-      );
-      const script = results.find(({ callId }) => callId === 'query-script');
-      expect(
-        script?.result.status,
-        script?.result.status === 'error' ? script.result.error : undefined,
-      ).toBe('executed');
-      expect(script?.result).toMatchObject({
-        status: 'executed',
-        value: {
-          columns: ['number', 'text', 'absent'],
-          count: 200,
-          first: [1, text, null],
-          last: [200, text, null],
-          more: true,
-          oversized: {
-            name: 'ToolFailed',
-            message: expect.stringContaining('4194304 bytes'),
-          },
-        },
-      });
-      const query = results.find(({ callId }) => callId === 'query-script/0');
-      expect(query?.result.output).toContain('select a substr() to read them');
-      expect(query?.result.output).toContain('More rows exist past these 200');
-    }),
-  );
-
-  it.live(
-    'leaves a durable tool write unsettled when it fails under an interrupt',
-    () =>
-      Effect.gen(function* () {
-        const failure = new DatabaseWriteFailed({
-          path: '/unavailable/state.sqlite',
-          cause: new Error('disk write failed'),
-        });
-        const cause = Cause.combine(Cause.interrupt(), Cause.die(failure));
-        const kit = yield* openDispatch({
-          tools: {
-            write_state: {
-              definition: { name: 'write_state' },
-              call: () => Effect.failCause(cause),
+              }),
+            ],
+          });
+          yield* dispatch(kit, [ExecutionsTool.definition]);
+          yield* Context.get(kit.session, SessionLog).settled;
+          const { results } = yield* Context.get(
+            kit.session,
+            SessionLog,
+          ).runRows(qualifyAggregateId('run', kit.runId), 'results');
+          const script = results.find(
+            ({ callId }) => callId === 'query-script',
+          );
+          expect(
+            script?.result.status,
+            script?.result.status === 'error' ? script.result.error : undefined,
+          ).toBe('executed');
+          expect(script?.result).toMatchObject({
+            status: 'executed',
+            value: {
+              columns: ['number', 'text', 'absent'],
+              count: 200,
+              first: [1, text, null],
+              last: [200, text, null],
+              more: true,
+              oversized: {
+                name: 'ToolFailed',
+                message: expect.stringContaining('4194304 bytes'),
+              },
             },
-          },
-          calls: [makeCall('failed-write', 'write_state', {})],
-        });
-        const exit = yield* Effect.exit(dispatch(kit));
-        expect(Exit.isFailure(exit)).toBe(true);
-        if (Exit.isFailure(exit)) {
-          expect(Cause.squash(exit.cause)).toBe(failure);
-          expect(Cause.hasInterrupts(exit.cause)).toBe(true);
-        }
-        const saved = yield* Context.get(kit.session, RunHistory).load(
-          kit.runId,
-        );
-        expect(settledIds(saved)).toEqual([]);
-        expect(saved?.pendingResponse).not.toBeNull();
-        yield* closeSessionOf(kit.session);
-      }),
-  );
-
-  // Failure mode: the guest ends (here it throws) while a call it issued is
-  // still running. The sandbox interrupts that call, and nothing wrote its
-  // result, so its intent and card stayed open forever and a resumed parent
-  // counted the child it had launched as still owned.
-  it.live(
-    'settles a call its script issued and never awaited, before the script result',
-    () =>
-      Effect.gen(function* () {
-        // `slow` never settles on its own; `fast` settles once `slow` has
-        // started, so the guest ends while `slow` has its rows and no result.
-        const never = yield* Deferred.make<void>();
-        const slowStarted = yield* Deferred.make<void>();
-        const probe = newProbe();
-        const kit = yield* openDispatch({
-          tools: {
-            // cast: the built-in's services are the dispatch's.
-            script: ScriptTool as unknown as StepTool,
-            slow: probeTool(
-              probe,
-              'slow',
-              Deferred.succeed(slowStarted, undefined).pipe(
-                Effect.andThen(Deferred.await(never)),
-              ),
-              { lane: 'parallel' },
-            ),
-            fast: probeTool(probe, 'fast', Deferred.await(slowStarted), {
-              lane: 'parallel',
-            }),
-          },
-          calls: [
-            makeCall('c1', 'script', {
-              code: 'const pending = tools.slow({}); await tools.fast({}); throw new Error("the guest gave up");',
-            }),
-          ],
-        });
-
-        yield* dispatch(kit, [
-          { name: 'slow', description: 'slow', parameters: {} },
-          { name: 'fast', description: 'fast', parameters: {} },
-        ]);
-
-        // The results as the run history committed them, in commit order.
-        yield* Context.get(kit.session, SessionLog).settled;
-        const { results } = yield* Context.get(kit.session, SessionLog).runRows(
-          qualifyAggregateId('run', kit.runId),
-          'results',
-        );
-        const nested = results.findIndex((r) => r.callId === 'c1/0');
-        const own = results.findIndex((r) => r.callId === 'c1');
-        expect(results[nested]?.disposition).toBe('skipped');
-        const skipped = results[nested]?.result;
-        // It had started, so the reason carries the unknown-outcome warning.
-        expect(skipped?.status === 'error' && skipped.error).toContain(
-          'Its outcome is unknown',
-        );
-        // Committed before the script's own result.
-        expect(nested).toBeLessThan(own);
-        yield* closeSessionOf(kit.session);
-      }),
-  );
-
-  it.live('treats non-safe tools as ordering barriers', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const kit = yield* openDispatch({
-        tools: {
-          read_file: probeTool(probe, 'read_file', 20, { lane: 'parallel' }),
-          write_file: probeTool(probe, 'write_file', 10),
-        },
-        calls: [
-          makeCall('c1', 'read_file', { n: 1 }),
-          makeCall('c2', 'write_file', { n: 2 }),
-          makeCall('c3', 'read_file', { n: 3 }),
-        ],
-      });
-
-      yield* dispatch(kit);
-
-      expect(probe.maxInFlight).toBe(1);
-      expect(probe.events).toEqual([
-        'start read_file:{"n":1}',
-        'end read_file:{"n":1}',
-        'start write_file:{"n":2}',
-        'end write_file:{"n":2}',
-        'start read_file:{"n":3}',
-        'end read_file:{"n":3}',
-      ]);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-
-  // The settlement is the whole transactional boundary: the result and the
-  // card that reports it commit together, and the edit and the call the
-  // fold reads off the result need no other row.
-  it.live('commits the card and the workspace with the tool result', () =>
-    Effect.gen(function* () {
-      const probe = newProbe();
-      const editingTool: StepTool = {
-        definition: { name: 'edit_file', description: 'edit_file' },
-        call: () =>
-          Effect.sync((): ToolResult => {
-            probe.events.push('end edit_file');
-            return {
-              status: 'executed',
-              output: 'edited',
-              edits: [
-                { path: 'notes.tex', lineChanges: { added: 3, removed: 1 } },
-              ],
-            };
-          }),
-      };
-      const kit = yield* openDispatch({
-        tools: {
-          edit_file: editingTool,
-          slow_barrier: probeTool(probe, 'slow_barrier', 5_000),
-        },
-        calls: [
-          makeCall('c1', 'edit_file', { path: 'notes.tex' }),
-          makeCall('c2', 'slow_barrier', {}),
-        ],
-      });
-      const recorded = recordSessionEvents(kit.session, {
-        aggregateId: qualifyAggregateId('run', kit.runId),
-      });
-
-      const fiber = yield* Effect.forkChild(dispatch(kit));
-      // The barriers are ordered, so the second call starting is proof the
-      // first has settled; the dispatch is then stopped before delivery.
-      while (!probe.events.some((event) => event.startsWith('start slow'))) {
-        yield* Effect.sleep(5);
-      }
-      yield* Fiber.interrupt(fiber);
-
-      const folded = yield* Effect.provide(
-        Effect.gen(function* () {
-          const runHistory = yield* RunHistory;
-          return yield* runHistory.load(kit.runId);
+          });
+          const query = results.find(
+            ({ callId }) => callId === 'query-script/0',
+          );
+          expect(query?.result.output).toContain(
+            'select a substr() to read them',
+          );
+          expect(query?.result.output).toContain(
+            'More rows exist past these 200',
+          );
         }),
-        kit.layer,
       );
-      expect(settledIds(folded)).toEqual(['c1']);
-      // No delivery ran: the edit and the call are folded from the
-      // settlement itself. The interrupted barrier's call is not counted,
-      // because it never settled.
-      expect(folded?.edited).toEqual(['notes.tex']);
-      expect(folded?.toolCalls).toBe(1);
 
-      // The fast tool's card is now two rows of that same batch rather than a
-      // pair of trace publications: exactly one open and one close reach the
-      // display plane, and the interrupted second call opens none.
-      const types = (yield* Effect.promise(() => recorded.read())).map(
-        (event) => event.type,
+      // Failure mode: the guest ends (here it throws) while a call it issued is
+      // still running. The sandbox interrupts that call, and nothing wrote its
+      // result, so its intent and card stayed open forever and a resumed parent
+      // counted the child it had launched as still owned.
+      it.effect(
+        'settles a call its script issued and never awaited, before the script result',
+        () =>
+          Effect.gen(function* () {
+            // `slow` never settles on its own; `fast` settles once `slow`
+            // has started, so the guest ends while `slow` has its rows and no
+            // result.
+            const never = yield* Deferred.make<void>();
+            const slowStarted = yield* Deferred.make<void>();
+            const probe = newProbe();
+            const kit = yield* openDispatch({
+              tools: {
+                // cast: the built-in's services are the dispatch's.
+                script: ScriptTool as unknown as StepTool,
+                slow: probeTool(
+                  probe,
+                  'slow',
+                  Deferred.succeed(slowStarted, undefined).pipe(
+                    Effect.andThen(Deferred.await(never)),
+                  ),
+                  { lane: 'parallel' },
+                ),
+                fast: probeTool(probe, 'fast', Deferred.await(slowStarted), {
+                  lane: 'parallel',
+                }),
+              },
+              calls: [
+                makeCall('c1', 'script', {
+                  code: 'const pending = tools.slow({}); await tools.fast({}); throw new Error("the guest gave up");',
+                }),
+              ],
+            });
+
+            yield* dispatch(kit, [
+              { name: 'slow', description: 'slow', parameters: {} },
+              { name: 'fast', description: 'fast', parameters: {} },
+            ]);
+
+            // The results as the run history committed them, in commit order.
+            yield* Context.get(kit.session, SessionLog).settled;
+            const { results } = yield* Context.get(
+              kit.session,
+              SessionLog,
+            ).runRows(qualifyAggregateId('run', kit.runId), 'results');
+            const nested = results.findIndex((r) => r.callId === 'c1/0');
+            const own = results.findIndex((r) => r.callId === 'c1');
+            expect(results[nested]?.disposition).toBe('skipped');
+            const skipped = results[nested]?.result;
+            // It had started, so the reason carries the unknown-outcome
+            // warning.
+            expect(skipped?.status === 'error' && skipped.error).toContain(
+              'Its outcome is unknown',
+            );
+            // Committed before the script's own result.
+            expect(nested).toBeLessThan(own);
+          }),
       );
-      expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
-      expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
-      yield* closeSessionOf(kit.session);
-    }),
-  );
-});
+
+      it.effect('treats non-safe tools as ordering barriers', () =>
+        Effect.gen(function* () {
+          const probe = newProbe();
+          const kit = yield* openDispatch({
+            tools: {
+              read_file: probeTool(probe, 'read_file', 20, {
+                lane: 'parallel',
+              }),
+              write_file: probeTool(probe, 'write_file', 10),
+            },
+            calls: [
+              makeCall('c1', 'read_file', { n: 1 }),
+              makeCall('c2', 'write_file', { n: 2 }),
+              makeCall('c3', 'read_file', { n: 3 }),
+            ],
+          });
+
+          yield* dispatch(kit);
+
+          expect(probe.maxInFlight).toBe(1);
+          expect(probe.events).toEqual([
+            'start read_file:{"n":1}',
+            'end read_file:{"n":1}',
+            'start write_file:{"n":2}',
+            'end write_file:{"n":2}',
+            'start read_file:{"n":3}',
+            'end read_file:{"n":3}',
+          ]);
+        }),
+      );
+
+      // The settlement is the whole transactional boundary: the result and the
+      // card that reports it commit together, and the edit and the call the
+      // fold reads off the result need no other row.
+      it.effect('commits the card and the workspace with the tool result', () =>
+        Effect.gen(function* () {
+          const probe = newProbe();
+          const editingTool: StepTool = {
+            definition: { name: 'edit_file', description: 'edit_file' },
+            call: () =>
+              Effect.sync((): ToolResult => {
+                probe.events.push('end edit_file');
+                return {
+                  status: 'executed',
+                  output: 'edited',
+                  edits: [
+                    {
+                      path: 'notes.tex',
+                      lineChanges: { added: 3, removed: 1 },
+                    },
+                  ],
+                };
+              }),
+          };
+          const kit = yield* openDispatch({
+            tools: {
+              edit_file: editingTool,
+              slow_barrier: probeTool(probe, 'slow_barrier', 5_000),
+            },
+            calls: [
+              makeCall('c1', 'edit_file', { path: 'notes.tex' }),
+              makeCall('c2', 'slow_barrier', {}),
+            ],
+          });
+          const recorded = recordSessionEvents(kit.session, {
+            aggregateId: qualifyAggregateId('run', kit.runId),
+          });
+
+          const fiber = yield* Effect.forkChild(dispatch(kit));
+          // The barriers are ordered, so the second call starting is proof the
+          // first has settled; the dispatch is then stopped before delivery.
+          while (
+            !probe.events.some((event) => event.startsWith('start slow'))
+          ) {
+            yield* Effect.sleep(5);
+          }
+          yield* Fiber.interrupt(fiber);
+
+          const folded = yield* Effect.provide(
+            Effect.gen(function* () {
+              const runHistory = yield* RunHistory;
+              return yield* runHistory.load(kit.runId);
+            }),
+            kit.layer,
+          );
+          expect(settledIds(folded)).toEqual(['c1']);
+          // No delivery ran: the edit and the call are folded from the
+          // settlement itself. The interrupted barrier's call is not counted,
+          // because it never settled.
+          expect(folded?.edited).toEqual(['notes.tex']);
+          expect(folded?.toolCalls).toBe(1);
+
+          // The fast tool's card is now two rows of that same batch rather
+          // than a pair of trace publications: exactly one open and one close
+          // reach the display plane, and the interrupted second call opens
+          // none.
+          const types = (yield* recorded.read).map((event) => event.type);
+          expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
+          expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
+        }),
+      );
+    });
+  },
+);

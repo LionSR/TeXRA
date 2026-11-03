@@ -32,10 +32,8 @@ export type {
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-// The subscriptions a model call can route through, and each one's switch
-// and sign-in names.
+// The subscriptions a model call can route through, by provider id.
 export {
-  SUBSCRIPTION_AUTH_NAMES,
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
@@ -80,11 +78,6 @@ export type {
 } from '@shared/session/database';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
-// The plan a used-up subscription falls back to (`quotaFallbackRouteFor`).
-export type {
-  QuotaFallbackExhaustionReason,
-  QuotaFallbackRoute,
-} from '@shared/quotaFallbackRoutes';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
@@ -125,6 +118,7 @@ export type {
   PermissionPayload,
   Persona,
   ProposalFileGroup,
+  ProviderError,
   OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
@@ -192,11 +186,9 @@ export {
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 // A request a host sends a session, the outcome or the error class it is
-// answered with, a run's start as data, and a tool edit's hunks as
-// unified-diff lines.
+// answered with, and a run's start as data.
 export {
   Cancelled,
-  formatHunkLines,
   Invalid,
   OutcomeSchema,
   Rejected,
@@ -300,8 +292,11 @@ export {
   fileLocationShortDisplayPath,
   // A fresh run id, for a caller that names a run before a session launches it.
   generateRunId,
+  formatHunkLines,
   getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
+  GOAL_STRATEGY_SETTING,
+  GoalResultSchema,
   InlinePersonaSchema,
   InstalledPluginSchema,
   HARNESS_INSTRUCTION_KEY,
@@ -312,6 +307,8 @@ export {
   isRunId,
   isTaskConfig,
   JsonValueSchema,
+  type LaunchNotice,
+  LaunchNoticeSchema,
   LineCountSchema,
   listingTypeOf,
   type McpToolOutput,
@@ -333,6 +330,7 @@ export {
   recipeBlockOf,
   referencedAggregates,
   type RequestDecision,
+  RequestShowErrorPayloadSchema,
   type RetryPermission,
   RUN_LIFECYCLE_READY,
   RUN_OUTCOME,

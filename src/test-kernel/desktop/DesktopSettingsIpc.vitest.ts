@@ -119,7 +119,7 @@ function flushAsyncWork(): Promise<void> {
 }
 
 // Live clock: the IPC's programs settle on real event-loop turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'desktop settings IPC',
   (it) => {
     beforeAll(async () => {

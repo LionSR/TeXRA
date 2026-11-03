@@ -11,6 +11,7 @@
  */
 import {
   Context,
+  type Deferred,
   Effect,
   Schema,
   type Scope,
@@ -27,6 +28,7 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
   type PluginRequest,
@@ -37,7 +39,6 @@ import {
 import type { RunFacts } from '@shared/session/runFacts';
 import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
-import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
 import type { SessionServices } from './rootLaunch';
@@ -128,13 +129,14 @@ export interface ScriptScope extends ScriptSource {
     readonly { readonly toolName: string; readonly input: unknown }[]
   >;
   /**
-   * The value the script's calls share under `key`: the first call to ask
+   * The value the script's calls share under `key`, a key its caller
+   * declares once with the value's type and failure: the first call to ask
    * makes it, and every later one, concurrent or not, gets what that made
    * (its failure included). Held in memory for the script's run in this
    * process; what must outlive a restart is made from rows.
    */
   readonly shared: <A, E, R>(
-    key: string,
+    key: Context.Key<unknown, Deferred.Deferred<A, E>>,
     make: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
 }

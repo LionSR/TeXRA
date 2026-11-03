@@ -483,8 +483,20 @@ All eight moves merged on 2026-10-30, each verified on the merged tree
 The estimates in "What gets deleted" counted lines that moved as lines that
 vanished: M1 and M2 landed far below them, and M7 added behavior. The
 structural goals held: no closure nest, one run module, one owner of liveness,
-no row kind named outside its reducer, no memory twin, no warning over a lost
-durable fact.
+fewer runtime readers of row kinds, no memory twin, no warning over a lost
+durable fact. Storage boundaries still interpret rows: the codec validates
+stored payloads, the writer enforces sequencing and parent-incarnation
+preconditions, and the reader reconstructs persisted listings and tool-card
+output. These responsibilities were not moved into the runtime reducers.
+
+Scope clarification, 2026-11-02 at `4249491a02`: #14449 excluded five named
+storage modules from the application-reader scan. Its seven removed baseline
+entries still have readers in the code; the change from 14 entries to seven
+is a change in measurement scope, not seven deleted readers. The remaining
+seven entries cover five row kinds in `RunHistory`, `storedTurn`, the trace
+decoder and the trace viewer. The historical 43-to-14 count above retains its
+original scope. Neither count establishes that row kinds are read only by
+reducers; the separate fact-owner checks still govern the facts they name.
 
 ## Verified
 

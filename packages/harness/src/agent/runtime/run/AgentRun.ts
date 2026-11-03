@@ -24,6 +24,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
+import { RunFileService } from '@common/storage/runStorage';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -42,7 +43,6 @@ import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
-import { RunFileService } from '@utils/files/runStorage';
 import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -272,8 +272,6 @@ export const agentRunLayer = (
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        stores: roots,
-        workspaceRoot: roots.workspace,
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).

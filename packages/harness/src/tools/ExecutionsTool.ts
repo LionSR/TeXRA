@@ -28,6 +28,7 @@ import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { scriptRunCalls } from '@agent/runtime/scriptRun';
 import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
+import { findExistingRunStoragePathUnder } from '@common/storage/storageLayout';
 import { SessionRoots, StorageFs } from '@platform/rootedFs';
 import {
   isRunId,
@@ -43,7 +44,6 @@ import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
 import { splitContentLines } from '@utils/text/stringUtils';
 

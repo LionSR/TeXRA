@@ -1,7 +1,8 @@
 /**
- * A run's directory on disk: removing the files a run generated, driven
- * only by committed deletion records, and the `run.files` request that
- * copies a stopped run's directory into the workspace or removes it.
+ * A run's removal: a `run.delete`, which removes the run from its log; the
+ * removal of the files a run generated, driven only by committed deletion
+ * records; and the `run.files` request that copies a stopped run's
+ * directory into the workspace or removes it.
  */
 import * as path from 'node:path';
 
@@ -10,29 +11,44 @@ import {
   Effect,
   type Fiber,
   FileSystem,
-  type Path,
+  Path,
   type PlatformError,
   Schema,
   type Scope,
 } from 'effect';
 
+import { runNoun } from '@agent/runtime/forkRun';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
-import { SessionRoots, withSessionFs } from '@platform/rootedFs';
-import type { RunId } from '@shared/schemas';
-import type { Database } from '@shared/session/database';
+import {
+  SessionRoots,
+  StorageFs,
+  WorkspaceFs,
+  withSessionFs,
+} from '@platform/rootedFs';
+import { qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  type AggregateState,
+  type Database,
+  type DeletionMode,
+} from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
 import {
+  NotOwner,
   Rejected,
+  Unavailable,
   type RequestError,
   type OutcomeOf,
   type RunFilesResult,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import { SessionLog } from '@shared/session/runHistory';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import { SessionLog, type SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { copyDereferenced } from '@utils/files/fsDurability';
 import { absentReason } from '@utils/files/fsEntryExists';
-import { copyOrRemoveRunDir } from '@utils/files/runStorageFs';
 import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
@@ -150,6 +166,101 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
 export type RunFilesServices = FileSystem.FileSystem | Path.Path;
 
 /**
+ * Copy a stopped run's directory to the workspace path `to`, or remove it;
+ * `false` when the run has no directory. Symlinks are dereferenced so a copy
+ * stands alone, and a copy onto an existing folder fails rather than merging
+ * into it.
+ */
+const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
+  function* (
+    runId: RunId,
+    files:
+      { readonly op: 'copy'; readonly to: string } | { readonly op: 'remove' },
+  ) {
+    const storageFs = yield* StorageFs;
+    const runDir = path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, runId);
+    if (!(yield* storageFs.exists(runDir))) {
+      yield* Effect.logWarning(`Run directory not found for run ${runId}`);
+      return false;
+    }
+    if (files.op === 'remove') {
+      yield* Effect.logInfo(`Removing the run directory ${runDir}`);
+      yield* storageFs.remove(runDir, { recursive: true, force: true });
+      return true;
+    }
+    const workspaceFs = yield* WorkspaceFs;
+    const source = yield* storageFs.resolve(runDir);
+    const destination = yield* workspaceFs.resolve(files.to);
+    yield* workspaceFs.makeDirectory((yield* Path.Path).dirname(files.to), {
+      recursive: true,
+    });
+    yield* copyDereferenced(source, destination);
+    yield* Effect.logInfo(`Copied ${source} -> ${destination}`);
+    return true;
+  },
+);
+
+/** The registry's step on an inactive run, which refuses one anything
+ *  still runs and holds a launch back until it ends. */
+interface InactiveRunStep {
+  readonly withInactiveRunStep: <A, E, R>(
+    runId: RunId,
+    operation: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E | Error, R>;
+}
+
+/** A `run.delete`, or a listing's removal: the admitted lifetime's rows
+ *  removed from the log once the registry's inactive run step holds the
+ *  run, which refuses one anything still runs. */
+export const deleteAdmittedRun = (
+  deps: {
+    readonly log: Pick<SessionEventsShape, 'removeRun'>;
+    readonly view: SessionViewAccess['Service'];
+  },
+  runId: RunId,
+  admitted: AggregateState,
+  mode: DeletionMode,
+  runs: InactiveRunStep,
+): Effect.Effect<OutcomeOf<'run.delete'>, RequestError> => {
+  const aggregateId = qualifyAggregateId('run', runId);
+  return Effect.gen(function* () {
+    if (admitted.startCommit === null) {
+      return yield* new Unavailable({
+        runId,
+        reason: `The ${runNoun(deps.view, runId)} has no recorded start.`,
+      });
+    }
+    yield* runs
+      .withInactiveRunStep(
+        runId,
+        deps.log.removeRun(aggregateId, mode, admitted.startCommit),
+      )
+      .pipe(
+        Effect.mapError((error): RequestError => {
+          if (error instanceof RunLive)
+            return new Unavailable({
+              runId,
+              reason: `Stop the ${runNoun(deps.view, runId)} before deleting it.`,
+            });
+          if (error instanceof DatabaseClaimRefused) {
+            return error.verdict === 'alive'
+              ? new NotOwner({ runId })
+              : new Rejected({
+                  reason:
+                    'The current owner could not be verified, so automatic or bulk deletion was refused.',
+                });
+          }
+          return new Unavailable({
+            runId,
+            reason: `The ${runNoun(deps.view, runId)} could not be removed from the listing.`,
+          });
+        }),
+      );
+    return { kind: 'done' } as const;
+  });
+};
+
+/**
  * Answer a `run.files` request on its session as one step on the inactive run
  * (`runs`: the registry's `withInactiveRunStep`), its claim taken for the
  * operation: a run launched here or held by another live process refuses
@@ -158,12 +269,7 @@ export type RunFilesServices = FileSystem.FileSystem | Path.Path;
  * requesting app's.
  */
 export const runFiles = (
-  runs: {
-    readonly withInactiveRunStep: <A, E, R>(
-      runId: RunId,
-      operation: Effect.Effect<A, E, R>,
-    ) => Effect.Effect<A, E | Error, R>;
-  },
+  runs: InactiveRunStep,
   req: Extract<RuntimeRequest, { kind: 'run.files' }>,
 ): Effect.Effect<
   OutcomeOf<'run.files'>,

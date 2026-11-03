@@ -2,11 +2,6 @@ import { Predicate } from 'effect';
 
 import { causeChain } from '@utils/errors/errorMessage';
 
-/** Check if an error represents "a parent path component is a file, not a directory". */
-export function isNotADirectoryError(err: unknown): boolean {
-  return Predicate.hasProperty(err, 'code') && err.code === 'ENOTDIR';
-}
-
 /** Check if an error is "dynamic import couldn't find the module" (Node + ESM variants). */
 export function isModuleNotFoundError(err: unknown): boolean {
   return (

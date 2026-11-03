@@ -50,16 +50,6 @@ const AGENT_IMPORT_PATTERNS = [
   /\bimport\s*\(\s*['"]@agent\//,
 ];
 
-// The one pre-existing shared-to-agent edge (packages/harness/src/shared/agent/
-// terminalResultPresentation.ts) was deleted by folding its mapper back into
-// the agent runtime (now `@agent/runtime/HostInteractions.ts`, the host
-// presentation surface) — where `ResultEvent` lives. Keep this allowlist
-// empty; a new entry would recreate the inversion.
-const SHARED_AGENT_IMPORT_ALLOWLIST: readonly string[] = [];
-const SHARED_AGENT_IMPORT_ALLOWLIST_SET = new Set<string>(
-  SHARED_AGENT_IMPORT_ALLOWLIST,
-);
-
 const HOST_LAYER_IMPORT_SPECIFIERS = ['@common/webview'] as const;
 
 const HOST_LAYER_IMPORT_PREFIXES = [
@@ -209,13 +199,14 @@ describe('VS Code-free zones never import vscode', () => {
 describe('Shared layer dependency direction', () => {
   // The UI kit is held to the same rule as the harness's `shared/`: the toolkit renders a
   // host-neutral view model handed to it, so an `@agent/*` import there would
-  // be the run system leaking into the render layer.
+  // be the run system leaking into the render layer. There is no allowlist:
+  // the agent runtime's host presentation surface lives in
+  // `@agent/runtime/HostInteractions.ts`, beside the events it presents.
   it('does not grow shared-to-agent imports', () => {
     const offenders = ['packages/harness/src/shared', 'packages/texra/src/ui']
       .flatMap((root) => sourceFilesUnder(root))
       .filter((file) => importsMatching(file, AGENT_IMPORT_PATTERNS))
       .map(toRepoPath)
-      .filter((file) => !SHARED_AGENT_IMPORT_ALLOWLIST_SET.has(file))
       .toSorted();
 
     expect(offenders).toEqual([]);

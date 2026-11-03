@@ -19,6 +19,7 @@ import {
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import { displayToStoragePath } from '@agent/memory/memoryUtils';
+import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type {
@@ -32,7 +33,6 @@ import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { absentReason, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';

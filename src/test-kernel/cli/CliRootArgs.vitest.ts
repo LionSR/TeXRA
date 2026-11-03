@@ -12,7 +12,7 @@ import { FakeHost, SessionGraph, TestSession } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Live clock: the CLI's entry runs in real time.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'runCli usage output stream routing',
   (it) => {
     // Capture every byte the CLI writes. Usage on an ERROR flows through

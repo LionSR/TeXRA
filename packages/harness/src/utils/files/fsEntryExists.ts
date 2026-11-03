@@ -1,8 +1,10 @@
 // Third-party imports
 import { Effect, FileSystem, PlatformError, Predicate, Schedule } from 'effect';
 
-// Common imports
-import { isNotADirectoryError } from '@common/errors/errorPredicates';
+/** Check if an error represents "a parent path component is a file, not a directory". */
+export function isNotADirectoryError(err: unknown): boolean {
+  return Predicate.hasProperty(err, 'code') && err.code === 'ENOTDIR';
+}
 
 /**
  * Whether a failure means nothing is at the path: it is not there

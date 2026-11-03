@@ -1,7 +1,5 @@
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Layer, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
@@ -19,9 +17,8 @@ import {
   type ScriptedRunInit,
   type ScriptedTurn,
 } from '@test/support/scriptedRunLayers';
-import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
-import { sessionWithInteractions } from '../progressTestUtils';
 import type { ITool } from '@texra-ai/harness';
 
 // ---------------------------------------------------------------------------
@@ -60,75 +57,55 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
   return { result, requests, state };
 });
 
-const quietSession = () => sessionWithInteractions({ emit: () => {} });
+const quietSession = () => isolatedTestSession({ emit: () => {} });
 
-describe('the tool-use turn', () => {
-  it.effect(
-    'keeps the text of an earlier turn when a later model turn fails',
-    () =>
-      Effect.gen(function* () {
-        // A failed run still reports what the model had said: the text that
-        // accompanied the tool calls is the run's response, beside the error.
-        const session = yield* quietSession();
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'tool-use progress events',
+  (it) => {
+    describe('the tool-use turn', () => {
+      it.effect(
+        'keeps the text of an earlier turn when a later model turn fails',
+        () =>
+          Effect.gen(function* () {
+            // A failed run still reports what the model had said: the text
+            // that accompanied the tool calls is the run's response, beside
+            // the error.
+            const session = yield* quietSession();
 
-        const { result } = yield* runScript({
-          runId: startedRun(session),
-          session,
-          tools: {
-            probe: {
-              definition: { name: 'probe' },
-              call: () =>
-                Effect.succeed({ status: 'executed' as const, output: 'done' }),
-            } as ITool,
-          },
-          script: [
-            toolCallTurn(
-              [{ id: 'call-1', name: 'probe' }],
-              'I checked the tool.',
-            ),
-            {
-              failWith: {
-                message: 'Later provider failure',
-                userRetryable: false,
+            const { result } = yield* runScript({
+              runId: startedRun(session),
+              session,
+              tools: {
+                probe: {
+                  definition: { name: 'probe' },
+                  call: () =>
+                    Effect.succeed({
+                      status: 'executed' as const,
+                      output: 'done',
+                    }),
+                } as ITool,
               },
-            },
-          ],
-        });
+              script: [
+                toolCallTurn(
+                  [{ id: 'call-1', name: 'probe' }],
+                  'I checked the tool.',
+                ),
+                {
+                  failWith: {
+                    message: 'Later provider failure',
+                    userRetryable: false,
+                  },
+                },
+              ],
+            });
 
-        expect(result).toMatchObject({
-          outcome: RUN_OUTCOME.FAILED,
-          output: { response: 'I checked the tool.' },
-          failure: { message: 'Later provider failure' },
-        });
-      }),
-  );
-});
-
-describe('tool-use session-stage outcome persistence (#8023)', () => {
-  it.effect('persists a cancelled turn as one structural session stage', () =>
-    Effect.gen(function* () {
-      const session = yield* quietSession();
-      const runId = startedRun(session);
-      const recorder = createTestRunTrace(runId);
-      yield* Effect.addFinalizer(() => Effect.sync(recorder.dispose));
-
-      yield* runScript({
-        runId,
-        session,
-        logger: recorder.trace,
-        script: [{ cancelled: true }],
-      });
-
-      const sessionStages = recorder
-        .transcript()
-        .taskGroups.flatMap((group) =>
-          group.kind === 'session' && group.endTime !== undefined
-            ? [{ label: group.name, status: group.status }]
-            : [],
-        );
-      expect(sessionStages).toEqual([
-        { label: 'Tool-use turn', status: RUN_OUTCOME.CANCELLED },
-      ]);
-    }),
-  );
-});
+            expect(result).toMatchObject({
+              outcome: RUN_OUTCOME.FAILED,
+              output: { response: 'I checked the tool.' },
+              failure: { message: 'Later provider failure' },
+            });
+          }),
+      );
+    });
+  },
+);

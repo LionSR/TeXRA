@@ -1,7 +1,7 @@
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Layer, Schema } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
 import {
@@ -20,6 +20,7 @@ import {
   fakeHostAgentDirectories,
   storePluginsLayer,
 } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
@@ -31,7 +32,7 @@ import {
  * A program over the process's global storage view and the bundled agents:
  * a launch's agent decides its mode, so the catalog is the one a real host
  * scans. The global storage view only satisfies the requirement the catalog
- * readers name; the fake agent directories answer `custom()` themselves.
+ * readers name; the installed fake host answers `custom()` itself.
  */
 function onGlobalStorage<A, E>(
   program: Effect.Effect<A, E, AgentCatalog>,
@@ -74,7 +75,7 @@ function launchRequest(
   };
 }
 
-describe('main-view run launch controller', () => {
+layer(FakeHost.layer())('main-view run launch controller', (it) => {
   it.effect(
     'fills Run again… with the agent key, model and files a form launch saved',
     () =>

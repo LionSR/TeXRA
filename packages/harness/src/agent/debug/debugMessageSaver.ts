@@ -3,10 +3,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
+import { runDirUnder } from '@common/storage/storageLayout';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 /** One model request or response to save under its run's directory. */
 interface SaveDebugParams {

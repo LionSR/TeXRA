@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -133,6 +133,13 @@ type ProposalRequestError =
   | DatabaseReadFailed
   | DatabaseWriteFailed
   | RunHistoryRefused;
+
+/** The key of the request the `agent` calls of one script share
+ *  (`ScriptScope.shared`): the `ask` {@link decideDelegation} takes. */
+export const AgentRequest =
+  Context.Service<Deferred.Deferred<RequestDecision, ProposalRequestError>>(
+    'agent:request',
+  );
 
 /** How a child records an approval the run's delegated-work grant gave. */
 const GRANTED_CHILD = {

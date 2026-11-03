@@ -96,7 +96,7 @@ afterEach(() => {
 });
 
 // Live clock: the command drives real git processes.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'install-github-action command',
   (it) => {
     beforeEach(() => {

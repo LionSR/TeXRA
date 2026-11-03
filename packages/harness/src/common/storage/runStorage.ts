@@ -4,7 +4,6 @@ import * as path from 'node:path';
 // Third-party imports
 import { Effect, FileSystem, type PlatformError } from 'effect';
 
-import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type RunId,
@@ -15,23 +14,29 @@ import { normalizeFilePath } from '@utils/core';
 import { getPathSegments } from '@utils/core/pathCore';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { createSymlink } from '@utils/files/fsDurability';
+import {
+  absentReason,
+  entryExists,
+  entryTypeIn,
+} from '@utils/files/fsEntryExists';
+import { locateInWorkspace } from '@utils/files/workspaceFS';
+
 import {
   createExternalLocation,
   createRunStorageLocation,
   pathToLocationIn,
 } from './fileLocation';
-import { absentReason, entryExists, entryTypeIn } from './fsEntryExists';
 import {
-  CHANNEL,
-  createSymlink,
-  ensureParentDir,
   ensureRunDirUnder,
   runDirUnder,
   runStorageAbsolutePathUnder,
   runStorageLocationUnder,
   shouldSkipRelocation,
-} from './runStorageFs';
-import { locateInWorkspace } from './workspaceFS';
+  WORKSPACE_STORAGE_LAYOUT,
+} from './storageLayout';
+
+const CHANNEL = 'runStorage';
 
 /** `createSymlink`'s refusal to replace an entry that is not a link. */
 const isStanding = (error: PlatformError.PlatformError): boolean =>
@@ -185,7 +190,9 @@ export class RunFileService {
         const stats = yield* fs.stat(target.absolutePath);
         if (stats.type !== 'File') return target;
 
-        yield* ensureParentDir(snapshotAbsolute);
+        yield* fs.makeDirectory(path.dirname(snapshotAbsolute), {
+          recursive: true,
+        });
         yield* fs.copyFile(target.absolutePath, snapshotAbsolute);
         return snapshot;
       }).pipe(withPerKeyLane(this.pathLanes, target.relativePath));

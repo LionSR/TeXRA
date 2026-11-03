@@ -1,46 +1,61 @@
 import { Result, Schema, Struct } from 'effect';
 
+import { DeclinableUsageRouteSchema } from './usage';
+
+/** The upstream provider account itself is out of credit/quota — the key the
+ *  user has IS the broken one, so a new key is required. */
+const UpstreamCreditSchema = Schema.Literal('upstream-credit');
+
 /** Reason a credential/quota is exhausted, requiring user action before an
  *  identical retry can succeed. The reasons are mutually exclusive — a single
  *  error is classified as exactly one — which is why this is a discriminant
  *  rather than independent booleans. `getExhaustionReason` below answers the
- *  combined "exhausted for any reason" question. */
-const ExhaustionReasonSchema = Schema.Literals([
-  /** The upstream provider account itself is out of credit/quota — the key
-   *  the user has IS the broken one, so a new key is required. */
-  'upstream-credit',
-  /** A ChatGPT-subscription (Codex) request was rejected because the plan's
-   *  usage quota is exhausted; accepting the switch turns off "ChatGPT
-   *  subscription" so the retry uses the OpenAI API key.
-   *  Remark: permanently flipping it off is not always ideal — when the
-   *  quota later resets, the user may forget to turn it back on. */
-  'chatgpt-subscription',
-  /** A Kimi Code (Moonshot coding-subscription) request was rejected because
-   *  the membership's usage quota is exhausted; accepting the switch turns off
-   *  "Kimi Code subscription" so dual-backend Kimi models re-route through the
-   *  Moonshot open-platform API key. */
-  'kimi-code-subscription',
-  /** A GLM Coding Plan request was rejected because the plan's usage quota is
-   *  exhausted; accepting the switch turns off the Coding Plan toggle so GLM
-   *  requests route through the regular pay-as-you-go endpoint. */
-  'glm-coding-plan',
-  /** A Grok (xAI SuperGrok) subscription request was rejected because the
-   *  plan's usage quota is exhausted; accepting the switch turns off "Grok
-   *  subscription" so xAI models re-route through the stored xAI API key. */
-  'xai-subscription',
+ *  combined "exhausted for any reason" question. A used-up plan is named by
+ *  the route that bills through it; the retry can decline that route for the
+ *  run, so the model goes on with its own provider key (the regular
+ *  pay-as-you-go endpoint, for the GLM Coding Plan). */
+const ExhaustionReasonSchema = Schema.Union([
+  UpstreamCreditSchema,
+  DeclinableUsageRouteSchema,
 ]);
 export type ExhaustionReason = typeof ExhaustionReasonSchema.Type;
+
+/** A route that bills a signed-in subscription session (ChatGPT, Grok). */
+export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick([
+  'chatgpt-subscription',
+  'xai-subscription',
+]);
 
 /** Mutually exclusive provider-error classifications. The two runtime kinds
  * share AgentErrorKind's spelling; exhaustion members retain the actionable
  * route reason as the discriminant itself. */
-const ProviderErrorClassificationSchema = Schema.Struct({
-  kind: Schema.Union([
-    Schema.Literal('missing-api-key'),
-    Schema.Literal('context-window'),
-    ExhaustionReasonSchema,
-  ]),
-});
+export const ProviderErrorClassificationSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Union([
+      Schema.Literals(['missing-api-key', 'context-window']),
+      UpstreamCreditSchema,
+    ]),
+  }),
+  /** A used-up plan, with what the provider said of it: its tier in the
+   *  provider's own word (ChatGPT's `plus`), and how long until the quota
+   *  resets, from the moment it refused. */
+  Schema.Struct({
+    kind: DeclinableUsageRouteSchema,
+    planType: Schema.optional(Schema.String),
+    resetsInMs: Schema.optional(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    ),
+  }),
+  /** A signed-in subscription that could not bill the call: its route,
+   *  whether only a fresh sign-in can help (else it may recover), and the
+   *  session's own failure. */
+  Schema.Struct({
+    kind: Schema.Literal('subscription-session'),
+    route: SubscriptionSessionRouteSchema,
+    needsReauth: Schema.Boolean,
+    sessionError: Schema.String,
+  }),
+]);
 export type ProviderErrorClassification =
   (typeof ProviderErrorClassificationSchema)['Type'];
 

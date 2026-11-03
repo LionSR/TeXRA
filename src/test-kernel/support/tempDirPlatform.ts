@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { Effect, Context } from 'effect';
+import { Effect } from 'effect';
 import { afterEach } from 'vitest';
 
 // Local imports
@@ -11,12 +11,9 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import { SessionRoots } from '@platform/rootedFs';
-import { isPathWithin } from '@utils/core/pathCore';
 
 // Local file imports
 import { createFakeHost, type FakeHost } from './setupPlatform';
-import { tryTestProcessRuntime, testSessionOwner } from './testProcessRuntime';
 
 /**
  * Creates a fresh temp directory and records it on `tempDirs` for later
@@ -57,25 +54,6 @@ export async function createTempDirPlatform(
 }
 
 /**
- * Runs `run` against a fresh temp directory and always removes the directory
- * when the scope exits — the scoped form of the `tempDirs` registry for
- * suites that create and tear down a directory within a single test (or a
- * file-local `withX` fixture). Like {@link makeTempDir}, the path handed to
- * `run` is realpath-canonicalized.
- */
-export async function withTempDir<T>(
-  prefix: string,
-  run: (tempDir: string) => Promise<T>,
-): Promise<T> {
-  const tempDirs: string[] = [];
-  try {
-    return await run(await makeTempDir(prefix, tempDirs));
-  } finally {
-    await cleanupTempDirs(tempDirs);
-  }
-}
-
-/**
  * Returns a `tempDirs` registry for `makeTempDir` / `createTempDirPlatform`
  * and registers the `afterEach` that empties it — the declaration form of the
  * registry-plus-cleanup-hook pair every suite used to hand-write. Call it once
@@ -89,39 +67,14 @@ export function useTempDirs(): string[] {
   return tempDirs;
 }
 
-/** Removes every directory recorded by `createTempDirPlatform` (or pushed manually), then clears the list. */
+/**
+ * Removes every directory recorded by `createTempDirPlatform` (or pushed
+ * manually), then clears the list. A session over one of them is closed
+ * first by the scope that opened it: a test's own scope (`TestSession.open`,
+ * `isolatedTestSession`) closes before its hooks run.
+ */
 export async function cleanupTempDirs(tempDirs: string[]): Promise<void> {
   const uniqueDirs = [...new Set(tempDirs.splice(0))];
-  // A process with no runtime installed has opened no session.
-  const reports =
-    tryTestProcessRuntime() === undefined
-      ? []
-      : await Effect.runPromise(
-          Effect.gen(function* () {
-            const owner = yield* testSessionOwner;
-            const roots = new Set(
-              (yield* owner.list)
-                .filter((session) =>
-                  uniqueDirs.some((directory) =>
-                    isPathWithin(
-                      directory,
-                      Context.get(session, SessionRoots).storage,
-                    ),
-                  ),
-                )
-                .map((session) => Context.get(session, SessionRoots).storage),
-            );
-            return yield* Effect.forEach(roots, owner.close, {
-              concurrency: 'unbounded',
-            });
-          }),
-        );
-  const abandoned = reports.flatMap((report) => report.abandoned);
-  if (reports.some((report) => !report.settled) || abandoned.length > 0) {
-    throw new Error(
-      `Cannot remove temporary directories while sessions still own runs: ${abandoned.join(', ')}`,
-    );
-  }
   await Promise.all(
     uniqueDirs.map((dir) => rm(dir, { recursive: true, force: true })),
   );

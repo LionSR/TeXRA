@@ -5,7 +5,7 @@
  * normalized, and so does a plugin fact this build cannot read, by the
  * store's own rules (`readTraceFacts`): a version outside its fact kind's, or a
  * value its fact kind's schema refuses. A fact whose plugin this build lacks is
- * left out, as the store leaves it out.
+ * kept as written, marked `unavailable`, as the store reads it.
  */
 import { Result, Schema } from 'effect';
 

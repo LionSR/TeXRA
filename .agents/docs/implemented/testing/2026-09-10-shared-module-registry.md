@@ -1,15 +1,17 @@
 # Kernel suite wall time: the module registry, not the tests
 
-Status: proposed. The `pure` tier landed on 2026-09-10 in `vitest.config.mjs`:
-a module registry shared between files, membership computed from each suite's
-source, no list of exempt suites (`src/test-kernel/AGENTS.md`, "Test tiers").
-Still open: the `kernel` project runs with `isolate: true`, one module
-registry per file, and that is where the suite's wall time goes.
+Status: implemented. Every suite a module registry shared between files can
+serve gets one (`vitest.config.mjs`; `src/test-kernel/AGENTS.md`, "Test
+tiers"): the `pure` tier since 2026-09-10, and the `kernel` project since
+2026-11-02 (slice A6 of
+[the tech-debt target designs](../../proposed/architecture/2026-10-27-tech-debt-target-designs.md)).
+Only the `isolated` project keeps one registry per file, for the suites that
+mock a module, reset the registry or bring a DOM. Membership is computed from
+each suite's source, with no list of exempt suites.
 
-The numbers below are the 2026-09-10 measurement (741 suites then; about 440
-today, after consolidation). A clean full run of the isolated config was
-**8m45s**; the shared-registry number stands, so the payoff of a `kernel`
-flip was sized at ~3.5x on the full suite. Re-measure before acting on it.
+The numbers below up to "The flip" are the 2026-09-10 measurement (741 suites
+then, 277 at the flip), which sized the payoff of a `kernel` flip at ~3.5x on
+the full suite; "The flip (2026-11-02)" has its own.
 
 ## Finding (measured 2026-09-10)
 
@@ -108,17 +110,17 @@ session has not been initialized`, unhandled `ExecutionLeaseLostError`
 273 suites; 58 import `defaultSessionTestSetup` or `sessionGraphTestSetup`,
 27 call `vi.mock`, and the `kernel` project still runs `isolate: true`. The
 per-suite migration below is sliced as A3 to A6 in
-[the tech-debt target designs](../architecture/2026-10-27-tech-debt-target-designs.md)
+[the tech-debt target designs](../../proposed/architecture/2026-10-27-tech-debt-target-designs.md)
 ("Tests and ratchets"); this note keeps the measurements and the reasons.
 
-## Proposal
+## How it was done
 
-Move each kernel suite's per-file setup out of import-time side effects into
-a layer scoped to the suite (`it.layer(...)`), so a shared registry has
-nothing to evaluate once per worker. Then re-run `--no-isolate` on the
-non-DOM kernel tree, and flip it to a shared registry with a shrink-only
-pinned list for what still leaks. Keep the DOM suites (`progressView`,
-`settings`, `frontend`, `desktop`) isolated.
+Each kernel suite's per-file setup moved out of import-time side effects into
+layers its blocks build (`support/testKernel.ts`, slices A3 to A5), so a
+shared registry has nothing to evaluate once per worker. The non-DOM kernel
+tree then went to a shared registry with no pinned list: what needs a
+registry of its own is computed from the source, like the rest of the tiers.
+The DOM suites (`desktop`, `progressView`, `settings`) stay isolated.
 
 Not a per-file reset hook: a hook that scrubs module globals before each
 suite is a transitional adapter whose purpose disappears once the state is
@@ -138,13 +140,50 @@ worker under a shared registry. The only per-file points are `setupFiles`
 (before a file's `vi.mock`s, which rules it out) or explicit calls in each
 file's body. So the migration is per suite.
 
+## The flip (2026-11-02)
+
+277 suites: `pure` 113 (unchanged), `kernel` 120 on a shared registry, and
+`isolated` 44, where the `kernel` project isolated 164 before. Of the 44, 25
+call `vi.mock` / `vi.doMock` and 19 sit under `desktop`, `progressView` and
+`settings`. Three shuffled runs of the old `kernel` project before the flip
+and of the shared one after it (seeds 101, 202 and 303 each), and one run of
+every shared suite in a single worker (seed 11, `--maxWorkers=1`), passed
+with no failure.
+
+The same 164 suites on one machine (10 cores, five workers), two runs each:
+88s and 83s before, 75s and 81s after, with import and setup down from 45%
+of the work to 26%. The wall time is now one file's: `crashConformanceTexra`
+runs 54s of tests alone (65s beside the other workers), and the 120 shared
+suites take 58s to 61s with it and 72s in a single worker. Vitest queues the
+`isolated` files first (its default order is by project name), so that file
+started 13s into the run and ended it; without a duration cache, as on CI, a
+project's files queue by size, which puts that seven-line file last.
+
+What a shared worker carries from one file to the next, and what holds it:
+
+- the installed host (`support/setupPlatform.ts`): each `FakeHost.layer`
+  release reinstalls the host it replaced, so a file ends with none;
+- the worker's fake root: each new host empties it, and every shared suite
+  that touches it builds a host first;
+- the worker's storage root and its global database, shared by every host a
+  worker builds as `~/.texra` is by a machine's processes: the runs above
+  found no suite that reads a global value another one wrote, and the suites
+  of the global store open their own (`globalValuesOver` over a temp
+  directory);
+- the environment, the log sink and the CLI's module state: each suite that
+  changes them restores them (`vi.unstubAllEnvs`, `setLogSink(null)`,
+  `resetCliState()`), and Vitest restores `vi.spyOn` spies after every file;
+- the counter `isolatedTestSession` names storage roots with: it now counts
+  per worker, and its numbers stay unique;
+- the setup files: they run before every file, and a worker swaps its home
+  once, for its first file.
+
 ## Reproduction
 
 ```bash
-# per-phase breakdown on one directory
-npx vitest run --config vitest.config.mjs src/test-kernel/latex
-npx vitest run --config vitest.config.mjs --no-isolate src/test-kernel/latex
+# the shared project in a shuffled file order: another seed, other neighbours
+npx vitest run --project kernel --sequence.shuffle --sequence.seed=101
 
-# the full-suite trial; expect ~2.5 min and a few hundred order-dependent failures
-npx vitest run --config vitest.config.mjs --no-isolate --reporter=dot
+# every shared suite in one worker, each file after all the others before it
+npx vitest run --project kernel --sequence.shuffle --sequence.seed=11 --maxWorkers=1
 ```

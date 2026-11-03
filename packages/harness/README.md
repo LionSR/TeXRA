@@ -219,8 +219,11 @@ Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
 surface names (`AgentNotFound`, `ToolsRefused`); a launch that fails
 before its run enters the session fails `start` with `RunFailure`, whose
-`cause` is exactly what the launch path threw. A run that fails after
-entering stores a failed end, which `run.result` returns.
+`cause` is exactly what the launch path threw. No host is shown such a
+failure: a launch refused for an unknown model, or for a `config` naming an
+unknown agent, carries the notice to show for it (`AgentError.notice`, read
+with `launchNoticeOf` from `./host`). A run that fails after entering stores
+a failed end, which `run.result` returns.
 
 `run.view` is the derived session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
@@ -266,6 +269,33 @@ a root the first holds is refused at open ("already open in this process";
 the guard is `processRoots` beside `SessionOwner`): share that session
 instead. Builds over different roots each work, and a later build after the
 first one is released is fine.
+
+### Messages to a run, and their receipts
+
+`session.request({ kind: 'followUp.send', runId, text, id })` sends a run a
+message under the caller's `id` (one is minted and returned when absent).
+
+- A retry under the same `id` answers with the first send's receipt instead of
+  sending the message twice. That includes a retry after a lost reply and a
+  retry once the run takes no more input.
+- A different message under that `id` fails with `Conflict`. The id is
+  scoped to the run and to sends, and the comparison is on what the message
+  says (its text, media and hold), not on how it was serialized.
+
+`session.request({ kind: 'followUp.receipt', runId, id })` reads where the
+message stands, from the run's committed rows. Nothing extra is stored. The
+receipt is one of:
+
+- `accepted` while it is queued;
+- `incorporated` into turn `turn` while that turn runs;
+- `answered`, naming the row that answered it (`answer`, its `seq`);
+- `unanswered`, with the reason nothing will answer it: the turn failed, the
+  run ended before the turn did, or the message left the queue unread.
+
+With `wait: true` the read returns once the message is answered or
+unanswered. Messages that join one turn share that turn's answer. Wait on
+the receipt rather than counting model calls or watching for a `waiting`
+status.
 
 ## Durable invariants
 
@@ -334,6 +364,35 @@ the session store's source; in short:
   caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
   answers `ownedElsewhere`, a request `NotOwner`.
 
+## Generated files and deletion
+
+Under its storage root a session owns the store (`texra.db`) and one
+directory per run, `executions/<runId>/`, holding the files the run
+generated. A deletion removes nothing else: the project's own files are
+never touched, and a store moved aside (`texra.db.pre1`) is never read again
+and goes only when a person deletes it (`deleteStorageInventory`, which
+`texra doctor --prune-storage` runs after asking).
+
+- Deleting a run (the `run.delete` request) commits a deletion marker, the
+  `run.removed` row that closes the run and every run it owns. Nothing on
+  disk is removed before that row commits, and a deletion removes only the
+  directories of the runs its marker closed.
+- The session collects committed markers when it opens and after each
+  deletion: it removes the closed runs' directories, then their rows and the
+  blobs no other row uses. Each step may run twice, in one process or two,
+  with the same result.
+- A removal that fails leaves its marker pending, with a warning, and the
+  next collection retries it. The deleted run stays deleted meanwhile.
+- The only runs the harness deletes on its own are ended background shells
+  an earlier process left, at session open, through the same marker.
+- Before removing anything, the collector resolves the storage root and its
+  `executions` directory, which must resolve to itself. If it was replaced by
+  a link elsewhere, the collection is refused and stays pending; each target
+  must also fall inside it. This is resolve-then-check: a directory replaced
+  between the check and the removal is not detected.
+- The `run.files` request copies a stopped run's directory into the project,
+  or removes the directory without deleting the run.
+
 ## Run results
 
 There is exactly one result shape: `RunEnd`, the end the run stored for
@@ -386,11 +445,13 @@ composes (the agent directories, secrets and the resume
 port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under.
+`mcp.json` at the storage root that global storage lies under, and a run's
+system prompt carries the workspace's `AGENTS.md`, or the storage root's when
+the workspace has none.
 `nodePlatform()` supplies all of them: process-local config and state,
 the ordinary storage layout under the `storageDir` you name (required; the
-package never falls back to a per-user directory), that directory's `mcp.json`,
-and environment-variable secrets (so provider API keys are read from
+package never falls back to a per-user directory), that directory's `mcp.json`
+and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
 go to it as `nodePlatform({ settings })`, a catalog built with
 `settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
@@ -404,18 +465,49 @@ stores it holds.
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
 timeout, bound to each model rather than installed as your process's global
-dispatcher.
+dispatcher. To answer model requests yourself, for a scripted model in a test
+or a recording transport, merge `ModelFetch` (a `fetch`) beneath
+`Sessions.layer`; every model request of the layer's runs then goes through
+it, and it owns the proxy policy and timeouts too:
 
-The harness's log entries (a store that failed, a plugin that did not load, a
-run's warnings) print to the console until you name another destination:
-`setLogSink({ write(entry) { … } })` from `@texra-ai/harness/node` receives
-each `LogEntry`, Effect's structured record (level, message, cause,
-annotations), and `entryChannel` / `entryMessage` read its channel and text
-as the console prints them. Setting a sink disposes the one it replaces (its optional
-`dispose`), and `setLogSink(null)` restores the console. Entries reach the sink
-with secrets redacted, unless you pass `{ trusted: true }`. `Sessions.layer`
-logs at `Info` and above; `effectDiagnosticsLayer(level)`, from the same
-entry, sets the level for a program you run outside it.
+```ts
+import { Effect, Layer } from 'effect';
+import { ModelFetch, Sessions } from '@texra-ai/harness';
+
+const scripted: typeof fetch = async () =>
+  new Response(/* the provider's wire reply */);
+
+program.pipe(
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(Layer.succeed(ModelFetch)(scripted)),
+    ),
+  ),
+);
+```
+
+The fetch has to stay in the runtime's context, where the runs read it, so
+the sample merges it with `Layer.provideMerge` rather than handing it only to
+the layer's build with `Layer.provide`. Leave it out and the harness's own
+transport carries the requests.
+[`example/_support.ts`](./example/_support.ts) answers with an in-memory
+Anthropic Messages stream this way.
+
+The harness logs with `Effect.log*`, and `Sessions.layer` installs no logger
+of its own: its entries (a store that failed, a plugin that did not load, a
+run's warnings) go through the loggers, minimum level and tracer your program
+provides. Effect's default logger prints `Info` and above to the console;
+provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
+them. To send them through the harness's sink instead, which redacts secrets,
+provide `effectDiagnosticsLayer(level)` from `@texra-ai/harness/node` around
+the program and name a destination with `setLogSink({ write(entry) { … } })`:
+it receives each `LogEntry`, Effect's structured record (level, message,
+cause, annotations), and `entryChannel` / `entryMessage` read its channel and
+text. Setting a sink disposes the one it replaces (its optional `dispose`),
+and `setLogSink(null)` restores the console. Entries reach the sink with
+secrets redacted, unless you pass `{ trusted: true }`. The few lines written
+outside any fiber (a trace sink that threw, a stored setting that does not
+read) always go to the sink, the console until you set one.
 
 The platform is **process-wide** for the layer's lifetime: create one and
 reuse it for every run, with the one `Sessions.layer` built over it.

@@ -40,6 +40,7 @@ import {
   instructionActions,
   type InstructionAction,
 } from '@ui/copy/instructionActions';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { StateStore } from '@texra-ai/harness/host';
 
@@ -89,16 +90,16 @@ const INSTRUCTION_ACTION_VIEW: Record<
   },
 };
 
-function handleRequestShowError({
-  message,
-  docsPage,
-}: RequestShowErrorPayload): Effect.Effect<void, Error> {
+function handleRequestShowError(
+  failure: RequestShowErrorPayload,
+): Effect.Effect<void, Error> {
+  const { docsPage } = failure;
   // The notice settles only on dismissal, which no caller waits on: the
   // session forks this program, so the handoff and a post-handoff rejection
   // (the extension host tearing down) are reported there rather than
   // becoming an unhandled rejection. A docs page is offered as a button.
   return vscodeUi
-    .error(message, { items: docsPage ? ['View Docs'] : [] })
+    .error(modelFailureText(failure), { items: docsPage ? ['View Docs'] : [] })
     .pipe(
       Effect.flatMap((choice) =>
         choice && docsPage

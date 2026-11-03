@@ -12,6 +12,7 @@ import {
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -221,7 +222,7 @@ export function buildAgentProposalApprovalContent(
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
-  return `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
+  return `Retry requested (${payload.operation}): ${modelFailureText(payload.errorDetails)}`;
 }
 
 export function formatBashApprovalSummary(payload: BashPermission): string {

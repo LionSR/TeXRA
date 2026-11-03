@@ -117,13 +117,13 @@ export function globEscape(
       segment !== null;
       segment = segment.rest()
     ) {
+      // A literal segment is a string, `**` is a symbol that never matches
+      // `..`, and a segment with magic is the matcher the walker tests
+      // directory entries with.
       const matcher = segment.pattern();
-      // minimatch overrides `test` on some compiled segments with a fast
-      // path (with `dot`, `*.` becomes `endsWith('.')`, true for '..'), so
-      // the check runs the underlying regex.
       if (
         matcher === '..' ||
-        (matcher instanceof RegExp && RegExp.prototype.test.call(matcher, '..'))
+        (typeof matcher === 'object' && matcher.test('..'))
       ) {
         return alternative.globString();
       }

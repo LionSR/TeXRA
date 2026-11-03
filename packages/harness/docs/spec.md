@@ -189,7 +189,8 @@ highest version each kind was written at
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
 (`controllers/session/rowCodec.ts:372-398`). A plugin kind whose plugin this
-build lacks passes the gate; its rows are left out of every read (below). The
+build lacks passes the gate; its rows read as written, marked unavailable
+(below). The
 gate MUST run at open and inside every outermost transaction that writes or
 derives rows, so no build opens a store holding core rows it cannot read, or
 writes beside them (`controllers/session/Database.ts:276`, `:429-445`).
@@ -197,8 +198,11 @@ Releasing claims is the one write it skips: it writes no row and only gives back
 this process's claims (`controllers/session/Database.ts:429-433`, `:976-984`). A
 core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts:374-380`). Kinds a build deleted are listed as
-retired; their rows fail only their own run's reads
-(`shared/schemas/rowVersions.ts:44-56`, `controllers/session/rowCodec.ts:287`).
+retired, each with what its rows fed (`RETIRED_ROW_KINDS`,
+`shared/schemas/rowVersions.ts`): a `display` row is skipped on read, logged
+once, and its run still resumes; an `execution` row makes its run an earlier
+build's (`DatabaseRowEarlier`), failing only that run's reads
+(`controllers/session/rowCodec.ts`, `rowUpcasts`).
 
 Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
 older build's row would read wrong (`shared/schemas/rowVersions.ts:72-197`). A
@@ -212,8 +216,12 @@ classified by the reader (`controllers/session/rowCodec.ts:268-334`):
   earlier build's (`controllers/session/rowCodec.ts:292-295`)
 - **readable, payload fails parse**: `DatabaseRowCorrupt`, naming its commit
   (`controllers/session/rowCodec.ts:308-320`)
-- **a plugin kind this build lacks**: left out of every read, kept in the store
-  (`controllers/session/rowCodec.ts:326-327`)
+- **a plugin kind this build lacks**: read as written, its value neither
+  upcast nor checked, with `unavailable` saying why; the row is unchanged, and
+  a run holding one is refused resume as `pluginUnavailable`, naming the plugin
+  (`controllers/session/rowCodec.ts`, `agent/storage/resumability.ts`); a
+  retired built-in kind (`RETIRED_PLUGIN_FACTS`) is an earlier build's
+  (`DatabaseRowEarlier`) instead
 
 A read of one run's whole history MUST fail on any row of the aggregate that
 does not decode; a read of its records fails on any undecodable row among the
@@ -231,8 +239,8 @@ kinds, a listing of listing rows) can still succeed, while writes and projection
 catch-up stay gated (`controllers/session/rowReader.ts:296-297`). Reads do not
 run the gate: a row of a core kind this build lacks, written by a newer build
 after this one opened the store, reads as corrupt until the next write's gate
-refuses the store; a plugin kind whose plugin this build lacks is left out of
-reads and passes the gate (`controllers/session/rowCodec.ts:287`,
+refuses the store; a plugin kind whose plugin this build lacks reads
+unavailable and passes the gate (`controllers/session/rowCodec.ts:287`,
 `controllers/session/Database.ts:434-445`). A run whose rows do not decode
 cannot be opened or resumed (`shared/session/runHistory.ts:145-151`,
 `agent/runtime/resumeRun.ts:267-275`).
@@ -781,51 +789,51 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 ## 9. Crash guarantees
 
 The crash-point suite is the source of truth for this section
-(`src/test-kernel/support/crashConformance.ts:1-55`). It runs under a full
+(`src/test-kernel/support/crashConformance.ts:1-59`). It runs under a full
 app's plugins, which include every harness built-in
-(`src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:9`).
+(`src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:7`).
 
 Its method: drive a clean run over a real store, record the event commit each
 event-writing transaction ended at (claim-only writes leave no distinct point;
 the points are deduplicated by commit), and for each such commit N copy the
 store, cut it to commits 1..N, hand its claims to a dead owner, reopen it in a
 fresh session and resume the root run
-(`src/test-kernel/support/crashConformance.ts:7-26`).
+(`src/test-kernel/support/crashConformance.ts:7-27`).
 
 The guarantees, numbered as in the package README:
 
 - **I1**: Under the suite's deterministic model, recovery reaches the clean
   run's outcome: its answers, view edits, call results, owned children and fork.
-  Asserted by `src/test-kernel/support/crashConformance.ts:29-31`, `:756`.
+  Asserted by `src/test-kernel/support/crashConformance.ts:30-32`, `:810`.
 - **I2**: A call settled before the crash is not executed again, and no call
-  settles twice. Asserted by `src/test-kernel/support/crashConformance.ts:32`,
-  `:756`.
+  settles twice. Asserted by `src/test-kernel/support/crashConformance.ts:33`,
+  `:810`.
 - **I3**: One model invocation has at most one committed response. Asserted by
-  `src/test-kernel/support/crashConformance.ts:37`, `:756`.
+  `src/test-kernel/support/crashConformance.ts:38`, `:810`.
 - **I4**: A command subject to approval runs only after its approval; an
   unfinished call that is not replay-safe and that recovery classifies as
   outcome-unknown runs again only after a person's retry (a call rejoining a
   standing or newly decided request runs at once, section 9). Asserted by
-  `src/test-kernel/support/crashConformance.ts:33-34`, `:756`.
+  `src/test-kernel/support/crashConformance.ts:34-35`, `:810`.
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
   again without a person's retry; no child is left without a terminal row,
   except one deliberately paused with a `child.park` `paused` row so it can be
   called again (`agent/runtime/delegation/childRun.ts:103-113`). Asserted by
-  `src/test-kernel/support/crashConformance.ts:38-39`, `:867`.
+  `src/test-kernel/support/crashConformance.ts:39-40`, `:920`.
 - **I6**: A child's result is delivered to its parent at most once and is not
   lost while the parent was held elsewhere; a result whose child was detached,
   or whose parent cannot take it, stays in the child's run report with a warning
   (`agent/runtime/childTurnResult.ts:233-240`, `:262-267`). Asserted by
-  `src/test-kernel/support/crashConformance.ts:859-880`.
+  `src/test-kernel/support/crashConformance.ts:912-940`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed. Asserted by
-  `src/test-kernel/support/crashConformance.ts:40`, `:756`.
+  `src/test-kernel/support/crashConformance.ts:41`, `:810`.
 - **I8**: A run's halt commits with its end; a stopped run never reads as
-  interrupted. Asserted by `src/test-kernel/support/crashConformance.ts:42-43`,
-  `:756`.
+  interrupted. Asserted by `src/test-kernel/support/crashConformance.ts:43-44`,
+  `:810`.
 - **I9**: Turning off a run's shell bypass is acknowledged only after its row is
-  durable. Asserted by `src/test-kernel/support/crashConformance.ts:52-53`,
-  `:756`.
+  durable. Asserted by `src/test-kernel/support/crashConformance.ts:56-57`,
+  `:810`.
 
 I1 is equality with a clean run because the suite's validation model is
 deterministic. Against a live model, a resent attempt (section 6) may answer
@@ -835,8 +843,8 @@ run opens, such as a retry request past the automatic budget. The suite also
 asserts that a crash between a request and its answer leaves the request pending
 and the resume answers that same request; that a crash between the answer and
 the body honours the answer; and that a crash inside one publisher job leaves
-neither half on disk (`src/test-kernel/support/crashConformance.ts:48-55`,
-`:1114`).
+neither half on disk (`src/test-kernel/support/crashConformance.ts:49-59`,
+`:1392`).
 
 What survives at each commit point follows from sections 2 to 8:
 
@@ -874,49 +882,51 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:660`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:620`).
 
 ## 10. Conformance
 
 These existing suites check the sections above.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:808` (pre-1.0
-  moved aside), `:868` (foreign file refused), `:902` (damaged file moved
-  aside), `:1063` (newer schema refused)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:624` (pre-1.0
+  moved aside), `:684` (foreign file refused), `:718` (damaged file moved
+  aside), `:820` (newer schema refused)
 - **2.2 envelope**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1087` (dense seq,
-  one commit order), `:1126` (parent incarnation), `:1236` (ordinals never
-  reused), `:1287` (blobs)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:844` (dense seq,
+  one commit order), `:883` (ordinals never reused), `:934` (blobs)
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:417` (enqueue
-  order), `:1199` (a rejected batch rolls back whole), `:372`, `:622`;
-  `src/test-kernel/support/crashConformance.ts:1114` (one job, one transaction)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:365` (enqueue
+  order); `src/test-kernel/support/crashConformance.ts:1392` (one job, one
+  transaction)
 - **2.4 versions and gate**:
-  `src/test-kernel/schemas/rowVersions.vitest.ts:110`, `:128`, `:162`;
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:475` (newer build
-  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:935`
-  (undecodable row), `:1004` (earlier build's row);
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:199`
+  `src/test-kernel/schemas/rowVersions.vitest.ts:111`, `:129`, `:163`;
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:486` (newer build
+  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:751`
+  (undecodable row); `src/test-kernel/controllers/session/goldenStore.vitest.ts:735`
+  (earlier build's row), `:207`
 - **3 row kinds**:
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:199` (every golden
-  row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
-- **4 write points**: `src/test-kernel/support/crashConformance.ts:756`, `:1168`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2083`
-  (live state equals reloaded state), `:2115` (batch contract);
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:375`, `:526`
-  (listing equals the fold)
-- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:470`,
-  `:522` (asks again after a stop), `:436` (budget), `:593` (unchain once),
-  `:410`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:207` (every golden
+  row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:111`
+- **4 write points**: `src/test-kernel/support/crashConformance.ts:810`, `:1444`
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1749`
+  (batch contract); `src/test-kernel/controllers/session/goldenStore.vitest.ts:383`
+  (the fold equals the pinned session view and run states)
+- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:436`
+  (budget), `:441` (manual retry through a durable approval), `:565`
+  (automatic attempts stop at the limit), `:591` (an attempt the process
+  stopped during spends a retry);
+  `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:72`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:489`, `:558`,
-  `:1384`, `:1625` (another OS process), `:1737` (dead owner reclaimed), `:1787`
-  (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:84`
-- **8 requests**: `src/test-kernel/support/crashConformance.ts:48-51`
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:438` (requests
+  follow current claims), `:1031` (deletion needs every dependent claim),
+  `:1272` (another OS process), `:1385` (dead owner reclaimed), `:1453` (second
+  writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:126`,
+  `:237`
+- **8 requests**: `src/test-kernel/support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:630`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:620`
 
 ## 11. Non-goals
 

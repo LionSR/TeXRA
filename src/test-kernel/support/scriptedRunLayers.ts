@@ -15,6 +15,7 @@ import {
   SynchronizedRef,
 } from 'effect';
 
+import { RunFileService } from '@texra-ai/harness/plugins';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
@@ -44,8 +45,6 @@ import { generateRunId } from '@shared/schemas';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { installedHost } from '@test/support/setupPlatform';
-import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 
@@ -310,7 +309,7 @@ export function testAgentRun(
       initialUserMessage: 'Do the thing.',
     },
     fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
-    ...testRunTools(installedHost().roots),
+    ...testRunTools(),
     finalToolName: null,
     swapModel: (next) =>
       SynchronizedRef.updateAndGetEffect(model, (current) =>
@@ -363,7 +362,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-          ...testRunTools(installedHost().roots, tools),
+          ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
           callbacks: {},
           entry: {

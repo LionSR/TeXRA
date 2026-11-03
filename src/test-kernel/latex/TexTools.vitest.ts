@@ -1,15 +1,15 @@
 import * as path from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, expect, vi } from 'vitest';
 
 import { pathToLocationIn } from '@texra-ai/harness/host';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 
 const mocks = vi.hoisted(() => ({
   runTool: vi.fn(),
@@ -24,13 +24,15 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
 const workspacePath = fakePath('workspace');
 
 // Exercises the real production code; only the subprocess call is mocked.
-describe('compileLatex2Pdf structured return', () => {
-  beforeEach(async () => {
+layer(FakeHost.layer({ workspacePath }), {
+  buildPerTest: true,
+  excludeTestServices: true,
+})('compileLatex2Pdf structured return', (it) => {
+  beforeEach(() => {
     mocks.runTool.mockReset();
-    await installPlatform({ workspacePath });
   });
 
-  it.live(
+  it.effect(
     'returns { ok: true } with the engine PDF path and no logTail on success',
     () =>
       Effect.gen(function* () {

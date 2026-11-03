@@ -205,7 +205,7 @@
           {
             "id": "texra.gettingStarted.signIn",
             "title": "Connect a model",
-            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run Codex models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nEvery agent ships bundled, the orchestrator included; none needs a TeXRA account.",
+            "description": "TeXRA needs one way to reach a model. It is the one step no agent can do for you.\n\n**ChatGPT subscription**: Plus, Pro, and Team plans run OpenAI models through your ChatGPT sign-in.\n\n[Sign in with ChatGPT](command:texra.auth.chatgpt.signIn)\n\n**Your own API key**: Anthropic, OpenAI, Google, and more. Chat subscriptions other than ChatGPT do not include API access.\n\n[Set API key](command:texra.setApiKey)\n\nEvery agent ships bundled, the orchestrator included; none needs a TeXRA account.",
             "media": {
               "image": "resources/walkthroughs/media/api-key-setup.png",
               "altText": "Screenshot of the provider API key settings"
@@ -534,7 +534,7 @@
     "@texra-ai/harness": "workspace:*",
     "@texra-ai/llm": "workspace:*",
     "@types/vscode": "^1.125.0",
-    "@vscode/vsce": "^4.0.0",
+    "@vscode/vsce": "^4.1.0",
     "concurrently": "^10.0.6",
     "effect": "catalog:",
     "esbuild": "^0.28.2",

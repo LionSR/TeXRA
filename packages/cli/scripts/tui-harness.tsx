@@ -972,21 +972,30 @@ function makeRetryApprovalPayload(): RetryPermission {
     runId: HARNESS_RUN_ID,
     operation: 'Model request',
     model: HARNESS_MODEL,
-    errorMessage: RETRY_APPROVAL_CHATGPT
-      ? 'ChatGPT subscription usage limit reached. Resets in 2h.'
-      : 'HTTP 429 Too Many Requests',
-    errorDetails: {
-      classification: {
-        // The default stays upstream-credit: that classification requires an
-        // explicit user decision before changing credentials, so this fixture
-        // remains interactive.
-        kind: RETRY_APPROVAL_CHATGPT
-          ? 'chatgpt-subscription'
-          : 'upstream-credit',
-      },
-      provider: 'openai',
-      statusCode: 429,
-    },
+    // The failure as the harness records it: its own plain words, and the
+    // facts the modal words in the app's (the plan and its reset).
+    errorDetails: RETRY_APPROVAL_CHATGPT
+      ? {
+          message:
+            'Usage limit reached on your OpenAI plan. Resets in 2h. Switch to your own API key to keep working, or wait until the limit resets.',
+          classification: {
+            kind: 'chatgpt-subscription',
+            resetsInMs: 7_200_000,
+          },
+          userRetryable: true,
+          provider: 'openai',
+          statusCode: 429,
+        }
+      : {
+          message: 'HTTP 429 Too Many Requests',
+          // The default stays upstream-credit: that classification requires
+          // an explicit user decision before changing credentials, so this
+          // fixture remains interactive.
+          classification: { kind: 'upstream-credit' },
+          userRetryable: true,
+          provider: 'openai',
+          statusCode: 429,
+        },
     // The invoker decides the offer (#13236); a subscription quota declines
     // its route for the model's own key.
     credentialSwitch: RETRY_APPROVAL_CHATGPT

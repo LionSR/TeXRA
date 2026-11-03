@@ -45,11 +45,8 @@ const COMPOSITION_ROOT_FILES = new Set([
   // The package's composition root: `Sessions.layer` composes the process
   // its projection serves.
   path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),
-  // The test suite's composition root: the one harness file that installs
-  // the process runtime the session graph runs on, over the plugin list its
-  // setup module passes (`sessionGraphTestSetup`).
-  path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
-  // Its layer form: the session graph a block builds with `it.layer`.
+  // The test suite's composition root: the session graph a block builds with
+  // `it.layer`.
   path.join(__dirname, 'src/test-kernel/support/testKernel.ts'),
 ]);
 
@@ -1104,6 +1101,28 @@ export default tseslint.config(
         message: '`.then(` chains in core: compose with Effect instead.',
       },
     ];
+    // A test support module awaits nothing and runs no Effect when it is
+    // imported: what a suite runs over is a layer its blocks build
+    // (support/testKernel.ts). Each selector matches at module scope only,
+    // outside every function.
+    const moduleScope = (selector, node) =>
+      `${selector}:not(:function ${node})`;
+    const supportMessage = (what) =>
+      `No module-scope ${what} in test support: what a suite runs over is a layer its blocks build (support/testKernel.ts), or a function the suite calls.`;
+    const supportImport = [
+      {
+        selector: moduleScope('AwaitExpression', 'AwaitExpression'),
+        message: supportMessage('await'),
+      },
+      {
+        selector: moduleScope('ForOfStatement[await=true]', 'ForOfStatement'),
+        message: supportMessage('await'),
+      },
+      ...run.map(({ selector }) => ({
+        selector: moduleScope(selector, 'CallExpression'),
+        message: supportMessage('Effect run'),
+      })),
+    ];
     const inCore = (file) =>
       CORE_QUALITY_DIRS.some(
         (dir) => file === dir || file.startsWith(`${dir}/`),
@@ -1162,6 +1181,16 @@ export default tseslint.config(
         ...promise,
       ),
       block(entries.filter(inCore), [], waIcon, abort, ...promise),
+      // No disable comment reaches past the support rule.
+      {
+        ...block(
+          ['src/test-kernel/support/**/*.{ts,mts}'],
+          [],
+          waIcon,
+          ...supportImport,
+        ),
+        linterOptions: { noInlineConfig: true },
+      },
     ];
   })(),
 );

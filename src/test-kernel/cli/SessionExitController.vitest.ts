@@ -65,7 +65,7 @@ const createController = (session: TuiSession) =>
   });
 
 // Live clock: the teardown's flush and exit sequence run in real time.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('chat TUI session exit controller', (it) => {
   beforeEach(() => {

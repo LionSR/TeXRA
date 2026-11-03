@@ -50,7 +50,7 @@ const createIpc = Effect.gen(function* () {
   return ipc;
 });
 
-layer(SessionGraph.layer)('desktop workspace IPC', (it) => {
+layer(SessionGraph.hosted)('desktop workspace IPC', (it) => {
   const tempDirs = useTempDirs();
 
   beforeEach(async () => {

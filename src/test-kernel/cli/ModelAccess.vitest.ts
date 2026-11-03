@@ -79,7 +79,7 @@ const resolveModelFromAccessList = (
     }),
   );
 
-layer(SessionGraph.layer)('CLI model access resolution', (it) => {
+layer(SessionGraph.hosted)('CLI model access resolution', (it) => {
   // A fresh default host per test, as the lookups read its stores.
   it.layer(FakeHost.layer({}), { buildPerTest: true })((it) => {
     beforeEach(() => {
