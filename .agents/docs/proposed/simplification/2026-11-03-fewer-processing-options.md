@@ -247,6 +247,10 @@ contract the approval shows.
 `FileSelectGroup.ts` renders its items from the table; `task.rewrite` is gone
 from `documentTask.ts` and the YAMLs.
 
+The storage layer, error definitions and catch sites, interruption and stop,
+and the model-call failure path are inventoried under the same rule in
+[storage, errors and stop paths](./2026-11-03-storage-errors-and-stop-paths.md).
+
 ## 6. Bounded deletions
 
 Each is a single PR with no design call; grouped here so the thread is in one
