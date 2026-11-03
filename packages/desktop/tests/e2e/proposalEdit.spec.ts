@@ -339,12 +339,13 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
       saveArtifact('child-run-config.json', childConfig);
 
       // The approval went back to the asking task, which lists the child it
-      // started; the task's row comes before that of its revision, which
-      // the task started in turn.
-      await page
-        .getByRole('listitem', { name: 'Open revise_validation: Completed' })
-        .first()
-        .click();
+      // started and the child's revision, which the child started in turn.
+      // Once the app shows both done, the child's row comes first.
+      const started = page.getByRole('listitem', {
+        name: 'Open revise_validation: Completed',
+      });
+      await expect(started).toHaveCount(2, { timeout: 60_000 });
+      await started.first().click();
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'revise_validation',
       );
