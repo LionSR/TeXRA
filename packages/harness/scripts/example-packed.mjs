@@ -18,7 +18,7 @@ import {
 } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -96,14 +96,16 @@ if (acceptance) {
   // One directory per run: the model and the local time it started.
   const now = new Date();
   const day = now.toLocaleDateString('sv');
-  const evidence =
+  // Absolute: the runner writes from inside the consumer, which is removed.
+  const evidence = resolve(
     process.env.TEXRA_ACCEPTANCE_OUT?.trim() ||
-    join(
-      packageRoot,
-      '../../.agents/docs/evidence',
-      `${day}-harness-real-model`,
-      `${model.replaceAll('/', '-')}-${now.toTimeString().slice(0, 5).replace(':', '')}`,
-    );
+      join(
+        packageRoot,
+        '../../.agents/docs/evidence',
+        `${day}-harness-real-model`,
+        `${model.replaceAll('/', '-')}-${now.toTimeString().slice(0, 5).replace(':', '')}`,
+      ),
+  );
   if (existsSync(evidence)) {
     console.error(`Evidence directory exists: ${evidence}`);
     process.exit(1);

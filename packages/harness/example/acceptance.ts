@@ -27,7 +27,7 @@
  */
 import { spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { Effect, Layer, Option, Schema, Stream } from 'effect';
@@ -105,10 +105,20 @@ const outlineTool = (workspace: string) =>
       }),
     }),
     scriptReturns: '{ sections: { title: string; text: string }[] }',
-    execute: ({ path }) =>
-      Effect.promise(() =>
-        readFile(join(workspace, path), 'utf8').catch(() => null),
-      ).pipe(
+    execute: ({ path }) => {
+      const file = resolve(workspace, path);
+      const inside = relative(workspace, file);
+      if (inside.startsWith('..') || isAbsolute(inside))
+        return Effect.succeed(errorResult(`${path} is outside the workspace.`));
+      return Effect.tryPromise({
+        try: () => readFile(file, 'utf8'),
+        catch: (error) => error as NodeJS.ErrnoException,
+      }).pipe(
+        // Only absence is the model's to fix; any other failure is the
+        // environment's and fails the call with its cause.
+        Effect.catch((error) =>
+          error.code === 'ENOENT' ? Effect.succeed(null) : Effect.die(error),
+        ),
         Effect.map((tex) => {
           if (tex === null) return errorResult(`No file at ${path}.`);
           const sections = [
@@ -127,14 +137,15 @@ const outlineTool = (workspace: string) =>
             value: { sections },
           };
         }),
-      ),
+      );
+    },
   });
 
 const CODEMODE_INSTRUCTION = `draft.tex in the workspace is a short paper draft. Review it with one script program that you write yourself (the script tool's description lists what a program can call):
 1. Get the draft's sections through the latex script module.
 2. Run two review rounds with self(), each returning a structured verdict that names the section it checked and whether its claim is supported. Round 1 checks the first section; choose round 2's section from round 1's verdict.
 3. After both rounds, query the executions SQL history (the runs table) to count how many of your child runs ended completed.
-Return an object with the section titles, both verdicts and that count. Then reply with one sentence on what the review found.`;
+Return an object with the section titles, both verdicts, and that count as completedChildren. Then reply with one sentence on what the review found.`;
 
 const codemode = (dir: string) =>
   Effect.gen(function* () {
@@ -185,8 +196,6 @@ const codemode = (dir: string) =>
             call.status === 'completed' &&
             (input?.(call.input) ?? true),
         );
-      const numbers: string[] =
-        JSON.stringify(returned ?? null).match(/\d+/g) ?? [];
       return judged(
         session,
         run.runId,
@@ -218,7 +227,8 @@ const codemode = (dir: string) =>
           ),
           check(
             'the returned count matches the finished children',
-            numbers.includes(String(completed)),
+            (returned as { completedChildren?: unknown } | undefined)
+              ?.completedChildren === completed,
             { completed, returned },
           ),
         ],
@@ -552,12 +562,20 @@ if (crashing) {
   const only = (process.env.TEXRA_ACCEPTANCE_SCENARIOS ?? '')
     .split(',')
     .filter(Boolean);
+  const scenarios = [
+    ['codemode', codemode],
+    ['plugin', plugin],
+    ['crash-resume', crashResume],
+  ] as const;
+  const unknown = only.filter(
+    (name) => !scenarios.some(([known]) => known === name),
+  );
+  if (unknown.length > 0)
+    throw new Error(
+      `No scenario named ${unknown.join(', ')}; the scenarios are ${scenarios.map(([name]) => name).join(', ')}.`,
+    );
   if (!missingKey)
-    for (const [name, program] of [
-      ['codemode', codemode],
-      ['plugin', plugin],
-      ['crash-resume', crashResume],
-    ] as const)
+    for (const [name, program] of scenarios)
       if (only.length === 0 || only.includes(name))
         results.push(
           await runScenario(OUT, name, (dir) =>
