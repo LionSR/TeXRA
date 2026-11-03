@@ -27,7 +27,8 @@ export function unsupported(reason: string): Unsupported {
 export function isUnsupported(value: unknown): value is Unsupported {
   return (
     Predicate.isObjectOrArray(value) &&
-    Predicate.isString((value as { unsupported?: unknown }).unsupported)
+    'unsupported' in value &&
+    Predicate.isString(value.unsupported)
   );
 }
 
@@ -98,6 +99,7 @@ export function createDispatcher<TMessage extends CommandMessage>(
     }
 
     const message = parseResult.success;
+    // cast: the registry maps the decoded message's own command to its handler.
     const entry = handlers[message.command as TMessage['command']] as
       MessageHandler<typeof message> | Unsupported;
 
@@ -170,12 +172,17 @@ export function isUnrecognizedCommand(error: unknown): boolean {
 // would put `node:process` on those browser module graphs. It also keeps
 // the module compiling without Node types and returns `false` in a browser.
 function isDevAssertionMode(): boolean {
-  const env = (
-    globalThis as {
-      process?: { env?: Record<string, string | undefined> };
-    }
-  ).process?.env;
-  return env?.NODE_ENV === 'test' || env?.TEXRA_DEV_ASSERTIONS === '1';
+  const scope: unknown = globalThis;
+  const env =
+    Predicate.hasProperty(scope, 'process') &&
+    Predicate.hasProperty(scope.process, 'env')
+      ? scope.process.env
+      : undefined;
+  return (
+    (Predicate.hasProperty(env, 'NODE_ENV') && env.NODE_ENV === 'test') ||
+    (Predicate.hasProperty(env, 'TEXRA_DEV_ASSERTIONS') &&
+      env.TEXRA_DEV_ASSERTIONS === '1')
+  );
 }
 
 /**

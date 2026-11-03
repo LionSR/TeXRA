@@ -365,6 +365,7 @@ export type SettingsTabCommandId = Extract<
  * Command → settings panel, derived from the `settingsTab` catalog field.
  * Both hosts build their `showSettings` handler rows from this map.
  */
+// cast: each entry with a `settingsTab` keys its own id: exactly SettingsTabCommandId.
 export const settingsTabByCommand = Object.fromEntries(
   commandCatalog.flatMap((entry) =>
     'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],

@@ -7,7 +7,6 @@ import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
-  type DesktopCommandId,
 } from '../shared/desktopCommandSurface';
 
 export const DESKTOP_COMMAND_PALETTE_ID = 'texra.desktop.showCommands';
@@ -77,7 +76,7 @@ export function createDesktopShortcutRegistry(
       options.openCommands();
       return;
     }
-    dispatchDesktopCommand(entry.id as DesktopCommandId, options.actions);
+    dispatchDesktopCommand(entry.id, options.actions);
   }
 
   // Let the focused editor, terminal, or form handle its own keys first.
@@ -98,13 +97,10 @@ export function createDesktopShortcutRegistry(
  * separate DOM), so `instanceof` has to go through that view.
  */
 function isElementFrom(
-  view: Window | null | undefined,
+  view: Document['defaultView'],
   target: EventTarget | null,
 ): target is Element {
-  const ElementConstructor = (
-    view as (Window & { Element?: typeof Element }) | null | undefined
-  )?.Element;
-  return ElementConstructor != null && target instanceof ElementConstructor;
+  return view != null && target instanceof view.Element;
 }
 
 /**
@@ -112,7 +108,7 @@ function isElementFrom(
  * entry control or one is focused, possibly inside a shadow root.
  */
 function isTextEntryTarget(
-  view: Window | null | undefined,
+  view: Document['defaultView'],
   document: Document,
   event: KeyboardEvent,
 ): boolean {
@@ -123,7 +119,7 @@ function isTextEntryTarget(
 }
 
 function isTextEntryElement(
-  view: Window | null | undefined,
+  view: Document['defaultView'],
   target: EventTarget | null,
 ): boolean {
   if (!isElementFrom(view, target)) return false;

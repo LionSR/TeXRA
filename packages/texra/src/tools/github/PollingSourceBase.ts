@@ -606,12 +606,7 @@ export abstract class PollingSourceBase<
             return Effect.failCause(cause);
           }
           return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            this.handleFailure(
-              key,
-              state,
-              (reason.error as PollHookRejected).cause,
-              failedAt,
-            ),
+            this.handleFailure(key, state, reason.error.cause, failedAt),
           );
         }),
         Effect.catchCause((cause) => {

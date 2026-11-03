@@ -1,4 +1,11 @@
-import { Cache, Cause, Clock, Duration, Effect } from 'effect';
+import {
+  Cache,
+  Cause,
+  Clock,
+  Duration,
+  Effect,
+  Record as EffectRecord,
+} from 'effect';
 import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
@@ -9,8 +16,10 @@ import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
 } from '@texra/shared/model/subscriptionUsage';
-import { SUBSCRIPTION_USAGE_PROVIDERS } from '@texra/shared/model/subscriptionUsage';
-import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type CodingPlanSubscription,
+} from '@texra/shared/model/codingPlans';
 
 import {
   fetchGlmCodingPlanUsage,
@@ -32,22 +41,13 @@ const CACHE_TTL = Duration.seconds(30);
 /** The one deadline over a usage request and its body read. */
 const REQUEST_TIMEOUT_MS = 15_000;
 
-type CodingPlanUsageProvider =
-  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'];
+const [KIMI_CODE_PLAN, GLM_CODING_PLAN] = CODING_PLAN_SUBSCRIPTIONS;
 
-function mapCodingPlanSubscriptions(
-  field: 'credentialName' | 'displayName',
-): Record<CodingPlanUsageProvider, string> {
-  return Object.fromEntries(
-    CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.usageProvider, plan[field]]),
-  ) as Record<CodingPlanUsageProvider, string>;
-}
-
-const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> =
-  mapCodingPlanSubscriptions('credentialName');
-
-const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> =
-  mapCodingPlanSubscriptions('displayName');
+/** Each subscription's catalog plan, by the provider that reports its usage. */
+const PLAN_BY_PROVIDER = {
+  [KIMI_CODE_PLAN.usageProvider]: KIMI_CODE_PLAN,
+  [GLM_CODING_PLAN.usageProvider]: GLM_CODING_PLAN,
+} satisfies Record<SubscriptionUsageProvider, CodingPlanSubscription>;
 
 /** The setting slots this service reads; credentials come from the process
  *  `Secrets`. */
@@ -214,18 +214,12 @@ export class SubscriptionUsageService {
     HttpClient.HttpClient | Secrets
   > {
     // Each snapshot key is the provider id itself, so key and provider can
-    // never drift apart the way a positional destructure would allow.
-    return Effect.map(
-      Effect.forEach(
-        SUBSCRIPTION_USAGE_PROVIDERS,
-        (provider) =>
-          Effect.map(
-            this.getUsage(provider, options),
-            (snapshot) => [provider, snapshot] as const,
-          ),
-        { concurrency: 'unbounded' },
+    // never drift apart.
+    return Effect.all(
+      EffectRecord.map(PLAN_BY_PROVIDER, (_plan, provider) =>
+        this.getUsage(provider, options),
       ),
-      (entries) => Object.fromEntries(entries) as SubscriptionUsageSnapshots,
+      { concurrency: 'unbounded' },
     );
   }
 
@@ -253,8 +247,8 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'unavailable',
-      providerName: PROVIDER_NAMES[provider],
-      planName: DEFAULT_PLAN_NAMES[provider],
+      providerName: PLAN_BY_PROVIDER[provider].credentialName,
+      planName: PLAN_BY_PROVIDER[provider].displayName,
       windows: [],
       fetchedAt,
       reason,
@@ -267,8 +261,8 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'available',
-      providerName: PROVIDER_NAMES[provider],
-      planName: parsed.planName ?? DEFAULT_PLAN_NAMES[provider],
+      providerName: PLAN_BY_PROVIDER[provider].credentialName,
+      planName: parsed.planName ?? PLAN_BY_PROVIDER[provider].displayName,
       windows: [...parsed.windows],
       fetchedAt,
     }));

@@ -19,6 +19,7 @@ import {
   Option,
   Result,
   Schedule,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -39,7 +40,6 @@ import {
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
-  type JsonValue,
   type RunId,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -456,9 +456,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
             session.roots.workspaceState.get(key),
           ).pipe(
             // The store answers what it holds, which is JSON.
-            Effect.map((value) => ({
-              ...(value !== undefined && { value: value as JsonValue }),
-            })),
+            Effect.flatMap((value) =>
+              value === undefined
+                ? Effect.succeed({})
+                : Effect.map(
+                    Schema.decodeUnknownEffect(Schema.Json)(value),
+                    (json) => ({ value: json }),
+                  ),
+            ),
             Effect.mapError(
               (error) => new ProjectStateFailed({ message: error.message }),
             ),

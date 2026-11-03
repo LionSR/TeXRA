@@ -222,13 +222,15 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
           part.kind === 'reasoning' &&
           sameModelOrigin(message.origin, origin)
         ) {
+          const onlyContent =
+            part.content?.length === 1 ? part.content.at(0) : undefined;
           if (
             part.evidence?.kind === 'anthropic-thinking-signature' &&
-            part.content?.length === 1
+            onlyContent !== undefined
           ) {
             content.push({
               type: 'thinking',
-              thinking: part.content[0]!.text,
+              thinking: onlyContent.text,
               signature: part.evidence.signature,
             });
           } else if (part.evidence?.kind === 'anthropic-redacted-thinking') {

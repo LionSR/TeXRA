@@ -42,9 +42,9 @@ function isRecommendedValueSet(field: LatexRecommendedSettingField): boolean {
   }
 
   if (typeof current !== 'object' || current === null) return false;
-  const currentObject = current as Record<string, unknown>;
+  const currentEntries = new Map<string, unknown>(Object.entries(current));
   return Object.entries(setting.value).every(
-    ([key, value]) => currentObject[key] === value,
+    ([key, value]) => currentEntries.get(key) === value,
   );
 }
 

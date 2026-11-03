@@ -50,7 +50,17 @@ import './LatexdiffResults';
 
 /** The `data-command` of a file name: open it in the editor. */
 const OPEN_FILE = 'openFile';
-type FileVerb = Extract<HostRequest, { kind: 'fileAction' }>['action'];
+/** The file verbs a button carries in its `data-command`. */
+const FILE_VERBS = [
+  'compareOriginal',
+  'comparePrevious',
+  'latexdiff',
+  'accept',
+  'merge',
+] as const satisfies readonly Extract<
+  HostRequest,
+  { kind: 'fileAction' }
+>['action'][];
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -60,7 +70,7 @@ interface FileActionOptions {
   readonly label: string;
   readonly title: string;
   readonly className: string;
-  readonly command: string;
+  readonly command: (typeof FILE_VERBS)[number] | typeof OPEN_FILE;
   readonly file: string;
   // Unique per (round, file-index); see renderFileActionButton for the id contract.
   readonly idPrefix: string;
@@ -381,11 +391,12 @@ export class FileList extends LitElement {
    * All data is stored directly on command elements for unified delegation.
    */
   private handleFileClick(event: MouseEvent): void {
-    const actionEl = getComposedPathElement<HTMLElement>(
+    const actionEl = getComposedPathElement(
       event,
       '[data-command]',
+      HTMLElement,
     );
-    if (!(actionEl instanceof HTMLElement)) return;
+    if (!actionEl) return;
     this.dispatchFileAction(actionEl);
   }
 
@@ -394,11 +405,12 @@ export class FileList extends LitElement {
   // delegation for file-path spans without intercepting native wa-button keys.
   private handleFileKey(event: KeyboardEvent): void {
     if (event.key !== 'Enter' && event.key !== ' ') return;
-    const actionEl = getComposedPathElement<HTMLElement>(
+    const actionEl = getComposedPathElement(
       event,
       '.file-path[data-command]',
+      HTMLElement,
     );
-    if (!(actionEl instanceof HTMLElement)) return;
+    if (!actionEl) return;
     event.preventDefault();
     this.dispatchFileAction(actionEl);
   }
@@ -413,11 +425,16 @@ export class FileList extends LitElement {
       );
       return;
     }
+    const action = FILE_VERBS.find((verb) => verb === command);
+    if (action === undefined) {
+      console.warn(`Unknown file action: ${command}`);
+      return;
+    }
     this.dispatchEvent(
       SessionUiEvents.host({
         kind: 'fileAction',
         runId,
-        action: command as FileVerb,
+        action,
         file,
         base: base ?? null,
         prev: prev ?? null,

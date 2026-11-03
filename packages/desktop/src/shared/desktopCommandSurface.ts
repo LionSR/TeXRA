@@ -177,16 +177,6 @@ const DESKTOP_COMMAND_HANDLERS = {
     a.toggleSidePanel(),
   ),
   'texra.showDashboard': action((a) => a.showSettings()),
-  // `texra.show*` rows derived from the catalog's `settingsTab` field
-  // (`settingsTabByCommand`) — same source the extension handler map uses.
-  ...(Object.fromEntries(
-    (
-      Object.entries(settingsTabByCommand) as [
-        SettingsTabCommandId,
-        SettingsTarget,
-      ][]
-    ).map(([id, tab]) => [id, action((a) => a.showSettings(tab))]),
-  ) as Record<SettingsTabCommandId, DesktopCommandHandler>),
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: action((a) => a.openLogFolder()),
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: action((a) =>
     a.openWorkspaceFolder(),
@@ -195,12 +185,26 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: action((a) =>
     a.openDesktopDocs(),
   ),
-} as const satisfies Record<DesktopCommandId, DesktopCommandHandler>;
+} as const satisfies Record<
+  Exclude<DesktopCommandId, SettingsTabCommandId>,
+  DesktopCommandHandler
+>;
+
+// The `texra.show*` commands open the tab the catalog's `settingsTab` field
+// names (`settingsTabByCommand`), the same source the extension handler map uses.
+const SETTINGS_TAB_BY_COMMAND = new Map<string, SettingsTarget>(
+  Object.entries(settingsTabByCommand),
+);
 
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
 ): boolean | Promise<boolean> {
+  const settingsTab = SETTINGS_TAB_BY_COMMAND.get(id);
+  if (settingsTab) {
+    actions.showSettings(settingsTab);
+    return true;
+  }
   return dispatchCommandFromRegistry(
     id,
     DESKTOP_COMMAND_HANDLERS,

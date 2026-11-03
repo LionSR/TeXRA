@@ -1,4 +1,4 @@
-import { Result, Schema, SchemaIssue } from 'effect';
+import { Predicate, Result, Schema, SchemaIssue } from 'effect';
 
 /** A renderer's synchronous key-value store; `undefined` removes a key. */
 export interface KeyValueStore {
@@ -21,8 +21,15 @@ export function createWebviewStorage(hostBridge: {
   setState(state: unknown): void;
 }): KeyValueStore {
   // Cache full state - read once, update in memory
-  const cache =
-    (hostBridge.getState() as Record<string, unknown> | undefined) ?? {};
+  const stored = hostBridge.getState();
+  if (stored != null && !Predicate.isObject(stored)) {
+    console.warn('[PersistedState] Host state is not an object, resetting.', {
+      storedType: describeStored(stored),
+    });
+  }
+  const cache: Record<string, unknown> = Predicate.isObject(stored)
+    ? stored
+    : {};
 
   return {
     get(key) {

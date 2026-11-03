@@ -171,18 +171,21 @@ export const sessionInputsLayer = Layer.effect(
               // of the same state after a burst of text chunks.
               Stream.buffer({ capacity: 1, strategy: 'dropping' }),
               Stream.mapAccumEffect(
-                () => ({
-                  cursor: anchor,
-                  // The wake level the last durable read saw; none yet, so
-                  // the first drain reads.
-                  level: -1,
-                  text: new Map() as InflightText,
-                  local: initialLocal,
-                  // Every change the record holds: an aggregate that started
-                  // or moved its claim during the cold read is checked again
-                  // once its rows are in the view, not only by the replay.
-                  change: 0,
-                }),
+                () => {
+                  const text: InflightText = new Map();
+                  return {
+                    cursor: anchor,
+                    // The wake level the last durable read saw; none yet, so
+                    // the first drain reads.
+                    level: -1,
+                    text,
+                    local: initialLocal,
+                    // Every change the record holds: an aggregate that started
+                    // or moved its claim during the cold read is checked again
+                    // once its rows are in the view, not only by the replay.
+                    change: 0,
+                  };
+                },
                 (previous) =>
                   Effect.gen(function* () {
                     // Text first, then the level: a row committed before a

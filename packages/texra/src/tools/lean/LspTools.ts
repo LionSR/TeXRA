@@ -1,5 +1,5 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Cause, Effect, Result, Schema, Scope } from 'effect';
+import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
@@ -39,14 +39,14 @@ function commandLine([name, spec]: [string, LeanCommandSpec]): string {
   return `- "${name}": ${spec.description}${spec.hint ? ` (${spec.hint})` : ''}`;
 }
 
-const FILE_COMMAND_NAMES = Object.keys(LEAN_FILE_COMMANDS) as LeanFileCommand[];
+const FILE_COMMAND_NAMES: LeanFileCommand[] = Struct.keys(LEAN_FILE_COMMANDS);
 const FILE_COMMAND_PROSE = Object.entries(LEAN_FILE_COMMANDS)
   .map(commandLine)
   .join('\n');
 
-const PROJECT_COMMAND_NAMES = Object.keys(
+const PROJECT_COMMAND_NAMES: LeanProjectCommand[] = Struct.keys(
   LEAN_PROJECT_COMMANDS,
-) as LeanProjectCommand[];
+);
 
 /** Project commands bucketed by their declared group, in declaration order. */
 const PROJECT_COMMAND_GROUPS = Map.groupBy(
@@ -232,7 +232,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
       summary: countsStr,
       output: `${file}: ${countsStr}`,
       diagnostics: baseDiagnostics,
-    } as ToolResult;
+    } satisfies ToolResult;
   }
 
   return {
@@ -240,7 +240,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     summary: countsStr,
     output: formatGroupedSections(diagnostics),
     diagnostics: { ...baseDiagnostics, details: diagnostics },
-  } as ToolResult;
+  } satisfies ToolResult;
 });
 
 export const LeanDiagnosticsTool = defineTool({

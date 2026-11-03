@@ -65,6 +65,48 @@ import type {
 
 const LOG_CHANNEL = 'lean.direct';
 
+const LspPositionSchema = Schema.Struct({
+  line: Schema.Finite,
+  character: Schema.Finite,
+});
+
+const LspRangeSchema = Schema.Struct({
+  start: LspPositionSchema,
+  end: LspPositionSchema,
+});
+
+/** `textDocument/publishDiagnostics` as the server sends it. */
+const decodePublishDiagnostics = Schema.decodeUnknownResult(
+  Schema.Struct({
+    uri: Schema.String,
+    diagnostics: Schema.mutable(
+      Schema.Array(
+        Schema.Struct({
+          range: LspRangeSchema,
+          message: Schema.String,
+          severity: Schema.optional(Schema.Finite),
+          source: Schema.optional(Schema.String),
+        }),
+      ),
+    ),
+  }) satisfies Schema.Codec<LspPublishDiagnosticsParams, unknown>,
+);
+
+/** Lean's `$/lean/fileProgress` as the server sends it. */
+const decodeFileProgress = Schema.decodeUnknownResult(
+  Schema.Struct({
+    textDocument: Schema.Struct({ uri: Schema.String, version: Schema.Finite }),
+    processing: Schema.mutable(
+      Schema.Array(
+        Schema.Struct({
+          range: LspRangeSchema,
+          kind: Schema.optional(Schema.Finite),
+        }),
+      ),
+    ),
+  }) satisfies Schema.Codec<LeanFileProgressParams, unknown>,
+);
+
 const LEAN_LANGUAGE_ID = 'lean4';
 const HANDSHAKE_TIMEOUT = Duration.millis(15_000);
 const SHUTDOWN_TIMEOUT = Duration.millis(2_000);
@@ -146,12 +188,12 @@ export class LeanServer extends Context.Service<
      * position-scoped LSP request. Position requests like `$/lean/plainGoal`
      * return stale data if the elaborator hasn't finished.
      */
-    readonly requestSettled: <T>(
+    readonly requestSettled: (
       filePath: string,
       line: number,
       column: number,
       method: string,
-    ) => Effect.Effect<T, LeanSessionError>;
+    ) => Effect.Effect<unknown, LeanSessionError>;
     /** Drop the cached open state and re-open with fresh contents. */
     readonly restartFile: (
       filePath: string,
@@ -336,17 +378,29 @@ const make = ({
         yield* wakeWaiters(state);
       });
 
+    /** A notification the server sent in a shape LSP does not define. */
+    const ignoreMalformed = (method: string, error: Schema.SchemaError) =>
+      Effect.logWarning(
+        `[${root}] Ignored a malformed ${method} notification: ${error.message}`,
+      ).pipe(withLogChannel(LOG_CHANNEL));
+
     const rpc: JsonRpcConnection = yield* makeJsonRpcConnection({
       input: handle.stdout,
       output: handle.stdin,
       onNotification: (method, params) => {
         switch (method) {
-          case 'textDocument/publishDiagnostics':
-            return handlePublishDiagnostics(
-              params as LspPublishDiagnosticsParams,
-            );
-          case '$/lean/fileProgress':
-            return handleFileProgress(params as LeanFileProgressParams);
+          case 'textDocument/publishDiagnostics': {
+            const decoded = decodePublishDiagnostics(params);
+            return Result.isSuccess(decoded)
+              ? handlePublishDiagnostics(decoded.success)
+              : ignoreMalformed(method, decoded.failure);
+          }
+          case '$/lean/fileProgress': {
+            const decoded = decodeFileProgress(params);
+            return Result.isSuccess(decoded)
+              ? handleFileProgress(decoded.success)
+              : ignoreMalformed(method, decoded.failure);
+          }
           case 'window/logMessage':
             return Effect.logDebug(`[${root}] ${JSON.stringify(params)}`).pipe(
               withLogChannel(LOG_CHANNEL),
@@ -586,7 +640,7 @@ const make = ({
       return { diagnostics: state.diagnostics, complete };
     });
 
-    const requestSettled = Effect.fn('LeanServer.requestSettled')(function* <T>(
+    const requestSettled = Effect.fn('LeanServer.requestSettled')(function* (
       filePath: string,
       line: number,
       column: number,
@@ -594,7 +648,7 @@ const make = ({
     ) {
       const { absolute } = yield* openAndSettle(filePath);
       const live = yield* requireRpc;
-      return yield* live.request<T>(method, {
+      return yield* live.request(method, {
         textDocument: { uri: pathToUri(absolute) },
         position: { line, character: column },
       });
@@ -645,10 +699,9 @@ function toLeanDiagnostic(d: LspDiagnostic): LeanDiagnostic {
 function lspSeverityToVsCode(severity: number): DiagnosticSeverity {
   // VS Code: Error=0, Warning=1, Information=2, Hint=3
   // LSP:     Error=1, Warning=2, Information=3, Hint=4
-  // LSP severities are 1-4 so the shift always lands in 0-3; the cast keeps
-  // the mapping to the DiagnosticSeverity union without adding a clamp (an
-  // unexpected out-of-range value is still dropped by SEVERITY_CONFIG's
-  // numeric lookup downstream, exactly as before).
+  // No clamp: an out-of-range value reads as an unknown severity downstream
+  // (SEVERITY_CONFIG's lookup), as it always has.
+  // cast: LSP severities are 1-4, so the shift lands in 0-3.
   return Math.max(0, severity - 1) as DiagnosticSeverity;
 }
 

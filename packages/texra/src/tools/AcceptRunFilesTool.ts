@@ -11,7 +11,14 @@
 
 // Third-party imports
 import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
-import { Clock, Effect, FileSystem, Schema } from 'effect';
+import {
+  Array as Arr,
+  Clock,
+  Effect,
+  FileSystem,
+  Predicate,
+  Schema,
+} from 'effect';
 
 // Local imports
 import { defineTool, type ToolResult } from '@texra-ai/harness';
@@ -58,8 +65,8 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
       (error) =>
         absentReason(error) ||
         (error.reason._tag === 'BadResource' &&
-          (error.reason.cause as { code?: string } | undefined)?.code ===
-            'ELOOP'),
+          Predicate.hasProperty(error.reason.cause, 'code') &&
+          error.reason.cause.code === 'ELOOP'),
       () => Effect.succeed(false),
     ),
   );
@@ -84,13 +91,19 @@ const DECLINE_RANK = ['cancel', 'deny', 'reject'] as const;
  * joined.
  */
 function summarizeRejections(
-  rejections: readonly RecordedRejection[],
+  rejections: Arr.NonEmptyReadonlyArray<RecordedRejection>,
 ): RecordedRejection {
-  const action = DECLINE_RANK.find((kind) =>
-    rejections.some((r) => r.decision.action === kind),
-  )!;
+  const rank = (r: RecordedRejection) =>
+    DECLINE_RANK.indexOf(r.decision.action);
+  const [first, ...rest] = rejections;
+  // The first of the highest-ranked rejections.
+  const top = rest.reduce(
+    (best, r) => (rank(r) < rank(best) ? r : best),
+    first,
+  );
+  const { action } = top.decision;
   const group = rejections.filter((r) => r.decision.action === action);
-  const path = group.length > 1 ? 'multiple files' : group[0]!.path;
+  const path = group.length > 1 ? 'multiple files' : top.path;
   const text = group
     .map(({ decision: d }) => {
       if (d.action === 'cancel') return d.cause;
@@ -341,7 +354,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
 
   // All changed files rejected: one rejection result, worded by the
   // decision that outranks the others.
-  if (rejections.length === changed) {
+  if (Arr.isArrayNonEmpty(rejections) && rejections.length === changed) {
     const { path, decision } = summarizeRejections(rejections);
     return buildApprovalRejectedResult(path, 'accept_run_files', decision);
   }

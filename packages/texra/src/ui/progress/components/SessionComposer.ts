@@ -312,7 +312,9 @@ export class SessionComposer extends LitElement {
   }
 
   private handleInput = (event: Event): void => {
-    this.setText((event.target as HTMLTextAreaElement).value);
+    if (event.target instanceof HTMLTextAreaElement) {
+      this.setText(event.target.value);
+    }
   };
 
   private handleKeydown = (event: KeyboardEvent): void => {

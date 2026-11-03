@@ -21,7 +21,7 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, SynchronizedRef } from 'effect';
+import { Effect, FileSystem, Predicate, SynchronizedRef } from 'effect';
 import which from 'which';
 
 import { withLogChannel, isModuleNotFoundError } from '@texra-ai/harness/host';
@@ -32,21 +32,22 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 const CHANNEL = 'ExternalBinaryUtils';
 
-type ElectronProcess = NodeJS.Process & {
-  defaultApp?: boolean;
-  resourcesPath?: string;
-};
-
 /**
  * `process.resourcesPath` when running inside a packaged Electron app;
  * undefined in development mode (`defaultApp === true`) and in
  * non-Electron runtimes (VS Code extension host, CLI, plain Node.js).
  */
 function packagedElectronResourcesPath(): string | undefined {
-  const electronProcess = process as ElectronProcess;
-  if (electronProcess.versions.electron == null) return undefined;
-  if (electronProcess.defaultApp === true) return undefined;
-  return electronProcess.resourcesPath;
+  if (process.versions.electron == null) return undefined;
+  if (
+    Predicate.hasProperty(process, 'defaultApp') &&
+    process.defaultApp === true
+  )
+    return undefined;
+  return Predicate.hasProperty(process, 'resourcesPath') &&
+    typeof process.resourcesPath === 'string'
+    ? process.resourcesPath
+    : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -87,17 +88,25 @@ export function importForeignSdk<M, K extends keyof M & string>(opts: {
   }).pipe(
     Effect.flatMap((mod) => {
       // The bundler's interop shape is not what the module's type declares,
-      // so the lookup reads the namespace as the plain record it is at
+      // so the lookup reads the namespace as the unknown value it is at
       // runtime.
-      const record = mod as Record<string, unknown>;
+      const namespace: unknown = mod;
+      const fromDefault = Predicate.hasProperty(namespace, 'default')
+        ? namespace.default
+        : undefined;
       const value =
-        record[opts.exportName] ??
-        (record.default as Record<string, unknown> | undefined)?.[
-          opts.exportName
-        ] ??
-        record.default;
+        (Predicate.hasProperty(namespace, opts.exportName)
+          ? namespace[opts.exportName]
+          : undefined) ??
+        (Predicate.hasProperty(fromDefault, opts.exportName)
+          ? fromDefault[opts.exportName]
+          : undefined) ??
+        fromDefault;
+      // cast: a callable export is the SDK entry the module's type names at `K`.
       if (typeof value === 'function') return Effect.succeed(value as M[K]);
-      const keys = Object.keys(record).join(', ');
+      const keys = Predicate.isObjectKeyword(namespace)
+        ? Object.keys(namespace).join(', ')
+        : '';
       return Effect.fail(
         new Error(
           `${opts.errorLabel} not found in ${opts.specifier}. Module keys: [${keys}]. ` +
