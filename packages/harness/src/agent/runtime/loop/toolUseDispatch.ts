@@ -14,8 +14,9 @@
  * partitioned into their groups up front, or a guest of one of its `script`
  * calls, whose calls take their lanes as the guest issues them. A call's rows
  * are its only facts: the `script.call` that issues a script's call commits
- * with the call's first row, the script's first with its stage's
- * `stage.start`; its requests, under ids the attempt derives
+ * with the call's first row, and the first batch a script's calls commit in
+ * an activation with its stage's `stage.start`; its requests, under ids the
+ * attempt derives
  * (`callRequestId`); `tool.intent` as the body starts, after the PreToolUse
  * hooks, the guard and its approval, with a slow tool's card; `tool.result`
  * with its card's close, a script's with its stage's `stage.end`; and the
@@ -145,12 +146,14 @@ interface Dispatch {
 
 /** One call as the per-call program takes it: its facts (a response's
  *  dispatch fact, or a script's `script.call`), its input and its dispatch;
- *  a script's call carries its script's title, which labels the stage. */
+ *  a script's call carries its script's title, which labels the stage, and
+ *  `opensStage`, true for the first batch its script's door commits. */
 interface Call {
   readonly dispatch: Dispatch;
   readonly fact: DispatchFacts | ScriptCallPayload;
   readonly input: unknown;
   readonly title?: string | null;
+  readonly opensStage?: () => boolean;
 }
 
 /** The `script.call` a call carries, or null for a response's own. */
@@ -245,13 +248,13 @@ function resultContent(
 }
 
 /** Commit rows of the call, its `script.call` first while the run holds no
- *  record of it: a script's call exists from its first row, and the
- *  script's stage (`stage.start`) from the first row of the script's first
- *  recorded call. The batch that records the call's `result` closes the
- *  stage of the calls it issued (`stage.end`). Concurrent results of one
- *  group commit one at a time under the cell's lock. */
+ *  record of it: a script's call exists from its first row. The first batch
+ *  a script's door commits (`opensStage`, asked under the cell's lock) opens
+ *  the script's stage, again after an earlier activation's end closed it;
+ *  the batch that records a call's `result` closes the stage of the calls it
+ *  issued. Concurrent results of one group commit one at a time. */
 const commit = (
-  { dispatch, fact, title }: Call,
+  { dispatch, fact, title, opensStage }: Call,
   rows: readonly RunHistoryDraft[],
   result?: Pick<ToolResult, 'status'>,
   alongside?: ReturnType<typeof factRows>['alongside'],
@@ -259,38 +262,33 @@ const commit = (
   dispatch.cell.append((state) => {
     const { runId } = dispatch.run;
     const script = scriptOf(fact);
-    const opening: RunHistoryDraft[] =
-      script === null || recordOf(dispatch, state, fact.callId) !== null
-        ? []
-        : [
-            ...(issuedBy(state, script.scriptCallId).length > 0
-              ? []
-              : [
-                  displayRow(runId, {
-                    type: 'stage.start',
-                    id: script.stageId,
-                    label: title ?? 'Script',
-                    kind: 'script',
-                  }),
-                ]),
-            {
-              type: 'script.call',
-              aggregateId: dispatch.aggregateId,
-              payload: script,
-            },
-          ];
+    const batch: RunHistoryDraft[] = [];
+    if (script !== null && opensStage?.() === true)
+      batch.push(
+        displayRow(runId, {
+          type: 'stage.start',
+          id: script.stageId,
+          label: title ?? 'Script',
+          kind: 'script',
+        }),
+      );
+    if (script !== null && recordOf(dispatch, state, fact.callId) === null)
+      batch.push({
+        type: 'script.call',
+        aggregateId: dispatch.aggregateId,
+        payload: script,
+      });
+    batch.push(...rows);
     const [issued] = result === undefined ? [] : issuedBy(state, fact.callId);
-    const closing: RunHistoryDraft[] =
-      issued === undefined || result === undefined
-        ? []
-        : [
-            displayRow(runId, {
-              type: 'stage.end',
-              id: issued.call.stageId,
-              status: result.status === 'executed' ? 'completed' : 'failed',
-            }),
-          ];
-    return [...opening, ...rows, ...closing];
+    if (issued !== undefined && result !== undefined)
+      batch.push(
+        displayRow(runId, {
+          type: 'stage.end',
+          id: issued.call.stageId,
+          status: result.status === 'executed' ? 'completed' : 'failed',
+        }),
+      );
+    return batch;
   }, alongside);
 
 /** The call's result row at `attempt`; `blobs` are the bytes it links. */
@@ -666,8 +664,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
 
 /**
  * The door a `script` call's guest issues calls through: the same per-call
- * program, under the script's stage, which opens with the first call the run
- * records and closes with the script's result (`commit`). A resumed script
+ * program, under the script's stage, which the first batch the door commits
+ * opens (again on a resume, after a stop's end closed it) and the script's
+ * result closes (`commit`). A resumed script
  * is handed back what its rows settled, in commit order, before any call
  * runs again; a call at a recorded `seq` that differs is a divergence. Built
  * in the call body's scope, which owns the calls the guest issues and ends
@@ -771,6 +770,9 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   // issued still runs when the finalizer reads what it left.
   const fork = yield* FiberMap.makeRuntime<AgentRunServices, string>();
 
+  // True for the first batch this door commits, once per activation.
+  let stageOpened = false;
+  const opensStage = () => !stageOpened && (stageOpened = true);
   // What the script's calls share while it runs (`ScriptScope.shared`).
   let sharedValues = Context.empty();
   const shared = <A, E, R>(
@@ -830,7 +832,8 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       stageId: `script-${script.logId}`,
       phase: op.phase,
     };
-    const call: Call = { dispatch, fact, input, title: source.title };
+    const { title } = source;
+    const call: Call = { dispatch, fact, input, title, opensStage };
     if (known?.status.kind === 'settled') {
       // Replayed from its row: it takes no lane and does not run.
       yield* inLane(op.seq, null, Effect.void);
