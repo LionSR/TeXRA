@@ -16,7 +16,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
   `Sessions.layer({ platform, plugins })`.
-- **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+- **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+  [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
@@ -1068,6 +1069,60 @@ Trim and validate a working_directory value. Must be absolute if provided.
 function parseWorkingDirectory(
   raw: string | null | undefined,
 ): Result.Result<string | undefined, ToolError>
+```
+
+## Plugin
+
+One plugin: what it contributes to a run. How an app shows it (a
+dashboard card's copy, its setup guide, its settings rows) is the app's
+own record, keyed by `id`.
+
+```ts
+interface Plugin {
+  /** Stable, persisted identifier (the switch key, the plugin a run's
+   *  offered tool records, and the name of its `resources/plugins/<id>/`
+   *  directory): lowercase letters, digits and dashes, starting with a
+   *  letter or digit. A list with any other id is refused. */
+  readonly id: string;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
+  /**
+   * Present when the plugin has an external dependency: it is probed, and
+   * its tools are withheld while the dependency is missing. Without it the
+   * plugin is built in and always available.
+   */
+  readonly availability?: ToolAvailabilityChecks;
+  /** The plugin has a user switch, which a fresh install sets to this
+   *  position; while off, its tools are withheld from every agent. It must
+   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
+   *  installed). Without one the plugin is always on. */
+  readonly toggle?: 'on' | 'off';
+  /** Tools of this plugin offered to every agent with tools, declared or not,
+   *  while the plugin is on and a boolean catalog setting is on: tool name to
+   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  injected tool still passes the host and approval gates; a script's
+   *  run (a task's recipe) and a text-only persona get none. */
+  readonly injectedWhen?: Readonly<Record<string, string | true>>;
+  /** Its section of each request's system text, pinned while it is on. */
+  readonly prompt?: PromptSection;
+  /** Process-lifetime services, up while the plugin is switched on or a step
+   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
+   *  the host's plugin value. */
+  readonly processLayer?: ProcessPluginLayer;
+  /** Session-lifetime services, one per open session, up while the plugin
+   *  is switched on or a step of that session pins it. */
+  readonly sessionLayer?: SessionPluginLayer;
+  /** Its side of a decision on a pending request it opened, on or off. */
+  readonly decision?: RequestDecisionHook;
+  /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
+  readonly factKinds?: readonly FactKind[];
+  /** The agent-file block it owns (`AgentBlock`), on or off. */
+  readonly agentBlock?: AgentBlock;
+  /** Script module sources by name, imported as `builtIn:<name>`. */
+  readonly scriptModules?: Readonly<Record<string, string>>;
+  /** The plugins it runs on, by id; a list lacking one is rejected. */
+  readonly requires?: readonly string[];
+}
 ```
 
 ## PluginDefinition
