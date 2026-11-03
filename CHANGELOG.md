@@ -32,19 +32,24 @@ All notable changes to this project will be documented in this file.
   `quotaFallbackRouteFor`, `QuotaFallbackRoute` and
   `QuotaFallbackExhaustionReason` are gone: the harness words these failures
   plainly, naming a plan by the provider it bills ("Usage limit reached on
-  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA's retry card,
-  `texra run`'s retry prompt and the automatic-fallback notice word the
-  facts as before. A used-up plan's classification carries its tier and
-  reset (`planType`, `resetsInMs`), and the GLM Coding Plan's is named by its
-  route, `glm-coding-plan-subscription`; a subscription that cannot bill the
-  call is `RouteUnavailable.session` (`route`, `needsReauth`), with the
-  session's own failure as its message; an automatic fallback is a
-  `quotaFallback` log row recording the route
-  (`ProgressStatusRow.quotaFallback`), and a status row has no `detail`.
-  `RetryPermission` carries the failure once and whole as `errorDetails` (no
-  `errorMessage`). The end-of-run notice and the transcript's error details
-  show the harness's words. Conversations saved by an earlier build show as
-  written by that build and cannot be resumed by this one.
+  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA words the facts
+  wherever it shows them, as before. A used-up plan's classification
+  carries its tier and reset (`planType`, `resetsInMs`), and the GLM Coding
+  Plan's is named by its route, `glm-coding-plan-subscription`; a
+  subscription that cannot bill the call is `RouteUnavailable.session`
+  (`route`, `needsReauth`), with the session's own failure as its message,
+  and is classified `subscription-session` (`route`, `needsReauth`,
+  `sessionError`); an automatic fallback is a `quotaFallback` log row
+  recording the route (`ProgressStatusRow.quotaFallback`), and a status row
+  has no `detail`. `RetryPermission` carries the failure once and whole as
+  `errorDetails` (no `errorMessage`). A `requestShowError` notice carries
+  the failure's classification beside its message
+  (`RequestShowErrorPayloadSchema`), an error row the classified failure it
+  records (`ErrorRow.failure`), and a classified failure's run end names its
+  cause without "Error executing agent …:". `getSdkErrorMessage` (`./host`)
+  is `normalizeProviderError`, which returns the message with its
+  classification (`ProviderError`). Conversations saved by an earlier build
+  show as written by that build and cannot be resumed by this one.
 - **SDK: a refused launch is its caller's to show.** `session.start` and
   `session.resume` no longer show the unknown-model instruction or the
   missing-agent notice through the session's host, at once or to a host
@@ -1381,6 +1386,19 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A used-up plan or a lapsed subscription reads in TeXRA's words again
+  wherever a run's failure shows.** The end-of-run notice (the desktop and
+  VS Code message, `texra run`'s `ERROR` line), a launch that fails before
+  its run starts, the transcript's error rows and a text polish say which
+  plan ran out and which switch or sign-in to use, as before: "ChatGPT
+  subscription usage limit reached (Plus plan). Resets in 2h 5m. Switch to
+  your own OpenAI API key to keep working, or wait until the limit
+  resets." and "ChatGPT subscription unavailable: … Sign in with ChatGPT
+  again, or turn off "ChatGPT subscription"." Such a failure leads with its
+  cause, without "Error executing agent …:" in front. The ChatGPT sign-in,
+  the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
+  the setup assistant and the guide say "OpenAI models" where they said
+  "Codex models".
 - **A lost durable fact is a row or a failure, never a warning.** A
   subagent's result held for a parent open in another process is delivered
   under a claim its park let go, so the delivery no longer polls for the
