@@ -233,6 +233,10 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
               expect(rows.map((row) => row.type)).toEqual(
                 expect.arrayContaining(['run.report', 'run.result', 'run.end']),
               );
+              // A child keeps its agent name: no label request is sent for it.
+              expect(rows.map((row) => row.type)).not.toContain(
+                'run.description',
+              );
               expect(claimHolder(parent.storage, result.runId)).toBeNull();
               expect(
                 rowOf(parent.storage, result.runId, 'run.result')?.result,

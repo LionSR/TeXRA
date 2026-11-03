@@ -136,10 +136,6 @@ function scriptedFetch(
 
   return async (input, init) => {
     const rawBody = await new Request(input, init).text();
-    if (rawBody.includes('Generate a short session label')) {
-      return stream({ text: 'Reviewing manuscript section' }, 0);
-    }
-
     requests.push(
       (rawBody ? JSON.parse(rawBody) : {}) as Record<string, unknown>,
     );

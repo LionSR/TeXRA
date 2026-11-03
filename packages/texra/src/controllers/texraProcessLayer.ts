@@ -136,6 +136,8 @@ export const texraProcessLayer = ({
       ),
     ),
     usageLog: usageLogLayer(usageLog),
+    // Every host shows a root run's title in its run list and history.
+    labelRuns: true,
     minimumLogLevel,
     workspace,
     ...(globalStores && {
