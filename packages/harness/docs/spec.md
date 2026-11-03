@@ -791,7 +791,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 The crash-point suite is the source of truth for this section
 (`src/test-kernel/support/crashConformance.ts:1-59`). It runs under a full
 app's plugins, which include every harness built-in
-(`src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:7`).
+(`src/test-kernel/controllers/session/crashConformanceResume.vitest.ts:7` and
+its siblings, one file per scenario).
 
 Its method: drive a clean run over a real store, record the event commit each
 event-writing transaction ended at (claim-only writes leave no distinct point;
@@ -923,7 +924,7 @@ These existing suites check the sections above.
   (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:147`
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
-  `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
+  `src/test-kernel/controllers/session/crashConformance*.vitest.ts`,
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:731`
 
 ## 11. Non-goals
