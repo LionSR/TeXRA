@@ -114,8 +114,8 @@ export class ModelRetryGate {
     options: RouteOptions,
   ): <A, E, R>(attempt: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
     return (attempt) =>
-      Effect.uninterruptibleMask((restore) =>
-        Effect.gen({ self: this }, function* () {
+      Effect.uninterruptibleMask(
+        Effect.fnUntraced({ self: this }, function* (restore) {
           const acquired = yield* restore(
             this.acquireAll(routes, options.onWait),
           );
@@ -232,8 +232,8 @@ export class ModelRetryGate {
     route: string,
     onWait: RouteOptions['onWait'],
   ): Effect.Effect<RetryPermit> {
-    return Effect.uninterruptibleMask((restore) =>
-      Effect.gen({ self: this }, function* () {
+    return Effect.uninterruptibleMask(
+      Effect.fnUntraced({ self: this }, function* (restore) {
         if (this.scope.state._tag === 'Closed') return yield* Effect.interrupt;
         const healthyPermit = this.acquireHealthy(route);
         if (healthyPermit) return healthyPermit;

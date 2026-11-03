@@ -148,52 +148,56 @@ const leadsGroup = (command: ChildProcess.StandardCommand): boolean =>
  *  a reap by milliseconds (see `killLive`). Without a handle (a spawn that failed
  *  or was interrupted after upstream acquired a stage) there is no pid to
  *  signal, only the warning. */
-const stopWaiting = (
+const stopWaiting: (
   handle: ChildProcessHandle | undefined,
   command: ChildProcess.Command,
   budgetMs: number,
   via: 'scope close' | 'kill',
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const stage = lastStage(command);
-    if (handle === undefined) {
-      return yield* Effect.logWarning(
-        'Teardown of a failed child process spawn outlived its budget; stopped waiting',
-      ).pipe(Effect.annotateLogs({ command: stage.command, budgetMs, via }));
-    }
-    const running = yield* handle.isRunning.pipe(
-      Effect.catch((error: PlatformError) =>
+) => Effect.Effect<void> = Effect.fn('stopWaiting')(function* (
+  handle: ChildProcessHandle | undefined,
+  command: ChildProcess.Command,
+  budgetMs: number,
+  via: 'scope close' | 'kill',
+) {
+  const stage = lastStage(command);
+  if (handle === undefined) {
+    return yield* Effect.logWarning(
+      'Teardown of a failed child process spawn outlived its budget; stopped waiting',
+    ).pipe(Effect.annotateLogs({ command: stage.command, budgetMs, via }));
+  }
+  const running = yield* handle.isRunning.pipe(
+    Effect.catch((error: PlatformError) =>
+      Effect.logWarning(
+        `Could not tell whether child process ${handle.pid} is running: ${error.message}`,
+      ).pipe(Effect.as(false)),
+    ),
+  );
+  if (running) {
+    yield* Effect.try({
+      try: () =>
+        process.kill(leadsGroup(stage) ? -handle.pid : handle.pid, 'SIGKILL'),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error: Error) =>
         Effect.logWarning(
-          `Could not tell whether child process ${handle.pid} is running: ${error.message}`,
-        ).pipe(Effect.as(false)),
+          `Could not SIGKILL child process ${handle.pid}: ${error.message}`,
+        ),
       ),
     );
-    if (running) {
-      yield* Effect.try({
-        try: () =>
-          process.kill(leadsGroup(stage) ? -handle.pid : handle.pid, 'SIGKILL'),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error: Error) =>
-          Effect.logWarning(
-            `Could not SIGKILL child process ${handle.pid}: ${error.message}`,
-          ),
-        ),
-      );
-    }
-    yield* Effect.logWarning(
-      running
-        ? 'Child process outlived its teardown budget; sent SIGKILL and stopped waiting'
-        : 'Child process teardown outlived its budget; stopped waiting',
-    ).pipe(
-      Effect.annotateLogs({
-        pid: handle.pid,
-        command: stage.command,
-        budgetMs,
-        via,
-      }),
-    );
-  }).pipe(withLogChannel(CHANNEL));
+  }
+  yield* Effect.logWarning(
+    running
+      ? 'Child process outlived its teardown budget; sent SIGKILL and stopped waiting'
+      : 'Child process teardown outlived its budget; stopped waiting',
+  ).pipe(
+    Effect.annotateLogs({
+      pid: handle.pid,
+      command: stage.command,
+      budgetMs,
+      via,
+    }),
+  );
+}, withLogChannel(CHANNEL));
 
 /** The supervisor over the upstream spawner, built once per layer build. */
 const supervisedSpawner = Layer.effect(
@@ -229,8 +233,8 @@ const supervisedSpawner = Layer.effect(
     );
 
     const spawn = (command: ChildProcess.Command) =>
-      Effect.uninterruptibleMask((restore) =>
-        Effect.gen(function* () {
+      Effect.uninterruptibleMask(
+        Effect.fnUntraced(function* (restore) {
           const child = yield* Scope.make();
           const entry = { group: leadsGroup(lastStage(command)) };
           const forget = (pid: number) => {

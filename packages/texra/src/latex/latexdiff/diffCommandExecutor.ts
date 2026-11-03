@@ -212,8 +212,9 @@ export class DiffCommandExecutor {
         timeout: timeoutMs,
         cwd,
       };
-      const attempt = (flatten: boolean) =>
-        Effect.gen({ self: this }, function* () {
+      const attempt = Effect.fn('attempt')(
+        { self: this },
+        function* (flatten: boolean) {
           const variant = flatten ? 'with --flatten' : 'without --flatten';
           yield* Effect.logDebug(`Running ${commandType} ${variant}`);
           // A missing tool fails with its `ToolMissing`, which the
@@ -240,7 +241,8 @@ export class DiffCommandExecutor {
             `${commandType} completed successfully (${variant})`,
           );
           return result;
-        });
+        },
+      );
 
       return yield* attempt(true).pipe(
         Effect.catchIf(

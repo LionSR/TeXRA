@@ -278,8 +278,8 @@ export function openaiResponsesModel(
             const progress = events.pipe(
               Stream.mapEffect(responsesWire(sequence)),
               Stream.takeUntil((event) => event.terminal),
-              Stream.mapEffect((event) =>
-                Effect.gen(function* () {
+              Stream.mapEffect(
+                Effect.fnUntraced(function* (event) {
                   sequence = event.sequence;
                   const turnEvents = (yield* Effect.forEach(
                     event.parts,

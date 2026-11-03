@@ -124,8 +124,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         Effect.andThen(
           Effect.forkScoped(
             Effect.scoped(
-              Stream.runForEach(session.view.changes, (view) =>
-                Effect.gen({ self: this }, function* () {
+              Stream.runForEach(
+                session.view.changes,
+                Effect.fnUntraced({ self: this }, function* (view) {
                   this.applyView(view);
                   if (this.rootRunTerminal || !this.rootRunId) {
                     this.stopHeartbeat();

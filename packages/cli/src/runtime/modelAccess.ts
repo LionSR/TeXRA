@@ -160,8 +160,9 @@ export function modelSelectItemsForCli(
   models: readonly CliModelAccess[],
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ) {
-  return Effect.forEach(runnableCliModelAccessEntries(models), (model) =>
-    Effect.gen(function* () {
+  return Effect.forEach(
+    runnableCliModelAccessEntries(models),
+    Effect.fnUntraced(function* (model) {
       const disabledReason = getModelSwitchDisabledReason
         ? yield* getModelSwitchDisabledReason(model.model.value)
         : undefined;

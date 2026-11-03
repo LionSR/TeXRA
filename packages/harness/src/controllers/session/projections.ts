@@ -301,8 +301,9 @@ export function projectionUpkeep<E>(
     names: readonly ProjectionName[],
   ) =>
     Effect.forEach(events, (event) =>
-      Effect.forEach(names, (name) =>
-        Effect.gen(function* () {
+      Effect.forEach(
+        names,
+        Effect.fnUntraced(function* (name) {
           if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
           const projector = PROJECTORS[name];
           const row =

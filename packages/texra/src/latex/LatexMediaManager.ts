@@ -344,17 +344,16 @@ export class LatexMediaManager {
           deps,
           (absolutePath) => absolutePath,
           'Unable to mirror LaTeX dependency',
-          (absolutePath) =>
-            Effect.gen(function* () {
-              const depLocation = pathToLocationIn(workspaceRoot, absolutePath);
-              const isTex = hasExtension(absolutePath, '.tex');
-              yield* fileService.mirrorWorkspaceFile(depLocation, {
-                snapshot: isTex,
-              });
-              if (isTex) {
-                worklist.push(depLocation);
-              }
-            }),
+          Effect.fnUntraced(function* (absolutePath) {
+            const depLocation = pathToLocationIn(workspaceRoot, absolutePath);
+            const isTex = hasExtension(absolutePath, '.tex');
+            yield* fileService.mirrorWorkspaceFile(depLocation, {
+              snapshot: isTex,
+            });
+            if (isTex) {
+              worklist.push(depLocation);
+            }
+          }),
         );
         this.logger.debug('Mirrored LaTeX dependencies', {
           data: { count: deps.length, from: file.absolutePath },
@@ -402,14 +401,13 @@ export class LatexMediaManager {
       candidates,
       (absolutePath) => absolutePath,
       'Unable to mirror project sibling',
-      (absolutePath) =>
-        Effect.gen(function* () {
-          const stats = yield* fs.stat(absolutePath);
-          if (stats.type !== 'File') return;
-          yield* fileService.mirrorWorkspaceFile(
-            pathToLocationIn(workspaceRoot, absolutePath),
-          );
-        }),
+      Effect.fnUntraced(function* (absolutePath) {
+        const stats = yield* fs.stat(absolutePath);
+        if (stats.type !== 'File') return;
+        yield* fileService.mirrorWorkspaceFile(
+          pathToLocationIn(workspaceRoot, absolutePath),
+        );
+      }),
     );
   });
 
@@ -443,8 +441,8 @@ export class LatexMediaManager {
                 return [];
               }),
             ),
-            Effect.flatMap((figures) =>
-              Effect.gen(function* () {
+            Effect.flatMap(
+              Effect.fnUntraced(function* (figures) {
                 if (figures.length === 0)
                   return { file, figures, baseDir: '', probed: [] };
                 // Match the resolution in extractFigurePathsFromLatex so the

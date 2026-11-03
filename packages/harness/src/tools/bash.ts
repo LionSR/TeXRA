@@ -459,8 +459,8 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   const { runId: parentRunId } = call.run;
   const log = yield* SessionLog;
   const roots = yield* SessionRoots;
-  return yield* Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+  return yield* Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
       const runId = generateRunId();
       const { command } = input;
       const preview = previewLabel(command);

@@ -165,11 +165,14 @@ export class DesktopProgressFileActions {
     );
   });
 
-  runLatexdiffFile(
+  readonly runLatexdiffFile: (
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
+  ) => Effect.Effect<void, Error> = Effect.fn(
+    'DesktopProgressFileActions.runLatexdiffFile',
+  )(
+    { self: this },
+    function* (baseFile: string, editedFile: string) {
       const service = new LaTeXdiffService(
         DESKTOP_LATEXDIFF_CHANNEL,
         this.host.session.roots,
@@ -188,8 +191,9 @@ export class DesktopProgressFileActions {
       }
 
       yield* this.openDiffOutput(result.diffPath);
-    }).pipe((program) => withProcessServices(this.host.runtime, program));
-  }
+    },
+    (program) => withProcessServices(this.host.runtime, program),
+  );
 
   /** Open a generated diff file via the desktop LaTeX build display. */
   private openDiffOutput(diffFilePath: string): Effect.Effect<void, Error> {

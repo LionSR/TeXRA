@@ -428,79 +428,73 @@ export class RunFileService {
       const fs = yield* FileSystem.FileSystem;
       yield* Effect.forEach(
         [...this.mirroredDependencies],
-        (relativePath) =>
-          Effect.gen({ self: this }, function* () {
-            // A root dep named as the directory's own artifact would take its
-            // path before the artifact is written there. Skip these; the
-            // dependency is still reachable at
-            // `<relativeDirectory>/../<relativePath>`.
-            const { dir: depDir, name: depName } = path.parse(relativePath);
-            if (depDir === '' && depName === options.protectedStem) {
-              yield* Effect.logDebug(
-                `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
-              ).pipe(withLogChannel(CHANNEL));
-              return;
-            }
+        Effect.fnUntraced({ self: this }, function* (relativePath) {
+          // A root dep named as the directory's own artifact would take its
+          // path before the artifact is written there. Skip these; the
+          // dependency is still reachable at
+          // `<relativeDirectory>/../<relativePath>`.
+          const { dir: depDir, name: depName } = path.parse(relativePath);
+          if (depDir === '' && depName === options.protectedStem) {
+            yield* Effect.logDebug(
+              `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
+            ).pipe(withLogChannel(CHANNEL));
+            return;
+          }
 
-            // Prefer the immutable `original/` snapshot as the symlink source
-            // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
-            // never reaches the live workspace. Read-only build assets
-            // (cls/sty/bib/figures) have no snapshot and fall through to the
-            // workspace mirror at `runDir/<rel>`, which is correct — those
-            // are never written to.
-            const snapshotAbsolute = this.originalSnapshotPath(relativePath);
-            const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
-              this.roots.storage,
-              this.runId,
-              relativePath,
-            );
-            // No snapshot is the ordinary case for a read-only build asset.
-            // Any other failure leaves unknown whether one exists, and
-            // linking the workspace mirror then could hand an agent write at
-            // `r<N>/<rel>` the user's working copy, so this dependency is
-            // left unlinked, as the destination guard below does.
-            const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
-              Effect.as('present' as const),
-              Effect.catchIf(absentReason, () =>
-                Effect.succeed('absent' as const),
-              ),
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,
-                ).pipe(
-                  withLogChannel(CHANNEL),
-                  Effect.as('unreadable' as const),
-                ),
-              ),
-            );
-            if (snapshot === 'unreadable') return;
-            const sourceAbsolute =
-              snapshot === 'present'
-                ? snapshotAbsolute
-                : workspaceMirrorAbsolute;
-            const destinationAbsolute = runStorageAbsolutePathUnder(
-              this.roots.storage,
-              this.runId,
-              path.join(relativeDirectory, relativePath),
-            );
+          // Prefer the immutable `original/` snapshot as the symlink source
+          // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
+          // never reaches the live workspace. Read-only build assets
+          // (cls/sty/bib/figures) have no snapshot and fall through to the
+          // workspace mirror at `runDir/<rel>`, which is correct — those
+          // are never written to.
+          const snapshotAbsolute = this.originalSnapshotPath(relativePath);
+          const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
+            this.roots.storage,
+            this.runId,
+            relativePath,
+          );
+          // No snapshot is the ordinary case for a read-only build asset.
+          // Any other failure leaves unknown whether one exists, and
+          // linking the workspace mirror then could hand an agent write at
+          // `r<N>/<rel>` the user's working copy, so this dependency is
+          // left unlinked, as the destination guard below does.
+          const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
+            Effect.as('present' as const),
+            Effect.catchIf(absentReason, () =>
+              Effect.succeed('absent' as const),
+            ),
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL), Effect.as('unreadable' as const)),
+            ),
+          );
+          if (snapshot === 'unreadable') return;
+          const sourceAbsolute =
+            snapshot === 'present' ? snapshotAbsolute : workspaceMirrorAbsolute;
+          const destinationAbsolute = runStorageAbsolutePathUnder(
+            this.roots.storage,
+            this.runId,
+            path.join(relativeDirectory, relativePath),
+          );
 
-            // A stale link from a previous call is replaced (idempotent); a
-            // real file already written to the round dir (a multi-document
-            // output at `r{round}/chapters/ch1.md` when `chapters/ch1.md` is
-            // also an include dependency) stands: `createSymlink` refuses it.
-            yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
-              Effect.catch((error) =>
-                isStanding(error)
-                  ? Effect.logDebug(
-                      `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
-                    )
-                  : Effect.logWarning(
-                      `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
-                    ),
-              ),
-              withLogChannel(CHANNEL),
-            );
-          }),
+          // A stale link from a previous call is replaced (idempotent); a
+          // real file already written to the round dir (a multi-document
+          // output at `r{round}/chapters/ch1.md` when `chapters/ch1.md` is
+          // also an include dependency) stands: `createSymlink` refuses it.
+          yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
+            Effect.catch((error) =>
+              isStanding(error)
+                ? Effect.logDebug(
+                    `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
+                  )
+                : Effect.logWarning(
+                    `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
+                  ),
+            ),
+            withLogChannel(CHANNEL),
+          );
+        }),
         { concurrency: 'unbounded', discard: true },
       );
     },

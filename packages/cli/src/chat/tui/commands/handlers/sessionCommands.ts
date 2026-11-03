@@ -232,8 +232,8 @@ function renameCliTask(
  * history and stays in `/resume`. Its transcript starts empty, so a line
  * says where it came from.
  */
-function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
-  return Effect.gen(function* () {
+const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
+  Effect.fn('forkCliTask')(function* (context: SlashCommandContext) {
     const runId = selectedRunIdSignal.get() ?? context.session.runId;
     if (runId === undefined) {
       setTransientNotice('No conversation to fork yet.');
@@ -283,7 +283,6 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       fork,
     );
   });
-}
 
 /** The task commands: compacting the focused agent's context, and leaving.
  *  The agent list (Tab) lists and focuses the task's agents; typing to a

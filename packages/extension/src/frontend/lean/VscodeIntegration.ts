@@ -254,34 +254,39 @@ function executeLeanCommand(
   );
 }
 
-function executeFileCommand(
+const executeFileCommand: (
   globalState: StateStore,
   command: LeanFileCommand,
   filePath: string,
-): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable> = Effect.fn(
+  'executeFileCommand',
+)(
+  function* (
+    globalState: StateStore,
+    command: LeanFileCommand,
+    filePath: string,
+  ) {
     yield* openFileInEditor(filePath, { preview: true, preserveFocus: true });
     yield* getClientProvider(globalState);
     yield* executeLeanCommand(FILE_COMMAND_VSCODE_IDS[command]);
-  }).pipe(
-    Effect.mapError((failure) =>
-      // A missing extension is a setup problem; every other failure (an
-      // editor refusal, an activation fault, a rejected command) already
-      // says what to do in its message.
-      failure._tag === 'LeanExtensionUnavailable' &&
-      failure.reason === 'not-installed'
-        ? new LeanUnavailable({
-            reason: 'toolchain',
-            message: failure.message,
-            cause: failure,
-          })
-        : new LeanFileCommandFailed({
-            message: failure.message,
-            cause: failure,
-          }),
-    ),
-  );
-}
+  },
+  Effect.mapError((failure) =>
+    // A missing extension is a setup problem; every other failure (an
+    // editor refusal, an activation fault, a rejected command) already
+    // says what to do in its message.
+    failure._tag === 'LeanExtensionUnavailable' &&
+    failure.reason === 'not-installed'
+      ? new LeanUnavailable({
+          reason: 'toolchain',
+          message: failure.message,
+          cause: failure,
+        })
+      : new LeanFileCommandFailed({
+          message: failure.message,
+          cause: failure,
+        }),
+  ),
+);
 
 /**
  * Get the Lean 4 extension's client provider, or say why there is none.

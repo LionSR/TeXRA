@@ -171,19 +171,20 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
    * launchers' catalogs, the profile, the Models page and, when the
    * credential is a coding plan's, its usage.
    */
-  const refreshAfterCredentialChange = (
+  const refreshAfterCredentialChange: (
     usageProvider?: SubscriptionUsageProvider,
-  ): HostEffect =>
-    Effect.gen(function* () {
-      if (usageProvider) yield* usage.invalidate(usageProvider);
-      yield* bindings.refreshCredentialStatus;
-      yield* allSettledVoid<Error, ProcessServices>([
-        bindings.refreshCatalogs(),
-        postProfile,
-        postModelSelection,
-        ...(usageProvider ? [postUsage(false)] : []),
-      ]);
-    });
+  ) => HostEffect = Effect.fn('refreshAfterCredentialChange')(function* (
+    usageProvider?: SubscriptionUsageProvider,
+  ) {
+    if (usageProvider) yield* usage.invalidate(usageProvider);
+    yield* bindings.refreshCredentialStatus;
+    yield* allSettledVoid<Error, ProcessServices>([
+      bindings.refreshCatalogs(),
+      postProfile,
+      postModelSelection,
+      ...(usageProvider ? [postUsage(false)] : []),
+    ]);
+  });
   /** Run a subscription mutation, report its failure, and repaint what the
    *  subscription feeds whatever the mutation did. */
   const subscriptionChange = <E>(

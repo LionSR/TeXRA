@@ -201,44 +201,42 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   const stdin = encodeHookInput(input);
   const outcomes = yield* Effect.forEach(
     matched,
-    (step) =>
-      Effect.gen(function* () {
-        const { run: ended, durationMs } = step.stale
-          ? { run: STALE.run, durationMs: 0 }
-          : yield* runHook(step.hook, stdin, {
-              pluginRoot: step.root,
-              projectDir: workspace,
-              pluginData: pluginDataDir(globalStorage, step.name),
-            });
-        const { status, warning, systemMessage, ...said } = interpretHookRun(
-          input,
-          ended,
-        );
-        if (warning !== null)
-          run.logger.warn(`${warning} (plugin ${step.name})`);
-        if (systemMessage !== null)
-          run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
-        // A failure keeps the start of stderr, or why the process never ran.
-        const stderr =
-          status === 'ok' || ended.kind === 'timeout'
-            ? ''
-            : (ended.kind === 'unstartable'
-                ? ended.message
-                : ended.stderr
-              ).slice(0, 2_000);
-        return {
-          point,
-          event,
-          plugin: step.plugin,
-          hook: step.hook.id,
-          durationMs,
-          status,
-          exitCode: ended.kind === 'exited' ? ended.exitCode : null,
-          ...said,
-          ...(step.stale && event === 'PreToolUse' && STALE.denial),
-          stderr: stderr === '' ? null : stderr,
-        } satisfies HookOutcomePayload;
-      }),
+    Effect.fnUntraced(function* (step) {
+      const { run: ended, durationMs } = step.stale
+        ? { run: STALE.run, durationMs: 0 }
+        : yield* runHook(step.hook, stdin, {
+            pluginRoot: step.root,
+            projectDir: workspace,
+            pluginData: pluginDataDir(globalStorage, step.name),
+          });
+      const { status, warning, systemMessage, ...said } = interpretHookRun(
+        input,
+        ended,
+      );
+      if (warning !== null) run.logger.warn(`${warning} (plugin ${step.name})`);
+      if (systemMessage !== null)
+        run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
+      // A failure keeps the start of stderr, or why the process never ran.
+      const stderr =
+        status === 'ok' || ended.kind === 'timeout'
+          ? ''
+          : (ended.kind === 'unstartable' ? ended.message : ended.stderr).slice(
+              0,
+              2_000,
+            );
+      return {
+        point,
+        event,
+        plugin: step.plugin,
+        hook: step.hook.id,
+        durationMs,
+        status,
+        exitCode: ended.kind === 'exited' ? ended.exitCode : null,
+        ...said,
+        ...(step.stale && event === 'PreToolUse' && STALE.denial),
+        stderr: stderr === '' ? null : stderr,
+      } satisfies HookOutcomePayload;
+    }),
     { concurrency: 'unbounded' },
   );
   return pointOf(

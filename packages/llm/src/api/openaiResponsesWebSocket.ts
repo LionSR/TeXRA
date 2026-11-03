@@ -111,22 +111,21 @@ const connect = Effect.fnUntraced(function* (
         iterator: reader[Symbol.asyncIterator]() as AsyncIterator<unknown>,
       };
     }),
-    ({ socket, reader, iterator }, exit) =>
-      Effect.gen(function* () {
-        invalid ??= closed;
-        reader.destroy(closed);
-        yield* join(
-          iterator.return ? iterator.return() : Promise.resolve(),
-          exit,
-        ).pipe(
-          Effect.ensuring(
-            Effect.callback<void>((resume) => {
-              if (socket.readyState === WebSocket.CLOSED) resume(Effect.void);
-              else socket.once('close', () => resume(Effect.void));
-            }),
-          ),
-        );
-      }),
+    Effect.fnUntraced(function* ({ socket, reader, iterator }, exit) {
+      invalid ??= closed;
+      reader.destroy(closed);
+      yield* join(
+        iterator.return ? iterator.return() : Promise.resolve(),
+        exit,
+      ).pipe(
+        Effect.ensuring(
+          Effect.callback<void>((resume) => {
+            if (socket.readyState === WebSocket.CLOSED) resume(Effect.void);
+            else socket.once('close', () => resume(Effect.void));
+          }),
+        ),
+      );
+    }),
   );
   const { socket, reader, iterator } = resource;
   const invalidate = (error: ModelError) => {
@@ -223,13 +222,12 @@ const connect = Effect.fnUntraced(function* (
           phase = 'reading';
           return Effect.void;
         }),
-        (_, exit) =>
-          Effect.gen(function* () {
-            if (!completed || Exit.isFailure(exit)) invalidate(closed);
-            if (pendingRead) yield* join(pendingRead, exit);
-            pendingRead = undefined;
-            if (!invalid) phase = 'idle';
-          }),
+        Effect.fnUntraced(function* (_, exit) {
+          if (!completed || Exit.isFailure(exit)) invalidate(closed);
+          if (pendingRead) yield* join(pendingRead, exit);
+          pendingRead = undefined;
+          if (!invalid) phase = 'idle';
+        }),
       );
       yield* Effect.callback<void, ModelError>((resume) => {
         socket.send(
@@ -299,8 +297,8 @@ const connect = Effect.fnUntraced(function* (
       return responseEvents(chunks, origin, (result) =>
         withResponsesContinuation(config, turn, result),
       ).pipe(
-        Stream.mapEffect((event) =>
-          Effect.gen(function* () {
+        Stream.mapEffect(
+          Effect.fnUntraced(function* (event) {
             if (event.kind === 'identified') {
               if (event.providerResponseId === latestResponseId)
                 return yield* new ModelError({
