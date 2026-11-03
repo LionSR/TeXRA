@@ -4,7 +4,11 @@ import type { ArgDef, ArgsDef, CommandDef, CommandMeta } from 'citty';
 export const CLI_COMPLETION_SHELLS = ['bash', 'zsh', 'fish'] as const;
 export type CliCompletionShell = (typeof CLI_COMPLETION_SHELLS)[number];
 
-export type AnyCommand = CommandDef<any>;
+/**
+ * The part of a citty command the tree walkers read. Every `CommandDef<T>`
+ * is one, whatever its args, because these fields are only read.
+ */
+export type AnyCommand = Pick<CommandDef, 'meta' | 'args' | 'subCommands'>;
 
 export interface CompletionCommand {
   readonly path: readonly string[];
@@ -44,7 +48,8 @@ async function resolveValue<T>(
   value: T | Promise<T> | (() => T | Promise<T>),
 ): Promise<T> {
   return typeof value === 'function'
-    ? (value as () => T | Promise<T>)()
+    ? // cast: a command's meta, args and children are objects, never functions.
+      (value as () => T | Promise<T>)()
     : value;
 }
 
