@@ -1435,7 +1435,13 @@ show` print the same notice, and the new `texra agents customize`,
   and shows the same diff. Before, both lived only in the process that
   opened the request, and a resume applied the tool's own proposal. A
   window that closes mid-review takes its unsent edits with it, as an
-  editor does.
+  editor does. Every window of the project shows the same proposal, and
+  changes made in one window go only with an approval from that window:
+  an approval sent after another window answered is refused. When the
+  request closes without the changes made in a window (another window or
+  the terminal answered it, or the task stopped), that window keeps them,
+  VS Code in a new editor and the desktop app in the file its editor
+  saved, and says they were not applied.
 - **A task interrupted by a crash is no longer held forever after the
   network changes.** On macOS the computer's name follows the network (a
   router-assigned name at home, `name.local` elsewhere), and a task whose
