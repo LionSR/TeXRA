@@ -122,10 +122,11 @@ export function formatToolUseTemplate(
     sections.push(html`<div class="tool-use-section tool-exit-code" dir="ltr">exit ${model.exitCode}</div>`);
   }
 
-  // A call the run's end cut short has no error of its own: its note stands in.
+  // A call the run's end cut short shows the note in place of an error.
   const errorText =
-    model.errorPreview?.full ??
-    (row.cutByRunEnd === true ? TOOL_CUT_BY_RUN_END_NOTE : undefined);
+    row.cutByRunEnd === true
+      ? TOOL_CUT_BY_RUN_END_NOTE
+      : model.errorPreview?.full;
   if (errorText !== undefined) {
     sections.push(
       buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),

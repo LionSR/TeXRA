@@ -159,16 +159,16 @@ function toolStatusColor(model: ToolRow['model']): string | undefined {
     : undefined;
 }
 
-/** The failure block: the error text when there is one, the note for a call
- *  the run's end cut short, and a bare marker when a call failed without
+/** The failure block: the note for a call the run's end cut short, the error
+ *  text when there is one, and a bare marker when a call failed without
  *  saying why. A user-feedback rejection has no error of its own — its
  *  `Feedback:` block is the whole story. */
 function toolErrorLines(
   { model, cutByRunEnd }: ToolRow,
   elide: boolean,
 ): string[] {
-  if (model.errorPreview) return elidedLines(model.errorPreview, elide);
   if (cutByRunEnd === true) return [TOOL_CUT_BY_RUN_END_NOTE];
+  if (model.errorPreview) return elidedLines(model.errorPreview, elide);
   return model.isError && !model.isUserFeedback ? ['(error)'] : [];
 }
 

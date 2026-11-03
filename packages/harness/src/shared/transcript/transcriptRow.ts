@@ -134,8 +134,8 @@ export interface ToolRow extends TranscriptRowBase {
   readonly attempt?: number;
   /** The run waited or ended while the call was open: the call never
    *  finished, so nothing records how it ended, and the row reads failed.
-   *  A result that lands once the run runs again replaces it. Each host
-   *  words it. */
+   *  A result that lands once the run runs again replaces it. The row
+   *  holds no text for it; each reader words it. */
   readonly cutByRunEnd?: true;
 }
 
