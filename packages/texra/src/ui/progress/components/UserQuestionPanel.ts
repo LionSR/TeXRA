@@ -6,10 +6,10 @@ import { customElement, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 // Side-effect imports - register Web Awesome components
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
+import WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
-import '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
+import WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 // Local imports - shared styles
 
@@ -188,8 +188,8 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   }
 
   private updateSelection(index: number, label: string, event: Event): void {
-    const checked = (event.target as HTMLElement & { checked?: boolean })
-      .checked;
+    if (!(event.target instanceof WaCheckbox)) return;
+    const { checked } = event.target;
     const current = this.selections[index] ?? [];
     const next = checked
       ? [...current, label]
@@ -200,12 +200,14 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   }
 
   private updateSingleSelection(index: number, event: Event): void {
-    const value =
-      (event.target as HTMLElement & { value?: string }).value ?? '';
+    if (!(event.target instanceof WaRadioGroup)) return;
+    // Each radio's value is its option label, a string.
+    const { value } = event.target;
+    const label = typeof value === 'string' ? value : '';
     const nextSelections = [...this.selections];
-    nextSelections[index] = value ? [value] : [];
+    nextSelections[index] = label ? [label] : [];
     this.selections = nextSelections;
-    if (value && this.freeText[index]) {
+    if (label && this.freeText[index]) {
       const nextFreeText = [...this.freeText];
       nextFreeText[index] = '';
       this.freeText = nextFreeText;
@@ -213,8 +215,8 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
   }
 
   private updateFreeText(index: number, event: Event): void {
-    const value =
-      (event.currentTarget as HTMLElement & { value?: string }).value ?? '';
+    if (!(event.currentTarget instanceof WaTextarea)) return;
+    const value = event.currentTarget.value ?? '';
     const nextFreeText = [...this.freeText];
     nextFreeText[index] = value;
     this.freeText = nextFreeText;

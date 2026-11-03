@@ -79,7 +79,7 @@ export function createBegEndEnvironmentProbe(
     const after = upperBoundIndex(
       excludedRanges.length,
       position,
-      (index) => excludedRanges[index]!.start,
+      (index) => excludedRanges[index].start,
     );
     const range = excludedRanges[after - 1];
     return range !== undefined && position < range.end;
@@ -89,9 +89,9 @@ export function createBegEndEnvironmentProbe(
     const after = upperBoundIndex(
       closers.length,
       openEnd,
-      (index) => closers[index]!,
+      (index) => closers[index],
     );
-    return after < closers.length ? closers[after]! : undefined;
+    return after < closers.length ? closers[after] : undefined;
   };
 
   const rule = (
@@ -101,14 +101,14 @@ export function createBegEndEnvironmentProbe(
     silent: boolean,
   ): boolean => {
     if (!active) return false;
-    const pos = state.bMarks[startLine]! + state.tShift[startLine]!;
+    const pos = state.bMarks[startLine] + state.tShift[startLine];
     if (isInsideExcludedRange(pos)) return false;
     const source = state.src;
     if (source.charCodeAt(pos) !== 0x5c) return false;
     beginEnvPattern.lastIndex = pos;
     const opener = beginEnvPattern.exec(source);
     if (opener === null) return false;
-    const name = opener[1]!;
+    const name = opener[1];
     const openEnd = beginEnvPattern.lastIndex;
     const closers = closersByEnv.get(name);
     if (closers === undefined) return false;
@@ -120,13 +120,13 @@ export function createBegEndEnvironmentProbe(
       upperBoundIndex(
         state.bMarks.length,
         closeStart,
-        (index) => state.bMarks[index]!,
+        (index) => state.bMarks[index],
       ) - 1;
     if (silent) return true;
 
     const lineContentStarts: number[] = [];
     for (let line = startLine; line <= closerLine; line++) {
-      lineContentStarts.push(state.bMarks[line]! + state.tShift[line]!);
+      lineContentStarts.push(state.bMarks[line] + state.tShift[line]);
     }
     matches.push({
       start: pos,
@@ -161,7 +161,7 @@ export function createBegEndEnvironmentProbe(
       // least one lowercase opener name also has a lowercase closer.
       const openerNames = new Set<string>();
       for (const opener of content.matchAll(/\\begin\{([a-z]+)\}/g)) {
-        openerNames.add(opener[1]!);
+        openerNames.add(opener[1]);
       }
       if (openerNames.size === 0) return matches;
 
@@ -169,7 +169,7 @@ export function createBegEndEnvironmentProbe(
         Array.from(
           Map.groupBy(
             content.matchAll(/\\end\{([a-z]+)\}/g),
-            (closer) => closer[1]!,
+            (closer) => closer[1],
           ),
           ([name, closers]) => [name, closers.map((closer) => closer.index)],
         ),
@@ -252,11 +252,11 @@ export function applyEnvironmentShields(
   let copiedUntil = 0;
   for (const match of sorted) {
     if (match.start < copiedUntil) continue;
-    pieces.push(content.slice(copiedUntil, lineStarts[match.startLine]!));
+    pieces.push(content.slice(copiedUntil, lineStarts[match.startLine]));
     for (const [offset, contentStart] of match.lineContentStarts.entries()) {
       const line = match.startLine + offset;
-      const lineStart = lineStarts[line]!;
-      const lineEnd = lineEnds[line]!;
+      const lineStart = lineStarts[line];
+      const lineEnd = lineEnds[line];
       const fullPrefix = content.slice(lineStart, contentStart);
       const retained = retainedBlockquotePrefix(fullPrefix);
       const remainder = fullPrefix.slice(retained.length);
@@ -275,7 +275,7 @@ export function applyEnvironmentShields(
         const index = items.push(item) - 1;
         pieces.push(`@@${tag}-${index}@@`);
       }
-      if (!isLast) pieces.push(content.slice(lineEnd, lineStarts[line + 1]!));
+      if (!isLast) pieces.push(content.slice(lineEnd, lineStarts[line + 1]));
     }
     copiedUntil = match.end;
   }
