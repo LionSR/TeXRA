@@ -6,7 +6,7 @@
  * `items`). The tool catalog builds the package's uniform tool definitions
  * from it; the structured-output tool builder shares it.
  */
-import { Predicate, Schema, SchemaAST } from 'effect';
+import { type JsonSchema, Predicate, Schema, SchemaAST } from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
 
@@ -55,14 +55,14 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
  * enum is what the model actually selects between.
  */
 function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
-  const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
-    (k) => Array.isArray(schema[k]) && schema.type !== 'object',
+  if (schema.type === 'object') return schema;
+  const rawVariants = [schema.oneOf, schema.anyOf, schema.allOf].find((v) =>
+    Array.isArray(v),
   );
-  if (!variantKey) return schema;
+  if (!rawVariants) return schema;
 
-  const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject => Predicate.isObject(v) && v.type === 'object',
+    (v) => Predicate.isObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;
@@ -213,7 +213,9 @@ const distinct = (nodes: readonly unknown[]): unknown[] => [
 /** A tool's input as JSON Schema, unflattened: its Effect Schema converted
  *  (its definitions, if any, attached as `$defs`, where the emitted `$ref`s
  *  point), else its pre-converted parameters. */
-export const inputSchema = (definition: ToolDefinition): unknown => {
+export const inputSchema = (
+  definition: ToolDefinition,
+): JsonSchema.JsonSchema | undefined => {
   if (definition.schema === undefined) return definition.parameters;
   const { schema, definitions } = Schema.toJsonSchemaDocument(
     definition.schema,
@@ -232,7 +234,7 @@ export const inputSchema = (definition: ToolDefinition): unknown => {
 export function convertToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
-  const schema = inputSchema(def) as JSONSchemaObject | null | undefined;
+  const schema: JSONSchemaObject | undefined = inputSchema(def);
   if (!schema) return null;
   return withArrayItems(
     stripDollarSchema(withObjectRoot(def, flattenTopLevelUnion(schema))),

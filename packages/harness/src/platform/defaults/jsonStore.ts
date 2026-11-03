@@ -89,7 +89,8 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   if (content === undefined) return { ...missingFallback };
   const parsed: unknown = yield* Effect.try({
     try: () => JSON.parse(content),
-    catch: (cause) => cause as SyntaxError,
+    // JSON.parse throws a SyntaxError, which passes through unchanged.
+    catch: ensureError,
   });
   if (Predicate.isObject(parsed)) return parsed;
   return yield* Effect.fail(
@@ -235,6 +236,8 @@ export class JsonStore {
   });
 
   get<T>(key: string): T | undefined {
+    // cast: the `ConfigStore` port lets the reader name the value's type
+    // (`get<T>`); nothing here checks it, so the reader owns that claim.
     return this.current()[key] as T | undefined;
   }
 

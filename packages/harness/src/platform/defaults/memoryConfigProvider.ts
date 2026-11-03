@@ -9,6 +9,8 @@ class MemoryConfigStore implements ConfigStore {
   private readonly values = new Map<string, unknown>();
 
   get<T>(key: string): T | undefined {
+    // cast: the `ConfigStore` port lets the reader name the value's type
+    // (`get<T>`); nothing here checks it, so the reader owns that claim.
     return this.values.get(key) as T | undefined;
   }
 
