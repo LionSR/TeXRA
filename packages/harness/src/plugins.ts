@@ -13,7 +13,8 @@
  *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
  *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
  *   `Sessions.layer({ platform, plugins })`.
- * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+ * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+ *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
  *   [`executed`](#executed), [`errorResult`](#errorresult),
  *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
  *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
@@ -45,6 +46,7 @@ export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
   type FactKind,
+  type Plugin,
   type PluginDefinition,
   type PluginRow,
 } from '@tools/plugins';

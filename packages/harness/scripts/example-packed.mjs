@@ -54,6 +54,16 @@ for (const [name, file] of [
   );
   renameSync(join(consumer, packed), join(consumer, file));
 }
+// A plugin package of its own, packed as its author would publish it.
+run(
+  'npm',
+  ['pack', join(exampleDir, 'acme-notes'), '--pack-destination', consumer],
+  packageRoot,
+);
+renameSync(
+  join(consumer, 'acme-notes-1.0.0.tgz'),
+  join(consumer, 'acme-notes.tgz'),
+);
 // npm, not pnpm: a plain node_modules and no lockfile, so the install
 // resolves what a new consumer's would, peers included.
 run('npm', ['install', '--no-audit', '--no-fund'], consumer);
