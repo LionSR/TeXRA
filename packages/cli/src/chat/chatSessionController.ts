@@ -21,7 +21,7 @@ import {
 } from '@texra-ai/harness';
 import {
   describeFollowUpFailure,
-  hasErrorPresentationClaimed,
+  launchNoticeOf,
   presentFollowUpResult,
   type PerKeyLane,
   type ProcessRuntime,
@@ -398,23 +398,28 @@ export function createChatSessionController(
     runtime.runFork(request({ kind: 'run.stop', runId, reason }));
   };
 
-  // Shared tail of the run/resume failure recovery: surface the error to
-  // the local transcript unless the run was stopped intentionally, and set
-  // the exit code accordingly. A run whose claim the slot no longer holds
-  // (a fork or a new task replaced it) says nothing to the chat.
+  // A failure the chat shows: a refused launch by the notice it carries (an
+  // unknown model's instruction, an unknown agent) where the chat's runtime
+  // notices show, any other as the transcript line `text`. The session
+  // shows neither: a launch's failure is its caller's to show.
+  const showFailure = (error: unknown, text: string): void => {
+    const notice = launchNoticeOf(error);
+    if (notice !== undefined)
+      presentationHost.emit(notice.event, notice.payload);
+    else appendLocalErrorTranscript(text);
+  };
+
+  // Shared tail of the run/resume failure recovery: surface the error
+  // unless the run was stopped intentionally, and set the exit code
+  // accordingly. A run whose claim the slot no longer holds (a fork or a
+  // new task replaced it) says nothing to the chat.
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     if (session.stopRequested) {
       session.runExitCode = CliExitCode.Success;
       return;
     }
-    // A launch failure already rendered through a targeted presentation
-    // (e.g. the model-not-recognized instruction), or presented already (by
-    // the service, to this chat) is marked -- skip the generic transcript
-    // line so the TUI doesn't show the same failure twice.
-    if (!hasErrorPresentationClaimed(error)) {
-      appendLocalErrorTranscript(toErrorMessage(error));
-    }
+    showFailure(error, toErrorMessage(error));
     session.runExitCode = CliExitCode.AgentError;
   };
 
@@ -580,22 +585,24 @@ export function createChatSessionController(
           );
           yield* Effect.forkDetach(
             resumeRun(runSession, id).pipe(
-              Effect.map((resumed) =>
+              Effect.flatMap((resumed) =>
                 resumed === 'waiting'
-                  ? describeFollowUpFailure('blocked')
-                  : undefined,
+                  ? Effect.sync(() =>
+                      appendLocalErrorTranscript(
+                        describeFollowUpFailure('blocked'),
+                      ),
+                    )
+                  : Effect.void,
               ),
               Effect.catch((refused) =>
-                Effect.succeed(
-                  isRequestRefusal(refused)
-                    ? requestErrorText(refused)
-                    : refused.message,
+                Effect.sync(() =>
+                  showFailure(
+                    refused,
+                    isRequestRefusal(refused)
+                      ? requestErrorText(refused)
+                      : refused.message,
+                  ),
                 ),
-              ),
-              Effect.flatMap((notResumed) =>
-                notResumed === undefined
-                  ? Effect.void
-                  : Effect.sync(() => appendLocalErrorTranscript(notResumed)),
               ),
             ),
           );

@@ -45,16 +45,34 @@ export const finalizedRows = (
   },
 ];
 
-/** Where the loop stands; a run's first one opens it. */
+/** Where the loop stands; a run's first one opens it. A turn's end says
+ *  how the turn ended. */
+export function positionRow(
+  runId: RunId,
+  state: Pick<RunState, 'turn'>,
+  at: Exclude<PositionAt, 'halted' | 'turn.end'>,
+): RunHistoryDraft;
+export function positionRow(
+  runId: RunId,
+  state: Pick<RunState, 'turn'>,
+  at: 'turn.end',
+  outcome: Exclude<RunOutcome, 'cancelled'>,
+): RunHistoryDraft;
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,
   at: Exclude<PositionAt, 'halted'>,
+  outcome?: RunOutcome,
 ): RunHistoryDraft {
   return {
     type: 'run.position',
     aggregateId: qualifyAggregateId('run', runId),
-    payload: { family: 'toolUse', at, turn: state.turn },
+    payload: {
+      family: 'toolUse',
+      at,
+      turn: state.turn,
+      ...(outcome !== undefined && { outcome }),
+    },
   };
 }
 
@@ -134,11 +152,15 @@ export function configRow(
 type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
 
 /** A display row the loop commits atomically with a run history row: the card a
- *  tool call opens, closes, or both, in the batch that settles it. */
+ *  tool call opens, closes, or both, in the batch that settles it, and the
+ *  stage a script's calls open under. */
 export function displayRow(
   runId: RunId,
   draft: Unqualified<
-    Extract<SessionEventDraft, { type: 'tool.start' | 'tool.end' }>
+    Extract<
+      SessionEventDraft,
+      { type: 'tool.start' | 'tool.end' | 'stage.start' | 'stage.end' }
+    >
   >,
 ): RunHistoryDraft {
   return { ...draft, aggregateId: qualifyAggregateId('run', runId) };

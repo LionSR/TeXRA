@@ -4,8 +4,10 @@
  * Everything this card says about a call — its header label and preview, the
  * structured sections, whether the output block is shown at all, the error
  * text and the user instruction — comes from `ToolRow.model`
- * (`toolRowModel` in `@texra-ai/harness/transcript`). This file paints that model with
- * Lit and applies the webview's own widths, icons, and live controls.
+ * (`toolRowModel` in `@texra-ai/harness/transcript`), except the error note of
+ * a call the run's end cut short (`ToolRow.cutByRunEnd`), which is the app's
+ * copy. This file paints that model with Lit and applies the webview's own
+ * widths, icons, and live controls.
  *
  * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
  * with indentation will render with unwanted spaces in the output. Always use
@@ -22,6 +24,7 @@ import {
   normalizeToolName,
 } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
 import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
 
 // Local imports - formatter helpers
@@ -119,12 +122,14 @@ export function formatToolUseTemplate(
     sections.push(html`<div class="tool-use-section tool-exit-code" dir="ltr">exit ${model.exitCode}</div>`);
   }
 
-  if (model.errorPreview) {
+  // A call the run's end cut short shows the note in place of an error.
+  const errorText =
+    row.cutByRunEnd === true
+      ? TOOL_CUT_BY_RUN_END_NOTE
+      : model.errorPreview?.full;
+  if (errorText !== undefined) {
     sections.push(
-      buildToolUseSection(
-        'Error:',
-        wrapInPre(model.errorPreview.full, 'tool-error-content'),
-      ),
+      buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),
     );
   }
 

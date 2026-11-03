@@ -136,10 +136,6 @@ function scriptedFetch(
 
   return async (input, init) => {
     const rawBody = await new Request(input, init).text();
-    if (rawBody.includes('Generate a short session label')) {
-      return stream({ text: 'Reviewing manuscript section' }, 0);
-    }
-
     requests.push(
       (rawBody ? JSON.parse(rawBody) : {}) as Record<string, unknown>,
     );
@@ -168,6 +164,9 @@ export async function makeExampleWorkspace(
   turns: readonly ScriptedTurn[] = [],
   /** An existing workspace to reuse, as a second process does. */
   existing?: string,
+  /** The agent directory the platform serves, a plugin package's own;
+   *  absent, the workspace's `agents/`. */
+  agents?: string,
 ): Promise<{
   readonly workspace: string;
   readonly agentsDir: string;
@@ -191,7 +190,7 @@ export async function makeExampleWorkspace(
 
   const workspace =
     existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
-  const agentsDir = join(workspace, 'agents');
+  const agentsDir = agents ?? join(workspace, 'agents');
   await mkdir(agentsDir, { recursive: true });
   const platform = nodePlatform({
     agentsDir,

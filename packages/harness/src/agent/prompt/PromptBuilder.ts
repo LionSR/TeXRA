@@ -4,8 +4,8 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - agent
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settings';
 import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
@@ -117,10 +117,11 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     personaPrompt: string,
     { inputs, attachedMemories }: TemplateOpening,
     options: {
-      /** The run's workspace root: its `AGENTS.md` and `<workspace_info>`. */
-      workspace: string | undefined;
-      /** The same session's setting slots, for the `<workspace_info>` git reads. */
-      settings: SettingsStores;
+      /** The run's session roots: the workspace whose `AGENTS.md` and
+       *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
+       *  stands in when the workspace has none, and the setting slots the
+       *  `<workspace_info>` git reads take. */
+      roots: WorkspaceRoots;
       /** A persona that declares no tools: no tool-use suffix. */
       textOnly: boolean;
     },
@@ -130,13 +131,14 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     const rendered = yield* renderPrompt(personaPrompt, inputs);
+    const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(
       [
-        loadAgentsMd(options.workspace),
+        loadAgentsMd(roots.workspace, roots.storageRoot),
         options.textOnly
           ? Effect.succeed('')
-          : buildWorkspaceInfoBlock(options.workspace, options.settings),
+          : buildWorkspaceInfoBlock(roots.workspace, roots),
       ],
       { concurrency: 'unbounded' },
     );

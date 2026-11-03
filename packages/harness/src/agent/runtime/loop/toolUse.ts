@@ -216,11 +216,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         openingSystem = yield* buildOpeningSystemPrompt(
           run.persona.prompt,
           run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`))),
-          {
-            workspace: roots.workspace,
-            settings: roots,
-            textOnly: bound.textOnly,
-          },
+          { roots, textOnly: bound.textOnly },
         );
         // The first step renders the prompt, and stores its base text.
         const step = yield* openStep(opening, 'request');
@@ -474,7 +470,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ? yield* start.turns.finishTurn(result(turn.outcome, state))
             : null;
         const ending = [
-          positionRow(runId, state, 'turn.end'),
+          positionRow(runId, state, 'turn.end', turn.outcome),
           ...log.closure(runId),
           positionRow(runId, state, 'waiting'),
           ...(childTurn?.rows ?? []),

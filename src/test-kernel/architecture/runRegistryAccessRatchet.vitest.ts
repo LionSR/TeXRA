@@ -26,7 +26,7 @@ import {
 const REGISTRY_IMPORTERS: Readonly<Record<string, string>> = {
   // The session's owners: the registry built, and its runs drained at close.
   'packages/harness/src/controllers/session/sessionOwners.ts': 'session layer',
-  // A deletion is an inactive-run step on the registry's lane.
+  // A request's stop, controls and deletion step on the registry's lane.
   'packages/harness/src/controllers/session/SessionRequests.ts':
     'session layer',
   // The run loop: its birth, and its controls for its life.

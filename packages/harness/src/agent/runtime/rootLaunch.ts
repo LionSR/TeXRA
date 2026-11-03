@@ -1,4 +1,11 @@
-import { Context, Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  SubscriptionRef,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
@@ -105,7 +112,8 @@ type RootLaunch = typeof StartOptionsSchema.Type &
  * root's `SessionOwner` must still hold the session. It answers the commit
  * of the run's opening once that commits, the run going on on the session's
  * fork; a launch that fails first fails this, and the caller's interruption
- * before then stops the run.
+ * before then stops the run. A run that opened never fails this: its end,
+ * failed or not, is its `run.end` row's.
  *
  * A run with a parent, or one that is resumed rather than registered here
  * (a child's strategy, `resumeRun`), runs the lower-level `executeAgent`
@@ -134,7 +142,13 @@ export const rootRun = Effect.fn('rootRun')(function* (
         restore(
           Effect.raceFirst(
             Deferred.await(opened),
-            Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
+            Fiber.await(fiber).pipe(
+              Effect.flatMap((exit) =>
+                Exit.isFailure(exit) && !Deferred.isDoneUnsafe(opened)
+                  ? Effect.failCause(exit.cause)
+                  : activationIfOpened(opened),
+              ),
+            ),
           ),
         ).pipe(
           // A caller interrupted as the run opened never holds it.

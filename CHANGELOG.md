@@ -27,6 +27,32 @@ All notable changes to this project will be documented in this file.
   gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
   account id; `SubscriptionCoordinator.buildAuthorizeRequest` is an Effect
   and `loginWithCode` takes the authorize request and its callback.
+- **SDK: a used-up plan and an unusable subscription carry their facts;
+  the app words them.** `SUBSCRIPTION_AUTH_NAMES` (`./schemas`) and
+  `quotaFallbackRouteFor`, `QuotaFallbackRoute` and
+  `QuotaFallbackExhaustionReason` are gone: the harness words these failures
+  plainly, naming a plan by the provider it bills ("Usage limit reached on
+  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA's retry card,
+  `texra run`'s retry prompt and the automatic-fallback notice word the
+  facts as before. A used-up plan's classification carries its tier and
+  reset (`planType`, `resetsInMs`), and the GLM Coding Plan's is named by its
+  route, `glm-coding-plan-subscription`; a subscription that cannot bill the
+  call is `RouteUnavailable.session` (`route`, `needsReauth`), with the
+  session's own failure as its message; an automatic fallback is a
+  `quotaFallback` log row recording the route
+  (`ProgressStatusRow.quotaFallback`), and a status row has no `detail`.
+  `RetryPermission` carries the failure once and whole as `errorDetails` (no
+  `errorMessage`). The end-of-run notice and the transcript's error details
+  show the harness's words. Conversations saved by an earlier build show as
+  written by that build and cannot be resumed by this one.
+- **SDK: a refused launch is its caller's to show.** `session.start` and
+  `session.resume` no longer show the unknown-model instruction or the
+  missing-agent notice through the session's host, at once or to a host
+  that attaches later: the failure carries it as `AgentError.notice`
+  (`LaunchNoticeSchema` in `./schemas`), `launchNoticeOf` (`./host`) reads
+  it through the `RunFailure`, and `presentRunFailure` shows it in place of
+  the generic error. `attachErrorPresentationClaimed` and
+  `hasErrorPresentationClaimed` are gone.
 - **SDK: a tool edit's proposal is the request's, not the session's.**
   `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
   address in the session's blob store, written with the `request.opened`
@@ -807,6 +833,22 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **SDK: a message to a run carries the caller's id, and its receipt says
+  what became of it.**
+  - `followUp.send` takes an optional `id` and answers with that id and
+    the message's receipt.
+  - A retry under the same id answers with the first send's receipt instead
+    of sending the message twice. That holds after a lost reply, and after
+    the run stopped taking input.
+  - A different message under that id fails with `Conflict`.
+  - `followUp.receipt`, with `wait: true` to wait, reads the receipt from
+    the run's rows. It is one of: `accepted`; `incorporated` into a turn;
+    `answered`; or `unanswered`, with why. Why is one of: the turn failed,
+    the run ended first, or the message left the queue unread.
+  - The harness examples wait on the receipt instead of counting model
+    calls.
+  - A turn's end position records the turn's outcome (`run.position` v2), so
+    a run an earlier build wrote reads as that build's.
 - **A message typed while a run works is answered at its next model
   request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
   model inside the turn; since then it waited for the turn to end. A message
@@ -1339,6 +1381,24 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **No model request runs only to title a subagent, and the SDK sends none
+  you did not ask for.** A subagent or a script's `self()` round keeps its
+  agent name instead of a generated title, so a loop of rounds no longer
+  doubles its requests. SDK: a session titles its runs only when the
+  composition asks (`processLayer({ labelRuns: true })`, as every TeXRA app
+  does); `Sessions.layer` titles none, so an embedder's runs make only the
+  requests their agents do.
+- **SDK: the harness logs through your program's own logger.**
+  `Sessions.layer` no longer replaces the Effect loggers, minimum level and
+  tracer of the program that provides it, so the harness's lines go where
+  your `Logger.layer` sends them instead of straight to the console.
+  `effectDiagnosticsLayer` with `setLogSink` still routes them through the
+  harness's redacting sink.
+- **A DeepSeek account out of credit reads as out of credit.** A request
+  DeepSeek refuses for an empty balance (HTTP 402, "Insufficient Balance")
+  is now reported as the account running out of credit, with the same
+  choice to replace the key that an OpenAI or Anthropic account out of
+  credit gets. Before, it read as an unexpected error.
 - **A lost durable fact is a row or a failure, never a warning.** A
   subagent's result held for a parent open in another process is delivered
   under a claim its park let go, so the delivery no longer polls for the
@@ -1468,6 +1528,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **The panel's agent menu lists each agent once, and a document agent
   opens on files.** Picking an agent such as `criticize` starts its
   document task and shows the file panel; a file icon marks those agents.
+  The New task form runs only an agent the menu lists: one you hide in
+  Settings → Agents after picking it (or one Run again… brings back)
+  reads **Choose agent** until you pick another, rather than starting
+  with files the form no longer shows.
 - **`texra`'s `/key` picker shows which providers already have a key.** Each
   provider row reads "Key set", "Env" or "Not set", as the API-keys page of
   `/config` already did. If the key store cannot be read, the rows read
@@ -1905,7 +1969,9 @@ view` on a sub-agent the parent waited for shows its report instead of
   definitions) never reached the compaction trigger; the trigger, the context
   gauge and the output-length limit now all read the last response's reported
   input plus output tokens and add an estimate for what was added since. The
-  gauge therefore counts the model's reply too.
+  gauge therefore counts the model's reply too. An estimate for images, PDFs
+  and audio attached since the model's last reply now counts toward
+  compaction and the output-length limit, where they counted as nothing.
 
 - **Long histories stay usable.** With a few thousand runs in a workspace,
   starting a session no longer stalls for minutes, and an agent's history

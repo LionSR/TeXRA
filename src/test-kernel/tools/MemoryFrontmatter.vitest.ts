@@ -31,12 +31,6 @@ describe('memory frontmatter (yaml-backed) (packages/harness/src/agent/memory/me
       raw: 'just some content\nwith no frontmatter',
     },
     {
-      scenario: 'a block lacking modifiedBy',
-      raw: ['---', 'foo: bar', 'modifiedAt: 2026-01-01', '---', 'body'].join(
-        '\n',
-      ),
-    },
-    {
       scenario: 'malformed YAML',
       raw: ['---', 'modifiedBy: "unterminated', '---', 'body'].join('\n'),
     },

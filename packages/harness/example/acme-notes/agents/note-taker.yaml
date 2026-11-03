@@ -1,0 +1,4 @@
+name: note_taker
+description: Keeps notes on a draft.
+prompt: Keep notes on the draft with a script over the notes module.
+tools: [script, note_add]

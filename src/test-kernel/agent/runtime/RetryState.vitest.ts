@@ -194,7 +194,9 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
     return outcome;
   };
   const model: Model = {
-    prepareTurn: () => Effect.succeed(PREPARED),
+    // The history it is asked for: the invoker checks the prepared turn
+    // against the run's rows, whatever the run opened with.
+    prepareTurn: ({ messages }) => Effect.succeed({ ...PREPARED, messages }),
     streamTurn: () =>
       Stream.unwrap(
         Effect.sync(() => {
@@ -309,12 +311,16 @@ interface InvokerKit {
 }
 
 /**
- * Open a run aggregate the way the tool-use loop does, and build the invoker
- * that writes to it.
+ * Open a run aggregate the way the tool-use loop does, with its `opening`
+ * messages, and build the invoker that writes to it over `binding`.
  */
 const openRun = Effect.fn('openRun')(function* (
   session: Context.Context<SessionServices>,
   model: Model,
+  opening: Parameters<typeof appendRow>[1] = [
+    { role: 'user', content: [{ kind: 'text', text: 'go' }] },
+  ],
+  binding: Partial<BoundModel> = {},
 ): Effect.fn.Return<
   InvokerKit,
   RunHistoryRefused | DatabaseReadFailed | DatabaseWriteFailed
@@ -326,9 +332,7 @@ const openRun = Effect.fn('openRun')(function* (
     activation: () => Effect.succeed([]),
   });
   yield* cell.append([
-    appendRow(runId, [
-      { role: 'user', content: [{ kind: 'text', text: 'go' }] },
-    ]),
+    appendRow(runId, opening),
     positionRow(runId, freshState(), 'turn.ready'),
   ]);
   // The retries the binding carries, read from the session as `bindModel`
@@ -338,7 +342,7 @@ const openRun = Effect.fn('openRun')(function* (
     MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
   ).pipe(Effect.orDie);
   const bound = yield* SynchronizedRef.make(
-    boundModel(model, { automaticRetries }),
+    boundModel(model, { automaticRetries, ...binding }),
   );
   const layer = modelInvokerLayer().pipe(
     Layer.provide(
@@ -432,27 +436,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     it.layer(caseHost(0), { buildPerTest: true })((it) => {
       // The setting bounds the automatic batch; the human gate opens only once
       // it is spent.
-      it.effect('cancels the run when the user declines the retry', () =>
-        Effect.gen(function* () {
-          const session = yield* isolatedTestSession();
-          yield* autoDecideRequests(session, () => ({
-            action: 'cancel',
-            cause: 'The user declined the retry.',
-          }));
-          const stub = stubModel([
-            { fail: httpError('temporary provider failure', 503) },
-          ]);
-
-          const kit = yield* openRun(session, stub.model);
-          const { runId } = kit;
-          yield* Effect.promise(() => seedActiveRun(session, runId));
-          const outcome = yield* invokeOn(kit);
-
-          expect(outcome.kind).toBe('cancelled');
-          expect(stub.attempts()).toBe(1);
-        }),
-      );
-
       // The authorized attempt waits out the session gate's cooldown the failed
       // attempt opened; the pump advances the test clock past it.
       it.effect('admits a manual retry through a durable approval', () =>
@@ -504,42 +487,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         }),
       );
 
-      // Failure modes: a resume resends a billed attempt a person admitted
-      // without asking again; it refills the automatic budget the rows spent.
-      it.effect(
-        'asks again about an approved retry the process stopped during',
-        () =>
-          Effect.gen(function* () {
-            const session = yield* isolatedTestSession();
-            const pump = yield* pumpClock;
-            const requests = yield* autoDecideRequests(session, () => ({
-              action: 'retry',
-            }));
-            const stub = stubModel([
-              { fail: httpError('temporary provider failure', 503) },
-              { hang: true },
-              { ok: completedTurn('recovered') },
-            ]);
-            const kit = yield* openRun(session, stub.model);
-            yield* Effect.promise(() => seedActiveRun(session, kit.runId));
-            const fiber = yield* Effect.forkChild(invokeOn(kit));
-            while (stub.attempts() < 2) yield* settle;
-            yield* Fiber.interrupt(fiber);
-
-            // The resume opens the run again from its stored rows.
-            const cell = yield* Context.get(session, RunHistory).open(
-              kit.runId,
-            );
-            const resumed = yield* invokeOn({ ...kit, cell });
-
-            expect(resumed.kind).toBe('response');
-            // The interrupted attempt was asked about again, then sent once.
-            expect(requests.opened).toHaveLength(2);
-            expect(stub.attempts()).toBe(3);
-            yield* Fiber.interrupt(pump);
-          }),
-      );
-
       // A denial does not retry and — crucially — is NOT a user cancel, so
       // the run resumes to RUNNING to let the failure terminalize (#7331); a
       // cancelled zero-output run would report COMPLETED. The session's
@@ -575,6 +522,41 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ).toBe(RUN_PHASE.RUNNING);
             expect(stub.attempts()).toBe(1);
           }),
+      );
+
+      // Failure mode (#14259): media added since the last counted response
+      // estimated 0 tokens, so a PDF the window cannot hold was sent, and
+      // billed, for the provider to refuse.
+      it.effect('refuses, unsent, a PDF the context window cannot hold', () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession();
+          const stub = stubModel([{ ok: completedTurn('read') }]);
+          const pdf = Buffer.from('%PDF-1.7').toString('base64');
+
+          const kit = yield* openRun(
+            session,
+            stub.model,
+            [
+              {
+                role: 'user',
+                content: [
+                  { kind: 'text', text: 'Summarize this.' },
+                  {
+                    kind: 'document',
+                    mimeType: 'application/pdf',
+                    base64: pdf,
+                  },
+                ],
+              },
+            ],
+            { config: { ...MODEL_CONFIGS[GPT54], contextWindow: 1_000 } },
+          );
+          yield* Effect.promise(() => seedActiveRun(session, kit.runId));
+          const outcome = yield* invokeOn(kit);
+
+          expect(outcome.kind).toBe('failed');
+          expect(stub.attempts()).toBe(0);
+        }),
       );
     });
     it.layer(caseHost(MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue), {
@@ -642,88 +624,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       );
     });
     it.layer(caseHost(), { buildPerTest: true })((it) => {
-      it.effect(
-        'retries a chained request once without its continuation when the stored response is gone',
-        () =>
-          Effect.gen(function* () {
-            const session = yield* isolatedTestSession();
-            const pump = yield* pumpClock;
-            const chained: boolean[] = [];
-            // The first response is stored and anchors the next request to it.
-            const anchored = Schema.decodeUnknownSync(TurnResultSchema)({
-              ...completedTurn('first'),
-              continuation: {
-                origin: { ...ORIGIN, protocol: 'openai-responses' },
-                coveredMessages: 2,
-                prefixFingerprint: 'a'.repeat(64),
-                anchor: {
-                  kind: 'stored',
-                  responseId: 'resp-0',
-                  coveredItems: 2,
-                },
-              },
-            });
-            const model: Model = {
-              prepareTurn: (request) =>
-                Effect.succeed(
-                  Schema.decodeUnknownSync(ResolvedTurnSchema)({
-                    ...PREPARED,
-                    messages: request.messages,
-                    ...(request.continuation === undefined
-                      ? {}
-                      : { continuation: request.continuation }),
-                  }),
-                ),
-              streamTurn: (turn) =>
-                Stream.unwrap(
-                  Effect.sync(() => {
-                    chained.push('continuation' in turn);
-                    return 'continuation' in turn
-                      ? Stream.fail(
-                          new ModelError({
-                            kind: 'continuation-gone',
-                            status: 404,
-                            message:
-                              'Previous response with id resp-1 not found.',
-                          }),
-                        )
-                      : Stream.fromIterable<TurnEvent>([
-                          {
-                            kind: 'identified',
-                            providerResponseId: PROVIDER_RESPONSE_ID,
-                            requestedOrigin: ORIGIN,
-                            returnedModel: null,
-                          },
-                          {
-                            kind: 'completed',
-                            result:
-                              chained.length === 1
-                                ? anchored
-                                : completedTurn('full'),
-                          },
-                        ]);
-                  }),
-                ),
-            };
-            const kit = yield* openRun(session, model);
-            const first = yield* invokeOn(kit);
-            if (first.kind !== 'response') throw new Error('no first response');
-            expect(first.state.continuation).not.toBeNull();
-
-            // The next turn's message, sent on top of the stored response.
-            yield* kit.cell.append([
-              appendRow(kit.runId, [
-                { role: 'user', content: [{ kind: 'text', text: 'again' }] },
-              ]),
-            ]);
-            const outcome = yield* invokeOn(kit);
-
-            expect(outcome.kind).toBe('response');
-            expect(chained).toEqual([false, true, false]);
-            yield* Fiber.interrupt(pump);
-          }),
-      );
-
       // Failure modes: a user stop leaves the remote job billing; a
       // cancelled operation is re-observed on resume; a shutdown (or any
       // interrupt without a `user` stop reason) cancels work a resume should

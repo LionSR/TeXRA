@@ -28,7 +28,8 @@ import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
  * 5. A run history row, a private record, or the session database's own tables
  *    are reachable from a query.
  * 6. A statement writes to the store or runs a second statement.
- * 7. `runs` comes from a view that lags the rows fed into `events`.
+ * 7. `runs` comes from a view that lags the rows committed before the
+ *    query.
  */
 
 const withSession = <A, E>(
@@ -87,7 +88,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           publishTestRunStart(session);
           const write = yield* query(
             session,
-            'WITH gone AS (SELECT 1) DELETE FROM events',
+            'WITH gone AS (SELECT 1) DELETE FROM tool_calls',
           ).pipe(Effect.flip);
           expect(write).toMatchObject({ reason: 'rejected' });
           const pragma = yield* query(session, 'PRAGMA query_only = OFF').pipe(
@@ -98,13 +99,13 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             Effect.flip,
           );
           expect(two).toMatchObject({ reason: 'not-a-read' });
-          const kept = yield* query(session, 'SELECT count(*) FROM events');
+          const kept = yield* query(session, 'SELECT count(*) FROM runs');
           expect(kept.rows).toEqual([[1]]);
         }),
       ),
     );
 
-    it.effect('fills runs from a view that reached the rows in events', () =>
+    it.effect('fills runs from a view that reached the committed rows', () =>
       withSession((session) =>
         Effect.gen(function* () {
           yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
@@ -129,11 +130,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             Effect.provideService(SessionLog, Context.get(session, SessionLog)),
             Effect.provideService(SessionViewAccess, lagging),
           );
-          const page = yield* history.query(
-            'SELECT (SELECT count(DISTINCT run_id) FROM events), (SELECT count(*) FROM runs)',
-            [],
-          );
-          expect(page.rows).toEqual([[1, 1]]);
+          const page = yield* history.query('SELECT count(*) FROM runs', []);
+          expect(page.rows).toEqual([[1]]);
         }).pipe(Effect.scoped, Effect.provide(nodeSpawnerLayer)),
       ),
     );

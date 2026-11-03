@@ -78,7 +78,7 @@ import {
   withToolUseSubagentHandoffInstruction,
   workingDirectoryField,
 } from './inputFields';
-import { decideDelegation, requireAgent } from './proposalFlow';
+import { AgentRequest, decideDelegation, requireAgent } from './proposalFlow';
 import {
   delegatedChildGrants,
   describeSubagentProgress,
@@ -495,7 +495,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
     proposal,
     script === undefined
       ? undefined
-      : script.shared('agent:request', scriptRequest(call, script, proposal)),
+      : script.shared(AgentRequest, scriptRequest(call, script, proposal)),
   );
   if ('status' in decided) return decided;
   if (script !== undefined) {

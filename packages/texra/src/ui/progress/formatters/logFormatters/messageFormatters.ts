@@ -22,6 +22,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
+import { quotaFallbackNoticeText } from '@ui/copy/modelAccess';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -61,18 +62,17 @@ export function formatProgressStatusTemplate(
     new Date(timestamp),
   );
 
-  const summaryText = row.summary.full;
-  const detailText = row.detail?.full ?? '';
+  const summaryText =
+    row.quotaFallback === undefined
+      ? row.summary.full
+      : quotaFallbackNoticeText(row.quotaFallback);
   const levelIcon = buildLevelIcon(level);
 
   // prettier-ignore
   return html`<div
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
-    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
-        detailText,
-        () => html`<pre class=${`log-line message-${level}`}>${detailText}</pre>`,
-      )}</div>`;
+    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div></div>`;
 }
 
 /**

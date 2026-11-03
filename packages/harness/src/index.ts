@@ -92,6 +92,9 @@ export type { AgentRunListingEntry } from '@agent/storage/runListing';
 export { defineTool, type DefinedTool } from '@tools/core/definition';
 export type { ITool } from '@agent/core/tools/ToolTypes';
 export type { ToolResult } from '@shared/schemas';
+// The tables `executions` `query` reads (a script's SQL over its session's
+// runs and calls) and their columns.
+export { HISTORY_TABLES } from '@agent/runtime/historyQuery/views';
 
 // Why starting, resuming or opening fails.
 export {
@@ -112,6 +115,7 @@ export type { SessionOpenError } from '@shared/session/database';
 // What `session.request` answers, and why it refuses.
 export {
   Cancelled,
+  Conflict,
   HostRequestFailure,
   Internal,
   isRequestRefusal,

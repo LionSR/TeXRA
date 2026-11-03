@@ -6,7 +6,14 @@
  * `Effect.acquireUseRelease`.
  */
 
-import { Cause, Context, Effect, Exit, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Exit,
+  SubscriptionRef,
+  SynchronizedRef,
+} from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -22,6 +29,7 @@ import { outcomeFromCause } from '@shared/runs/runStatus';
 import {
   Approvals,
   RunHistory,
+  RunHistoryRefused,
   SessionLog,
   type RunCell,
   SessionViewAccess,
@@ -31,6 +39,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { registryOf, Runs } from '../runRegistry';
+import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -72,6 +81,37 @@ const NOT_RESUMABLE_MESSAGE =
   'This run stopped before it recorded any state to resume from. Start a new run instead.';
 
 /**
+ * The refusal of a resume of `runId` from `state`, or null when none is due:
+ * a turn the next request replays (an assistant message, the pending
+ * response's, or the continuation) was recorded on another protocol than
+ * `bound` speaks now, so its provider evidence cannot be sent.
+ */
+const foreignProtocol = (
+  runId: RunId,
+  state: RunState,
+  bound: Pick<BoundModel, 'backend' | 'origin'>,
+): RunHistoryRefused | null => {
+  const { pendingResponse, continuation } = state;
+  const recorded = [
+    ...[
+      ...state.messages,
+      ...(pendingResponse === null ? [] : [pendingResponse.assistant]),
+    ].flatMap((message) =>
+      message.role === 'assistant' && message.origin !== null
+        ? [message.origin.protocol]
+        : [],
+    ),
+    ...(continuation === null ? [] : [continuation.origin.protocol]),
+  ].find((protocol) => protocol !== bound.origin.protocol);
+  if (recorded === undefined) return null;
+  return new RunHistoryRefused({
+    reason: 'foreign-protocol',
+    runId,
+    detail: `its turns were recorded on ${recorded}, and its ${bound.backend} backend now binds ${bound.origin.protocol}`,
+  });
+};
+
+/**
  * The run's entry: its cell. A fresh run's registration rides the cell's
  * first append, its opening, so the run exists with its opening or not at
  * all. A resume takes the claim and commits its activation, in one batch,
@@ -103,11 +143,19 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
       resume
         ? {
             activation: (state: RunState | null) =>
-              state?.phase == null
-                ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
-                : activationRows(runId, run.config).pipe(
-                    Effect.provide(owners),
-                  ),
+              Effect.gen(function* () {
+                if (state?.phase == null)
+                  return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+                const refused = foreignProtocol(
+                  runId,
+                  state,
+                  yield* SynchronizedRef.get(run.model),
+                );
+                if (refused !== null) return yield* refused;
+                return yield* activationRows(runId, run.config).pipe(
+                  Effect.provide(owners),
+                );
+              }),
           }
         : { registration: Effect.sync(() => birthRows(run, runs, view)) },
     )

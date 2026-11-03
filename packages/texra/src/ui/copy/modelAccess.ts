@@ -8,10 +8,16 @@
  */
 
 import { formatCostUsd } from '@texra-ai/harness/transcript';
-import { absurd } from 'effect';
+import { absurd, String as Str } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
-import type { TokenUsageStats, UsageRoute } from '@texra-ai/harness/schemas';
+import { formatResetDuration } from '@ui/copy/format';
+import type {
+  DeclinableUsageRoute,
+  RetryPermission,
+  TokenUsageStats,
+  UsageRoute,
+} from '@texra-ai/harness/schemas';
 
 /** The words for each `ModelOptionData.availability` kind. */
 export const MODEL_AVAILABILITY_LABEL = {
@@ -24,6 +30,76 @@ export const MODEL_AVAILABILITY_LABEL = {
   unserved: 'Unavailable',
   'unknown-model': 'Unknown model',
 } as const;
+
+/**
+ * Each plan a model call can bill through, as a person knows it: the name of
+ * its switch, which a used-up plan is called by, and what the model takes
+ * with the switch off, which a retry moves onto once the plan is used up.
+ * Keyed by the route that bills through the plan, the route the harness's
+ * failure and fallback notice record.
+ */
+const PLAN_NAMES = Object.freeze({
+  'chatgpt-subscription': {
+    plan: CHATGPT_AUTH.subscriptionLabel,
+    fallback: 'your own OpenAI API key',
+  },
+  'xai-subscription': {
+    plan: GROK_AUTH.subscriptionLabel,
+    fallback: 'your own xAI API key',
+  },
+  'kimi-code-subscription': {
+    plan: codingPlanForUsageRoute('kimi-code-subscription').preferenceLabel,
+    fallback: 'your own Moonshot API keys',
+  },
+  'glm-coding-plan-subscription': {
+    plan: codingPlanForUsageRoute('glm-coding-plan-subscription')
+      .preferenceLabel,
+    fallback: 'the regular GLM endpoint',
+  },
+} satisfies Record<DeclinableUsageRoute, { plan: string; fallback: string }>);
+
+/** What a model of `route`'s plan takes with the plan's switch off. */
+export function planFallbackName(route: DeclinableUsageRoute): string {
+  return PLAN_NAMES[route].fallback;
+}
+
+/**
+ * A model call's failure as a person reads it: a used-up plan in these
+ * words, from the facts the run recorded (the plan, its tier and when it
+ * resets); any other failure as the harness worded it.
+ */
+export function modelFailureText({
+  message,
+  classification,
+}: Pick<
+  RetryPermission['errorDetails'],
+  'message' | 'classification'
+>): string {
+  if (classification === undefined) return message;
+  switch (classification.kind) {
+    case 'missing-api-key':
+    case 'context-window':
+    case 'upstream-credit':
+      return message;
+    default: {
+      const { plan, fallback } = PLAN_NAMES[classification.kind];
+      const tier = classification.planType
+        ? ` (${Str.capitalize(classification.planType)} plan)`
+        : '';
+      const reset =
+        classification.resetsInMs === undefined
+          ? ''
+          : ` Resets in ${formatResetDuration(classification.resetsInMs)}.`;
+      return `${plan} usage limit reached${tier}.${reset} Switch to ${fallback} to keep working, or wait until the limit resets.`;
+    }
+  }
+}
+
+/** The notice of a used-up plan's automatic retry on the model's own key. */
+export function quotaFallbackNoticeText(route: DeclinableUsageRoute): string {
+  const { plan, fallback } = PLAN_NAMES[route];
+  return `${plan} usage limit reached; retrying with ${fallback}.`;
+}
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {

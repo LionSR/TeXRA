@@ -1,12 +1,8 @@
 // Third-party imports
-import { BadRequestError as OpenAIBadRequestError } from 'openai';
+import { APIError, BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import {
-  attachErrorPresentationClaimed,
-  hasErrorPresentationClaimed,
-} from '@texra-ai/harness/host';
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -36,6 +32,29 @@ describe('context-window overflow', () => {
   });
 });
 
+describe('an account out of credit', () => {
+  // DeepSeek answers a request on an empty balance with a 402 whose error
+  // type, not its code, says why (the code is a generic
+  // `invalid_request_error`).
+  it("is the credit verdict on DeepSeek's insufficient balance", () => {
+    const err = new APIError(
+      402,
+      {
+        message: 'Insufficient Balance',
+        type: 'insufficient_balance_error',
+        param: null,
+        code: 'invalid_request_error',
+      },
+      '402 Insufficient Balance',
+      new Headers(),
+    );
+
+    expect(judged(err).classification).toStrictEqual({
+      kind: 'upstream-credit',
+    });
+  });
+});
+
 describe('a ChatGPT plan limit', () => {
   // OpenAI can end a streamed response with `response.failed` once the plan
   // runs out; the stream's terminal event carries the error as a plain object.
@@ -57,16 +76,11 @@ describe('a ChatGPT plan limit', () => {
 
 describe('attachProviderError end-to-end', () => {
   // A frozen error cannot take a symbol property: marking it must neither
-  // throw nor lose the mark, at the error itself or behind a wrapper.
+  // throw nor lose the mark.
   it('marks a frozen error without throwing', () => {
     const frozen = Object.freeze(new Error('overloaded'));
-    attachErrorPresentationClaimed(frozen);
     attachProviderError(frozen, { message: 'overloaded', userRetryable: true });
 
-    expect(hasErrorPresentationClaimed(frozen)).toBe(true);
-    expect(
-      hasErrorPresentationClaimed(new Error('wrapped', { cause: frozen })),
-    ).toBe(true);
     expect(normalizeProviderError(frozen).userRetryable).toBe(true);
   });
 });

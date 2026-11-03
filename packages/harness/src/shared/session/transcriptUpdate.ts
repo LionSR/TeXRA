@@ -27,7 +27,6 @@ import {
 import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityProjection';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { decodeToolUseLog } from '@shared/toolUse';
-import { TOOL_CUT_BY_RUN_END } from '@shared/transcript/scriptStage';
 
 import { recordLogRow, STREAMING_TEXT_ROW_KIND } from './transcriptLogRows';
 import {
@@ -182,6 +181,9 @@ function record(d: Draft, event: TranscriptEvent): void {
         ...result,
         status: event.status,
       });
+      // The call's own end replaces a cut by the run's end.
+      const { cutByRunEnd: _cut, ...call } = slot.call;
+      slot.call = call;
       if (!inProgress) {
         slot.base = settle(ix, slot.base);
         ix.activeTools.delete(event.logId);
@@ -271,7 +273,8 @@ function closeText(
 }
 
 /** A phase move ({@link phaseMoveOf}) moves the transcript boundary: a
- *  waiting or ended run closes every open stream and fails every open card. */
+ *  waiting or ended run closes every open stream and fails every open card
+ *  as cut by the run's end (`ToolRow.cutByRunEnd`). */
 function moveBoundary(d: Draft, phase: RunPhase): void {
   const { ix } = d;
   if (phase === RUN_PHASE.RUNNING) {
@@ -290,11 +293,8 @@ function moveBoundary(d: Draft, phase: RunPhase): void {
     const slot = ix.slots.get(id);
     if (slot?.kind !== 'tool') continue;
     slot.base = settle(ix, slot.base);
-    slot.log = {
-      ...slot.log,
-      status: TOOL_CALL_STATUS.FAILED,
-      error: TOOL_CUT_BY_RUN_END,
-    };
+    slot.log = { ...slot.log, status: TOOL_CALL_STATUS.FAILED };
+    slot.call = { ...slot.call, cutByRunEnd: true };
     write(d, slot);
   }
   ix.activeTools.clear();

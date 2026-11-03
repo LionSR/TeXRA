@@ -32,7 +32,7 @@ import {
   type Session,
   type RunEnd,
 } from '@texra-ai/harness';
-import { presentRunFailure } from '@texra-ai/harness/host';
+import { launchNoticeOf } from '@texra-ai/harness/host';
 import {
   type SessionView,
   isLiveRun,
@@ -429,19 +429,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
               runs,
               // A service task stays open for its windows' follow-ups.
               session.start({ ...start, interactive: true }),
-              // A start fails before its run opens, with no row to show
-              // it: the project's windows are told here, once, and the
-              // client hears that they were.
+              // A start that fails before its run opens has no row to show
+              // it: the window that asked shows it, with its notice.
               (error) =>
-                presentRunFailure(session, error).pipe(
-                  Effect.andThen(
-                    Effect.fail(
-                      new TaskFailed({
-                        message: error.message,
-                        presented: true,
-                      }),
-                    ),
-                  ),
+                Effect.fail(
+                  new TaskFailed({
+                    message: error.message,
+                    notice: launchNoticeOf(error),
+                  }),
                 ),
             );
             return yield* admittedTask(run);
@@ -524,7 +519,12 @@ export const serviceHandlers = TexraRpcs.toLayer(
                 ),
               ),
               (error) =>
-                Effect.fail(new TaskFailed({ message: error.message })),
+                Effect.fail(
+                  new TaskFailed({
+                    message: error.message,
+                    notice: launchNoticeOf(error),
+                  }),
+                ),
             );
             return 'kind' in run ? run : yield* admittedTask(run);
           }),

@@ -1,5 +1,5 @@
 {
-  "semantics": "Every core row kind a build has ever stored, by name. Append-only: a name never leaves this list. rowVersions.vitest checks each name is in ROW_KINDS (read) or RETIRED_ROW_KINDS (its rows fail only their own run), so deleting a kind without retiring it fails before a store holding it is refused whole. Plugin kinds (plugin.fact/<arm>) are not listed: a store with an absent plugin's kind always opens.",
+  "semantics": "Every core row kind a build has ever stored, by name. Append-only: a name never leaves this list. rowVersions.vitest checks each name is in ROW_KINDS (read) or RETIRED_ROW_KINDS (its rows are skipped, or fail only their own run), so deleting a kind without retiring it fails before a store holding it is refused whole. Plugin kinds (plugin.fact/<arm>) are not listed: a store with an absent plugin's kind always opens.",
   "kinds": [
     "approval.policy",
     "child.park",

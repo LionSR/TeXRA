@@ -11,6 +11,7 @@ import {
   UserMessagePayloadSchema,
   WebSearchPayloadSchema,
 } from './progressView/data';
+import { DeclinableUsageRouteSchema } from './usage';
 
 const StreamingTextDataSchema = Schema.StructWithRest(
   Schema.Struct({
@@ -35,7 +36,14 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.WEB_SEARCH]: WebSearchPayloadSchema,
   [MESSAGE_TYPES.MODEL_RESPONSE]: Schema.optional(StreamingTextDataSchema),
   [MESSAGE_TYPES.USER_MESSAGE]: Schema.optional(UserMessagePayloadSchema),
-  [MESSAGE_TYPES.PROGRESS_STATUS]: Schema.optional(Schema.Unknown),
+  // A status note is its message alone (`logProgressStatus`).
+  [MESSAGE_TYPES.PROGRESS_STATUS]: Schema.Undefined,
+  // A used-up plan's automatic retry on the model's own key: the route the
+  // run declined. The row's message is the harness's plain wording; an app
+  // words the route itself.
+  [MESSAGE_TYPES.QUOTA_FALLBACK]: Schema.Struct({
+    route: DeclinableUsageRouteSchema,
+  }),
   [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
   [MESSAGE_TYPES.ERROR]: Schema.optional(ErrorLogDataSchema),
   [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,

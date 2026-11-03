@@ -219,8 +219,11 @@ Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
 surface names (`AgentNotFound`, `ToolsRefused`); a launch that fails
 before its run enters the session fails `start` with `RunFailure`, whose
-`cause` is exactly what the launch path threw. A run that fails after
-entering stores a failed end, which `run.result` returns.
+`cause` is exactly what the launch path threw. No host is shown such a
+failure: a launch refused for an unknown model, or for a `config` naming an
+unknown agent, carries the notice to show for it (`AgentError.notice`, read
+with `launchNoticeOf` from `./host`). A run that fails after entering stores
+a failed end, which `run.result` returns.
 
 `run.view` is the derived session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
@@ -266,6 +269,33 @@ a root the first holds is refused at open ("already open in this process";
 the guard is `processRoots` beside `SessionOwner`): share that session
 instead. Builds over different roots each work, and a later build after the
 first one is released is fine.
+
+### Messages to a run, and their receipts
+
+`session.request({ kind: 'followUp.send', runId, text, id })` sends a run a
+message under the caller's `id` (one is minted and returned when absent).
+
+- A retry under the same `id` answers with the first send's receipt instead of
+  sending the message twice. That includes a retry after a lost reply and a
+  retry once the run takes no more input.
+- A different message under that `id` fails with `Conflict`. The id is
+  scoped to the run and to sends, and the comparison is on what the message
+  says (its text, media and hold), not on how it was serialized.
+
+`session.request({ kind: 'followUp.receipt', runId, id })` reads where the
+message stands, from the run's committed rows. Nothing extra is stored. The
+receipt is one of:
+
+- `accepted` while it is queued;
+- `incorporated` into turn `turn` while that turn runs;
+- `answered`, naming the row that answered it (`answer`, its `seq`);
+- `unanswered`, with the reason nothing will answer it: the turn failed, the
+  run ended before the turn did, or the message left the queue unread.
+
+With `wait: true` the read returns once the message is answered or
+unanswered. Messages that join one turn share that turn's answer. Wait on
+the receipt rather than counting model calls or watching for a `waiting`
+status.
 
 ## Durable invariants
 
@@ -415,11 +445,13 @@ composes (the agent directories, secrets and the resume
 port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under.
+`mcp.json` at the storage root that global storage lies under, and a run's
+system prompt carries the workspace's `AGENTS.md`, or the storage root's when
+the workspace has none.
 `nodePlatform()` supplies all of them: process-local config and state,
 the ordinary storage layout under the `storageDir` you name (required; the
-package never falls back to a per-user directory), that directory's `mcp.json`,
-and environment-variable secrets (so provider API keys are read from
+package never falls back to a per-user directory), that directory's `mcp.json`
+and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
 go to it as `nodePlatform({ settings })`, a catalog built with
 `settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
@@ -461,16 +493,21 @@ transport carries the requests.
 [`example/_support.ts`](./example/_support.ts) answers with an in-memory
 Anthropic Messages stream this way.
 
-The harness's log entries (a store that failed, a plugin that did not load, a
-run's warnings) print to the console until you name another destination:
-`setLogSink({ write(entry) { … } })` from `@texra-ai/harness/node` receives
-each `LogEntry`, Effect's structured record (level, message, cause,
-annotations), and `entryChannel` / `entryMessage` read its channel and text
-as the console prints them. Setting a sink disposes the one it replaces (its optional
-`dispose`), and `setLogSink(null)` restores the console. Entries reach the sink
-with secrets redacted, unless you pass `{ trusted: true }`. `Sessions.layer`
-logs at `Info` and above; `effectDiagnosticsLayer(level)`, from the same
-entry, sets the level for a program you run outside it.
+The harness logs with `Effect.log*`, and `Sessions.layer` installs no logger
+of its own: its entries (a store that failed, a plugin that did not load, a
+run's warnings) go through the loggers, minimum level and tracer your program
+provides. Effect's default logger prints `Info` and above to the console;
+provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
+them. To send them through the harness's sink instead, which redacts secrets,
+provide `effectDiagnosticsLayer(level)` from `@texra-ai/harness/node` around
+the program and name a destination with `setLogSink({ write(entry) { … } })`:
+it receives each `LogEntry`, Effect's structured record (level, message,
+cause, annotations), and `entryChannel` / `entryMessage` read its channel and
+text. Setting a sink disposes the one it replaces (its optional `dispose`),
+and `setLogSink(null)` restores the console. Entries reach the sink with
+secrets redacted, unless you pass `{ trusted: true }`. The few lines written
+outside any fiber (a trace sink that threw, a stored setting that does not
+read) always go to the sink, the console until you set one.
 
 The platform is **process-wide** for the layer's lifetime: create one and
 reuse it for every run, with the one `Sessions.layer` built over it.

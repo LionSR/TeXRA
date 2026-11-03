@@ -87,8 +87,8 @@ export interface RunRecords {
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere` or `earlierBuild`), or null when it may
-   *  go ahead; a fact that cannot be read fails. */
+   *  (`finished`, `ownedElsewhere`, `earlierBuild` or `pluginUnavailable`),
+   *  or null when it may go ahead; a fact that cannot be read fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;

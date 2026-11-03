@@ -5,12 +5,18 @@
  * `RUN_ROW_READS`), one committed row's own record for a reader of the
  * tail (`recordOf`), a row as the decision of a request
  * (`isRequestDecision`), and the phase a row moves its run to
- * (`phaseMoveOf`, `closesRunWindow`). A reader reads these instead of a
- * row's type, so a row kind is decided here once.
+ * (`phaseMoveOf`, `closesRunWindow`), and what became of one input
+ * (`followUpReceipt`). A reader reads these instead of a row's type, so a
+ * row kind is decided here once.
  *
  * Pure: no IO, no clock, no platform, no synthetic id.
  */
-import { RUN_PHASE, type RunPhase, type SessionEvent } from '@shared/schemas';
+import {
+  RUN_PHASE,
+  type FollowUpReceipt,
+  type RunPhase,
+  type SessionEvent,
+} from '@shared/schemas';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   applyRunRow,
@@ -18,7 +24,7 @@ import {
   freshRunRows,
   isSharedRunRow,
 } from './runRows';
-import type { RunRows } from './runRowsShape';
+import type { RowOf, RunRows } from './runRowsShape';
 
 /**
  * The kinds each read of a run folds, by what it reads: its input
@@ -226,3 +232,105 @@ export function closesRunWindow(row: SessionEvent): boolean {
   const phase = phaseMoveOf(row);
   return phase !== null && phase !== RUN_PHASE.RUNNING;
 }
+
+/** The row kinds a follow-up's receipt reads ({@link followUpReceipt}). */
+export const RECEIPT_ROW_TYPES = [
+  'followup.queued',
+  'followup.consumed',
+  'run.position',
+  'run.activate',
+  'run.end',
+  'run.removed',
+] as const satisfies readonly SessionEvent['type'][];
+
+/** One input as its run's rows record it: the `followup.queued` row it was
+ *  accepted as, and where it stands now. */
+export interface FollowUpRecord {
+  readonly queued: RowOf<'followup.queued'>;
+  readonly receipt: FollowUpReceipt;
+}
+
+/**
+ * Input `followUpId` of the run whose rows of the {@link RECEIPT_ROW_TYPES}
+ * are `rows`, in seq order: `unknown` for an id no row queued, `deleted`
+ * for a run deleted since, its inputs with it. A turn's input is answered at that turn's `turn.end` when
+ * the turn completed, and unanswered when it failed, or when the run ended
+ * with the turn open and no activation followed (a clean close is not an
+ * end: the input is still the resumable run's). An activation after the end
+ * continues the turn, and its input with it.
+ */
+export function followUpReceipt(
+  rows: readonly SessionEvent[],
+  followUpId: string,
+): FollowUpRecord | 'unknown' | 'deleted' {
+  if (rows.some((row) => row.type === 'run.removed')) return 'deleted';
+  const at = rows.findIndex(
+    (row) => row.type === 'followup.queued' && row.followUpId === followUpId,
+  );
+  if (at < 0) return 'unknown';
+  // cast: the row `findIndex` matched is a `followup.queued`.
+  const queued = rows[at] as RowOf<'followup.queued'>;
+  const took = rows.findIndex(
+    (row, index) =>
+      index > at &&
+      row.type === 'followup.consumed' &&
+      row.followUpId === followUpId,
+  );
+  if (took < 0) return { queued, receipt: { state: 'accepted' } };
+  // cast: the row `findIndex` matched is a `followup.consumed`.
+  const consumed = rows[took] as RowOf<'followup.consumed'>;
+  const { disposition } = consumed;
+  const receipt = ((): FollowUpReceipt => {
+    switch (disposition.kind) {
+      case 'answered':
+      case 'applied':
+        return { state: 'answered', answer: consumed.seq };
+      case 'dropped':
+        return { state: 'unanswered', reason: disposition.reason };
+      case 'turn':
+        return turnReceipt(rows.slice(took + 1), disposition.turn);
+    }
+  })();
+  return { queued, receipt };
+}
+
+/** Where an input of turn `turn` stands, from the rows after it joined. */
+function turnReceipt(
+  after: readonly SessionEvent[],
+  turn: number,
+): FollowUpReceipt {
+  let end: RowOf<'run.end'> | null = null;
+  let closed = false;
+  for (const row of after) {
+    if (row.type === 'run.activate') {
+      end = null;
+      closed = false;
+    }
+    if (row.type === 'run.end') end = row;
+    if (row.type !== 'run.position') continue;
+    const { at, outcome, reason } = row.payload;
+    const rowTurn = row.payload.turn ?? 0;
+    if (at === 'halted') closed = reason === 'closed';
+    if (at === 'turn.end' && rowTurn === turn)
+      return outcome === 'completed'
+        ? { state: 'answered', turn, answer: row.seq }
+        : { state: 'unanswered', turn, reason: 'failed' };
+    // Past the turn with no end of it: the end that cut it short says why.
+    if (rowTurn > turn) return unansweredBy(turn, end);
+  }
+  return end === null || closed
+    ? { state: 'incorporated', turn }
+    : unansweredBy(turn, end);
+}
+
+/** A turn's input the run's end left unanswered: the end's outcome and
+ *  error, or `ended` when no end is in view. */
+const unansweredBy = (
+  turn: number,
+  end: RowOf<'run.end'> | null,
+): FollowUpReceipt => ({
+  state: 'unanswered',
+  turn,
+  reason: end?.outcome ?? 'ended',
+  ...(end?.error?.message != null && { error: end.error.message }),
+});

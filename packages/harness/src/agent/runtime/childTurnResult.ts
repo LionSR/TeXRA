@@ -216,6 +216,8 @@ export const parentAdmission = (
       DatabaseReadFailed: refused,
       DatabaseNotOwner: (error) =>
         error.closed ? refused(error) : Effect.fail(error),
+      // A delivery names no caller id, so nothing conflicts with it.
+      Conflict: Effect.die,
     }),
   );
 };

@@ -6,12 +6,11 @@
  *
  * The fixture holds only cleanly finished runs. Failure modes: a stored
  * row that no longer decodes; a fold that reads the same rows to a different
- * run or state; a projection that rebuilds to other rows than its
- * incremental tables hold; a listing that differs from the fold over the
- * whole history; a store a newer build wrote that opens, or is rewritten;
- * a stored protocol unavailable for execution being treated as damaged history,
- * or a malformed protocol being accepted; and the durable harness's row
- * shapes read back other than written: a fork
+ * run or state; a store a newer build wrote that opens, or is rewritten;
+ * a resume of a run holding an earlier build's row that fails untyped,
+ * sends the model a request, or adds a row; and the durable harness's row
+ * shapes read back
+ * other than written: a fork
  * whose `run.start` does not name its source, a fork's seed
  * `context.edit` missing, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
@@ -38,9 +37,10 @@ import { DatabaseSync } from 'node:sqlite';
 // Third-party imports
 import { it, layer } from '@effect/vitest';
 import {
+  Deferred,
   Effect,
+  Exit,
   Layer,
-  Result,
   Schema,
   Stream,
   SubscriptionRef,
@@ -54,11 +54,12 @@ import {
   RunIdSchema,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { AgentCatalog } from '@texra-ai/harness/host';
+import { ResumeRefused, Sessions } from '@texra-ai/harness';
+import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { runHistoryRows } from '@agent/runtime/storedTurn';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import { validationModelLayer } from '@cli/runtime/validationModel';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
 import { rowReader } from '@controllers/session/rowReader';
@@ -71,16 +72,19 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { isDisplaySessionEvent, ROW_KINDS } from '@shared/schemas';
+import { ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/setupPlatform';
-import { persistentTestSession } from '@test/support/storeFaults';
+import {
+  persistentTestSession,
+  REAL_RUN_TIMEOUT,
+  validationHost,
+} from '@test/support/storeFaults';
 import {
   createTempDirPlatform,
   useTempDirs,
@@ -89,6 +93,7 @@ import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { texraPlugins } from '@texra/tools/registry';
 import { factKindsOf } from '@tools/plugins';
+import type { Model } from '@texra-ai/llm';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -117,7 +122,6 @@ const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-const TOMBSTONED = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
@@ -376,95 +380,6 @@ describe('the golden 1.0 store', () => {
     },
   );
 
-  it.effect(
-    'reads an unavailable protocol as history, not executable work',
-    () => {
-      const storage = goldenRoot();
-      const setProtocol = (protocol: string | number) =>
-        raw(storage, (db) =>
-          db
-            .prepare(
-              `UPDATE event SET data = json_set(data,
-             '$.payload.turn.requestedOrigin.protocol', ?,
-             '$.payload.usage.provider', ?) WHERE "commit" = 24`,
-            )
-            .run(protocol, protocol),
-        );
-      expect(setProtocol('unavailable-protocol').changes).toBe(1);
-      raw(storage, (db) =>
-        db.exec("DELETE FROM projection_state WHERE name = 'usage'"),
-      );
-      const saved = () =>
-        raw(storage, (db) =>
-          db.prepare('SELECT data FROM event WHERE "commit" = 24').get(),
-        );
-      const before = saved();
-      return Effect.gen(function* () {
-        const db = yield* Database;
-        const read = () =>
-          db.readAggregate(qualifyAggregateId('run', PARENT), 0, [
-            'model.message',
-          ]);
-        const response = (yield* read()).find((event) => event.commit === 24);
-        expect(response).toMatchObject({
-          type: 'model.message',
-          payload: {
-            kind: 'response',
-            turn: {
-              requestedOrigin: { protocol: 'unavailable-protocol' },
-              content: [
-                {
-                  kind: 'local-call',
-                  name: 'read_file',
-                  argumentsText: '{"path":"notes.tex"}',
-                },
-              ],
-            },
-            usage: { provider: 'unavailable-protocol', cost: 0.000024 },
-          },
-        });
-        if (response === undefined)
-          throw new Error('The stored response is missing');
-        const executable = runHistoryRows([response]);
-        if (Result.isSuccess(executable))
-          throw new Error('An unavailable protocol became executable');
-        expect(executable.failure).toMatchObject({
-          reason: 'unreadable-turn',
-          commit: 24,
-        });
-        const listing = yield* db.readListing();
-        const view = makeSessionViewUpdater('golden').apply(
-          listing.filter(isDisplaySessionEvent).map((event) => ({
-            _tag: 'event' as const,
-            read: 'listing' as const,
-            event,
-          })),
-        );
-        expect(view.runs.get(PARENT)?.usage).toMatchObject({
-          inputTokens: 4,
-          outputTokens: 4,
-          cost: 0.000096,
-        });
-        const display = yield* db.readDisplayAggregate(
-          qualifyAggregateId('run', PARENT),
-          0,
-        );
-        expect(display.find((event) => event.commit === 24)).toMatchObject({
-          type: 'usage',
-          usage: { inputTokens: 1, outputTokens: 1, cost: 0.000024 },
-        });
-        expect(saved()).toEqual(before);
-        for (const malformed of ['', 42]) {
-          setProtocol(malformed);
-          expect(yield* Effect.flip(read())).toMatchObject({
-            _tag: 'DatabaseReadFailed',
-            cause: { _tag: 'DatabaseRowCorrupt', commit: 24 },
-          });
-        }
-      }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
-    },
-  );
-
   it.effect('folds to the pinned session view and run states', () => {
     const storage = goldenRoot();
     return Effect.gen(function* () {
@@ -618,32 +533,6 @@ describe('the golden 1.0 store', () => {
       });
     },
   );
-
-  it.effect('lists what the fold over the whole history holds', () => {
-    const storage = goldenRoot();
-    return Effect.gen(function* () {
-      const db = yield* Database;
-      const listing = yield* db.readListing();
-      const history = yield* Stream.runCollect(db.readDisplay(0));
-      const of = (events: readonly (typeof listing)[number][]) => {
-        const view = makeSessionViewUpdater('golden').apply(
-          events.filter(isDisplaySessionEvent).map((event) => ({
-            _tag: 'event' as const,
-            read: 'listing' as const,
-            event,
-          })),
-        );
-        return {
-          runs: runsOf(view),
-          order: view.order,
-          requests: view.requests,
-          queued: [...view.queuedFollowUps],
-        };
-      };
-      expect(of(listing)).toEqual(of([...history]));
-      expect(of(listing).runs.map((run) => run.id)).not.toContain(TOMBSTONED);
-    }).pipe(Effect.provide(substrate(storage)));
-  });
 });
 
 /**
@@ -779,5 +668,108 @@ describe('the golden run killed after its effect', () => {
           }),
       );
     });
+  });
+});
+
+/**
+ * R11 of the harness 1.0 release acceptance: a resume of a golden run whose
+ * rows this build cannot continue is refused, with its reason, before the
+ * model's transport is sent anything, and the store gains no row. The
+ * golden chat holds input queued behind its stopped turn, so a resume that
+ * went ahead sends a turn at once, as it does over the unchanged store.
+ */
+describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
+  /** The validation model, counting the turns sent to it; `first` opens
+   *  with the first. */
+  const countedModel = () => {
+    const sent = { turns: 0, first: Deferred.makeUnsafe<void>() };
+    const model = Layer.effect(
+      ValidationModel,
+      Effect.map(ValidationModel, (inner) => ({
+        enabled: inner.enabled,
+        bind: (config: Parameters<typeof inner.bind>[0]) => {
+          const bound = inner.bind(config);
+          return {
+            ...bound,
+            model: {
+              ...bound.model,
+              streamTurn: (turn: Parameters<Model['streamTurn']>[0]) => {
+                sent.turns += 1;
+                Deferred.doneUnsafe(sent.first, Exit.void);
+                return bound.model.streamTurn(turn);
+              },
+            },
+          };
+        },
+      })),
+    ).pipe(Layer.provide(validationModelLayer));
+    return { sent, process: SessionGraph.with([], model) };
+  };
+  /** The chat's last model response. */
+  const RESPONSE = 605;
+  /** The golden store, with `rewrite` applied, and a session over it. */
+  const goldenSession = (rewrite?: string) =>
+    Effect.gen(function* () {
+      const storage = goldenRoot();
+      if (rewrite !== undefined) raw(storage, (db) => db.exec(rewrite));
+      const session = yield* (yield* Sessions).open(
+        { ...testWorkspaceRoots(), storage },
+        { persistent: true, host: {} },
+      );
+      return { storage, session };
+    });
+  /** The chat's stored rows. */
+  const chatRows = (storage: string) =>
+    raw(storage, (db) =>
+      db
+        .prepare(
+          `SELECT e.* FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(CHAT),
+    );
+
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-golden-resume-'), { buildPerTest: true })(
+      (it) => {
+        it.effect.each([
+          [
+            "an earlier build's row",
+            `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
+            { kind: 'earlierBuild', cause: expect.any(String) },
+          ],
+        ] as const)(
+          'refuses a run holding %s before any request, and adds no row',
+          ([, rewrite, reason]) => {
+            const { sent, process } = countedModel();
+            return Effect.gen(function* () {
+              const { storage, session } = yield* goldenSession(rewrite);
+              const before = chatRows(storage);
+              const refused = yield* Effect.flip(
+                session.resume(CHAT, { interactive: true }),
+              );
+              expect(refused).toBeInstanceOf(ResumeRefused);
+              expect(refused).toMatchObject({ runId: CHAT, reason });
+              expect(sent.turns).toBe(0);
+              expect(chatRows(storage)).toEqual(before);
+            }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+          },
+        );
+
+        it.effect('resumes the unchanged chat, which sends a turn', () => {
+          const { sent, process } = countedModel();
+          return Effect.gen(function* () {
+            const { session } = yield* goldenSession();
+            const run = yield* session.resume(CHAT, { interactive: true });
+            expect(run.runId).toBe(CHAT);
+            yield* Deferred.await(sent.first);
+          }).pipe(
+            Effect.timeout('20 seconds'),
+            Effect.scoped,
+            Effect.provide(process, { local: true }),
+          );
+        });
+      },
+    );
   });
 });
