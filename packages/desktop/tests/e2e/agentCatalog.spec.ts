@@ -4,8 +4,10 @@ import { test, expect } from '@playwright/test';
 import { loadDatabaseFixture } from '../../../../scripts/desktop-package-smoke-environment.mjs';
 import {
   closeTexraApp,
+  dismissOnboarding,
   launchTexraApp,
   setSettingsTab,
+  showLauncher,
   type LaunchedApp,
 } from './electronApp.js';
 import {
@@ -88,6 +90,95 @@ test('browses agents and opens read-only and editable YAML inside the workbench'
     await expect(
       page.locator('.shell-dock-editor:visible .view-lines'),
     ).toContainText('name: assistant');
+    expect(errors).toEqual([]);
+  } finally {
+    if (launched) await closeTexraApp(launched);
+    cleanupDirectory(profile.workspacePath);
+    cleanupDirectory(profile.userDataPath);
+  }
+});
+
+// A document agent picked in the composer, then hidden in Settings → Agents
+// (#14240). The form and the launch read the one agent list, so the form
+// shows no agent and no file section, and both launches it allows, with no
+// files and with a pasted image, are refused instead of running the hidden
+// agent as a document task.
+test('a picked document agent hidden in Settings is no agent to the form or the launch', async () => {
+  const profile = createIsolatedProfile();
+  let launched: LaunchedApp | undefined;
+  try {
+    launched = await launchTexraApp(profile);
+    const { page } = launched;
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await dismissOnboarding(page);
+    await showLauncher(launched);
+    const agentChip = page.locator('#composer-agent');
+    const fileSection = page.locator('progress-app wa-details.context');
+    const notice = page.locator('progress-app .request-notice');
+    const refusal =
+      'Choose an agent first: polish is hidden from the agent selector.';
+
+    await agentChip.click();
+    await page
+      .locator(
+        'session-composer wa-dropdown-item[value="agent:builtIn:polish"]',
+      )
+      .click();
+    await expect(agentChip).toContainText('polish');
+    await expect(fileSection).toBeVisible();
+
+    await setSettingsTab(launched, 'agents');
+    const catalog = page.locator('agent-selection-panel');
+    await catalog
+      .getByRole('textbox', { name: 'Search agents', exact: true })
+      .fill('polish');
+    // The toggle's state is on the host element, not on its inner button.
+    const shown = catalog.locator(
+      'wa-button[aria-label="Show polish in agent selector"]',
+    );
+    await expect(shown).toHaveAttribute('aria-pressed', 'true');
+    await shown.click();
+    await expect(shown).toHaveAttribute('aria-pressed', 'false');
+    await page.locator('.desktop-settings-close').click();
+    await showLauncher(launched);
+
+    await expect(fileSection).toHaveCount(0);
+    await page.locator('#composer-text').fill('Polish the introduction.');
+    await page.locator('#composer-send').click();
+    await expect(notice).toContainText(refusal);
+    await expect(agentChip).toContainText('Choose agent');
+
+    // A pasted image is the composer's own attachment for an agent with no
+    // file section; it does not make the hidden agent a document task.
+    await page.locator('#dismiss-request-notice').click();
+    await expect(notice).toHaveCount(0);
+    await page.locator('#composer-text').evaluate((textarea) => {
+      // A 1×1 transparent PNG.
+      const png = Uint8Array.from(
+        atob(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+        ),
+        (char) => char.charCodeAt(0),
+      );
+      const data = new DataTransfer();
+      data.items.add(new File([png], 'figure.png', { type: 'image/png' }));
+      textarea.dispatchEvent(
+        new ClipboardEvent('paste', {
+          clipboardData: data,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    await expect(
+      page.locator('launch-attachments [role="listitem"]'),
+    ).toHaveCount(1);
+    await page.locator('#composer-send').click();
+    await expect(notice).toContainText(refusal);
+    await page.screenshot({
+      path: test.info().outputPath('hidden-agent-launch-refused.png'),
+    });
     expect(errors).toEqual([]);
   } finally {
     if (launched) await closeTexraApp(launched);
