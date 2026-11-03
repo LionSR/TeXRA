@@ -196,10 +196,9 @@ export type RunResult =
 /**
  * The terminal result of the lifecycle the `lifecycles` rows end with: its
  * `run.end`'s outcome, error and output, and the usage its activation
- * spent, folded from the `history` rows from its own `run.activate` on, with
- * the label request its model `run.description` priced in that activation
- * (a recipe's with its children's then); none with no end. An unreadable fold
- * is logged and reads as no usage.
+ * spent: its `history` rows from its own `run.activate` on and its label's
+ * request (a recipe's with its children's then); none with no end. An
+ * unreadable fold is logged and reads as no usage.
  */
 const runEndOf = (
   runId: RunId,
@@ -217,8 +216,7 @@ const runEndOf = (
       runId,
     );
     const from = start?.seq ?? -1;
-    /** Committed in this activation, by its end. */
-    const within = (commit: CommitOrdinal) =>
+    const during = (commit: CommitOrdinal) =>
       commit > (start?.commit ?? -1) && commit <= end.commit;
     // One read of the rows, so a resume never pairs the end with another
     // activation's totals: the state before the activation, its usage
@@ -246,7 +244,9 @@ const runEndOf = (
     const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
     // The label's request, priced on the row its description fiber wrote.
     const withLabel = (label: RunRows['label']) =>
-      label?.usage === undefined || !within(label.commit)
+      Result.isFailure(folded) ||
+      label?.usage === undefined ||
+      !during(label.commit)
         ? turns
         : addTurnUsage(turns ?? EMPTY_RUN_USAGE_TOTALS, label.usage);
     const own = withLabel(held.label);
@@ -261,7 +261,7 @@ const runEndOf = (
               Effect.flatMap(
                 SessionLog.use((log) => log.facts(child)),
                 (facts) => {
-                  if (facts === null || !within(facts.start?.commit ?? -1))
+                  if (facts === null || !during(facts.start?.commit ?? -1))
                     return Effect.succeed(null);
                   const asOf = (row: SessionEvent) => row.commit <= end.commit;
                   return Effect.flatMap(rowsOf(child), (rows) =>
