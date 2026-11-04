@@ -15,8 +15,8 @@
  * run. Every branch reads the fold: a `waiting` phase re-enters the wait (a
  * batch consumed at `turn.ready` runs its turn), an unanswered open attempt
  * invokes again under its gate, a pending response dispatches what is
- * unsettled, a committed text response runs its policy, and a halted run
- * launched again waits for its input.
+ * unsettled, a committed text response runs its policy, and a run whose turn
+ * ended (`turn.ended`) launched again waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
  * task's recipe) opens on that one call, handed down in its opening batch
