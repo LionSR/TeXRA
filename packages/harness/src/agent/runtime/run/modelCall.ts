@@ -20,7 +20,6 @@ import {
   type CallFailure,
 } from '@agent/runtime/modelAccess/failureInfo';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
-import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import type {
   FailedNext,
   InvocationRef,
@@ -165,11 +164,11 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     }),
     failed: Effect.fn('modelCall.failed')(function* (
       ref,
-      { error, unsent },
+      { error },
       next,
       bound,
     ) {
-      const info = failureInfo(error, bound.config.provider, { unsent });
+      const info = failureInfo(error, bound.config.provider);
       if (call.record !== null) yield* call.record.failed(ref, info, next);
       yield* fold({
         kind: 'failed',
@@ -189,9 +188,8 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     return yield* Effect.fail(
       new Error(`The ${call.purpose} call was cancelled.`),
     );
-  // The failure as recorded (quota reset and switch, overflow guidance),
-  // carried on the error every formatter recovers it from.
-  const failed = new Error(ended.error.message, { cause: ended.cause });
-  attachProviderError(failed, ended.error);
-  return yield* Effect.fail(failed);
+  // The failure as recorded, over the verdict every formatter words it from.
+  return yield* Effect.fail(
+    new Error(ended.error.message, { cause: ended.cause }),
+  );
 });

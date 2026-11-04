@@ -66,8 +66,6 @@
       "@agent/trace/TraceEmitter",
       "@agent/workspaceAgents/WorkspaceAgentsController",
       "@common/errors/agentErrorClassification",
-      "@common/errors/sdkError/errorMetadata",
-      "@common/errors/sdkError/providerErrorFormat",
       "@common/plugins/hookProtocol",
       "@common/plugins/pluginHooks",
       "@common/plugins/pluginTrust",

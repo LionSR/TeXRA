@@ -150,7 +150,12 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // halt row carried as `closed` before, and the error kind `abort` is gone
   // (no upcaster: an earlier build's shutdown end would read as a user's
   // stop, holding a child's delivery back).
-  'run.end': { version: 6, upcast: [], listing: 'own' },
+  // v7: the error is a model failure as the run's rows record it (`kind:
+  // 'model'`, its classification beside) or a local one (`disk-full`,
+  // `result-lost`, `unexpected`); `context-window` and `missing-api-key`
+  // are classifications, no longer kinds (no upcaster: an earlier build's
+  // classified end would fail as damaged).
+  'run.end': { version: 7, upcast: [], listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   'run.description': { ...V1, listing: 'own' },
@@ -181,7 +186,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // `errorMessage`), classified as `model.message` v9, and a host words a
   // used-up plan from that classification (no upcaster: an earlier build's
   // retry would read without the tier and reset its text named).
-  'request.opened': { version: 7, upcast: [], listing: 'request' },
+  // v8: a retry's failure carries no `userRetryable`; the offer is the
+  // `failed` row's own `next` (no upcaster, as `model.message` v12).
+  'request.opened': { version: 8, upcast: [], listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options (no upcaster, as `run.config`).
   'request.decided': { version: 2, upcast: [], listing: 'request' },
@@ -203,7 +210,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v5: an error row's classification as `model.message` v10 (no upcaster:
   // an earlier build would refuse a subscription's failure as a damaged
   // payload).
-  log: { version: 5, upcast: [], listing: 'none' },
+  // v6: an error row carries no `userRetryable` (no upcaster: an earlier
+  // build's error row would be refused as a damaged payload).
+  log: { version: 6, upcast: [], listing: 'none' },
   // v2: no `phase` kind and no `index`/`total` (no upcaster, as
   // `run.config`: an earlier build's workflow phase stage would fail its
   // run as damaged rather than read as that build's).
@@ -258,7 +267,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // the priced `usage` of a response the provider billed before refusing it
   // (no upcaster: an earlier build's overflowed turn would read as a
   // completed one).
-  'model.message': { version: 11, upcast: [], listing: 'none' },
+  // v12: a failed attempt's error carries no `userRetryable`; whether a
+  // person is offered a retry is the row's own `next` (no upcaster: a v11
+  // row's flag would otherwise be silently dropped).
+  'model.message': { version: 12, upcast: [], listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).

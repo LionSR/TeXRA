@@ -2,6 +2,7 @@ import { Schema } from 'effect';
 
 import {
   LaunchNoticeSchema,
+  RetryErrorInfoSchema,
   SubscriptionSessionRouteSchema,
 } from '@shared/schemas';
 
@@ -20,6 +21,9 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   /** A refused launch's notice (an unknown model, an unknown agent), which
    *  the launch's caller shows in place of the generic error. */
   notice: Schema.optional(LaunchNoticeSchema),
+  /** A run that ended on a model failure: the failure as its rows record
+   *  it, which a host reads in place of this message's words. */
+  failure: Schema.optional(RetryErrorInfoSchema),
 }) {}
 
 /**

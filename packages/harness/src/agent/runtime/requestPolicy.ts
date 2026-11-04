@@ -51,7 +51,6 @@ import {
 import {
   decisionFits,
   qualifyAggregateId,
-  isCredentialRetryFailure,
   type CommitOrdinal,
   type DecisionOf,
   type PermissionPayload,
@@ -151,9 +150,7 @@ function answerFor(
       const decision = decideRetryApproval({
         policy,
         canPresent: canPresent(owners),
-        isCredentialFailure: isCredentialRetryFailure(
-          payload.data.errorDetails,
-        ),
+        isCredentialFailure: payload.data.credentialSwitch != null,
       });
       if (decision === 'present') return undefined;
       return {

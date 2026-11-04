@@ -12,6 +12,7 @@ import {
   hasUsableApiKey,
   type Model,
   type ModelConfig,
+  type ModelError,
   type ModelOrigin,
   type ModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -25,12 +26,10 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
 import { decideReasoning, servingBackend } from '@model/reasoningLevel';
 import { Secrets } from '@platform/secrets';
-import {
-  getExhaustionReason,
-  type CredentialSwitch,
-  type DeclinableUsageRoute,
-  type ModelBackend,
-  type ProviderError,
+import type {
+  CredentialSwitch,
+  DeclinableUsageRoute,
+  ModelBackend,
 } from '@shared/schemas';
 
 /** The canned model a package-validation build provides beneath the process
@@ -168,11 +167,12 @@ export const admitSwitch = Effect.fn('admitSwitch')(
 );
 
 /**
- * The move onto the user's own credential a failed attempt offers, carried
- * on the retry request so no host re-derives it.
+ * The move onto the user's own credential a used-up `quota` (llm's verdict
+ * on the failed attempt) offers, carried on the retry request so no host
+ * re-derives it.
  *
- * - A subscription or coding-plan route falls back to the route the model
- *   takes with every preference off, unless that is the same kind of route.
+ * - A used-up plan falls back to the route the model takes with every
+ *   preference off, unless that is not a plain key route.
  * - A key whose upstream account ran out of credit needs a changed key.
  *
  * A coding-plan fallback is automatic when its key is already stored and the
@@ -181,29 +181,18 @@ export const admitSwitch = Effect.fn('admitSwitch')(
  */
 export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
   failed: { readonly config: ModelConfig; readonly route: RunRoute },
-  recorded: Pick<ProviderError, 'classification'>,
+  quota: ModelError['quota'],
   declinedRoutes: readonly DeclinableUsageRoute[],
 ): Effect.fn.Return<CredentialSwitch | null, never, Secrets> {
-  const reason = getExhaustionReason(recorded);
-  if (reason === undefined) return null;
+  if (quota === undefined) return null;
   const { route } = failed;
-  let declined: DeclinableUsageRoute;
-  switch (route.kind) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      declined = route.kind;
-      break;
-    case 'api-key':
-      // The key the route bound is itself the broken credential.
-      if (reason === 'upstream-credit') {
-        return { kind: 'new-key', provider: route.provider };
-      }
-      if (route.usageRoute === 'api-key') return null;
-      declined = route.usageRoute;
-      break;
-    default:
-      return null;
-  }
+  // The account's own credit: the key the route bound is itself the broken
+  // credential, so only a new one helps.
+  if (quota.plan === null)
+    return route.kind === 'api-key'
+      ? { kind: 'new-key', provider: route.provider }
+      : null;
+  const declined = quota.plan;
   const fallback = decideModelRoute(failed.config, OWN_KEY_ROUTE_FACTS);
   if (fallback.kind !== 'api-key' || fallback.usageRoute !== 'api-key') {
     return null;
