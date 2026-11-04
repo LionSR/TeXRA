@@ -60,7 +60,7 @@ export function agentErrorPresentation(error: {
   /** The failure's classification, carried beside its message so a host
    *  may word the failure itself. */
   classification?: ProviderErrorClassification;
-}): AgentErrorPresentation | null {
+}): AgentErrorPresentation {
   const docs = error.docsPage ? { docsPage: error.docsPage } : {};
   const facts = error.classification
     ? { classification: error.classification }
@@ -85,9 +85,8 @@ export function agentErrorPresentation(error: {
       };
     default: {
       // Every error kind must choose an explicit presentation policy.
-      const _exhaustive: never = error.kind;
-      void _exhaustive;
-      return null;
+      const unhandled: never = error.kind;
+      return unhandled;
     }
   }
 }
