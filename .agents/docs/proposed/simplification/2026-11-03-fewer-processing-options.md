@@ -310,7 +310,7 @@ above.
   the switch.
 - `followUp.receipt` (`packages/harness/src/shared/session/runtimeRequest.ts:122`)
   has producers only in `packages/harness/example/`; keep it only as public SDK.
-- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:153-191`);
+- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:155-193`);
   `config agents` has eight flags for three choices
   (`packages/cli/src/commands/config.ts:111-131,201-232`); `--input`,
   `--context`, `--instruction-file` and `--model` are declared in two to four
