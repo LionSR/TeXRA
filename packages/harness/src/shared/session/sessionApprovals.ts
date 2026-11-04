@@ -40,7 +40,11 @@ export type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
 
 /** Each operation a run asks permission for (the guard's `OPERATIONS`). */
 export type ApprovalOperation =
-  'bash' | 'call' | 'toolEdit' | 'plan' | 'proposal';
+  | 'bash'
+  | 'call'
+  | 'toolEdit'
+  | 'plan'
+  | 'proposal';
 
 /** What a call's `PreToolUse` hooks answered, if anything. */
 export type HookAnswer = 'allow' | 'ask' | undefined;

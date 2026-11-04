@@ -103,7 +103,8 @@ const BASH_PLATFORM_OPTIONS = {
 /** The run id a background launch reports in its output. */
 function launchedRunId(result: ToolResult): RunId | undefined {
   return /Run ID: (\S+)/.exec(String(result.output ?? ''))?.[1] as
-    RunId | undefined;
+    | RunId
+    | undefined;
 }
 
 function launchBackgroundBash(

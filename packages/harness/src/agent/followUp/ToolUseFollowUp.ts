@@ -29,7 +29,11 @@ export class Inbox extends Context.Service<Inbox, SessionInbox>()(
 
 /** What a follow-up's admission and its wake read of the session. */
 export type FollowUpServices =
-  Inbox | Runs | SessionLog | SessionViewAccess | Interactions;
+  | Inbox
+  | Runs
+  | SessionLog
+  | SessionViewAccess
+  | Interactions;
 
 /** The caller's {@link FollowUpServices}, for a run's inbox kept past the
  *  caller's fiber ({@link runInbox}). */
@@ -54,7 +58,10 @@ export const followUpServices = Effect.map(
  * - `notParent`: the sender is not the run's parent.
  */
 export type FollowUpFailureReason =
-  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
+  | ResumeRefusal['kind']
+  | 'readFailed'
+  | 'oneShot'
+  | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's

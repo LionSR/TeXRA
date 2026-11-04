@@ -36,31 +36,25 @@ Deno.test('normalizes only missing optional usage fields', () => {
   equal(Object.hasOwn(parsed, 'viaChatGptSubscription'), false);
 });
 
-Deno.test(
-  'derives the legacy subscription route from an explicit boolean',
-  () => {
-    const parsed = parseEntry({
-      ...usageEntry(),
-      viaChatGptSubscription: true,
-    });
+Deno.test('derives the legacy subscription route from an explicit boolean', () => {
+  const parsed = parseEntry({
+    ...usageEntry(),
+    viaChatGptSubscription: true,
+  });
 
-    equal(parsed.usageRoute, 'chatgpt-subscription');
-  },
-);
+  equal(parsed.usageRoute, 'chatgpt-subscription');
+});
 
-Deno.test(
-  'classifies Kimi Code usage under the Kimi subscription source',
-  () => {
-    const parsed = parseEntry({
-      ...usageEntry(),
-      model: 'k3',
-      provider: 'openai-responses',
-      usageRoute: 'kimi-code-subscription',
-    });
+Deno.test('classifies Kimi Code usage under the Kimi subscription source', () => {
+  const parsed = parseEntry({
+    ...usageEntry(),
+    model: 'k3',
+    provider: 'openai-responses',
+    usageRoute: 'kimi-code-subscription',
+  });
 
-    equal(subscriptionSourceForUsage(parsed), 'kimi');
-  },
-);
+  equal(subscriptionSourceForUsage(parsed), 'kimi');
+});
 
 Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
   const parsed = parseEntry({

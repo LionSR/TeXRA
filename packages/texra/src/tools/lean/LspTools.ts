@@ -202,8 +202,9 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   // Host capability: VS Code moves the editor cursor to the first error;
   // CLI/desktop adapters omit it and this is a no-op rather than a pretend
   // navigation. The tool result below still carries the diagnostic list.
-  yield* services.navigateToFirstError?.(absoluteFile, diagnostics) ??
-    Effect.void;
+  yield* (
+    services.navigateToFirstError?.(absoluteFile, diagnostics) ?? Effect.void
+  );
 
   if (!result.complete) {
     // Diagnostics so far are not the file's verdict: an empty list must not
