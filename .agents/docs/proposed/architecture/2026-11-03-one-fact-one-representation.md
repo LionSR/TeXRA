@@ -301,6 +301,19 @@ And one exemption: files the ratchets name as reducers or fact readers
 `sessionViewUpdate.ts`) are exempt from the 400-line cap, so a fact never
 moves away from its reader to satisfy a size rule.
 
+Landed 2026-11-04: `npm run check:fact-spread` (`scripts/check-fact-spread.mjs`,
+in `gate:invariants`) holds the first two against the merge base, the
+exemption is `FACT_FILES` in `scripts/core-quality-measure.mjs`, and
+`npm run report:fix-churn` prints the third. At that day's `main`:
+`Cause.hasInterrupts` 56 files, `Cause.squash` 84, `isTerminalOutcomePhase`
+19, `isActivePhase` 9, `isLiveRun` 17, `ownedHere` 8, `readOnly` 19,
+`parentId` 51, `withPerKeyLane` 25, `toErrorMessage` 194; 26 overlapping
+pairs of files (the provider list 3, the approval vocabularies 3, the status
+sets `completed`/`failed`/`cancelled` and `cancelled`/`failed`/`skipped` 10,
+the finish reasons and the llm wire enums 4, the rest 6). The month's fix
+churn: 171 fixes, 31 in stop/resume/ownership, 18 in model/retry/route, 15 in
+desktop/windows, 6 in view/fold, 2 in cli/tui: three areas over ten.
+
 ## Surface inventory
 
 What each slice must clear before it opens, counted at `b411a6d6` outside

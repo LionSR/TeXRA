@@ -2,10 +2,13 @@
 // the target branch, named by `--base <ref>` or TEXRA_RATCHET_BASE
 // (origin/main by default; CI passes the pull request's target).
 // check-ratchet-baselines.mjs compares the committed allowlists with the
-// base's copies; check-core-quality.mjs measures the base's tree.
+// base's copies; check-core-quality.mjs and check-fact-spread.mjs measure
+// the base's tree (`withBaseTree`).
 
 // Node imports
 import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -37,6 +40,26 @@ export function ratchetBase(ref) {
       `no merge base between ${target} and HEAD (${String(cause.stderr ?? cause.message).trim()}); fetch ${target} and enough history, or name the branch to compare with (--base <ref> or TEXRA_RATCHET_BASE)`,
       { cause },
     );
+  }
+}
+
+/**
+ * `use(tree)` over the files of commit `base`, extracted into a temporary
+ * directory that is removed after. The directory is given by its real path:
+ * a measurement compares resolved paths with its root, and the temp
+ * directory is a symlink on macOS.
+ */
+export async function withBaseTree(base, use) {
+  const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'ratchet-base-')));
+  try {
+    const tar = path.join(dir, 'base.tar');
+    git('archive', '--format=tar', '--output', tar, base);
+    const tree = path.join(dir, 'tree');
+    mkdirSync(tree);
+    execFileSync('tar', ['-xf', tar, '-C', tree]);
+    return await use(tree);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
