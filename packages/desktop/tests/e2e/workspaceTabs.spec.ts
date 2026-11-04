@@ -424,8 +424,15 @@ test('moves live terminals and unsaved editors without recreating resources', as
 
 test('restarts an exited terminal in its own tab', async () => {
   const { page } = launched;
-  // The terminal the previous case left open.
-  const surface = panel('terminal').locator('.desktop-terminal-surface');
+  // A terminal of this case's own, closed again at its end.
+  const before = await tab('terminal').count();
+  await menu(groupOf(tab('agent')), 'terminal');
+  await expect(tab('terminal')).toHaveCount(before + 1);
+  const ownTab = tab('terminal').nth(before);
+  const tabId = await ownTab.getAttribute('data-tab-id');
+  const surface = page.locator(
+    `.shell-dock-terminal[data-panel-id="${tabId}"] .desktop-terminal-surface`,
+  );
   const restart = surface.getByRole('button', { name: 'Restart' });
   await surface.locator('.xterm').click();
   await page.keyboard.type('exit');
@@ -443,7 +450,8 @@ test('restarts an exited terminal in its own tab', async () => {
   await expect
     .poll(() => existsSync(pidPath) && readFileSync(pidPath, 'utf8').trim())
     .toMatch(/^\d+$/);
-  await expect(panel('terminal')).toHaveCount(1);
+  await ownTab.locator('.shell-dock-tab-close wa-button').click();
+  await expect(tab('terminal')).toHaveCount(before);
 });
 
 test('keeps browser menus above native content and close controls inside tab bounds', async () => {
