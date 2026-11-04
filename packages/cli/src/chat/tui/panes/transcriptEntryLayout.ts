@@ -264,10 +264,11 @@ function entryLines(
           ' '.repeat(NOTICE_ENTRY_PREFIX.length),
         );
       }
-      // An answer its model ended early says so under its text.
+      // An answer its model ended early says so under its text, wrapped
+      // like every other row so the layout counts the rows Ink paints.
       const cut =
         row.kind === 'assistant' && row.cut !== undefined
-          ? [RESPONSE_CUT_NOTE[row.cut]]
+          ? wrapAnsiToWidth(RESPONSE_CUT_NOTE[row.cut], columns).split('\n')
           : [];
       if (mode === 'live') {
         return [
