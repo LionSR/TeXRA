@@ -10,8 +10,10 @@ All notable changes to this project will be documented in this file.
   (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
   and the `mediaFiles` on its prompt) or a task (`task` with its `files`:
   input, context, media and output lists); a launch that names a task's
-  lists for a chat, or a schema for a task, no longer type-checks. No
-  stored row or service message changes.
+  lists for a chat, or a schema for a task, no longer type-checks. A stop
+  while a child call resolves its files or picks a model now stops the
+  call, where it was reported as the call's error. No stored row or
+  service message changes.
 - **A document task's switches have one name on every surface.** The
   `document_task` tool's `extractFigures` and `extractTikz` inputs are
   `autoExtractFigure` and `autoExtractTikzFigure`, the names a run stores
