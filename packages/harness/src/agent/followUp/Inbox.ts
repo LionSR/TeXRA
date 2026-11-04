@@ -28,7 +28,7 @@ import {
 import type { ClaimError, SessionLogShape } from '@shared/session/sessionLog';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import { needsWake, RunInput } from './RunInput';
+import { needsWake, parentsFromRows, RunInput } from './RunInput';
 import {
   queuedRow,
   sameAsFirst,
@@ -111,8 +111,6 @@ export class SessionInbox {
   private disposed = false;
 
   private readonly port: InboxPort;
-  private readonly parentOf = (runId: RunId): RunId | null | undefined =>
-    this.port.run(runId)?.parentId;
 
   constructor(port: InboxPort) {
     this.port = port;
@@ -322,9 +320,10 @@ export class SessionInbox {
       const sender = item.from.kind === 'run' ? item.from.runId : null;
       if (options.fromParent === true && input.parent?.id !== sender)
         return only({ kind: 'refused', reason: 'notParent' });
-      // Stamped inside the job, from committed parentage.
-      const row = queuedRow(item, options.hold, (sender) =>
-        runRelation(sender, runId, this.parentOf),
+      // Stamped inside the job, from the parent edges the rows record.
+      const parents = yield* parentsFromRows(this.read, runId, sender);
+      const row = queuedRow(item, options.hold, (from) =>
+        runRelation(from, runId, (id) => parents.get(id)),
       );
       const queuedStill = input.followUps.some(
         (f) => f.followUpId === row.followUpId,
@@ -364,11 +363,10 @@ export class SessionInbox {
   }
 
   /** The run's input, lifecycle and parent as its committed rows say them. */
-  read(runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> {
-    return Effect.suspend(() =>
+  readonly read = (runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> =>
+    Effect.suspend(() =>
       this.port.log.runRows(qualifyAggregateId('run', runId), 'input'),
     );
-  }
 
   private notify(closed: InboxClosed): void {
     for (const observer of this.observers) {

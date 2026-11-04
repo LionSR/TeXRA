@@ -1,8 +1,9 @@
 /**
  * The one reading of where two runs stand in the supervision tree, for
  * every surface that says it: admission stamping a message's sender, the
- * `/executions` listing. Parentage is the view's
- * `parentId`, so a detached run is top level here as everywhere else.
+ * `/executions` listing. A job that stamps reads parentage off the rows
+ * (`run.start`, then a `run.detach`); a listing reads the view's `parentId`,
+ * their projection; a detached run is top level in both.
  */
 import type { RunId, RunRelation } from '@shared/schemas';
 

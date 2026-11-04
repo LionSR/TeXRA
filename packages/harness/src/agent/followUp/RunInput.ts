@@ -16,7 +16,9 @@ import {
   type QueuedFollowUp,
   type RunLookup,
 } from '@shared/session/runRows';
+import type { RunId } from '@shared/schemas';
 import type { RunRows } from '@shared/session/runRowsShape';
+import type { DatabaseReadFailed } from '@shared/session/database';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
@@ -190,3 +192,25 @@ export class RunInput {
       }
     });
 }
+
+/**
+ * The parent of `runId`, of `sender` and of each of their ancestors, as the
+ * rows record it (`read`: a run's input rows): what a job that stamps a
+ * message's sender reads its relation from.
+ */
+export const parentsFromRows = (
+  read: (runId: RunId) => Effect.Effect<RunRows, DatabaseReadFailed>,
+  runId: RunId,
+  sender: RunId | null,
+): Effect.Effect<ReadonlyMap<RunId, RunId | null>, DatabaseReadFailed> =>
+  Effect.gen(function* () {
+    const parents = new Map<RunId, RunId | null>();
+    for (const start of [runId, sender]) {
+      for (let id = start; id !== null && !parents.has(id);) {
+        const parent = (yield* read(id)).parent?.id ?? null;
+        parents.set(id, parent);
+        id = parent;
+      }
+    }
+    return parents;
+  });

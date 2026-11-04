@@ -178,7 +178,6 @@ export class RunRegistry implements RunsShape {
     return {
       runId,
       controls,
-      parent: this.attachedParent(runId),
       readsMessages,
       drained: this.awaitDrained(runId),
     };
@@ -195,7 +194,7 @@ export class RunRegistry implements RunsShape {
   /** The run's attached parent here: the settled view's for a run that
    *  exists, its activation's for one not yet created. A decision that
    *  writes reads the run's records in its job instead. */
-  private attachedParent(runId: RunId): RunId | null {
+  attachedParent(runId: RunId): RunId | null {
     const run = this.init.view.run(runId);
     return run
       ? run.parentId
