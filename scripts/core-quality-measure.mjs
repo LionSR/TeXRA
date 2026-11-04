@@ -39,8 +39,7 @@ export const CORE_FILE_LINES = 400;
 
 /**
  * The reducer and fact-reader files, which file-size skips: a fact's reader
- * belongs beside the rows that decide it, and a size cap would move it away
- * (the 2026-11-03 one-fact note, "Checks").
+ * belongs beside the rows that decide it, and a size cap would move it away.
  */
 const FACT_FILES = new Set([
   'packages/harness/src/shared/session/runRows.ts',

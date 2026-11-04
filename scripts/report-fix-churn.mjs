@@ -1,8 +1,8 @@
 // A report, not a gate: the fix commits on the current branch over the last
-// month, by Conventional Commit scope and by the areas the design note
-// .agents/docs/proposed/architecture/2026-11-03-one-fact-one-representation.md
-// counts. Its rule 4: an area that took more than ten fixes in a month has
-// its rulings re-asked in the next design pass, with the fixes as evidence.
+// month, by Conventional Commit scope and by area. An area that took more
+// than ten fixes in a month has its design rulings re-asked in the next
+// design pass, with the fixes as evidence: that many fixes in one area say
+// the rulings behind it, not the code, are what keeps breaking.
 //
 //   node scripts/report-fix-churn.mjs                 the last 30 days
 //   node scripts/report-fix-churn.mjs --since 2026-10-01
@@ -14,7 +14,8 @@ import { parseArgs } from 'node:util';
 // Local imports
 import { git } from './ratchet-base.mjs';
 
-/** The areas, each a pattern over the commit subject's word starts (`desktop` is no stop). */
+/** The areas, each a pattern over the subject after its `fix(scope):` prefix
+ *  (word starts, so `desktop` is no stop). */
 const AREAS = {
   'stop/resume/ownership':
     /\b(stop|resum|interrupt|own(er|s|ed|ership)?\b|claim|liveness|cancel)/i,
@@ -24,6 +25,10 @@ const AREAS = {
   'model/retry/route':
     /\b(model|retry|retries|route|credential|provider|quota)/i,
 };
+
+/** The `fix(scope):` prefix, which no area reads: `progress-view` is a scope,
+ *  not the view area. */
+const PREFIX = /^fix(\([^)]*\))?!?:\s*/;
 
 /** More than this many fixes in a month re-asks an area's rulings. */
 const REOPEN_AT = 10;
@@ -41,7 +46,8 @@ function main() {
   }
   const byArea = Object.entries(AREAS).map(([area, pattern]) => [
     area,
-    subjects.filter((subject) => pattern.test(subject)).length,
+    subjects.filter((subject) => pattern.test(subject.replace(PREFIX, '')))
+      .length,
   ]);
   const scopes = [...byScope]
     .sort((a, b) => b[1] - a[1])

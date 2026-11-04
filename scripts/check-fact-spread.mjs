@@ -1,9 +1,8 @@
 // Two counts of how many places decide one fact, held shrink-only against
 // the merge base with origin/main (ratchet-base.mjs), as the core-quality
 // rules are. A fact decided in more files than before fails; a fall needs
-// nothing. Both come from the design note
-// .agents/docs/proposed/architecture/2026-11-03-one-fact-one-representation.md,
-// whose "Checks" section names them.
+// nothing. Each count is one more place a fact can be decided differently:
+// a predicate evaluated in another file, a vocabulary spelled again.
 //
 // - predicate spread: for each predicate in PREDICATES, the number of
 //   source files that contain it. A predicate that decides "did it stop",
@@ -18,16 +17,8 @@
 //   node scripts/check-fact-spread.mjs --report      print the head's counts
 
 // Node imports
-import { execFileSync } from 'node:child_process';
 import console from 'node:console';
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -38,7 +29,7 @@ import ts from 'typescript';
 
 // Local imports
 import { SOURCE_DIRS, sourceFiles } from './core-quality-measure.mjs';
-import { git, ratchetBase } from './ratchet-base.mjs';
+import { ratchetBase, withBaseTree } from './ratchet-base.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -114,9 +105,9 @@ function literalSets(file, text) {
 }
 
 /**
- * The counts over `tree`: files per predicate, and the overlapping pairs
- * keyed by their two files and the members they share, so a rise names
- * the pair that rose.
+ * The counts over `tree`: files per predicate, and the overlapping pairs of
+ * files, each with the members its two literal sets share (the most, when
+ * the files hold several), so a rise names the pair that is new.
  */
 function measure(tree) {
   const files = sourceFiles(tree, SOURCE_DIRS);
@@ -136,40 +127,26 @@ function measure(tree) {
       if (a.file === b.file) continue;
       const shared = [...a.members].filter((m) => b.members.has(m)).sort();
       if (shared.length < SHARED_MEMBERS) continue;
-      const [first, second] = [a.file, b.file].sort();
-      const key = `${first} ~ ${second}: ${shared.join(', ')}`;
-      pairs.set(key, { first, second, shared });
+      const key = [a.file, b.file].sort().join(' ~ ');
+      const known = pairs.get(key);
+      if (known === undefined || shared.length > known.length)
+        pairs.set(key, shared);
     }
   return { spread, pairs };
 }
 
-/** The counts over the base commit's tree, extracted like core-quality's. */
-function measureBase(base) {
-  const dir = realpathSync(
-    mkdtempSync(path.join(tmpdir(), 'fact-spread-base-')),
-  );
-  try {
-    const tar = path.join(dir, 'base.tar');
-    git('archive', '--format=tar', '--output', tar, base);
-    const tree = path.join(dir, 'tree');
-    mkdirSync(tree);
-    execFileSync('tar', ['-xf', tar, '-C', tree]);
-    return measure(tree);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
+const describePair = ([key, shared]) => `    ${key}: ${shared.join(', ')}`;
 
 function report({ spread, pairs }, { listPairs = false } = {}) {
   const lines = [...spread].map(
     ([predicate, files]) => `  ${predicate}: ${files.length} files`,
   );
   lines.push(`  vocabulary overlap: ${pairs.size} pairs`);
-  if (listPairs) lines.push(...[...pairs.keys()].map((key) => `    ${key}`));
+  if (listPairs) lines.push(...[...pairs].map(describePair));
   return lines.join('\n');
 }
 
-function main() {
+async function main() {
   const { values } = parseArgs({
     options: { base: { type: 'string' }, report: { type: 'boolean' } },
   });
@@ -179,7 +156,7 @@ function main() {
     return;
   }
   const { target, base } = ratchetBase(values.base);
-  const before = measureBase(base);
+  const before = await withBaseTree(base, measure);
   const problems = [];
   for (const [predicate, files] of head.spread) {
     const baseFiles = before.spread.get(predicate);
@@ -190,11 +167,9 @@ function main() {
     );
   }
   if (head.pairs.size > before.pairs.size) {
-    const added = [...head.pairs.keys()].filter(
-      (key) => !before.pairs.has(key),
-    );
+    const added = [...head.pairs].filter(([key]) => !before.pairs.has(key));
     problems.push(
-      `vocabulary overlap: ${head.pairs.size} pairs of literal sets share ${SHARED_MEMBERS}+ members, merge base ${before.pairs.size}; new:\n${added.map((key) => `    ${key}`).join('\n')}`,
+      `vocabulary overlap: ${head.pairs.size} pairs of files hold literal sets sharing ${SHARED_MEMBERS}+ members, merge base ${before.pairs.size}; new:\n${added.map(describePair).join('\n')}`,
     );
   }
   if (problems.length > 0) {
@@ -209,4 +184,4 @@ function main() {
   );
 }
 
-main();
+await main();

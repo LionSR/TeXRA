@@ -26,19 +26,14 @@
 //   node scripts/check-core-quality.mjs --docgen      rewrite the API reports and references
 //   node scripts/check-core-quality.mjs --report      per-package totals and hotspots
 
-import { execFileSync } from 'node:child_process';
 import console from 'node:console';
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   readdirSync,
-  realpathSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -47,7 +42,7 @@ import { parseArgs } from 'node:util';
 import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
 import { CORE_FILE_LINES, RULES, measure } from './core-quality-measure.mjs';
-import { git, ratchetBase, renamesSince } from './ratchet-base.mjs';
+import { ratchetBase, renamesSince, withBaseTree } from './ratchet-base.mjs';
 import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
 const rootDir = path.resolve(
@@ -60,25 +55,6 @@ const FILE_SIZE_STEP = 25;
 
 const heldAtZero = (rule) =>
   Object.hasOwn(ZERO_RULES, `config/ratchets/core-quality/${rule}.json`);
-
-/** The rules measured over the base commit's tree. */
-async function measureBase(base) {
-  // The measurement compares resolved paths with its root, and the temp
-  // directory is a symlink on macOS.
-  const dir = realpathSync(
-    mkdtempSync(path.join(tmpdir(), 'core-quality-base-')),
-  );
-  try {
-    const tar = path.join(dir, 'base.tar');
-    git('archive', '--format=tar', '--output', tar, base);
-    const tree = path.join(dir, 'tree');
-    mkdirSync(tree);
-    execFileSync('tar', ['-xf', tar, '-C', tree]);
-    return (await measure(tree)).byRule;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
 
 function describeSites(entry) {
   const shown = entry.sites
@@ -299,7 +275,10 @@ const main = async () => {
   }
   const { target, base } = ratchetBase(values.base);
   const { files, byRule } = await measure(rootDir);
-  const before = await measureBase(base);
+  const before = await withBaseTree(
+    base,
+    async (tree) => (await measure(tree)).byRule,
+  );
   const renamed = new Map(renamesSince(base).map(([from, to]) => [to, from]));
   const baseKey = (key) => renamed.get(key) ?? key;
   const problems = [];
