@@ -603,7 +603,7 @@ every model on that route shares. The wire key is the binding's own tuple:
 provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
 (`agent/runtime/modelAccess/binding.ts:193-205`, `:141`)
-(`agent/runtime/modelAccess/failureInfo.ts:42-74`). An observation
+(`agent/runtime/modelAccess/failureInfo.ts:36-68`). An observation
 runs outside it (`agent/runtime/run/invocation.ts:211`). The loop pauses 1,000
 ms before a `retry` or `unchain` that follows a recorded failure
 (`agent/runtime/run/invocation.ts:48`, `:246-263`, `:371-377`); a resend after a
@@ -791,7 +791,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 The crash-point suite is the source of truth for this section
 (`src/test-kernel/support/crashConformance.ts:1-59`). It runs under a full
 app's plugins, which include every harness built-in
-(`src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts:7`).
+(`src/test-kernel/controllers/session/crashConformanceResume.vitest.ts:7` and
+its siblings, one file per scenario).
 
 Its method: drive a clean run over a real store, record the event commit each
 event-writing transaction ended at (claim-only writes leave no distinct point;
@@ -925,7 +926,7 @@ These existing suites check the sections above.
   `:237`
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
-  `src/test-kernel/controllers/session/crashConformanceTexra.vitest.ts`,
+  `src/test-kernel/controllers/session/crashConformance*.vitest.ts`,
   `src/test-kernel/controllers/session/goldenStore.vitest.ts:620`
 
 ## 11. Non-goals

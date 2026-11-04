@@ -37,6 +37,7 @@ import {
 } from '@shared/session/runHistory';
 import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
+import { descriptionRow } from '@shared/session/runFacts';
 import { factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -238,15 +239,16 @@ export const forkRun = Effect.fn('forkRun')(function* (
     identity: start.identity,
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
     provenance: { kind: 'fork', from, at: cut },
-    ...(title !== null && {
-      description: title.description,
-      descriptionBy: title.by,
-    }),
   });
-  // Registration and history are one commit, through the fork's cell: a
-  // fork exists with its history or not at all.
+  // Registration, the source's title (by whoever wrote it) and history are
+  // one commit, through the fork's cell: a fork exists with its history or
+  // not at all.
   const cell = yield* (yield* RunHistory).open(runId, {
-    registration: Effect.succeed(rows),
+    registration: Effect.succeed(
+      title === null
+        ? rows
+        : [...rows, descriptionRow(runId, title.description, title.by)],
+    ),
   });
   yield* cell.append([
     ...viewRows(runId, state, state.messages),

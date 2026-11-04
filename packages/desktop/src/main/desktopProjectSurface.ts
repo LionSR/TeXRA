@@ -23,7 +23,7 @@ import {
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -52,7 +52,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly runtime: ProcessRuntime;
     readonly projects: DesktopProjectRegistry;
     readonly bindings: ProjectBindings;
-    readonly onboarding: DesktopOnboardingIpc;
+    readonly onboarding: WindowOnboarding;
     readonly promptController: DesktopPromptController;
     readonly resourcesPath: string;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
@@ -174,7 +174,7 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         refreshCredentialStatus: Effect.suspend(() =>
           Effect.andThen(
             bindings.eachSnapshot((snapshot) => snapshot.refreshHostBanners),
-            onboarding.refreshOnboardingFunnel(),
+            onboarding.refresh,
           ),
         ),
         // Selection is the surface's: a settings jump asks the shown

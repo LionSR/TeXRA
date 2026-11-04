@@ -84,7 +84,7 @@ export const GLOBAL_ARGS: CliGlobalArgsDef = {
   cwd: {
     type: 'string',
     valueHint: 'directory',
-    description: 'Working directory the agent runs against (defaults to $PWD)',
+    description: 'Directory the command works in (defaults to $PWD)',
   },
   'output-format': {
     type: 'enum',

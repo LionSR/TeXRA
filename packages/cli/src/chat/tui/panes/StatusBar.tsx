@@ -14,12 +14,10 @@ import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
-  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
 import { sessionView, runViewOf } from '../state/sessionView';
 import {
-  chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   runStopFacts as runStopFactsSignal,
 } from '../state/sessionRunState';
@@ -140,15 +138,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // closure's identity, which froze the hint at its boot-time value for the
   // whole run (#8273).
   const runStopFacts = useSignal(runStopFactsSignal);
-  const ownedRunIds = useSignal(rootRunIdsSignal);
   const target = statusBarRunTarget({
     activeRunId,
-    canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
-    // The whole pending-run window, not just its launch gap: a restored
-    // stream's phase is derived, so a run whose stream has not reported one
-    // yet must still read "stop" — Ctrl-C would stop it.
-    canStopPendingRun: chatTuiCanStopActiveRun(runStopFacts),
-    ownedRunIds,
+    canStop: chatTuiCanStopVisibleRun(runStopFacts),
     view,
   });
   const displayRunId = target.displayRunId;

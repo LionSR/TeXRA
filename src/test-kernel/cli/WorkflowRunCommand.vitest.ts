@@ -10,8 +10,9 @@ import { beforeEach, expect, vi } from 'vitest';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
 import { layer } from '@effect/vitest';
-import { Effect, Context } from 'effect';
+import { Effect, Context, Schema } from 'effect';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -142,6 +143,7 @@ function workflowProgram(
       inputFiles: ['paper.tex'],
       contextFiles: [],
       instruction: '',
+      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
       ...init,
     });
   });
@@ -242,7 +244,6 @@ layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
         tools: [],
         blocks: {
           task: {
-            rewrite: true,
             outputs: [],
             files: {},
             prefix: '',

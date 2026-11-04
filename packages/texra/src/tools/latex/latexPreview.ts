@@ -17,14 +17,12 @@ import {
   isStrictlyWithin,
   createExternalLocation,
   createWorkspaceLocation,
-  Settings,
 } from '@texra-ai/harness/host';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
-import { LATEXDIFF_TEMP_FILE_LOCATIONS } from '@texra/shared/settingsView/texraSettings';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -73,7 +71,6 @@ export interface LatexPreviewEntry {
   onError: (message: string) => void;
 }
 
-const TEXRA_TEMP_DIR = '.texra-temp';
 /** Length of the random suffix for temp file names (8 nanoid chars ≈ 2^47 combinations, sufficient for uniqueness) */
 const TEMP_ID_LENGTH = 8;
 /** The suffix latexdiff's output file carries after the proposed file's stem. */
@@ -86,10 +83,9 @@ const DIFF_SUFFIX = '_diff';
  */
 type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
-/** Delete a file or directory; a real failure is logged, not raised. */
+/** Delete a temp file; a real failure is logged, not raised. */
 const silentDelete = Effect.fn('latexPreview.silentDelete')(function* (
   targetPath: string,
-  kind: 'file' | 'dir',
 ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
   const fs = yield* FileSystem.FileSystem;
   // `fs.remove` without `recursive`: a non-directory (a symlink included)
@@ -100,7 +96,7 @@ const silentDelete = Effect.fn('latexPreview.silentDelete')(function* (
     // Best-effort temp cleanup: `force` already absorbs an absent target,
     // so what reaches here is a real fault worth a warning.
     Effect.catch((error) =>
-      Effect.logWarning(`Failed to delete temp ${kind} ${targetPath}`).pipe(
+      Effect.logWarning(`Failed to delete temp file ${targetPath}`).pipe(
         withLogChannel(CHANNEL),
         Effect.annotateLogs({ data: error }),
       ),
@@ -135,7 +131,7 @@ const deleteWithAuxFiles = Effect.fn('latexPreview.deleteWithAuxFiles')(
     );
     yield* Effect.forEach(
       [filePath, ...exactTargets, ...backupTargets],
-      (target) => silentDelete(target, 'file'),
+      silentDelete,
       { concurrency: 8, discard: true },
     );
   },
@@ -228,23 +224,17 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
       return yield* Effect.fail(new Error('No workspace folder open'));
     }
 
-    const location = yield* Settings.get<
-      (typeof LATEXDIFF_TEMP_FILE_LOCATIONS)[number]
-    >(entry.request.roots, 'latexdiff.tempFileLocation');
-
     const originalPath = entry.request.path;
     const ext = path.extname(originalPath);
     const basename = path.basename(originalPath, ext);
     const tempFileName = `${basename}${suffix}-${randomUUID().slice(0, TEMP_ID_LENGTH)}${ext}`;
 
-    const tempDir =
-      location === 'workspaceTemp'
-        ? path.join(workspacePath, TEXRA_TEMP_DIR)
-        : path.dirname(
-            path.isAbsolute(originalPath)
-              ? originalPath
-              : path.join(workspacePath, originalPath),
-          );
+    // Beside the file it stands in for, where its relative inputs resolve.
+    const tempDir = path.dirname(
+      path.isAbsolute(originalPath)
+        ? originalPath
+        : path.join(workspacePath, originalPath),
+    );
     const tempPath = path.join(tempDir, tempFileName);
 
     // Writing the file and registering its removal are one step: a finished
@@ -254,23 +244,10 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     yield* Effect.uninterruptible(
       Effect.gen(function* () {
         const fs = yield* FileSystem.FileSystem;
-        if (location === 'workspaceTemp') {
-          // Recursive because the provider's `createDirectory` always was:
-          // two previews of files in one folder share this temp directory.
-          yield* fs.makeDirectory(tempDir, { recursive: true });
-        }
         yield* fs.writeFileString(tempPath, content);
       }).pipe(
         Effect.onExit(() =>
-          registerCleanup(
-            entry,
-            Effect.gen(function* () {
-              yield* deleteWithAuxFiles(tempPath);
-              if (location === 'workspaceTemp') {
-                yield* silentDelete(tempDir, 'dir');
-              }
-            }),
-          ),
+          registerCleanup(entry, deleteWithAuxFiles(tempPath)),
         ),
       ),
     );

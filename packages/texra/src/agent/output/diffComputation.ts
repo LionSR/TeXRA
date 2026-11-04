@@ -108,7 +108,7 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
 /** The diff stats and lineage of a round's outputs, against the
  *  snapshot-resolved `baseFiles` (the list `RunFileService.prepareRunWorkspace`
  *  returns): the live workspace path would collapse in-place diffs to 0/0. A
- *  task that does not rewrite its documents gets no lineage. */
+ *  task that writes new documents (it declares `outputs`) gets no lineage. */
 export const computeOutputDiffStats = Effect.fn(
   'documents.computeOutputDiffStats',
 )(function* (
@@ -117,11 +117,11 @@ export const computeOutputDiffStats = Effect.fn(
   workspace: string | undefined,
   baseFiles: FileLocation[],
   currRound: number,
-  rewrite: boolean,
+  /** Whether the outputs descend from the inputs (false for new documents). */
+  lineage: boolean,
 ) {
   const roundOutputs = ensureRoundData(state, currRound).outputs;
   const mapping = traceFileLineage(state, baseFiles, currRound);
-  const suppressLineage = !rewrite;
 
   return yield* Effect.forEach(
     roundOutputs,
@@ -154,10 +154,10 @@ export const computeOutputDiffStats = Effect.fn(
           }
         }
 
-        const effectiveOriginal = suppressLineage
-          ? null
-          : yield* toWorkspaceOrigin(workspace, originalLocation);
-        const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;
+        const effectiveOriginal = lineage
+          ? yield* toWorkspaceOrigin(workspace, originalLocation)
+          : null;
+        const effectiveDiffBase = lineage ? diffBaseLocation : null;
         const stats = yield* computeDiffStats(effectiveDiffBase, location);
 
         return {

@@ -6,6 +6,99 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One flag per choice in `texra config agents`.** `--agents` takes the
+  workspace agents as one value (`inherit`, `all`, `team:<team>` by id,
+  name or slug, or a comma-separated agent list), `--default-team` takes a
+  team or `none`, and `--default-agent` an agent or `none`; `--inherit`,
+  `--all`, `--team`, `--clear-default` and `--clear-default-agent` are
+  gone, with the three "not both" errors. `texra clone` takes its
+  destination as the second argument, resolved against `--cwd` (the
+  directory every command works in) and defaulting to it; passing both no
+  longer errors.
+- **Two LaTeX config keys are gone.** `latex.wrapCritiqueInAlign` is gone:
+  a bare criticism command is always wrapped in an `align` environment with
+  `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
+  file is always written beside the file it stands in for, where its
+  relative inputs resolve. A stored value of either is ignored.
+- **A child launch is a chat or a task.** SDK: `ChildLaunch`
+  (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
+  and the `mediaFiles` on its prompt) or a task (`task` with its `files`:
+  input, context, media and output lists); a launch that names a task's
+  lists for a chat, or a schema for a task, no longer type-checks. A stop
+  while a child call resolves its files or picks a model now stops the
+  call, where it was reported as the call's error. No stored row or
+  service message changes.
+- **A document task's switches have one name on every surface.** The
+  `document_task` tool's `extractFigures` and `extractTikz` inputs are
+  `autoExtractFigure` and `autoExtractTikzFigure`, the names a run stores
+  and its approval shows, and the tool also takes `attachTeXCount` and
+  `autoCompileInputPdf`. `texra run` takes `--attachTeXCount`,
+  `--autoExtractFigure`, `--autoExtractTikzFigure` and
+  `--autoCompileInputPdf` beside `--reflect`. The launch form's Input menu
+  offers Critic review, and a proposal card badges every switch the task
+  was launched with. `task.rewrite` is gone from agent YAML: a task that
+  declares `outputs` writes new documents and gets no diff lineage, one
+  that declares none rewrites its inputs; an agent file that still sets
+  `rewrite:` is refused at load as an unrecognized key, so delete the line.
+  No stored row changes.
+- **Launch options that travel together are one shape.** SDK: a
+  `ProcessChildStrategy` is a one-turn command (`interruptedTurn`, the result
+  a killed process still has) or a coding agent's CLI session, whose
+  `runTurn`, `pauseNotice`, `onTurnSuccess` and `releaseSessionOwnership`
+  are one required `cli` bag; a strategy with only some of them no longer
+  type-checks. `ProcessLayerOptions.labelRuns` and
+  `seedToolSwitches` are gone: a process built with `processLayer` labels
+  its root runs, and the first-install tool switches are seeded into the
+  store the process builds itself (`Sessions.layer` seeds the embedder's
+  global state; a store handed to `processLayer` is left as it is).
+  `AgentRuntimeEmitOptions.replayWhenAttached` is gone: a notice raised
+  while no host is attached always waits for the next one. A forked run's
+  copied title rides its registration rows (`RegisterRunOptions` has no
+  `descriptionBy`), and a compaction's reason is the one argument it takes
+  (`CompactionInput` has no `force`). No stored row or service message
+  changes.
+- **One approval decision.** A run's `approvalPolicy` (Block, Ask,
+  Auto-approve) is the one setting that says whether its shell commands,
+  file edits, delegations and coding-agent launches ask first. Under Ask
+  every guarded operation asks unless the task granted it on a request card;
+  `texra.toolUse.requireEditApproval` and `texra.toolUse.requireBashApproval`
+  are gone (a stored value is ignored). The `codex` and `claude_code` tools
+  derive their sandbox and permission mode from the launching run: a launch
+  a person approved runs Codex `workspace-write` and Claude Code
+  `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex
+  `danger-full-access` and Claude Code `bypassPermissions`; Codex never
+  prompts on its own. Removed: the `codexSandboxMode`, `codexApprovalPolicy`
+  and `claudeAgentPermissionMode` settings with their rows in Settings and
+  `/config`, and the tools' `sandbox_mode` and `permission_mode` inputs (a
+  read-only `plan` Claude child can no longer be requested). A stop of a
+  task cascades to its agents on shutdown and otherwise follows "Keep agents
+  running"; `run.stop.detachActiveChildren` is gone from the service
+  protocol (52). SDK: `ChildRuns.autoApproved` says whether the launching
+  run does its work unasked; `RunStopOptions` is gone, so a stop is
+  `Runs.stop(runId, reason)`; `decideApproval` takes no `promptRequired`.
+- **A run's failure is one value from the model call to the run's end.**
+  The `failed` row, the retry request, the `run.end` row and the
+  `AgentError` a root's launch raises carry the failure as the run recorded
+  it; nothing re-classifies it from an error's message or a cache on the
+  error object. A `run.end` error is the recorded model failure
+  (`kind: 'model'`, with its classification, status, provider and the text
+  the attempt streamed) or a local `disk-full`, `result-lost` or
+  `unexpected` one; `context-window` and `missing-api-key` are its
+  classification, no longer kinds of their own. Whether a person is offered
+  a retry is the `failed` row's `next` alone (llm's verdict: the same
+  request can succeed, or a quota ran out), so `userRetryable` is gone from
+  every row, and the credential move a retry offers is decided over llm's
+  verdict on the plan that ran out, before it is recorded. A subscription
+  token is renewed once on any authentication failure (a 403 as a 401
+  was). An unclassified model failure's `run.end` message is the failure's
+  own words, without the "Error executing agent" prefix, and a child's
+  error delivery no longer carries a `retryable` attribute. SDK:
+  `AgentError.failure` carries the recorded failure, `AgentErrorKind` is
+  `disk-full | result-lost | unexpected | model`, `RetryErrorInfo`,
+  `ProviderError`, `ErrorLogData` and a retry request's `errorDetails` lose
+  `userRetryable`, and the `ExhaustionReason` type is gone (a plan that ran
+  out is the classification's `kind`). Rows: `model.message` v12,
+  `request.opened` v8, `run.end` v7, `log` v6; service protocol 51.
 - **A run's model route is decided over one set of facts.** The binding a
   `run.config` records now carries the subscription routes it was decided
   over, and a model switch is admitted over the routes the run's history

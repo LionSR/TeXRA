@@ -8,20 +8,15 @@ import {
 
 describe('TeXRA approval policy', () => {
   it.each([
-    ['never', true, true, true, 'deny-policy'],
-    ['ask', true, false, false, 'deny-unpresentable'],
-    ['ask', true, true, false, 'allow'],
+    ['never', true, true, 'deny-policy'],
+    ['ask', false, false, 'deny-unpresentable'],
+    ['ask', true, false, 'allow'],
   ] as const)(
-    'decides %s with promptRequired=%s, bypass=%s, canPresent=%s as %s',
-    (policy, promptRequired, scopedBypass, canPresent, expected) => {
-      expect(
-        decideApproval({
-          policy,
-          promptRequired,
-          scopedBypass,
-          canPresent,
-        }),
-      ).toBe(expected);
+    'decides %s with bypass=%s, canPresent=%s as %s',
+    (policy, scopedBypass, canPresent, expected) => {
+      expect(decideApproval({ policy, scopedBypass, canPresent })).toBe(
+        expected,
+      );
     },
   );
 
