@@ -95,8 +95,11 @@ interface Projector {
 function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
-  if (event.type === 'model.message' && event.payload.kind === 'response')
-    priced = event.payload.usage;
+  if (
+    event.type === 'model.message' &&
+    (event.payload.kind === 'response' || event.payload.kind === 'failed')
+  )
+    priced = event.payload.usage ?? null;
   if (priced == null) return null;
   const { provider, responseTimeMs, ...usage } = priced;
   return usage;
