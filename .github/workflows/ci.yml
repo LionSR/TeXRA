@@ -124,13 +124,13 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      # The ratchets and cheap invariant scripts (`npm run gate:invariants`).
+      # The cheap invariant scripts (`npm run gate:invariants`).
       - name: Check invariants
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. The ratchet checks (the allowlists and the
-          # core-quality counts, both reading TEXRA_RATCHET_BASE) judge this
+          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (the
+          # core-quality counts, fact spread and row-kind list) judge this
           # tree against its merge base with the target: fetch the target tip
           # if it is missing, then deepen the target and HEAD until git finds
           # the merge base. The checks fail loudly if it still cannot.

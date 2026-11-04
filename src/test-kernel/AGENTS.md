@@ -92,7 +92,7 @@ only by hand, never in CI or `npm test`, and skips a model whose key is not set.
 
 ## Scoping the test run
 
-The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". `test:pure` includes the architecture ratchets, which read the repository from disk and are never selected by a module graph. Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
+The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
 
 ## Writing tests that earn a place
 
