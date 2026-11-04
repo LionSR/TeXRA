@@ -100,8 +100,9 @@ function subsystemPath(path: string): string | null {
 }
 
 function subsystemFromRepoRelative(path: string): string | null {
-  // These extension-owned aliases deliberately overlap @common. Keep them
-  // in distinct pseudo-subsystems so they cannot hide in a common edge.
+  // A relative import into the extension's `common/` gets its own
+  // pseudo-subsystem, so it shows up as a new edge instead of hiding in the
+  // harness's `common`.
   const extensionCommon = /^packages\/extension\/src\/common\/([^/]+)/.exec(
     path,
   );
@@ -119,21 +120,12 @@ function resolveImportPath(file: string, specifier: string): string | null {
     return repoRelative(resolve(dirname(file), specifier));
   }
 
-  // Match the most specific (longest) alias so a carve-out like
-  // `@common/webview` wins over the broader `@common` alias regardless of
-  // map insertion order.
-  let bestMatch: { alias: string; target: string } | null = null;
-  for (const [alias, target] of ALIAS_TARGETS) {
-    if (
-      (specifier === alias || specifier.startsWith(`${alias}/`)) &&
-      (bestMatch == null || alias.length > bestMatch.alias.length)
-    ) {
-      bestMatch = { alias, target };
-    }
-  }
-  return bestMatch == null
+  const match = [...ALIAS_TARGETS].find(
+    ([alias]) => specifier === alias || specifier.startsWith(`${alias}/`),
+  );
+  return match == null
     ? null
-    : `${bestMatch.target}${specifier.slice(bestMatch.alias.length)}`;
+    : `${match[1]}${specifier.slice(match[0].length)}`;
 }
 
 function resolveImportedSubsystem(

@@ -50,7 +50,7 @@ const baselineFileOf = (pkg: Package): string =>
   pkg === 'test-kernel' ? KERNEL_FILE : HOSTS_FILE;
 const TSCONFIG_PATH = resolve(REPO_ROOT, 'tsconfig.json');
 
-/** Each tsconfig alias (`@agent`, `@transcript`, `@common/webview`, …) and
+/** Each tsconfig alias (`@agent`, `@transcript`, `@texra/*`, …) and
  *  whether it names a harness-internal path, read from the one source of
  *  truth. The package's own entries (`@texra-ai/harness`, `/node`, …) are
  *  its public surface, not deep imports. */
@@ -75,8 +75,8 @@ function loadAliases(): ReadonlyMap<string, boolean> {
 
 const ALIASES = loadAliases();
 
-/** Whether `specifier`'s longest matching alias is a harness one, so the
- *  extension's own `@common/webview` is not read as the harness's `@common`. */
+/** Whether the longest alias `specifier` matches names a harness-internal
+ *  path. */
 function isHarnessDeepImport(specifier: string): boolean {
   const alias = [...ALIASES.keys()]
     .filter((key) => specifier === key || specifier.startsWith(`${key}/`))
