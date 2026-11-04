@@ -283,8 +283,8 @@ export class SessionHostInteractions implements HostInteractions {
 
 /**
  * Present a classified failure on a host: its instruction (a missing API key)
- * or its error toast. An abort presents nothing. Replayed to a surface that
- * attaches later, so no guidance is lost for want of an attached host.
+ * or its error toast. Replayed to a surface that attaches later, so no
+ * guidance is lost for want of an attached host.
  */
 function presentAgentFailure(
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -292,11 +292,9 @@ function presentAgentFailure(
 ): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
   const options = { replayWhenAttached: true };
-  if (toast?.type === 'instruction')
-    return interactions.emit('requestShowInstruction', toast.payload, options);
-  if (toast?.type === 'error')
-    return interactions.emit('requestShowError', toast.payload, options);
-  return Effect.void;
+  return toast.type === 'instruction'
+    ? interactions.emit('requestShowInstruction', toast.payload, options)
+    : interactions.emit('requestShowError', toast.payload, options);
 }
 
 /**
