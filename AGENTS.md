@@ -129,8 +129,11 @@ llm import no host layer. ESLint also fails:
 
 The core-quality counts are held against the merge base by
 `npm run check:core-quality` (`packages/harness/AGENTS.md` "Core quality").
-Boundaries are held by ESLint and the package entries; there are no baseline
-files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
+ESLint holds the VS Code-free zones, the host-layer and harness-no-app import
+rules, and the core-quality syntax bans. The other boundaries (no deep import
+of harness internals from the app or a host, no `@shared/schemas/<leaf>`
+import, one owner per fact) are conventions with no mechanical check; there
+are no baseline files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
 investigated and refused; landing one on new evidence rewrites its entry in
 the same PR. The open work is the public surface in
 `.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`,
