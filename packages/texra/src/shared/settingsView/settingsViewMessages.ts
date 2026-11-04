@@ -205,8 +205,6 @@ const UpdateModelSelectionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: Schema.Array(ModelSelectionItemSchema),
   helperModel: Schema.String,
-  /** Whether the user prefers short (unpinned) model names. */
-  preferShortModelNames: Schema.Boolean,
 });
 export type UpdateModelSelectionMessage =
   (typeof UpdateModelSelectionMessageSchema)['Type'];

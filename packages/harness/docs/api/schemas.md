@@ -832,7 +832,7 @@ function getProposalFileGroups(
 ## GlobalStateKey
 
 ```ts
-const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "memory.enabled"; readonly SCRIPT_ONLY: "codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "detachSubagentsOnStop"; readonly MODEL_SELECTION: "modelSelection"; readonly HELPER_MODEL: "helperModel"; readonly REASONING_LEVELS: "reasoningLevels"; readonly PREFER_SHORT_MODEL_NAMES: "preferShortModelNames"; readonly CUSTOM_AGENT_DIR: "customAgentDir"; readonly GLM_CODING_PLAN: "glm.codingPlan"; readonly KIMI_CODE_PREFER: "kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "websocket.openai"; readonly DISABLED_TOOLS: "tools.disabled"; readonly MCP_REVISION_KEY: "mcp.revisionKey"; readonly INSTALLED_PLUGINS: "plugins.installed"; readonly ACTIVE_TEAM_ID: "onboarding.defaultTeamId"; }>
+const GlobalStateKey: Readonly<{ readonly MEMORY_ENABLED: "memory.enabled"; readonly SCRIPT_ONLY: "codeMode.scriptOnly"; readonly ALLOW_ORCHESTRATOR_KILL: "allowOrchestratorKill"; readonly DETACH_SUBAGENTS_ON_STOP: "detachSubagentsOnStop"; readonly MODEL_SELECTION: "modelSelection"; readonly HELPER_MODEL: "helperModel"; readonly REASONING_LEVELS: "reasoningLevels"; readonly CUSTOM_AGENT_DIR: "customAgentDir"; readonly GLM_CODING_PLAN: "glm.codingPlan"; readonly KIMI_CODE_PREFER: "kimiCode.prefer"; readonly WEBSOCKET_OPENAI: "websocket.openai"; readonly DISABLED_TOOLS: "tools.disabled"; readonly MCP_REVISION_KEY: "mcp.revisionKey"; readonly INSTALLED_PLUGINS: "plugins.installed"; readonly ACTIVE_TEAM_ID: "onboarding.defaultTeamId"; }>
 ```
 
 ## GOAL_MAX_COST_SETTING
