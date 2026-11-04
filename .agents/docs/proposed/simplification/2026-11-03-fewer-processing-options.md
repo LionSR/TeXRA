@@ -371,6 +371,19 @@ above.
 - `RegexRuleSet.flags?` (`packages/texra/src/replacement/types.ts:31`) is set
   by all nine rule sets: required.
 
+_Landed 2026-11-04 (first batch): `pickFiles.fileType` is a document file
+type (the extension's unreachable `output` picker and
+`isMultipleDocumentFileType` are gone; `useCurrentFile` keeps the diff view's
+pseudo-types, which it alone sends); `openInstallGuide` carries no `tool`;
+`latex.wrapCritiqueInAlign` and `latexdiff.tempFileLocation` are gone with
+their one reader each; `RegexRuleSet.flags` is required. Checked and kept:
+`latexdiff.changesOnly` has a LaTeX-tab row; `goal.strategy` is the SDK's
+strategy hook, exercised by `packages/harness/example/09-goal-strategies.ts`;
+`followUp.receipt` stays as public SDK. Waiting on the owner: `acceptEditedFile`'s
+`copyMeta` (deleting it removes the VS Code "Save as copy" choice, a working
+control the desktop never had), the four replacement presets with their key
+pairs (a feature reachable from `config.json` by hand), and `git.markCommits`._
+
 _Landed 2026-11-04 (CLI): `clone`'s destination is its second argument and
 `--cwd` keeps its one global meaning (the directory the command works in,
 which the positional resolves against; `clone` and `init` no longer re-describe

@@ -280,10 +280,9 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         yield* host.openPath(directory);
       }),
       recheckDependencies: Effect.suspend(() => options.recheckTools()),
-      openInstallGuide: () =>
-        Effect.sync(() =>
-          postDesktopSettingsView(options.postToRenderer, 'plugins'),
-        ),
+      openInstallGuide: Effect.sync(() =>
+        postDesktopSettingsView(options.postToRenderer, 'plugins'),
+      ),
       onboarding: {
         signInChatGpt: Effect.suspend(() =>
           options.onboarding.signInWithChatGpt(),
@@ -311,14 +310,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         case 'popBack':
           return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
         case 'pickFiles': {
-          const { fileType } = request;
-          if (fileType === 'base' || fileType === 'edited') {
-            return yield* Effect.fail(
-              notOnDesktop(`A picker for ${fileType} files`),
-            );
-          }
           const paths = yield* options.files
-            .pickFiles(fileType)
+            .pickFiles(request.fileType)
             .pipe(
               Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
             );

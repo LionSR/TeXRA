@@ -15,6 +15,11 @@ All notable changes to this project will be documented in this file.
   destination as the second argument, resolved against `--cwd` (the
   directory every command works in) and defaulting to it; passing both no
   longer errors.
+- **Two LaTeX config keys are gone.** `latex.wrapCritiqueInAlign` is gone:
+  a bare criticism command is always wrapped in an `align` environment with
+  `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
+  file is always written beside the file it stands in for, where its
+  relative inputs resolve. A stored value of either is ignored.
 - **A child launch is a chat or a task.** SDK: `ChildLaunch`
   (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
   and the `mediaFiles` on its prompt) or a task (`task` with its `files`:
