@@ -316,8 +316,11 @@ export const executeCliConfig: (
             // interrupt was on its way, is stopped through the session, which
             // its own end answers (an ended run's stop is the registry's
             // quiet no-op).
+            if (!accepted) yield* Effect.forkDetach(Fiber.interrupt(launched));
+            // Read again: acceptance may have landed while the interrupt was
+            // being forked, and an interrupt that reaches the launch after it
+            // waits on the uninterruptible acceptance instead of stopping it.
             if (accepted) yield* stopThroughSession;
-            else yield* Effect.forkDetach(Fiber.interrupt(launched));
             // The run's end, its recovery notice and the command's own
             // finalization, within the deadline below.
             yield* Deferred.await(shutdownFinalizationDone);
