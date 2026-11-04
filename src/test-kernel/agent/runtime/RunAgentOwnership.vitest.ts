@@ -108,10 +108,16 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
               const faults = yield* sessionStoreFaults(roots.storage);
               // The opening's append claims the run; the hold the run takes on
               // its claim right after is the launch's first `acquireClaims`.
+              // The launch answers with the opening it committed; the
+              // refusal is the run's end.
               yield* faults.failNext('acquireClaims');
 
-              const error = yield* Effect.flip(launch(session, runId));
-              expect(error.message).toContain('injected acquireClaims fault');
+              yield* launch(session, runId);
+              yield* untilStored(roots.storage, () =>
+                storedRows(roots.storage).some(
+                  (row) => row.run === runId && row.type === 'run.end',
+                ),
+              );
               const end = storedRows(roots.storage).findLast(
                 (row) => row.run === runId && row.type === 'run.end',
               );

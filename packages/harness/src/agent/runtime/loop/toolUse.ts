@@ -196,7 +196,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       ];
       yield* cell
         .append(born, run.entry.opening)
-        .pipe(Effect.flatMap(run.entry.entered), Effect.uninterruptible);
+        .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
       run.callbacks.onProgress?.({ kind: 'started' });
       return cell;
     }
@@ -268,7 +268,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ];
     yield* cell
       .append(rows, run.entry.opening)
-      .pipe(Effect.flatMap(run.entry.entered), Effect.uninterruptible);
+      .pipe(Effect.andThen(run.entry.entered), Effect.uninterruptible);
     run.callbacks.onProgress?.({ kind: 'started' });
     return cell;
   });

@@ -4,9 +4,32 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { RunId, RunStopReason } from '@shared/schemas';
-import type { Effect } from 'effect';
+import type {
+  CommitOrdinal,
+  ResumeRefusal,
+  RunId,
+  RunStopReason,
+} from '@shared/schemas';
+import type { Deferred, Effect, Fiber } from 'effect';
 import type { SessionServices } from './rootLaunch';
+
+/** How a launch of a run answers, once: the commit of the activation its
+ *  program opened (a fresh run's `run.start`, a resume's `run.activate`),
+ *  or, for a resume, why it opened none: refused, or owned by an open call
+ *  of `ownedBy`, as its records said under its claim, so a caller resumes
+ *  that parent instead. A launch that ends before it opens fails its
+ *  answer with its own failure. */
+export type LaunchAnswer =
+  | { readonly activation: CommitOrdinal }
+  | { readonly failed: ResumeRefusal }
+  | { readonly ownedBy: RunId };
+
+/** A launch in flight (`RunRegistry.start`): its fiber, and its one answer,
+ *  which every caller that asks for the run hears. */
+export interface Launched<B, E extends Error> {
+  readonly fiber: Fiber.Fiber<B, E>;
+  readonly answer: Deferred.Deferred<LaunchAnswer, Error>;
+}
 
 /**
  * What a host can ask of a running tool-use loop: the members something
@@ -39,6 +62,9 @@ export interface LiveRun {
    *  and a run with no loop of its own (a background command) reads what
    *  its launch said it takes. */
   readonly readsMessages: boolean;
+  /** The launch's answer: its activation's commit once it opened, or why
+   *  it opened none ({@link LaunchAnswer}). */
+  readonly opened: Effect.Effect<LaunchAnswer, Error>;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
 }

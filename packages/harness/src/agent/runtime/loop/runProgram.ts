@@ -164,9 +164,7 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
       // A resume enters once its activation settled, with the state it
       // opened on (a fresh run, with its opening batch); a stop lands before
       // both or after both.
-      Effect.tap((cell) =>
-        resume ? run.entry.entered(cell.opened) : Effect.void,
-      ),
+      Effect.tap(() => (resume ? run.entry.entered() : Effect.void)),
       Effect.uninterruptible,
     );
   if (!resume && (yield* cell.current).phase !== null)

@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Clock, Deferred, Effect, Schema } from 'effect';
+import { Clock, Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -19,7 +19,6 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
-  type CommitOrdinal,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -115,7 +114,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
     });
     const { config } = definition;
-    const opened = yield* Deferred.make<CommitOrdinal>();
     yield* startDetachedChildRunLoop({
       runId,
       parentRunId,
@@ -132,9 +130,8 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         runId,
         startedAt,
         workingDirectory,
-        onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
       }),
-      opened,
+      awaitOpening: true,
     });
 
     const meta = launch.approvalMeta;

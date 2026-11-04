@@ -6,6 +6,7 @@ import {
   Fiber,
   Scheduler,
   Semaphore,
+  Stream,
   Context,
 } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
@@ -24,7 +25,6 @@ import { SessionInbox, type InboxPort } from '@agent/followUp/Inbox';
 import { RunInput } from '@agent/followUp/RunInput';
 import { Inbox, submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import type { ResumeAttempt } from '@agent/runtime/resumeRun';
 import {
   RunRegistry,
   type RunPrograms,
@@ -32,6 +32,7 @@ import {
   Runs,
 } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import type { LaunchAnswer } from '@agent/runtime/runs';
 import type { Append } from '@shared/session/sessionEvents';
 import {
   runStateAppend,
@@ -197,34 +198,34 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
     );
   recorded = recordedFollowUps();
   const { followUps, live } = recorded;
-  /** The session's resume decision: a run that took it is live here from
-   *  then on. */
+  /** The session's resume decision: it answers for the activation it runs
+   *  on, and a run that took it is live here from then on. */
   const resume = (
     runId: RunId,
     _options: unknown,
-    activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
+    answer: Deferred.Deferred<LaunchAnswer, Error>,
   ) =>
-    Effect.flatMap(
-      tryResume(runId),
-      (resumed): Effect.Effect<ResumeAttempt> => {
-        if (typeof resumed === 'object') return Effect.succeed(resumed);
-        if (!resumed)
-          return Effect.succeed({ failed: { kind: 'notResumable' as const } });
-        live.add(runId);
-        return Effect.as(activated(1 as CommitOrdinal), {
-          started: true as const,
-          delivered: true,
-          completion: Effect.never,
+    Effect.flatMap(tryResume(runId), (resumed): Effect.Effect<void> => {
+      if (typeof resumed === 'object') return Deferred.succeed(answer, resumed);
+      if (!resumed)
+        return Deferred.succeed(answer, {
+          failed: { kind: 'notResumable' as const },
         });
-      },
-    );
+      live.add(runId);
+      return Deferred.succeed(answer, { activation: 1 as CommitOrdinal });
+    });
   // cast: the fake view knows every run, with no fields.
   const view = { run: () => ({}) } as unknown as SessionViewAccess['Service'];
-  // cast: the fake log serves only what a wake reads.
+  // cast: the fake log serves only what a wake and a launch read; the
+  // launch's opening never lands on this empty tail, so the fake decision
+  // answers it itself.
   const log = {
     records: () => Effect.succeed([]),
     owner: () => Effect.succeed({ ownerId: null, liveness: null }),
     hold: () => Effect.void,
+    facts: () => Effect.succeed(null),
+    now: () => 0,
+    tail: () => Stream.empty,
   } as unknown as SessionLog['Service'];
   const registry = new RunRegistry({
     view,

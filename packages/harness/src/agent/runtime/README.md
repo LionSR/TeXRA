@@ -38,8 +38,9 @@ is the module map by concern. Run-loop rules are in
   `AgentRunLifecycle` (the end: `endRun`, the terminal's classification of
   an exit, and `endActivation`, the one end of an activation, through
   `agent/storage/runLifecycle`'s `finalizeRun`); `runReport` (a run's
-  unclassified report to its terminal); `resumeRun` (the cross-host resume entry, root or recovered child: the
-  run's activation from the call, joined by a second resume);
+  unclassified report to its terminal); `resumeRun` (the cross-host resume
+  entry, root or recovered child: it opens the run's activation or joins the
+  launch in flight, and hears its one answer);
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
   missing or untrusted agent).
 - **Registry**: `runRegistry` (one entry per run: fiber, loop controls,

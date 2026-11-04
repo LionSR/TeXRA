@@ -106,7 +106,7 @@ export function admitInterruptibleRun(
 
 /** A run admitted at `runs`' door and awaited, as a root launch awaits its
  *  program: the caller's interruption stops it. */
-export function startAwaited<A, E, R extends AgentRunServices>(
+export function startAwaited<A, E extends Error, R extends AgentRunServices>(
   runs: RunsShape,
   runId: RunId,
   program: Effect.Effect<A, E, R>,
@@ -114,7 +114,7 @@ export function startAwaited<A, E, R extends AgentRunServices>(
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
     registryOf(runs).start(runId, program, (run) => run, launchParent),
-    (fiber) =>
+    ({ fiber }) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );
 }

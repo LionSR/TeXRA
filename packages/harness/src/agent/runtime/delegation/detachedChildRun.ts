@@ -14,7 +14,6 @@ import { Cause, Deferred, Effect, Fiber } from 'effect';
 
 // Local imports
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import { activationIfOpened } from '@agent/runtime/AgentLaunchContext';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   startChildRunLoop,
@@ -31,7 +30,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { SessionLog } from '@shared/session/runHistory';
 import {
   USER_FOLLOW_UP_SUPPORT,
-  type CommitOrdinal,
   type RunId,
   type RunIdentity,
 } from '@shared/schemas';
@@ -48,11 +46,10 @@ type DetachedChildRunInput<TTurn, R> =
       ChildRunLoopParams<TTurn, R>,
       { readonly childRun?: undefined }
     > & {
-      /** The deferred the strategy's `onAdmitted` completes with the run's
-       *  opening commit. Given, the start waits for it: the caller's receipt
-       *  names a run that exists, and a loop that ends before the opening
-       *  fails the start with the launch's failure. */
-      readonly opened?: Deferred.Deferred<CommitOrdinal>;
+      /** Wait for the run's opening: the caller's receipt names a run that
+       *  exists, and a loop that ends before the opening fails the start
+       *  with the launch's failure (`Launched.answer`). */
+      readonly awaitOpening?: true;
     })
   | (Omit<ChildRunLoopParams<never>, 'strategy' | 'childRun'> & {
       /** Create the stream inside the launch guard, before any stream-dependent setup. */
@@ -81,7 +78,7 @@ export function startDetachedChildRunLoop<
   input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | SessionServices> {
   if (!('createChildRun' in input)) {
-    const { opened, ...params } = input;
+    const { awaitOpening, ...params } = input;
     const started = Effect.uninterruptible(
       params.awaited === true
         ? startChildRunLoop(params)
@@ -90,14 +87,9 @@ export function startDetachedChildRunLoop<
           ),
     );
     // Interruptible: a cancelled caller stops waiting, not the child.
-    return opened === undefined
+    return awaitOpening === undefined
       ? started
-      : Effect.tap(started, ({ fiber }) =>
-          Effect.raceFirst(
-            Deferred.await(opened),
-            Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
-          ),
-        );
+      : Effect.tap(started, ({ answer }) => Deferred.await(answer));
   }
   const { createChildRun, buildLaunch, ...loopParams } = input;
   return runWithLaunchGuard(

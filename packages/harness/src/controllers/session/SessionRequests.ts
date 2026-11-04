@@ -4,14 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import {
-  Context,
-  Deferred,
-  Effect,
-  FileSystem,
-  Path,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
@@ -294,12 +287,9 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 ): Effect.fn.Return<Outcome, RequestError, Inbox> {
   const { runId } = req;
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
-  const attempt = runs.attemptOf(runId);
-  if (attempt !== undefined)
-    yield* Effect.raceFirst(
-      attempt.answer,
-      Deferred.await(attempt.admitted),
-    ).pipe(Effect.exit);
+  // A launch in flight attaches its controls once its run is activated.
+  const live = runs.get(runId);
+  if (live !== undefined) yield* Effect.exit(live.opened);
   const controls = runs.get(runId)?.controls;
   if (controls === undefined)
     return yield* unavailable(

@@ -53,8 +53,6 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         readonly definition: PreparedAgentDefinition;
         /** The child's registration, which its opening commits. */
         readonly registration: RegisterRunOptions;
-        /** Told the commit of the child's opening (`ExecuteAgentOptions`). */
-        readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
         readonly resume?: never;
       }
     | {
@@ -62,7 +60,7 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         /** A persisted child, resumed under its stored config with the
          *  parent its rows hold (`parent`), read as its run starts, under
          *  the claim its loop holds. */
-        readonly resume: Pick<ExecuteAgentOptions, 'onAdmitted' | 'tools'> & {
+        readonly resume: Pick<ExecuteAgentOptions, 'tools'> & {
           readonly config: AgentConfig;
           readonly parent: Effect.Effect<RunId | undefined, Error, SessionLog>;
           readonly stopAfterCycle?: boolean;
@@ -132,7 +130,6 @@ export function createNativeSubagentStrategy(
           return yield* programs.executeAgent(params.definition, params.runId, {
             ...options,
             registration: { ...params.registration, seed: params.seed },
-            ...(params.onAdmitted && { onAdmitted: params.onAdmitted }),
           });
         }),
       ),

@@ -3,6 +3,7 @@ import {
   Cause,
   Clock,
   Context,
+  type Deferred,
   Effect,
   Exit,
   type Fiber,
@@ -22,6 +23,7 @@ import {
   type AgentRunServices,
   Runs,
 } from '@agent/runtime/runRegistry';
+import type { LaunchAnswer } from '@agent/runtime/runs';
 import type { RunInput } from '@agent/followUp/RunInput';
 import {
   childTurnResult,
@@ -73,12 +75,10 @@ export interface ChildRunPort {
   readonly logger: TraceEmitter;
 }
 
-/**
- * A native run's child policy: each turn runs under `turnPermit` (a child
- * waiting for input holds no slot) and its result commits in the batch that
- * ends it (its boundary's `waiting` row, or the last turn's `run.end`). `R`:
- * the services they read of the run that calls them, its loop and its end.
- */
+/** A native run's child policy: each turn runs under `turnPermit` (a child
+ *  waiting for input holds no slot) and its result commits in the batch that
+ *  ends it (its boundary's `waiting` row, or the last turn's `run.end`). `R`:
+ *  the services they read of the run that calls them, its loop and its end. */
 export interface ChildRunTurns<TTurn, R> extends ChildRunBoundary<TTurn, R> {
   /** Finish the run's last turn: what its `run.end` transaction writes. A
    *  failure here is the loop's, raised once the run is joined. */
@@ -205,12 +205,10 @@ interface ChildRunLoopShared {
   readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
-/**
- * One child loop's parameters, by family: a native child (no port), in the
- * session's child-run budget unless `awaited` (its caller joins the loop and
- * reads its last turn: no slot, no delivery or notice to the parent, and a
- * cancelled turn is still its last), or a process child with its port.
- */
+/** One child loop's parameters, by family: a native child (no port), in the
+ *  session's child-run budget unless `awaited` (its caller joins the loop and
+ *  reads its last turn: no slot, no delivery or notice to the parent, and a
+ *  cancelled turn is still its last), or a process child with its port. */
 export type ChildRunLoopParams<TTurn, R = never> = ChildRunLoopShared &
   (
     | {
@@ -232,10 +230,11 @@ interface LastTurn {
   readonly error?: unknown;
 }
 
-/** A started child loop: its fiber, and the turn its end recorded, read
- *  once the fiber is done (undefined when no turn finished at its end). */
+/** A started child loop: its fiber, the launch's answer, and the turn its
+ *  end recorded, read once the fiber is done (undefined when none did). */
 export interface StartedChildRunLoop<TTurn> {
   readonly fiber: Fiber.Fiber<TTurn | undefined, Error>;
+  readonly answer: Deferred.Deferred<LaunchAnswer, Error>;
   readonly lastTurn: () => LastTurn | undefined;
 }
 
@@ -253,12 +252,10 @@ type ChildEnd =
     }
   | { readonly kind: 'error'; readonly error: Error };
 
-/**
- * One child loop's state, passed through the functions below: its setup,
- * its turn, and `end`, its last turn's result. A stop is its run fiber's
- * interruption, its reason the registry activation's. The activation mints
- * its turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record.
- */
+/** One child loop's state, passed through the functions below: its setup, its
+ *  turn, and `end`, its last turn's result. A stop is its run fiber's
+ *  interruption, its reason the registry activation's. The activation mints its
+ *  turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record. */
 class ChildLoop<TTurn, R> {
   readonly attemptId = randomUUID();
   stage: StageHandle | undefined;
@@ -406,12 +403,10 @@ const progressNotify =
     });
   };
 
-/**
- * Accept the next turn: its `child.turn accepted` row, the fact the
- * report/result slots are attributed from, with the `resumed` row that ends
- * the wait. Not best-effort: a refused append is the turn's failure, and
- * `not-owner` stops the loop rather than run under a lost claim.
- */
+/** Accept the next turn: its `child.turn accepted` row, the fact the
+ *  report/result slots are attributed from, with the `resumed` row that ends
+ *  the wait. Not best-effort: a refused append is the turn's failure, and `not-
+ *  owner` stops the loop rather than run under a lost claim. */
 const beginTurn = Effect.fn('childRunLoop.beginTurn')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   resumed: boolean,
@@ -570,13 +565,10 @@ function nativeTurns<TTurn, R>(
   };
 }
 
-/**
- * A process child's interim turn, in one transaction: its result, its
- * parent's delivery and the `parked` row, durable before
- * the loop waits so a follow-up is accepted; then the ids it answers to
- * (so one sent on them finds it waiting, never mid-turn), and the parent's
- * resume.
- */
+/** A process child's interim turn, in one transaction: its result, its parent's
+ *  delivery and the `parked` row, durable before the loop waits so a follow-up
+ *  is accepted; then the ids it answers to (so one sent on them finds it
+ *  waiting, never mid-turn), and the parent's resume. */
 const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
   function* <TTurn, R>(
     loop: ChildLoop<TTurn, R>,
@@ -592,11 +584,9 @@ const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
   },
 );
 
-/**
- * A native child: its launch runs the whole run on its own fiber and offers
- * its turn boundaries through `nativeTurns`; a launch that fails before its
- * run's birth tells the parent as input alone.
- */
+/** A native child: its launch runs the whole run on its own fiber and offers
+ *  its turn boundaries through `nativeTurns`; a launch that fails before its
+ *  run's birth tells the parent as input alone. */
 const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
@@ -625,10 +615,8 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   return turn ?? undefined;
 });
 
-/**
- * A process child: each turn's result commits here before the loop waits on
- * `input` for its next batch; a stop interrupts the turn or the wait.
- */
+/** A process child: each turn's result commits here before the loop waits on
+ *  `input` for its next batch; a stop interrupts the turn or the wait. */
 const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
   TTurn,
   R,
@@ -699,13 +687,11 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
   yield* sendToParent(item, parentRunId, hold, loop.trace);
 });
 
-/**
- * The child's end, carrying the last turn's result unless its run's end
- * took it: a stopped process child that can be continued pauses; a native
- * child whose own lifecycle ended it commits that result alone; any other
- * end is the activation's ({@link endActivation}), a native child's only
- * while it still holds the run.
- */
+/** The child's end, carrying the last turn's result unless its run's end took
+ *  it: a stopped process child that can be continued pauses; a native child
+ *  whose own lifecycle ended it commits that result alone; any other end is the
+ *  activation's ({@link endActivation}), a native child's only while it still
+ *  holds the run. */
 const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   stopped: boolean,
@@ -769,13 +755,10 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   yield* sendStopNotice(loop, params.strategy);
 });
 
-/**
- * The loop's terminal (exit protocol): a stop lands before or after it, so
- * the terminal row, the provider ids and the stage are all handled on every
- * exit; the body's failure propagates as itself, joined by the cleanup's.
- * The parent is woken once the generation let the child's claim go
- * ({@link startChildRunLoop}).
- */
+/** The loop's terminal (exit protocol): a stop lands before or after it, so the
+ *  terminal row, the provider ids and the stage are all handled on every exit;
+ *  the body's failure propagates as itself, joined by the cleanup's. The parent
+ *  is woken once the generation let the child's claim go ({@link settled}). */
 const endChildLoop = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   body: Exit.Exit<TTurn | undefined, Error>,
@@ -838,38 +821,50 @@ const runChildLoop = <TTurn, R>(
     );
   }).pipe(Effect.onExit((body) => endChildLoop(loop, body)));
 
-/**
- * Own one child's delivery, queue, concurrency budget and terminal cleanup.
- * A native launch runs on its own fiber and offers its turn boundaries to
- * this loop; process strategies return a turn and wait for their next batch
- * here.
- */
+/** The loop admitted a tick later (a refused one still lets an agent CLI's
+ *  provider ids go), its parent woken once the generation let the claim go. */
+const settled =
+  <TTurn, R>(loop: ChildLoop<TTurn, R>) =>
+  <A, E, R2>(admitted: Effect.Effect<A, E, R2>) =>
+    Effect.andThen(Effect.yieldNow, admitted).pipe(
+      Effect.ensuring(Effect.sync(() => loop.releaseOwnership())),
+      Effect.onExit(() =>
+        loop.end.kind === 'finished'
+          ? wakeParent(loop.end.result.delivery, loop.trace)
+          : Effect.void,
+      ),
+    );
+
+/** Own one child's delivery, queue, concurrency budget and terminal
+ *  cleanup, on its own fiber. A native launch offers its turn boundaries to
+ *  this loop; a process strategy returns a turn and waits for its next
+ *  batch here. */
 export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   params: ChildRunLoopParams<TTurn, R>,
 ): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | Runs> {
   return Effect.flatMap(Runs, (runs) => {
     const loop = new ChildLoop(params, registryOf(runs));
-    // Admitted a tick later; a refused one still lets an agent CLI's
-    // provider ids go. The parent may read this child at once: it is woken
-    // once the generation let the child's claim go.
     const launched = loop.runs.start(
       params.runId,
       runChildLoop(loop),
-      (admitted) =>
-        Effect.andThen(Effect.yieldNow, admitted).pipe(
-          Effect.ensuring(Effect.sync(() => loop.releaseOwnership())),
-          Effect.onExit(() =>
-            loop.end.kind === 'finished'
-              ? wakeParent(loop.end.result.delivery, loop.trace)
-              : Effect.void,
-          ),
-        ),
+      settled(loop),
       params.parentRunId,
     );
-    return Effect.map(launched, (fiber) => ({
+    return Effect.map(launched, ({ fiber, answer }) => ({
       fiber,
+      answer,
       lastTurn: () =>
         loop.end.kind === 'finished' ? loop.end.turn : undefined,
     }));
   });
 }
+
+/** The same loop for a persisted child, on the fiber of the resume that
+ *  decided it (`decideResume`); its `run.activate` answers the resume. */
+export const resumeChildRunLoop = <TTurn, R extends AgentRunServices = never>(
+  params: ChildRunLoopParams<TTurn, R>,
+): Effect.Effect<TTurn | undefined, Error, R | AgentRunServices> =>
+  Effect.flatMap(Runs, (runs) => {
+    const loop = new ChildLoop(params, registryOf(runs));
+    return settled(loop)(runChildLoop(loop));
+  });

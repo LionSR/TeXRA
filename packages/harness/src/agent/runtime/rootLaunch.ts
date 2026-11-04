@@ -1,11 +1,4 @@
-import {
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Deferred, Effect, Fiber, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
@@ -31,10 +24,7 @@ import {
   type SessionLog,
 } from '@shared/session/runHistory';
 import { humanGrant } from './runApprovalQueue';
-import {
-  activationIfOpened,
-  prepareAgentDefinition,
-} from './AgentLaunchContext';
+import { prepareAgentDefinition } from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf, Runs } from './runRegistry';
@@ -128,29 +118,20 @@ export const rootRun = Effect.fn('rootRun')(function* (
     return yield* Effect.fail(
       new Error('This session is closed; open it again to launch a run.'),
     );
-  const opened = yield* Deferred.make<CommitOrdinal>();
-  const onAdmitted = (_: RunId, commit: CommitOrdinal) =>
-    Deferred.succeed(opened, commit);
+  // The launch answers with its opening's commit, or fails with the
+  // launch's own failure before the run opened.
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.flatMap(
-      registryOf(runs).start(
-        launch.runId,
-        admittedRun(launch, onAdmitted),
-        (run) => run,
-      ),
-      (fiber) =>
-        restore(
-          Effect.raceFirst(
-            Deferred.await(opened),
-            Fiber.await(fiber).pipe(
-              Effect.flatMap((exit) =>
-                Exit.isFailure(exit) && !Deferred.isDoneUnsafe(opened)
-                  ? Effect.failCause(exit.cause)
-                  : activationIfOpened(opened),
-              ),
-            ),
+      registryOf(runs).start(launch.runId, admittedRun(launch), (run) => run),
+      ({ fiber, answer }) =>
+        restore(Deferred.await(answer)).pipe(
+          Effect.flatMap((answered) =>
+            'activation' in answered
+              ? Effect.succeed(answered.activation)
+              : Effect.die(
+                  new Error(`A root launch of ${launch.runId} was refused`),
+                ),
           ),
-        ).pipe(
           // A caller interrupted as the run opened never holds it.
           Effect.tap(() => restore(Effect.void)),
           Effect.onInterrupt(() => Fiber.interrupt(fiber)),
@@ -165,10 +146,7 @@ export const rootRun = Effect.fn('rootRun')(function* (
  * born with its opening, so a launch that fails before it leaves no run:
  * its failure is the launch's.
  */
-const admittedRun = Effect.fn('admittedRun')(function* (
-  launch: RootLaunch,
-  onAdmitted: NonNullable<ExecuteAgentOptions['onAdmitted']>,
-) {
+const admittedRun = Effect.fn('admittedRun')(function* (launch: RootLaunch) {
   const { runId, continues, approval } = launch;
   // Resolve the selected model before registering the run. The helper
   // model swap reads the enabled-model list and the routing switches, so it
@@ -200,7 +178,6 @@ const admittedRun = Effect.fn('admittedRun')(function* (
     approval?.policy === 'yolo' ? undefined : approval?.policy;
   return yield* executeAgent(definition, runId, {
     tools: launch.tools,
-    onAdmitted,
     registration: {
       identity: { kind: 'agent', agent: definition.config.agent },
       grants: limit === undefined ? grants : { ...grants, limit },

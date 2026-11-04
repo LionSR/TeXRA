@@ -21,7 +21,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import {
-  type CommitOrdinal,
   isTaskConfig,
   RUN_OUTCOME,
   type RunId,
@@ -64,16 +63,6 @@ export interface ExecuteAgentOptions {
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /**
-   * The one admission hook, with the run admitted and the commit of the
-   * batch that opened this activation (a fresh run's opening, a resume's
-   * `run.activate`). The run runs it as that batch commits, which it holds:
-   * keep it short.
-   */
-  readonly onAdmitted?: (
-    runId: RunId,
-    commit: CommitOrdinal,
-  ) => Effect.Effect<void>;
 }
 
 /**
@@ -123,7 +112,7 @@ const enterRun = Effect.fn('enterRun')(function* (
   // commit that created it, let go as the scope closes, after its end. A
   // claim the run cannot hold fails it, like any refused write.
   const scope = yield* Effect.scope;
-  const entered: RunLaunch['entry']['entered'] = (state) =>
+  const entered: RunLaunch['entry']['entered'] = () =>
     Effect.sync(() => {
       for (const e of held?.slice(carried) ?? []) log.publish(runId, e);
       held = null;
@@ -134,7 +123,6 @@ const enterRun = Effect.fn('enterRun')(function* (
           : Scope.provide(log.hold(runId, { ends: true }), scope),
       ),
       Effect.andThen(Deferred.succeed(opened, undefined)),
-      Effect.andThen(options.onAdmitted?.(runId, state.commit) ?? Effect.void),
     );
   const seed = options.registration?.seed ?? null;
   const parent =

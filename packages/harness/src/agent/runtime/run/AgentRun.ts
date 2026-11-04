@@ -39,7 +39,6 @@ import type {
   Registration,
 } from '@shared/session/runFacts';
 import { RunHistory } from '@shared/session/runHistory';
-import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
@@ -70,7 +69,7 @@ interface LaunchEntry {
   readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
   /** Fails when a fresh run's claim, its birth's, cannot be held. */
-  readonly entered: (state: RunState) => Effect.Effect<void, ClaimError>;
+  readonly entered: () => Effect.Effect<void, ClaimError>;
   readonly initialUserMessage: string | undefined;
 }
 

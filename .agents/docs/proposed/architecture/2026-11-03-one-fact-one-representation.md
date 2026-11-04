@@ -427,6 +427,14 @@ checks below green. No slice keeps two representations "for now".
    Amends D4 and M3.
 4. **A4 + A5: one resume, one refusal, children through tool results** (O5).
    Amends the session-messaging note.
+   _Landed 2026-11-04 (the resume row): one `Deferred<LaunchAnswer>` per
+   activation, completed from the log's `run.start`/`run.activate` row;
+   `RunRegistry.resume` opens the run or joins the launch in flight in one
+   step, and the decision runs the generation on its own fiber under the
+   claim the activation holds. `RunAttempt`, `waiters`, `handedOff`, the
+   activation link, the last-leaver interrupt, `attemptOf`, `restsWith`,
+   `delivered`, the hand-off rule, `onAdmitted` and `activationIfOpened` are
+   gone. The refusal row and A5 follow._
 5. **A6 + A7: no ownerless stop, list at open** (O4). Deletes the setting.
 6. **B: the fold fields and the host deletions** (O6).
 7. **C: the CLI exit owner** (O7).
