@@ -4,7 +4,7 @@ Date: 2026-11-03
 Status: proposed — a read-only review of the storage layer against the 1.0
 design (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md`),
 with the post-1.0 compatibility policy stated as rules and the pre-freeze
-changes those rules need. Baseline: `main` at `171aa36`.
+changes those rules need. Baseline: `main` at `9062f1b` (first read at `b411a6d`; the 2026-11-04 rulings reconciled in §5).
 
 ## Summary
 
@@ -166,9 +166,52 @@ Two findings to add:
 
 Sources: the `openai/codex` tree (`codex-rs/state/src/{runtime,sqlite,migrations,nfs_migration,runtime/recovery}.rs`, `codex-rs/rollout/src/recorder.rs`) and issues #21750, #22452, #23787, #28087, #40112, #55933; the `anomalyco/opencode` issues #13636, #13654, #41217, #55253, #55555, #56312 and PR #51935; the agentbridge PR #1199, which writes the v2 schema; a third-party write-up of the Codex session lifecycle (codex.danielvaughan.com, 2026-06-08).
 
-## 5. Verified
+## 5. Reconciled with the rulings of 2026-11-04
 
-- Every path and symbol above was read in the tree at `b411a6d`; `171aa36` changed no storage file.
+Two notes were accepted by the owner on 2026-11-04, after this review's
+first baseline:
+`.agents/docs/proposed/architecture/2026-11-03-one-fact-one-representation.md`
+(O1: one process per project store, held by SQLite's own exclusive lock;
+claims, liveness proofs and takeover deleted; the freeze waits for its
+slices 2, 3, 4 and D) and
+`.agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md`
+§1 (the upcast fields and loops deleted until a first upcaster exists; a
+`ValuesStore` layer split from the event `Database`, with the global database
+opened on it; one value gate; `databaseLayer({ file, create })`; one busy
+policy). In the same day `main` bumped six row kinds (`run.end` 4 to 6,
+`run.position` 2 to 3, `log` 4 to 5, `response.finalized` 1 to 2,
+`model.message` 9 to 11, `context.edit` 6 to 7) and regenerated the golden
+store four times. After the freeze that day's work is six upcasters. What
+changes in this note:
+
+| Item     | Before                                       | After the rulings                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P4       | Three hosts share one `texra.db`             | One process holds a project store; a second opener attaches to the service. The file meets another build only after the holder exits, and P4 still decides that open. The **global store stays multi-process** and holds current values alone, so the mixed-build case moves to `current_value`: F1 is now the main cross-build fact, not a side one.                                                                                                                   |
+| P1       | Upcasters run in the codec                   | The deletion is right before the freeze: with no upcaster written, the loops cost every read and prove nothing. It needs one sentence of policy beside it (decision D-A below), or the empty machinery invites bump-and-refuse after the freeze, which reads every older run as an earlier build's.                                                                                                                                                                     |
+| F1, S1   | Per-family `version` and `upcast`            | Narrowed: a per-family `version` and one `stored_kind` entry per family; no `upcast` field until a first upcaster exists; the per-read version check goes with "one value gate". Best landed inside the `ValuesStore` split, which touches every site anyway.                                                                                                                                                                                                           |
+| F4, S4   | A step table before the freeze               | Now urgent. O1's slice deletes `event_sequence.owner_id`: a column drop is a table rebuild and a `SCHEMA_VERSION` bump, after which every stamp-101 store (every developer's, and the golden fixture as loaded) is refused with "no step from it exists". Either S4 lands before the lock slice, or the column stays as an unused nullable column until the first major (P3's additive rule; a dead column is not a compatibility reader). Recommend: the column stays. |
+| F5, S5   | `StoreConnection` out of `Database.ts`       | Smaller and more useful. The claim half (about 250 lines: `acquireClaims`, `releaseClaims`, `claimOwner`, `claimAll`, `prepareRunRemoval`'s claim half, `provingOwners`) leaves with O1, and the `ValuesStore` split needs exactly the connection module: both stores open over one `StoreConnection`. Land S5 before or with the split.                                                                                                                                |
+| F7       | Three change coordinates and a poll          | After O1 the 250 ms `data_version` poll and the `aggregate_change` triggers serve only the global store; a project store has one writer. New F13: scope both to the global store and delete `aggregate_change` (its reader is `readInputBatch`'s `changedSince`, which tracked claim changes; an existence change is an event).                                                                                                                                         |
+| F10      | A defect as control flow, kept               | Deleted with O1 (`OwnersUnproven`, `provingOwners`, `reclaimable`). Nothing to keep.                                                                                                                                                                                                                                                                                                                                                                                    |
+| P5       | A major compacts in place                    | Unchanged. The lock design's sentence "a store's schema change is a version bump, not an upcaster" describes the pre-freeze slice; after the freeze P1 and P2 govern.                                                                                                                                                                                                                                                                                                   |
+| §4 table | TeXRA: one file per project, claims by owner | After O1: one process per project store (pi's model), the global store multi-process with a busy retry (Codex's model for its databases).                                                                                                                                                                                                                                                                                                                               |
+
+**Decision for the owner (D-A).** After the freeze, a breaking change to a
+released kind ships its adjacent upcaster or a new kind (P1, P2);
+bump-and-refuse ends at the freeze. `rowVersions.vitest.ts` enforces the
+chain once `config/storage/frozen/` exists, so the accepted deletion keeps
+the test's chain check and the registry's place for `upcast` (an empty
+tuple costs nothing), or re-adds both with the first upcaster in the same
+PR as the first post-freeze bump.
+
+**Revised order.** S4, or the decision to keep `owner_id`, before the lock
+slice. S2 and S3 before the freeze. S1 inside the `ValuesStore` split, S5
+before or with it. F13 inside the lock slice. S7 after the one-fact note's
+slices 2, 3, 4 and D, as that note rules.
+
+## 6. Verified
+
+- Every path and symbol in §2 was read at `b411a6d` and re-checked at `9062f1b`: the closure-bag signatures, the blob regex, `DISPLAY_PAGE_END`, `ValueFamily`, `checkStamps` and `ADDITIVE` are unchanged; `Database.ts` is 1,069 lines after the Effect built-ins refactor (#14635).
 - `config/storage/frozen/` does not exist; `rowVersions.vitest.ts` has
   nothing to compare until `storage:freeze` runs.
 - `src/test-kernel/fixtures/storage/golden-1.0.sql` exists (690 KB, written
