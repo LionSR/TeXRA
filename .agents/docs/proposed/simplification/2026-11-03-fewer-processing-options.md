@@ -389,8 +389,10 @@ _Landed 2026-11-04 (CLI): `clone`'s destination is its second argument and
 which the positional resolves against; `clone` and `init` no longer re-describe
 it); `config agents` takes `--agents <inherit|all|team:<team>|list>`,
 `--default-team <team|none>` and `--default-agent <agent|none>`, the grammar
-the command already printed and the forms used, so five flags and three
-"not both" errors are gone and a team is looked up one way for both flags.
+the command already printed and the forms used, so five flags and four usage
+errors are gone (three in `config agents`, `clone`'s "not both"); each value
+is trimmed once, a keyword reads in any case, and a team is looked up one way
+for both flags.
 Checked and kept: `--input`, `--context`, `--instruction` and `--model` are
 declared per command because their help differs per command (the team
 orchestrator, `run`'s media and document-task notes), `--model` was never

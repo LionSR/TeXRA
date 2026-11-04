@@ -104,25 +104,30 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
   ) {
     const roots = services.roots;
     const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
-    const { agents, defaultTeam, defaultAgent } = input;
+    // Each value is read once, trimmed; a keyword (`inherit`, `all`, `none`,
+    // the `team:` prefix) reads in any case, as a team's name does.
+    const agents = input.agents?.trim();
+    const defaultTeam = input.defaultTeam?.trim();
+    const defaultAgent = input.defaultAgent?.trim();
     for (const [flag, value] of [
       ['--agents', agents],
       ['--default-team', defaultTeam],
       ['--default-agent', defaultAgent],
     ] as const) {
-      if (value?.trim() === '')
-        return yield* failUsage(`${flag} needs a value.`);
+      if (value === '') return yield* failUsage(`${flag} needs a value.`);
     }
+    const keyword = (value: string | undefined) => value?.toLowerCase();
     // A team is named by id, name or slug; a selection stores its id.
     const teamNamed = (query: string) =>
       Effect.map(workspaceTeams(roots.repoState), (teams) =>
         findTeamPreset(teams, query),
       );
 
-    if (agents === 'inherit') yield* workspaceAgents.setInherited();
-    else if (agents === 'all') yield* workspaceAgents.setAll();
-    else if (agents?.startsWith('team:')) {
-      const query = agents.slice('team:'.length);
+    if (keyword(agents) === 'inherit') yield* workspaceAgents.setInherited();
+    else if (keyword(agents) === 'all') yield* workspaceAgents.setAll();
+    else if (agents !== undefined && keyword(agents)?.startsWith('team:')) {
+      const query = agents.slice('team:'.length).trim();
+      if (query === '') return yield* failUsage('--agents team: needs a team.');
       const team = yield* teamNamed(query);
       if (!team) return yield* failUsage(`Unknown agent team: ${query}`);
       yield* workspaceAgents
@@ -132,7 +137,8 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
       yield* workspaceAgents.setEnabledAgentKeys(parseAgentKeys(agents));
     }
 
-    if (defaultTeam === 'none') yield* workspaceAgents.clearDefaultTeam();
+    if (keyword(defaultTeam) === 'none')
+      yield* workspaceAgents.clearDefaultTeam();
     else if (defaultTeam !== undefined) {
       const team = yield* teamNamed(defaultTeam);
       if (!team) return yield* failUsage(`Unknown agent team: ${defaultTeam}`);
@@ -148,7 +154,7 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
         .pipe(Effect.mapError(asTeamUsageError));
     }
 
-    if (defaultAgent === 'none') {
+    if (keyword(defaultAgent) === 'none') {
       yield* setWorkspaceCliChatAgent(roots, undefined);
     } else if (defaultAgent !== undefined) {
       const available = yield* workspaceAgents.getVisibleAgents();
