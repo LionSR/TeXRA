@@ -467,7 +467,12 @@ const crashResume = (dir: string) =>
           }
           if (event.type === 'tool.start' && event.toolName === 'self')
             selfCards.add(event.logId);
-          if (event.type === 'tool.end' && selfCards.has(event.logId))
+          // A `self()` call that failed (its input refused) committed no round.
+          if (
+            event.type === 'tool.end' &&
+            selfCards.has(event.logId) &&
+            event.status === 'completed'
+          )
             selfEnded += 1;
           if (event.type === 'tool.start' && event.toolName === 'await_signoff')
             signoffStarted = true;
@@ -536,7 +541,7 @@ const crashResume = (dir: string) =>
         [
           check('killed by SIGKILL', signal === 'SIGKILL', signal),
           check(
-            'exactly one round was committed before the kill',
+            'the interrupted script committed exactly one round before the kill',
             Option.isSome(finished) && selfEnded === 1,
             selfEnded,
           ),

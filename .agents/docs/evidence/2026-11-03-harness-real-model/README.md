@@ -10,7 +10,7 @@ runs are allowed and nothing runs in CI.
 
 - DeepSeek (`deepseek/deepseek-flash`): every scenario passed, three times, on the
   build of #14623. The first run that reached the model, on `171aa36b38`,
-  failed two of three; the fixes are in findings 4 and 5 below.
+  failed two of three; the fixes are in findings 4 and 6 below.
 - Anthropic: no `ANTHROPIC_API_KEY` is set; the run waits for the owner.
 
 ## Runs
