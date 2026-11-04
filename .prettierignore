@@ -19,6 +19,3 @@ attic/
 # Generated API references (npm run docgen)
 packages/harness/docs/api/
 packages/llm/docs/api/
-
-# Real-model acceptance evidence, kept as the run wrote it (the model's scripts verbatim)
-.agents/docs/evidence/*-harness-real-model/*/

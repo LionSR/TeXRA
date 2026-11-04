@@ -15,18 +15,20 @@ runs are allowed and nothing runs in CI.
 
 ## Runs
 
-Each directory is one run. Its `summary.md` names `171aa36b38`, the commit the
-worktree was on; the runs after the first packed that commit with #14623's
+The raw records are kept in the history of #14623 at
+[`95980f4a90`](https://github.com/LionSR/TeXRA/tree/95980f4a90fa6cb5377eaa22be5b6820e79b4c5a/.agents/docs/evidence/2026-11-03-harness-real-model),
+not in the current tree. Each linked `summary.md` names `171aa36b38`, the commit
+the worktree was on; the runs after the first packed that commit with #14623's
 changes on top, uncommitted. Runs on intermediate versions of the fix are not
 kept.
 
 | Run                                                                       | Harness                | codemode | plugin | crash-resume  | Spend (USD) |
 | ------------------------------------------------------------------------- | ---------------------- | -------- | ------ | ------------- | ----------- |
-| [`deepseek-deepseek-flash-1931`](deepseek-deepseek-flash-1931/summary.md) | `171aa36b38`           | fail     | pass   | fail          | 0.0144      |
-| [`deepseek-deepseek-flash-2016`](deepseek-deepseek-flash-2016/summary.md) | #14623, earlier runner | pass     | pass   | pass          | 0.0124      |
-| [`deepseek-deepseek-flash-2018`](deepseek-deepseek-flash-2018/summary.md) | #14623, earlier runner | pass     | pass   | fail (runner) | 0.0134      |
-| [`deepseek-deepseek-flash-2021`](deepseek-deepseek-flash-2021/summary.md) | #14623, earlier runner | pass     | pass   | pass          | 0.0129      |
-| [`deepseek-deepseek-flash-2137`](deepseek-deepseek-flash-2137/summary.md) | #14623                 | pass     | pass   | pass          | 0.0123      |
+| `deepseek-deepseek-flash-1931` | `171aa36b38`           | fail     | pass   | fail          | 0.0144      |
+| `deepseek-deepseek-flash-2016` | #14623, earlier runner | pass     | pass   | pass          | 0.0124      |
+| `deepseek-deepseek-flash-2018` | #14623, earlier runner | pass     | pass   | fail (runner) | 0.0134      |
+| `deepseek-deepseek-flash-2021` | #14623, earlier runner | pass     | pass   | pass          | 0.0129      |
+| `deepseek-deepseek-flash-2137` | #14623                 | pass     | pass   | pass          | 0.0123      |
 
 Run `2018`'s crash-resume failed on the runner's checks, not the harness's
 behavior: the model first tried `self()` out in a separate script, and the
