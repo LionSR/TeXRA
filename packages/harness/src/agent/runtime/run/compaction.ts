@@ -67,8 +67,6 @@ interface CompactionInput {
   readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
-  /** The `/compact` requests it answers, consumed with its edit. */
-  readonly answers?: readonly RunHistoryDraft[];
 }
 
 /** Why a compaction runs: as its `context.edit` records it (`trigger`), and
@@ -208,7 +206,9 @@ const summarize = Effect.fn('compaction.summarize')(function* (
  * dropped with them. What the loop appended since stays after it.
  */
 const land = Effect.fn('compaction.land')(function* (
-  input: Pick<CompactionInput, 'runId' | 'logger' | 'answers'>,
+  input: Pick<CompactionInput, 'runId' | 'logger'>,
+  /** The `/compact` requests the edit answers, consumed with it. */
+  answers: readonly RunHistoryDraft[],
   summary: Summary,
   base: number | null,
   reason: Reason,
@@ -216,7 +216,7 @@ const land = Effect.fn('compaction.land')(function* (
   // Onto the cell's state, which holds the summary's own attempt rows.
   const state = yield* summary.cell.current;
   const compacted = yield* summary.cell.append([
-    ...(input.answers ?? []),
+    ...answers,
     {
       type: 'context.edit',
       aggregateId: qualifyAggregateId('run', input.runId),
@@ -313,7 +313,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       if (Exit.isSuccess(exit))
         return exit.value === null
           ? cell.current
-          : land(input, exit.value, base, reason);
+          : land(input, [], exit.value, base, reason);
       // A failed summary call warned itself; this is a defect in making one.
       input.logger.warn(
         `A background compaction stopped: ${toErrorMessage(Cause.squash(exit.cause))}`,
@@ -385,32 +385,28 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
     });
 
     /** Compact now, after any summary being made has landed as this edit:
-     *  a `/compact`'s answers ride it; an overflow's closes the failed request.
-     *  A history too short to summarize, or a summary attempt that failed
-     *  (logged and shown, never a stop), leaves the state unchanged. */
+     *  a `/compact`'s answers ride it; an overflow's closes the failed
+     *  request. The state is unchanged when the history is too short to
+     *  summarize, or the summary attempt failed (logged and shown, never
+     *  a stop). */
     const forced = Effect.fn('compaction.forced')(function* (
       cell: RunCell,
       bound: BoundModel,
-      force: 'request' | 'overflow',
+      reason: Exclude<Reason, 'threshold'>,
       answers: readonly RunHistoryDraft[],
     ) {
       const settled = yield* settle(
         cell,
-        `${force === 'request' ? 'a /compact' : 'an overflow'} replaces it`,
-        force === 'overflow' ? 'overflow' : 'threshold',
+        `${reason === 'request' ? 'a /compact' : 'an overflow'} replaces it`,
+        reason === 'overflow' ? 'overflow' : 'threshold',
       );
       const summary = yield* summarize(
         settled,
         { ...input, cell, bound },
-        force,
+        reason,
       );
       if (summary === null) return yield* cell.current; // its attempts
-      return yield* land(
-        { ...input, answers },
-        summary,
-        settled.lastEdit,
-        force,
-      );
+      return yield* land(input, answers, summary, settled.lastEdit, reason);
     });
 
     const afterOverflow = Effect.fn('compaction.afterOverflow')(function* (

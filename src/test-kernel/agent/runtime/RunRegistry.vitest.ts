@@ -14,6 +14,7 @@ import { expect, vi } from 'vitest';
 
 // Local imports
 import {
+  GlobalStateKey,
   generateRunId,
   RUN_PHASE,
   type RunId,
@@ -29,6 +30,7 @@ import {
 } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
+import { Settings } from '@shared/config/settings';
 import {
   runStateAppend,
   SessionLog,
@@ -246,11 +248,14 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
           // while the parent's `run.end` has not folded yet. The stop still
           // stands on the parent's activation, so a child whose lineage read
           // preceded the stop is refused as it registers.
+          // A user's stop detaches the children under "Keep agents running".
+          yield* Settings.set(
+            Context.get(session, SessionRoots),
+            GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+            true,
+          );
           yield* registry
-            .stop(rootRunId, {
-              detachActiveChildren: true,
-              reason: 'user',
-            })
+            .stop(rootRunId, 'user')
             .settlement.pipe(Effect.provide(session));
           expect(registry.bornDetached(childRunId)).toBe(true);
           expect(yield* refusal(lateChildRunId)).toMatchObject(stopped);

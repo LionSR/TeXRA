@@ -5,7 +5,7 @@
  * `agent` (the `ChildRuns` launch): one proposal, one reuse key, one in-band or
  * detached child. A model that wants a conversation calls `agent` instead.
  */
-import { Effect, Predicate, Schema } from 'effect';
+import { Effect, Predicate, Record as Rec, Schema } from 'effect';
 
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { AgentCatalog } from '@texra-ai/harness/host';
@@ -17,7 +17,7 @@ import {
   fileList,
 } from '@texra-ai/harness/plugins';
 import { agentMatchesIdentifier, toJsonValue } from '@texra-ai/harness/schemas';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
+import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
   documentTaskPatch,
@@ -44,16 +44,9 @@ const DocumentTaskInputSchema = Schema.Struct({
   outputFiles: fileList(
     'Output paths, a subset of `inputFiles`. Empty for the default outputs.',
   ),
-  extractFigures: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description: 'Attach the figures the input LaTeX includes as media.',
-  }),
-  extractTikz: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description: 'Compile the input LaTeX TikZ figures and attach them.',
-  }),
-  reflect: Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({
-    description:
-      'Have the `critic` agent review each revision but the last; the next revision reads its critique.',
-  }),
+  ...Rec.map(DOCUMENT_TASK_OPTIONS, ({ description }) =>
+    Schema.optional(Schema.NullOr(Schema.Boolean)).annotate({ description }),
+  ),
   ...CALL_FIELDS,
 });
 type DocumentTaskInput = typeof DocumentTaskInputSchema.Type;
@@ -80,7 +73,6 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     agentName: input.agentName,
     prompt: input.prompt,
     model: input.model,
-    schema: null,
     memories: input.memories,
     workingDirectory: input.working_directory,
     id: input.id,
@@ -108,15 +100,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
           ? { script: patch.script, outputFiles: patch.outputFiles }
           : null;
       },
-      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({
-        ...(input.extractFigures != null && {
-          autoExtractFigure: input.extractFigures,
-        }),
-        ...(input.extractTikz != null && {
-          autoExtractTikzFigure: input.extractTikz,
-        }),
-        ...(input.reflect != null && { reflect: input.reflect }),
-      }),
+      options: Rec.map(DOCUMENT_TASK_OPTIONS, (_, key) => input[key] ?? false),
     },
   });
   return withDocuments(launched);

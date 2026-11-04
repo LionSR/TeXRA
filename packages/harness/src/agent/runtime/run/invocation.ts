@@ -10,14 +10,12 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { StatusCodes } from 'http-status-codes';
 import { Cause, Context, Effect, Exit, Result } from 'effect';
 import { ModelError } from '@texra-ai/llm';
 
 import type { AgentTrace } from '@agent/trace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { type CallFailure } from '@agent/runtime/modelAccess/failureInfo';
-import { offersRetry } from '@common/errors/sdkError/providerErrorFormat';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import {
   type FailedNext,
@@ -138,7 +136,7 @@ const nextRef = (invocation: Invocation | null): InvocationRef =>
  * The once-per-invocation renewal of a subscription access token the
  * provider rejects before its stored expiry (revoked, or expired
  * server-side): the binding rebound on a refreshed session. `true` when the
- * attempt may go again on it. A renewal that fails takes the stale 401's
+ * attempt may go again on it. A renewal that fails takes the rejection's
  * place as an unsent failure, so the user reads the "sign in again"
  * instruction rather than "token is expired", and no retry resends the
  * rejected token.
@@ -154,7 +152,7 @@ const credentialRenewal = <R>(
     if (
       spent ||
       !(failure.error instanceof ModelError) ||
-      failure.error.status !== StatusCodes.UNAUTHORIZED ||
+      failure.error.kind !== 'authentication' ||
       bound.subscriptionToken === undefined
     )
       return Effect.succeed(failure);
@@ -285,7 +283,13 @@ const moveAfter = <A, E, R>(
           !unsent &&
           error instanceof ModelError &&
           error.retryable,
-        offered: !unsent && offersRetry(error),
+        // A person is offered a retry whenever llm says the same request can
+        // succeed, and after a used-up quota, whose retry carries the switch
+        // onto their own credential; a missing route is fixed outside the run.
+        offered:
+          !unsent &&
+          error instanceof ModelError &&
+          (error.retryable || error.quota !== undefined),
       },
       driver.retries,
       driver.asker?.requestId() ?? null,

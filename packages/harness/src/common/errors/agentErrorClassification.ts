@@ -1,13 +1,17 @@
 import {
   HARNESS_INSTRUCTION_KEY,
-  type ProviderErrorClassification,
+  toRetryErrorInfo,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
   type RunEnd,
 } from '@shared/schemas';
 
 import { isDiskFullError } from './errorPredicates';
-import { normalizeProviderError } from './sdkError/providerErrorFormat';
+import {
+  DISK_FULL_MESSAGE,
+  modelFailureIn,
+  unexpectedMessage,
+} from './sdkError/providerErrorFormat';
 
 export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 
@@ -21,19 +25,19 @@ export function primaryAgentError(err: unknown): unknown {
 }
 
 /**
- * Classify agent execution errors for consistent runtime notification policy.
- *
- * Every kind is decided by a typed signal: an errno, or
- * the failure's classification (a missing key is model access's
- * `RouteUnavailable`, an overflowed window llm's verdict, either one as a
- * run recorded it).
+ * A run's failure as its `run.end` row records it. Every kind is decided by
+ * a typed signal: an errno, or the model failure in the cause chain (as the
+ * run recorded it, else llm's verdict or a missing route worded fresh);
+ * anything else is unexpected, in its own words.
  */
-export function classifyAgentError(err: unknown): AgentErrorKind {
+export function classifyAgentError(err: unknown): NonNullable<RunEnd['error']> {
   const primary = primaryAgentError(err);
-  if (isDiskFullError(primary)) return 'disk-full';
-  const kind = normalizeProviderError(primary).classification?.kind;
-  if (kind === 'missing-api-key' || kind === 'context-window') return kind;
-  return 'unexpected';
+  if (isDiskFullError(primary))
+    return { kind: 'disk-full', message: DISK_FULL_MESSAGE };
+  const failure = modelFailureIn(primary);
+  return failure === undefined
+    ? { kind: 'unexpected', message: unexpectedMessage(primary) }
+    : { kind: 'model', ...toRetryErrorInfo(failure) };
 }
 
 /** How a host presents an agent error: an instruction, or a plain error. */
@@ -50,43 +54,33 @@ export type AgentErrorPresentation =
 const MISSING_API_KEY_MESSAGE =
   'API key not found. Set your API key and run again.';
 
-/** Map a classified error to host guidance. */
-export function agentErrorPresentation(error: {
-  kind: AgentErrorKind;
-  message: string;
-  /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
-   *  beside the error so the host's dialog keeps the guide affordance. */
-  docsPage?: string;
-  /** The failure's classification, carried beside its message so a host
-   *  may word the failure itself. */
-  classification?: ProviderErrorClassification;
-}): AgentErrorPresentation {
-  const docs = error.docsPage ? { docsPage: error.docsPage } : {};
-  const facts = error.classification
-    ? { classification: error.classification }
-    : {};
-  switch (error.kind) {
-    case 'missing-api-key':
-      return {
-        type: 'instruction',
-        payload: {
-          key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
-          message: MISSING_API_KEY_MESSAGE,
-          showSuppress: false,
-        },
-      };
-    case 'context-window':
-    case 'disk-full':
-    case 'result-lost':
-    case 'unexpected':
-      return {
-        type: 'error',
-        payload: { message: error.message, ...docs, ...facts },
-      };
-    default: {
-      // Every error kind must choose an explicit presentation policy.
-      const unhandled: never = error.kind;
-      return unhandled;
-    }
-  }
+/**
+ * Map a run's failure to host guidance: the missing-key instruction, or an
+ * error with the failure's classification beside its message, which a host
+ * may word in its place.
+ */
+export function agentErrorPresentation(
+  error: NonNullable<RunEnd['error']>,
+): AgentErrorPresentation {
+  if (
+    error.kind === 'model' &&
+    error.classification?.kind === 'missing-api-key'
+  )
+    return {
+      type: 'instruction',
+      payload: {
+        key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
+        message: MISSING_API_KEY_MESSAGE,
+        showSuppress: false,
+      },
+    };
+  return {
+    type: 'error',
+    payload: {
+      message: error.message,
+      ...(error.kind === 'model' && error.classification !== undefined
+        ? { classification: error.classification }
+        : {}),
+    },
+  };
 }

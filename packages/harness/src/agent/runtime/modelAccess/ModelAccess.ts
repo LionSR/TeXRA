@@ -15,6 +15,7 @@ import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
 import {
   type ModelConfig,
+  type ModelError,
   type ModelRoute,
   selectModel,
   type TurnRequest,
@@ -30,7 +31,6 @@ import type {
   CredentialSwitch,
   DeclinableUsageRoute,
   ModelBackend,
-  RetryErrorInfo,
 } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
@@ -115,10 +115,11 @@ export class ModelAccess extends Context.Service<
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<SwitchRefusal | null, RouteUnavailable>;
-    /** The move onto the user's own credential a failure on `failed` offers. */
+    /** The move onto the user's own credential a used-up `quota` (llm's
+     *  verdict on a failure of `failed`) offers. */
     readonly credentialSwitch: (
       failed: BoundModel,
-      recorded: RetryErrorInfo,
+      quota: ModelError['quota'],
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CredentialSwitch | null>;
   }
@@ -230,8 +231,8 @@ export const modelAccessLayer = (
             ),
           );
         },
-        credentialSwitch: (failed, recorded, declined) =>
-          credentialSwitch(failed, recorded, declined).pipe(
+        credentialSwitch: (failed, quota, declined) =>
+          credentialSwitch(failed, quota, declined).pipe(
             Effect.provideService(Secrets, secrets),
           ),
       };

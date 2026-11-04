@@ -5,20 +5,11 @@
  * in a browser-safe module, because the settings view's webview renders them.
  */
 
-// Third-party imports
-import { Effect, Schema } from 'effect';
-
 // Local imports
 import {
   AGENT_CLI_EFFORT_SETTING,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CLAUDE_AGENT_MODEL_SETTING,
-  ClaudeAgentPermissionModeSchema,
-  CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_MODEL_SETTING,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CodexApprovalPolicySchema,
-  CodexSandboxModeSchema,
 } from '@texra/shared/agentCliSettings';
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
@@ -26,16 +17,13 @@ import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces
 /** The `codex` plugin's repository-scoped keys. */
 export const CodexStateKey = Object.freeze({
   MODEL: 'codexModel',
-  SANDBOX_MODE: 'codexSandboxMode',
   REASONING_EFFORT: 'codexReasoningEffort',
-  APPROVAL_POLICY: 'codexApprovalPolicy',
 } as const);
 export type CodexStateKey = (typeof CodexStateKey)[keyof typeof CodexStateKey];
 
 /** The `claude-agent` plugin's repository-scoped keys. */
 export const ClaudeAgentStateKey = Object.freeze({
   MODEL: 'claudeAgentModel',
-  PERMISSION_MODE: 'claudeAgentPermissionMode',
   EFFORT: 'claudeAgentEffort',
 } as const);
 export type ClaudeAgentStateKey =
@@ -65,18 +53,6 @@ export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
     }),
   },
   {
-    label: 'Sandbox mode',
-    row: agentCliSetting({
-      key: CodexStateKey.SANDBOX_MODE,
-      schema: CodexSandboxModeSchema.pipe(
-        Schema.withDecodingDefault(Effect.succeed(CODEX_SANDBOX_MODE_DEFAULT)),
-      ),
-      title: 'Codex sandbox mode',
-      description: 'Filesystem access mode used when TeXRA launches Codex.',
-      enumLabels: ['Read-only', 'Workspace write', 'Full access'],
-    }),
-  },
-  {
     label: 'Reasoning effort',
     row: agentCliSetting({
       key: CodexStateKey.REASONING_EFFORT,
@@ -84,25 +60,6 @@ export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
       title: 'Codex reasoning effort',
       description:
         'Reasoning effort for Codex runs, up to what the model takes.',
-    }),
-  },
-  {
-    label: 'Approval policy',
-    row: agentCliSetting({
-      key: CodexStateKey.APPROVAL_POLICY,
-      schema: CodexApprovalPolicySchema.pipe(
-        Schema.withDecodingDefault(
-          Effect.succeed(CODEX_APPROVAL_POLICY_DEFAULT),
-        ),
-      ),
-      title: 'Codex approval policy',
-      description: 'When Codex should ask for approval before risky actions.',
-      enumLabels: [
-        'Auto approve',
-        'Ask when requested',
-        'Ask for untrusted',
-        'Ask on failure',
-      ],
     }),
   },
 ];
@@ -126,25 +83,6 @@ export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = [
       title: 'Claude Code reasoning effort',
       description:
         'Reasoning effort for Claude Code, up to what the model takes.',
-    }),
-  },
-  {
-    label: 'Permission mode',
-    row: agentCliSetting({
-      key: ClaudeAgentStateKey.PERMISSION_MODE,
-      schema: ClaudeAgentPermissionModeSchema.pipe(
-        Schema.withDecodingDefault(
-          Effect.succeed(CLAUDE_AGENT_DEFAULT_PERMISSION_MODE),
-        ),
-      ),
-      title: 'Claude Code permission mode',
-      description: 'Permission policy used by Claude Code agent sessions.',
-      enumLabels: [
-        'Prompt for risky actions',
-        'Auto-accept edits',
-        'Bypass all (dangerous)',
-        'Plan only (read-only)',
-      ],
     }),
   },
 ];

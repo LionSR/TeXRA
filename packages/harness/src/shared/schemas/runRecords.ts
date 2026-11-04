@@ -49,30 +49,17 @@ export const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
 /** Why a run stops: a `user` stop or this process's `shutdown`. */
 export type RunStopReason = typeof RunStopReasonSchema.Type;
 
-/** Terminal errors keep the classified kind beside the provider detail,
- *  and always say what went wrong (`message`). */
+/** Why a run ended failed, always saying what went wrong (`message`): a
+ *  local failure, or a model failure as the run's rows record it, with its
+ *  classification (a used-up plan, a missing key, an overflowed window). */
 const RunEndErrorSchema = Schema.Union([
-  RetryErrorInfoSchema.mapFields(Struct.pick(['userRetryable', 'partialText']))
-    .mapFields(Struct.map(Schema.optional))
-    .mapFields(
-      Struct.assign({
-        message: RetryErrorInfoSchema.fields.message,
-        kind: Schema.Literals(['disk-full', 'result-lost']),
-      }),
-    ),
-
-  RetryErrorInfoSchema.mapFields(Struct.omit(['message']))
-    .mapFields(Struct.map(Schema.optional))
-    .mapFields(
-      Struct.assign({
-        message: RetryErrorInfoSchema.fields.message,
-        kind: Schema.Literals([
-          'context-window',
-          'missing-api-key',
-          'unexpected',
-        ]),
-      }),
-    ),
+  Schema.Struct({
+    kind: Schema.Literals(['disk-full', 'result-lost', 'unexpected']),
+    message: Schema.String,
+  }),
+  RetryErrorInfoSchema.mapFields(
+    Struct.assign({ kind: Schema.Literal('model') }),
+  ),
 ]);
 
 /**

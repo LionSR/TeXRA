@@ -87,9 +87,7 @@ function applyNonRegexPolicy(
   const processed = applyReplacements(text, getAllReplacements(config));
   const trimmed = processed.text.trim();
   return {
-    text: shouldWrapCritiqueInAlign(config)
-      ? wrapCritiqueInAlign(trimmed)
-      : trimmed,
+    text: wrapCritiqueInAlign(trimmed),
     diagnostics: processed.diagnostics,
   };
 }
@@ -99,20 +97,19 @@ function applyAllPolicy(
   config: ConfigProvider,
 ): ReplacementResult {
   const replacements = getAllReplacements(config);
-  const wrapCritique = shouldWrapCritiqueInAlign(config);
 
   const nonRegex = applyReplacements(text, replacements, {
     cleanupPasses: false,
   });
   let result = nonRegex.text.trim();
-  if (wrapCritique) result = wrapCritiqueInAlign(result);
+  result = wrapCritiqueInAlign(result);
   const regex = applyReplacements(result, getAllReplacementsRegex(config), {
     cleanupPasses: false,
   });
   const final = applyReplacements(regex.text.trim(), replacements);
   result = final.text.trim();
   return {
-    text: wrapCritique ? wrapCritiqueInAlign(result) : result,
+    text: wrapCritiqueInAlign(result),
     diagnostics: [
       ...nonRegex.diagnostics,
       ...regex.diagnostics,
@@ -222,10 +219,6 @@ const REGEX_RULES: Record<RegexReplacementCategory, RegexRuleSet> = {
   max_style_regex: MAX_REGEX_REPLACEMENTS,
 };
 
-function shouldWrapCritiqueInAlign(config: ConfigProvider): boolean {
-  return Settings.getConfig(config, 'latex.wrapCritiqueInAlign');
-}
-
 /**
  * Combine every enabled non-regex category into a single category. Custom
  * replacements from user settings take precedence over predefined rules.
@@ -293,8 +286,8 @@ const compiledRegexCache = new LRUCache<string, RegExp>({
   max: MAX_COMPILED_REGEX_CACHE,
 });
 
-function getCompiledRegex(pattern: string, flags?: string): RegExp {
-  const key = `${flags ?? ''}\u0000${pattern}`;
+function getCompiledRegex(pattern: string, flags: string): RegExp {
+  const key = `${flags}\u0000${pattern}`;
   const cached = compiledRegexCache.get(key);
   if (cached) {
     return cached;

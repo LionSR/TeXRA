@@ -94,7 +94,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 {
                   failWith: {
                     message: 'Later provider failure',
-                    userRetryable: false,
                   },
                 },
               ],
@@ -134,7 +133,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 failWith: {
                   message:
                     "Input is 300000 tokens, which exceeds the model's context window of 200000 tokens.",
-                  userRetryable: false,
                   classification: { kind: 'context-window' },
                 },
               },

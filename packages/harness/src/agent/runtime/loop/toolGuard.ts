@@ -19,16 +19,12 @@ import {
   type CallRequests,
   type ITool,
 } from '@agent/core/tools/ToolTypes';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   approvalPolicyDenialMessage,
   decideApproval,
   isApprovalDenied,
 } from '@shared/approvalPolicy';
-import { Settings } from '@shared/config/settings';
 import {
-  BASH_APPROVAL_CONFIG_KEY,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   qualifyAggregateId,
   type DecisionOf,
   type HookOutcomePayload,
@@ -68,16 +64,16 @@ import type { preToolUse } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
-/** Each operation a run asks permission for: the grant that answers it, the
- *  setting that says whether it is asked (none: always), and what a denial
- *  is told as. A call of a tool that declares no `guard.grant` takes the
- *  run's delegated-work grant, so a command grant never approves it. */
+/** Each operation a run asks permission for: the grant that answers it and
+ *  what a denial is told as. A call of a tool that declares no `guard.grant`
+ *  takes the run's delegated-work grant, so a command grant never approves
+ *  it. */
 const OPERATIONS = {
-  bash: ['bash', BASH_APPROVAL_CONFIG_KEY, 'executable'],
-  call: ['superYolo', BASH_APPROVAL_CONFIG_KEY, 'executable'],
-  toolEdit: ['toolEdit', TOOL_EDIT_APPROVAL_CONFIG_KEY, 'executable'],
-  plan: ['superYolo', null, 'plan'],
-  proposal: ['superYolo', null, 'proposal'],
+  bash: ['bash', 'executable'],
+  call: ['superYolo', 'executable'],
+  toolEdit: ['toolEdit', 'executable'],
+  plan: ['superYolo', 'plan'],
+  proposal: ['superYolo', 'proposal'],
 } as const satisfies Record<ApprovalOperation, unknown>;
 
 /**
@@ -90,16 +86,13 @@ export const sessionPermission =
   (
     approvals: Pick<SessionApprovals, 'policy' | 'bypass'>,
     interactions: Interactions['Service'],
-    roots: WorkspaceRoots,
   ): ApprovalsWithPermission['permission'] =>
   (runId, operation, hook) => {
-    const [grant, setting, kind] = OPERATIONS[operation];
+    const [grant, kind] = OPERATIONS[operation];
     const canPresent = !interactions.approvalPromptsUnavailable;
     const policy = approvals.policy(runId);
     const decision = decideApproval({
       policy,
-      promptRequired:
-        setting === null || Settings.getConfig<boolean>(roots.config, setting),
       scopedBypass: approvals.bypass(runId, grant) !== null,
       canPresent,
     });
@@ -219,7 +212,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // The call as the prompt shows it: the guard's spelling, else the tool's
   // name and its final input.
   const command = guard?.command
-    ? yield* guard.command.text(decoded)
+    ? guard.command.text(decoded)
     : `${definition.name} ${JSON.stringify(decoded)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather

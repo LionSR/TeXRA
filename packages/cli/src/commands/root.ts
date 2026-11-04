@@ -119,7 +119,7 @@ export const rootCommand = withUsageSections(
         ['texra auth grok login', 'sign in with a Grok (xAI) subscription'],
         ['texra chat', 'start an interactive tool-use session'],
         [
-          'texra clone <project> --cwd ./paper',
+          'texra clone <project> ./paper',
           'clone an Overleaf or ShareLaTeX project',
         ],
         ['texra run <agent> --input file.tex', 'run an agent headless'],
@@ -130,7 +130,7 @@ export const rootCommand = withUsageSections(
         ],
         ['texra agents list', 'list the available agents'],
         [
-          'texra config agents --all',
+          'texra config agents --agents all',
           'make every agent visible in this workspace',
         ],
         [

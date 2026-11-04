@@ -289,6 +289,18 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
+      # Vitest starts the files that took longest last run first; without
+      # its results it falls back to the largest files, and the crash-point
+      # suites (a few lines each, the slowest by far) would start last and
+      # set the shard's wall-clock. Each run saves its own results; a run
+      # restores the newest a shard saved, a PR's from its base branch.
+      - name: Restore test durations
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.vite/vitest
+          key: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-
+
       # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
       # shards exist because a single runner can't go wider than that.
       - name: Kernel tests
