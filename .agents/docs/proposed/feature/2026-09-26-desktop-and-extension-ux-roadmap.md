@@ -35,9 +35,10 @@ The UI should be quiet and should never mislead the user. In priority order:
 
 ## Decided
 
-- **The desktop wears the TeXRA brand**: warm paper surfaces, aubergine ink,
-  and the logo purple `#6f387a` as the single interaction accent in both
-  themes, as tokens in `packages/desktop/src/renderer/themeTokens.css`.
+- **The desktop has its own palette**: a cool neutral canvas, ink text and
+  one blue interaction accent in both themes, as tokens in
+  `packages/desktop/src/renderer/themeTokens.css`. #13895 replaced the brand
+  purple `#6f387a` this line used to record.
 - **The VS Code extension stays native** to the editor theme. A brand accent
   inside someone's editor theme is noise, not identity.
 - **The composer is the one home to attach files.** `<launch-attachments>`
@@ -67,8 +68,9 @@ Each item is independent and small enough for one PR.
    Terminal / Files / Browser or switch-project commands.
 5. **Settings search.** Each settings catalog has its own search field
    (`SettingsCatalog.ts`); there is still no filter across the tabs.
-   Paragraph-length descriptions that expose internals remain (for example
-   "Interactions (submit + poll)" in `stateSettings.ts`). The owner has not
+   The example once given for descriptions that expose internals,
+   "Interactions (submit + poll)" in `stateSettings.ts`, belongs to
+   `model.useGoogleBackgroundResponses`, which no settings UI shows. The owner has not
    decided whether the Agents › Advanced switches stay, so wait on that
    before polishing them.
 6. **Loading and failure placeholders.** "Error loading content"

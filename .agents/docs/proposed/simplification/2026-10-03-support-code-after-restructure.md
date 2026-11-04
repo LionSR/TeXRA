@@ -11,9 +11,7 @@ second config-path derivation, `ConfigProvider.inspect`'s `| undefined`, the
 plugin digest's symlink read (now one `lstat` per entry, with no recovery) and
 the hook runner's stdio read (now logged at `warn` before the result keeps
 what was read) have since been settled. The `initializeNodeRuntimeSkills`
-inline was dropped: the package split made it a published `./node` export
-(`packages/harness/src/node.ts`) whose caller, `bootstrapHost`, now lives in
-the app, which may not import `@skills`. Re-checked against `main` at `808521a8ed`
+inline is moot: neither it nor `bootstrapHost` exists any more. Re-checked against `main` at `808521a8ed`
 (2026-10-30); what follows is still open.
 
 ## 1. Two silent catches
@@ -36,8 +34,10 @@ the hook runner's verdicts are pinned by
 `pluginDigest.ts` (`externalFiles`) resolves an MCP server command with
 `whichOnExtendedPath`. `pluginHooks.ts` (`pinHook`) resolves a hook program
 with `which.sync(program, { path: process.env.PATH })`. If a binary is only
-on the extended PATH, it pins for a server but is refused for a hook, and
-the two can pin different binaries for the same name.
+on the extended PATH, it pins for a server, while a hook is left unpinned (trusted by its exact
+text) and then is not found when it runs, since `runHook` spawns on the
+unextended PATH. A binary on the process PATH resolves the same for both:
+the extended PATH appends the `CommandDirs` after it.
 
 The server side is settled: its spawn gets the extended PATH its pin
 resolves over, so a server runs the binary it pinned without moving any
@@ -46,7 +46,9 @@ spawns with `extendEnv: false` and `PATH: process.env.PATH ?? '/usr/bin:/bin'`,
 and `pinHook` resolves over `process.env.PATH ?? ''`, so with PATH unset the
 hook is left dynamic rather than pinned against that fallback. The extension
 host writes the extended PATH into `process.env.PATH` once it activates, so
-there hooks see it too; the CLI and the desktop app do not.
+there hooks see it too. The desktop app on macOS repairs `process.env.PATH`
+at launch (`repairLaunchPath`: the login shell's PATH plus fixed TeX and
+Homebrew directories) but adds no `CommandDirs`; the CLI does neither.
 
 Still open: one resolver for hooks and servers. Not done because it changes
 which hooks load, and with that the hook trust digests.

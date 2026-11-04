@@ -70,7 +70,7 @@ const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
 /** Each operation a run asks permission for: the grant that answers it, the
  *  setting that says whether it is asked (none: always), and what a denial
- *  is told as. A call of a tool that declares no `guard.grant` takes the
+ *  is told as. A call of a tool that declares no `command.grant` takes the
  *  run's delegated-work grant, so a command grant never approves it. */
 const OPERATIONS = {
   bash: ['bash', BASH_APPROVAL_CONFIG_KEY, 'executable'],
