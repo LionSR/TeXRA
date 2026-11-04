@@ -15,7 +15,6 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import type { Shell } from '@texra/shared/session/shell';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
@@ -23,6 +22,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import type { Shell } from './shell';
 import type { SessionView } from '@texra-ai/harness/schemas';
 
 /** One open project as the rail lists it: how its host names it, its session,

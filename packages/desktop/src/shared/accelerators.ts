@@ -1,4 +1,4 @@
-import type { CommandKeybinding } from './catalog';
+import type { CommandKeybinding } from '@texra/shared/commands/catalog';
 
 /**
  * Pure string transformations for keyboard accelerators. The catalog stores

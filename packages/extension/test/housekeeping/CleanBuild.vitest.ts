@@ -4,7 +4,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { findBuildDirectories } from '@housekeeping/clean';
+import { findBuildDirectories } from '@commands/housekeeping/clean';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 
