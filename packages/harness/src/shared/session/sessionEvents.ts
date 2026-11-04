@@ -99,10 +99,11 @@ export interface JobOptions {
   readonly failed?: (error: unknown) => void;
 }
 
-/** A row that is not part of any run's state: any job may append it as is,
- *  with the blobs it stores. */
+/** A row that is not part of any run's state, or a run's end, which nothing
+ *  continues from until the next open folds it: any job may append it as
+ *  is, with the blobs it stores. */
 export type UnfoldedDraft = WithBlobs<
-  Exclude<SessionEventDraft, { type: RunStateRowType }>
+  Exclude<SessionEventDraft, { type: Exclude<RunStateRowType, 'run.end'> }>
 >;
 
 /** Rows another owner decides inside a job, appended with the job's own

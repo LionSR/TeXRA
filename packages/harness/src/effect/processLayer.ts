@@ -9,6 +9,7 @@ import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { RunLabels } from '@agent/runtime/sessionDescription';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
 import {
   ownerProcessLayer,
@@ -58,9 +59,6 @@ export interface ProcessLayerOptions extends Omit<
   /** The global store: absent, the global root's (`globalAppStateLayer`);
    *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
   readonly appState?: ProcessServicesOptions['appState'];
-  /** Seed the first-install tool switches (opt-in plugins off) unless the
-   *  user's list exists; `false` for a store that refuses every write. */
-  readonly seedToolSwitches?: boolean;
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
@@ -124,7 +122,9 @@ export class Sessions extends Context.Service<
    * open. A list the harness cannot compose fails with
    * {@link PluginsRefused}, as {@link processLayer} says, and the
    * first-install tool switches are seeded into the platform's global
-   * state.
+   * state. The harness logs with `Effect.log*` through the loggers, level
+   * and tracer the embedder's program provides (`Logger.layer`,
+   * `References.MinimumLogLevel`), and installs none of its own.
    *
    * Build it once per process, as any Effect layer is memoized: a second
    * live build that opens a root the first holds is refused at open
@@ -141,14 +141,13 @@ export class Sessions extends Context.Service<
       plugins,
       skills,
       secrets: Secrets.layer(platform.secrets),
-      appState: AppState.layer(platform.roots.globalState),
+      appState: seeded(AppState.layer(platform.roots.globalState), plugins),
       agentDirectories: Layer.succeed(AgentDirectories)(
         platform.agentDirectories,
       ),
       commandDirs: platform.commandDirs,
-      // An embedder's console has no live level filter of its own, so
-      // the package speaks at the informational level, not flooding it.
-      minimumLogLevel: 'Info',
+      // No logger of the harness's own: the embedder's logger layer,
+      // level and tracer decide where the harness's lines go.
     });
   }
 }
@@ -171,40 +170,53 @@ export class Sessions extends Context.Service<
  * recording one request kind's decisions, a switch on a plugin with no
  * availability probe) fails the build with {@link PluginsRefused} before
  * anything is built, so the refusal names the plugin rather than failing
- * the first session open. The global store is seeded with the first-install
- * tool switches as it is built, unless `seedToolSwitches` is `false`.
+ * the first session open. A global store the process builds itself is
+ * seeded with the first-install tool switches; a store handed in is left as
+ * it is. Every root run is labelled with a short title from the helper model
+ * (its `run.description`): an extra model request per root run, outside the
+ * run's usage, which every host's run list shows.
  */
 export function processLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
-  return Layer.merge(
+  // Labels are read from the runtime's own context, so they are merged
+  // into this layer's output, not provided to the sessions' construction.
+  return Layer.mergeAll(
     sessionsLayer(options),
+    Layer.succeed(RunLabels)(true),
     Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
   );
 }
 
+/** The store, seeded with the first-install tool switches (opt-in plugins
+ *  off) unless the user's list exists: as it is built, so before the tool
+ *  catalog first reads the switches (an embedder's store has no change feed
+ *  and is read once). A store that cannot be read or written is a platform
+ *  defect. */
+const seeded = (
+  appState: NonNullable<ProcessServicesOptions['appState']>,
+  plugins: ProcessLayerOptions['plugins'],
+) =>
+  appState.pipe(
+    Layer.tap((context) =>
+      seedDisabledToolDefaults(Context.get(context, AppState), plugins).pipe(
+        Effect.orDie,
+      ),
+    ),
+  );
+
 function sessionsLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
-  // Seeded as the store is built, so before the tool catalog first reads
-  // the switches: an embedder's store has no change feed and is read once.
-  // A store that cannot be read or written is a platform defect.
-  const appState = (
+  const appState =
     options.appState ??
-    globalAppStateLayer(
-      resolveGlobalStoragePath(options.storageRoot),
-      options.settings,
-    )
-  ).pipe(
-    Layer.tap((context) =>
-      options.seedToolSwitches === false
-        ? Effect.void
-        : seedDisabledToolDefaults(
-            Context.get(context, AppState),
-            options.plugins,
-          ).pipe(Effect.orDie),
-    ),
-  );
+    seeded(
+      globalAppStateLayer(
+        resolveGlobalStoragePath(options.storageRoot),
+        options.settings,
+      ),
+      options.plugins,
+    );
   const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
@@ -225,6 +237,7 @@ function sessionsLayer(
             options: options.skills.skillSourceOptions ?? {},
             contributions: hostSkillContributions(
               options.plugins.map(({ id }) => id),
+              options.skills.projectFolder,
             ),
           }),
     ),

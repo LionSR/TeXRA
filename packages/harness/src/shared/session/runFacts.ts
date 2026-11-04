@@ -5,18 +5,18 @@
  * and where its turn policy stands (the final-tool nudge, the finalized
  * answer). The row handlers in `runState.ts` and `turnRowHandlers.ts` set these
  * fields, so the loop reads them off the same state on the live path and on
- * resume. The consumed follow-up is here too, as its writers commit it and as a
- * reader learns its receipt from `RunRows`; the rules for which pending rows a
- * run reads are the reader's (`agent/followUp/RunInput.ts`). The lifecycle rows
- * a run is registered, activated and ended with are built here, beside the
- * readers of their facts; `agent/storage/runLifecycle.ts` commits them.
+ * resume. The consumed follow-up is here too, as its writers commit it (its
+ * receipt is `followUpReceipt`, in `runRowReads.ts`); the rules for which
+ * pending rows a run reads are the reader's (`agent/followUp/RunInput.ts`).
+ * The lifecycle rows a run is registered, activated and ended with are
+ * built here, beside the readers of their facts;
+ * `agent/storage/runLifecycle.ts` commits them.
  */
 import {
   NO_APPROVAL_GRANTS,
   type ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import {
-  type CommitOrdinal,
   type DispatchFacts,
   emptyRunEndOutput,
   type FollowUpContent,
@@ -38,6 +38,7 @@ import {
   type ToolResultPayload,
   USER_FOLLOW_UP_SUPPORT,
   type UserFollowUpSupport,
+  type RunStopReason,
 } from '@shared/schemas';
 
 import { byId, isSharedRunRow } from './runRows';
@@ -189,59 +190,6 @@ export const consumedRow = (
   disposition,
 });
 
-/**
- * Where one follow-up stands: `accepted` while queued; `incorporated` once it
- * is part of a turn's message and that turn has not ended; `terminal` once
- * something answered it (`answer`: the commit of the row that took it, written
- * in the transaction that answered it: a child's report, a control's edit or
- * config, or the turn's own rows) or nothing will (`answer` null, `reason`: a
- * dropped row's, or the error or outcome that ended the run before its turn
- * finished). Every message of one turn shares that turn's answer.
- */
-type FollowUpReceipt =
-  | { readonly state: 'accepted' }
-  | { readonly state: 'incorporated'; readonly turn: number }
-  | {
-      readonly state: 'terminal';
-      readonly answer: CommitOrdinal | null;
-      readonly reason?: string;
-    };
-
-/** The receipt of `followUpId` as `rows` say it; an id no row named has left
- *  no receipt. A turn ends when the loop rests at it (`waiting`, or `turn.ready`
- *  once the next input is taken at the same turn number), moves past it, or
- *  the run ends. */
-export function followUpReceipt(
-  rows: RunRows,
-  followUpId: string,
-): FollowUpReceipt | undefined {
-  if (rows.followUps.some((f) => f.followUpId === followUpId))
-    return { state: 'accepted' };
-  const taken = rows.taken.get(followUpId);
-  if (taken === undefined) return undefined;
-  const { disposition, commit } = taken;
-  switch (disposition.kind) {
-    case 'answered':
-    case 'applied':
-      return { state: 'terminal', answer: commit };
-    case 'dropped':
-      return { state: 'terminal', answer: null, reason: disposition.reason };
-    case 'turn': {
-      const { turn } = disposition;
-      const rested = rows.at === 'waiting' || rows.at === 'turn.ready';
-      if (rows.turn > turn || (rows.turn === turn && rested))
-        return { state: 'terminal', answer: commit };
-      if (rows.end === null) return { state: 'incorporated', turn };
-      const { error, outcome } = rows.end;
-      return {
-        state: 'terminal',
-        answer: null,
-        reason: error?.message ?? outcome,
-      };
-    }
-  }
-}
-
 /** Run `runId`'s rows among `rows`, folded (a shared row left out, so a
  *  partial read, a listing's, folds too). */
 export const recordsOf = (
@@ -274,8 +222,8 @@ export function runEndFromEvents(
   return recordsOf(rows, runId).end;
 }
 
-/** `invocation` once a clean close stopped its open attempt (a `run.position`
- *  halt, reason `closed`): none, or one with a recorded outcome, is as it was. */
+/** `invocation` once a shutdown stopped its open attempt (a `run.end` whose
+ *  `reason` is `shutdown`): none, or one with a recorded outcome, is as it was. */
 export function closedBy(invocation: Invocation | null): Invocation | null {
   if (invocation === null || invocation.current.failed !== null)
     return invocation;
@@ -296,8 +244,6 @@ export interface RegisterRunOptions {
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;
-  /** Who wrote it: the model, unless a fork copies its user's title. */
-  readonly descriptionBy?: 'model' | 'user';
   readonly provenance?: RunProvenance; // a fork's source and cut
   readonly grants?: ApprovalGrants; // the grants it starts with
   /** A fork's history, which its opening commits in place of a prompt
@@ -317,6 +263,18 @@ export interface Registration {
   readonly rows: readonly SessionEventDraft[];
   readonly start: Extract<SessionEventDraft, { type: 'run.start' }> | null;
 }
+
+/** The row that titles `runId`: the model's summary, or the user's rename. */
+export const descriptionRow = (
+  runId: RunId,
+  description: string,
+  by: 'model' | 'user',
+): Extract<SessionEventDraft, { type: 'run.description' }> => ({
+  type: 'run.description',
+  aggregateId: qualifyAggregateId('run', runId),
+  description,
+  by,
+});
 
 /** The rows that register a run, in commit order: a new run's (`born`)
  *  `run.start`, its configuration, its `run.activate` (a re-registration's with
@@ -351,12 +309,7 @@ export function registrationDrafts(
     ...(born ? [] : ended),
   ];
   if (options.description !== undefined)
-    rows.push({
-      type: 'run.description',
-      aggregateId: target,
-      description: options.description,
-      by: options.descriptionBy ?? 'model',
-    });
+    rows.push(descriptionRow(runId, options.description, 'model'));
   return { rows, start: born ? start : null };
 }
 
@@ -375,23 +328,26 @@ export function activationDrafts(
   return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
 }
 
-/** The `run.end` row: the run's outcome, its error with the note of a last
- *  turn whose delivery failed (`note`), and what it produced, or nothing. */
+/** The `run.end` row: the run's outcome, why a cancelled one stopped, its
+ *  error with the note of a last turn whose delivery failed (`note`), and
+ *  what it produced, or nothing. */
 export function runEndDraft(
   runId: RunId,
   end: {
     readonly outcome: RunOutcome;
+    readonly reason?: RunStopReason;
     readonly error?: RunEnd['error'];
     readonly note?: string;
     readonly output?: RunEndOutput;
   },
 ): Extract<RunInputDraft, { readonly type: 'run.end' }> {
-  const { outcome, error, note } = end;
-  const message = error && [error.message, note].filter(Boolean).join('; ');
+  const { outcome, reason, error, note } = end;
+  const message = [error?.message, note].filter(Boolean).join('; ');
   return {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
+    ...(reason && outcome === 'cancelled' && { reason }),
     ...(error && { error: { ...error, message } }),
     output: end.output ?? emptyRunEndOutput(),
   };

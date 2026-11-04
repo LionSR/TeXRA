@@ -1,3 +1,6 @@
+// Third-party imports
+import { Predicate } from 'effect';
+
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 
 /** `err` followed by its `cause` chain, outermost first; an
@@ -10,13 +13,12 @@ export function causeChain(err: unknown): unknown[] {
   const chain: unknown[] = [];
   const seen = new Set<unknown>();
   const visit = (current: unknown): void => {
-    if (current == null || typeof current !== 'object' || seen.has(current))
-      return;
+    if (!Predicate.isObjectOrArray(current) || seen.has(current)) return;
     seen.add(current);
     chain.push(current);
     if (current instanceof AggregateError)
       for (const error of current.errors) visit(error);
-    visit((current as { cause?: unknown }).cause);
+    if ('cause' in current) visit(current.cause);
   };
   visit(err);
   return chain;

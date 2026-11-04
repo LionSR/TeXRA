@@ -10,14 +10,18 @@
  * Attaching never steers the task: it ends when the task reaches a terminal
  * outcome, and an interrupt only detaches this client.
  */
-import { Effect, Fiber, LogLevel, Option, Schema, Stream } from 'effect';
+import {
+  Effect,
+  Fiber,
+  LogLevel,
+  Option,
+  Predicate,
+  Schema,
+  Stream,
+} from 'effect';
 import stripAnsi from 'strip-ansi';
 
-import {
-  isTerminalOutcomePhase,
-  qualifyAggregateId,
-  type RunOutcome,
-} from '@texra-ai/harness/schemas';
+import { qualifyAggregateId, type RunOutcome } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
@@ -169,10 +173,10 @@ export const attachTask = Effect.fn('attachTask')(function* (
       writeProgress(frame, aggregate, includeDebugLogs);
   }).pipe(
     Stream.map((view) => view.runs.get(task.runId)),
-    Stream.filter((run): run is RunView => run !== undefined),
-    Stream.takeUntil((run) => isTerminalOutcomePhase(run.status)),
+    Stream.filter(Predicate.isNotUndefined),
+    Stream.takeUntil((run) => run.durableOutcome !== null),
     Stream.tap((run) =>
-      Effect.sync(() => printSettled(run, isTerminalOutcomePhase(run.status))),
+      Effect.sync(() => printSettled(run, run.durableOutcome !== null)),
     ),
     Stream.runLast,
   );

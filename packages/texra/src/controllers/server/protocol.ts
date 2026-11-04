@@ -35,6 +35,7 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 import {
   AgentConfigSchema,
   JsonValueSchema,
+  LaunchNoticeSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
@@ -86,20 +87,20 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 42,
+  version: 53,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
     'tasks.list': 'f53aa5564aa8',
-    'task.watch': 'ed773bfeb75e',
-    'task.request': '2d02fac452d1',
-    'task.start': '0b4a53ec91d2',
-    'task.resume': '80bcbb1450bf',
-    'task.ended': 'e4309942b0fc',
+    'task.watch': 'f3cdd07e24f8',
+    'task.request': 'f055ca5a4858',
+    'task.start': 'bd10b36a735a',
+    'task.resume': 'df1eb0f607ad',
+    'task.ended': 'b8a10423576c',
     'task.config': 'ee42ee67ab23',
-    'task.exportTrace': 'aff43fe555fd',
+    'task.exportTrace': 'f005493cb0c1',
     'task.exportInput': 'fefc9f82f1e2',
-    'host.attach': 'b0875cdcef14',
+    'host.attach': '153808303ff7',
     'state.get': '221cc7263384',
     'state.set': 'e377b902a4e3',
     'host.focus': 'fd20627c2222',
@@ -164,12 +165,13 @@ const TaskAdmitted = Schema.Struct({
   activation: CommitOrdinalSchema,
 });
 
-/** Why `task.start` or `task.resume` did not reach its run. */
+/** Why `task.start` or `task.resume` did not reach its run. The service
+ *  shows it nowhere: the window that asked presents it. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   message: Schema.String,
-  /** The service already presented it, through the window attached to the
-   *  project: the caller does not present it again. */
-  presented: Schema.optional(Schema.Boolean),
+  /** A refused launch's notice (an unknown model, an unknown agent), which
+   *  the window shows in place of the message. */
+  notice: Schema.optional(LaunchNoticeSchema),
 }) {}
 
 /** Why a task's records have no answer: the service holds no such run in

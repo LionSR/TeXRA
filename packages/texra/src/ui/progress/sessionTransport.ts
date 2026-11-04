@@ -342,7 +342,23 @@ export function installWebviewTransport(
     request,
     async answer(message, timeoutMs) {
       const result = await request(message, timeoutMs);
-      if (result.ok) return result.outcome as HostOutcome;
+      if (result.ok) {
+        const { outcome } = result;
+        // The response's outcome is either side's; a host request is
+        // answered with a host outcome, so a runtime one is the host's defect.
+        switch (outcome.kind) {
+          case 'followUp':
+          case 'receipt':
+          case 'forked':
+          case 'preview':
+          case 'runFiles':
+            throw new Error(
+              `The host answered a host request with a runtime outcome (${outcome.kind}).`,
+            );
+          default:
+            return outcome;
+        }
+      }
       throw new Error(
         'reason' in result.error
           ? result.error.reason

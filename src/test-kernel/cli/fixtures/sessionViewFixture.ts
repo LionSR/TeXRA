@@ -27,7 +27,7 @@ import { SessionGraph } from '@test/support/testKernel';
 /**
  * An empty view bound for the block's life, on a runtime over the block's
  * session graph: `layer(Layer.provideMerge(boundTestSessionView,
- * SessionGraph.layer))`. The block's release unbinds it.
+ * SessionGraph.hosted))`. The block's release unbinds it.
  */
 export const boundTestSessionView = Layer.effectDiscard(
   Effect.gen(function* () {
@@ -87,7 +87,9 @@ function runViewFields(over: RunViewOverrides): RunView {
     tone: copy.tone,
     createdAt: 1,
     launchedAt: 1,
+    turnStartedAt: null,
     runStartedAt: null,
+    working: false,
     lastTimestamp: 1,
     turn: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

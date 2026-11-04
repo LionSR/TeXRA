@@ -1,7 +1,7 @@
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect } from 'vitest';
+import { afterEach, expect } from 'vitest';
 
 // Local imports
 import {
@@ -17,11 +17,8 @@ import {
 } from '@texra-ai/harness/schemas';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import {
-  fakeHostSecrets,
-  installedHost,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 
 const GLM53 = MODEL_CONFIGS['glm/glm-5.3'];
 
@@ -47,29 +44,19 @@ const boundEndpoint = (
       : { baseUrl };
   });
 
-describe('coding-plan subscription runtime', () => {
-  setupPlatform({
+// Each test's host is its own, so the state a case writes reaches no other.
+layer(
+  FakeHost.layer({
     globalState: {
       [GlobalStateKey.GLM_CODING_PLAN]: true,
       [GlobalStateKey.KIMI_CODE_PREFER]: false,
     },
     secrets: { [apiKeySecretName('glm')]: 'glm-key' },
-  });
-
-  afterEach(async () => {
+  }),
+  { buildPerTest: true },
+)('coding-plan subscription runtime', (it) => {
+  afterEach(() => {
     delete MODEL_CONFIGS['glm/glm-5.3'].baseUrl;
-    await Effect.runPromise(
-      installedHost().roots.globalState.update('endpoint.glm', ''),
-    );
-    await Effect.runPromise(
-      installedHost().roots.globalState.update(
-        GlobalStateKey.GLM_CODING_PLAN,
-        true,
-      ),
-    );
-    await Effect.runPromise(
-      installedHost().roots.globalState.update('glm.useChina', true),
-    );
   });
 
   it.effect.each([

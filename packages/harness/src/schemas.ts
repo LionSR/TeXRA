@@ -10,7 +10,7 @@
  *   [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
  *   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
  *   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
- *   [`isLiveRun`](#isliverun), [`isWorkingRun`](#isworkingrun),
+ *   [`isLiveRun`](#isliverun),
  *   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
  * - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
  *   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
@@ -32,10 +32,8 @@ export type {
 export type { RunRecord } from '@agent/core/definition/RunRecord';
 export { serializeFilteredConfig } from '@tools/executions/configView';
 export { DEFAULT_AGENT_MODEL } from '@shared/constants/defaultModels';
-// The subscriptions a model call can route through, and each one's switch
-// and sign-in names.
+// The subscriptions a model call can route through, by provider id.
 export {
-  SUBSCRIPTION_AUTH_NAMES,
   SUBSCRIPTION_AUTH_PROVIDERS,
   type SubscriptionAuthProvider,
 } from '@shared/model/subscriptionAuth';
@@ -46,7 +44,6 @@ export {
   attentionOf,
   descendantRuns,
   isLiveRun,
-  isWorkingRun,
   requestAnswerability,
   rollupOf,
   sessionActivity,
@@ -80,11 +77,6 @@ export type {
 } from '@shared/session/database';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
-// The plan a used-up subscription falls back to (`quotaFallbackRouteFor`).
-export type {
-  QuotaFallbackExhaustionReason,
-  QuotaFallbackRoute,
-} from '@shared/quotaFallbackRoutes';
 // The data shapes the public signatures name: session events and their
 // owners, run facts, tool definitions and results, log and transcript
 // payloads, follow-ups and requests.
@@ -101,7 +93,6 @@ export type {
   DispatchFacts,
   DisplaySessionEvent,
   ErrorLogData,
-  ExhaustionReason,
   ExternalFileLocation,
   FileListEntry,
   FileLocation,
@@ -125,9 +116,11 @@ export type {
   PermissionPayload,
   Persona,
   ProposalFileGroup,
+  ProviderError,
   OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
+  ResponseCut,
   ResultMeta,
   ResumeRefusal,
   RunAction,
@@ -154,13 +147,13 @@ export type {
   WorkspaceFileLocation,
 } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
-// its next input), active, ended, or settled enough for its transcript.
+// its next input), ended, or settled enough for its transcript. Whether a
+// run is working right now is the view's `working`, never read off the phase.
 export {
   RUN_STATUS_KEYS,
   type RunStatusKey,
 } from '@shared/runs/runStatusDisplay';
 export {
-  isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
@@ -192,11 +185,9 @@ export {
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
 // A request a host sends a session, the outcome or the error class it is
-// answered with, a run's start as data, and a tool edit's hunks as
-// unified-diff lines.
+// answered with, and a run's start as data.
 export {
   Cancelled,
-  formatHunkLines,
   Invalid,
   OutcomeSchema,
   Rejected,
@@ -282,7 +273,6 @@ export {
   type AgentScanIssue,
   AgentScanIssueSchema,
   AgentSourceSchema,
-  BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
   blocksCaller,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -300,8 +290,11 @@ export {
   fileLocationShortDisplayPath,
   // A fresh run id, for a caller that names a run before a session launches it.
   generateRunId,
+  formatHunkLines,
   getProposalFileGroups,
   GOAL_MAX_COST_SETTING,
+  GOAL_STRATEGY_SETTING,
+  GoalResultSchema,
   InlinePersonaSchema,
   InstalledPluginSchema,
   HARNESS_INSTRUCTION_KEY,
@@ -312,6 +305,8 @@ export {
   isRunId,
   isTaskConfig,
   JsonValueSchema,
+  type LaunchNotice,
+  LaunchNoticeSchema,
   LineCountSchema,
   listingTypeOf,
   type McpToolOutput,
@@ -333,6 +328,7 @@ export {
   recipeBlockOf,
   referencedAggregates,
   type RequestDecision,
+  RequestShowErrorPayloadSchema,
   type RetryPermission,
   RUN_LIFECYCLE_READY,
   RUN_OUTCOME,
@@ -356,7 +352,6 @@ export {
   toJsonValue,
   type TokenUsageStats,
   TOOL_CALL_STATUS,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
   type UserQuestionPermission,

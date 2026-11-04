@@ -22,6 +22,7 @@ import { ifDefined } from 'lit/directives/if-defined.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports - shared schemas and utilities
+import { errorRowText, quotaFallbackNoticeText } from '@ui/copy/modelAccess';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - formatter helpers
@@ -61,23 +62,23 @@ export function formatProgressStatusTemplate(
     new Date(timestamp),
   );
 
-  const summaryText = row.summary.full;
-  const detailText = row.detail?.full ?? '';
+  const summaryText =
+    row.quotaFallback === undefined
+      ? row.summary.full
+      : quotaFallbackNoticeText(row.quotaFallback);
   const levelIcon = buildLevelIcon(level);
 
   // prettier-ignore
   return html`<div
       data-log-id=${ifDefined(id)}
       data-group-id=${ifDefined(groupId)}
-    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div>${when(
-        detailText,
-        () => html`<pre class=${`log-line message-${level}`}>${detailText}</pre>`,
-      )}</div>`;
+    ><div class="log-line"><span class="timestamp" title=${tooltipTimestamp}>${levelIcon} [${timeDisplay}]</span> <span class=${`message-${level}`}>${summaryText}</span></div></div>`;
 }
 
 /**
  * Format error message as TemplateResult. The detail field set and its display
- * order are the row's — see `ERROR_DETAIL_FIELDS` in `@texra-ai/harness/transcript`.
+ * order are the row's — see `ERROR_DETAIL_FIELDS` in `@texra-ai/harness/transcript`
+ * — and a classified failure reads in the app's words (`errorRowText`).
  */
 export function formatErrorTemplate(row: ErrorRow): FormatResult {
   const { id, groupId, timestamp } = row;
@@ -86,8 +87,9 @@ export function formatErrorTemplate(row: ErrorRow): FormatResult {
     'minute',
   );
 
-  const summaryText = row.summary.full.trim() || 'Error occurred';
-  const detailText = row.detailText.full;
+  const worded = errorRowText(row);
+  const summaryText = worded.summary.trim() || 'Error occurred';
+  const detailText = worded.detailText.full;
   const hasDetails = row.details.length > 0;
   const rawContent = detailText || summaryText;
 

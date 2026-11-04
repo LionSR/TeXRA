@@ -162,14 +162,14 @@ function glmPlanLimit(body: unknown): Quota | undefined {
   );
 }
 
-/** The account itself is out of credit: OpenAI's `insufficient_quota`, Anthropic's low balance. */
+/** The account itself is out of credit: OpenAI's `insufficient_quota`, DeepSeek's `insufficient_balance_error`, Anthropic's low balance. */
 const creditDepleted = (body: unknown): boolean =>
   envelopes(body).some((candidate) => {
     const type = stringField(candidate, 'type');
     const message = stringField(candidate, 'message')?.toLowerCase() ?? '';
     return (
-      stringField(candidate, 'code') === 'insufficient_quota' ||
-      type === 'insufficient_quota' ||
+      [stringField(candidate, 'code'), type].includes('insufficient_quota') ||
+      type === 'insufficient_balance_error' ||
       (type === 'invalid_request_error' &&
         message.includes('credit balance is too low')) ||
       message.includes('exceeded your current quota')

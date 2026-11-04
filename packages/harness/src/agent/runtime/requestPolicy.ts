@@ -51,7 +51,6 @@ import {
 import {
   decisionFits,
   qualifyAggregateId,
-  isCredentialRetryFailure,
   type CommitOrdinal,
   type DecisionOf,
   type PermissionPayload,
@@ -88,8 +87,8 @@ const canPresent = ({ interactions }: PolicyOwners): boolean =>
   !interactions.approvalPromptsUnavailable;
 
 /** The policy's answer for a run's approval-gated tools under what the
- *  host can answer: whether a step withholds them, and the `permission_mode`
- *  a plugin hook is told. */
+ *  host can answer: whether a step withholds them, and whether the run's
+ *  work runs unasked ({@link workAutoApproved}). */
 const decideExecutable = (
   owners: PolicyOwners,
   runId: RunId,
@@ -100,16 +99,20 @@ const decideExecutable = (
 ): ApprovalPolicyDecision =>
   decideApproval({
     policy,
-    promptRequired: true,
     scopedBypass,
     canPresent: canPresent(owners),
   });
 
-/** {@link decideExecutable} for `runId` under the session's own policy. */
-export const executableDecision = (
+/** Whether `runId`'s work runs unasked under the session's own policy
+ *  ({@link decideExecutable} allows): what a plugin hook's `permission_mode`
+ *  and a coding agent's own sandbox or permissions follow. */
+export const workAutoApproved = (
   runId: RunId,
-): Effect.Effect<ApprovalPolicyDecision, never, Approvals | Interactions> =>
-  Effect.map(policyOwners, (owners) => decideExecutable(owners, runId));
+): Effect.Effect<boolean, never, Approvals | Interactions> =>
+  Effect.map(
+    policyOwners,
+    (owners) => decideExecutable(owners, runId) === 'allow',
+  );
 
 /** The policy's answer for one request: a plan follows the executable rule
  *  (`never` denies, `yolo` approves, `ask` presents or, with nobody to ask,
@@ -151,9 +154,7 @@ function answerFor(
       const decision = decideRetryApproval({
         policy,
         canPresent: canPresent(owners),
-        isCredentialFailure: isCredentialRetryFailure(
-          payload.data.errorDetails,
-        ),
+        isCredentialFailure: payload.data.credentialSwitch != null,
       });
       if (decision === 'present') return undefined;
       return {
@@ -206,36 +207,35 @@ export const policyDecidedRows = (
 /** Whether a step's approval-gated tools are withheld, read live from its
  *  session's policy, its grants and its host, and the policy read (which a
  *  denial names). A fresh run's opening reads its uncommitted `run.start`. */
-export const liveToolGates = ({
+export const liveToolGates = Effect.fn('liveToolGates')(function* ({
   runId,
   entry,
 }: Pick<AgentRunShape, 'runId'> & {
   readonly entry: Pick<AgentRunShape['entry'], 'registration'>;
-}): Effect.Effect<
+}): Effect.fn.Return<
   Pick<StepToolInputs, 'approvalPromptsUnavailable'> & {
     readonly policy: ApprovalPolicy;
   },
   never,
   SessionViewAccess | Approvals | Interactions
-> =>
-  Effect.gen(function* () {
-    const owners = yield* policyOwners;
-    const view = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
-    const start = entry.registration?.start ?? null;
-    const parent = start?.parent?.id ?? null;
-    const source =
-      start === null
-        ? view
-        : withUnborn(view, runId, parent, start.approvalPolicy);
-    const policy = runPolicy(owners.approvals.policy(), source, runId);
-    const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
-    return {
-      approvalPromptsUnavailable: isApprovalDenied(
-        decideExecutable(owners, runId, policy, bypassed),
-      ),
-      policy,
-    };
-  });
+> {
+  const owners = yield* policyOwners;
+  const view = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
+  const start = entry.registration?.start ?? null;
+  const parent = start?.parent?.id ?? null;
+  const source =
+    start === null
+      ? view
+      : withUnborn(view, runId, parent, start.approvalPolicy);
+  const policy = runPolicy(owners.approvals.policy(), source, runId);
+  const bypassed = resolveBypass(source, runId, 'superYolo') !== null;
+  return {
+    approvalPromptsUnavailable: isApprovalDenied(
+      decideExecutable(owners, runId, policy, bypassed),
+    ),
+    policy,
+  };
+});
 
 /** What the session's host serves now: the union of what each plugin of
  *  the step's capability-gated tools says (`HostCapabilities`), each read
@@ -300,21 +300,20 @@ export const requestAsks: Effect.Effect<
    *  alone (the `requests` read, through the type index), so a decision
    *  costs the same however long the run's history grows, and asks their
    *  `RunRows` whether the request is open, as the run state does. */
-  const decisionRow = (
+  const decisionRow = Effect.fn('decisionRow')(function* (
     runId: RunId,
     requestId: string,
     decision: RequestDecision,
     append: Append,
-  ) =>
-    Effect.gen(function* () {
-      const aggregateId = qualifyAggregateId('run', runId);
-      const { requests } = yield* log.runRows(aggregateId, 'requests');
-      if (requests[requestId]?.decision !== null) return false;
-      yield* runStateAppend(append)([
-        { type: 'request.decided', aggregateId, requestId, decision },
-      ]);
-      return true;
-    });
+  ) {
+    const aggregateId = qualifyAggregateId('run', runId);
+    const { requests } = yield* log.runRows(aggregateId, 'requests');
+    if (requests[requestId]?.decision !== null) return false;
+    yield* runStateAppend(append)([
+      { type: 'request.decided', aggregateId, requestId, decision },
+    ]);
+    return true;
+  });
 
   const decision: SessionRequestsShape['decision'] = (runId, id, from) => {
     const aggregate = qualifyAggregateId('run', runId);

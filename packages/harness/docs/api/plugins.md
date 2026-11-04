@@ -16,7 +16,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
   `Sessions.layer({ platform, plugins })`.
-- **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+- **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+  [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
@@ -188,6 +189,10 @@ interface BoundModel extends Binding {
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The route decision this binding carries out, or the validation model. */
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
@@ -317,40 +322,47 @@ type CellError =
 ## ChildLaunch
 
 One child launch as the shared core runs it: the agent and its prompt,
-the files a task works over (empty for a chat), and the recipe a task's
-run opens on. `tool` names the launching tool in its reuse key and its
-copy.
+and what the child is. A chat (`task: null`) may ask for a value of
+`schema` and attaches `mediaFiles` to its prompt. A task opens on what
+the launching plugin builds for the approved agent (`configFor`: its
+recipe and outputs, null for an agent with no task block) and works over
+`files` with `options`, as its proposal says. `tool` names the launching
+tool in its reuse key and its copy.
 
 ```ts
-interface ChildLaunch {
+type ChildLaunch = {
   readonly tool: string;
   readonly agentName: string;
   /** An agent the call defines, named `agentName`: no catalog entry. */
   readonly persona?: AgentProposal['persona'];
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly schema: Record<string, unknown> | null | undefined;
   readonly memories: readonly string[];
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
   readonly timeoutMs: number | null | undefined;
   readonly background: boolean | null | undefined;
-  readonly files: {
-    readonly inputFiles: readonly string[];
-    readonly contextFiles: readonly string[];
-    readonly mediaFiles: readonly string[];
-    readonly outputFiles: readonly string[];
-  };
-  /** A task: the child opens on what the launching plugin builds for the
-   *  approved agent (its recipe and outputs; null for an agent with no task
-   *  block); the proposal says it works over `files` with `options`. */
-  readonly task: {
-    readonly configFor: (
-      chosen: AgentProposal,
-    ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-    readonly options: NonNullable<AgentProposal['options']>;
-  } | null;
-}
+} & (
+  | {
+      readonly task: null;
+      readonly schema: Record<string, unknown> | null | undefined;
+      readonly mediaFiles: readonly string[];
+    }
+  | {
+      readonly task: {
+        readonly configFor: (
+          chosen: AgentProposal,
+        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
+        readonly options: NonNullable<AgentProposal['options']>;
+      };
+      readonly files: {
+        readonly inputFiles: readonly string[];
+        readonly contextFiles: readonly string[];
+        readonly mediaFiles: readonly string[];
+        readonly outputFiles: readonly string[];
+      };
+    }
+);
 ```
 
 ## ChildRunDelivery
@@ -437,11 +449,9 @@ interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent while it is live in this process: null for a root run,
-   *  undefined when it is not live here. */
-  readonly parent: (
-    runId: RunId,
-  ) => Effect.Effect<RunId | null | undefined, Error>;
+  /** Its attached parent as the rows record it (`run.start`, then a
+   *  `run.detach`): null for a root, or a run that is not there. */
+  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
@@ -458,6 +468,11 @@ interface ChildRunsShape {
       readonly schema: Schema.Codec<A, unknown>;
     },
   ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the launching run's work runs unasked (the Auto-approve policy,
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
+  readonly autoApproved: Effect.Effect<boolean, Error>;
   /** Whether the run holds the request `requestId`, open or decided: what
    *  a tool that posted one reads after a failed post. */
   readonly requested: (
@@ -567,7 +582,7 @@ type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -614,10 +629,11 @@ function executed(
 One row kind a plugin owns (`plugin.fact`): the version it writes, the
 schema of that version's value, and adjacent upcasters from
 `version - upcasters.length` to `version`, oldest first.
-The store checks every row of the kind against its fact kind, and keeps a row
-whose fact kind the process's plugins lack (its plugin removed, or not listed
-here) without reading it. Fact kinds live beside their readers, in modules
-webviews can import.
+The store checks every row of the kind against its fact kind, and reads a
+row whose fact kind the process's plugins lack (its plugin removed, or not
+listed here) as written, marked `unavailable`; a run holding one does not
+resume. Fact kinds live beside their readers, in modules webviews can
+import.
 
 ```ts
 interface FactKind {
@@ -752,7 +768,8 @@ type GitignoreMatcher = {
 
 Plans and goals: the `plan` tool proposes a plan, which the user may run
 as a goal: a background script of the conversation that runs its agent
-in rounds through `self()` (`goalScript`).
+in rounds through `self()` (`goalScript`), on the default strategy, its
+module `builtIn:goal`, unless `goal.strategy` names another.
 
 ```ts
 const goal: Plugin
@@ -798,6 +815,10 @@ interface InboxItem {
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
+  /** The id a caller named the message by (`followUp.send`; `deliveryId`
+   *  is its `sentFollowUpId`): a retry under it answers with the first
+   *  send's receipt, another message under it fails `Conflict`. */
+  readonly caller?: string;
 }
 ```
 
@@ -855,10 +876,10 @@ function jitteredExponentialBackoffMs(
 
 ```ts
 interface JsonRpcConnection {
-  readonly request: <T>(
+  readonly request: (
     method: string,
     params?: unknown,
-  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  ) => Effect.Effect<unknown, JsonRpcRequestError | JsonRpcConnectionDisposed>;
   /** Send a notification; after `close` it is dropped. */
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
@@ -1068,6 +1089,60 @@ function parseWorkingDirectory(
 ): Result.Result<string | undefined, ToolError>
 ```
 
+## Plugin
+
+One plugin: what it contributes to a run. How an app shows it (a
+dashboard card's copy, its setup guide, its settings rows) is the app's
+own record, keyed by `id`.
+
+```ts
+interface Plugin {
+  /** Stable, persisted identifier (the switch key, the plugin a run's
+   *  offered tool records, and the name of its `resources/plugins/<id>/`
+   *  directory): lowercase letters, digits and dashes, starting with a
+   *  letter or digit. A list with any other id is refused. */
+  readonly id: string;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
+  /**
+   * Present when the plugin has an external dependency: it is probed, and
+   * its tools are withheld while the dependency is missing. Without it the
+   * plugin is built in and always available.
+   */
+  readonly availability?: ToolAvailabilityChecks;
+  /** The plugin has a user switch, which a fresh install sets to this
+   *  position; while off, its tools are withheld from every agent. It must
+   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
+   *  installed). Without one the plugin is always on. */
+  readonly toggle?: 'on' | 'off';
+  /** Tools of this plugin offered to every agent with tools, declared or not,
+   *  while the plugin is on and a boolean catalog setting is on: tool name to
+   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  injected tool still passes the host and approval gates; a script's
+   *  run (a task's recipe) and a text-only persona get none. */
+  readonly injectedWhen?: Readonly<Record<string, string | true>>;
+  /** Its section of each request's system text, pinned while it is on. */
+  readonly prompt?: PromptSection;
+  /** Process-lifetime services, up while the plugin is switched on or a step
+   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
+   *  the host's plugin value. */
+  readonly processLayer?: ProcessPluginLayer;
+  /** Session-lifetime services, one per open session, up while the plugin
+   *  is switched on or a step of that session pins it. */
+  readonly sessionLayer?: SessionPluginLayer;
+  /** Its side of a decision on a pending request it opened, on or off. */
+  readonly decision?: RequestDecisionHook;
+  /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
+  readonly factKinds?: readonly FactKind[];
+  /** The agent-file block it owns (`AgentBlock`), on or off. */
+  readonly agentBlock?: AgentBlock;
+  /** Script module sources by name, imported as `builtIn:<name>`. */
+  readonly scriptModules?: Readonly<Record<string, string>>;
+  /** The plugins it runs on, by id; a list lacking one is rejected. */
+  readonly requires?: readonly string[];
+}
+```
+
 ## PluginDefinition
 
 A plugin as its author writes it: its tools, layers and probe may
@@ -1145,7 +1220,7 @@ against whichever roots its fiber happens to carry. The child-launch
 door (`ChildRuns`) and the call's place in its run (`RunCall`) are
 references with defaults, never requirements; a plugin's tool reads the
 door and never the session's `Runs`, which only the engine door carries
-(`RunCallShape.runs`).
+(`RunCallShape.session`).
 
 ```ts
 type PluginToolServices =
@@ -1176,34 +1251,43 @@ interface ProcessChildLaunch<TTurn> {
 ## ProcessChildStrategy
 
 An external process's strategy (agent CLI, background bash): each turn's
-result commits in the loop, which then waits for the child's next batch.
+result commits in the loop, which then waits for the child's next batch:
+a one-turn command whose killed process still has a result, or a coding
+agent's CLI session (`cli`), a turn per batch of follow-ups.
 
 ```ts
-interface ProcessChildStrategy<
+type ProcessChildStrategy<TTurn, R = never> = ChildStrategyBase<
   TTurn,
-  R = never,
-> extends ChildStrategyBase<TTurn, R> {
+  R
+> & {
   /** A stop interrupts the turn's fiber: a foreign call takes its signal
    *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
   launch(): Effect.Effect<TTurn, Error, R>;
-  /** The next turn, from the queued follow-ups. Absent: the first turn is
-   *  the only one (a background shell). */
-  runTurn?(
-    followUps: readonly FollowUpContent[],
-  ): Effect.Effect<TTurn, Error, R>;
-  /** The turn a stop cut short, rebuilt from what the child buffered, and
-   *  delivered: only a killed OS process, whose exit code and output are a
-   *  complete result. */
-  interruptedTurn?(): TTurn;
-  /** A stop pauses this child rather than cancelling it: what it had done
-   *  and how the parent's model continues it; undefined cancels it. */
-  pauseNotice?(): ChildRunPause | undefined;
-  /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
-  /** Release provider-owned registry entries; called once, before a failed
-   *  or interrupted delivery or at the end. */
-  releaseSessionOwnership?(): void;
-}
+} & (
+    | {
+        /** The turn a stop cut short, rebuilt from what the child buffered
+         *  and delivered: a killed OS process's exit code and output. */
+        interruptedTurn(): TTurn;
+        readonly cli?: undefined;
+      }
+    | {
+        readonly cli: {
+          /** The next turn, from the queued follow-ups. */
+          runTurn(
+            followUps: readonly FollowUpContent[],
+          ): Effect.Effect<TTurn, Error, R>;
+          /** What the paused child had done and how the parent's model
+           *  continues it; undefined cancels it instead. */
+          pauseNotice(): ChildRunPause | undefined;
+          /** After a successful turn: register the session/thread id, etc. */
+          onTurnSuccess(turn: TTurn): void;
+          /** Release provider-owned registry entries; called once, before a
+           *  failed or interrupted delivery or at the end. */
+          releaseSessionOwnership(): void;
+        };
+        readonly interruptedTurn?: undefined;
+      }
+  );
 ```
 
 ## ProcessPluginLayer
@@ -1352,10 +1436,7 @@ directories are registered external roots).
 outside path.
 
 ```ts
-function resolveToolPath(
-  call: ToolPathCall,
-  targetPath?: string,
-): Effect.Effect<ToolPathResolution, Error>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>
 ```
 
 ## retryTransientFetch
@@ -1482,6 +1563,9 @@ Which arms are reachable, and from where:
   `load`, and from `RunCell.append` before it publishes: a batch is applied
   first and refused with nothing committed, because a published row the
   row handlers reject is a run no later `load` can read.
+- `foreign-protocol`: from a resume's activation, before its rows: a turn
+  the history replays was recorded on another protocol than the run's
+  binding speaks now, so no request could replay it.
 A violated `RunCell.append` precondition is a caller defect
 (`Effect.die`), not an arm: the loop must not handle it.
 
@@ -1494,6 +1578,7 @@ class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
       'unsafe-endpoint',
       'unprepared-history',
       'inconsistent',
+      'foreign-protocol',
     ]),
     runId: RunIdSchema,
     detail: Schema.String,
@@ -1880,7 +1965,7 @@ either is asked for, so no tool body opens its own approval prompt or
 re-checks its own roots.
 
 ```ts
-interface ToolGuard<T, R = never> {
+interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -1892,12 +1977,8 @@ interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the

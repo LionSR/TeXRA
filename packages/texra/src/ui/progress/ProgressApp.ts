@@ -31,7 +31,7 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared webview
@@ -344,7 +344,9 @@ export class ProgressApp extends LitElement {
   }
 
   private handleSearchInput = (event: Event): void => {
-    const value = (event.target as HTMLInputElement).value;
+    if (!(event.target instanceof WaInput)) return;
+    // An input event always follows a typed value, so `value` is set.
+    const value = event.target.value ?? '';
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
   };
 
@@ -464,6 +466,9 @@ export class ProgressApp extends LitElement {
     const { launch } = surface;
     // Only a document task reads Input and Context, so only an agent with
     // one gets the file section; a chat attaches through the composer alone.
+    // The selected option's `rounds` decides, and the host's launch keeps to
+    // the same options: a selection naming none of them (an agent hidden
+    // since it was chosen) gets no file section, and its launch is refused.
     // Open on a proposal, its own `task` flag decides: the form offers only
     // agents of the proposal's kind, and a team's hidden member's option
     // carries no `rounds` to read.

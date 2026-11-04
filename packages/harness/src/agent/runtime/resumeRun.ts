@@ -20,7 +20,7 @@ import {
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { Inbox, openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
-import { runRejection } from '@agent/storage/resumability';
+import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
@@ -34,13 +34,12 @@ import {
   type ResumeRefusal,
   type RunId,
 } from '@shared/schemas';
-import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import {
   RunHistoryRefused,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { followUpReceipt } from '@shared/session/runFacts';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -94,14 +93,20 @@ export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
 const CHANNEL = 'ResumeRun';
 
 /**
- * Only a run history refusal of the saved rows names an unusable checkpoint.
- * Ownership, metadata and lease failures remain operational errors.
+ * Only a run history refusal of the saved rows names an unusable checkpoint:
+ * rows that cannot be applied, a history the package's rules refuse, or turns
+ * on a protocol the run's binding no longer speaks. Ownership, metadata and
+ * lease failures remain operational errors.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
   const reason = findInCauseChain(error, (cause) =>
     cause instanceof RunHistoryRefused ? cause.reason : undefined,
   );
-  return reason === 'inconsistent' || reason === 'unprepared-history';
+  return (
+    reason === 'inconsistent' ||
+    reason === 'unprepared-history' ||
+    reason === 'foreign-protocol'
+  );
 }
 
 /**
@@ -115,12 +120,12 @@ export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
 ): Effect.Effect<ResumeHandOff, Error, SessionServices> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+  Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
       const runs = registryOf(yield* Runs);
+      // Counted among the attempt's waiters as `openResume` returned it.
       const attempt = yield* openResume(runId, options, false);
       if (attempt === undefined) return REFUSED;
-      attempt.waiters += 1;
       const handOff = (activation: CommitOrdinal): ResumeHandOff => ({
         activation,
       });
@@ -172,10 +177,17 @@ export const decideResume = Effect.fn('decideResume')(function* (
   const log = yield* SessionLog;
   const inbox = yield* Inbox;
   const store = getRunRecords(runId);
-  const [config, exists] = yield* Effect.all([
-    store.readConfig(),
-    store.exists(),
-  ]);
+  const records = yield* Effect.result(
+    Effect.all([store.readConfig(), store.exists()]),
+  );
+  // A record read refuses a run holding an earlier build's row, wherever
+  // the row sits: this build cannot open the run.
+  if (Result.isFailure(records)) {
+    const earlier = earlierBuildRefusal(records.failure);
+    if (earlier === undefined) return yield* Effect.fail(records.failure);
+    return { failed: earlier };
+  }
+  const [config, exists] = records.success;
   if (!config || !exists) {
     // A run whose records are gone: with nothing queued its input ends.
     yield* inbox.closeInput(runId);
@@ -217,10 +229,9 @@ export const decideResume = Effect.fn('decideResume')(function* (
   return yield* resumeQueuedToolUse(runId, config, options, activated);
 }, Effect.scoped);
 
-/** Whether every follow-up of `batch` has left the queue `rows` hold: its
- *  receipt is past `accepted`. */
+/** Whether every follow-up of `batch` has left the queue `rows` hold. */
 const taken = (rows: RunRows, batch: ReadonlySet<string>): boolean =>
-  [...batch].every((id) => followUpReceipt(rows, id)?.state !== 'accepted');
+  !rows.followUps.some(({ followUpId }) => batch.has(followUpId));
 
 /**
  * Whether `runId` rests with every follow-up of `batch` taken: its rows
@@ -262,10 +273,8 @@ function refusalFor(
   const owner = heldElsewhereBy(error);
   if (owner !== null)
     return Effect.succeed({ failed: { kind: 'ownedElsewhere', owner } });
-  if (error instanceof DatabaseRowEarlier)
-    return Effect.succeed({
-      failed: { kind: 'earlierBuild', cause: error.message },
-    });
+  const earlier = earlierBuildRefusal(error);
+  if (earlier !== undefined) return Effect.succeed({ failed: earlier });
   if (namesUnusableCheckpoint(error)) {
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,

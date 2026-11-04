@@ -112,16 +112,13 @@ export function formatSubagentDelivery(
 export function formatSubagentError(
   runId: string,
   agentName: string,
-  formatted: Pick<RetryErrorInfo, 'message' | 'userRetryable'>,
+  formatted: Pick<RetryErrorInfo, 'message'>,
   options: DeliveryContext & { readonly wallTimeMs: number },
 ): string {
   return formatDelivery({
     tag: DELIVERY_TAG.subagentError,
     runId,
-    attributes: [
-      { name: 'agent', value: agentName },
-      { name: 'retryable', value: formatted.userRetryable },
-    ],
+    attributes: [{ name: 'agent', value: agentName }],
     wallTime: formatWallSeconds(options.wallTimeMs),
     lines: formatDeliveryPreamble(options),
     message: formatted.message,

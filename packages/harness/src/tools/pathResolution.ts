@@ -110,99 +110,97 @@ export const assertNoParentTraversal = (
  * `WorkspaceFs` view answers it, and absolute for a working-directory or
  * outside path.
  */
-export function resolveToolPath(
+export const resolveToolPath = Effect.fn('resolveToolPath')(function* (
   call: ToolPathCall,
   targetPath?: string,
-): Effect.Effect<ToolPathResolution, Error> {
-  return Effect.gen(function* () {
-    const settings = call.roots;
-    const root = call.workingDirectory ?? call.roots.workspace;
-    const scope = call.workingDirectory ? 'working directory' : 'workspace';
-    const resolution = yield* Effect.try({
-      try: (): WorkspacePathResolution | OutsideRootCandidate => {
-        const trimmed = targetPath?.trim();
-        const input = !trimmed || trimmed === '.' ? '' : trimmed;
+): Effect.fn.Return<ToolPathResolution, Error> {
+  const settings = call.roots;
+  const root = call.workingDirectory ?? call.roots.workspace;
+  const scope = call.workingDirectory ? 'working directory' : 'workspace';
+  const resolution = yield* Effect.try({
+    try: (): WorkspacePathResolution | OutsideRootCandidate => {
+      const trimmed = targetPath?.trim();
+      const input = !trimmed || trimmed === '.' ? '' : trimmed;
 
-        if (!root) {
-          // No workspace: only the allowlist admits a path, so agent-dir
-          // calls still work.
-          if (input && path.isAbsolute(input)) {
-            return {
-              kind: 'outside-root',
-              absolutePath: input,
-              match: findExternalRoot(input, call.stepRoots),
-              outsideMessage: 'Workspace path is not available.',
-            };
-          }
-          throw new ToolError('Workspace path is not available.');
-        }
-
-        const resolved = locateInWorkspace(root, input);
-        if (resolved.kind === 'external') {
+      if (!root) {
+        // No workspace: only the allowlist admits a path, so agent-dir
+        // calls still work.
+        if (input && path.isAbsolute(input)) {
           return {
             kind: 'outside-root',
-            absolutePath: resolved.absolutePath,
-            match: findExternalRoot(resolved.absolutePath, call.stepRoots),
-            outsideMessage: `Path must stay within the ${scope}.`,
+            absolutePath: input,
+            match: findExternalRoot(input, call.stepRoots),
+            outsideMessage: 'Workspace path is not available.',
           };
         }
-        const relative = resolved.relativePath || '.';
-        // Lexical containment is not physical containment: a symlink inside
-        // the root (`ln -s .. up`) makes `up/x` name a file outside it. The
-        // realpath of the path's deepest existing ancestor must stay inside
-        // the root's; one that leaves is an outside-root path at its real
-        // location, so the allowlist, the protection setting and the
-        // approval UI all see where the read or write actually lands.
-        const physical = canonicalizePath(resolved.absolutePath);
-        if (!isPathWithin(canonicalizePath(root), physical)) {
-          return {
-            kind: 'outside-root',
-            absolutePath: physical,
-            match: findExternalRoot(physical, call.stepRoots),
-            outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
-          };
-        }
-        return annotateExternalPermission(
-          {
-            relative,
-            absolute: resolved.absolutePath,
-            fsPath: call.workingDirectory ? resolved.absolutePath : relative,
-          },
-          call.stepRoots,
-        );
-      },
-      catch: ensureError,
-    });
+        throw new ToolError('Workspace path is not available.');
+      }
 
-    if (!('kind' in resolution)) {
-      return { ...resolution, display: toPosixPath(resolution.relative) };
-    }
-    // This setting deliberately uses the same workspaceState slot in every
-    // host. Do not add a CLI-specific store without also making host identity
-    // explicit at this enforcement boundary. Registered external roots need no
-    // containment override, so keep their resolution independent of the store.
-    if (
-      !resolution.match &&
-      (yield* Settings.get<boolean>(
-        settings,
-        WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-      ))
-    ) {
-      return yield* Effect.fail(new ToolError(resolution.outsideMessage));
-    }
-    // `relative` is the full absolute path so an external operation never
-    // reads as a workspace one, even when basenames collide.
-    const relative = normalizeFilePath(resolution.absolutePath);
-    return {
-      relative,
-      absolute: resolution.absolutePath,
-      fsPath: resolution.absolutePath,
-      // Already forward-slashed; `toPosixPath` would drop the leading `/`.
-      display: relative,
-      ...(resolution.match ? { external: externalInfo(resolution.match) } : {}),
-    };
+      const resolved = locateInWorkspace(root, input);
+      if (resolved.kind === 'external') {
+        return {
+          kind: 'outside-root',
+          absolutePath: resolved.absolutePath,
+          match: findExternalRoot(resolved.absolutePath, call.stepRoots),
+          outsideMessage: `Path must stay within the ${scope}.`,
+        };
+      }
+      const relative = resolved.relativePath || '.';
+      // Lexical containment is not physical containment: a symlink inside
+      // the root (`ln -s .. up`) makes `up/x` name a file outside it. The
+      // realpath of the path's deepest existing ancestor must stay inside
+      // the root's; one that leaves is an outside-root path at its real
+      // location, so the allowlist, the protection setting and the
+      // approval UI all see where the read or write actually lands.
+      const physical = canonicalizePath(resolved.absolutePath);
+      if (!isPathWithin(canonicalizePath(root), physical)) {
+        return {
+          kind: 'outside-root',
+          absolutePath: physical,
+          match: findExternalRoot(physical, call.stepRoots),
+          outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
+        };
+      }
+      return annotateExternalPermission(
+        {
+          relative,
+          absolute: resolved.absolutePath,
+          fsPath: call.workingDirectory ? resolved.absolutePath : relative,
+        },
+        call.stepRoots,
+      );
+    },
+    catch: ensureError,
   });
-}
+
+  if (!('kind' in resolution)) {
+    return { ...resolution, display: toPosixPath(resolution.relative) };
+  }
+  // This setting deliberately uses the same workspaceState slot in every
+  // host. Do not add a CLI-specific store without also making host identity
+  // explicit at this enforcement boundary. Registered external roots need no
+  // containment override, so keep their resolution independent of the store.
+  if (
+    !resolution.match &&
+    (yield* Settings.get<boolean>(
+      settings,
+      WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+    ))
+  ) {
+    return yield* Effect.fail(new ToolError(resolution.outsideMessage));
+  }
+  // `relative` is the full absolute path so an external operation never
+  // reads as a workspace one, even when basenames collide.
+  const relative = normalizeFilePath(resolution.absolutePath);
+  return {
+    relative,
+    absolute: resolution.absolutePath,
+    fsPath: resolution.absolutePath,
+    // Already forward-slashed; `toPosixPath` would drop the leading `/`.
+    display: relative,
+    ...(resolution.match ? { external: externalInfo(resolution.match) } : {}),
+  };
+});
 
 /** Permission metadata carried for a path inside a registered external root. */
 function externalInfo(

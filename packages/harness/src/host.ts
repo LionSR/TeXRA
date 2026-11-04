@@ -91,20 +91,18 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-// Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
+// Follow-up delivery helpers hosts share.
 export {
   describeFollowUpFailure,
   presentFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-export {
-  attachErrorPresentationClaimed,
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
 // A host's presentation surface: session and sessionless interactions, the
-// emit handlers (one per event), and a failed run's presentation claim.
+// emit handlers (one per event), and a failed run's presentation, with the
+// notice a refused launch carries.
 export {
   SessionHostInteractions,
   type HostInteractions,
+  launchNoticeOf,
   presentRunFailure,
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
@@ -167,8 +165,6 @@ export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
 export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
-// What a used-up plan falls back to, as the retry copy names it.
-export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 // The rooted file systems plugins read, and their layers outside a run.
 export {
   GlobalStorageFs,
@@ -184,7 +180,7 @@ export {
   createRunStorageLocation,
   createWorkspaceLocation,
   pathToLocationIn,
-} from '@utils/files/fileLocation';
+} from '@common/storage/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
 export { readMcpConfig } from '@tools/mcp/mcpConfig';
 export { mcpConfigPathOf } from '@common/plugins/mcpServers';
@@ -227,16 +223,14 @@ export {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 // Failures as hosts and plugins read them: the agent error, predicates, cause
-// chain, abort, provider message (`toErrorMessage` is in `./schemas`).
+// chain, and a failure's message with its classification (`toErrorMessage`
+// is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
-export {
-  isModuleNotFoundError,
-  isNotADirectoryError,
-  isUserAbort,
-} from '@common/errors/errorPredicates';
-export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+export { isModuleNotFoundError } from '@common/errors/errorPredicates';
+export { isNotADirectoryError } from '@utils/files/fsEntryExists';
+export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.
 export {
   getPathSegments,

@@ -14,7 +14,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 type WorkflowResult = Parameters<typeof resolveWorkflowOutput>[2];
 
@@ -82,31 +81,6 @@ function workflowResult(
 }
 
 describe('CLI workflow output resolution', () => {
-  it('does not publish cancelled workflow outputs to requested destinations', async () => {
-    const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
-    const runOutput = await writeRunFile(cwd, 'r0/paper.tex', 'provisional');
-    const outputFile = join(cwd, 'out.tex');
-    await writeFile(outputFile, 'existing file');
-
-    const result = await resolveOutput(
-      outputFile,
-      undefined,
-      workflowResult(
-        [{ absolutePath: runOutput, relativePath: 'r0/paper.tex', round: 0 }],
-        RUN_OUTCOME.CANCELLED,
-      ),
-      testContext(cwd),
-      { storageRoot: join(cwd, 'storage') },
-    );
-
-    expect(result).toMatchObject({
-      outcome: RUN_OUTCOME.CANCELLED,
-      runDirectory: runDirUnder(join(cwd, 'storage'), TEST_RUN_ID),
-    });
-    expect(Object.hasOwn(result, 'copiedOutput')).toBe(false);
-    await expect(readFile(outputFile, 'utf8')).resolves.toBe('existing file');
-  });
-
   it('uses original-path lineage before flat generated names when basenames collide', async () => {
     const cwd = await makeTempDir('texra-workflow-output-', tempDirs);
     const runRoot = await writeRunFile(cwd, 'root/main.tex', 'root');

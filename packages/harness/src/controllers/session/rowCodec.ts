@@ -32,10 +32,12 @@ import {
   aggregateTarget,
   CURRENT_VALUE_VERSION,
   pluginFactFloor,
+  RETIRED_PLUGIN_FACTS,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
   SessionEventDraftSchema,
   SessionEventSchema,
+  unavailableFactReason,
   type AggregateId,
   type JsonValue,
   type SessionEvent,
@@ -128,12 +130,12 @@ const readableFrom = (type: string): number =>
     ? ROW_KINDS[type].version - ROW_KINDS[type].upcast.length
     : Number.MAX_SAFE_INTEGER;
 
-/** The upcasts a row this build reads takes, or why it refuses it: an
- *  earlier build's (a retired kind, or below its floor), a newer build's
- *  (above it), or damaged (an unknown kind: its run's reads fail). */
+/** The upcasts a row this build reads takes, null for a retired display row,
+ *  or why it refuses it: an earlier build's, a newer build's, or damaged. */
 function rowUpcasts({ commit, type, version: stored }: typeof RowSchema.Type) {
-  if (RETIRED_ROW_KINDS.has(type))
-    return new DatabaseRowEarlier({ commit, type });
+  const retired = RETIRED_ROW_KINDS.get(type);
+  if (retired === 'display') return null;
+  if (retired === 'execution') return new DatabaseRowEarlier({ commit, type });
   if (!hasKind(type))
     return new DatabaseRowCorrupt({ commit, type, detail: 'an unknown kind' });
   // A projected row has no version: this build's projector wrote it.
@@ -151,10 +153,10 @@ export function decodable(row: SqlRow): boolean {
 }
 
 /** The queries, with their parameters, for the runs holding a row an
- *  earlier build wrote ({@link readableFrom}). */
+ *  earlier build wrote ({@link readableFrom}), a retired display row aside. */
 export const EARLIER_RUNS: readonly (readonly [string, readonly unknown[]])[] =
-  [...RETIRED_ROW_KINDS, ...Object.keys(ROW_KINDS)].flatMap((type) =>
-    readableFrom(type) > 1
+  [...RETIRED_ROW_KINDS.keys(), ...Object.keys(ROW_KINDS)].flatMap((type) =>
+    RETIRED_ROW_KINDS.get(type) !== 'display' && readableFrom(type) > 1
       ? [
           [
             `SELECT s.logical_id AS logicalId, min(e."commit") AS "commit",
@@ -255,8 +257,7 @@ const jsonObject = Schema.decodeUnknownSync(Schema.JsonObject);
 function parseData(data: string, blobs: Blobs): unknown {
   if (!/"\$+b":/.test(data)) return JSON.parse(data);
   return JSON.parse(data, (_key, value: unknown) => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value))
-      return value;
+    if (!Predicate.isObject(value)) return value;
     if (!('$b' in value)) return renameRefShaped(value, (key) => key.slice(1));
     const digest = String(value.$b);
     const text = blobs.get(digest);
@@ -265,22 +266,14 @@ function parseData(data: string, blobs: Blobs): unknown {
   });
 }
 
-/** A plugin row whose plugin this build lacks: kept as written and left
- *  out of every read, named by its `plugin/kind`. */
-interface LeftOut {
-  readonly _tag: 'leftOut';
-  readonly kind: string;
-}
-
-/** A selected row as its event, or {@link LeftOut}: another build's kind
- *  or version fails as {@link rowUpcasts} says, and an undecodable row
- *  `DatabaseRowCorrupt`, naming it. */
+/** A selected row as its event (undefined: a retired display row), or why
+ *  not; a plugin fact this build lacks reads as written (`unavailable`). */
 export function decodeRow(
   input: SqlRow,
   factKinds: FactKinds,
   blobs: Blobs,
 ): Result.Result<
-  SessionEvent | LeftOut,
+  SessionEvent | undefined,
   DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
 > {
   const row = Schema.decodeUnknownSync(RowSchema)(input);
@@ -293,6 +286,7 @@ export function decodeRow(
       }),
     );
   const upcasts = rowUpcasts(row);
+  if (upcasts === null) return Result.succeed(undefined);
   if (!Array.isArray(upcasts)) return Result.fail(upcasts);
   let data: Record<string, JsonValue>;
   try {
@@ -320,26 +314,28 @@ export function decodeRow(
   if (!Result.isSuccess(parsed)) return corrupt(parsed.failure);
   const event = parsed.success;
   if (event.type !== 'plugin.fact') return Result.succeed(event);
-  const name = `${event.plugin}/${event.kind}`;
   const factKind = factKindOf(event, row.commit, factKinds);
   if (Result.isFailure(factKind)) return Result.fail(factKind.failure);
   if (factKind.success === undefined)
-    return Result.succeed({ _tag: 'leftOut', kind: name });
+    return Result.succeed({
+      ...event,
+      unavailable: unavailableFactReason(event),
+    });
   const value = factKind.success.upcasters
     .slice(event.version - pluginFactFloor(factKind.success))
     .reduce((current, step) => step(current), event.value);
   const checked = Schema.decodeUnknownResult(factKind.success.schema)(value);
   if (Result.isFailure(checked))
-    return corrupt(checked.failure, `plugin.fact/${name}`);
+    return corrupt(checked.failure, pluginKind(event.plugin, event.kind));
   return Result.succeed({ ...event, version: factKind.success.version, value });
 }
 
 /**
- * A stored plugin fact's header, its row's top-level `plugin`, `kind` and
- * `version`, against its fact kind: the fact kind, none when this build
- * lacks the plugin (the row is left out), or a newer or an earlier build's
- * version.
- * `decodeRow` and the reader's earlier-run scan both ask it.
+ * A stored plugin fact's header (its row's top-level `plugin`, `kind` and
+ * `version`) against its fact kind: the fact kind; none when this build
+ * lacks it (the row reads unavailable); or a newer or an earlier build's
+ * version, a retired kind's being an earlier build's. `decodeRow` and the
+ * reader's earlier-run scan both ask it.
  */
 export function factKindOf(
   fact: {
@@ -353,8 +349,11 @@ export function factKindOf(
   FactKinds[string] | undefined,
   DatabaseStoreNewer | DatabaseRowEarlier
 > {
+  const name = `${fact.plugin}/${fact.kind}`;
   const type = pluginKind(fact.plugin, fact.kind);
-  const factKind = factKinds[`${fact.plugin}/${fact.kind}`];
+  const factKind = factKinds[name];
+  if (factKind === undefined && RETIRED_PLUGIN_FACTS.has(name))
+    return Result.fail(new DatabaseRowEarlier({ commit, type }));
   if (factKind === undefined) return Result.succeed(undefined);
   if (fact.version > factKind.version)
     return Result.fail(new DatabaseStoreNewer({ type, version: fact.version }));
@@ -371,8 +370,8 @@ export const pluginKind = (plugin: string, kind: string): string =>
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
 
-/** The highest version of a `stored_kind` entry this build reads: `Infinity`
- *  for a plugin kind it lacks (left out), 0 for a core kind it lacks. */
+/** The highest `stored_kind` version this build reads: `Infinity` for a
+ *  plugin kind it lacks (`factKindOf` reads its rows), 0 for a core one. */
 function readableVersion(type: string, factKinds: FactKinds): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))

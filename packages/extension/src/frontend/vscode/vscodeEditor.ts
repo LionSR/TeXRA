@@ -123,7 +123,7 @@ function showDocument(
  * itself what an unopenable file means instead of reading back an absent
  * editor that was warn-logged somewhere else.
  */
-export function openFileInEditor(
+export const openFileInEditor = Effect.fn('openFileInEditor')(function* (
   absolutePath: string,
   options: {
     line?: number;
@@ -134,48 +134,46 @@ export function openFileInEditor(
     /** Reuse an already-visible editor without re-showing it. */
     reuseVisible?: boolean;
   } = {},
-): Effect.Effect<
+): Effect.fn.Return<
   { editor: vscode.TextEditor; absolutePath: string },
   EditorOpenFailed
 > {
-  return Effect.gen(function* () {
-    const { line, save, reuseVisible } = options;
-    const uri = vscode.Uri.file(absolutePath);
-    const existingEditor = findVisibleEditor(uri);
-    const preserveFocus = options.preserveFocus ?? false;
+  const { line, save, reuseVisible } = options;
+  const uri = vscode.Uri.file(absolutePath);
+  const existingEditor = findVisibleEditor(uri);
+  const preserveFocus = options.preserveFocus ?? false;
 
-    const editor =
-      reuseVisible && existingEditor && preserveFocus
-        ? existingEditor
-        : yield* showDocument(
-            uri,
-            existingEditor,
-            preserveFocus,
-            options.preview ?? false,
-          );
+  const editor =
+    reuseVisible && existingEditor && preserveFocus
+      ? existingEditor
+      : yield* showDocument(
+          uri,
+          existingEditor,
+          preserveFocus,
+          options.preview ?? false,
+        );
 
-    if (line !== undefined) {
-      const position = new vscode.Position(toZeroBasedLine(line), 0);
-      editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(
-        new vscode.Range(position, position),
-        vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-      );
-    }
+  if (line !== undefined) {
+    const position = new vscode.Position(toZeroBasedLine(line), 0);
+    editor.selection = new vscode.Selection(position, position);
+    editor.revealRange(
+      new vscode.Range(position, position),
+      vscode.TextEditorRevealType.InCenterIfOutsideViewport,
+    );
+  }
 
-    if (save && editor.document.isDirty) {
-      yield* Effect.tryPromise({
-        try: () => editor.document.save(),
-        catch: (cause) =>
-          new EditorOpenFailed({
-            reason: 'save-failed',
-            message: `Could not save ${uri.fsPath}: ${toErrorMessage(cause)}`,
-            absolutePath: uri.fsPath,
-            cause,
-          }),
-      });
-    }
+  if (save && editor.document.isDirty) {
+    yield* Effect.tryPromise({
+      try: () => editor.document.save(),
+      catch: (cause) =>
+        new EditorOpenFailed({
+          reason: 'save-failed',
+          message: `Could not save ${uri.fsPath}: ${toErrorMessage(cause)}`,
+          absolutePath: uri.fsPath,
+          cause,
+        }),
+    });
+  }
 
-    return { editor, absolutePath: uri.fsPath };
-  });
-}
+  return { editor, absolutePath: uri.fsPath };
+});

@@ -6,8 +6,6 @@ import {
   Deferred,
   Effect,
   Exit,
-  Fiber,
-  Queue,
   Stream,
   SubscriptionRef,
 } from 'effect';
@@ -105,52 +103,6 @@ class FakeSession {
   }
 }
 
-/**
- * A session whose run's previous activation completed, as a same-session
- * resume meets it: the view still holds that outcome when the launch opens
- * the run at commit 1, and the new activation folds once the test's reader
- * has read that level. The opening seeds the old outcome.
- */
-class RelaunchedSession extends FakeSession {
-  readonly readers = Effect.runSync(Queue.unbounded<void>());
-  override readonly view: FakeSession['view'] = {
-    ...this.view,
-    changes: this.view.changes.pipe(
-      Stream.tap(() => Queue.offer(this.readers, undefined)),
-    ),
-  };
-  override open(): Effect.Effect<number> {
-    return Effect.gen({ self: this }, function* () {
-      yield* this.fold(0, 'completed');
-      yield* Effect.forkDetach(
-        Queue.take(this.readers).pipe(
-          Effect.andThen(this.fold(1, null)),
-          Effect.andThen(this.fold(2, 'completed')),
-        ),
-      );
-      return 1;
-    });
-  }
-
-  constructor(foldDeath: Deferred.Deferred<never, Error>) {
-    super({ storage: '/storage' }, foldDeath);
-  }
-
-  /** The level at `cursor`, the run's durable outcome `outcome`. */
-  fold(cursor: number, outcome: FakeRunView['durableOutcome']) {
-    return SubscriptionRef.update(this.viewRef, (current) => ({
-      ...current,
-      cursor,
-      runs: new Map(current.runs).set(RUN_ID, {
-        id: RUN_ID,
-        ancestors: [],
-        childIds: [],
-        durableOutcome: outcome,
-      }),
-    }));
-  }
-}
-
 /** The package's handle on `fake`'s run, from the activation its opening
  *  commits, as `session.start` gives it. */
 const startedRun = (fake: FakeSession) =>
@@ -192,28 +144,6 @@ describe('agent package sessions', () => {
             Exit.isFailure(exit) && Cause.squash(exit.cause),
           ).toMatchObject({ message: 'fold died' });
         }
-      }).pipe(Effect.scoped),
-  );
-
-  it.live(
-    "ends a relaunched run's view at its own activation's outcome, not the one before",
-    () =>
-      Effect.gen(function* () {
-        const fake = new RelaunchedSession(
-          yield* Deferred.make<never, Error>(),
-        );
-        const run = yield* startedRun(fake);
-        const levels = yield* Effect.forkChild(Stream.runCollect(run.view));
-
-        expect(
-          (yield* Fiber.join(levels)).map((level) => [
-            level.cursor,
-            level.runs.get(RUN_ID as RunId)?.durableOutcome,
-          ]),
-        ).toEqual([
-          [1, null],
-          [2, 'completed'],
-        ]);
       }).pipe(Effect.scoped),
   );
 });

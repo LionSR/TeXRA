@@ -17,6 +17,7 @@ import {
 } from '@shared/schemas';
 import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 import { withPerKeyLane } from '@utils/core/perKeyQueue';
+import { sentBefore } from './followUpMessages';
 import type { InboxItem, SessionInbox } from './Inbox';
 
 /** The session's follow-up inbox ({@link SessionInbox}): every run's input,
@@ -94,6 +95,7 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
   earlierBuild:
     'This run was written by an earlier build, and this build cannot continue it.',
+  pluginUnavailable: 'This run needs a plugin that is not loaded here.',
   readFailed: "This run couldn't be read right now. Try again in a moment.",
   ownedElsewhere:
     'This run is live in another process. Send the message there.',
@@ -119,14 +121,11 @@ export function presentFollowUpResult(
   result: SubmitFollowUpResult,
 ): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {
   if (result.status === 'failed') {
-    return {
-      severity: 'warning',
-      message: describeFollowUpFailure(result.reason),
-    };
+    const message = describeFollowUpFailure(result.reason);
+    return { severity: 'warning', message };
   }
-  if (result.status === 'queued' && result.wake === 'failed') {
+  if (result.status === 'queued' && result.wake === 'failed')
     return { severity: 'info', message: FOLLOW_UP_WAKE_FAILED_MESSAGE };
-  }
   return { severity: 'none' };
 }
 
@@ -143,7 +142,7 @@ export interface RunAttempt {
   readonly answer: Effect.Effect<ResumeAttempt, Error>;
   /** The commit of the `run.activate` it admitted the run at. */
   readonly admitted: Deferred.Deferred<CommitOrdinal>;
-  /** The callers waiting on its answer. */
+  /** The callers waiting on its answer, counted as they join (`openResume`). */
   waiters: number;
   /** A caller holds the activated run, or none holds the resume (a wake):
    *  only a stop or the session's close ends the run now. */
@@ -161,36 +160,35 @@ export interface RunAttempt {
  * that no resume launched reads that input itself, and a run gone from the
  * view is not resumed. Gives back the resume's end, which never fails.
  */
-export const wakeRun = (
+export const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.Effect<Effect.Effect<void>, never, FollowUpServices> =>
-  Effect.gen(function* () {
-    if ((yield* SessionViewAccess).run(runId) === undefined) return Effect.void;
-    const attempt = yield* openResume(runId, {}, true);
-    if (attempt === undefined) return Effect.void;
-    attempt.handedOff = true;
-    // Observation only: interruptible even where the caller is masked.
-    return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
-  });
+): Effect.fn.Return<Effect.Effect<void>, never, FollowUpServices> {
+  if ((yield* SessionViewAccess).run(runId) === undefined) return Effect.void;
+  const attempt = yield* openResume(runId, {}, true);
+  if (attempt === undefined) return Effect.void;
+  attempt.handedOff = true;
+  // Observation only: interruptible even where the caller is masked.
+  return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
+});
 
 /** Resume the run, or join its resume in flight here, if its input obliges
  *  one and no reader here takes it (`SessionInbox.owesResume`). False only
  *  if the input could not be read; else the resume's end, for a caller to
  *  wait on (at once if none started). */
-export const wakeIfOwed = (
+export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
-): Effect.Effect<false | Effect.Effect<void>, never, FollowUpServices> =>
-  Effect.gen(function* () {
-    const owed = yield* (yield* Inbox).owesResume(runId);
-    if (owed === undefined) return false;
-    return owed ? yield* wakeRun(runId) : Effect.void;
-  });
+): Effect.fn.Return<false | Effect.Effect<void>, never, FollowUpServices> {
+  const owed = yield* (yield* Inbox).owesResume(runId);
+  if (owed === undefined) return false;
+  return owed ? yield* wakeRun(runId) : Effect.void;
+});
 
 /**
  * Join `runId`'s resume in flight here, or open one as its activation,
  * deciding on the session's fork. The registry opens one per activation
  * (`RunRegistry.start`): a caller that lost the race joins the winner.
- * Undefined while a launch that is no resume holds the run.
+ * Undefined while a launch that is no resume holds the run. A caller that
+ * is no wake is a waiter from the step that joins (seen by `answered`).
  */
 export const openResume = (
   runId: RunId,
@@ -202,13 +200,16 @@ export const openResume = (
     Effect.gen(function* () {
       const runs = registryOf(yield* Runs);
       const found = runs.attemptOf(runId);
-      if (found) return found;
+      if (found) {
+        if (!wake) found.waiters += 1;
+        return found;
+      }
       if (runs.get(runId) !== undefined) return undefined;
       const done = yield* Deferred.make<ResumeAttempt, Error>();
       const attempt: RunAttempt = {
         answer: Deferred.await(done),
         admitted: yield* Deferred.make<CommitOrdinal>(),
-        waiters: 0,
+        waiters: wake ? 0 : 1,
         handedOff: wake,
       };
       // Built as it runs: a stop before it decides nothing (`start`).
@@ -241,51 +242,54 @@ export const openResume = (
  * the user what the run did not take, or a fault. A caller that holds the
  * answer acts on it itself.
  */
-const answered = <R>(
+const answered = Effect.fn('answered')(function* <R>(
   runId: RunId,
   attempt: RunAttempt,
   decided: Effect.Effect<ResumeAttempt, Error, R>,
-): Effect.Effect<ResumeAttempt, Error, R | FollowUpServices> =>
-  Effect.gen(function* () {
-    const view = yield* SessionViewAccess;
-    const interactions = yield* Interactions;
-    // Latched: a run id deleted and re-created is not the run this wake was for.
-    let missing = false;
-    const gone = () => (missing ||= view.run(runId) === undefined);
-    return yield* decided.pipe(
-      Effect.tap((result) => {
-        if (!attempt.handedOff) return Effect.void;
-        // The parent's open call reattaches the run it owns.
-        if ('ownedBy' in result) return Effect.flatten(wakeRun(result.ownedBy));
-        if (gone() || ('started' in result && result.delivered))
-          return Effect.void;
-        return interactions.emit(
-          'requestShowInstruction',
-          {
-            key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
-            message:
-              'failed' in result
-                ? describeFollowUpFailure(result.failed.kind)
-                : FOLLOW_UP_WAKE_FAILED_MESSAGE,
-            showSuppress: false,
-          },
-          { replayWhenAttached: true },
-        );
-      }),
-      Effect.tapCause((cause) => {
-        if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
-          return Effect.void;
-        const error = Cause.squash(cause);
-        return Effect.logError(`Failed to resume run ${runId}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            presentRunFailure(interactions, error, 'Resume failed: '),
-          ),
-        );
-      }),
-    );
-  });
+): Effect.fn.Return<ResumeAttempt, Error, R | FollowUpServices> {
+  const view = yield* SessionViewAccess;
+  const interactions = yield* Interactions;
+  // Latched: a run id deleted and re-created is not the run this wake was for.
+  let missing = false;
+  const gone = () => (missing ||= view.run(runId) === undefined);
+  return yield* decided.pipe(
+    Effect.tap((result) => {
+      if (!attempt.handedOff) return Effect.void;
+      // The parent's open call reattaches the run it owns.
+      if ('ownedBy' in result) return Effect.flatten(wakeRun(result.ownedBy));
+      if (gone() || ('started' in result && result.delivered))
+        return Effect.void;
+      return interactions.emit('requestShowInstruction', {
+        key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
+        message:
+          'failed' in result
+            ? describeFollowUpFailure(result.failed.kind)
+            : FOLLOW_UP_WAKE_FAILED_MESSAGE,
+        showSuppress: false,
+      });
+    }),
+    Effect.tapCause((cause) => {
+      if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
+        return Effect.void;
+      const error = Cause.squash(cause);
+      // Shown once, by its one presenter: a run the resume opened shows
+      // its own end (`presentTerminalResult`), and a caller still waiting
+      // on the answer (a host's resume that joined this one) shows what it
+      // receives.
+      const shownElsewhere =
+        Deferred.isDoneUnsafe(attempt.admitted) || attempt.waiters > 0;
+      return Effect.logError(`Failed to resume run ${runId}`).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          shownElsewhere
+            ? Effect.void
+            : presentRunFailure(interactions, error, 'Resume failed: '),
+        ),
+      );
+    }),
+  );
+});
 
 /**
  * The one admission of a message to a run: every host and tool sends
@@ -312,6 +316,8 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
+    if (yield* sentBefore(runId, item, hold, attach))
+      return { status: 'sent' } as const;
     const live = runs.get(runId);
     if (live !== undefined) {
       if (!live.readsMessages)

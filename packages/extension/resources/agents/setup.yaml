@@ -166,16 +166,16 @@ prompt: |
   ## Setting up credentials (phase D: required)
 
   TeXRA needs one runnable-model credential path: active ChatGPT
-  subscription access for Codex models, or a usable provider or
+  subscription access for OpenAI models, or a usable provider or
   coding-plan key. Pick the path that fits the user; don't push more
   than one.
 
-    - **ChatGPT subscription for Codex models:** for users who already
-      have ChatGPT Plus/Pro/Team and want Codex models. Extension:
+    - **ChatGPT subscription for OpenAI models:** for users who already
+      have ChatGPT Plus/Pro/Team and want OpenAI models. Extension:
       `invoke_command` with `texra.showModels`; CLI: `/login chatgpt`;
       desktop: Model access. Tell them to sign in via the ChatGPT
       subscription section and enable the preference. This does not
-      unlock non-Codex providers.
+      unlock other providers.
     - **Bring-your-own API key:** ask which provider they already have
       an account with. If none, briefly explain the options:
         - **Anthropic** (Claude): best default for most TeXRA agents.
@@ -187,7 +187,7 @@ prompt: |
         - **DeepSeek**, **xAI** (Grok), **Together**
           and others: list only the one(s) the user mentions.
       Chat subscriptions such as Claude Pro or ChatGPT do NOT include
-      API access (Codex-via-ChatGPT is the one exception). The user
+      API access (the ChatGPT sign-in above is the one exception). The user
       needs a key from the provider's developer console specifically.
       Never ask the user to paste an API key into the conversation.
       Even a masked transcript still crosses the model boundary. Use

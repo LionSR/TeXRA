@@ -7,7 +7,15 @@ import { FILE_HANDLING_RULES } from './fileHandlingRules';
  * Note: This is distinct from DocumentFileType in @shared/schemas/fileTypes.ts
  * which defines UI file input field types.
  */
-export type ExtensionCategory = 'input' | 'context' | 'media' | 'edited';
+export type ExtensionCategory = (typeof EXTENSION_CATEGORIES)[number];
+
+/** Every extension category, for callers that aggregate them all. */
+export const EXTENSION_CATEGORIES = [
+  'input',
+  'context',
+  'media',
+  'edited',
+] as const;
 
 const INCLUDED_EXTENSIONS: Record<ExtensionCategory, readonly string[]> = {
   input: FILE_HANDLING_RULES.included.inputExtensions,
@@ -15,11 +23,6 @@ const INCLUDED_EXTENSIONS: Record<ExtensionCategory, readonly string[]> = {
   media: FILE_HANDLING_RULES.included.mediaExtensions,
   edited: FILE_HANDLING_RULES.included.editedExtensions,
 };
-
-/** Every extension category, for callers that aggregate them all. */
-export const EXTENSION_CATEGORIES = Object.keys(
-  INCLUDED_EXTENSIONS,
-) as readonly ExtensionCategory[];
 
 export function getIncludedExtensions(category: ExtensionCategory): string[] {
   return [...INCLUDED_EXTENSIONS[category]];

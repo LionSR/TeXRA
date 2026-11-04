@@ -202,10 +202,7 @@ interface OnboardingFunnelHost {
    * refresh can observe the transition.
    */
   readonly apply: (
-    transition: OnboardingFunnelTransition & {
-      /** This refresh moved the funnel state; the first one always does. */
-      readonly changed: boolean;
-    },
+    transition: OnboardingFunnelTransition,
   ) => Effect.Effect<void>;
 }
 
@@ -265,8 +262,7 @@ export class OnboardingFunnelRefresher {
         ),
         firstRunDone: yield* getFirstRunDone(this.host.flags),
       });
-      const changed = this.current !== transition.state;
-      yield* this.host.apply({ ...transition, changed });
+      yield* this.host.apply(transition);
       this.current = transition.state;
       if (transition.clearDeclined) {
         yield* setOnboardingDeclined(this.host.flags, false);

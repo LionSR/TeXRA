@@ -202,3 +202,23 @@ export function inheritedGrants<Id>(
   const limit = policyLimit(source, runId);
   return { own, goal: [], ...(limit !== undefined && { limit }) };
 }
+
+/** The grant source over runs' rows: each run's parent edge and its grants,
+ *  none for a run whose rows carry none. */
+export function grantSource<Id>(
+  rows: ReadonlyMap<
+    Id,
+    {
+      readonly parent: { readonly id: Id } | null;
+      readonly grants: ApprovalGrants | null;
+    }
+  >,
+): ApprovalGrantSource<Id> {
+  const runs = new Map<Id, { parentId: Id | null }>();
+  const policy = new Map<Id, ApprovalGrants>();
+  for (const [id, own] of rows) {
+    runs.set(id, { parentId: own.parent?.id ?? null });
+    policy.set(id, own.grants ?? NO_APPROVAL_GRANTS);
+  }
+  return { runs, policy };
+}

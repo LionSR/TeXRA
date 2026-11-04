@@ -61,10 +61,11 @@ export interface PluginRow {
  * One row kind a plugin owns (`plugin.fact`): the version it writes, the
  * schema of that version's value, and adjacent upcasters from
  * `version - upcasters.length` to `version`, oldest first.
- * The store checks every row of the kind against its fact kind, and keeps a row
- * whose fact kind the process's plugins lack (its plugin removed, or not listed
- * here) without reading it. Fact kinds live beside their readers, in modules
- * webviews can import.
+ * The store checks every row of the kind against its fact kind, and reads a
+ * row whose fact kind the process's plugins lack (its plugin removed, or not
+ * listed here) as written, marked `unavailable`; a run holding one does not
+ * resume. Fact kinds live beside their readers, in modules webviews can
+ * import.
  */
 export interface FactKind {
   /** The plugin's id: a fact kind is its own plugin's, never another's. */
@@ -338,22 +339,19 @@ export function factRows(
         parent: null,
       });
     else own.push(ownFactRow({ ...fact, aggregate }, runId));
-  const current = (draft: OwnFactRow) =>
-    Effect.gen(function* () {
-      const factKind = plugin?.factKinds?.find(
-        (one) => one.kind === draft.kind,
-      );
-      if (factKind?.supersedes === undefined) return true;
-      const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
-        `${draft.plugin}/${draft.kind}`
-      ];
-      if (latest === undefined || !factKind.supersedes(latest, draft))
-        return true;
-      yield* Effect.logDebug(
-        `${factKind.plugin}/${factKind.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
-      );
-      return false;
-    });
+  const current = Effect.fn('current')(function* (draft: OwnFactRow) {
+    const factKind = plugin?.factKinds?.find((one) => one.kind === draft.kind);
+    if (factKind?.supersedes === undefined) return true;
+    const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
+      `${draft.plugin}/${draft.kind}`
+    ];
+    if (latest === undefined || !factKind.supersedes(latest, draft))
+      return true;
+    yield* Effect.logDebug(
+      `${factKind.plugin}/${factKind.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
+    );
+    return false;
+  });
   return {
     run,
     alongside: Effect.filter(own, current).pipe(

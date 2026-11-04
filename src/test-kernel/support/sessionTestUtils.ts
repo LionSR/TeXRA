@@ -1,11 +1,7 @@
-import '@test/support/sessionGraphTestSetup';
-
 import { Effect, Context } from 'effect';
 import { TraceEmitter } from '@agent/trace';
-import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { SessionRoots } from '@platform/rootedFs';
 import {
   runStateAppend,
   SessionLog,
@@ -21,7 +17,6 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { applyTranscriptEvent } from '@shared/session/transcriptUpdate';
 import {
@@ -33,83 +28,7 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
-import {
-  closeSessionOf,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
-import { testSessionOwner } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-
-/** What a test supplies: the isolated roots are this helper's job. */
-/** An open's init; `persistent` keeps the root's own store. */
-type TestSessionInit = Partial<SessionHandleInit> & {
-  readonly persistent?: boolean;
-};
-
-let opened = 0;
-
-/**
- * Open an isolated session with an explicitly ephemeral transcript, on a
- * storage root of its own under the process roots (one root holds one
- * session): it shares a graph with no other test session and not with the
- * process default session.
- */
-export const createTestSession = (
-  init: TestSessionInit = {},
-): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> =>
-  Effect.flatMap(testSessionOwner, (owner) => {
-    const installed = testWorkspaceRoots();
-    opened += 1;
-    const { persistent, ...open } = init;
-    return owner.open({
-      ...open,
-      roots: init.roots ?? {
-        workspace: installed.workspace,
-        storageRoot: installed.storageRoot,
-        storage: `${installed.storage}/test-sessions/${opened}`,
-        globalStorage: installed.globalStorage,
-        config: installed.config,
-        workspaceState: installed.workspaceState,
-        repoState: installed.repoState,
-        globalState: installed.globalState,
-      },
-      ...(!persistent && {
-        transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
-      }),
-    });
-  });
-
-/**
- * Open a fresh session over the process roots, for a file that seeds or
- * reads the process storage outside the session's scope. One root holds one
- * session, so a session still open there (a previous test's) is released
- * first, and its release is awaited: `dispose` settles once the root's entry
- * has unwound, and an open issued before that would race it. The caller
- * gets its own session, over the store it supplies.
- */
-export function createProcessSession(
-  init: TestSessionInit = {},
-): Effect.Effect<Context.Context<SessionServices>, SessionOpenError> {
-  return Effect.gen(function* () {
-    const roots = testWorkspaceRoots();
-    const owner = yield* testSessionOwner;
-    const predecessors = (yield* owner.list).filter(
-      (live) => Context.get(live, SessionRoots).storage === roots.storage,
-    );
-    yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {
-      discard: true,
-    });
-    // The session over the process roots is the file's default session.
-    const { persistent, ...open } = init;
-    return yield* openTestDefaultSession({
-      ...open,
-      roots,
-      ...(!persistent && {
-        transcriptMode: init.transcriptMode ?? { kind: 'ephemeral' },
-      }),
-    });
-  });
-}
 
 /**
  * Enqueue rows on the session's publisher and return at once, as a detached

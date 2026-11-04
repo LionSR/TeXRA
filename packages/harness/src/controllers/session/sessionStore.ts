@@ -42,11 +42,7 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
-import {
-  recordOf,
-  RUN_ROW_READS,
-  runRowsFrom,
-} from '@shared/session/runRowReads';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
 import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import type {
   SessionLogShape,
@@ -89,7 +85,7 @@ const CHANNEL = 'sessionStore';
 
 /** Whether `row` is a run's deletion marker. */
 const isRemoval = (row: SessionEvent | undefined): boolean =>
-  row !== undefined && recordOf(row).removed !== null;
+  row?.type === 'run.removed';
 
 /** Log a failure on this channel, with the failure attached as its `data`. */
 const logFailure =
@@ -146,15 +142,15 @@ function settlement(
  *  and takes the claim, later ones find it this process's. Only the last to
  *  go decides the claim (`Scope.addFinalizer` keeps no context: in its
  *  closer's transaction): given back to how the holders found it, or
- *  released when a hold `ends` it. The session's close decides whatever is
- *  still held. */
+ *  released when a hold `ends` it, unless a holder here holds it by the
+ *  time that release takes its write lock. Close decides what is left. */
 const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
   type Hold = { count: number; taken: boolean; ended: boolean };
   const holds = new Map<AggregateId, Hold>();
   const decide = (id: AggregateId, hold: Hold) =>
     hold.taken || hold.ended
       ? database
-          .releaseClaims([id])
+          .releaseClaims([id], () => (holds.get(id)?.count ?? 0) > 0)
           .pipe(
             Effect.catch(
               logFailure(
@@ -163,24 +159,26 @@ const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
             ),
           )
       : Effect.void;
+  /** Drop an entry once its release ran, unless it is held again: kept till
+   *  then, a holder that comes back meanwhile keeps its `taken`. */
+  const forget = (id: AggregateId, hold: Hold) =>
+    hold.count === 0 && holds.get(id) === hold && holds.delete(id);
   const letGo = (id: AggregateId, hold: Hold) =>
     Effect.suspend(() => {
       hold.count -= 1;
       if (hold.count > 0 || holds.get(id) !== hold) return Effect.void;
-      holds.delete(id);
-      return decide(id, hold);
+      return decide(id, hold).pipe(
+        Effect.ensuring(Effect.sync(() => forget(id, hold))),
+      );
     });
   const close = Effect.suspend(() => {
     const held = [...holds];
     holds.clear();
-    return Effect.forEach(held, ([id, hold]) => decide(id, hold), {
-      discard: true,
-    });
+    return Effect.forEach(held, ([id, hold]) => decide(id, hold));
   });
   const hold: SessionLogShape['hold'] = (runId, options = {}) => {
     const id = qualifyAggregateId('run', runId);
-    // Taking the claim and recording it are one step: a claim committed
-    // under an interrupt that landed before `taken` would never be released.
+    // One step, so an interrupt cannot leave a claim taken and unrecorded.
     return Effect.uninterruptible(
       Effect.gen(function* () {
         const held = holds.get(id) ?? { count: 0, taken: false, ended: false };
@@ -215,17 +213,15 @@ const transaction =
       let committed: CommitOrdinal | null = null;
       const owned: AggregateId[] = [];
       const release = Effect.suspend(() =>
-        owned.length === 0
-          ? Effect.void
-          : database
-              .releaseClaims(owned)
-              .pipe(
-                Effect.catch(
-                  logFailure(
-                    'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
-                  ),
-                ),
+        database
+          .releaseClaims(owned)
+          .pipe(
+            Effect.catch(
+              logFailure(
+                'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
               ),
+            ),
+          ),
       );
       const tx = (append: Append): SessionTransaction => ({
         append: (drafts) =>
@@ -233,7 +229,7 @@ const transaction =
             Effect.sync(() => {
               committed = rows.at(-1)?.commit ?? committed;
               for (const row of rows)
-                if (recordOf(row).start !== null) owned.push(row.aggregateId);
+                if (row.type === 'run.start') owned.push(row.aggregateId);
             }),
           ),
         claim: (runId) =>
@@ -325,7 +321,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       settled,
       afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
-      history: (id) => database.readAggregate(id, 1, RUN_STATE_ROW_TYPES),
+      history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
+        database.readAggregate(id, fromSeq, types),
       runRows: (id, read, through) =>
         database
           .readAggregate(id, 1, RUN_ROW_READS[read], through)
@@ -368,8 +365,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       ).pipe(Stream.ensuring(Deferred.succeed(foldedEnded, undefined))),
       deliver: (removed) =>
         events.all(anchor, delivered).pipe(
-          Stream.runForEach((event) =>
-            Effect.gen(function* () {
+          Stream.runForEach(
+            Effect.fnUntraced(function* (event) {
               const target = aggregateTarget(event.aggregateId);
               if (target.kind === 'run' && isRemoval(event)) removed(target.id);
               yield* trace.committed(event);

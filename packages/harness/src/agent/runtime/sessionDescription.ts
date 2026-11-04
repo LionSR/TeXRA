@@ -7,7 +7,7 @@
  * can quickly understand each session.
  */
 
-import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
+import { Cause, Context, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { helperCall } from '@agent/runtime/helperModel';
@@ -15,14 +15,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
+import { descriptionRow } from '@shared/session/runFacts';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { RouteRetries } from './run/invocation';
 import type { HttpClient } from 'effect/http';
@@ -80,6 +76,19 @@ export function getDisplayedInstruction(
   return config.displayInstruction?.trim() || config.instruction.trim();
 }
 
+/**
+ * Whether the session labels its root runs: one extra helper-model request
+ * per root run, reported to the usage log but not to the run's own usage.
+ * The label is the app's (a session's title in its run list and history),
+ * so it is off unless the process layer provides it (`processLayer`
+ * does; `Sessions.layer` does not); a child
+ * run is never labelled and keeps its agent name.
+ */
+export const RunLabels = Context.Reference<boolean>(
+  '@texra-ai/harness/agent/RunLabels',
+  { defaultValue: () => false },
+);
+
 /** How long a run's end may wait on its optional description. */
 const DESCRIPTION_DEADLINE = '20 seconds';
 
@@ -91,9 +100,8 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * warned about and the run keeps its agent-name label. Stopping the run
  * interrupts it.
  *
- * Every run qualifies, the children a script's `agent()` calls create
- * included: without one they are labelled by their agent name alone.
- * A resumed run (`resumed`) is described only while it has no
+ * Only a root run of a session that labels its runs ({@link RunLabels})
+ * qualifies. A resumed run (`resumed`) is described only while it has no
  * `run.description` row, as when its process died before the helper
  * answered, so no run is described twice.
  * Uses the configured helper model, else the run's own, for a one-shot,
@@ -169,14 +177,7 @@ export const generateSessionDescription = Effect.fn(
     // would then turn into a warning, leaving the terminal drain to write a
     // COMPLETED row over a fact nobody hears about. A refused commit is this
     // path's own failure and the one thing the warning is for.
-    yield* log.transact([
-      {
-        type: 'run.description',
-        aggregateId: qualifyAggregateId('run', runId),
-        description,
-        by: 'model',
-      },
-    ]);
+    yield* log.transact([descriptionRow(runId, description, 'model')]);
     yield* Effect.logInfo(`Generated session description for ${runId}`).pipe(
       withLogChannel(CHANNEL),
     );

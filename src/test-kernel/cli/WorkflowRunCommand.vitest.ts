@@ -10,8 +10,9 @@ import { beforeEach, expect, vi } from 'vitest';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
 import { layer } from '@effect/vitest';
-import { Effect, Context } from 'effect';
+import { Effect, Context, Schema } from 'effect';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -45,8 +46,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@utils/files/runStorageFs', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
+vi.mock('@common/storage/storageLayout', async (importActual) => ({
+  ...(await importActual<typeof import('@common/storage/storageLayout')>()),
   runDirUnder: vi.fn(
     (_storageRoot: string, runId: string) => `/tmp/runs/${runId}`,
   ),
@@ -142,6 +143,7 @@ function workflowProgram(
       inputFiles: ['paper.tex'],
       contextFiles: [],
       instruction: '',
+      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
       ...init,
     });
   });
@@ -230,7 +232,7 @@ const seedStartedRun = (
     },
   ]);
 
-layer(SessionGraph.layer)('CLI run command, workflow agents', (it) => {
+layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
   beforeEach(() => {
     vi.clearAllMocks();
     pendingRunStarts = [];
@@ -242,7 +244,6 @@ layer(SessionGraph.layer)('CLI run command, workflow agents', (it) => {
         tools: [],
         blocks: {
           task: {
-            rewrite: true,
             outputs: [],
             files: {},
             prefix: '',

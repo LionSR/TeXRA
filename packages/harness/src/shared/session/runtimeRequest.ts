@@ -13,7 +13,7 @@
  * another retained command adds its arm with its handler. A start is not a
  * request: it is `StartRequestSchema`, beside it.
  */
-import { type Context, Effect, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
@@ -22,49 +22,16 @@ import {
 import { ApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   AgentConfigSchema,
+  FollowUpReceiptSchema,
   InlinePersonaSchema,
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
+  RunStopReasonSchema,
   ToolEditContentSchema,
-  type ToolEditContent,
-  type ToolEditPermission,
 } from '@shared/schemas';
-import type { Database } from './database.js';
-
-// Null records a missing file; an empty string records an existing empty one.
-// The preview wire contract renders either as empty text.
-const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
-  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
-);
-
-/** Read the proposal named by a durable edit request. A missing or malformed
- *  blob is a corrupt store, never permission to use a recomputed proposal. */
-export const readToolEditContent = (
-  readBlobs: Context.Service.Shape<typeof Database>['readBlobs'],
-  address: ToolEditPermission['content'],
-): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
-  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
-    const text = held.get(address);
-    if (text === undefined)
-      throw new Error(`The store holds no tool edit proposal at ${address}`);
-    return Schema.decodeUnknownSync(StoredToolEditContentSchema)(
-      JSON.parse(text),
-    );
-  });
 
 const runScoped = { runId: RunIdSchema };
-
-/**
- * Why a run stops. `user` is an explicit stop of the work (a stop button,
- * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
- * background operation it is observing. `shutdown` only ends this process's
- * hold on the run (an exit, a signal, a session close), leaving that
- * operation for a resume to observe.
- */
-const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
-/** Why a run stops: a `user` stop or this process's `shutdown`. */
-export type RunStopReason = typeof RunStopReasonSchema.Type;
 
 /** Every request a surface issues to its session's runtime, one arm per
  *  `group.action` tag. */
@@ -72,7 +39,6 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.stop'),
     ...runScoped,
-    detachActiveChildren: Schema.optional(Schema.NullOr(Schema.Boolean)),
     reason: RunStopReasonSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('run.delete'), ...runScoped }),
@@ -117,9 +83,15 @@ export const RuntimeRequestSchema = Schema.Union([
       Schema.Struct({ op: Schema.Literal('remove') }),
     ]),
   }),
+  /** A message to the run, under the caller's `id` (minted when absent): a
+   *  retry under it answers with the first send's receipt, even once the run
+   *  takes no more input; another message under it is a {@link Conflict}. */
   Schema.Struct({
     kind: Schema.Literal('followUp.send'),
     ...runScoped,
+    id: Schema.optional(
+      Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+    ),
     text: Schema.String.check(Schema.isMinLength(1)),
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
     /** What the message attaches: a file (a pasted image's), read and
@@ -132,6 +104,14 @@ export const RuntimeRequestSchema = Schema.Union([
     /** `turn`: the run reads the message when its current turn ends, not
      *  at the turn's next model request. Absent: at the next request. */
     holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
+  }),
+  /** The receipt of the message sent under `id`; with `wait`, once it is
+   *  answered or unanswered. */
+  Schema.Struct({
+    kind: Schema.Literal('followUp.receipt'),
+    ...runScoped,
+    id: Schema.String.check(Schema.isMinLength(1)),
+    wait: Schema.optional(Schema.NullOr(Schema.Boolean)),
   }),
   /**
    * The one answer to a `request.opened` (one run model, section 3.7): the
@@ -185,19 +165,6 @@ export const RuntimeRequestSchema = Schema.Union([
 /** One request a surface issues to its session's runtime. */
 export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 
-/**
- * Hunks as unified-diff text lines, each preceded by its header. One header
- * policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
- */
-export function formatHunkLines(hunks: ToolEditContent['hunks']): string[] {
-  const range = (start: number, lines: number) =>
-    lines === 1 ? String(start) : `${start},${lines}`;
-  return hunks.flatMap((hunk) => [
-    `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`,
-    ...hunk.lines,
-  ]);
-}
-
 /** What a `run.files` did: `done` (with the copy's folder), no directory
  *  to act on, or the failure that stopped it. */
 const RunFilesResultSchema = Schema.Union([
@@ -214,11 +181,18 @@ export type RunFilesResult = typeof RunFilesResultSchema.Type;
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('done') }),
+  /** A message accepted, now or by an earlier send under its `id`. */
   Schema.Struct({
     kind: Schema.Literal('followUp'),
+    id: Schema.String,
     status: Schema.Literals(['sent', 'queued']),
     /** A queued input whose recovery wake did not reach the run. */
     wake: Schema.optional(Schema.NullOr(Schema.Literal('failed'))),
+    receipt: FollowUpReceiptSchema,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('receipt'),
+    receipt: FollowUpReceiptSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('forked'), runId: RunIdSchema }),
   Schema.Struct({
@@ -238,6 +212,7 @@ const OUTCOME_KIND = {
   'run.fork': 'forked',
   'run.files': 'runFiles',
   'followUp.send': 'followUp',
+  'followUp.receipt': 'receipt',
   'request.preview': 'preview',
 } as const satisfies Partial<Record<RuntimeRequest['kind'], Outcome['kind']>>;
 
@@ -283,7 +258,19 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()(
   { runId: RunIdSchema, reason: Schema.String },
 ) {}
 
-/** The user cancelled the operation. No refusal notice is needed. */
+/** A `followUp.send` under an `id` the run holds another message under. */
+export class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
+  runId: RunIdSchema,
+  id: Schema.String,
+}) {
+  override get message(): string {
+    return `A different message was already sent under id ${this.id}.`;
+  }
+}
+
+/** Nothing is left to tell the user: they cancelled the operation, or the
+ *  host has already told them why it did not go through. No refusal notice
+ *  is needed. */
 export class Cancelled extends Schema.TaggedError<Cancelled>()(
   'Cancelled',
   {},
@@ -317,6 +304,7 @@ export const RequestErrorSchema = Schema.Union([
   Unavailable,
   Cancelled,
   Rejected,
+  Conflict,
   Invalid,
   Internal,
 ]);
@@ -324,7 +312,7 @@ export const RequestErrorSchema = Schema.Union([
 export type RequestError = typeof RequestErrorSchema.Type;
 
 /**
- * How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds
+ * How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
  * onto the wire ({@link RequestRefusal}); every other tag is a defect it
  * logs and answers `Internal` — but it is a *named* defect, so the log says
  * which capability produced it. The bound is structural because the tags a
@@ -337,18 +325,19 @@ export interface HostRequestFailure extends Error {
 }
 
 /**
- * A request's refusal, as opposed to its defect: the three a handler may
+ * A request's refusal, as opposed to its defect: the four a handler may
  * answer the surface with. The bridge folds these onto the wire; every other
  * tag is `Internal`.
  */
-export type RequestRefusal = Cancelled | Unavailable | Rejected;
+export type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
 
-/** Whether a failure is one of the three the bridge answers on the wire. */
+/** Whether a failure is one of the four the bridge answers on the wire. */
 export function isRequestRefusal(error: unknown): error is RequestRefusal {
   return (
     error instanceof Cancelled ||
     error instanceof Unavailable ||
-    error instanceof Rejected
+    error instanceof Rejected ||
+    error instanceof Conflict
   );
 }
 

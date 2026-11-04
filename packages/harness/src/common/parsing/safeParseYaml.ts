@@ -15,7 +15,7 @@ import { ensureError } from '@utils/errors/errorMessage';
  */
 export function safeParseYaml(text: string): Result.Result<unknown, Error> {
   return Result.try({
-    try: () => yaml.parse(text) as unknown,
+    try: (): unknown => yaml.parse(text),
     catch: ensureError,
   });
 }

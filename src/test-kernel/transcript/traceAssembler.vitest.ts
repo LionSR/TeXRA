@@ -1,6 +1,6 @@
-import { it } from '@effect/vitest';
-import { Effect, Schema, Context } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer, Schema, Context } from 'effect';
+import { expect } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -12,31 +12,37 @@ import {
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { assembleTrace } from '@transcript/traceAssembler';
 import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
 
 const tempDirs = useTempDirs();
 
-describe('assembleTrace', () => {
-  setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
-
+layer(
+  SessionGraph.layer.pipe(
+    Layer.provideMerge(
+      FakeHost.layer(() => createTempDirPlatform('texra-trace-', tempDirs)),
+    ),
+  ),
+  { excludeTestServices: true },
+)('assembleTrace', (it) => {
   it.effect('assembles a full trace document for a run', () =>
     Effect.gen(function* () {
-      const session: Context.Context<SessionServices> =
-        yield* createTestSession({
-          roots: testWorkspaceRoots(),
-        });
+      // An ephemeral session over the host's own roots.
+      const session: Context.Context<SessionServices> = yield* sessionHandleOf(
+        yield* TestSession.open(),
+      );
       const runId = 'aa11bb22cc33' as RunId;
       const aggregateId = qualifyAggregateId('run', runId);
       const planFact = {

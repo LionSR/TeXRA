@@ -46,7 +46,7 @@ jobs:
       checks: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Require green CI on the dispatched commit
         uses: ./.github/actions/require-green-ci
@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -142,7 +142,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -277,10 +277,10 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download desktop installer artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: texra-desktop-installers-*
           path: artifacts/desktop-release

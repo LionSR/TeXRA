@@ -42,17 +42,12 @@ export interface Facts {
       readonly credentialScope: string;
     };
   };
-  /**
-   * The three request controls every OpenAI-descended route defaults from, in
-   * the package's own order. A case that clamps or fixes one overrides it
-   * after the spread; a case whose route takes only some of the three names
-   * those, because a spread is not excess-property-checked.
-   */
+  /** The request controls the protocol cases default from; a case that
+   *  clamps or fixes one sets its own value instead. */
   readonly controls: {
     readonly maxOutputTokens: number;
     /** Null where the request takes no temperature: the route then sends none. */
     readonly temperature: number | null;
-    readonly parallelToolCalls: boolean;
   };
   /** The effort values the route accepts on the wire (see {@link acceptedEfforts}). */
   readonly acceptedEfforts: readonly ReasoningEffort[];
@@ -90,7 +85,6 @@ const CONFIGURE: {
       supportsSystemMessages: config.capabilities.supportsIntermDevMsgs,
       defaults: {
         maxOutputTokens: controls.maxOutputTokens,
-        parallelToolCalls: true,
         thinking: anthropicThinking(config, choice, controls.maxOutputTokens),
         // Anthropic has no `none` or `minimal`: off is the thinking switch.
         effort:
@@ -156,8 +150,6 @@ export function configurationFor(spec: BindSpec): {
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
     reasoning: chooseReasoning(config, {}, { route }),
-    parallelToolCalls: false,
-    reasoningSummary: false,
     serverState: false,
     fastTier: false,
     webSocket: false,
@@ -190,8 +182,6 @@ export function configurationFor(spec: BindSpec): {
     controls: {
       maxOutputTokens: options.maxOutputTokens,
       temperature: sampled ? (options.temperature ?? null) : null,
-      // Every OpenAI-descended route honors this; Anthropic uses its default.
-      parallelToolCalls: options.parallelToolCalls,
     },
     acceptedEfforts: acceptedEfforts(config, route),
   });

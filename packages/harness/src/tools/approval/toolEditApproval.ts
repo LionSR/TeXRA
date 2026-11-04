@@ -3,13 +3,13 @@ import { Context, Effect } from 'effect';
 import { requireToolRun } from '@agent/runtime/RunCall';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import {
+  readToolEditContent,
   type RefusalDecision,
   type ToolEditPermission,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy } from '@shared/session/approvalDecision';
 import { Approvals, SessionLog } from '@shared/session/runHistory';
-import { readToolEditContent } from '@shared/session/runtimeRequest';
 import { errorResult } from '@tools/core/result';
 import {
   buildDiffHunks,

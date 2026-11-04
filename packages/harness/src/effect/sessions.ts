@@ -187,7 +187,9 @@ export interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host.
+   * returned to you and shown to no host: a launch refused for an unknown
+   * model, or for a `config` naming an unknown agent, carries the notice a
+   * host shows for it (`launchNoticeOf` in `./host`).
    */
   readonly start: (
     input: StartInput,
@@ -246,6 +248,13 @@ export interface LocalSession extends Session {
      * {@link head}, or a snapshot's `cursor`), in write order, then each
      * new one as it is written. `drained`, if given, is updated to the
      * position each read reached.
+     *
+     * Another process's commit reaches this stream and the view on the same
+     * poll of the store (about 250 ms), but the view applies it on its own
+     * update fiber, so `current` read right after an event here can still
+     * be the snapshot before it. A caller that acts on an event and then
+     * needs the snapshot to show it waits on `changes` rather than reading
+     * `current` once.
      */
     readonly events: (
       from: CommitOrdinal,
@@ -272,9 +281,8 @@ export interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been

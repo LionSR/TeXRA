@@ -10,14 +10,16 @@
  * 3. The model's first turn calls `script`. The program imports the module,
  *    calls the plugin tool through it, runs `self()` twice with a JSON
  *    Schema (each child submits a structured value) and reads the fields.
- * 4. The program then queries `executions` with SQL and reads the page's
- *    `columns`, `rows` and `more`, a long text cell included.
+ * 4. The program then reads its own calls back with `executions` SQL: the
+ *    plugin call's result (`tool_calls`: `columns`, `rows` and `more`, the
+ *    structured value and a long text cell), each `self()` child's status
+ *    (`runs`, joined to the call that launched it), and a write refused.
  */
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { Effect, Schema } from 'effect';
-import { defineTool, Sessions } from '@texra-ai/harness';
+import { Effect, Layer, Schema } from 'effect';
+import { defineTool, HISTORY_TABLES, Sessions } from '@texra-ai/harness';
 import { definePlugin, harnessBuiltins } from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace, scriptReturnsOf } from './_support.ts';
@@ -58,6 +60,8 @@ const PERSONA = {
   tools: ['script', 'executions', 'outline_sections'],
 };
 const TEX = '\\section{Setup}\\section{Main bound}';
+/** Each `self()` child as `runs` and its launching call read it. */
+const CHILDREN = 'ended:completed:executed,ended:completed:executed';
 const VERDICT = {
   type: 'object',
   properties: { verdict: { type: 'string' } },
@@ -69,20 +73,35 @@ const { titles } = await outline(${JSON.stringify(TEX)});
 const schema = ${JSON.stringify(VERDICT)};
 const first = await self('Round 1: check the setup.', { schema });
 const second = await self('Round 2: check the bound.', { schema });
-const page = await tools.executions({
-  path: '/executions',
-  action: 'query',
-  sql: "SELECT tool, result FROM tool_calls WHERE tool = 'outline_sections'",
-});
+const sql = (sql, params = []) =>
+  tools.executions({ path: '/executions', action: 'query', sql, params });
+const page = await sql(
+  "SELECT tool, status, value, output FROM tool_calls WHERE script_call_id = ? AND tool = 'outline_sections'",
+  ['call_script'],
+);
+const children = await sql(
+  'SELECT r.status, r.outcome, c.status FROM runs r JOIN tool_calls c ON c.position = r.parent_call_position WHERE c.script_call_id = ? ORDER BY c.position',
+  ['call_script'],
+);
+let write = null;
+try {
+  await sql('WITH gone AS (SELECT 1) DELETE FROM tool_calls');
+} catch (error) {
+  write = error.message;
+}
+const [tool, status, value, output] = page.rows[0] ?? [];
 return {
   titles,
   verdicts: [first.structured.verdict, second.structured.verdict],
   columns: page.columns,
   more: page.more,
-  longCell: page.rows[0]?.[1]?.length ?? null,
+  call: [tool, status, JSON.parse(value).titles.join()],
+  longCell: output?.length ?? null,
+  children: children.rows.map((row) => row.join(':')),
+  write,
 };`;
 
-const { platform, agentsDir, requests } = await makeExampleWorkspace([
+const { platform, agentsDir, requests, route } = await makeExampleWorkspace([
   { text: 'Inline persona reply.', expect: 'Inline start.' },
   {
     expect: 'Outline and review.',
@@ -121,7 +140,7 @@ const shape = (request: Readonly<Record<string, unknown>> | undefined) =>
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
   const session = yield* sessions.open(platform.roots);
-  const model = 'anthropic/claude-sonnet-5-5';
+  const { model } = route;
 
   const inline = yield* session.start({
     agent: PERSONA,
@@ -145,6 +164,13 @@ const program = Effect.gen(function* () {
   const fromFile = shape(requests[1]);
   if (config?.agent !== PERSONA.name || fromFile !== shape(requests[0]))
     throw new Error(`file persona differs from inline: ${fromFile}`);
+  // `self` comes with the script tool, but only a script calls it: the
+  // model is sent the script's declaration of it, never a tool of its own.
+  const sentNames = (requests[1]?.tools as { name: string }[] | undefined)?.map(
+    ({ name }) => name,
+  );
+  if (sentNames?.includes('self'))
+    throw new Error(`the model was sent self as a tool: ${fromFile}`);
   console.log(`[07] agent file ${config.agent} = inline persona`);
 
   // 2-4. What the script returned, read back from the stored conversation.
@@ -155,19 +181,28 @@ const program = Effect.gen(function* () {
     verdicts: string[];
     columns: string[];
     more: boolean;
+    call: string[];
     longCell: number;
+    children: string[];
+    write: string | null;
   };
   const expected = ['setup-ok', 'bound-ok'];
   if (
     returned.titles.join() !== 'Setup,Main bound' ||
     returned.verdicts.join() !== expected.join() ||
-    returned.columns.join() !== 'tool,result' ||
+    returned.columns.join() !== 'tool,status,value,output' ||
+    !returned.columns.every((column) =>
+      HISTORY_TABLES.tool_calls.some((name) => name === column),
+    ) ||
     returned.more !== false ||
-    !(returned.longCell > 3000)
+    returned.call.join('|') !== 'outline_sections|executed|Setup,Main bound' ||
+    !(returned.longCell > 3000) ||
+    returned.children.join() !== CHILDREN ||
+    !returned.write?.includes('readonly')
   )
     throw new Error(`unexpected script return: ${JSON.stringify(returned)}`);
   console.log(
-    `[07] script: titles=${returned.titles.join('|')} verdicts=${returned.verdicts.join('|')} query columns=${returned.columns.join('|')} more=${returned.more} long cell=${returned.longCell} chars`,
+    `[07] script: titles=${returned.titles.join('|')} verdicts=${returned.verdicts.join('|')} query columns=${returned.columns.join('|')} more=${returned.more} call=${returned.call.join('|')} long cell=${returned.longCell} chars children=${returned.children.join('|')} write refused`,
   );
   console.log(
     `[07] model turns=${requests.length} reply="${end.output.response}"`,
@@ -175,7 +210,10 @@ const program = Effect.gen(function* () {
 }).pipe(
   Effect.scoped,
   Effect.provide(
-    Sessions.layer({ platform, plugins: [...harnessBuiltins, latexPlugin] }),
+    Sessions.layer({
+      platform,
+      plugins: [...harnessBuiltins, latexPlugin],
+    }).pipe(Layer.provideMerge(route.transport)),
   ),
 );
 

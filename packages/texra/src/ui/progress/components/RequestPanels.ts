@@ -88,7 +88,7 @@ function isTextInput(el: Element | null): boolean {
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
     return true;
   }
-  if ((el as HTMLElement).isContentEditable) return true;
+  if (el instanceof HTMLElement && el.isContentEditable) return true;
   const tagName = el.tagName.toLowerCase();
   if (tagName.includes('textarea') || tagName.includes('input')) return true;
   return isTextInput(el.shadowRoot?.activeElement ?? null);
@@ -159,7 +159,8 @@ export class RequestPanels extends LitElement {
   private handleKeydown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
     const path = event.composedPath();
-    if (isTextInput((path[0] as Element | undefined) ?? null)) return;
+    const [origin] = path;
+    if (isTextInput(origin instanceof Element ? origin : null)) return;
     if (path.some((t) => t instanceof Element && CHOOSER.test(t.localName)))
       return;
     const card = path.find(

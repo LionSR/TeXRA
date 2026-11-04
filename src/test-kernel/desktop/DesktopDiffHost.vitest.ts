@@ -25,7 +25,7 @@ const tempDirs = useTempDirs();
 
 // Live clock: the window's open and the patch directory's removal are real
 // filesystem work.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'createDesktopDiffHost',
   (it) => {
     // The dynamic import pulls the full desktop main graph through the module

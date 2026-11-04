@@ -19,6 +19,7 @@ import {
 // Local imports
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
 import { displayToStoragePath } from '@agent/memory/memoryUtils';
+import { runStorageLocationUnder } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type {
@@ -32,7 +33,6 @@ import { parseWorkingDirectory } from '@tools/pathResolution';
 import { errorResult } from '@tools/core/result';
 import type { ToolRegistry } from '@tools/toolTable';
 import { nullishWithDefault } from '@tools/core/inputSchema';
-import { runStorageLocationUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { absentReason, entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, formatError } from '@utils/errors/errorMessage';
@@ -260,38 +260,37 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
         .pipe(Effect.catchIf(absentReason, () => Effect.void));
       const references = yield* Effect.forEach(
         files,
-        (file) =>
-          Effect.gen(function* () {
-            const absolutePath = yield* absoluteWorkspacePath(workspace, file);
-            const canonicalPath = yield* fs.realPath(absolutePath);
-            const relative =
-              storageRoot === undefined
-                ? undefined
-                : path.relative(storageRoot, canonicalPath);
-            const storagePath =
-              relative !== undefined &&
-              !escapesRoot(relative) &&
-              !path.isAbsolute(relative)
-                ? path.join(storage, relative)
-                : undefined;
-            if (
-              storagePath !== undefined &&
-              runStorageLocationUnder(storage, storagePath) === undefined
-            ) {
-              return yield* Effect.fail(
-                new Error(
-                  `${file}; workspace-storage files must be declared outputs of a completed child run.`,
-                ),
-              );
-            }
-            // Explicit run paths still pass the resolver's symlink rejection,
-            // even when a workspace mirror points outside storage.
-            const runStoragePath =
-              runStorageLocationUnder(storage, absolutePath) !== undefined
-                ? absolutePath
-                : storagePath;
-            return { file, absolutePath: canonicalPath, runStoragePath };
-          }),
+        Effect.fnUntraced(function* (file) {
+          const absolutePath = yield* absoluteWorkspacePath(workspace, file);
+          const canonicalPath = yield* fs.realPath(absolutePath);
+          const relative =
+            storageRoot === undefined
+              ? undefined
+              : path.relative(storageRoot, canonicalPath);
+          const storagePath =
+            relative !== undefined &&
+            !escapesRoot(relative) &&
+            !path.isAbsolute(relative)
+              ? path.join(storage, relative)
+              : undefined;
+          if (
+            storagePath !== undefined &&
+            runStorageLocationUnder(storage, storagePath) === undefined
+          ) {
+            return yield* Effect.fail(
+              new Error(
+                `${file}; workspace-storage files must be declared outputs of a completed child run.`,
+              ),
+            );
+          }
+          // Explicit run paths still pass the resolver's symlink rejection,
+          // even when a workspace mirror points outside storage.
+          const runStoragePath =
+            runStorageLocationUnder(storage, absolutePath) !== undefined
+              ? absolutePath
+              : storagePath;
+          return { file, absolutePath: canonicalPath, runStoragePath };
+        }),
         { concurrency: 'unbounded' },
       );
       // After the paths resolve, as it ran before: a reference this run does
@@ -306,25 +305,24 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
       ]);
       return yield* Effect.forEach(
         references,
-        ({ file, absolutePath, runStoragePath }) =>
-          Effect.gen(function* () {
-            if (runStoragePath !== undefined) {
-              const output = yield* resolveChildRunOutput(
-                parentRunId,
-                runStoragePath,
+        Effect.fnUntraced(function* ({ file, absolutePath, runStoragePath }) {
+          if (runStoragePath !== undefined) {
+            const output = yield* resolveChildRunOutput(
+              parentRunId,
+              runStoragePath,
+            );
+            if (!output)
+              return yield* Effect.fail(
+                new Error(
+                  `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
+                ),
               );
-              if (!output)
-                return yield* Effect.fail(
-                  new Error(
-                    `${runStoragePath}; pass a matching workflow file option whose files still exist.`,
-                  ),
-                );
-            }
-            return {
-              file: runStoragePath === undefined ? file : absolutePath,
-              absolutePath,
-            };
-          }),
+          }
+          return {
+            file: runStoragePath === undefined ? file : absolutePath,
+            absolutePath,
+          };
+        }),
         { concurrency: 'unbounded' },
       );
     }).pipe(

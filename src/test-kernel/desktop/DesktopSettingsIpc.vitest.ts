@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
 import { Effect, Result, Schema } from 'effect';
 import { beforeAll, expect, vi } from 'vitest';
-import { BASH_APPROVAL_CONFIG_KEY } from '@texra-ai/harness/schemas';
+import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
@@ -119,7 +119,7 @@ function flushAsyncWork(): Promise<void> {
 }
 
 // Live clock: the IPC's programs settle on real event-loop turns.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'desktop settings IPC',
   (it) => {
     beforeAll(async () => {
@@ -128,7 +128,7 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
     });
 
     it.effect(
-      'writes the bash-approval toggle to the local config scope, not global or the project file',
+      'writes the approval policy to the local config scope, not global or the project file',
       () =>
         Effect.gen(function* () {
           const config = fakeConfig();
@@ -139,19 +139,19 @@ layer(SessionGraph.layer, { excludeTestServices: true })(
           expect(
             settings.handleMessage({
               command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-              key: BASH_APPROVAL_CONFIG_KEY,
-              value: false,
+              key: APPROVAL_POLICY_CONFIG_KEY,
+              value: 'yolo',
             }),
           ).toBe(true);
           yield* Effect.promise(flushAsyncWork);
 
-          expect(config.get('toolUse.requireBashApproval')).toBe(false);
+          expect(config.get(APPROVAL_POLICY_CONFIG_KEY)).toBe('yolo');
           // Security-adjacent scope pin: a per-workspace approval bypass must
           // never be written to the global config target (see issue #7085),
           // nor to the project file a cloned repository controls.
           expect(update).toHaveBeenCalledWith(
-            'toolUse.requireBashApproval',
-            false,
+            APPROVAL_POLICY_CONFIG_KEY,
+            'yolo',
             'local',
           );
         }),

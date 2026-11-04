@@ -4,7 +4,8 @@
  * labels every host shows for them. Plain data, so browser webviews render
  * the same catalog; the app attaches each plan's preference toggle
  * (`model/codingPlanSubscriptions.ts`). What a used-up plan falls back to is
- * the harness's retry copy (`quotaFallbackRouteFor`), not this catalog's.
+ * the payment copy's (`planFallbackName` in `@ui/copy/modelAccess`), not
+ * this catalog's.
  */
 import type { ApiKeyUsageRoute } from '@texra-ai/llm';
 

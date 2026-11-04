@@ -15,11 +15,11 @@ a gate, listed here by what it answers.
 ## 1. Test estate
 
 - **Tiers are computed, not declared.** `vitest.config.mjs` puts a suite in
-  `pure` or `kernel` from what its source reaches; there is no list of
-  exempt suites, and a module that reads an ambient host is a production
-  defect, not a test-config exception (`src/test-kernel/AGENTS.md`, "Test
-  tiers"). The fake platform (`src/test-kernel/support/setupPlatform.ts`,
-  `FakePlatform.ts`) remains the kernel tier's host.
+  `pure`, `kernel` or `isolated` from what its source reaches; there is no
+  list of exempt suites, and a module that reads an ambient host is a
+  production defect, not a test-config exception (`src/test-kernel/AGENTS.md`,
+  "Test tiers"). The fake platform (`src/test-kernel/support/setupPlatform.ts`,
+  `FakePlatform.ts`) is the host of the `kernel` and `isolated` tiers.
 - **Mocks of harness internals are measured.** The `core-module-mocks` rule
   (`scripts/core-quality-measure.mjs`) counts `vi.mock` of `@agent/*`
   internals from CLI, desktop and shared support, held to the merge base's

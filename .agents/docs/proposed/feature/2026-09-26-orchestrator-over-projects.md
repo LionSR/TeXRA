@@ -5,7 +5,7 @@ status: parked (owner, 2026-10-02: waits until reopened)
 
 # PRD: an always-on orchestrator over all projects
 
-Parked: the owner ruled on 2026-10-02 that this waits, and nothing here is built. It records the agreed shape so the build can start from it later. Paths and tool names are checked against `main` at `485fbf2b6a` (2026-10-22); the two delegation paths were re-pointed at `808521a8ed` (2026-10-30). Its two stored-shape changes (an origin on `run.start`, a durable wake) need an owner decision before they are built, and so does whether a background desktop is acceptable.
+Parked: the owner ruled on 2026-10-02 that this waits, and nothing here is built. It records the agreed shape so the build can start from it later. Paths and tool names are checked against `main` at `9062f1b028` (2026-11-04). Its stored-shape changes (an origin on `run.start`, a durable wake, a `wake` follow-up sender and a `dispatched` run relation) need an owner decision before they are built, and so does whether a background desktop is acceptable.
 
 ## Problem
 
@@ -57,21 +57,21 @@ The model decided everything in that sequence: when to wake, what to check, what
 Tools: `agent` (in scripts, `agent(prompt, {project})`), `executions`, `accept_run_files`.
 
 - **Only from the orchestrator's folder.** The field is accepted only when the calling session's root is the orchestrator folder. Anywhere else it is a `ToolError`, so project agents cannot reach each other.
-- **Prepared against the target.** The call resolves `sessionFor(project)` up front and prepares everything against that project's roots: agent, model, files, working directory. Today these read `call.roots` (`packages/harness/src/agent/runtime/delegation/AgentTool.ts`).
+- **Prepared against the target.** The call resolves `sessionFor(project)` up front and prepares everything against that project's roots: agent, model, files, working directory. Today these read `call.env.roots` (`packages/harness/src/agent/runtime/delegation/AgentTool.ts`).
 - **The destination is visible.** The proposal schemas carry `project`, and the approval card shows it.
 - **A dispatched run is an ordinary top-level run in the target project.**
   - It records where it came from on its `run.start`, as a new `{sessionRoot, runId}` arm of `RunProvenanceSchema` (`packages/harness/src/shared/schemas/sessionEvent.ts`; today the only arm is `fork`).
   - Child lineage is session-local (`RunRegistry`, `packages/harness/src/agent/runtime/runRegistry.ts`), so no parent link crosses two stores.
   - A script the dispatched run executes keeps its rows in the target store, so deleting the run there removes them.
   - Its run history, approvals and resume all live in that project.
-- **Its report comes back.** When the run ends, its report is admitted onto the orchestrator's run as `from: {kind:'run', runId, relation:'dispatched'}`, the same way a subagent report arrives today (`packages/harness/src/agent/runtime/childRunLoop.ts`).
+- **Its report comes back.** When the run ends, its report is admitted onto the orchestrator's run as `from: {kind:'run', runId, relation:'dispatched'}`, the same way a subagent report arrives today (`packages/harness/src/agent/runtime/childRunLoop.ts`). Two parts are new: today the recipient stamps `relation` from lineage in its own session (`packages/harness/src/agent/followUp/followUpMessages.ts`), which cannot see a run in another store, and `needsWake` (`packages/harness/src/agent/followUp/RunInput.ts`) wakes a run that ended only for a `child` report, so `dispatched` needs a branch there.
 - **`executions` with `project`** reads and acts on the target session: view, query, send, kill. It keeps the caller's own session for `wait`.
 
 ### R2. A `projects` tool
 
 - **One command, `list`.** For each project it returns the root, live and paused runs, pending requests, and today's spend (shown, not limited). Everything is read from `SessionView`, with no model call.
 - **The registry.** The desktop's remembered projects move from the `desktop-projects` record to a host-neutral `projects` record in `GlobalDatabase`. Desktop and the CLI both read it.
-- **Hosts.** `projects` declares `unavailableHosts: ['vscode', 'sdk']`.
+- **Hosts.** `projects` declares a `hostCapability` that only the desktop and the CLI serve, so VS Code and the SDK do not offer it (`packages/harness/src/agent/runtime/agentToolResolution.ts`).
 
 ### R3. A `wake` tool
 
@@ -81,16 +81,16 @@ Tools: `agent` (in scripts, `agent(prompt, {project})`), `executions`, `accept_r
   - Runs it dispatched report back without one.
   - For anything else, it reads `projects list` when it wakes.
 - **Stored on the orchestrator's run.**
-  - The rows are `wake.scheduled {wakeId, at, message}` and `wake.cancelled {wakeId}`, committed through the session log (`SessionHandle`) and folded with the run.
+  - The rows are `wake.scheduled {wakeId, at, message}` and `wake.cancelled {wakeId}`, committed through the session log (`SessionLog`, `packages/harness/src/shared/session/runHistory.ts`) and applied with the run's other rows.
   - Deleting the run deletes its wakes.
 - **Delivery.**
   - A fiber in the session's scope (`packages/harness/src/controllers/session/sessionLayer.ts`) sleeps until the earliest `at`.
-  - It then calls `submitFollowUp(runId, {text, from: {kind:'wake', wakeId}, deliveryId: wakeId}, {session})`. `deliveryId` makes a replay a no-op.
-  - The no-loop branch of `submitFollowUp` (`packages/harness/src/agent/followUp/ToolUseFollowUp.ts`) lets a `wake` follow-up resume a resumable run, as a `user` message can.
+  - It then sends `{text, from: {kind:'wake', wakeId}, deliveryId: wakeId}` through `runInbox(runId, session).send` (`packages/harness/src/agent/followUp/ToolUseFollowUp.ts`), which calls `submitFollowUp` with that session provided. `deliveryId` makes a replay a no-op.
+  - `needsWake` (`packages/harness/src/agent/followUp/RunInput.ts`), which decides whether a message to a run with no loop resumes it, gets a `wake` branch so the follow-up resumes a run that ended, as a `user` message can; today any other sender wakes only a run that has not ended.
 - **Missed wakes.** A wake missed while TeXRA was off arrives when the session next opens, marked late.
-- **A pending proposal holds wakes.** `requestDelegationProposal` waits on `session.openRequest` (`packages/harness/src/agent/runtime/delegation/proposalFlow.ts`), so while a proposal is undecided the orchestrator's run is parked on it. A wake that falls due then is queued on that run and arrives after the decision. The open request's OS notification is what reaches the researcher meanwhile. The prompt therefore has the model schedule its next wake before it proposes.
+- **A pending proposal holds wakes.** `requestDelegationProposal` waits on the tool call's `requests.open` (`packages/harness/src/agent/runtime/delegation/proposalFlow.ts`), so while a proposal is undecided the orchestrator's run waits on it. A wake that falls due then is queued on that run and arrives after the decision. The open request's OS notification is what reaches the researcher meanwhile. The prompt therefore has the model schedule its next wake before it proposes.
 - **Accepted imperfection.** With the desktop and the CLI both running, a wake cancelled on one may still arrive once from the other. The model sees that it was cancelled and ignores it.
-- **Hosts.** `wake` declares `unavailableHosts: ['vscode', 'sdk']`.
+- **Hosts.** `wake` declares the same `hostCapability` as `projects`.
 
 ### R4. Staying on
 

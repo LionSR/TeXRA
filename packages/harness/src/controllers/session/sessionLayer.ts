@@ -259,18 +259,17 @@ const unopenedEntry =
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
  *  an open find the session (`SessionOwner.open`). Builds nothing. */
-const heldSession = (root: string) =>
-  Effect.gen(function* () {
-    const sessions = yield* SessionMap;
-    const keys = yield* RcMap.keys(sessions.rcMap);
-    const key = [...keys].find((candidate) => candidate.storage === root);
-    if (key === undefined) return undefined;
-    const held = yield* sessions
-      .contextEffectOption(key)
-      .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
-    if (Option.isNone(held)) return undefined;
-    return { key, session: held.value };
-  });
+const heldSession = Effect.fn('heldSession')(function* (root: string) {
+  const sessions = yield* SessionMap;
+  const keys = yield* RcMap.keys(sessions.rcMap);
+  const key = [...keys].find((candidate) => candidate.storage === root);
+  if (key === undefined) return undefined;
+  const held = yield* sessions
+    .contextEffectOption(key)
+    .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
+  if (Option.isNone(held)) return undefined;
+  return { key, session: held.value };
+});
 
 /**
  * Close the session of one root, the one way a session ends: refuse new
@@ -354,8 +353,9 @@ export interface ProcessServicesOptions {
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   *  `--quiet` / `--verbose`; no live setting changes it. */
-  readonly minimumLogLevel: LogLevel.LogLevel;
+   *  `--quiet` / `--verbose`; no live setting changes it. Absent (an
+   *  embedder), no logger, level or tracer is installed: its own decide. */
+  readonly minimumLogLevel?: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }
@@ -421,7 +421,7 @@ export function ownerProcessLayer({
     Layer.provideMerge(globalDatabase),
     Layer.provideMerge(
       Layer.mergeAll(
-        effectDiagnosticsLayer(minimumLogLevel),
+        minimumLogLevel ? effectDiagnosticsLayer(minimumLogLevel) : Layer.empty,
         FetchHttpClient.layer,
         Layer.succeed(HttpClient.TracerPropagationEnabled)(false), // no run trace ids to third parties
         // Filesystem, path, spawner, env config: once per process.

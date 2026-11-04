@@ -3,20 +3,9 @@
 // with `session.openRequest`; the surface answers with `request.decide`.
 
 import { layer } from '@effect/vitest';
-import {
-  Deferred,
-  Effect,
-  Fiber,
-  Layer,
-  SubscriptionRef,
-  Context,
-} from 'effect';
+import { Effect, Fiber, Layer, SubscriptionRef, Context } from 'effect';
 import { afterEach, beforeEach, expect, type MockInstance, vi } from 'vitest';
-import {
-  API_KEY_ENV_NAMES,
-  apiKeySecretName,
-  SecretsFailed,
-} from '@texra-ai/llm';
+import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 
 const mocks = vi.hoisted(() => ({
   /** The key prompt: the user closes it without entering a key. */
@@ -123,8 +112,8 @@ const cancelOpenRequests = Effect.gen(function* () {
  * Attach the TUI presentation host for one test, until its scope closes. It
  * answers nothing on its own: it stages what a request needs before it can
  * be shown, and performs the `useOwnApiKey` capability a retry decision
- * names. The detach comes back for a test that detaches it early; the
- * scope's close detaches it once, then cancels the requests left open.
+ * names. The scope's close detaches it, then cancels the requests left
+ * open.
  */
 const tui = Effect.gen(function* () {
   const cliContext = createTuiCliContext();
@@ -142,14 +131,7 @@ const tui = Effect.gen(function* () {
       runtime: yield* SessionGraph.runtime,
     }),
   );
-  let attached = true;
-  const detach = Effect.sync(() => {
-    if (!attached) return;
-    attached = false;
-    detachHost();
-  });
-  yield* Effect.addFinalizer(() => detach);
-  return detach;
+  yield* Effect.addFinalizer(() => Effect.sync(detachHost));
 });
 
 /** Run ids are hex-branded, so a readable case label hashes to a stable one. */
@@ -200,7 +182,6 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
     requestId: `retry-${label}`,
     runId: runIdFor(label),
     operation: 'model request',
-    errorMessage: message,
     errorDetails: {
       message,
       classification: { kind: 'chatgpt-subscription' },
@@ -235,15 +216,6 @@ function waitFor(assertion: () => void): Effect.Effect<void> {
   });
 }
 
-/** Two macrotasks: enough for the host's own async work to reach its next
- *  await, used where the assertion is that nothing further happened. */
-function settle(): Effect.Effect<void> {
-  return Effect.promise(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-}
-
 function waitForApproval(
   kind: string,
   data: Record<string, unknown>,
@@ -272,8 +244,6 @@ const OPENAI_KEY = apiKeySecretName('openai');
 /** Reads of the installed host's secret store; a key check is a read of
  *  the provider's entry. Each case starts with no OpenAI key stored. */
 let secretReads: MockInstance<PlatformSecrets['get']>;
-/** The store's own read, for a case that holds only the OpenAI entry. */
-let readSecret: PlatformSecrets['get'];
 
 /** Whether the store's OpenAI key entry was read: the own-key check. */
 const openAiKeyChecks = (): number =>
@@ -285,13 +255,12 @@ const openAiKeyChecks = (): number =>
 layer(
   boundSessionView.pipe(
     Layer.provideMerge(TestSession.layer()),
-    Layer.provideMerge(SessionGraph.layer),
+    Layer.provideMerge(SessionGraph.hosted),
   ),
   { excludeTestServices: true },
 )('TUI request decisions', (it) => {
   beforeEach(() => {
     const { secrets } = installedHost();
-    readSecret = secrets.get.bind(secrets);
     secretReads = vi.spyOn(secrets, 'get');
     // The session runtime reads key variables from the process environment; a
     // blank one counts as unset, so an ambient key never stands in for one.
@@ -341,7 +310,9 @@ layer(
 
         yield* waitForApproval('retry', {
           runId: runIdFor('s3'),
-          errorMessage: 'ChatGPT subscription usage limit reached.',
+          errorDetails: {
+            message: 'ChatGPT subscription usage limit reached.',
+          },
         });
         expect(openAiKeyChecks()).toBe(0);
 
@@ -356,53 +327,6 @@ layer(
         // finds its key, and asks for none.
         expect(openAiKeyChecks()).toBe(1);
         expect(mocks.promptForCliProviderApiKey).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'does not publish a retry decision after its key lookup outlives the host',
-    () =>
-      Effect.gen(function* () {
-        let finishLookup: (() => void) | undefined;
-        const lookupCaptured = Deferred.makeUnsafe<void>();
-        secretReads.mockImplementation((key) =>
-          key !== OPENAI_KEY
-            ? readSecret(key)
-            : Effect.tryPromise({
-                try: () =>
-                  new Promise<string | undefined>((_resolve, reject) => {
-                    finishLookup = () =>
-                      reject(new Error('Keychain unavailable'));
-                    Deferred.doneUnsafe(lookupCaptured, Effect.void);
-                  }),
-                catch: (cause) =>
-                  new SecretsFailed({
-                    reason: 'io',
-                    operation: 'get',
-                    message: String(cause),
-                    key,
-                  }),
-              }),
-        );
-        const detachHost = yield* tui;
-        const permission = chatGptSubscriptionRetry('disposed-key');
-        const pending = yield* Effect.forkChild(openRetry(permission));
-        yield* waitForApproval('retry', { runId: permission.runId });
-        yield* decideCurrent(PERSONAL_KEY_RETRY);
-        yield* Deferred.await(lookupCaptured);
-        yield* detachHost;
-        finishLookup?.();
-        yield* settle();
-        const session = yield* sessionHandle;
-        yield* Context.get(session, SessionLog).settled;
-        expect(
-          SubscriptionRef.getUnsafe(
-            Context.get(session, SessionViewAccess).ref,
-          ).requests.some(
-            (request) => request.requestId === permission.requestId,
-          ),
-        ).toBe(true);
-        yield* Fiber.interrupt(pending);
       }),
   );
 });

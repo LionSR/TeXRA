@@ -1,48 +1,55 @@
 /**
  * Faults injected into the real store, never a mocked one: the run engine's
  * suites drive real sessions over a real SQLite file and the validation
- * model, and fail, hold or crash that store where a case needs a race.
+ * model, and fail, hold or crash that store where a case needs a race. Each
+ * takes what it runs on from the calling block (`SessionGraph`): the
+ * sessions, the store handles and the agent catalog are the block's.
  *
- * - {@link sessionStoreFaults} arms faults on the `Database` the process
- *   holds for a persistent session's root, the instance the session graph
- *   borrows from `ProjectDatabases` (which has no other test seam): the next
- *   call of a named operation fails as the store fails (`DatabaseWriteFailed`
- *   or `DatabaseReadFailed`, nothing written), or waits, before it starts,
- *   until the case releases or fails it. `appendAll` may be narrowed to a
- *   batch holding one row type; a held `appendAll` or `job` holds the
- *   session's one publisher, as a slow commit does. Every operation runs the
- *   real store's code unless a fault is armed, and the faults go with the
- *   caller's scope.
+ * - {@link sessionStoreFaults} arms faults on the `Database` the block's
+ *   process holds for a persistent session's root, the instance its
+ *   sessions borrow from `ProjectDatabases` (which has no other test seam):
+ *   the next call of a named operation fails as the store fails
+ *   (`DatabaseWriteFailed` or `DatabaseReadFailed`, nothing written), or
+ *   waits, before it starts, until the case releases or fails it.
+ *   `appendAll` may be narrowed to a batch holding one row type; a held
+ *   `appendAll` or `job` holds the session's one publisher, as a slow commit
+ *   does. Every operation runs the real store's code unless a fault is
+ *   armed, and the faults go with the caller's scope.
  * - {@link parkedRunAfterCrash} is a process killed with a run parked: the
  *   committed store copied to a fresh root, claims held by a dead owner
  *   (or one the case names), and a fresh session opened over it.
- * - {@link validationHost} is the host those sessions run on: a temp-dir
- *   platform whose model is the validation model (`TEXRA_INTERNAL_VALIDATE_*`):
- *   a golden fixture agent plays its script, any other agent answers with
- *   what it was sent.
+ * - {@link validationHost} is the host those sessions run on, one per test:
+ *   a temp-dir platform whose model is the validation model
+ *   (`TEXRA_INTERNAL_VALIDATE_*`): a golden fixture agent plays its script,
+ *   any other agent answers with what it was sent.
  */
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import * as os from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import {
   type Cause,
+  Context,
   Deferred,
   Effect,
+  Layer,
   RcMap,
   Ref,
   Schema,
   type Scope,
-  type Context,
 } from 'effect';
-import { afterEach, beforeEach, vi } from 'vitest';
+import { vi } from 'vitest';
 
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
-import { withProcessServices } from '@texra-ai/harness/host';
-import { AgentCatalog } from '@agent/index/agentCatalog';
-import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
-import type { SessionHandleInit } from '@agent/runtime/SessionHandle';
+import { AgentCatalog, type HostInteractions } from '@texra-ai/harness/host';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import {
+  rootRun,
+  type SessionOwner,
+  type SessionServices,
+} from '@agent/runtime/rootLaunch';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentConfigSchema,
   type RunId,
@@ -53,20 +60,21 @@ import {
   DatabaseWriteFailed,
   ProjectDatabases,
   type DatabaseOpenFailed,
+  type SessionOpenError,
 } from '@shared/session/database';
 
 import { generateRunId } from '@shared/schemas';
 import { REPO_ROOT } from './repoScan';
-import { fakeHostSecrets, setupPlatform } from './setupPlatform';
-import { closeTestDefaultSession, openTestDefaultSession } from './sessionEnd';
-import { createTempDirPlatform, useTempDirs } from './tempDirPlatform';
-import { testRuntime } from './testProcessRuntime';
+import { createTempDirPlatform } from './tempDirPlatform';
+import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
 import { testWorkspaceRoots } from './testWorkspaceRoots';
+import type { Sessions } from '@texra-ai/harness';
 
 const WRITES = ['appendAll', 'job', 'acquireClaims', 'releaseClaims'] as const;
 const READS = [
   'readRunRecords',
   'readAggregate',
+  'readInputBatch',
   'claimOwner',
   'aggregateState',
 ] as const;
@@ -112,22 +120,21 @@ interface StoreFaults {
 }
 
 /**
- * {@link StoreFaults} on the `Database` the test process holds for the
- * persistent session root `storage`: the instance the session's graph
- * borrows, so its readers and its publisher see the faults. The store is
- * borrowed, and its operations wrapped, for the caller's scope.
+ * {@link StoreFaults} on the `Database` the calling block's process holds
+ * for the persistent session root `storage`: the instance the sessions
+ * opened there borrow, so their readers and their publisher see the
+ * faults. The store is borrowed, and its operations wrapped, for the
+ * caller's scope.
  */
 export const sessionStoreFaults = (
   storage: string,
-): Effect.Effect<StoreFaults, DatabaseOpenFailed, Scope.Scope> =>
+): Effect.Effect<
+  StoreFaults,
+  DatabaseOpenFailed,
+  ProjectDatabases | Scope.Scope
+> =>
   Effect.gen(function* () {
-    const databases = yield* withProcessServices(
-      testRuntime(),
-      Effect.gen(function* () {
-        return yield* ProjectDatabases;
-      }),
-    );
-    const database = yield* RcMap.get(databases, storage);
+    const database = yield* RcMap.get(yield* ProjectDatabases, storage);
     const armed = yield* Ref.make<readonly Armed[]>([]);
     const matches = (entry: Armed, operation: string, args: unknown[]) =>
       entry.operation === operation &&
@@ -286,7 +293,7 @@ export function crashAt(
  * run files beside it, copied to a fresh root with every claim held by a
  * dead owner (or by `owner`). Returns that root, for a fresh session to open.
  */
-function crashedCopy(storage: string, owner?: string): string {
+export function crashedCopy(storage: string, owner?: string): string {
   const crashed = join(storage, `crashed-${Date.now()}`);
   const committed = join(storage, 'committed.db');
   const db = new DatabaseSync(storeFile(storage));
@@ -355,62 +362,91 @@ const VALIDATION = {
 };
 
 /**
- * Register, for the calling `describe`, a temp-dir host whose agents are the
- * golden fixtures and the bundled personas and whose model is the
- * validation model: a golden agent plays its script, any other answers with
- * what it was sent. Each test starts with no default session open, and no
- * provider key from the shell: its keys are the ones its secrets store.
+ * The host a test runs on, as a layer built per test (`buildPerTest: true`)
+ * inside a `SessionGraph` block, whose agent catalog it loads: a temp-dir
+ * host whose agents are the golden fixtures and the bundled personas and
+ * whose model is the validation model, where a golden agent plays its
+ * script and any other answers with what it was sent. No provider key comes
+ * from the shell: its keys are the ones its secrets store. The release puts
+ * the environment back and removes the temp dir.
  */
-export function validationHost(prefix: string): void {
-  const tempDirs = useTempDirs();
-  setupPlatform(async () => {
-    const host = await createTempDirPlatform(prefix, tempDirs);
-    const agents = {
-      custom: () => Effect.succeed(AGENTS),
-      customConfigured: () => Effect.succeed(false),
-      builtIn: () => Effect.succeed(BUNDLED_AGENTS),
-    };
-    return {
-      ...host,
-      platform: { ...host.platform, agentDirectories: agents },
-    };
-  });
-  let restore: Record<string, string | undefined> = {};
-  beforeEach(async () => {
-    const { storage, workspace } = testWorkspaceRoots();
-    const flag = join(storage, 'validation-flag');
-    restore = Object.fromEntries(
-      [...Object.keys(VALIDATION), 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG'].map(
-        (key) => [key, process.env[key]],
-      ),
-    );
-    Object.assign(process.env, VALIDATION, {
-      TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-    });
-    // Key lookups read the process environment, where a blank key counts as
-    // unset: the host's keys are the ones it stores, never the shell's.
-    for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
-    mkdirSync(storage, { recursive: true });
-    mkdirSync(workspace!, { recursive: true });
-    writeFileSync(flag, 'texra-cli-run-validation\n');
-    await testRuntime().runPromise(
-      AgentCatalog.use((catalog) => catalog.refresh),
-    );
-    // A golden child's model is chosen among those a key makes available.
-    await Effect.runPromise(
-      fakeHostSecrets.set(apiKeySecretName('openai'), 'validation-fake-key'),
-    );
-    await Effect.runPromise(closeTestDefaultSession);
-  });
-  afterEach(async () => {
-    await Effect.runPromise(closeTestDefaultSession);
-    vi.unstubAllEnvs();
-    for (const [key, value] of Object.entries(restore)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
-}
+export const validationHost = (
+  prefix: string,
+): Layer.Layer<FakeHost, never, AgentCatalog> =>
+  Layer.effect(
+    FakeHost,
+    Effect.gen(function* () {
+      // Removed last, once the sessions on it closed with the test.
+      const tempDirs: string[] = [];
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          for (const dir of tempDirs)
+            rmSync(dir, { recursive: true, force: true });
+        }),
+      );
+      const host = Context.get(
+        yield* Layer.build(
+          FakeHost.layer(async () => {
+            const host = await createTempDirPlatform(prefix, tempDirs);
+            const agents = {
+              custom: () => Effect.succeed(AGENTS),
+              customConfigured: () => Effect.succeed(false),
+              builtIn: () => Effect.succeed(BUNDLED_AGENTS),
+            };
+            return {
+              ...host,
+              platform: { ...host.platform, agentDirectories: agents },
+            };
+          }),
+        ),
+        FakeHost,
+      );
+      const { storage, workspace } = host.roots;
+      const flag = join(storage, 'validation-flag');
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          for (const [name, value] of Object.entries({
+            ...VALIDATION,
+            TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+          }))
+            vi.stubEnv(name, value);
+          // Key lookups read the process environment, where a blank key
+          // counts as unset: the host's keys are the ones it stores, never
+          // the shell's.
+          for (const name of API_KEY_ENV_NAMES) vi.stubEnv(name, '');
+        }),
+        () => Effect.sync(() => vi.unstubAllEnvs()),
+      );
+      mkdirSync(storage, { recursive: true });
+      mkdirSync(workspace!, { recursive: true });
+      writeFileSync(flag, 'texra-cli-run-validation\n');
+      yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
+      // A golden child's model is chosen among those a key makes available.
+      yield* host.secrets
+        .set(apiKeySecretName('openai'), 'validation-fake-key')
+        .pipe(Effect.orDie);
+      return host;
+    }),
+  );
+
+/**
+ * A session over `roots` (the installed host's, unless named) on the calling
+ * block's process, its history in the root's SQLite store, opened as by a
+ * host whose person answers from the view, so a request its runs open waits
+ * for a decision. Returns the internal handle the suites drive runs on; the
+ * session closes with the scope.
+ */
+export const persistentTestSession = (
+  roots: WorkspaceRoots = testWorkspaceRoots(),
+): Effect.Effect<
+  Context.Context<SessionServices>,
+  SessionOpenError,
+  Sessions | SessionOwner | Scope.Scope
+> =>
+  Effect.flatMap(
+    TestSession.open(roots, { persistent: true, host: {} }),
+    sessionHandleOf,
+  );
 
 /** Who holds `runId`'s claim in the store at `storage`: an owner id, or
  *  null when the claim is let go (or the run has no row). */
@@ -485,29 +521,26 @@ export const parkedAfter =
 
 /**
  * Launch a root run of the bundled `assistant` with `instruction` on
- * `session`, the default session over the process roots, and wait until it
+ * `session`, a session over the installed host's roots, and wait until it
  * answered and parked waiting for input. The launch lives in the caller's
  * scope.
  */
 export const parkedRoot = (
   session: Context.Context<SessionServices>,
   instruction = 'Start here.',
-): Effect.Effect<RunId, Cause.TimeoutError, Scope.Scope> =>
+): Effect.Effect<RunId, Cause.TimeoutError, SessionOwner | Scope.Scope> =>
   Effect.gen(function* () {
     const { storage } = testWorkspaceRoots();
     const runId = generateRunId();
-    yield* withProcessServices(
-      testRuntime(),
-      rootRun({
-        config: Schema.decodeUnknownSync(AgentConfigSchema)({
-          agent: 'assistant',
-          model: 'openai/gpt-5.6-sol',
-          instruction,
-        }),
-        runId,
-        interactive: true,
-      }).pipe(Effect.provide(session)),
-    ).pipe(Effect.forkScoped);
+    yield* rootRun({
+      config: Schema.decodeUnknownSync(AgentConfigSchema)({
+        agent: 'assistant',
+        model: 'openai/gpt-5.6-sol',
+        instruction,
+      }),
+      runId,
+      interactive: true,
+    }).pipe(Effect.provide(session), Effect.forkScoped);
     yield* untilStored(storage, parkedAfter(runId, 1, storage));
     return runId;
   });
@@ -523,33 +556,30 @@ interface CrashedRun {
 /**
  * Launch a root run of the bundled `assistant` with `instruction`, let it
  * answer and park waiting for input, then crash: the store's committed
- * state is copied as a killed process leaves it and the file's default
- * session opens over the copy (`interactions` its host's, `owner` holding
- * the run's claim instead of a dead process).
+ * state is copied as a killed process leaves it, and a session over the
+ * copy opens for the caller's scope (`interactions` attached as its host,
+ * `owner` holding the run's claim instead of a dead process).
  */
 export const parkedRunAfterCrash = (
   options: {
     readonly instruction?: string;
-    readonly interactions?: SessionHandleInit['interactions'];
+    readonly interactions?: HostInteractions;
     readonly owner?: string;
   } = {},
-): Effect.Effect<CrashedRun, Error> =>
+): Effect.Effect<CrashedRun, Error, Sessions | SessionOwner | Scope.Scope> =>
   Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const session = yield* openTestDefaultSession({ roots });
-    // The launch lives in this scope: closing it, after the session, is the
+    // The session and the launch live in this scope: closing it is the
     // kill, and a setup that fails on the way kills it too.
     const { runId, storage } = yield* Effect.scoped(
       Effect.gen(function* () {
+        const session = yield* persistentTestSession(roots);
         const runId = yield* parkedRoot(session, options.instruction);
-        const copy = crashedCopy(roots.storage, options.owner);
-        yield* closeTestDefaultSession;
-        return { runId, storage: copy };
+        return { runId, storage: crashedCopy(roots.storage, options.owner) };
       }),
     );
-    const reopened = yield* openTestDefaultSession({
-      roots: { ...roots, storage },
-      ...(options.interactions && { interactions: options.interactions }),
-    });
-    return { session: reopened, runId, storage };
+    const session = yield* persistentTestSession({ ...roots, storage });
+    if (options.interactions !== undefined)
+      yield* Context.get(session, Interactions).use(options.interactions);
+    return { session, runId, storage };
   });

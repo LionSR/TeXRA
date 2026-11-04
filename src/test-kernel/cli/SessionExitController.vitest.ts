@@ -9,8 +9,7 @@ import { boundTestSessionView } from './fixtures/sessionViewFixture';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 const mocks = vi.hoisted(() => ({
-  handOffCliShutdownSignalHandlers: vi.fn(),
-  cliPlatformShutdownSequence: vi.fn(),
+  cliExit: vi.fn(),
   writeTextStderrAndWait: vi.fn(),
   writeTextStdout: vi.fn(),
 }));
@@ -20,8 +19,8 @@ vi.mock('@cli/runtime/cliContext', () => ({
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
-  handOffCliShutdownSignalHandlers: mocks.handOffCliShutdownSignalHandlers,
-  cliPlatformShutdownSequence: mocks.cliPlatformShutdownSequence,
+  cliExit: mocks.cliExit,
+  leaveAtOnce: {},
   runCliExit: (exit: Effect.Effect<void, unknown>) => Effect.runPromise(exit),
 }));
 
@@ -59,18 +58,17 @@ const createController = (session: TuiSession) =>
       flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
       interruptActive: vi.fn(),
-      quiet: false,
     });
     return { controller, terminal };
   });
 
 // Live clock: the teardown's flush and exit sequence run in real time.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('chat TUI session exit controller', (it) => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.cliPlatformShutdownSequence.mockReturnValue(Effect.void);
+    mocks.cliExit.mockReturnValue(Effect.void);
     mocks.writeTextStderrAndWait.mockReturnValue(Effect.void);
   });
 

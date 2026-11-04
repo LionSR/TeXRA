@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Stream } from 'effect';
+import { Cause, Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -33,10 +33,10 @@ import {
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import { parseCriticismAnnotations } from '@latex/criticismParser';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
+import { parseCriticismAnnotations } from './criticismParser';
 import type { Session } from '@texra-ai/harness';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
@@ -198,7 +198,7 @@ export function followInlineCriticism(
     ),
   ).pipe(
     Stream.mapEffect(() => enabled),
-    Stream.filter((on) => on !== undefined),
+    Stream.filter(Predicate.isNotUndefined),
     Stream.changes,
     Stream.switchMap((on) =>
       on ? Stream.fromEffect(showDiagnostics(session)) : Stream.empty,

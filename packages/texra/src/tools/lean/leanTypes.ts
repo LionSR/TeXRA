@@ -110,17 +110,32 @@ export const LEAN_SERVER_MODE_LABELS = Object.freeze({
 
 // LSP contracts
 
-type LspMarkupContent = {
-  kind: 'plaintext' | 'markdown' | string;
-  value: string;
-};
+const LspPositionSchema = Schema.Struct({
+  line: Schema.Finite,
+  character: Schema.Finite,
+});
 
-type LspMarkedString = string | { language: string; value: string };
+const LspRangeSchema = Schema.Struct({
+  start: LspPositionSchema,
+  end: LspPositionSchema,
+});
+type LspRange = typeof LspRangeSchema.Type;
 
-export interface LspHover {
-  contents: LspMarkedString | LspMarkupContent | LspMarkedString[];
-  range?: LspRange;
-}
+const LspMarkedStringSchema = Schema.Union([
+  Schema.String,
+  Schema.Struct({ language: Schema.String, value: Schema.String }),
+]);
+
+/** Reply to `textDocument/hover`. */
+export const LspHoverSchema = Schema.Struct({
+  contents: Schema.Union([
+    LspMarkedStringSchema,
+    Schema.Struct({ kind: Schema.String, value: Schema.String }),
+    Schema.Array(LspMarkedStringSchema),
+  ]),
+  range: Schema.optional(LspRangeSchema),
+});
+export type LspHover = typeof LspHoverSchema.Type;
 
 export interface LspDiagnostic {
   range: LspRange;
@@ -144,28 +159,18 @@ export interface LeanFileProgressParams {
   processing: { range: LspRange; kind?: number }[];
 }
 
-interface LspRange {
-  start: LspPosition;
-  end: LspPosition;
-}
-
-interface LspPosition {
-  line: number;
-  character: number;
-}
-
 // Lean tool contracts
 
 /** Response from $/lean/plainGoal LSP request */
-export interface PlainGoal {
-  goals: string[];
-  rendered: string;
-}
+export const PlainGoalSchema = Schema.Struct({
+  goals: Schema.Array(Schema.String),
+  rendered: Schema.String,
+});
+export type PlainGoal = typeof PlainGoalSchema.Type;
 
 /** Response from $/lean/plainTermGoal LSP request */
-export interface PlainTermGoal {
-  goal: string;
-}
+export const PlainTermGoalSchema = Schema.Struct({ goal: Schema.String });
+export type PlainTermGoal = typeof PlainTermGoalSchema.Type;
 
 /** Typed result from an LSP request */
 export interface LspResult<T> {
@@ -238,11 +243,11 @@ export function extractHoverText(contents: LspHover['contents']): string {
     return contents;
   }
 
-  if (Array.isArray(contents)) {
-    return contents
-      .map((item) => (typeof item === 'string' ? item : item.value))
-      .join('\n\n');
+  if ('value' in contents) {
+    return contents.value;
   }
 
-  return contents.value;
+  return contents
+    .map((item) => (typeof item === 'string' ? item : item.value))
+    .join('\n\n');
 }

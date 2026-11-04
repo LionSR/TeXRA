@@ -79,7 +79,7 @@ the effect itself, so this port's members compose into any caller's program.
 
 ```ts
 interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 ```
@@ -490,8 +490,10 @@ interface NodePlatformOptions {
   readonly workspaceDir?: string;
   /**
    * The directory this platform stores run history, checkpoints and its
-   * global state under, and reads its `mcp.json` from. Required: the package
-   * never falls back to a per-user default directory.
+   * global state under, and reads the user's own files from: its
+   * `mcp.json`, the `AGENTS.md` a workspace without one falls back to, and,
+   * given skill sources, the skills under its `skills/`. Required: the
+   * package never falls back to a per-user default directory.
    */
   readonly storageDir: string;
   /** The catalog the platform's config resolves against (`settingsCatalog`);

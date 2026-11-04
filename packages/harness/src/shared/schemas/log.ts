@@ -19,6 +19,7 @@ export const MESSAGE_TYPES = {
   MODEL_RESPONSE: 'modelResponse',
   USER_MESSAGE: 'userMessage',
   PROGRESS_STATUS: 'progressStatus',
+  QUOTA_FALLBACK: 'quotaFallback',
   CONTEXT_COMPACTION_ACTIVITY: 'contextCompactionActivity',
   ERROR: 'error',
   CONTEXT_MANAGEMENT: 'contextManagement',

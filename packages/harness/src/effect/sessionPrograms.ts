@@ -94,84 +94,85 @@ function admitTools(
  *  work: the three the package states. A host's whole configuration is the
  *  config; a named agent is looked up; an inline persona is the agent,
  *  recorded on the config and validated by its schema there. */
-function admitInput(
+const admitInput = Effect.fn('admitInput')(function* (
   input: StartInput,
   session: Context.Context<SessionServices>,
   services: Context.Context<AgentCatalog>,
-): Effect.Effect<typeof AgentConfigSchema.Type, LaunchError | RunFailure> {
-  return Effect.gen(function* () {
-    const canAsk = !Context.get(session, Interactions)
-      .approvalPromptsUnavailable;
-    yield* admitTools(input.tools ?? [], canAsk);
-    // A host's whole configuration: its launch resolves the agent itself.
-    if ('config' in input) return input.config;
-    const { agent } = input;
-    const resolved =
-      typeof agent === 'string'
-        ? Context.get(services, AgentCatalog).get(agent)
-        : { name: null, source: 'inline' as const };
-    if (!resolved) {
-      return yield* new AgentNotFound({
-        agent: String(agent),
-        message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
-      });
-    }
-    // The schema is the launch's last refusal, and it is a refusal rather
-    // than a defect: an instruction this surface will not accept reaches an
-    // embedder's `catchTag` in the vocabulary the surface names, as the
-    // agent scan's failure above does.
-    // The run is named as its persona's schema spells the name.
-    const persona =
-      typeof agent === 'string'
-        ? null
-        : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
-            Effect.mapError(runFailure),
-          );
-    return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
-      agent: persona?.name ?? resolved.name,
-      agentSource: resolved.source,
-      persona,
-      instruction: input.instruction,
-      ...(input.model ? { model: input.model } : {}),
-    }).pipe(Effect.mapError(runFailure));
-  });
-}
+): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError | RunFailure> {
+  const canAsk = !Context.get(session, Interactions).approvalPromptsUnavailable;
+  yield* admitTools(input.tools ?? [], canAsk);
+  // A host's whole configuration: its launch resolves the agent itself.
+  if ('config' in input) return input.config;
+  const { agent } = input;
+  const resolved =
+    typeof agent === 'string'
+      ? Context.get(services, AgentCatalog).get(agent)
+      : { name: null, source: 'inline' as const };
+  if (!resolved) {
+    return yield* new AgentNotFound({
+      agent: String(agent),
+      message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
+    });
+  }
+  // The schema is the launch's last refusal, and it is a refusal rather
+  // than a defect: an instruction this surface will not accept reaches an
+  // embedder's `catchTag` in the vocabulary the surface names, as the
+  // agent scan's failure above does.
+  // The run is named as its persona's schema spells the name.
+  const persona =
+    typeof agent === 'string'
+      ? null
+      : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
+          Effect.mapError(runFailure),
+        );
+  return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
+    agent: persona?.name ?? resolved.name,
+    agentSource: resolved.source,
+    persona,
+    instruction: input.instruction,
+    ...(input.model ? { model: input.model } : {}),
+  }).pipe(Effect.mapError(runFailure));
+});
 
 /** Start one run on `session`: a root launch under the process's session
  *  owner, with the run id minted here when the input names none. */
-function start(
+const start = Effect.fn('start')(function* (
   session: Context.Context<SessionServices>,
   services: Context.Context<ProcessServices>,
   owner: Context.Service.Shape<typeof SessionOwner>,
   input: StartInput,
-): Effect.Effect<Run, LaunchError | RunFailure> {
-  return Effect.gen(function* () {
-    const config = yield* admitInput(input, session, services);
-    const runId = input.runId ?? generateRunId();
-    // A supplied id already in the session is refused here; one a launch
-    // still opens, its activation refuses (`RunLive`).
-    if (
-      input.runId !== undefined &&
-      (SubscriptionRef.getUnsafe(
-        Context.get(session, SessionViewAccess).ref,
-      ).runs.has(runId) ||
-        Context.get(session, Runs).get(runId) !== undefined)
-    )
-      return yield* runFailure(
-        new Error(`Run ${runId} already exists in this session.`),
-      );
-    const activation = yield* rootRun({
-      ...input,
-      config,
-      runId,
-    }).pipe(
-      Effect.provideService(SessionOwner, owner),
-      Effect.provide(session),
-      Effect.mapError(runFailure),
+): Effect.fn.Return<Run, LaunchError | RunFailure> {
+  const config = yield* admitInput(input, session, services);
+  const runId = input.runId ?? generateRunId();
+  // A supplied id already in the session is refused here; one a launch
+  // still opens, its activation refuses (`RunLive`).
+  if (
+    input.runId !== undefined &&
+    (SubscriptionRef.getUnsafe(
+      Context.get(session, SessionViewAccess).ref,
+    ).runs.has(runId) ||
+      Context.get(session, Runs).get(runId) !== undefined)
+  )
+    return yield* runFailure(
+      new Error(`Run ${runId} already exists in this session.`),
     );
-    return runView(session, runId, activation);
-  });
-}
+  // `rootRun` stops a run whose opening is interrupted. A caller
+  // interrupted after the run opened, before this hands its handle back,
+  // never holds the run either: the handle, built as the run opens, stops
+  // it. Only this call's own handle, so a caller that never opened the run
+  // stops nobody else's.
+  let opened: Run | undefined;
+  return yield* rootRun({ ...input, config, runId }).pipe(
+    Effect.provideService(SessionOwner, owner),
+    Effect.provide(session),
+    Effect.mapError(runFailure),
+    Effect.map((activation) => {
+      opened = runView(session, runId, activation);
+      return opened;
+    }),
+    Effect.onInterrupt(() => opened?.interrupt ?? Effect.void),
+  );
+});
 
 /** What a resume fails with before its run is handed over. */
 type ResumeError = ResumeRefused | ToolsRefused | RunFailure;

@@ -14,23 +14,26 @@
  * partitioned into their groups up front, or a guest of one of its `script`
  * calls, whose calls take their lanes as the guest issues them. A call's rows
  * are its only facts: the `script.call` that issues a script's call commits
- * with the call's first row; its requests, under ids the attempt derives
+ * with the call's first row, and the first batch a script's calls commit in
+ * an activation with its stage's `stage.start`; its requests, under ids the
+ * attempt derives
  * (`callRequestId`); `tool.intent` as the body starts, after the PreToolUse
  * hooks, the guard and its approval, with a slow tool's card; `tool.result`
- * with its card's close; and the delivering `append` with the complete tool
- * group once, when every call of the response has its result.
+ * with its card's close, a script's with its stage's `stage.end`; and the
+ * delivering `append` with the complete tool group once, when every call of
+ * the response has its result.
  */
 import { isDeepStrictEqual } from 'node:util';
 
 import {
   Cause,
+  Context,
   Deferred,
   Effect,
   Exit,
   Fiber,
   FiberMap,
   Schema,
-  Scope,
   Semaphore,
   SynchronizedRef,
 } from 'effect';
@@ -142,11 +145,15 @@ interface Dispatch {
 }
 
 /** One call as the per-call program takes it: its facts (a response's
- *  dispatch fact, or a script's `script.call`), its input and its dispatch. */
+ *  dispatch fact, or a script's `script.call`), its input and its dispatch;
+ *  a script's call carries its script's title, which labels the stage, and
+ *  `opensStage`, true for the first batch its script's door commits. */
 interface Call {
   readonly dispatch: Dispatch;
   readonly fact: DispatchFacts | ScriptCallPayload;
   readonly input: unknown;
+  readonly title?: string | null;
+  readonly opensStage?: () => boolean;
 }
 
 /** The `script.call` a call carries, or null for a response's own. */
@@ -170,6 +177,13 @@ const settlementOf = (dispatch: Dispatch, state: RunState, callId: string) =>
   state.pendingResponse?.responseId === dispatch.responseId
     ? callSettlementOf(state.pendingResponse, callId)
     : null;
+
+/** The calls the `script` call `scriptCallId` issued, as rows record them. */
+const issuedBy = (state: RunState, scriptCallId: string) =>
+  Object.values(state.pendingResponse?.records ?? {}).flatMap(
+    ({ script, status }) =>
+      script?.scriptCallId === scriptCallId ? [{ call: script, status }] : [],
+  );
 
 /** A sanitized result as the run history stores it: `consumedFollowUps`
  *  (own rows) and `facts` dropped, `files` without their bytes, `diagnostics`
@@ -234,25 +248,47 @@ function resultContent(
 }
 
 /** Commit rows of the call, its `script.call` first while the run holds no
- *  record of it: a script's call exists from its first row. Concurrent
- *  results of one group commit one at a time under the cell's lock. */
+ *  record of it: a script's call exists from its first row. The first batch
+ *  a script's door commits (`opensStage`, asked under the cell's lock) opens
+ *  the script's stage, again after an earlier activation's end closed it;
+ *  the batch that records a call's `result` closes the stage of the calls it
+ *  issued. Concurrent results of one group commit one at a time. */
 const commit = (
-  { dispatch, fact }: Call,
+  { dispatch, fact, title, opensStage }: Call,
   rows: readonly RunHistoryDraft[],
+  result?: Pick<ToolResult, 'status'>,
   alongside?: ReturnType<typeof factRows>['alongside'],
 ) =>
   dispatch.cell.append((state) => {
+    const { runId } = dispatch.run;
     const script = scriptOf(fact);
-    return script !== null && recordOf(dispatch, state, fact.callId) === null
-      ? [
-          {
-            type: 'script.call',
-            aggregateId: dispatch.aggregateId,
-            payload: script,
-          },
-          ...rows,
-        ]
-      : rows;
+    const batch: RunHistoryDraft[] = [];
+    if (script !== null && opensStage?.() === true)
+      batch.push(
+        displayRow(runId, {
+          type: 'stage.start',
+          id: script.stageId,
+          label: title ?? 'Script',
+          kind: 'script',
+        }),
+      );
+    if (script !== null && recordOf(dispatch, state, fact.callId) === null)
+      batch.push({
+        type: 'script.call',
+        aggregateId: dispatch.aggregateId,
+        payload: script,
+      });
+    batch.push(...rows);
+    const [issued] = result === undefined ? [] : issuedBy(state, fact.callId);
+    if (issued !== undefined && result !== undefined)
+      batch.push(
+        displayRow(runId, {
+          type: 'stage.end',
+          id: issued.call.stageId,
+          status: result.status === 'executed' ? 'completed' : 'failed',
+        }),
+      );
+    return batch;
   }, alongside);
 
 /** The call's result row at `attempt`; `blobs` are the bytes it links. */
@@ -279,7 +315,7 @@ const commitResult = (
   attempt: number,
   result: Omit<CallResult, 'attempt'>,
   rows: readonly RunHistoryDraft[] = [],
-) => commit(call, [resultRow(call, attempt, result), ...rows]);
+) => commit(call, [resultRow(call, attempt, result), ...rows], result.result);
 
 /** The rows of a call's card over `ran`, the input its body ran on: its
  *  `tool.start` unless the card is `opened` already, then its `tool.end` when
@@ -413,8 +449,9 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   const { attempt, raised, own: standing } = entered;
   // Whether this attempt's intent is committed: a re-entered attempt's is.
   let bodyStarted = status.kind === 'started' && status.attempt === attempt;
-  // A tool the step offers but did not send (script-only tools on) is
-  // reached from inside a script alone: a response's call to it has no body.
+  // A tool the step offers but did not send (a script's own function, or any
+  // tool while script-only tools are on) is reached from inside a script
+  // alone: a response's call to it has no body.
   const unsent =
     script === null &&
     step.offered.some((t) => t.name === fact.toolName && !t.sent);
@@ -460,29 +497,28 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   } else {
     // From here the call may have run: its intent commits now, with a slow
     // tool's card, unless this attempt's body already started (a re-entry).
-    const bodyStarts = (on: unknown) =>
-      Effect.gen(function* () {
-        ran = on;
-        if (!bodyStarted)
-          yield* commit(call, [
-            {
-              type: 'tool.intent',
-              aggregateId: dispatch.aggregateId,
-              payload: {
-                origin:
-                  script === null
-                    ? { kind: 'response', responseId }
-                    : { kind: 'script', scriptCallId: script.scriptCallId },
-                callId: fact.callId,
-                attempt,
-              },
+    const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
+      ran = on;
+      if (!bodyStarted)
+        yield* commit(call, [
+          {
+            type: 'tool.intent',
+            aggregateId: dispatch.aggregateId,
+            payload: {
+              origin:
+                script === null
+                  ? { kind: 'response', responseId }
+                  : { kind: 'script', scriptCallId: script.scriptCallId },
+              callId: fact.callId,
+              attempt,
             },
-            ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
-          ]);
-        bodyStarted = true;
-        accepting = tool.slow === true;
-        yield* pre.bodyStarts;
-      });
+          },
+          ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
+        ]);
+      bodyStarted = true;
+      accepting = tool.slow === true;
+      yield* pre.bodyStarts;
+    });
     // This call's place in its run, and the child door over exactly it.
     const runCall: RunCallShape = {
       run,
@@ -621,35 +657,29 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
       ...answered.map((id) => consumedRow(runId, id, { kind: 'answered' })),
       ...facts.run,
     ],
+    sanitized,
     facts.alongside,
   );
 });
 
 /**
  * The door a `script` call's guest issues calls through: the same per-call
- * program, under the script's stage, which ends with `dispatched`. A resumed
- * script is handed back what its rows settled, in commit order, before any
- * call runs again; a call at a recorded `seq` that differs is a divergence.
- * Built in the call body's scope, which owns the calls the guest issues and
- * ends them (`RunCallShape.scriptCalls`).
+ * program, under the script's stage, which the first batch the door commits
+ * opens (again on a resume, after a stop's end closed it) and the script's
+ * result closes (`commit`). A resumed script
+ * is handed back what its rows settled, in commit order, before any call
+ * runs again; a call at a recorded `seq` that differs is a divergence. Built
+ * in the call body's scope, which owns the calls the guest issues and ends
+ * them (`RunCallShape.scriptCalls`).
  */
 const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   dispatch: Dispatch,
   script: DispatchFacts,
-  dispatched: Scope.Scope,
 ) {
   const { run, cell, step, responseId, session } = dispatch;
-  const { runId } = run;
-  const log = yield* SessionLog;
-  const stageId = `script-${script.logId}`;
-  const issued = (state: RunState) =>
-    Object.values(state.pendingResponse?.records ?? {}).flatMap(
-      ({ script: call, status }) =>
-        call?.scriptCallId === script.callId ? [{ call, status }] : [],
-    );
   // What its rows settled reaches the guest in commit order, first: each waits
   // until the guest holds the one before it; a call that runs, until the last.
-  const replay = issued(yield* cell.current)
+  const replay = issuedBy(yield* cell.current, script.callId)
     .flatMap(({ call, status }) =>
       status.kind === 'settled' ? [[status.at, call.seq] as const] : [],
     )
@@ -676,40 +706,38 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   let since: Deferred.Deferred<void>[] = [];
   const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
   /** Run `body` in `seq`'s place and `lane`, or only take the place (no lane). */
-  const inLane = <E, R>(
+  const inLane = Effect.fn('inLane')(function* <E, R>(
     seq: number,
     lane: DispatchFacts['lane'] | null,
     body: Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, E, R> =>
-    Effect.gen(function* () {
-      if (seq > 0) yield* Deferred.await(slot(places, seq - 1));
-      const after = lane === 'barrier' ? [barrier, ...since] : [barrier];
-      const done = lane === null ? null : Deferred.makeUnsafe<void>();
-      if (done !== null && lane === 'barrier') [barrier, since] = [done, []];
-      else if (done !== null) since.push(done);
-      yield* Deferred.succeed(slot(places, seq), undefined);
-      if (done !== null)
-        for (const call of after)
-          if (call !== null) yield* Deferred.await(call);
-      // Nothing runs again until the guest holds all that settled.
-      yield* handedBack(seq);
-      if (done === null) return;
-      // A call that did not finish (a stop, a durable write that failed)
-      // lets nothing after it run: what follows it is interrupted too.
-      yield* (lane === 'parallel' ? window.withPermits(1)(body) : body).pipe(
-        Effect.onExit((exit) =>
-          Exit.isSuccess(exit)
-            ? Deferred.succeed(done, undefined)
-            : Deferred.interrupt(done),
-        ),
-      );
-    });
+  ): Effect.fn.Return<void, E, R> {
+    if (seq > 0) yield* Deferred.await(slot(places, seq - 1));
+    const after = lane === 'barrier' ? [barrier, ...since] : [barrier];
+    const done = lane === null ? null : Deferred.makeUnsafe<void>();
+    if (done !== null && lane === 'barrier') [barrier, since] = [done, []];
+    else if (done !== null) since.push(done);
+    yield* Deferred.succeed(slot(places, seq), undefined);
+    if (done !== null)
+      for (const call of after) if (call !== null) yield* Deferred.await(call);
+    // Nothing runs again until the guest holds all that settled.
+    yield* handedBack(seq);
+    if (done === null) return;
+    // A call that did not finish (a stop, a durable write that failed)
+    // lets nothing after it run: what follows it is interrupted too.
+    yield* (lane === 'parallel' ? window.withPermits(1)(body) : body).pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit)
+          ? Deferred.succeed(done, undefined)
+          : Deferred.interrupt(done),
+      ),
+    );
+  });
   yield* Effect.addFinalizer((exit) =>
     Exit.hasInterrupts(exit)
       ? Effect.void
       : Effect.flatMap(cell.current, (state) =>
           Effect.forEach(
-            issued(state),
+            issuedBy(state, script.callId),
             ({ call: fact, status }) => {
               if (status.kind === 'settled') return Effect.void;
               const call: Call = { dispatch, fact, input: fact.input };
@@ -739,57 +767,28 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   // Made after that finalizer, so it closes first: no call the guest
   // issued still runs when the finalizer reads what it left.
   const fork = yield* FiberMap.makeRuntime<AgentRunServices, string>();
-  // Opened once, labelled by the script's title, which its first call carries.
-  let stageOpened = false;
-  const openStage = Effect.fn('toolUse.openScriptStage')(function* (
-    title: string | null,
-  ) {
-    if (stageOpened) return;
-    stageOpened = true;
-    log.publish(runId, {
-      type: 'stage.start',
-      id: stageId,
-      label: title ?? 'Script',
-      kind: 'script',
-    });
-    yield* Scope.addFinalizerExit(dispatched, (exit) =>
-      Effect.gen(function* () {
-        const settled = settlementOf(
-          dispatch,
-          yield* cell.current,
-          script.callId,
-        );
-        let status: 'completed' | 'failed' | 'cancelled' =
-          settled?.result.status === 'executed' ? 'completed' : 'failed';
-        if (Exit.hasInterrupts(exit)) status = 'cancelled';
-        log.publish(runId, {
-          type: 'stage.end',
-          id: stageId,
-          status,
-        });
-      }),
-    );
-  });
 
+  // True for the first batch this door commits, once per activation.
+  let stageOpened = false;
+  const opensStage = () => !stageOpened && (stageOpened = true);
   // What the script's calls share while it runs (`ScriptScope.shared`).
-  const sharedValues = new Map<string, Deferred.Deferred<unknown, unknown>>();
+  let sharedValues = Context.empty();
   const shared = <A, E, R>(
-    key: string,
+    key: Context.Key<unknown, Deferred.Deferred<A, E>>,
     make: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R> =>
     Effect.suspend(() => {
-      const existing = sharedValues.get(key) as
-        Deferred.Deferred<A, E> | undefined;
+      const existing = Context.getOrUndefined(sharedValues, key);
       if (existing !== undefined) return Deferred.await(existing);
       const made = Deferred.makeUnsafe<A, E>();
-      sharedValues.set(key, made as Deferred.Deferred<unknown, unknown>);
+      sharedValues = Context.add(sharedValues, key, made);
       return make.pipe(Effect.onExit((exit) => Deferred.done(made, exit)));
     });
   const scopeOf = (source: ScriptSource): ScriptScope => ({
     ...source,
     callId: script.callId,
     calls: Effect.map(cell.current, (state) =>
-      issued(state)
+      issuedBy(state, script.callId)
         .map(({ call }) => call)
         .toSorted((a, b) => a.seq - b.seq)
         .map(({ toolName, input }) => ({ toolName, input })),
@@ -806,7 +805,6 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
     answer?: () => ToolResultPayload['result'],
   ) {
     const callId = `${script.callId}/${op.seq}`;
-    yield* openStage(source.title);
     const input = toJsonValue(op.input);
     const known = recordOf(dispatch, yield* cell.current, callId);
     const recorded = known?.script;
@@ -829,10 +827,11 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
       input,
       replay: answer !== undefined ? 'safe' : (tool?.replay ?? 'unsafe'),
       logId: crypto.randomUUID(),
-      stageId,
+      stageId: `script-${script.logId}`,
       phase: op.phase,
     };
-    const call: Call = { dispatch, fact, input };
+    const { title } = source;
+    const call: Call = { dispatch, fact, input, title, opensStage };
     if (known?.status.kind === 'settled') {
       // Replayed from its row: it takes no lane and does not run.
       yield* inLane(op.seq, null, Effect.void);
@@ -1066,14 +1065,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   );
   // One call of the response, with the door its guest's calls go through.
   const finish = (fact: DispatchFacts, ended: boolean) =>
-    Effect.scoped(
-      Effect.flatMap(Scope.Scope, (dispatched) =>
-        finishCall(
-          { dispatch, fact, input: inputOf.get(fact.callId) },
-          { script: null, scriptCalls: scriptDoor(dispatch, fact, dispatched) },
-          ended,
-        ),
-      ),
+    finishCall(
+      { dispatch, fact, input: inputOf.get(fact.callId) },
+      { script: null, scriptCalls: scriptDoor(dispatch, fact) },
+      ended,
     );
   // Each group in turn: its own calls together, under the window, then its
   // duplicates. A group after one that ended the turn sees that it did.

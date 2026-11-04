@@ -26,6 +26,7 @@ import {
   formatApprovalPolicy,
 } from '@ui/copy/approvalPolicy';
 import { TASK_APPROVAL } from '@ui/copy/taskApproval';
+import { UNLISTED_AGENT_LABEL } from '@ui/copy/taskAgent';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 
 export interface ChipMenu {
@@ -43,7 +44,9 @@ type Launch = Surface['launch'];
 /** The launcher's agent in the catalog. The default and imported selections
  *  can be bare names; catalog options are source-qualified. A bare name
  *  matches against the effective catalog, while an explicitly chosen source
- *  stays exact. */
+ *  stays exact. A selection naming no option (an agent hidden or removed
+ *  since it was chosen) is no agent, and the host's launch keeps to the same
+ *  options (`buildLaunchConfig`): it refuses an agent hidden since. */
 export function launchAgentOption(
   launch: Launch,
   host: HostSnapshot,
@@ -72,7 +75,7 @@ export function launcherChipMenus(
   const agentLabel =
     launch.launchTarget === 'team' && team
       ? team.label
-      : (agent?.label ?? launch.agent);
+      : (agent?.label ?? UNLISTED_AGENT_LABEL);
   const model = host.modelOptions.find(
     (option) => option.value === launch.model,
   );
@@ -284,7 +287,9 @@ function approvalMenu(
     onSelect: (value) => {
       if (value === 'approval:policy' || value === 'approval:autoApprove') {
         if (value === 'approval:autoApprove' && policy === 'never') return;
-        actions.setLaunch({ approval: value.slice(9) as Launch['approval'] });
+        actions.setLaunch({
+          approval: value === 'approval:policy' ? 'policy' : 'autoApprove',
+        });
       } else if (value === 'settings:general') {
         actions.openSettings('general/approval');
       }

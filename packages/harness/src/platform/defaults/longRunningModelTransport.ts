@@ -5,14 +5,15 @@
  * timeout) cut short.
  *
  * Model traffic carries it as a bound fetch: `ModelAccess` hands
- * {@link modelFetch} to every `packages/llm` model it constructs,
+ * {@link runModelFetch} to every `packages/llm` model it constructs,
  * so a run gets this transport in any process, the agent package's embedder
  * included, without touching that process's global dispatcher. A host's
  * composition root, which owns its process, also installs the dispatcher
  * globally ({@link installProcessHttpDispatcher}) so the rest of its HTTP
- * traffic follows the same proxy policy.
+ * traffic follows the same proxy policy. An embedder that supplies its own
+ * fetch ({@link ModelFetch}) replaces this transport for every model request.
  */
-import { Effect } from 'effect';
+import { Context, Effect, Option } from 'effect';
 import {
   type Dispatcher,
   EnvHttpProxyAgent,
@@ -56,23 +57,24 @@ interface ProxyPolicy {
 const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
 
 /**
- * undici's `fetch` under the `Fetch` signature the rest of the codebase
- * speaks: undici's `RequestInit`/`Response` are structurally close to the
- * DOM's but not assignable, so the cast lives here once, for every caller.
+ * undici's `fetch` under the DOM signature the rest of the codebase speaks,
+ * plus undici's `dispatcher` option.
  */
+// undici implements the DOM fetch, but its `RequestInfo`, `RequestInit` and
+// `Response` typings lag the DOM lib's (a `Headers` iterator without
+// `Symbol.dispose`, other `BodyInit` view types), so they are not assignable.
+// cast: the same function, under the DOM typings it implements.
+const domUndiciFetch = undiciFetch as unknown as (
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit & { readonly dispatcher: Dispatcher },
+) => Promise<Response>;
+
+/** undici's `fetch` through `dispatcher`, as the DOM `fetch` types it. */
 export const undiciFetchThrough = (
   dispatcher: Dispatcher,
   input: Parameters<typeof fetch>[0],
   init?: RequestInit,
-): Promise<Response> =>
-  undiciFetch(
-    // cast: undici's input type is the DOM's `Request` by another name.
-    input as Parameters<typeof undiciFetch>[0],
-    {
-      ...init,
-      dispatcher,
-    } as Parameters<typeof undiciFetch>[1],
-  ) as unknown as Promise<Response>;
+): Promise<Response> => domUndiciFetch(input, { ...init, dispatcher });
 
 /**
  * The fetch every model factory is constructed with. It is undici's own
@@ -92,36 +94,50 @@ export const undiciFetchThrough = (
 const fetchThrough =
   (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
   (input, init) => {
-    const request =
-      typeof input === 'string' || input instanceof URL ? undefined : input;
-    const response = undiciFetchThrough(
-      dispatch(),
-      request?.url ?? (input as string | URL),
-      {
-        ...(request && {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-          signal: request.signal,
-          redirect: request.redirect,
-          ...(request.body !== null && { duplex: 'half' }),
-        }),
-        ...init,
-      },
-    );
-    return request === undefined ? response : response.finally(() => request);
+    if (typeof input === 'string' || input instanceof URL)
+      return undiciFetchThrough(dispatch(), input, init);
+    const request = input;
+    return undiciFetchThrough(dispatch(), request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      signal: request.signal,
+      redirect: request.redirect,
+      ...(request.body !== null && { duplex: 'half' }),
+      ...init,
+    }).finally(() => request);
   };
 
 const longRunningModelFetch = fetchThrough(modelDispatcher);
 
 /**
- * The model fetch for the run's project: the process's transport, unless the
- * project's `.env` sets its own proxy policy (`HTTP_PROXY`, `HTTPS_PROXY`,
- * `NO_PROXY`, either case), which then wins over the process's, as every
- * other project variable does. The service holds many projects, so the
- * policy travels with the run rather than through `process.env`.
+ * The fetch every model request of the process's runs goes through, when the
+ * embedder supplies one: a fake model for a test or an example, a recording
+ * or instrumented transport. Merge it beneath `Sessions.layer` (or
+ * `processLayer`) with `Layer.provideMerge`, so it stays in the context the
+ * runs read; the supplied fetch then owns the proxy policy and the timeouts
+ * too. Absent, the harness's own transport carries model traffic:
+ * the environment's proxy policy, a project's `.env` proxy over it, and the
+ * long-stream timeouts a streamed reasoning turn needs. A service read as an
+ * option, not a `Context.Reference`, because that default depends on the
+ * run's project.
  */
-export const modelFetch = Effect.map(ProjectEnvironment, (project) => {
+export class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
+  '@texra-ai/harness/ModelFetch',
+) {}
+
+/**
+ * The model fetch for the run's project: the embedder's {@link ModelFetch},
+ * else the process's transport, unless the project's `.env` sets its own
+ * proxy policy (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`, either case), which
+ * then wins over the process's, as every other project variable does. The
+ * service holds many projects, so the policy travels with the run rather
+ * than through `process.env`.
+ */
+export const runModelFetch = Effect.gen(function* () {
+  const supplied = yield* Effect.serviceOption(ModelFetch);
+  if (Option.isSome(supplied)) return supplied.value;
+  const project = yield* ProjectEnvironment;
   // Undici's own order: the lowercase name first; a policy the project
   // leaves unset falls back to the process's.
   const named = (name: string) => project[name.toLowerCase()] ?? project[name];

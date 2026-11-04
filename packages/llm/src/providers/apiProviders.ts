@@ -11,12 +11,15 @@ import {
   resolveCredential,
   type SecretsFailed,
 } from './credentials.js';
-import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from './providers.js';
-import type { ApiKeyProviderId } from './providerPlugins.js';
+import { apiKeyEnvName } from './providers.js';
+import {
+  API_KEY_PROVIDER_IDS,
+  type ApiKeyProviderId,
+} from './providerPlugins.js';
 
 /** Runtime-checked narrowing for provider strings. */
 export function isApiProvider(provider: string): provider is ApiKeyProviderId {
-  return (API_KEY_PROVIDER_IDS as readonly string[]).includes(provider);
+  return API_KEY_PROVIDER_IDS.some((id) => id === provider);
 }
 
 /** Secret storage key for a provider's API key. */
@@ -133,7 +136,10 @@ export function loadApiKeyStatusMap(
     { concurrency: 'unbounded' },
   ).pipe(
     Effect.map(
+      // `entries` holds one pair per id in API_KEY_PROVIDER_IDS, which lists
+      // every ApiKeyProviderId, so the record is total.
       (entries) =>
+        // cast: total over ApiKeyProviderId, per the note above.
         Object.fromEntries(entries) as Record<ApiKeyProviderId, ApiKeyStatus>,
     ),
   );

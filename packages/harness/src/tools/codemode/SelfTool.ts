@@ -5,7 +5,7 @@
  * the message that started it (`forkSeed`); fresh, it starts from `prompt` alone with the
  * conversation's files and memories. Either way it is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
- * The goal is this function in a loop (`goalScript`).
+ * The default goal strategy is this function in a loop (`builtIn:goal`).
  */
 import { Effect, Result, Schema, SynchronizedRef } from 'effect';
 

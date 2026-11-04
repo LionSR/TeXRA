@@ -2,7 +2,8 @@
  * The filesystem primitives the repo must keep that the standard library's
  * `FileSystem` does not provide: crash-safe replace, directory listings that
  * give every entry its own (unfollowed) type, probing the ones the listing
- * leaves `Unknown`, and symlink-dereferencing copies.
+ * leaves `Unknown`, symlink-dereferencing copies, and links that fall back
+ * to a copy where the host cannot make one.
  *
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
@@ -14,6 +15,7 @@
 
 // Node imports
 import * as nodeFs from 'node:fs/promises';
+import * as path from 'node:path';
 
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
@@ -30,7 +32,7 @@ import {
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
-import { absentReason } from './fsEntryExists';
+import { absentReason, entryTypeIn } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -59,13 +61,20 @@ function systemErrorFrom(
   target: string,
   cause: unknown,
 ): PlatformError.PlatformError {
-  const error = cause as NodeJS.ErrnoException;
+  const code =
+    Predicate.hasProperty(cause, 'code') && typeof cause.code === 'string'
+      ? cause.code
+      : undefined;
   return PlatformError.systemError({
-    _tag: (error.code && SYSTEM_ERROR_TAGS[error.code]) || 'Unknown',
+    _tag: (code && SYSTEM_ERROR_TAGS[code]) || 'Unknown',
     module: MODULE,
     method,
     pathOrDescriptor: target,
-    syscall: error.syscall,
+    syscall:
+      Predicate.hasProperty(cause, 'syscall') &&
+      typeof cause.syscall === 'string'
+        ? cause.syscall
+        : undefined,
     cause,
   });
 }
@@ -274,6 +283,62 @@ export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
     });
   },
 );
+
+/** Errno codes for which symlink creation is unavailable and a copy is used instead. */
+const SYMLINK_UNSUPPORTED_CODES = new Set([
+  'EPERM',
+  'EACCES',
+  'EINVAL',
+  'ENOTSUP',
+]);
+
+/**
+ * Link `destination` to `sourceAbsolute`, parent directories included. An
+ * existing link there is replaced; any other entry fails `AlreadyExists` and
+ * stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
+ * `ENOTSUP`) gets a copy of the source instead.
+ */
+export const createSymlink = Effect.fn('fsDurability.createSymlink')(function* (
+  sourceAbsolute: string,
+  destination: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
+  yield* fs.symlink(sourceAbsolute, destination).pipe(
+    // One recovery: an existing link is replaced, while any other entry (a
+    // file the run wrote) fails `AlreadyExists` and stays; a host that cannot
+    // make links copies instead, and a second failure of either propagates
+    // rather than re-entering this branch.
+    Effect.catch((error) => {
+      if (error.reason._tag === 'AlreadyExists') {
+        return entryTypeIn(fs, destination).pipe(
+          Effect.flatMap((type) =>
+            type === 'SymbolicLink'
+              ? fs
+                  .remove(destination)
+                  .pipe(Effect.andThen(fs.symlink(sourceAbsolute, destination)))
+              : Effect.fail(error),
+          ),
+        );
+      }
+      // cast: a failed Node `symlink` carries its errno error as the cause.
+      const code = (error.reason.cause as NodeJS.ErrnoException | undefined)
+        ?.code;
+      if (!code || !SYMLINK_UNSUPPORTED_CODES.has(code)) {
+        return Effect.fail(error);
+      }
+      return Effect.gen(function* () {
+        yield* Effect.logWarning(
+          `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${code}`,
+        ).pipe(withLogChannel(CHANNEL));
+        const sourceType = yield* entryTypeIn(fs, sourceAbsolute);
+        yield* sourceType === 'Directory'
+          ? fs.copy(sourceAbsolute, destination, { overwrite: true })
+          : fs.copyFile(sourceAbsolute, destination);
+      });
+    }),
+  );
+});
 
 /**
  * The file's bytes decoded as UTF-8, with line endings normalized and a

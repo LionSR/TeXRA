@@ -24,6 +24,7 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
+import { RunFileService } from '@common/storage/runStorage';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -42,7 +43,6 @@ import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
-import { RunFileService } from '@utils/files/runStorage';
 import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
@@ -148,14 +148,6 @@ export interface AgentRunShape extends RunLaunch {
   readonly swapModel: <E, R>(
     next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
   ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
-  /**
-   * Subscription routes this run's launch declined (its own-API-key
-   * fallback). Its `run.config` binding records them, and the fold adds
-   * every retry the user answered with their own key, so a resume rebinds
-   * under the same choice and the user's stored preferences are never
-   * rewritten to express it.
-   */
-  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
    * the run's layer is released. What the run holds for its whole life (its
@@ -272,8 +264,6 @@ export const agentRunLayer = (
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        stores: roots,
-        workspaceRoot: roots.workspace,
         held,
       };
       // A fork binds as its source was bound at the cut (its seed's binding).
@@ -303,8 +293,9 @@ export const agentRunLayer = (
         .pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
       const swapModel: AgentRunShape['swapModel'] = (next) =>
-        SynchronizedRef.updateAndGetEffect(model, (current) =>
-          Effect.gen(function* () {
+        SynchronizedRef.updateAndGetEffect(
+          model,
+          Effect.fnUntraced(function* (current) {
             const fork = yield* Scope.fork(scope);
             const replacement = yield* next(current).pipe(
               Scope.provide(fork),
@@ -330,7 +321,6 @@ export const agentRunLayer = (
         finalToolName,
         model,
         swapModel,
-        declinedRoutes,
         scope,
         callbacks: input.callbacks,
       };

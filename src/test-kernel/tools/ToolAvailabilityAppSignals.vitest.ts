@@ -9,7 +9,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import {
   type PluginToolServices,
@@ -104,10 +104,6 @@ const availabilityService = (plugins: readonly Plugin[]) =>
     );
     return Context.get(context, ToolAvailability);
   });
-
-afterEach(() => {
-  vi.resetModules();
-});
 
 describe('tool availability service', () => {
   it.effect(

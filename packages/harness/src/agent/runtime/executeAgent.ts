@@ -40,6 +40,7 @@ import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import {
   generateSessionDescription,
   getDisplayedInstruction,
+  RunLabels,
   settleDescriptionOnExit,
 } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
@@ -58,7 +59,7 @@ export interface ExecuteAgentOptions {
    *  a fresh run's is its registration's. */
   readonly parentRunId?: RunId;
   /** The child-run policy: each turn's permit, each turn's settlement. */
-  readonly turns?: ChildRunTurns<RunReport>;
+  readonly turns?: ChildRunTurns<RunReport, AgentRunServices>;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -250,101 +251,100 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
  * resumes `resumeRun`; this runs on a fiber `RunRegistry.start` forked,
  * whose context carries the session's services.
  */
-export function executeAgent(
+export const executeAgent: (
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions,
-): Effect.Effect<RunReport, Error, AgentRunServices> {
-  return Effect.gen(function* () {
-    // Done once the run exists: its description is a row of it.
-    const opened = yield* Deferred.make<void>();
-    const launch = yield* buildAgentLaunchContext(
-      definition,
-      runId,
-      options,
-      opened,
-    );
-    const { config } = launch;
-    const resume = options.registration === undefined;
-    const loop = runToolUse({ turns: options.turns, resume }).pipe(
-      Effect.provide(
-        modelInvokerLayer().pipe(
-          Layer.provideMerge(
-            agentRunLayer(launch, {
-              modelConfig: definition.modelConfig,
-              tools: options.tools,
-              callbacks: { onProgress: options.onProgress },
-            }),
-          ),
-        ),
-      ),
-    );
-
-    // Start description generation concurrently with the run, and settle
-    // it before the run ends (`settleDescriptionOnExit`), so the metadata
-    // write cannot recreate a run deleted by another host. A resumed run
-    // whose process died before its description was written gets one now.
-    // A child of the run's fiber, so the run's stop interrupts it, as it
-    // interrupts the run.
-    const sessionDescription = yield* Effect.forkChild(
-      Deferred.await(opened).pipe(
-        Effect.andThen(
-          generateSessionDescription(
-            runId,
-            config,
-            definition.agentEntry.description,
-            resume,
-          ),
-        ),
-      ),
-    );
-    const flow = resume
-      ? loop
-      : Effect.andThen(
-          // The run directory is created by the first write into it.
-          Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-            Effect.annotateLogs({
-              data: {
-                agent: config.agent,
-                model: config.model,
-                input: config.inputFiles[0] ?? '(none)',
-                outputs: config.outputFiles.length,
-              },
-            }),
-            withLogChannel(CHANNEL),
-          ),
-          loop,
-        );
-    // The flow is an Effect: a fiber interruption reaches its provider work
-    // directly, and its finalizers run before the resources above are
-    // disposed. A fresh run is born with its opening, a resume activates
-    // with its cell: both inside the flow, so the terminal ends either. The
-    // run starts only inside the region whose exit is the terminal, so no
-    // stop lands between the two: a started run is always finalized. The
-    // host's stop is this run fiber's interruption (`RunRegistry.interrupt`);
-    // the requests this run left open close with the fibers waiting on them
-    // (`SessionRequests.ask`). The backstop wait is `ensuring`, not a
-    // generator `finally`: the driver skips a `finally` after a failed
-    // `yield*`, ending the run early.
-    const report = yield* Effect.uninterruptibleMask((restore) =>
-      Effect.flatMap(
-        Effect.exit(
-          restore(
-            flow.pipe(settleDescriptionOnExit(sessionDescription, opened)),
-          ),
-        ),
-        (exit) => endRun(launch, exit, options.turns?.finishLastTurn),
-      ),
-    ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
-    yield* Effect.logDebug(
-      `Task completed with outcome: ${report.outcome}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return report;
-  }).pipe(
-    // The run's scope: the launch acquires the run trace into it and the
-    // finalizer drops its subscribers once the run has ended. No mask: the
-    // launch's acquisitions settle atomically (`acquireRelease`), so an
-    // interruption lands between steps and this scope's finalizers run.
-    Effect.scoped,
+) => Effect.Effect<RunReport, Error, AgentRunServices> = Effect.fn(
+  'executeAgent',
+)(function* (
+  definition: PreparedAgentDefinition,
+  runId: RunId,
+  options: ExecuteAgentOptions,
+) {
+  // Done once the run exists: its description is a row of it.
+  const opened = yield* Deferred.make<void>();
+  const launch = yield* buildAgentLaunchContext(
+    definition,
+    runId,
+    options,
+    opened,
   );
-}
+  const { config } = launch;
+  const resume = options.registration === undefined;
+  const loop = runToolUse({ turns: options.turns, resume }).pipe(
+    Effect.provide(
+      modelInvokerLayer().pipe(
+        Layer.provideMerge(
+          agentRunLayer(launch, {
+            modelConfig: definition.modelConfig,
+            tools: options.tools,
+            callbacks: { onProgress: options.onProgress },
+          }),
+        ),
+      ),
+    ),
+  );
+
+  // A root run of a session that labels its runs gets its description
+  // concurrently with the run, settled before the run ends
+  // (`settleDescriptionOnExit`), so the metadata write cannot recreate a
+  // run deleted by another host. A resumed run whose process died before
+  // its description was written gets one now. A child of the run's fiber,
+  // so the run's stop interrupts it, as it interrupts the run.
+  const labelled = launch.entry.parent === null && (yield* RunLabels);
+  const sessionDescription = yield* Effect.forkChild(
+    labelled
+      ? Deferred.await(opened).pipe(
+          Effect.andThen(
+            generateSessionDescription(
+              runId,
+              config,
+              definition.agentEntry.description,
+              resume,
+            ),
+          ),
+        )
+      : Effect.void,
+  );
+  const flow = resume
+    ? loop
+    : Effect.andThen(
+        // The run directory is created by the first write into it.
+        Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+          Effect.annotateLogs({
+            data: {
+              agent: config.agent,
+              model: config.model,
+              input: config.inputFiles[0] ?? '(none)',
+              outputs: config.outputFiles.length,
+            },
+          }),
+          withLogChannel(CHANNEL),
+        ),
+        loop,
+      );
+  // The flow is an Effect: a fiber interruption reaches its provider work
+  // directly, and its finalizers run before the resources above are
+  // disposed. A fresh run is born with its opening, a resume activates
+  // with its cell: both inside the flow, so the terminal ends either. The
+  // run starts only inside the region whose exit is the terminal, so no
+  // stop lands between the two: a started run is always finalized. The
+  // host's stop is this run fiber's interruption (`RunRegistry.interrupt`);
+  // the requests this run left open close with the fibers waiting on them
+  // (`SessionRequests.ask`). The backstop wait is `ensuring`, not a
+  // generator `finally`: the driver skips a `finally` after a failed
+  // `yield*`, ending the run early.
+  const report = yield* Effect.uninterruptibleMask((restore) =>
+    Effect.flatMap(
+      Effect.exit(
+        restore(flow.pipe(settleDescriptionOnExit(sessionDescription, opened))),
+      ),
+      (exit) => endRun(launch, exit, options.turns?.finishLastTurn),
+    ),
+  ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
+  yield* Effect.logDebug(`Task completed with outcome: ${report.outcome}`).pipe(
+    withLogChannel(CHANNEL),
+  );
+  return report;
+}, Effect.scoped);

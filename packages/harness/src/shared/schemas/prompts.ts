@@ -1,4 +1,4 @@
-import { Schema, Struct } from 'effect';
+import { Effect, Schema, Struct } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
@@ -61,6 +61,42 @@ export const ToolEditContentSchema = Schema.Struct({
 /** A pending tool edit's content. */
 export type ToolEditContent = typeof ToolEditContentSchema.Type;
 
+/**
+ * Hunks as unified-diff text lines, each preceded by its header. One header
+ * policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
+ */
+export function formatHunkLines(hunks: ToolEditContent['hunks']): string[] {
+  const range = (start: number, lines: number) =>
+    lines === 1 ? String(start) : `${start},${lines}`;
+  return hunks.flatMap((hunk) => [
+    `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`,
+    ...hunk.lines,
+  ]);
+}
+
+// Null records a missing file; an empty string records an existing empty one.
+// The preview wire contract renders either as empty text.
+const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
+);
+
+/** Read the proposal named by a durable edit request. A missing or malformed
+ *  blob is a corrupt store, never permission to use a recomputed proposal. */
+export const readToolEditContent = (
+  readBlobs: (
+    digests: readonly string[],
+  ) => Effect.Effect<ReadonlyMap<string, string>, Error>,
+  address: ToolEditPermission['content'],
+): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
+  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    return Schema.decodeUnknownSync(
+      Schema.fromJsonString(StoredToolEditContentSchema),
+    )(text);
+  });
+
 export const BashPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({
     command: Schema.String,
@@ -120,10 +156,9 @@ export const RetryPermissionSchema = Schema.Struct({
   runId: RunIdSchema,
   operation: Schema.String,
   model: Schema.optional(Schema.String),
-  errorMessage: Schema.optional(Schema.String),
-  errorDetails: Schema.optional(
-    RetryErrorInfoSchema.mapFields(Struct.map(Schema.optional)),
-  ),
+  /** The failure as the run recorded it: the harness's plain message and
+   *  the facts a host words it from (its classification). */
+  errorDetails: RetryErrorInfoSchema,
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
 });

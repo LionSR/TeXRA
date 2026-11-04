@@ -1,10 +1,10 @@
-import { it } from '@effect/vitest';
+import { it, layer } from '@effect/vitest';
 import { Context, Effect, Exit, Layer, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AGENT_SOURCE } from '@texra-ai/harness/schemas';
 import { effectDiagnosticsLayer, setLogSink } from '@texra-ai/harness/node';
-import { UsageLog } from '@texra-ai/harness/host';
+import { AppState, UsageLog } from '@texra-ai/harness/host';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { usageAgentName } from '@shared/usageLog';
 import {
@@ -12,9 +12,12 @@ import {
   type UsageLogOptions,
 } from '@telemetry/UsageLogService';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { jsonResponse } from '@test/support/fetchTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import {
+  jsonResponse,
+  testHttpClientLayer,
+} from '@test/support/fetchTestUtils';
+import { fakeHostAppState } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import {
   TELEMETRY_ENABLED_KEY,
   TEXRA_SETTINGS,
@@ -53,7 +56,7 @@ describe('UsageLogService', () => {
   const stopUsageLog = async (): Promise<void> => {
     const scope = lifetime;
     lifetime = undefined;
-    if (scope) await testRuntime().runPromise(Scope.close(scope, Exit.void));
+    if (scope) await Effect.runPromise(Scope.close(scope, Exit.void));
   };
 
   const startUsageLog = async (
@@ -61,15 +64,25 @@ describe('UsageLogService', () => {
   ): Promise<void> => {
     await stopUsageLog();
     lifetime = Scope.makeUnsafe();
-    const context = await testRuntime().runPromise(
+    const context = await Effect.runPromise(
       Scope.provide(
-        // The process runtime's diagnostics, which the service logs through.
         Layer.build(
           usageLogLayer({
             version: undefined,
             editorType: undefined,
             config,
-          }).pipe(Layer.provide(effectDiagnosticsLayer('Trace'))),
+          }).pipe(
+            Layer.provide(
+              Layer.mergeAll(
+                // The process runtime's diagnostics, which the service logs
+                // through; the fetch each test stubs; and the installed
+                // host's app state, where the install id is kept.
+                effectDiagnosticsLayer('Trace'),
+                testHttpClientLayer,
+                AppState.layer(fakeHostAppState),
+              ),
+            ),
+          ),
         ),
         lifetime,
       ),
@@ -95,17 +108,15 @@ describe('UsageLogService', () => {
     vi.restoreAllMocks();
   });
 
-  describe('texra.telemetry.enabled opt-out', () => {
-    // These tests write to the config provider. Without a per-test platform the
-    // mutation outlives the test — the file-scoped fake from setupFakePlatform
-    // is shared — and a stray `enabled: false` silently disables logging for
-    // every suite that runs afterwards.
-    // The real provider, so the project-file scope rule is the one tested.
-    setupPlatform(
+  // These tests write to the config provider: the real provider, so the
+  // project-file scope rule is the one tested.
+  layer(
+    FakeHost.layer(
       {},
       { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
-    );
-
+    ),
+    { buildPerTest: true, excludeTestServices: true },
+  )('texra.telemetry.enabled opt-out', (it) => {
     // Optional entries must be discarded without a request.
     async function expectNoOptionalUsageSent(): Promise<void> {
       const fetchMock = stubBatchFetch();
@@ -116,7 +127,7 @@ describe('UsageLogService', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     }
 
-    it.live('does not let a project opt in over a user-wide opt-out', () =>
+    it.effect('does not let a project opt in over a user-wide opt-out', () =>
       Effect.gen(function* () {
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,
@@ -135,7 +146,7 @@ describe('UsageLogService', () => {
 
     // The setting is read live, so turning it off has to drop rounds already
     // queued under the old value rather than letting the next flush ship them.
-    it.live('discards entries queued before the setting was turned off', () =>
+    it.effect('discards entries queued before the setting was turned off', () =>
       Effect.gen(function* () {
         yield* Effect.promise(() =>
           startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
@@ -159,7 +170,7 @@ describe('UsageLogService', () => {
     // The environment kill switch is what a user has when editing settings is
     // awkward: a CI job, a shared machine, or a one-off `TEXRA_NO_TELEMETRY=1
     // texra run`. It overrides a stored `true` and cannot re-enable logging.
-    it.live('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
+    it.effect('sends nothing while TEXRA_NO_TELEMETRY=1 is set', () =>
       Effect.gen(function* () {
         yield* testWorkspaceRoots().config.update(
           TELEMETRY_ENABLED_KEY,

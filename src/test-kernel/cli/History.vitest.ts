@@ -92,7 +92,7 @@ const publishRunFacts = (
   });
 
 // Live clock: the history readers run as the command runs them.
-layer(SessionGraph.layer, { excludeTestServices: true })(
+layer(SessionGraph.hosted, { excludeTestServices: true })(
   'CLI history runtime',
   (it) => {
     // Per case: a host whose storage is a temp directory of its own, and

@@ -27,6 +27,7 @@ import {
   LayerMap,
   RcMap,
   Ref,
+  Predicate,
   Result,
   Schema,
 } from 'effect';
@@ -148,11 +149,13 @@ export class LeanServerPool extends Context.Service<
       void,
       LeanProjectCommandError | LeanStartError | LeanUnavailable
     >;
+    /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
     readonly positionRequest: <T>(
       filePath: string,
       line: number,
       column: number,
       method: string,
+      reply: Schema.Codec<T, unknown>,
       runId: RunId | undefined,
     ) => Effect.Effect<LspResult<T>>;
     /** See {@link LeanLanguageServices.stopSessionsForRun}. */
@@ -233,14 +236,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   )(function* (exceptRoot: string) {
     const live = yield* liveEntries;
     yield* Effect.forEach(
-      [...live].filter(
-        ([root, entry]) =>
-          root !== exceptRoot && entry.leases === 0 && entry.server,
+      [...live].flatMap(([root, { leases, server }]) =>
+        root !== exceptRoot && leases === 0 && server ? [{ root, server }] : [],
       ),
-      ([root, entry]) =>
+      ({ root, server }) =>
         servers
           .invalidate(root)
-          .pipe(Effect.andThen(Deferred.await(entry.server!.closed))),
+          .pipe(Effect.andThen(Deferred.await(server.closed))),
       { concurrency: 'unbounded', discard: true },
     );
   });
@@ -264,18 +266,17 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     return yield* serverFor(root).pipe(
       Effect.catchIf(
         (error) => isFileTableExhausted(error),
-        (error) =>
-          Effect.gen(function* () {
-            const others = [...(yield* liveEntries).keys()].some(
-              (other) => other !== root,
-            );
-            if (!others) return yield* Effect.fail(error);
-            yield* Effect.logWarning(
-              `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
-            ).pipe(withLogChannel(LOG_CHANNEL));
-            yield* evictOthersForExhausted(root);
-            return yield* serverFor(root);
-          }),
+        Effect.fnUntraced(function* (error) {
+          const others = [...(yield* liveEntries).keys()].some(
+            (other) => other !== root,
+          );
+          if (!others) return yield* Effect.fail(error);
+          yield* Effect.logWarning(
+            `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
+          ).pipe(withLogChannel(LOG_CHANNEL));
+          yield* evictOthersForExhausted(root);
+          return yield* serverFor(root);
+        }),
       ),
     );
   });
@@ -561,11 +562,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       line: number,
       column: number,
       method: string,
+      reply: Schema.Codec<T, unknown>,
       runId: RunId | undefined,
     ) {
       return yield* withServer(filePath, runId, (server) =>
-        server.requestSettled<T | null>(filePath, line, column, method),
+        server.requestSettled(filePath, line, column, method),
       ).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
         Effect.map((data): LspResult<T> =>
           data
             ? { data }
@@ -594,9 +597,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 function isFileTableExhausted(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; current != null && depth < 4; depth += 1) {
-    const code = (current as NodeJS.ErrnoException).code;
+    const code = Predicate.hasProperty(current, 'code')
+      ? current.code
+      : undefined;
     if (code === 'EMFILE' || code === 'ENFILE') return true;
-    current = (current as { cause?: unknown }).cause;
+    current = Predicate.hasProperty(current, 'cause')
+      ? current.cause
+      : undefined;
   }
   return false;
 }

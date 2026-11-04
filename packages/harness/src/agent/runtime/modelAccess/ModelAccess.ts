@@ -15,6 +15,7 @@ import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
 import {
   type ModelConfig,
+  type ModelError,
   type ModelRoute,
   selectModel,
   type TurnRequest,
@@ -30,7 +31,6 @@ import type {
   CredentialSwitch,
   DeclinableUsageRoute,
   ModelBackend,
-  RetryErrorInfo,
 } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
@@ -55,6 +55,10 @@ export interface BoundModel extends Binding {
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The route decision this binding carries out, or the validation model. */
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
@@ -111,10 +115,11 @@ export class ModelAccess extends Context.Service<
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<SwitchRefusal | null, RouteUnavailable>;
-    /** The move onto the user's own credential a failure on `failed` offers. */
+    /** The move onto the user's own credential a used-up `quota` (llm's
+     *  verdict on a failure of `failed`) offers. */
     readonly credentialSwitch: (
       failed: BoundModel,
-      recorded: RetryErrorInfo,
+      quota: ModelError['quota'],
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CredentialSwitch | null>;
   }
@@ -175,14 +180,7 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
     mode: ask.mode,
   });
   return yield* bindRoute(
-    {
-      request,
-      requested,
-      ask,
-      settings,
-      decision,
-      backend: request.backend ?? decision.backend,
-    },
+    { request, requested, ask, settings, decision },
     stores,
   );
 });
@@ -233,8 +231,8 @@ export const modelAccessLayer = (
             ),
           );
         },
-        credentialSwitch: (failed, recorded, declined) =>
-          credentialSwitch(failed, recorded, declined).pipe(
+        credentialSwitch: (failed, quota, declined) =>
+          credentialSwitch(failed, quota, declined).pipe(
             Effect.provideService(Secrets, secrets),
           ),
       };

@@ -19,7 +19,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
+import WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 import {
   InquiryRequestSchema,
@@ -73,8 +73,8 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   /** The surface whose `inquiryDrafts` holds this inquiry's answer in progress. */
   @property({ attribute: false }) surface: Surface | null = null;
 
-  /** The inquiry the request holds, read when the request is set. */
-  private inquiry!: InquiryRequest;
+  /** The last decoded request data and the inquiry it holds. */
+  private decoded: { data: unknown; inquiry: InquiryRequest } | undefined;
   private copyController = new CopyButtonController(this);
   private draftRestored = false;
   /** The key the pending debounced write belongs to. */
@@ -99,9 +99,6 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
       // The text still belongs to the previous inquiry here: a pending
       // write lands on its key before the fields reset for the new one.
       this.draftSaveDebounce.flush();
-      this.inquiry = Schema.decodeUnknownSync(InquiryRequestSchema)(
-        this.permission.data,
-      );
       this.answerText = '';
       this.sessionLinksText = '';
       this.draftRestored = false;
@@ -116,6 +113,18 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
         this.sessionLinksText = draft.sessionLinks;
       }
     }
+  }
+
+  /** The inquiry the request holds, decoded once per request. */
+  private get inquiry(): InquiryRequest {
+    const { data } = this.permission;
+    if (this.decoded?.data !== data) {
+      this.decoded = {
+        data,
+        inquiry: Schema.decodeUnknownSync(InquiryRequestSchema)(data),
+      };
+    }
+    return this.decoded.inquiry;
   }
 
   private currentDraft(): InquiryDraft | null {
@@ -426,16 +435,16 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
   // ── Event Handlers ──
 
   private handleAnswerInput(e: Event): void {
-    this.answerText =
-      (e.target as HTMLElement & { value?: string }).value ?? '';
-    (e.currentTarget as ValidatableTextarea).setCustomValidity('');
+    if (!(e.currentTarget instanceof WaTextarea)) return;
+    this.answerText = e.currentTarget.value ?? '';
+    e.currentTarget.setCustomValidity('');
     this.scheduleDraftSave();
   }
 
   private handleSessionLinksInput(e: Event): void {
-    this.sessionLinksText =
-      (e.target as HTMLElement & { value?: string }).value ?? '';
-    (e.currentTarget as ValidatableTextarea).setCustomValidity('');
+    if (!(e.currentTarget instanceof WaTextarea)) return;
+    this.sessionLinksText = e.currentTarget.value ?? '';
+    e.currentTarget.setCustomValidity('');
     this.scheduleDraftSave();
   }
 

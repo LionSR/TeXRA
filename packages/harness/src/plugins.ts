@@ -13,7 +13,8 @@
  *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
  *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
  *   `Sessions.layer({ platform, plugins })`.
- * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+ * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+ *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
  *   [`executed`](#executed), [`errorResult`](#errorresult),
  *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
  *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
@@ -45,6 +46,7 @@ export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
   type FactKind,
+  type Plugin,
   type PluginDefinition,
   type PluginRow,
 } from '@tools/plugins';
@@ -210,7 +212,10 @@ export type {
 } from '@agent/runtime/ModelRetryGate';
 // A run's files under its session storage: its directory, the pre-run
 // snapshots and workspace mirrors it prepares, and output locations.
-export { RunFileService, type RunStorageEntry } from '@utils/files/runStorage';
+export {
+  RunFileService,
+  type RunStorageEntry,
+} from '@common/storage/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

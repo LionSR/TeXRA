@@ -1,24 +1,15 @@
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, Layer } from 'effect';
-import { expect, vi } from 'vitest';
+import { Layer } from 'effect';
+import { expect } from 'vitest';
 
-import { ImagePasteQueue } from '@cli/chat/tui/input/imagePasteQueue';
 import {
   shouldRedactSlashInput,
   installSlashCommands,
 } from '@cli/chat/tui/commands/slashRegistry';
-import { createDeferred } from '@test/support/asyncTestUtils';
 import { SessionGraph } from '@test/support/testKernel';
 import { boundTestSessionView } from './fixtures/sessionViewFixture';
 
-const clipboardMock = vi.hoisted(() => ({
-  attachClipboardImage: vi.fn(),
-}));
-
-vi.mock('@cli/runtime/clipboardImage', () => clipboardMock);
-
-// Live clock: the paste queue waits on real fibers.
-layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
   excludeTestServices: true,
 })('InputBar slash submit', (it) => {
   it('does not persist commands whose input may contain a credential', () => {
@@ -68,34 +59,4 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.layer), {
       installSlashCommands([]);
     }
   });
-
-  it.effect('waits for pending image pastes and submits the latest draft', () =>
-    Effect.gen(function* () {
-      const chipSuffix = ' [Image #1]';
-      const imagePasteQueue = new ImagePasteQueue();
-      const paste = createDeferred();
-      const submitted: string[] = [];
-      let draft = '/h';
-
-      const pasteFiber = yield* Effect.forkChild(
-        Effect.promise(() => paste.promise).pipe(
-          Effect.map(() => {
-            draft = `/h${chipSuffix}`;
-          }),
-        ),
-      );
-      imagePasteQueue.add(pasteFiber, yield* SessionGraph.runtime);
-
-      imagePasteQueue.runWhenIdle(() => {
-        submitted.push(draft);
-      });
-
-      expect(submitted).toEqual([]);
-
-      paste.resolve();
-      yield* Fiber.await(pasteFiber);
-
-      expect(submitted).toEqual([`/h${chipSuffix}`]);
-    }),
-  );
 });

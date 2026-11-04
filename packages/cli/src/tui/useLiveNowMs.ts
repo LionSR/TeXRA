@@ -1,3 +1,4 @@
+import { Predicate } from 'effect';
 import { useEffect, useState } from 'react';
 
 import { subscribeToPolling } from './usePollingInterval';
@@ -23,8 +24,6 @@ export function useLiveNowMs(shouldTick: boolean, resetKey?: unknown): number {
 export function useLiveNowMsSince(
   startedAts: readonly (number | undefined)[],
 ): number {
-  const key = startedAts
-    .filter((startedAt): startedAt is number => startedAt !== undefined)
-    .join(':');
+  const key = startedAts.filter(Predicate.isNotUndefined).join(':');
   return useLiveNowMs(key.length > 0, key);
 }
