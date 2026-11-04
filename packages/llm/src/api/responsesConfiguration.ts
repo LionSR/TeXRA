@@ -17,8 +17,6 @@ import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 
-/** The one namespace a ChatGPT plan's route groups every function tool in. */
-
 /** The request fields a vendor route sets for itself. */
 interface VendorFields extends Pick<
   ResponsesConfiguration,

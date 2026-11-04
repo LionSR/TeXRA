@@ -171,6 +171,8 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
                 return vendorTool as OpenAI.Responses.FunctionTool;
               }),
             ),
+            // OpenAI's default, stated so a compatible endpoint takes it too.
+            parallel_tool_calls: true,
             tool_choice:
               turn.controls.toolChoice === 'auto'
                 ? ('auto' as const)
