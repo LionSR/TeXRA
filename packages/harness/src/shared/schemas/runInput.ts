@@ -1,16 +1,73 @@
 /**
- * What a run's rows carry beside its messages: its input (system text,
- * instruction, activated skills) and what it is bound to. Host-neutral so the
- * run history (`runHistoryEvent.ts`) composes them without reaching the agent
+ * The facts a run's rows carry beside its messages: its usage, its input
+ * (system text, instruction, activated skills) and what it is bound to.
+ * Host-neutral so the run history (`runHistoryEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back. The facts read back from those
  * rows are `session/runFacts.ts`.
  */
-import { Schema } from 'effect';
+import { Schema, Struct } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
 import { Sha256Schema } from './identifiers';
 import { QualifiedSkillNameSchema } from './skillName';
-import { DeclinableUsageRouteSchema } from './usage';
+import { StoredProtocolSchema } from './storedTurn';
+import {
+  DeclinableUsageRouteSchema,
+  type RunUsageTotals,
+  TokenUsageStatsSchema,
+} from './usage';
+
+// ---------------------------------------------------------------- usage
+
+/**
+ * The priced usage of one model call: the counts under `TurnUsage`'s names,
+ * its cost, route and plan ({@link TokenUsageStatsSchema}), and the wire
+ * surface and response time of the call. `run/pricing.ts` prices the
+ * package's `TurnResult.usage` into this shape.
+ */
+export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
+  Struct.assign({
+    /** Response time in milliseconds */
+    responseTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+    /** Wire surface that produced this usage; usage is billed per surface. */
+    provider: StoredProtocolSchema,
+  }),
+);
+/** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
+export type NormalizedUsage = typeof NormalizedUsageSchema.Type;
+
+/**
+ * The priced usage the writer stamped on one completed turn, summed into the
+ * run totals. The package's `turn.usage` is deliberately not the input: it
+ * carries token counts and provider-specific extras but no runtime price, so
+ * folding it would leave a resumed run's `totalCost` at zero. Every field of the totals is named here, so a new
+ * metric on either schema is a compile error rather than a silent zero.
+ */
+export function addTurnUsage(
+  totals: RunUsageTotals,
+  usage: NormalizedUsage | null,
+): RunUsageTotals {
+  if (usage === null) return totals;
+  return {
+    firstInputTokens:
+      totals.firstInputTokens === 0
+        ? usage.inputTokens
+        : totals.firstInputTokens,
+    totalInputTokens: totals.totalInputTokens + usage.inputTokens,
+    totalOutputTokens: totals.totalOutputTokens + usage.outputTokens,
+    totalCost: totals.totalCost + usage.cost,
+    totalCachedInputTokens:
+      totals.totalCachedInputTokens + (usage.cachedInputTokens ?? 0),
+    totalCacheMissInputTokens:
+      totals.totalCacheMissInputTokens + (usage.cacheMissInputTokens ?? 0),
+    totalCacheWriteTokens:
+      totals.totalCacheWriteTokens + (usage.cacheWriteTokens ?? 0),
+    totalReasoningTokens:
+      totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
+    totalToolUsePromptTokens:
+      totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
+  };
+}
 
 // ------------------------------------------------------------ launch facts
 
