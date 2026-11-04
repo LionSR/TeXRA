@@ -238,6 +238,7 @@ function boundModel(
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
     backend: 'openai',
+    declinedRoutes: [],
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },

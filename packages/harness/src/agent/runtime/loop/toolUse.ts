@@ -6,25 +6,24 @@
  * same function. Every write point below is one `cell.append`.
  *
  * The write points, in order: the opening batch of a fresh run (its message
- * and input, its `run.config` binding, `turn.ready`); `turn.begin`; per
- * round the invoker's `attempt` / `identified` / `response` rows; per
- * barrier call its `tool.intent`; per settled call its `tool.result` with
- * its card; the delivering `append` with the complete tool group; a
- * follow-up consumed at a request or a nudge, each an `append`; `turn.end`
- * and `waiting`; the follow-up consumption; and the `halted` step at every
- * exit that ends the run. Every branch reads the fold: a `waiting` phase
- * re-enters the wait (a batch consumed at `turn.ready` runs its turn), an
- * unanswered open attempt invokes again under its gate, a pending response
- * dispatches what is unsettled, a committed text response runs its policy,
- * and a halted run launched again waits for its input.
+ * and input, its `run.config` binding, `turn.ready`); `turn.begin`; per round
+ * the invoker's `attempt` / `identified` / `response` rows; per barrier call
+ * its `tool.intent`; per settled call its `tool.result` with its card; the
+ * delivering `append` with the complete tool group; a follow-up consumed at a
+ * request or a nudge, each an `append`; `turn.end` and `waiting`; the
+ * follow-up consumption; and the `halted` step at every exit that ends the
+ * run. Every branch reads the fold: a `waiting` phase re-enters the wait (a
+ * batch consumed at `turn.ready` runs its turn), an unanswered open attempt
+ * invokes again under its gate, a pending response dispatches what is
+ * unsettled, a committed text response runs its policy, and a halted run
+ * launched again waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
  * task's recipe) opens on that one call, handed down in its opening batch
- * instead of asked of its model; its settlement (`RunState.handedDown`)
- * ends the turn.
+ * instead of asked of its model; `RunState.handedDown` ends the turn.
  */
 
-import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
+import { Deferred, Effect, Exit, SynchronizedRef, type Scope } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
@@ -98,11 +97,10 @@ const turnResponse = (at: RunState): string =>
 type TurnServices = AgentRun | AgentRunServices | ModelAccess;
 
 /**
- * The policy a committed text-only response runs, read off the rows:
- * a blank turn after a tool result (a message delivered at the request
- * may sit between them) asks once more, the terminal tool gets one
- * forced turn per turn, else the turn ends with this text. Each step
- * is a row, so a resume finds it. `done` ends the turn.
+ * The policy a committed text-only response runs: a blank turn after a tool
+ * result (a message delivered at the request may sit between them) asks once
+ * more, the terminal tool gets one forced turn per turn, else the turn ends
+ * with this text. Each step is a row (a resume finds it); `done` ends the turn.
  */
 const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
   cell: RunCell,
@@ -169,9 +167,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     stepFor(run, state, kind, isChild(), openingSystem);
 
   // ------------------------------------------------------------ host port
+  // The controls stand from the run's start; a switch waits for the cell.
+  const opened = Deferred.makeUnsafe<RunCell, Error>();
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
-    ...modelSwitchPort(run, access, yield* Inbox),
+    ...modelSwitchPort(run, access, yield* Inbox, Deferred.await(opened)),
   };
 
   // -------------------------------------------------------------- opening
@@ -180,8 +180,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<RunCell, Error, AgentRunServices> {
     const bound = yield* SynchronizedRef.get(run.model);
     // The state its first step opens on: what the opening batch records.
-    const { backend } = bound;
-    const binding = { backend, declinedRoutes: run.declinedRoutes };
+    const { backend, declinedRoutes } = bound;
+    const binding = { backend, declinedRoutes };
     const opening: RunState = {
       ...(yield* cell.current),
       ...{ modelId: bound.modelId, ...binding },
@@ -393,7 +393,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ------------------------------------------------------------- the loop
   const enter = Effect.gen(function* () {
-    const cell = yield* openRun(runId, start.resume);
+    const cell = yield* openRun(runId, start.resume).pipe(
+      Effect.tap((cell) => Deferred.succeed(opened, cell)),
+      Effect.onError((cause) => Deferred.failCause(opened, cause)),
+    );
     const loaded = yield* cell.current;
     if (loaded.phase === null) return yield* openFresh(cell);
     logger.debug('Resuming tool-use run from the run history.');
@@ -531,15 +534,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   // The controls detach as the run's scope closes, after the bracket below
-  // settles the cell; `cell.append` protects each run history commit from
-  // interruption.
+  // settles the cell; `cell.append` protects each commit from interruption.
   yield* registryOf(yield* Runs).attachControls(runId, controls);
   return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
-    // However the run ends, a stop's interruption included, a finished
-    // summary lands before the halt (its usage is the run's); one still
-    // running stops with the run. A summary the store refuses fails the
-    // run with the refusal, which its end records; the lease is released
-    // either way.
+    // However the run ends (a stop's interruption included), a finished
+    // summary lands before the halt (its usage is the run's); one still running
+    // stops with the run. A refused summary fails the run, which its end records.
     compaction
       .settle(cell, 'the run stopped')
       .pipe(Effect.asVoid, Effect.ensuring(settleRun(cell, followUps)(exit))),

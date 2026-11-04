@@ -22,7 +22,6 @@ import { readGoogleBackground, type ModelSettings } from '@model/modelSettings';
 import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
-import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
@@ -42,8 +41,6 @@ export interface BindPlan {
   readonly ask: ReasoningRequest;
   readonly settings: ModelSettings;
   readonly decision: RouteDecision;
-  /** The run's backend: a resumed run's, else the decided one. */
-  readonly backend: ModelBackend;
 }
 
 /**
@@ -85,9 +82,10 @@ const reasoningOf = Effect.fn('binding.reasoning')(function* (
 });
 
 /** What every binding of `plan` shares. */
-const commonOf = ({ request, backend, settings }: BindPlan) => ({
+const commonOf = ({ request, decision, settings }: BindPlan) => ({
   modelId: request.modelId,
-  backend,
+  backend: decision.backend,
+  declinedRoutes: request.declinedRoutes,
   automaticRetries: settings.automaticRetries,
   textOnly: request.textOnly,
 });
@@ -101,8 +99,8 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   CallFailure,
   Scope.Scope | HttpClient.HttpClient | Secrets
 > {
-  const { request, requested, settings, backend } = plan;
-  const { route, facts } = plan.decision;
+  const { request, requested, settings } = plan;
+  const { route, facts, backend } = plan.decision;
   const protocol = PROTOCOL_BY_BACKEND[backend];
   if (protocol === 'validation') {
     const canned = yield* Effect.serviceOption(ValidationModel);

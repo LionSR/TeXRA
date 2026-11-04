@@ -89,11 +89,7 @@ export const planCompileFixer = Effect.fn('planCompileFixer')(
 
     const decision = decideRunModel(
       [
-        {
-          model: workflowConfig.model,
-          reason: 'agent-config',
-          fallbackMode: 'silent',
-        },
+        { model: workflowConfig.model, reason: 'agent-config' },
         {
           model: input.modelOptions.find(isModelOptionAvailable)?.value,
           reason: 'access-list-default',

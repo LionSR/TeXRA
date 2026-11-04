@@ -67,7 +67,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           ...consumed,
           configRow(run.runId, run.config, next.modelId, {
             backend: next.backend,
-            declinedRoutes: run.declinedRoutes,
+            declinedRoutes: next.declinedRoutes,
           }),
         ]);
         return next;
@@ -79,18 +79,25 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
 
 /** The host port's model switch: whether `model` can replace the run's, and
  *  the admission the loop applies at its next model boundary, answered once
- *  its row commits. */
+ *  its row commits. `opened` is the run's cell, once open: the switch is
+ *  admitted over the routes its state holds, the set the next bind decides
+ *  over. */
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
   inbox: Inbox['Service'],
+  opened: Effect.Effect<RunCell, Error>,
 ) {
   /** Why `model` cannot replace the run's, decided as the next bind will. */
   const admission = (model: string) =>
-    access.admit(
-      model,
-      SynchronizedRef.getUnsafe(run.model),
-      run.declinedRoutes,
+    Effect.flatMap(opened, (cell) =>
+      Effect.flatMap(cell.current, (state) =>
+        access.admit(
+          model,
+          SynchronizedRef.getUnsafe(run.model),
+          state.declinedRoutes,
+        ),
+      ),
     );
   return {
     modelSwitchDisabledReason: (model: string) =>

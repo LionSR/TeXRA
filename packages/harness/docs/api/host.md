@@ -2093,7 +2093,6 @@ interface RunGeneratedFile {
 interface RunModelCandidate {
   readonly model?: string | null;
   readonly reason: RunModelDecisionReason;
-  readonly fallbackMode?: RunModelFallbackMode;
 }
 ```
 
@@ -2117,7 +2116,7 @@ interface RunModelDecision {
 ## RunModelDecisionReason
 
 ```ts
-type RunModelDecisionReason = keyof typeof RUN_MODEL_PRECEDENCE;
+type RunModelDecisionReason = keyof typeof RUN_MODEL_REASONS;
 ```
 
 ## RunModelFallbackMode

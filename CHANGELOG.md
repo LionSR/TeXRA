@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A run's model route is decided over one set of facts.** The binding a
+  `run.config` records now carries the subscription routes it was decided
+  over, and a model switch is admitted over the routes the run's history
+  holds, the same set the next binding reads, so a switch after a quota
+  fallback is answered as the binding will answer it. A model that would be
+  served from a different conversation format is refused by the route
+  decision itself, for a switch and for a resume alike (a resumed run no
+  longer binds under its stored backend when the model moved). SDK:
+  `RunModelCandidate.fallbackMode` is gone: each candidate's reason decides
+  its fallback (a named or credential-chosen model is refused, a configured
+  or remembered one falls back with a notice, a default silently), in one
+  table.
 - **The view says whether a run is working.** `RunView.working` is true
   while the run is inside a turn: live, not paused, not interrupted and not
   waiting for its user. `runStartedAt` is set only while the run is busy on

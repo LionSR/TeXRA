@@ -79,6 +79,7 @@ function testBoundModel({
       capabilities: { supportsVision },
     }),
     backend: 'deepseek',
+    declinedRoutes: [],
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
@@ -335,7 +336,6 @@ export function testAgentRun(
       SynchronizedRef.updateAndGetEffect(model, (current) =>
         Effect.scoped(next(current)),
       ),
-    declinedRoutes: [],
     callbacks: {},
     ...run,
     ...over,
