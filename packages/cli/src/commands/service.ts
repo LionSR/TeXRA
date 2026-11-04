@@ -3,6 +3,7 @@ import { Deferred, Effect, Exit, Schedule } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
+import { holdSignals } from '@cli/runtime/processSignals';
 import { askServiceToStop } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
@@ -90,15 +91,8 @@ const runServe = Effect.fn('runServe')(function* (
   const served = Effect.gen(function* () {
     const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
     yield* Effect.acquireRelease(
-      Effect.sync(() => {
-        process.on('SIGINT', onSignal);
-        process.on('SIGTERM', onSignal);
-      }),
-      () =>
-        Effect.sync(() => {
-          process.off('SIGINT', onSignal);
-          process.off('SIGTERM', onSignal);
-        }),
+      Effect.sync(() => holdSignals({ SIGINT: onSignal, SIGTERM: onSignal })),
+      (release) => Effect.sync(release),
     );
     // The stores the projects' roots open live in this scope.
     const projects = yield* cliServiceProjects(

@@ -2771,6 +2771,15 @@ view` on a sub-agent the parent waited for shows its report instead of
 
 #### Bug Fixes
 
+- **One owner for how the terminal client leaves.** A run that fails while
+  you quit the chat now exits 1 instead of 0, and the chat reads its exit code
+  from one place. Ctrl-C while the chat is still choosing a model stops the
+  run it starts instead of dropping your message, and a resume refused while
+  a stop was asked says why and exits 2. `texra chat` ends through its own
+  exit code after a self-update. Every CLI signal listener goes through one
+  registry (`holdSignals`): the platform, a foreground pager or installer,
+  `texra serve` and the chat each hold their policy and the newest answers,
+  so a second Ctrl-C during a graceful exit still leaves at once.
 - **`/agent` shows workflows again.** Once teams joined the picker its list
   overflowed at every terminal height, and the Workflows section with its
   `texra run <name>` hint was dropped. The picker now scrolls its agents and

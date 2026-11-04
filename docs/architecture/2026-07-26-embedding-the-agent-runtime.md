@@ -514,8 +514,10 @@ following classification makes that distinction.
   Recommended for any long-lived process that runs `bash` tools; an embedder
   holds the same order in its own scope, closing sessions before it disposes
   the runtime.
-- **`installCliShutdownSignalHandlers()`:** SIGINT/SIGTERM handling for a
-  terminal process, which closes that scope.
+- **`holdSignals(policy)`** (`packages/cli/src/runtime/processSignals.ts`):
+  the one place the CLI listens for a signal; the platform's own policy
+  closes that scope through `cliExit`, and a holder above it (a foreground
+  child, the chat TUI) answers instead while it holds.
 
 ### Cross-check against desktop
 

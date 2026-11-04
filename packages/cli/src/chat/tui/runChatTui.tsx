@@ -431,13 +431,12 @@ export async function runChat(
   const session = new TuiSession(runsElsewhere);
   // A dead session view (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
-  // failure on every exit path, since they all read `session.runExitCode`.
+  // failure on every exit path (`TuiSession.exitCode` reads the failure).
   const unbindSessionView = bindSessionView(runtime, runSession.view, {
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
       );
-      session.runExitCode = CliExitCode.AgentError;
     },
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
@@ -727,7 +726,6 @@ export async function runChat(
     ),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: (reason) => chatController.stop(reason),
-    quiet: context.quietLogs,
   });
   // Transfer signal ownership from the platform handler and arm this session's
   // handlers, not any earlier: everything above (the platform init,
@@ -758,13 +756,17 @@ export async function runChat(
         rootPhase !== previous &&
         previous !== RUN_PHASE.WAITING &&
         isTranscriptSettlementPhase(rootPhase) &&
-        !session.stopRequested
+        // A stop ends the run cancelled: no "finished" bell for it.
+        rootPhase !== RUN_PHASE.CANCELLED
       ) {
         notify('agentFinished');
       }
     }),
   );
 
+  // The code the exit's drain answers, read before the exit clears the
+  // chat's state.
+  let exitCode: CliExitCode;
   try {
     await ink.waitUntilExit();
   } finally {
@@ -773,8 +775,8 @@ export async function runChat(
     // teardown finishes only on the graceful path, whose drain closes that
     // scope first (a signal exit ends in process.exit and never returns
     // here), so nothing subscribed to the view outlives the bridge.
-    await exitController.gracefulTeardown();
+    exitCode = await exitController.gracefulTeardown();
     unbindSessionView();
   }
-  return { exitCode: session.runExitCode };
+  return { exitCode };
 }
