@@ -39,12 +39,15 @@ All notable changes to this project will be documented in this file.
   detached child keeps the grants its ancestors' rows give it. SDK:
   `ChildRuns.parent` answers the rows' edge (null for a root, or a run that
   is not there; never `undefined`), and `LiveRun.parent` is gone.
-- **The route decides two wire knobs.** `model.useBackgroundResponses` is
+- **The route decides three wire knobs.** `model.useBackgroundResponses` is
   gone: a text-only turn goes out as background work whenever its route can
   carry it, which the setting's default already did.
   `model.openaiParallelToolCalls` is gone: a model may always call tools in
-  parallel. SDK: `BindSpec.options.parallelToolCalls`,
-  `TurnRequest.store` and `ChooseReasoningOptions.strict` are gone; a
+  parallel. `model.gpt5ReasoningSummary` is gone: a GPT-5 reasoning request
+  asks for a summary as every other reasoning model's does, so its thinking
+  shows as it streams. SDK: `BindSpec.options.parallelToolCalls` and
+  `reasoningSummary`, `TurnRequest.store` and `ChooseReasoningOptions.strict`
+  are gone; a
   Responses configuration loses `supportsStorage`, `instructions`,
   `webSocketStreamParameter` and `toolNamespace`, and its `requestDialect`
   gains `chatgpt` (the plan's namespaced function tools); a reasoning

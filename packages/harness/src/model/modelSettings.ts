@@ -84,7 +84,6 @@ export interface ModelSettings {
   readonly googleBackground: boolean;
   /** The vendor knobs a binding sends. */
   readonly wire: {
-    readonly reasoningSummary: boolean;
     readonly serverState: boolean;
     readonly fastTier: boolean;
     readonly webSocket: boolean;
@@ -263,7 +262,6 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         ),
       }),
       Effect.all({
-        reasoningSummary: flag('model.gpt5ReasoningSummary'),
         serverState: flag('model.useGoogleInteractionsServerState'),
         fastTier: flag('model.openaiFastTier'),
         webSocket: flag(GlobalStateKey.WEBSOCKET_OPENAI),
