@@ -299,7 +299,6 @@ describe('canonical Anthropic Messages protocol', () => {
           cache_control: { type: 'ephemeral', ttl: '5m' },
           tool_choice: {
             type: 'auto',
-            disable_parallel_tool_use: true,
           },
         });
         const next = yield* configured.prepareTurn(

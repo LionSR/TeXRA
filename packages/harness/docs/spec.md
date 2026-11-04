@@ -602,7 +602,7 @@ route, and a failure scoped to the route cools the wire route itself, which
 every model on that route shares. The wire key is the binding's own tuple:
 provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
-(`agent/runtime/modelAccess/binding.ts:203-215`, `:141`)
+(`agent/runtime/modelAccess/binding.ts:193-205`, `:141`)
 (`agent/runtime/modelAccess/failureInfo.ts:42-74`). An observation
 runs outside it (`agent/runtime/run/invocation.ts:211`). The loop pauses 1,000
 ms before a `retry` or `unchain` that follows a recorded failure

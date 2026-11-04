@@ -519,6 +519,22 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     slot: 'globalState',
   },
 
+  // --- Code mode -------------------------------------------------------------
+  // The codemode plugin's `injectedWhen` reads the key to inject `script`;
+  // the step reads it to send the model `script` and the run's own tools
+  // alone, recorded per tool on its `tools.offered` row.
+  {
+    key: GlobalStateKey.SCRIPT_ONLY,
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+    ),
+    title: 'Script-only tools',
+    description:
+      'Send chat agents the script tool and their own tools alone: every other tool is called from inside a script. Off by default while the comparison against direct tool calls runs.',
+    category: 'agents',
+    slot: 'globalState',
+  },
+
   // --- OpenAI WebSocket transport (experimental) -----------------------------
   {
     key: GlobalStateKey.WEBSOCKET_OPENAI,
