@@ -58,6 +58,7 @@ export function streamingTextRow(
   kind: StreamingTextRow['kind'],
   text: string,
   streaming: boolean,
+  cut?: StreamingTextRow['cut'],
 ): StreamingTextRow | undefined {
   const measured = transcriptText(text);
   if (!measured.oneLine.trim()) return undefined;
@@ -66,6 +67,7 @@ export function streamingTextRow(
     kind,
     text: measured,
     streaming,
+    ...(cut === undefined ? {} : { cut }),
     ...(kind === 'assistant' &&
     hasIncompleteEmbeddedSubagentFollowup(measured.full)
       ? { pendingEmbeddedFollowup: true }
@@ -262,7 +264,6 @@ export function logPayloadRow(
       return {
         ...base,
         kind: 'webSearch',
-        label: `Web Search${query ? `: "${query}"` : ''}`,
         ...(query !== undefined ? { query } : {}),
       };
     }

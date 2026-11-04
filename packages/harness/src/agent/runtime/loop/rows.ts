@@ -17,6 +17,7 @@ import {
   qualifyAggregateId,
   type FollowUpDisposition,
   type PositionAt,
+  type ResponseCut,
   type RunBinding,
   type RunId,
   type RunInput,
@@ -29,21 +30,36 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../storedTurn';
+import type { TurnResult } from '@texra-ai/llm';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-/** The row making `text` the response shown as final: a row of the run's
- *  history, awaited, never a detached trace row. */
+/** The limit that ended `turn`'s answer early, if one did. */
+const cutOf = (turn: TurnResult | null): ResponseCut | undefined => {
+  const finish = turn?.finishReason;
+  return finish === 'length' || finish === 'content-filter'
+    ? finish
+    : undefined;
+};
+
+/** The row making `text` the response shown as final, with the limit that
+ *  ended it early when one did (`turn`, the turn that wrote it): a row of
+ *  the run's history, awaited, never a detached trace row. */
 export const finalizedRows = (
   runId: RunId,
   text: string,
-): RunHistoryDraft[] => [
-  {
-    type: 'response.finalized',
-    aggregateId: qualifyAggregateId('run', runId),
-    text,
-  },
-];
+  turn: TurnResult | null,
+): RunHistoryDraft[] => {
+  const cut = cutOf(turn);
+  return [
+    {
+      type: 'response.finalized',
+      aggregateId: qualifyAggregateId('run', runId),
+      text,
+      ...(cut === undefined ? {} : { cut }),
+    },
+  ];
+};
 
 /** Where the loop stands; a run's first one opens it. A turn's end says
  *  how the turn ended. */
