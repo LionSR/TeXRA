@@ -7,7 +7,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { Rejected } from '@texra-ai/harness';
-import { relativeToRoot } from '@texra-ai/harness/node';
+import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 /**
@@ -40,12 +40,9 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
   const relative = relativeToRoot(workspacePath, dropped);
   if (relative === undefined) return null;
   const fs = yield* FileSystem.FileSystem;
-  const info = yield* fs.stat(path.resolve(workspacePath, relative)).pipe(
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(undefined),
-    ),
-  );
+  const info = yield* fs
+    .stat(path.resolve(workspacePath, relative))
+    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
   return info?.type === 'File' ? relative : null;
 });
 

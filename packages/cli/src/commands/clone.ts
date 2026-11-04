@@ -5,6 +5,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Internal imports
 import { Secrets, type PlatformSecrets } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   cloneOverleafProject,
@@ -76,10 +77,7 @@ function buildOverleafClonePorts(
       FileSystem.FileSystem.use((fs) => fs.readDirectory(dir)).pipe(
         // A destination that does not exist yet is an empty destination, not
         // an unreadable one: `runClone` creates it.
-        Effect.catchIf(
-          (error) => error.reason._tag === 'NotFound',
-          () => Effect.succeed<string[]>([]),
-        ),
+        Effect.catchIf(absentReason, () => Effect.succeed<string[]>([])),
         Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
       ),
     showWorkspaceUnreadable: (error) =>

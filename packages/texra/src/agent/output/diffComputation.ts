@@ -60,13 +60,7 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
   // run and logged at debug, anything else at warn.
   Effect.catch((err) => {
     const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
-    // The reads fail as `PlatformError`s, whose `reason` carries the
-    // errno classification the raw Node error used to.
-    const write =
-      err instanceof PlatformError.PlatformError &&
-      err.reason._tag === 'NotFound'
-        ? Effect.logDebug
-        : Effect.logWarning;
+    const write = absentReason(err) ? Effect.logDebug : Effect.logWarning;
     return write(message).pipe(
       withLogChannel(CHANNEL),
       Effect.as<DiffStats>({}),

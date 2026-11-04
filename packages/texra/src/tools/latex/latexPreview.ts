@@ -19,6 +19,7 @@ import {
   createWorkspaceLocation,
   Settings,
 } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { filesByPrefix } from '@latex/formatter/latexindentpt';
@@ -199,7 +200,7 @@ const readFileWithFallback = Effect.fn('latexPreview.readFileWithFallback')(
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>
-        error.reason._tag === 'NotFound'
+        absentReason(error)
           ? Effect.succeed(fallback)
           : Effect.logWarning(
               `Failed to read ${uri.fsPath}; previewing held content (saved hand edits may be missing): ${toErrorMessage(error)}`,
