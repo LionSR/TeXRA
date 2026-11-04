@@ -11,7 +11,14 @@
 
 // Third-party imports
 import { formatResultCount, pluralize } from '@texra-ai/harness/transcript';
-import { Clock, Effect, FileSystem, Schema } from 'effect';
+import {
+  Array as Arr,
+  Clock,
+  Effect,
+  FileSystem,
+  Predicate,
+  Schema,
+} from 'effect';
 
 // Local imports
 import { defineTool, type ToolResult } from '@texra-ai/harness';
@@ -58,8 +65,8 @@ const fileAt = (fs: FileSystem.FileSystem, target: string) =>
       (error) =>
         absentReason(error) ||
         (error.reason._tag === 'BadResource' &&
-          (error.reason.cause as { code?: string } | undefined)?.code ===
-            'ELOOP'),
+          Predicate.hasProperty(error.reason.cause, 'code') &&
+          error.reason.cause.code === 'ELOOP'),
       () => Effect.succeed(false),
     ),
   );
@@ -84,13 +91,19 @@ const DECLINE_RANK = ['cancel', 'deny', 'reject'] as const;
  * joined.
  */
 function summarizeRejections(
-  rejections: readonly RecordedRejection[],
+  rejections: Arr.NonEmptyReadonlyArray<RecordedRejection>,
 ): RecordedRejection {
-  const action = DECLINE_RANK.find((kind) =>
-    rejections.some((r) => r.decision.action === kind),
-  )!;
+  const rank = (r: RecordedRejection) =>
+    DECLINE_RANK.indexOf(r.decision.action);
+  const [first, ...rest] = rejections;
+  // The first of the highest-ranked rejections.
+  const top = rest.reduce(
+    (best, r) => (rank(r) < rank(best) ? r : best),
+    first,
+  );
+  const { action } = top.decision;
   const group = rejections.filter((r) => r.decision.action === action);
-  const path = group.length > 1 ? 'multiple files' : group[0]!.path;
+  const path = group.length > 1 ? 'multiple files' : top.path;
   const text = group
     .map(({ decision: d }) => {
       if (d.action === 'cancel') return d.cause;
@@ -172,86 +185,84 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
   // Phase 1: Validate all source paths and read content before any approvals
   const prepared = yield* Effect.forEach(
     files,
-    (mapping) =>
-      Effect.gen(function* () {
-        yield* assertNoParentTraversal(mapping.path);
+    Effect.fnUntraced(function* (mapping) {
+      yield* assertNoParentTraversal(mapping.path);
 
-        const sourceLocation = yield* resolveSourceFile(
-          runFiles,
-          mapping.path,
-          call,
+      const sourceLocation = yield* resolveSourceFile(
+        runFiles,
+        mapping.path,
+        call,
+      );
+
+      const destPath = mapping.original ?? mapping.path;
+      // The call's own workspace root, as data: the source may resolve
+      // under any root, but the destination is this session's.
+      const workspaceRoot = call.env.roots.workspace;
+      const dest = workspaceRoot
+        ? pathToLocationIn(workspaceRoot, destPath)
+        : undefined;
+      if (dest?.kind !== 'workspace') {
+        return yield* Effect.fail(
+          new ToolError(`original must be inside the workspace: ${destPath}`),
         );
+      }
+      const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
+      const processFs = yield* FileSystem.FileSystem;
 
-        const destPath = mapping.original ?? mapping.path;
-        // The call's own workspace root, as data: the source may resolve
-        // under any root, but the destination is this session's.
-        const workspaceRoot = call.env.roots.workspace;
-        const dest = workspaceRoot
-          ? pathToLocationIn(workspaceRoot, destPath)
-          : undefined;
-        if (dest?.kind !== 'workspace') {
-          return yield* Effect.fail(
-            new ToolError(`original must be inside the workspace: ${destPath}`),
-          );
-        }
-        const workspaceFs: FileSystem.FileSystem = yield* WorkspaceFs;
-        const processFs = yield* FileSystem.FileSystem;
+      const rawContent = yield* readNormalizedFile(
+        processFs,
+        sourceLocation.absolutePath,
+      ).pipe(Effect.mapError(ensureError));
+      const { content: proposedContent, count: strippedCount } = strip_criticize
+        ? stripCriticizeAnnotations(rawContent)
+        : { content: rawContent, count: 0 };
+      const destExists = yield* entryTypeIn(
+        workspaceFs,
+        dest.relativePath,
+      ).pipe(
+        Effect.map((type) => type !== undefined),
+        Effect.mapError(ensureError),
+      );
 
-        const rawContent = yield* readNormalizedFile(
-          processFs,
-          sourceLocation.absolutePath,
-        ).pipe(Effect.mapError(ensureError));
-        const { content: proposedContent, count: strippedCount } =
-          strip_criticize
-            ? stripCriticizeAnnotations(rawContent)
-            : { content: rawContent, count: 0 };
-        const destExists = yield* entryTypeIn(
+      // Determine original content for diff display. In-place document
+      // outputs can make source and destination the same workspace file, so
+      // the pre-run snapshot is the only reliable "before" image.
+      const snapshotPath = runFiles.originalSnapshotPath(dest.relativePath);
+      const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
+        Effect.mapError(ensureError),
+      );
+      const snapshotContent = snapshotExists
+        ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
+            Effect.mapError(ensureError),
+          )
+        : undefined;
+      const isSameFile =
+        sourceLocation.kind === 'workspace' &&
+        sourceLocation.absolutePath === dest.absolutePath;
+      let originalContent: string;
+      if (snapshotContent !== undefined) {
+        originalContent = snapshotContent;
+      } else if (isSameFile) {
+        originalContent = rawContent;
+      } else if (destExists) {
+        originalContent = yield* readNormalizedFile(
           workspaceFs,
           dest.relativePath,
-        ).pipe(
-          Effect.map((type) => type !== undefined),
-          Effect.mapError(ensureError),
-        );
+        ).pipe(Effect.mapError(ensureError));
+      } else {
+        originalContent = '';
+      }
 
-        // Determine original content for diff display. In-place document
-        // outputs can make source and destination the same workspace file, so
-        // the pre-run snapshot is the only reliable "before" image.
-        const snapshotPath = runFiles.originalSnapshotPath(dest.relativePath);
-        const snapshotExists = yield* fileAt(processFs, snapshotPath).pipe(
-          Effect.mapError(ensureError),
-        );
-        const snapshotContent = snapshotExists
-          ? yield* readNormalizedFile(processFs, snapshotPath).pipe(
-              Effect.mapError(ensureError),
-            )
-          : undefined;
-        const isSameFile =
-          sourceLocation.kind === 'workspace' &&
-          sourceLocation.absolutePath === dest.absolutePath;
-        let originalContent: string;
-        if (snapshotContent !== undefined) {
-          originalContent = snapshotContent;
-        } else if (isSameFile) {
-          originalContent = rawContent;
-        } else if (destExists) {
-          originalContent = yield* readNormalizedFile(
-            workspaceFs,
-            dest.relativePath,
-          ).pipe(Effect.mapError(ensureError));
-        } else {
-          originalContent = '';
-        }
-
-        return {
-          path: mapping.path,
-          original: dest.relativePath,
-          destAbsolutePath: dest.absolutePath,
-          proposedContent,
-          originalContent,
-          destExists,
-          strippedCount,
-        };
-      }),
+      return {
+        path: mapping.path,
+        original: dest.relativePath,
+        destAbsolutePath: dest.absolutePath,
+        proposedContent,
+        originalContent,
+        destExists,
+        strippedCount,
+      };
+    }),
     { concurrency: 'unbounded' },
   );
 
@@ -341,7 +352,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
 
   // All changed files rejected: one rejection result, worded by the
   // decision that outranks the others.
-  if (rejections.length === changed) {
+  if (Arr.isArrayNonEmpty(rejections) && rejections.length === changed) {
     const { path, decision } = summarizeRejections(rejections);
     return buildApprovalRejectedResult(path, 'accept_run_files', decision);
   }

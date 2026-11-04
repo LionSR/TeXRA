@@ -70,47 +70,41 @@ export type PluginCandidate =
 const localSourcePath = (source: { source: string; path?: string }) =>
   source.source === 'local' ? source.path : undefined;
 
-function marketplaceCandidate(
+const marketplaceCandidate = Effect.fn('marketplaceCandidate')(function* (
   root: string,
   pluginRoot: string,
   entry: MarketplaceEntry,
 ) {
-  return Effect.gen(function* () {
-    const { source } = entry;
-    const localPath =
-      typeof source === 'string' ? source : localSourcePath(source);
-    if (localPath !== undefined) {
-      const dir = yield* containedPath(root, path.join(pluginRoot, localPath));
-      if (dir === undefined) {
-        return yield* failPlugin(
-          `Marketplace plugin ${entry.name} points at "${localPath}", which does not exist.`,
-        );
-      }
-      return { kind: 'dir', dir, entry } satisfies PluginCandidate;
+  const { source } = entry;
+  const localPath =
+    typeof source === 'string' ? source : localSourcePath(source);
+  if (localPath !== undefined) {
+    const dir = yield* containedPath(root, path.join(pluginRoot, localPath));
+    if (dir === undefined) {
+      return yield* failPlugin(
+        `Marketplace plugin ${entry.name} points at "${localPath}", which does not exist.`,
+      );
     }
-    if (
-      typeof source !== 'string' &&
-      source.source === 'github' &&
-      source.repo
-    ) {
-      return {
-        kind: 'git',
-        url: `https://github.com/${source.repo}.git`,
-        ref: source.ref,
-      } satisfies PluginCandidate;
-    }
-    if (typeof source !== 'string' && source.source === 'url' && source.url) {
-      return {
-        kind: 'git',
-        url: source.url,
-        ref: source.ref,
-      } satisfies PluginCandidate;
-    }
-    return yield* failPlugin(
-      `Marketplace plugin ${entry.name} uses a "${typeof source === 'string' ? source : source.source}" source, which cannot be installed yet. Supported: a relative path, "local", "github" and "url".`,
-    );
-  });
-}
+    return { kind: 'dir', dir, entry } satisfies PluginCandidate;
+  }
+  if (typeof source !== 'string' && source.source === 'github' && source.repo) {
+    return {
+      kind: 'git',
+      url: `https://github.com/${source.repo}.git`,
+      ref: source.ref,
+    } satisfies PluginCandidate;
+  }
+  if (typeof source !== 'string' && source.source === 'url' && source.url) {
+    return {
+      kind: 'git',
+      url: source.url,
+      ref: source.ref,
+    } satisfies PluginCandidate;
+  }
+  return yield* failPlugin(
+    `Marketplace plugin ${entry.name} uses a "${typeof source === 'string' ? source : source.source}" source, which cannot be installed yet. Supported: a relative path, "local", "github" and "url".`,
+  );
+});
 
 /**
  * The plugins a source directory offers. A plugin manifest makes the
@@ -118,8 +112,8 @@ function marketplaceCandidate(
  * `only` when names are given. A marketplace listing several plugins needs
  * that narrowing, so an install never pulls in more than the user named.
  */
-export function readPluginCandidates(root: string, only: readonly string[]) {
-  return Effect.gen(function* () {
+export const readPluginCandidates = Effect.fn('readPluginCandidates')(
+  function* (root: string, only: readonly string[]) {
     if ((yield* readPluginManifests(root)).length > 0) {
       if (only.length > 0) {
         return yield* failPlugin(
@@ -160,5 +154,5 @@ export function readPluginCandidates(root: string, only: readonly string[]) {
     return yield* failPlugin(
       `No plugin found in ${root}: expected ${[...PLUGIN_MANIFEST_FILES, ...MARKETPLACE_FILES].join(', ')}.`,
     );
-  });
-}
+  },
+);

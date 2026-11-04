@@ -189,6 +189,10 @@ interface BoundModel extends Binding {
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The route decision this binding carries out, or the validation model. */
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
@@ -438,11 +442,9 @@ interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent while it is live in this process: null for a root run,
-   *  undefined when it is not live here. */
-  readonly parent: (
-    runId: RunId,
-  ) => Effect.Effect<RunId | null | undefined, Error>;
+  /** Its attached parent as the rows record it (`run.start`, then a
+   *  `run.detach`): null for a root, or a run that is not there. */
+  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
@@ -459,6 +461,11 @@ interface ChildRunsShape {
       readonly schema: Schema.Codec<A, unknown>;
     },
   ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the launching run's work runs unasked (the Auto-approve policy,
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
+  readonly autoApproved: Effect.Effect<boolean, Error>;
   /** Whether the run holds the request `requestId`, open or decided: what
    *  a tool that posted one reads after a failed post. */
   readonly requested: (
@@ -568,7 +575,7 @@ type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -862,10 +869,10 @@ function jitteredExponentialBackoffMs(
 
 ```ts
 interface JsonRpcConnection {
-  readonly request: <T>(
+  readonly request: (
     method: string,
     params?: unknown,
-  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  ) => Effect.Effect<unknown, JsonRpcRequestError | JsonRpcConnectionDisposed>;
   /** Send a notification; after `close` it is dropped. */
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
@@ -1237,34 +1244,43 @@ interface ProcessChildLaunch<TTurn> {
 ## ProcessChildStrategy
 
 An external process's strategy (agent CLI, background bash): each turn's
-result commits in the loop, which then waits for the child's next batch.
+result commits in the loop, which then waits for the child's next batch:
+a one-turn command whose killed process still has a result, or a coding
+agent's CLI session (`cli`), a turn per batch of follow-ups.
 
 ```ts
-interface ProcessChildStrategy<
+type ProcessChildStrategy<TTurn, R = never> = ChildStrategyBase<
   TTurn,
-  R = never,
-> extends ChildStrategyBase<TTurn, R> {
+  R
+> & {
   /** A stop interrupts the turn's fiber: a foreign call takes its signal
    *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
   launch(): Effect.Effect<TTurn, Error, R>;
-  /** The next turn, from the queued follow-ups. Absent: the first turn is
-   *  the only one (a background shell). */
-  runTurn?(
-    followUps: readonly FollowUpContent[],
-  ): Effect.Effect<TTurn, Error, R>;
-  /** The turn a stop cut short, rebuilt from what the child buffered, and
-   *  delivered: only a killed OS process, whose exit code and output are a
-   *  complete result. */
-  interruptedTurn?(): TTurn;
-  /** A stop pauses this child rather than cancelling it: what it had done
-   *  and how the parent's model continues it; undefined cancels it. */
-  pauseNotice?(): ChildRunPause | undefined;
-  /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
-  /** Release provider-owned registry entries; called once, before a failed
-   *  or interrupted delivery or at the end. */
-  releaseSessionOwnership?(): void;
-}
+} & (
+    | {
+        /** The turn a stop cut short, rebuilt from what the child buffered
+         *  and delivered: a killed OS process's exit code and output. */
+        interruptedTurn(): TTurn;
+        readonly cli?: undefined;
+      }
+    | {
+        readonly cli: {
+          /** The next turn, from the queued follow-ups. */
+          runTurn(
+            followUps: readonly FollowUpContent[],
+          ): Effect.Effect<TTurn, Error, R>;
+          /** What the paused child had done and how the parent's model
+           *  continues it; undefined cancels it instead. */
+          pauseNotice(): ChildRunPause | undefined;
+          /** After a successful turn: register the session/thread id, etc. */
+          onTurnSuccess(turn: TTurn): void;
+          /** Release provider-owned registry entries; called once, before a
+           *  failed or interrupted delivery or at the end. */
+          releaseSessionOwnership(): void;
+        };
+        readonly interruptedTurn?: undefined;
+      }
+  );
 ```
 
 ## ProcessPluginLayer
@@ -1413,10 +1429,7 @@ directories are registered external roots).
 outside path.
 
 ```ts
-function resolveToolPath(
-  call: ToolPathCall,
-  targetPath?: string,
-): Effect.Effect<ToolPathResolution, Error>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>
 ```
 
 ## retryTransientFetch
@@ -1945,7 +1958,7 @@ either is asked for, so no tool body opens its own approval prompt or
 re-checks its own roots.
 
 ```ts
-interface ToolGuard<T, R = never> {
+interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -1957,12 +1970,8 @@ interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the

@@ -50,6 +50,7 @@ const boundAnthropic: BoundModel = {
     capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
   }),
   backend: 'anthropic',
+  declinedRoutes: [],
   model: unusedModel,
   origin: {
     protocol: 'anthropic-messages',

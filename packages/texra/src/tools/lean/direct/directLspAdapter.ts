@@ -32,14 +32,17 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '../leanLanguageServices';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type {
-  LeanUnavailable,
-  LspHover,
-  LspResult,
-  PlainGoal,
-  PlainTermGoal,
+import {
+  LspHoverSchema,
+  PlainGoalSchema,
+  PlainTermGoalSchema,
+  type LeanUnavailable,
+  type LspHover,
+  type LspResult,
+  type PlainGoal,
+  type PlainTermGoal,
 } from '../leanTypes';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const LEAN_IDLE_TIMEOUT = Duration.minutes(30);
@@ -94,11 +97,12 @@ const portOverPool = (
 
   getGoalState: (filePath, line, column, runId) =>
     foldStopped(
-      pool.positionRequest<PlainGoal>(
+      pool.positionRequest(
         filePath,
         line,
         column,
         '$/lean/plainGoal',
+        PlainGoalSchema,
         runId,
       ),
       stoppedLspResult<PlainGoal>,
@@ -106,11 +110,12 @@ const portOverPool = (
 
   getTermGoal: (filePath, line, column, runId) =>
     foldStopped(
-      pool.positionRequest<PlainTermGoal>(
+      pool.positionRequest(
         filePath,
         line,
         column,
         '$/lean/plainTermGoal',
+        PlainTermGoalSchema,
         runId,
       ),
       stoppedLspResult<PlainTermGoal>,
@@ -118,11 +123,12 @@ const portOverPool = (
 
   getHoverInfo: (filePath, line, column, runId) =>
     foldStopped(
-      pool.positionRequest<LspHover>(
+      pool.positionRequest(
         filePath,
         line,
         column,
         'textDocument/hover',
+        LspHoverSchema,
         runId,
       ),
       stoppedLspResult<LspHover>,

@@ -32,31 +32,16 @@ const EVALUATOR_CALL_ALLOWLIST = new Set([
 ]);
 
 /**
- * Sites allowed to override a session's approval policy. The persisted
- * `texra.approvalPolicy` setting owns a project's policy and every session
- * reads it live; only a CLI invocation overrides it for its own in-process
- * session (`--approval-policy`, a local chat's `/approval`). A host window
- * or the service never joins: a window writes the setting, and the service
- * follows it for every client of the project.
- */
-const OVERRIDE_CALL_ALLOWLIST = new Set([
-  'packages/cli/src/runtime/executeCli.ts',
-  'packages/cli/src/runtime/approvalAdapter.ts',
-  'packages/cli/src/chat/tui/runChatTui.tsx',
-]);
-
-/**
  * Sites allowed to write a run's bypass or goal grant. A host reaches them
  * only by sending `policy.set`; a launch, a delegation and a goal are the
  * core paths that grant on a run's behalf. Extend in the same PR when a new
  * core path is intentional; a host site never joins.
  */
 const BYPASS_WRITE_ALLOWLIST = new Set([
+  // `policy.set`, the one host door, committed as its row.
   'packages/harness/src/agent/runtime/runApprovalQueue.ts',
   // An Auto-approve launch's grants, on its `run.start`.
   'packages/harness/src/agent/runtime/rootLaunch.ts',
-  // `policy.set`, the one host door, committed as its row.
-  'packages/harness/src/controllers/session/pendingUnderBypass.ts',
   // A delegated child's grants, from how its proposal was approved.
   'packages/harness/src/agent/runtime/delegation/subagentRun.ts',
   'packages/harness/src/agent/runtime/delegation/AgentTool.ts',
@@ -68,7 +53,6 @@ const EVALUATOR_CALL =
   /\b(?:decideApproval|decideRetryApproval|decideHumanInputRequest)\s*\(/;
 const BYPASS_WRITE_CALL =
   /\b(?:humanGrant|goalGrant|delegatedChildGrants)\s*\(|\.approvals\.change\s*\(/;
-const POLICY_OVERRIDE_CALL = /\.approvals\.override\s*\(/;
 const POLICY_VOCABULARY_DEFINITION =
   /\b(?:const|type)\s+(?:APPROVAL_POLICIES|ApprovalPolicySchema)\b/;
 
@@ -108,13 +92,6 @@ describe('approval policy authority ratchet', () => {
     expectNoOffenders(
       offendersMatching(EVALUATOR_CALL, EVALUATOR_CALL_ALLOWLIST),
       'call the shared TeXRA approval evaluator; if intentional, extend EVALUATOR_CALL_ALLOWLIST in this PR',
-    );
-  });
-
-  it('restricts policy overrides to the CLI invocations that own their session', () => {
-    expectNoOffenders(
-      offendersMatching(POLICY_OVERRIDE_CALL, OVERRIDE_CALL_ALLOWLIST),
-      'override a session approval policy; a window or the service writes the persisted setting instead',
     );
   });
 

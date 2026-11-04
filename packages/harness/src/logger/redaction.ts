@@ -87,8 +87,15 @@ export function redactSecrets(text: string): string {
  * render's `safe-stable-stringify` still reports it as `"[Circular]"`
  * instead of this walk recursing to a stack overflow.
  */
-export function redactDisplayValue<T>(value: T): T {
-  return redactValue(value, new WeakMap(), new WeakSet()) as T;
+export function redactDisplayValue(value: unknown): unknown {
+  return redactValue(value, new WeakMap(), new WeakSet());
+}
+
+/** {@link redactDisplayValue} over a record of fields, which stays a record. */
+export function redactDisplayFields(
+  fields: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return redactFields(fields, new WeakMap(), new WeakSet([fields]));
 }
 
 function redactValue(
@@ -107,6 +114,16 @@ function redactValue(
   if (value === null || typeof value !== 'object') return value;
   if (seen.has(value)) return value;
   seen.add(value);
+  return redactFields(value, errors, seen);
+}
+
+/** An object's own fields, each redacted, a secret-named string field
+ *  replaced whole. `seen` already holds `value`. */
+function redactFields(
+  value: object,
+  errors: WeakMap<Error, Record<string, unknown>>,
+  seen: WeakSet<object>,
+): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(value).map(([key, field]) => [
       key,

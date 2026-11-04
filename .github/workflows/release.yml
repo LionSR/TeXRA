@@ -157,7 +157,7 @@ jobs:
         # resolve with `git ls-remote <repo> 'refs/tags/v2^{}'` — plain
         # `refs/tags/v2` yields the annotated tag object, which does not
         # resolve. Bump the SHA and the trailing tag together.
-        uses: HaaLeo/publish-vscode-extension@ca5561daa085dee804bf9f37fe0165785a9b14db # v2
+        uses: HaaLeo/publish-vscode-extension@1b8df468b849f76a143b8c18bf0ffa2075398d12 # v2
         with:
           pat: ${{ secrets.VSCE_PAT }}
           registryUrl: https://marketplace.visualstudio.com
@@ -172,7 +172,7 @@ jobs:
         # resolve with `git ls-remote <repo> 'refs/tags/v2^{}'` — plain
         # `refs/tags/v2` yields the annotated tag object, which does not
         # resolve. Bump the SHA and the trailing tag together.
-        uses: HaaLeo/publish-vscode-extension@ca5561daa085dee804bf9f37fe0165785a9b14db # v2
+        uses: HaaLeo/publish-vscode-extension@1b8df468b849f76a143b8c18bf0ffa2075398d12 # v2
         with:
           pat: ${{ secrets.OVSX_PAT }}
           registryUrl: https://open-vsx.org

@@ -8,8 +8,6 @@ import {
   type ModelOption,
   type ProcessRuntime,
   type RunModelCandidate,
-  type RunModelDecisionReason,
-  type RunModelFallbackMode,
   type SettingsStores,
 } from '@texra-ai/harness/host';
 import {
@@ -49,20 +47,6 @@ interface CliRunnableModelResolution {
   readonly model: string;
   readonly notice?: string;
 }
-
-const CLI_MODEL_FALLBACK_MODE_BY_REASON = {
-  'explicit-override': 'reject',
-  environment: 'reject',
-  'agent-config': 'notice',
-  'command-config': 'notice',
-  'workspace-config': 'notice',
-  'user-config': 'notice',
-  history: 'notice',
-  'parent-run': 'notice',
-  credential: 'reject',
-  'builtin-default': 'silent',
-  'access-list-default': 'silent',
-} satisfies Record<RunModelDecisionReason, RunModelFallbackMode>;
 
 /** Stores and runtime held by command actions and form loaders. */
 export type CliModelStores = SettingsStores & {
@@ -111,8 +95,9 @@ const DEFAULT_CONFIGURE_KEY_ACTION =
   'add a provider API key with `texra setup`';
 
 function startSentence(text: string): string {
-  if (text.length === 0) return text;
-  return `${text.at(0)!.toUpperCase()}${text.slice(1)}`;
+  const first = text.at(0);
+  if (first === undefined) return text;
+  return `${first.toUpperCase()}${text.slice(1)}`;
 }
 
 function runnableCliModelAccessEntries(
@@ -160,8 +145,9 @@ export function modelSelectItemsForCli(
   models: readonly CliModelAccess[],
   getModelSwitchDisabledReason?: GetModelSwitchDisabledReason,
 ) {
-  return Effect.forEach(runnableCliModelAccessEntries(models), (model) =>
-    Effect.gen(function* () {
+  return Effect.forEach(
+    runnableCliModelAccessEntries(models),
+    Effect.fnUntraced(function* (model) {
       const disabledReason = getModelSwitchDisabledReason
         ? yield* getModelSwitchDisabledReason(model.model.value)
         : undefined;
@@ -367,9 +353,8 @@ type NormalizedCliModelCandidate = RunModelCandidate & {
 };
 
 /**
- * Each candidate's `reason` owns its unavailable-model fallback behavior
- * (`CLI_MODEL_FALLBACK_MODE_BY_REASON`) unless it names its own
- * `fallbackMode`.
+ * The model a CLI run takes, from its candidates: `decideRunModel` picks by
+ * precedence and falls back as each candidate's reason says.
  */
 export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
   function* (
@@ -380,17 +365,7 @@ export const selectCliRunnableModel = Effect.fn('selectCliRunnableModel')(
     const requestedCandidates: NormalizedCliModelCandidate[] =
       candidates.flatMap((candidate) => {
         const model = candidate.model?.trim();
-        return model
-          ? [
-              {
-                ...candidate,
-                model,
-                fallbackMode:
-                  candidate.fallbackMode ??
-                  CLI_MODEL_FALLBACK_MODE_BY_REASON[candidate.reason],
-              },
-            ]
-          : [];
+        return model ? [{ ...candidate, model }] : [];
       });
     const requestedModels = [
       ...new Set(requestedCandidates.map((candidate) => candidate.model)),

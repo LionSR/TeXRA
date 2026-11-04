@@ -153,8 +153,8 @@ function toZoteroItem(item: typeof ZoteroItemSchema.Type): ZoteroConnectorItem {
         if (parts.length === 1) {
           return { name: parts[0], creatorType: 'author' as const };
         }
-        const lastName = parts.pop() as string;
-        const firstName = parts.join(' ');
+        const [lastName] = parts.slice(-1);
+        const firstName = parts.slice(0, -1).join(' ');
         return { firstName, lastName, creatorType: 'author' as const };
       })
     : undefined;

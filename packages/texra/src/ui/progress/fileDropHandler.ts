@@ -5,10 +5,6 @@ import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
 
-type FileWithPath = File & {
-  path?: string;
-};
-
 const FILE_URI_PREFIX = 'file:';
 const FILE_URI_TEXT_TYPES = [
   'text/uri-list',
@@ -79,7 +75,10 @@ function extractDroppedFilePaths(dataTransfer: DataTransfer | null): string[] {
 
   const paths = new Set<string>();
   for (const file of dataTransfer.files ?? []) {
-    const path = normalizeDroppedPath((file as FileWithPath).path, true);
+    // Electron's renderer adds the file's absolute `path`; a browser has none.
+    const dropped =
+      'path' in file && typeof file.path === 'string' ? file.path : undefined;
+    const path = normalizeDroppedPath(dropped, true);
     if (path) paths.add(path);
   }
 

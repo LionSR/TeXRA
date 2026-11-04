@@ -42,7 +42,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import { type RunCell, SessionViewAccess } from '@shared/session/runHistory';
-import { executableDecision } from '../requestPolicy';
+import { workAutoApproved } from '../requestPolicy';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
@@ -201,44 +201,42 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   const stdin = encodeHookInput(input);
   const outcomes = yield* Effect.forEach(
     matched,
-    (step) =>
-      Effect.gen(function* () {
-        const { run: ended, durationMs } = step.stale
-          ? { run: STALE.run, durationMs: 0 }
-          : yield* runHook(step.hook, stdin, {
-              pluginRoot: step.root,
-              projectDir: workspace,
-              pluginData: pluginDataDir(globalStorage, step.name),
-            });
-        const { status, warning, systemMessage, ...said } = interpretHookRun(
-          input,
-          ended,
-        );
-        if (warning !== null)
-          run.logger.warn(`${warning} (plugin ${step.name})`);
-        if (systemMessage !== null)
-          run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
-        // A failure keeps the start of stderr, or why the process never ran.
-        const stderr =
-          status === 'ok' || ended.kind === 'timeout'
-            ? ''
-            : (ended.kind === 'unstartable'
-                ? ended.message
-                : ended.stderr
-              ).slice(0, 2_000);
-        return {
-          point,
-          event,
-          plugin: step.plugin,
-          hook: step.hook.id,
-          durationMs,
-          status,
-          exitCode: ended.kind === 'exited' ? ended.exitCode : null,
-          ...said,
-          ...(step.stale && event === 'PreToolUse' && STALE.denial),
-          stderr: stderr === '' ? null : stderr,
-        } satisfies HookOutcomePayload;
-      }),
+    Effect.fnUntraced(function* (step) {
+      const { run: ended, durationMs } = step.stale
+        ? { run: STALE.run, durationMs: 0 }
+        : yield* runHook(step.hook, stdin, {
+            pluginRoot: step.root,
+            projectDir: workspace,
+            pluginData: pluginDataDir(globalStorage, step.name),
+          });
+      const { status, warning, systemMessage, ...said } = interpretHookRun(
+        input,
+        ended,
+      );
+      if (warning !== null) run.logger.warn(`${warning} (plugin ${step.name})`);
+      if (systemMessage !== null)
+        run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
+      // A failure keeps the start of stderr, or why the process never ran.
+      const stderr =
+        status === 'ok' || ended.kind === 'timeout'
+          ? ''
+          : (ended.kind === 'unstartable' ? ended.message : ended.stderr).slice(
+              0,
+              2_000,
+            );
+      return {
+        point,
+        event,
+        plugin: step.plugin,
+        hook: step.hook.id,
+        durationMs,
+        status,
+        exitCode: ended.kind === 'exited' ? ended.exitCode : null,
+        ...said,
+        ...(step.stale && event === 'PreToolUse' && STALE.denial),
+        stderr: stderr === '' ? null : stderr,
+      } satisfies HookOutcomePayload;
+    }),
     { concurrency: 'unbounded' },
   );
   return pointOf(
@@ -262,21 +260,19 @@ const rootOf = (run: AgentRunShape) =>
 /** The fields every event's input carries for `run`: its root run's id as
  *  the session, its permission mode as its approvals decide, and for a child
  *  its own id and agent, as the reference gives a subagent's hooks. */
-const inputBase = (run: AgentRunShape) =>
-  Effect.gen(function* () {
-    const root = yield* rootOf(run);
-    return {
-      session_id: root,
-      cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
-      permission_mode:
-        (yield* executableDecision(run.runId)) === 'allow'
-          ? ('bypassPermissions' as const)
-          : ('default' as const),
-      ...(root === run.runId
-        ? {}
-        : { agent_id: run.runId, agent_type: run.config.agent }),
-    };
-  });
+const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
+  const root = yield* rootOf(run);
+  return {
+    session_id: root,
+    cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
+    permission_mode: (yield* workAutoApproved(run.runId))
+      ? ('bypassPermissions' as const)
+      : ('default' as const),
+    ...(root === run.runId
+      ? {}
+      : { agent_id: run.runId, agent_type: run.config.agent }),
+  };
+});
 
 /** The hooks of the run's current step. */
 const currentHooks = (run: AgentRunShape) =>

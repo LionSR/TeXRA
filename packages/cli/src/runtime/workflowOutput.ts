@@ -225,10 +225,10 @@ function outputCopyRelativePathForExpectedOutput(
 }
 
 function commonDirectory(paths: readonly string[]): string {
-  if (paths.length === 0) return '';
-  const [first, ...rest] = paths.map((file) =>
-    path.resolve(file).split(path.sep),
-  );
+  const [firstPath, ...restPaths] = paths;
+  if (firstPath === undefined) return '';
+  const first = path.resolve(firstPath).split(path.sep);
+  const rest = restPaths.map((file) => path.resolve(file).split(path.sep));
   let sharedLength = 0;
   while (
     sharedLength < first.length &&
@@ -238,7 +238,7 @@ function commonDirectory(paths: readonly string[]): string {
   }
   return (
     first.slice(0, Math.max(1, sharedLength)).join(path.sep) ||
-    path.parse(paths[0]!).root
+    path.parse(firstPath).root
   );
 }
 
@@ -290,14 +290,14 @@ function copyOutputFile(
   );
 }
 
-export function resolveWorkflowOutput(
-  outputFile: string | undefined,
-  outputDir: string | undefined,
-  result: CliRunResult,
-  context: CliContext,
-  options: WorkflowOutputResolutionOptions,
-): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
+export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
+  function* (
+    outputFile: string | undefined,
+    outputDir: string | undefined,
+    result: CliRunResult,
+    context: CliContext,
+    options: WorkflowOutputResolutionOptions,
+  ): Effect.fn.Return<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
     // A document task's recipe returns its documents, diffs included: its
     // run's `structured` value, which the CLI's result names `documents`.
     const { structured, ...output } = result.output;
@@ -393,8 +393,8 @@ export function resolveWorkflowOutput(
     }
 
     return { ...baseResult, copiedOutput: targetPath };
-  });
-}
+  },
+);
 
 export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
   if (result.outcome === RUN_OUTCOME.FAILED) {

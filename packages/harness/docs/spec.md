@@ -64,7 +64,7 @@ its kind is its `type` column.
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from (`shared/session/runState.ts:504-517`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
-  (`agent/runtime/SessionEvents.ts:165-302`).
+  (`agent/runtime/SessionEvents.ts:165-301`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
   within an aggregate (`controllers/session/storeSchema.ts:70-80`).
 
@@ -495,10 +495,10 @@ position MUST fail the load as `inconsistent`
 The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
 `results.ready` to `results.ready`, and `turn.end` to `halted`
-(`shared/runs/runStatus.ts:92-105`).
+(`shared/runs/runStatus.ts:79-92`).
 
 A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/runs/runStatus.ts:105`).
+from there (`shared/runs/runStatus.ts:92`).
 
 ### 5.4 The commit path
 
@@ -602,8 +602,8 @@ route, and a failure scoped to the route cools the wire route itself, which
 every model on that route shares. The wire key is the binding's own tuple:
 provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
-(`agent/runtime/modelAccess/binding.ts:203-215`, `:141`)
-(`agent/runtime/modelAccess/failureInfo.ts:42-74`). An observation
+(`agent/runtime/modelAccess/binding.ts:193-205`, `:141`)
+(`agent/runtime/modelAccess/failureInfo.ts:36-68`). An observation
 runs outside it (`agent/runtime/run/invocation.ts:211`). The loop pauses 1,000
 ms before a `retry` or `unchain` that follows a recorded failure
 (`agent/runtime/run/invocation.ts:48`, `:246-263`, `:371-377`); a resend after a
@@ -869,7 +869,7 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts:856-857`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/runs/runStatus.ts:92-100`).
+  `results.ready` (`shared/runs/runStatus.ts:83-91`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,
@@ -883,49 +883,51 @@ place a cut between an effect and its result. One real kill covers that case: a
 process killed after its command's effect and before its result reports the
 command as outcome unknown and never reruns it automatically; the model may
 still issue a new command, which runs under I4
-(`src/test-kernel/controllers/session/goldenStore.vitest.ts:777`).
+(`src/test-kernel/controllers/session/goldenStore.vitest.ts:620`).
 
 ## 10. Conformance
 
 These existing suites check the sections above.
 
 - **2.1 file and schema**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:808` (pre-1.0
-  moved aside), `:868` (foreign file refused), `:902` (damaged file moved
-  aside), `:1063` (newer schema refused)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:624` (pre-1.0
+  moved aside), `:684` (foreign file refused), `:718` (damaged file moved
+  aside), `:820` (newer schema refused)
 - **2.2 envelope**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1087` (dense seq,
-  one commit order), `:1126` (parent incarnation), `:1236` (ordinals never
-  reused), `:1287` (blobs)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:844` (dense seq,
+  one commit order), `:883` (ordinals never reused), `:934` (blobs)
 - **2.3 publisher**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:417` (enqueue
-  order), `:1199` (a rejected batch rolls back whole), `:372`, `:622`;
-  `src/test-kernel/support/crashConformance.ts:1392` (one job, one transaction)
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:365` (enqueue
+  order); `src/test-kernel/support/crashConformance.ts:1392` (one job, one
+  transaction)
 - **2.4 versions and gate**:
-  `src/test-kernel/schemas/rowVersions.vitest.ts:110`, `:128`, `:162`;
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:571` (newer build
-  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:935`
-  (undecodable row), `:1004` (earlier build's row);
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:203`
+  `src/test-kernel/schemas/rowVersions.vitest.ts:111`, `:129`, `:163`;
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:486` (newer build
+  refused); `src/test-kernel/controllers/session/sessionEvents.vitest.ts:751`
+  (undecodable row); `src/test-kernel/controllers/session/goldenStore.vitest.ts:735`
+  (earlier build's row), `:207`
 - **3 row kinds**:
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:203` (every golden
-  row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:110`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:207` (every golden
+  row decodes); `src/test-kernel/schemas/rowVersions.vitest.ts:111`
 - **4 write points**: `src/test-kernel/support/crashConformance.ts:810`, `:1444`
-- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:2083`
-  (live state equals reloaded state), `:2115` (batch contract);
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:468`, `:622`
-  (listing equals the fold)
-- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:470`,
-  `:522` (asks again after a stop), `:436` (budget), `:593` (unchain once),
-  `:410`; `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:74`
+- **5 fold**: `src/test-kernel/controllers/session/sessionEvents.vitest.ts:1749`
+  (batch contract); `src/test-kernel/controllers/session/goldenStore.vitest.ts:383`
+  (the fold equals the pinned session view and run states)
+- **6 retry**: `src/test-kernel/agent/runtime/RetryState.vitest.ts:436`
+  (budget), `:441` (manual retry through a durable approval), `:565`
+  (automatic attempts stop at the limit), `:591` (an attempt the process
+  stopped during spends a retry);
+  `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:72`
 - **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:489`, `:558`,
-  `:1384`, `:1625` (another OS process), `:1737` (dead owner reclaimed), `:1787`
-  (second writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:147`
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts:438` (requests
+  follow current claims), `:1031` (deletion needs every dependent claim),
+  `:1272` (another OS process), `:1385` (dead owner reclaimed), `:1453` (second
+  writer fenced); `src/test-kernel/agent/runtime/resumeRun.vitest.ts:126`,
+  `:237`
 - **8 requests**: `src/test-kernel/support/crashConformance.ts:49-52`
 - **9 crash guarantees**:
   `src/test-kernel/controllers/session/crashConformance*.vitest.ts`,
-  `src/test-kernel/controllers/session/goldenStore.vitest.ts:731`
+  `src/test-kernel/controllers/session/goldenStore.vitest.ts:620`
 
 ## 11. Non-goals
 

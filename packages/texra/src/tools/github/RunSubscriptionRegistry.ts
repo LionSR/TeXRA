@@ -200,10 +200,11 @@ export class RunSubscriptionRegistry<K extends string, Input> {
    * without needing to know which run owns it.
    */
   unbindAll(key: string): number {
-    const canonicalKey = key as K;
     const removedBindings: BoundSubscription[] = [];
-    for (const [runId] of [...this.perRun.groups()]) {
-      const binding = this.perRun.delete(runId, canonicalKey);
+    for (const [runId, byKey] of [...this.perRun.groups()]) {
+      const boundKey = [...byKey.keys()].find((bound) => bound === key);
+      if (boundKey === undefined) continue;
+      const binding = this.perRun.delete(runId, boundKey);
       if (binding) removedBindings.push(binding);
     }
     if (removedBindings.length > 0) {

@@ -1,3 +1,4 @@
+import { Predicate } from 'effect';
 import { Skills } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICIES,
@@ -240,10 +241,12 @@ export function optString(value: unknown): string | undefined {
  * `no-`-prefixed flag — the positive key set to `false` (citty rewrites
  * `--no-browser` into `browser: false` before parsing).
  */
-export function booleanArg(args: object, name: string): boolean {
-  const record = args as Record<string, unknown>;
-  if (record[name] === true) return true;
-  return name.startsWith('no-') && record[name.slice(3)] === false;
+export function booleanArg(
+  args: Readonly<Record<string, unknown>>,
+  name: string,
+): boolean {
+  if (args[name] === true) return true;
+  return name.startsWith('no-') && args[name.slice(3)] === false;
 }
 
 interface CommonAgentRunFlags {
@@ -288,9 +291,7 @@ export function rejectHeadlessOnlyFlags(
 ): void {
   const labels = [
     ...new Set(
-      rawArgs
-        .map(headlessOnlyFlagLabel)
-        .filter((label): label is string => label !== undefined),
+      rawArgs.map(headlessOnlyFlagLabel).filter(Predicate.isNotUndefined),
     ),
   ];
   if (labels.length === 0) return;

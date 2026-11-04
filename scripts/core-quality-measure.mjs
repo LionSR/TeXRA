@@ -37,6 +37,18 @@ import { walkFiles } from './walkFiles.mjs';
 /** Lines a core file may hold before file-size counts it. */
 export const CORE_FILE_LINES = 400;
 
+/**
+ * The reducer and fact-reader files, which file-size skips: a fact's reader
+ * belongs beside the rows that decide it, and a size cap would move it away.
+ */
+const FACT_FILES = new Set([
+  'packages/harness/src/shared/session/runRows.ts',
+  'packages/harness/src/shared/session/runState.ts',
+  'packages/harness/src/shared/session/runFacts.ts',
+  'packages/harness/src/shared/session/runRowReads.ts',
+  'packages/harness/src/shared/session/sessionViewUpdate.ts',
+]);
+
 const MIN_DEPTH_INTERFACE = 4;
 const MIN_MODULE_DEPTH = 3;
 
@@ -118,21 +130,24 @@ export const RULES = {
     'The shallow-modules rule over the source outside the core (the rest of the harness, the app, the hosts).',
   'wide-records-outside-core':
     'The wide-records rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'type-assertions-outside-core':
+    'The type-assertions rule over the source outside the core (the rest of the harness, the app, the hosts).',
 };
 
 /**
- * The depth rules, which hold everywhere: the source outside the core is
- * measured by the same code under its own rule name, so the core's rows and
- * the rest are budgeted apart.
+ * The rules that hold everywhere (the depth rules and unexplained `as`): the
+ * source outside the core is measured by the same code under its own rule
+ * name, so the core's rows and the rest are budgeted apart.
  */
 const OUTSIDE_CORE_RULES = {
   'pass-through': 'pass-through-outside-core',
   'shallow-modules': 'shallow-modules-outside-core',
   'wide-records': 'wide-records-outside-core',
+  'type-assertions': 'type-assertions-outside-core',
 };
 
 /** Every package's source; the part outside the core takes the depth rules. */
-const SOURCE_DIRS = [
+export const SOURCE_DIRS = Object.freeze([
   'packages/harness/src',
   'packages/llm/src',
   'packages/texra/src',
@@ -140,7 +155,7 @@ const SOURCE_DIRS = [
   'packages/desktop/src',
   'packages/cli/src',
   'packages/trace-viewer/src',
-];
+]);
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
@@ -152,7 +167,7 @@ const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
  * the manifests, src/test-kernel and the harness README exist at every base
  * the check runs against.
  */
-function sourceFiles(rootDir, dirs) {
+export function sourceFiles(rootDir, dirs) {
   return dirs
     .filter((dir) => existsSync(path.join(rootDir, dir)))
     .flatMap((dir) =>
@@ -1050,7 +1065,7 @@ function measureAst(rootDir, files, byRule) {
     const lines = text.endsWith('\n')
       ? text.split('\n').length - 1
       : text.split('\n').length;
-    if (lines > CORE_FILE_LINES) {
+    if (lines > CORE_FILE_LINES && !FACT_FILES.has(file)) {
       byRule.get('file-size').set(file, {
         value: lines,
         sites: [{ line: 1, detail: `${lines} lines` }],

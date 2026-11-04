@@ -58,6 +58,7 @@ export function streamingTextRow(
   kind: StreamingTextRow['kind'],
   text: string,
   streaming: boolean,
+  cut?: StreamingTextRow['cut'],
 ): StreamingTextRow | undefined {
   const measured = transcriptText(text);
   if (!measured.oneLine.trim()) return undefined;
@@ -66,6 +67,7 @@ export function streamingTextRow(
     kind,
     text: measured,
     streaming,
+    ...(cut === undefined ? {} : { cut }),
     ...(kind === 'assistant' &&
     hasIncompleteEmbeddedSubagentFollowup(measured.full)
       ? { pendingEmbeddedFollowup: true }
@@ -84,9 +86,7 @@ export function streamingTextRow(
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
- * request's own payload, never from a projected row. So is `userRetryable`:
- * the runtime's retry routing flag, which the row's own retry affordance
- * already expresses to a reader.
+ * request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -124,15 +124,19 @@ function errorRow(
   summary: string,
   data: ErrorLogData | undefined,
 ): ErrorRow {
-  const details = errorDetails(data, summary);
   return {
     ...base,
     kind: 'error',
     summary: transcriptText(summary),
-    details,
-    detailText: transcriptText(
-      details.map((detail) => `${detail.key}: ${detail.value}`).join('\n'),
-    ),
+    details: errorDetails(data, summary),
+    ...(data?.classification === undefined
+      ? {}
+      : {
+          failure: {
+            message: data.message,
+            classification: data.classification,
+          },
+        }),
   };
 }
 
@@ -258,7 +262,6 @@ export function logPayloadRow(
       return {
         ...base,
         kind: 'webSearch',
-        label: `Web Search${query ? `: "${query}"` : ''}`,
         ...(query !== undefined ? { query } : {}),
       };
     }

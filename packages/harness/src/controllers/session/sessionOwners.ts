@@ -230,8 +230,9 @@ const consumersLayer = (open: SessionHandleInit) =>
       // waiters read `RunView.status` once the view holds a row's state.
       // Host notices go to the author. `log.settled` waits for this reader.
       const announce = announceWrites(factKindsOf(plugins.entries.values()));
-      yield* Stream.runForEach(store.folded, (event) =>
-        Effect.gen(function* () {
+      yield* Stream.runForEach(
+        store.folded,
+        Effect.fnUntraced(function* (event) {
           yield* onHeldResult(event, consumers);
           yield* announce(event);
           if (store.closed()) return;
@@ -288,16 +289,12 @@ export const stopSessionRuns = (
   });
 
 /** The session's approvals, with the one reading of its policy
- *  (`sessionPermission`) over its presentation host and roots. */
+ *  (`sessionPermission`) over its presentation host. */
 const approvalsLayer = Layer.effect(
   Approvals,
   Effect.gen(function* () {
     const approvals = yield* sessionApprovals;
-    const permission = sessionPermission(
-      approvals,
-      yield* Interactions,
-      yield* SessionRoots,
-    );
+    const permission = sessionPermission(approvals, yield* Interactions);
     return { ...approvals, permission };
   }),
 );

@@ -24,18 +24,14 @@ const CODEX_TURN_TOOL = 'codex_turn';
 const CODEX_COMMAND_SUMMARY_MAX_LENGTH = 60;
 
 /**
- * The card of a `codex` call: its prompt, and as badges its sandbox mode and
- * whether it continues an existing thread.
+ * The card of a `codex` call: its prompt, and a badge when it continues an
+ * existing thread.
  */
 export function codexCallCard(input: {
   readonly prompt: string;
-  readonly sandbox_mode?: string | null;
   readonly thread_id?: string | null;
 }): ToolCard {
-  const badges = [
-    ...(input.sandbox_mode ? [input.sandbox_mode] : []),
-    ...(input.thread_id ? ['follow-up'] : []),
-  ];
+  const badges = input.thread_id ? ['follow-up'] : [];
   return {
     title: CODEX_AGENT_NAME,
     sections: [

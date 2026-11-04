@@ -341,7 +341,7 @@ export function ConfigForm(props: ConfigFormProps): React.JSX.Element {
     if (!entry) return;
     switch (settingEditKind(entry)) {
       case 'boolean':
-        commit(entry, !(effective(entry) as boolean));
+        commit(entry, !effective(entry));
         return;
       case 'form':
         if (entry.openForm)

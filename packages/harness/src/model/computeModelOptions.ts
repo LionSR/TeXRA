@@ -46,19 +46,6 @@ interface ModelAvailabilityStatus {
 }
 
 /**
- * Every kind whose {@link MODEL_AVAILABILITY_STATUS} entry is
- * `available: false` — derived, not hand-listed, so a kind can't be added to
- * one table (or have its `available` flip) without the other noticing.
- */
-type UnavailableAvailabilityKind = {
-  [
-    K in ModelAvailabilityKind
-  ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
-    ? never
-    : K;
-}[ModelAvailabilityKind];
-
-/**
  * Everything an unavailable-reason builder needs to word its message — all of
  * it data the route ladder already resolved, so no builder reads a host.
  */
@@ -69,15 +56,22 @@ interface UnavailableReasonContext {
 }
 
 /**
- * Per-kind unavailable-reason prose, compiler-checked the same way
- * {@link MODEL_AVAILABILITY_STATUS} is: omitting a kind here — including a
- * newly added `ModelAvailabilityKind` whose status is `available: false` —
- * is a type error instead of a silent fall-through to a generic message.
+ * Per-kind unavailable-reason prose, compiler-checked against
+ * {@link MODEL_AVAILABILITY_STATUS}: a kind whose status is
+ * `available: false` must have a builder, and an available one must have
+ * none, so a kind can't be added to one table (or have its `available` flip)
+ * without the other noticing.
  */
-const UNAVAILABLE_REASON_BUILDERS: Record<
-  UnavailableAvailabilityKind,
-  (reasonCtx: UnavailableReasonContext) => string
-> = {
+const UNAVAILABLE_REASON_BUILDERS: {
+  readonly [
+    K in ModelAvailabilityKind
+  ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
+    ? undefined
+    : (reasonCtx: UnavailableReasonContext) => string;
+} = {
+  'provider-key': undefined,
+  'subscription-access': undefined,
+  'xai-subscription-access': undefined,
   retired: ({ model }) =>
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   unserved: ({ model }) =>
@@ -213,10 +207,14 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
  * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
  * so it seeds the key statuses.
  */
-function buildAvailabilityContext(
-  stores: SettingsStores,
-): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable, Secrets> {
-  return Effect.gen(function* () {
+const buildAvailabilityContext = Effect.fn('buildAvailabilityContext')(
+  function* (
+    stores: SettingsStores,
+  ): Effect.fn.Return<
+    ModelAvailabilityContext,
+    ModelHostFactUnreadable,
+    Secrets
+  > {
     const settings = yield* hostFact(
       'the model settings',
       readModelSettings(stores),
@@ -226,8 +224,8 @@ function buildAvailabilityContext(
       facts: routeFactsFor(settings, []),
       keyStatuses: { kimiCode: settings.kimiCodeKey },
     };
-  });
-}
+  },
+);
 
 /**
  * Stage 1: decide every model's route once, and keep the decision, so
@@ -378,14 +376,14 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  * The models the pickers show — the single reader of
  * `GlobalStateKey.MODEL_SELECTION` for every host.
  */
-export function getEnabledModels(state: Pick<StateStore, 'get'>) {
-  return Effect.gen(function* () {
-    const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
-    const { selection, invalid } = selectionOf(stored);
-    yield* reportInvalid(invalid);
-    return enabledOrDefaults(selection);
-  });
-}
+export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
+  state: Pick<StateStore, 'get'>,
+) {
+  const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
+  const { selection, invalid } = selectionOf(stored);
+  yield* reportInvalid(invalid);
+  return enabledOrDefaults(selection);
+});
 
 /**
  * Enable or disable one model — the only writer of
@@ -514,14 +512,10 @@ function optionOf(
     decision,
     keyStatuses,
   );
-  // cast: a kind the status table marks unavailable is one the builders
-  // cover; the compiler enforces that on the table, not at this call site.
-  const unavailableReason = MODEL_AVAILABILITY_STATUS[kind].available
-    ? undefined
-    : UNAVAILABLE_REASON_BUILDERS[kind as UnavailableAvailabilityKind]({
-        model,
-        source,
-      });
+  const unavailableReason = UNAVAILABLE_REASON_BUILDERS[kind]?.({
+    model,
+    source,
+  });
   const savedEffort = reasoningLevels[config.ref];
   return {
     model,

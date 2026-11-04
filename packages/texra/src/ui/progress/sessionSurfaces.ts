@@ -546,8 +546,12 @@ export function createSessionSurfaces(options: {
         patch: { text: action.text, images: action.images },
       });
     else if (action.kind !== 'showSessions') act(entry, action);
-    // Show Sessions opens the newest session only from the New-task state.
-    else if (entry.surface$.get().selected === null) {
+    // Show Sessions opens the newest session only from the New-task state,
+    // and not over a run the window just started that is still on its way.
+    else if (
+      entry.surface$.get().selected === null &&
+      entry.surface$.get().pendingSelection === null
+    ) {
       act(entry, { kind: 'select', runId: action.runId });
     }
   });

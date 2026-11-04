@@ -5,7 +5,7 @@
  * once the view has applied them) or the job a cell was opened within, and
  * `applyRunRows` rebuilds the state on both paths.
  */
-import { Effect, Result, SynchronizedRef } from 'effect';
+import { Effect, Predicate, Result, SynchronizedRef } from 'effect';
 
 import {
   qualifyAggregateId,
@@ -124,7 +124,7 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
     url.username !== '' || url.password !== '' ? 'userinfo' : null,
     endpoint.includes('?') ? 'a query string' : null,
     endpoint.includes('#') ? 'a fragment' : null,
-  ].filter((part): part is string => part !== null);
+  ].filter(Predicate.isNotNull);
   return violations.length === 0
     ? null
     : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
@@ -272,22 +272,21 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     if (refusal !== null) return yield* refusal;
   }
   const target = qualifyAggregateId('run', run);
-  const job = (append: Append) =>
-    Effect.gen(function* () {
-      // Decided in the job, so it reads what the jobs before it left.
-      // The store refuses a `run.start` anywhere but a run's first row.
-      const born = yield* registration;
-      const stray = born.find((row) => row.aggregateId !== target);
-      if (stray !== undefined)
-        return yield* broken(`a registration targets ${stray.aggregateId}`);
-      const beside = yield* alongside;
-      const written = yield* runStateAppend(append)([
-        ...born,
-        ...rows.map(storedDraft),
-      ]);
-      yield* append(beside);
-      return written;
-    }).pipe(Effect.scoped);
+  const job = Effect.fn('job')(function* (append: Append) {
+    // Decided in the job, so it reads what the jobs before it left.
+    // The store refuses a `run.start` anywhere but a run's first row.
+    const born = yield* registration;
+    const stray = born.find((row) => row.aggregateId !== target);
+    if (stray !== undefined)
+      return yield* broken(`a registration targets ${stray.aggregateId}`);
+    const beside = yield* alongside;
+    const written = yield* runStateAppend(append)([
+      ...born,
+      ...rows.map(storedDraft),
+    ]);
+    yield* append(beside);
+    return written;
+  }, Effect.scoped);
   // A target no longer held open is `not-owner`, nothing written.
   const committed = yield* (
     within === undefined

@@ -35,13 +35,14 @@ import type {
 } from '@texra-ai/harness/transcript';
 import type { FormatResult } from './baseLogFormatter';
 
-type RowOf<K extends TranscriptRowKind> = Extract<TranscriptRow, { kind: K }>;
+/** Each row kind's row: indexing it by a kind parameter keeps the pairing. */
+type RowMap = { [K in TranscriptRowKind]: TranscriptRow & { kind: K } };
 
 /** `interrupted`: the row's run is interrupted (its process died), so an
  *  open call is not running. `tools`: how the host paints tool calls. */
 type RowFormatters = {
   [K in TranscriptRowKind]: (
-    row: RowOf<K>,
+    row: RowMap[K],
     interrupted: boolean,
     tools: HostSnapshot['tools'],
   ) => FormatResult;
@@ -83,15 +84,10 @@ export function formatLogEntry(
   tools: HostSnapshot['tools'],
 ): TemplateResult | typeof nothing {
   try {
-    // Runtime lookup preserves the kind/payload correlation encoded by
-    // `RowFormatters`; TypeScript cannot retain that correlation through an
-    // indexed access over the full union.
-    const formatter = ROW_FORMATTERS[row.kind] as (
-      row: TranscriptRow,
-      interrupted: boolean,
-      tools: HostSnapshot['tools'],
-    ) => FormatResult;
-    return formatter(row, interrupted, tools) ?? nothing;
+    // Generic over the kind, so the painter and its row share one `K`.
+    const paint = <K extends TranscriptRowKind>(kind: K, of: RowMap[K]) =>
+      ROW_FORMATTERS[kind](of, interrupted, tools);
+    return paint(row.kind, row) ?? nothing;
   } catch (e) {
     const label = renderLabel(row);
     console.error(`Error rendering ${label}:`, e);

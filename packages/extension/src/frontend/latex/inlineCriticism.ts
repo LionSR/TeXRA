@@ -18,7 +18,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, FileSystem, Stream } from 'effect';
+import { Cause, Effect, FileSystem, Predicate, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -198,7 +198,7 @@ export function followInlineCriticism(
     ),
   ).pipe(
     Stream.mapEffect(() => enabled),
-    Stream.filter((on) => on !== undefined),
+    Stream.filter(Predicate.isNotUndefined),
     Stream.changes,
     Stream.switchMap((on) =>
       on ? Stream.fromEffect(showDiagnostics(session)) : Stream.empty,

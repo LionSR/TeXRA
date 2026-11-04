@@ -7,6 +7,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Predicate,
   Queue,
   Schedule,
   Schema,
@@ -232,17 +233,13 @@ class UsageLogServiceImpl {
         Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
       ),
     );
-    // The first request waits one interval; the unref'd sleeps never keep
-    // the host process alive.
+    // `Effect.schedule` waits one interval before the first request; the
+    // unref'd sleeps never keep the host process alive.
     this.flushTimer = yield* Effect.forkScoped(
       Clock.clockWith((clock) =>
-        Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
-          Effect.andThen(
-            Effect.sync(() => this.requestFlush()).pipe(
-              Effect.schedule(
-                Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
-              ),
-            ),
+        Effect.sync(() => this.requestFlush()).pipe(
+          Effect.schedule(
+            Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
           ),
           Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
         ),
@@ -459,7 +456,7 @@ class UsageLogServiceImpl {
     const log = this.warnedRejected ? Effect.logDebug : Effect.logWarning;
     this.warnedRejected = true;
     const cause = [rejection.errorCode, rejection.error]
-      .filter((part) => part !== undefined)
+      .filter(Predicate.isNotUndefined)
       .join(': ');
     return log(
       `Usage endpoint rejected batch ${batch.batchId} as not retryable (${cause || 'no reason given'}); dropped ${batch.entries.length} entries`,

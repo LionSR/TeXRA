@@ -1,5 +1,6 @@
 import { Schema } from 'effect';
 
+import { ProviderErrorClassificationSchema } from './errors';
 import type { FileLocation } from './output';
 
 /**
@@ -71,9 +72,14 @@ export const LaunchNoticeSchema = Schema.Union([
 export type LaunchNotice = typeof LaunchNoticeSchema.Type;
 
 /** Show an error message via a host notification. */
-export interface RequestShowErrorPayload {
-  message: string;
+export const RequestShowErrorPayloadSchema = Schema.Struct({
+  message: Schema.String,
   /** Docs page of the refusing request (e.g. 'file-management'); the host
    *  offers it as a guide link or action beside the message. */
-  docsPage?: string;
-}
+  docsPage: Schema.optional(Schema.String),
+  /** The classification of the failure `message` words: a host with words
+   *  of its own for it shows them in place of `message`. */
+  classification: Schema.optional(ProviderErrorClassificationSchema),
+});
+/** {@link RequestShowErrorPayloadSchema}'s value. */
+export type RequestShowErrorPayload = typeof RequestShowErrorPayloadSchema.Type;

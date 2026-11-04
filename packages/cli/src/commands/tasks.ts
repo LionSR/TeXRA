@@ -113,19 +113,18 @@ const listCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS },
   catchExitCode: CliExitCode.AgentError,
-  run: (context) =>
-    Effect.gen(function* () {
-      const { client } = yield* connectCliService(context.storageRoot);
-      const tasks = yield* client['tasks.list']({ all: false });
-      emitCliResult(context, {
-        json: tasks,
-        ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),
-        text: tasks.length
-          ? tasks.map(taskLine).join('\n')
-          : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
-      });
-      return CliExitCode.Success;
-    }).pipe(Effect.scoped),
+  run: Effect.fn('run')(function* (context) {
+    const { client } = yield* connectCliService(context.storageRoot);
+    const tasks = yield* client['tasks.list']({ all: false });
+    emitCliResult(context, {
+      json: tasks,
+      ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),
+      text: tasks.length
+        ? tasks.map(taskLine).join('\n')
+        : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
+    });
+    return CliExitCode.Success;
+  }, Effect.scoped),
 });
 
 const attachCommand = defineCliCommand({

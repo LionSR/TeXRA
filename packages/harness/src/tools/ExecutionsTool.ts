@@ -200,23 +200,22 @@ const EXECUTION_ROUTES: ReadonlyArray<{
         showSummary(context, runId, {
           suppressAutoDeliveredSubagentReport: false,
         }),
-      wait: ({ context, input, runId }) =>
-        Effect.gen(function* () {
-          yield* waitForRuns(context, input.timeout, [runId]);
-          // The child's deliveries still queued on the caller: this result
-          // answers them, and its settlement consumes them with it.
-          const { followUps } = yield* (yield* SessionLog).runRows(
-            qualifyAggregateId('run', context.runId),
-            'input',
-          );
-          const answered = followUps
-            .map(({ followUpId }) => followUpId)
-            .filter((followUpId) => followUpId.startsWith(`${runId}:`));
-          const summary = yield* showSummary(context, runId, {
-            suppressAutoDeliveredSubagentReport: answered.length === 0,
-          });
-          return { ...summary, consumedFollowUps: answered };
-        }),
+      wait: Effect.fn('wait')(function* ({ context, input, runId }) {
+        yield* waitForRuns(context, input.timeout, [runId]);
+        // The child's deliveries still queued on the caller: this result
+        // answers them, and its settlement consumes them with it.
+        const { followUps } = yield* (yield* SessionLog).runRows(
+          qualifyAggregateId('run', context.runId),
+          'input',
+        );
+        const answered = followUps
+          .map(({ followUpId }) => followUpId)
+          .filter((followUpId) => followUpId.startsWith(`${runId}:`));
+        const summary = yield* showSummary(context, runId, {
+          suppressAutoDeliveredSubagentReport: answered.length === 0,
+        });
+        return { ...summary, consumedFollowUps: answered };
+      }),
       kill: ({ context, runId }) => handleKill(context, runId),
       send: ({ context, input, runId }) =>
         sendToRun(context.runId, runId, input.message),
@@ -483,7 +482,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
 
   // Its children follow the session's stop policy (`RunRegistry.stop`).
   const success = yield* Effect.suspend(() => {
-    const stop = runs.stop(runId, { reason: 'user' });
+    const stop = runs.stop(runId, 'user');
     // Asked after the settlement: a detaching stop interrupts the run
     // only once its children have left it, so that is when it knows
     // whether a live target took the stop.

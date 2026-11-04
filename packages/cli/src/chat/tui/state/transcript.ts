@@ -84,7 +84,6 @@ function localTranscriptRow(
       kind: 'error',
       summary: body,
       details: [],
-      detailText: transcriptText(''),
     };
   }
   if (kind === 'user') {
@@ -180,7 +179,7 @@ export function mergeLocalNotices(
   let next = 0;
   const flushThrough = (seq: number): void => {
     while (next < rows.length && rowSeq(rows[next]) <= seq) {
-      out.push(rows[next]!);
+      out.push(rows[next]);
       next += 1;
     }
   };
@@ -192,7 +191,7 @@ export function mergeLocalNotices(
       settlementSeqNo: notice.afterSeq,
     });
   }
-  for (; next < rows.length; next += 1) out.push(rows[next]!);
+  for (; next < rows.length; next += 1) out.push(rows[next]);
   return {
     rows: out,
     settledRows:

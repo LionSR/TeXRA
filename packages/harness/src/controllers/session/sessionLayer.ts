@@ -259,18 +259,17 @@ const unopenedEntry =
 /** The session held for `root`, if the map holds one: an entry still building
  *  is waited for, never skipped, which is what lets a close issued right after
  *  an open find the session (`SessionOwner.open`). Builds nothing. */
-const heldSession = (root: string) =>
-  Effect.gen(function* () {
-    const sessions = yield* SessionMap;
-    const keys = yield* RcMap.keys(sessions.rcMap);
-    const key = [...keys].find((candidate) => candidate.storage === root);
-    if (key === undefined) return undefined;
-    const held = yield* sessions
-      .contextEffectOption(key)
-      .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
-    if (Option.isNone(held)) return undefined;
-    return { key, session: held.value };
-  });
+const heldSession = Effect.fn('heldSession')(function* (root: string) {
+  const sessions = yield* SessionMap;
+  const keys = yield* RcMap.keys(sessions.rcMap);
+  const key = [...keys].find((candidate) => candidate.storage === root);
+  if (key === undefined) return undefined;
+  const held = yield* sessions
+    .contextEffectOption(key)
+    .pipe(Effect.scoped, Effect.catch(unopenedEntry(key)));
+  if (Option.isNone(held)) return undefined;
+  return { key, session: held.value };
+});
 
 /**
  * Close the session of one root, the one way a session ends: refuse new

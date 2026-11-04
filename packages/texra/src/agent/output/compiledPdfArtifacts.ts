@@ -79,7 +79,7 @@ export const publishCompiledPdfArtifact = Effect.fn(
     .stat(options.compiledPdfPath)
     .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
   if (stats === undefined || stats.type !== 'File') {
-    return null as RunStorageFileLocation | null;
+    return null;
   }
 
   const pdfRelativePath = toPdfRelativePath(options);

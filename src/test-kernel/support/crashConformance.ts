@@ -85,6 +85,7 @@ import {
 import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import {
   rootRun,
@@ -107,6 +108,7 @@ import {
 import { ProjectDatabases } from '@shared/session/database';
 import { generateRunId } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
+import { Settings } from '@shared/config/settings';
 import {
   crashAt,
   persistentTestSession,
@@ -1300,10 +1302,16 @@ export function crashConformanceSuite(
                         (rows) =>
                           parkedAfter(rows, root, 2) && began(rows) === 2,
                       );
+                      // A user's stop detaches the background command under
+                      // "Keep agents running".
+                      yield* Settings.set(
+                        roots,
+                        GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+                        true,
+                      );
                       yield* requests.request({
                         kind: 'run.stop',
                         runId: root,
-                        detachActiveChildren: true,
                         reason: 'user',
                       });
                       yield* until(

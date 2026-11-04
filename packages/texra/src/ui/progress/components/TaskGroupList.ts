@@ -2,7 +2,14 @@
 
 // Third-party imports
 import { String as Str } from 'effect';
-import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  css,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { guard } from 'lit/directives/guard.js';
@@ -10,9 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
-  isInFlightPhase,
   type RunOutcome,
-  type RunLifecycleStatus,
   type RunId,
   type TaskGroup,
 } from '@texra-ai/harness/schemas';
@@ -123,14 +128,14 @@ function transcriptTimeline(
     groups.filter(
       (group) => group.parentGroupId && groupIds.has(group.parentGroupId),
     ),
-    (group) => group.parentGroupId as string,
+    (group) => group.parentGroupId,
   );
   const sortedRows = rows.toSorted(compareRows);
   const isGroupedRow = (row: TranscriptRow) =>
     Boolean(row.groupId && groupIds.has(row.groupId));
   const rowsByGroup = Map.groupBy(
     sortedRows.filter(isGroupedRow),
-    (row) => row.groupId as string,
+    (row) => row.groupId,
   );
   const ungrouped = sortedRows.filter((row) => !isGroupedRow(row));
   const node = (group: TaskGroup): GroupTree => ({
@@ -185,10 +190,6 @@ export class TaskGroupList extends LitElement {
 
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
-
-  /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
-    undefined;
 
   /** The session view's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
@@ -268,7 +269,7 @@ export class TaskGroupList extends LitElement {
     this.isSticky = value;
   }
 
-  override willUpdate(changedProperties: Map<string, unknown>): void {
+  override willUpdate(changedProperties: PropertyValues<this>): void {
     if (changedProperties.has('run') || changedProperties.has('view')) {
       this.scripts =
         this.run && this.view
@@ -285,8 +286,7 @@ export class TaskGroupList extends LitElement {
     this.timeline = transcriptTimeline(this.groups, this.rows);
     // The windows count from the tail; a transcript that shrank (a
     // replaced history) or a fresh mount no longer lines up with them.
-    const previous = changedProperties.get('transcript') as
-      TranscriptView | null | undefined;
+    const previous = changedProperties.get('transcript');
     if (
       changedProperties.get('terminal') === true ||
       (previous != null && this.rows.length < previous.rows.length)
@@ -371,7 +371,8 @@ export class TaskGroupList extends LitElement {
   private handleRevealOlderRows(event: Event): void {
     event.preventDefault();
     event.stopPropagation();
-    const target = event.currentTarget as HTMLElement;
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return;
     const kind = target.dataset.revealKind;
     const scope = target.dataset.revealScope;
     if (!scope) return;
@@ -416,7 +417,8 @@ export class TaskGroupList extends LitElement {
    * the direction the event type carries.
    */
   private handleGroupToggle(event: Event): void {
-    const details = event.currentTarget as HTMLElement;
+    const details = event.currentTarget;
+    if (!(details instanceof HTMLElement)) return;
     dispatchGroupToggle(
       this,
       event,
@@ -575,7 +577,7 @@ export class TaskGroupList extends LitElement {
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
-      const active = isInFlightPhase(this.runStatus);
+      const active = this.run?.working === true;
       const noun = this.run?.parentId ? 'agent' : 'task';
       return html`
         <div class="log-placeholder">
