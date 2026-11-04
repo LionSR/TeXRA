@@ -18,7 +18,6 @@ import { repeat } from 'lit/directives/repeat.js';
 // Local imports - shared schemas
 import {
   type RunOutcome,
-  type RunLifecycleStatus,
   type RunId,
   type TaskGroup,
 } from '@texra-ai/harness/schemas';
@@ -191,10 +190,6 @@ export class TaskGroupList extends LitElement {
 
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
-
-  /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
-    undefined;
 
   /** The session view's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;

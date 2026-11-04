@@ -10,8 +10,8 @@ import type { SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * How long a running child has been at it, formatted: the caller selects the
- * window (the session view's `runStartedAt`, set only while the run works), and a
- * child that is not working shows none.
+ * window (the session view's `runStartedAt`, set only while the run is busy on a
+ * turn), and a child that is not shows none.
  */
 export function childElapsed(
   startedAt: number | undefined,

@@ -251,8 +251,10 @@ Acceptance: no host file imports `isActivePhase`, `isTerminalOutcomePhase` or
 hits renderers of the status word only.
 
 _Landed 2026-11-04 (every row but `runsHere`): `RunView.working` is the
-fold's (`sessionViewUpdate.ts`), `runStartedAt` is null unless it holds, and
-`isWorkingRun` and `isActivePhase` are deleted with the host sites above,
+fold's (`sessionViewUpdate.ts`), `runStartedAt` is null unless the run is busy
+on its turn (the fold keeps the rows' `turnStartedAt` beside it, so a wait or
+an ownership gap does not erase the start), and `isWorkingRun` and
+`isActivePhase` are deleted with the host sites above,
 which read `working`, `runStartedAt` and `durableOutcome`; a run listing
 entry's `status` became `outcome` (the view's `durableOutcome`), so `texra
 history` no longer reads an outcome off the status word. The TUI's Ctrl-C

@@ -87,6 +87,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     tone: copy.tone,
     createdAt: 1,
     launchedAt: 1,
+    turnStartedAt: null,
     runStartedAt: null,
     working: false,
     lastTimestamp: 1,

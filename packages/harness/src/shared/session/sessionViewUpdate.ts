@@ -333,6 +333,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     ...runStatus(RUN_LIFECYCLE_READY),
     createdAt: event.commit,
     launchedAt: event.at,
+    turnStartedAt: null,
     runStartedAt: null,
     working: false,
     lastTimestamp: event.at,
@@ -445,10 +446,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
-  const working =
-    !interrupted &&
-    run.substate !== RUN_SUBSTATE.PAUSED &&
-    run.status === RUN_PHASE.RUNNING;
+  const working = !interrupted && !paused && run.status === RUN_PHASE.RUNNING;
   const unreadable = local.unreadable.find(
     (entry) => entry.runId === run.id,
   )?.reason;
@@ -495,7 +493,7 @@ function withAggregates(u: Update, run: RunView): RunView {
     forceExpanded,
     durableOutcome,
     working,
-    runStartedAt: working ? run.runStartedAt : null,
+    runStartedAt: working && !waiting ? run.turnStartedAt : null,
     rollup: rollupOf(children),
     treeUsage,
     ...status,
@@ -718,7 +716,7 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         ...run,
         status: RUN_PHASE.RUNNING,
         substate,
-        runStartedAt: event.at,
+        turnStartedAt: event.at,
         turn: null,
         lost: null,
         output: null,
@@ -788,7 +786,7 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
           status: event.outcome,
           output: event.output,
           substate: null,
-          runStartedAt: null,
+          turnStartedAt: null,
         },
         event.at,
         event.error,
@@ -817,7 +815,7 @@ function withPosition(
     : movePhase(u, { ...run, turn }, phase === RUN_PHASE.WAITING, row.at);
 }
 
-/** Set the run waiting (its turn is over: `runStartedAt` clears and the
+/** Set the run waiting (its turn is over: `turnStartedAt` clears and the
  *  transcript's open compactions finish) or running. The one phase writer
  *  for both rows that make a run wait: a loop's `run.position` at `waiting`
  *  and an agent-CLI child's `child.park`. */
@@ -831,7 +829,7 @@ function movePhase(
     ...run,
     status: waiting ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
     substate: null,
-    runStartedAt: waiting ? null : (run.runStartedAt ?? at),
+    turnStartedAt: waiting ? null : (run.turnStartedAt ?? at),
   };
   return waiting ? withTurnFinished(u, moved, at) : moved;
 }

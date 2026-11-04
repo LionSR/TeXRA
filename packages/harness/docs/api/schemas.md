@@ -992,11 +992,9 @@ function isInFlightPhase(
 
 ## isLiveRun
 
-The one reading of "live" every host shares: a run somebody holds that has
-not ended. An interrupted run's durable phase may still say in flight, but
-nothing is working on it, so no run list, rollup, or status bar counts it.
-Not `group` alone: a spawned child that has not activated yet is `ready`
-and sorts under `recent`, yet it is live.
+The one reading of "live" every host shares: a run somebody holds that
+has not ended (an interrupted run's phase may still say in flight). Not
+`group` alone: a spawned child not yet activated is `ready`, yet live.
 
 ```ts
 function isLiveRun(

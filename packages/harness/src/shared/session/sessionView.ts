@@ -148,10 +148,14 @@ const RunViewSchema = Schema.Struct({
   /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
    *  host prints. `createdAt` orders; this never does. */
   launchedAt: Positive,
-  /** The turn's start, ms since the epoch, while the run is working; else null. */
+  /** The current turn's start as the rows record it: the fold's input to
+   *  `runStartedAt`, kept while the run's holder is not yet known. */
+  turnStartedAt: Schema.NullOr(Positive),
+  /** The clock a host shows: the turn's start while the run is busy on it;
+   *  null while it waits on a person, is interrupted, paused or between turns. */
   runStartedAt: Schema.NullOr(Positive),
-  /** Working right now: live (not paused, interrupted or ended) and in a
-   *  turn, not waiting on its user. The one reading of activity. */
+  /** Inside a turn: held, not paused, not ended. A pending approval or
+   *  question is still the turn's (Ctrl-C stops it, the tail stays live). */
   working: Schema.Boolean,
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
@@ -220,13 +224,9 @@ const RunViewSchema = Schema.Struct({
 });
 export type RunView = typeof RunViewSchema.Type;
 
-/**
- * The one reading of "live" every host shares: a run somebody holds that has
- * not ended. An interrupted run's durable phase may still say in flight, but
- * nothing is working on it, so no run list, rollup, or status bar counts it.
- * Not `group` alone: a spawned child that has not activated yet is `ready`
- * and sorts under `recent`, yet it is live.
- */
+/** The one reading of "live" every host shares: a run somebody holds that
+ *  has not ended (an interrupted run's phase may still say in flight). Not
+ *  `group` alone: a spawned child not yet activated is `ready`, yet live. */
 export function isLiveRun(
   run: Pick<ReadRunView, 'group' | 'status' | 'substate'>,
 ): boolean {
