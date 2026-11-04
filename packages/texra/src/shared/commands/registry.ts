@@ -18,7 +18,8 @@ import { Result, Schema } from 'effect';
  * `run` once parsing succeeds, keeping handlers free of parsing boilerplate.
  */
 export type CommandHandler<TActions, TResult = boolean | Promise<boolean>> =
-  ((actions: TActions) => TResult) | TypedCommandHandler<TActions, TResult>;
+  | ((actions: TActions) => TResult)
+  | TypedCommandHandler<TActions, TResult>;
 
 /**
  * A parameterized handler: `dispatch` decodes the raw argument list against

@@ -168,7 +168,9 @@ export const unloadable = (
 
 /** What a run cell's commits and re-reads fail with. */
 export type CellError =
-  RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
+  | RunHistoryRefused
+  | DatabaseWriteFailed
+  | DatabaseReadFailed;
 
 /**
  * One run's state holder and the only writer of the rows its state is

@@ -42,7 +42,10 @@ export function parseApprovalPolicy(input: string): ApprovalPolicy | undefined {
 }
 
 export type ApprovalPolicyDecision =
-  'allow' | 'present' | 'deny-policy' | 'deny-unpresentable';
+  | 'allow'
+  | 'present'
+  | 'deny-policy'
+  | 'deny-unpresentable';
 
 export function isApprovalDenied(
   decision: ApprovalPolicyDecision,

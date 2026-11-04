@@ -484,7 +484,7 @@ jobs:
     name: docs build
     needs: changes
     # Runs only for docs-only PRs (where the heavy validation jobs are
-    # skipped). Formatting still uses the root workspace's pinned Prettier;
+    # skipped). Formatting still uses the root workspace's pinned oxfmt;
     # VitePress then builds from its self-contained npm sub-project.
     if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
     runs-on: ubuntu-latest

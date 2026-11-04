@@ -64,7 +64,10 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * worktree.
  */
 export type SettingStore =
-  'config' | 'workspaceState' | 'repoState' | 'globalState';
+  | 'config'
+  | 'workspaceState'
+  | 'repoState'
+  | 'globalState';
 
 export interface StateSettingEntry {
   /** The row's key, relative to its catalog's namespace (`memory.enabled`),

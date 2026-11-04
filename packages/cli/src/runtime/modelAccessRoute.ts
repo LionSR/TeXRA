@@ -13,7 +13,8 @@ export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
   'Sign in or out, set subscription preferences, and how the rest is paid for.';
 
 type CliSubscriptionProvider =
-  SubscriptionAuthStatus['provider'] | CodingPlanSubscription['cliProvider'];
+  | SubscriptionAuthStatus['provider']
+  | CodingPlanSubscription['cliProvider'];
 
 interface CliCodingPlanStatus {
   readonly preferred: boolean;
