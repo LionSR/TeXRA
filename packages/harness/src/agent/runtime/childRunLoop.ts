@@ -39,7 +39,6 @@ import {
 } from '@agent/runtime/childTurnResult';
 import { pauseChildRun } from '@agent/runtime/delegation/childRun';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
@@ -725,10 +724,7 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
         outcome,
         ...(outcome === RUN_OUTCOME.FAILED &&
           failure?.cause != null && {
-            error: {
-              kind: classifyAgentError(failure.cause),
-              message: getSdkErrorMessage(failure.cause),
-            },
+            error: classifyAgentError(failure.cause),
           }),
         stage: loop.stage,
         lastTurn: () => Effect.succeed(lastTurn),
