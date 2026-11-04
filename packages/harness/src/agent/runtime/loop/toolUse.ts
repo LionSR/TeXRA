@@ -168,7 +168,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ------------------------------------------------------------ host port
   // The controls stand from the run's start; a switch waits for the cell.
-  const opened = Deferred.makeUnsafe<RunCell>();
+  const opened = Deferred.makeUnsafe<RunCell, Error>();
   const controls: RunControls = {
     oneShot: run.toolPolicy.stopAfterCycle === true,
     ...modelSwitchPort(run, access, yield* Inbox, Deferred.await(opened)),
@@ -395,7 +395,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const enter = Effect.gen(function* () {
     const cell = yield* openRun(runId, start.resume).pipe(
       Effect.tap((cell) => Deferred.succeed(opened, cell)),
-      Effect.onError(() => Deferred.interrupt(opened)),
+      Effect.onError((cause) => Deferred.failCause(opened, cause)),
     );
     const loaded = yield* cell.current;
     if (loaded.phase === null) return yield* openFresh(cell);

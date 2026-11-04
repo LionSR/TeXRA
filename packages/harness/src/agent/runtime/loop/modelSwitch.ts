@@ -86,7 +86,7 @@ export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
   inbox: Inbox['Service'],
-  opened: Effect.Effect<RunCell>,
+  opened: Effect.Effect<RunCell, Error>,
 ) {
   /** Why `model` cannot replace the run's, decided as the next bind will. */
   const admission = (model: string) =>
