@@ -5,8 +5,8 @@ status: proposed
 
 # One fact, one representation: stop, resume, and the four areas beside them
 
-Measured 2026-11-03 at `main` `b411a6d6` (history available: 709 commits,
-2026-10-04 to 2026-11-03). Paths are relative to the repo root. Peers checked
+Measured 2026-11-03 at `main` `b411a6d6` and re-checked 2026-11-04 at `18d74e86`
+(history available: 726 commits, 2026-10-04 to 2026-11-03); every site cited below stands at the later commit. Paths are relative to the repo root. Peers checked
 at source: pi (`packages/agent/src/agent.ts`, `session-manager.ts`),
 pi-durable (its README), Codex (`codex-rs/core/src/tasks/mod.rs`); OpenCode
 from the reviewer's knowledge of its code, not a fetch.
@@ -23,7 +23,7 @@ next classifier reads them right, three throw the shape away.
 
 The same species lives in four neighbouring areas (the table in "Findings").
 None of this was undetected: five notes since 2026-09-20 named it, the last
-one with pi as the yardstick, and eight PRs consolidated owners. Thirty-three
+one with pi as the yardstick, and eight PRs consolidated owners. Thirty-two
 stop/resume fixes landed in the same month, fourteen of them in the week after
 the 2026-10-27 target designs. The method, not the diligence, is what fails:
 every pass made each representation have one owner and never asked whether the
@@ -37,13 +37,13 @@ callers are known, not a fix.
 
 | Measure (one month)                                | Count      |
 | -------------------------------------------------- | ---------- |
-| Fix commits, all                                   | 155        |
-| Fix commits on stop/resume/ownership               | 33         |
-| Fix commits on desktop/windows, view/fold, CLI/TUI | 21, 18, 14 |
+| Fix commits, all                                   | 166        |
+| Fix commits on stop/resume/ownership               | 32         |
+| Fix commits on desktop/windows, view/fold, CLI/TUI | 24, 19, 15 |
 | Files classifying interrupt vs failure             | 37         |
 | Files reading the parent edge                      | 72         |
 | Files reading `ownedHere`/`readOnly`               | 23         |
-| Sites of `withPerKeyLane`                          | 52         |
+| Sites of `withPerKeyLane`                          | 48         |
 | Design notes naming the stop/resume problem        | 5          |
 | Stop/resume fixes after the 2026-10-27 note        | 14         |
 
@@ -282,7 +282,7 @@ moves away from its reader to satisfy a size rule.
 
 ## Surface inventory
 
-What each slice must clear before it opens, counted at `b411a6d6` outside
+What each slice must clear before it opens, counted at `b411a6d6` and unchanged at `18d74e86` outside
 tests:
 
 | Surface                                        | Slices | Sites                                                                                                                                                                     |
@@ -314,6 +314,6 @@ tests:
   (cancel token, 100 ms grace, an interrupted-turn marker recorded, no lease);
   pi's `handleRunFailure(error, signal.aborted)` as its one stop-or-failure
   site and a JSONL session tree with no lock and no abort marker.
-- History: 709 commits from 2026-10-04 to 2026-11-03; 155 fixes; 33 on
+- History: 726 commits from 2026-10-04 to 2026-11-03; 166 fixes; 32 on
   stop/resume/ownership; 14 since 2026-10-27; the notes of 2026-09-20,
   2026-10-23, 2026-10-24, 2026-10-27 and 2026-10-28 each name the problem.
