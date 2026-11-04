@@ -32,7 +32,11 @@ import {
   documentsSummary,
   documentTaskOptions,
 } from '@texra/shared/plugins/documents';
-import { runCompileCheck } from '@texra/agent/output/compileCheck';
+import {
+  type CompileSkip,
+  runCompileCheck,
+  skippedCompileCheck,
+} from '@texra/agent/output/compileCheck';
 import { extractFilesFromXml } from '@texra/agent/output/outputFileExtraction';
 import { recoverOutputFailure } from '@texra/agent/output/outputOperations';
 import {
@@ -77,7 +81,7 @@ const present = (docs: Documents, locations: readonly FileLocation[]) =>
   Effect.forEach(
     locations,
     (location) =>
-      docs.requests.present('requestOpenFile', {
+      docs.requests.present('openFile', {
         location,
         preserveFocus: true,
       }),
@@ -302,7 +306,9 @@ export const DocumentExtractTool = defineTool({
       docs.deps.roots.workspace,
       docs.baseFiles,
       revision,
-      docs.task.rewrite,
+      // A task that names no outputs rewrites its inputs: its outputs descend
+      // from them.
+      docs.task.outputs.length === 0,
     );
     checkExpectedOutputs(docs.state, docs.deps, revision);
     const missing = round.missingOutputs;
@@ -312,12 +318,14 @@ export const DocumentExtractTool = defineTool({
         message: 'Missing output files detected',
       });
     // An open reply was cut off: the model hit its output limit.
-    if (!reply.includes(OUTPUT_END_TAG)) {
-      const message = `Revision ${revision + 1} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
-      logger.warn(message);
+    const truncated = reply.includes(OUTPUT_END_TAG)
+      ? undefined
+      : `Revision ${revision + 1} did not close its documents, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
+    if (truncated !== undefined) {
+      logger.warn(truncated);
       yield* docs.requests.present('requestShowInstruction', {
         key: 'roundOutputLimit',
-        message,
+        message: truncated,
       });
     }
     yield* present(
@@ -330,9 +338,10 @@ export const DocumentExtractTool = defineTool({
     return {
       ...executed(
         (files.length > 0
-          ? `Revision ${revision + 1} wrote: ${files.join(', ')}`
+          ? `Revision ${revision + 1} wrote: ${files.join(', ')}.`
           : `Revision ${revision + 1} wrote no documents.`) +
-          (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : ''),
+          (missing.length > 0 ? ` Missing: ${missing.join(', ')}.` : '') +
+          (truncated === undefined ? '' : ` ${truncated}`),
         `Revision ${revision + 1}: ${files.length} files`,
       ),
       value: { files, missing },
@@ -341,13 +350,21 @@ export const DocumentExtractTool = defineTool({
   }),
 });
 
+/** Why `document_compile` checked nothing, as its result says it. */
+const COMPILE_SKIPPED: Readonly<Record<CompileSkip, string>> = {
+  disabled: 'auto-compile is off',
+  'no-tex': 'the revision wrote no .tex output',
+  'no-compiler': 'no LaTeX compiler (latexmk or pdflatex) is installed',
+  errored: 'the check itself failed',
+};
+
 /** `document_compile`: the compile check over a revision's outputs. */
 export const DocumentCompileTool = defineTool({
   name: 'document_compile',
   description:
-    "Compile a revision's .tex outputs. Resolves to `{ failures, checked }`: the outputs that failed with their logs, and whether a check ran at all (auto-compile off, or no LaTeX toolchain, runs none). Run it before `document_diff`, not beside it: each call records the run's documents whole.",
+    "Compile a revision's .tex outputs. Resolves to `{ failures, checked, skipped }`: the outputs that failed with their logs, whether a check ran, and why none did (`disabled`: auto-compile is off; `no-tex`: no .tex output; `no-compiler`: no LaTeX compiler is installed; `errored`: the check failed), else null. Run it before `document_diff`, not beside it: each call records the run's documents whole.",
   scriptReturns:
-    '{ failures: { output: string; log: string }[]; checked: boolean }',
+    "{ failures: { output: string; log: string }[]; checked: boolean; skipped: 'disabled' | 'no-tex' | 'no-compiler' | 'errored' | null }",
   replay: 'safe',
   schema: Schema.Struct({ revision: RevisionSchema }),
   execute: Effect.fn('document_compile')(function* ({ revision }) {
@@ -368,10 +385,10 @@ export const DocumentCompileTool = defineTool({
         logger,
         level: 'warn',
         label: 'Compile check',
-        recover: () => Effect.succeed({ artifacts: [], failures: undefined }),
+        recover: () => Effect.succeed(skippedCompileCheck('errored')),
       }),
     );
-    const failures = check.failures ?? [];
+    const { failures } = check;
     setCompileFailures(docs.state, revision, failures);
     if (yield* autoOpensPdf(docs))
       yield* present(
@@ -382,16 +399,36 @@ export const DocumentCompileTool = defineTool({
       output: failure.displayName,
       log: failure.logRelativePath,
     }));
+    const value = {
+      failures: summary,
+      checked: check.skipped === null,
+      skipped: check.skipped,
+    };
+    if (check.skipped !== null) {
+      // The rejection gate sees no failures here, so it says what it skips.
+      const unverified =
+        check.skipped === 'no-compiler' &&
+        (yield* rejectsOnCompileFailure(docs))
+          ? ' Failed compiles are rejected, but this revision is unverified.'
+          : '';
+      return {
+        ...executed(
+          `No compile check ran: ${COMPILE_SKIPPED[check.skipped]}.${unverified}`,
+          'Not checked',
+        ),
+        value,
+        facts: [docs.fact()],
+      };
+    }
     let message = `Revision ${revision + 1} compiles.`;
-    if (check.failures === undefined) message = 'No compile check ran.';
-    else if (failures.length > 0)
+    if (failures.length > 0)
       message = `Revision ${revision + 1} failed to compile: ${summary.map((f) => `${f.output} (${f.log})`).join(', ')}`;
     return {
       ...executed(
         message,
         failures.length === 0 ? 'Compiles' : `${failures.length} failed`,
       ),
-      value: { failures: summary, checked: check.failures !== undefined },
+      value,
       facts: [docs.fact()],
     };
   }),
@@ -401,7 +438,7 @@ export const DocumentCompileTool = defineTool({
 export const DocumentDiffTool = defineTool({
   name: 'document_diff',
   description:
-    "Run latexdiff of a revision's outputs against the documents the task started from. Resolves to `{ diffs, failed, notRun }`: the diff files it wrote, the documents whose diff failed with why, and why no diff ran at all (latexdiff not installed, or the pass failed), else null. Run it after `document_compile`, not beside it: each call records the run's documents whole.",
+    "Run latexdiff of a revision's outputs against the documents the task started from. Resolves to `{ diffs, failed, notRun }`: the diff files it wrote, the documents whose diff failed with why (latexdiff not installed among them), and why no diff ran at all (no outputs, or the pass failed), else null. Run it after `document_compile`, not beside it: each call records the run's documents whole.",
   scriptReturns:
     '{ diffs: string[]; failed: { document: string; error: string }[]; notRun: string | null }',
   replay: 'safe',

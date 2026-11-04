@@ -15,34 +15,33 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/popover/popover.js';
-import '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
+import WaSplitPanel from '@awesome.me/webawesome/dist/components/split-panel/split-panel.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
-import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
-import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
-import { type Shell } from '@texra/shared/session/shell';
 import {
   PersistedState,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
 
-import {
-  formatDesktopAccelerator,
-  type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
+import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
+import { ProgressApp } from '@ui/progress/ProgressApp';
 
-import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
+import { applyHostBodyTheme } from './hostTheme';
+import {
+  formatDesktopAccelerator,
+  type DesktopPlatform,
+} from '../shared/accelerators';
+import { type Shell } from './shell';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
@@ -73,6 +72,7 @@ import {
   resolveSessionWire,
 } from '../shared/hostBridgeChannels';
 import { createDesktopPromptOverlay } from './promptOverlay';
+import { createDiscardChangesDialog } from './discardDialog';
 import {
   createDesktopSettingsDialog,
   DesktopThemePreferenceSchema,
@@ -83,11 +83,13 @@ import { createProjectWorkbench } from './projectWorkbench';
 import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
 
-const appRoot = document.querySelector<HTMLElement>('#app')!;
+const foundAppRoot = document.querySelector<HTMLElement>('#app');
 
-if (appRoot == null) {
+if (foundAppRoot == null) {
   throw new Error('TeXRA desktop renderer root was not found.');
 }
+// Bound after the check so the functions below see it present.
+const appRoot: HTMLElement = foundAppRoot;
 
 // =============================================================================
 // Desktop shell
@@ -174,6 +176,8 @@ let shell: Shell = {
   collapsed: persistedShell.getState().collapsed,
 };
 let projectsKnown = false;
+/** The main process's recent list, as its last projects message sent it. */
+let recentProjects: readonly string[] = [];
 let applyingProjectList = false;
 // The no-workspace session is never among the open projects; how a project
 // is named is its host snapshot's.
@@ -386,6 +390,7 @@ const logsPane = logsController.element;
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
 );
+const confirmDiscard = createDiscardChangesDialog(appRoot);
 applyTheme();
 
 function shellWorkspaceToolbarTemplate(): TemplateResult {
@@ -468,10 +473,6 @@ function shellWorkspaceToolbarTemplate(): TemplateResult {
   `;
 }
 
-interface SplitPanelElement extends HTMLElement {
-  readonly positionInPixels: number;
-}
-
 /**
  * Store the split handle's measured size on this project's surface.
  */
@@ -489,7 +490,8 @@ function recordLayoutMeasurement(next: DesktopShellState): void {
  * panel's resize observer re-fires with the real measurement after layout.
  */
 function measuredSplitPosition(event: Event): number | undefined {
-  const value = (event.currentTarget as SplitPanelElement).positionInPixels;
+  if (!(event.currentTarget instanceof WaSplitPanel)) return undefined;
+  const value = event.currentTarget.positionInPixels;
   return Number.isFinite(value) ? value : undefined;
 }
 
@@ -540,6 +542,7 @@ function shellTemplate(): TemplateResult {
           ${shellSidebarTemplate(
             {
               projects: railProjects(),
+              recent: recentProjects,
               renamingProjectKey,
               shell,
               commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
@@ -550,6 +553,8 @@ function shellTemplate(): TemplateResult {
               onOpenCommands: () => palette.open(),
               onOpenFolder: () =>
                 postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+              onOpenRecent: (root) =>
+                postMessage(DESKTOP_PROJECT_COMMANDS.OPEN_RECENT, { root }),
               onSelectProject: selectProject,
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
@@ -792,6 +797,7 @@ const routeMessage = createMessageRoutes({
     applyingProjectList = true;
     try {
       projectsKnown = true;
+      recentProjects = message.recent;
       const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
       for (const [key, project] of projectWorkbenches) {
@@ -802,9 +808,7 @@ const routeMessage = createMessageRoutes({
       projectSessions.sync(sessions);
       for (const key of sessions) {
         if (projectWorkbenches.has(key)) continue;
-        const conversationView = document.createElement(
-          'progress-app',
-        ) as ProgressApp;
+        const conversationView = new ProgressApp();
         // The attribute sets the property, and the desktop styles select it,
         // as the extension's page markup does.
         conversationView.setAttribute('placement', 'desktop');
@@ -817,6 +821,7 @@ const routeMessage = createMessageRoutes({
           isActive: () => shell.active === key,
           isBrowserCovered: () =>
             settingsDialog.isOpen() || nativeViewOverlays.isCovered(),
+          confirmDiscard,
           onLayoutChanged: layoutChanged,
         });
         projectWorkbenches.set(key, project);

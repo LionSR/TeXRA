@@ -74,21 +74,16 @@ import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { getProviderKeyUrl } from '@texra/model/providerPresentation';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessServices } from '@texra-ai/harness/host';
+import type {
+  AppSignal,
+  AppSignalPayloads,
+  ProcessServices,
+} from '@texra-ai/harness/host';
 
 type HostEffect<A = void> = Effect.Effect<A, Error, ProcessServices>;
 type SettingsArms = SettingsViewInboundHandlerRegistry<
   ProcessServices | StorageFs
 >;
-
-/**
- * The usage snapshot a subscription's auth change invalidates (ChatGPT
- * only). The host-neutral subscription catalog does not carry it because it
- * also serves the CLI, which has no settings view.
- */
-const SUBSCRIPTION_USAGE_PROVIDERS_BY_ID: Readonly<
-  Partial<Record<SubscriptionProviderId, SubscriptionUsageProvider>>
-> = { chatgpt: 'chatgpt' };
 
 interface SettingsViewBodyPorts {
   readonly host: 'vscode' | 'desktop';
@@ -180,19 +175,20 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
    * launchers' catalogs, the profile, the Models page and, when the
    * credential is a coding plan's, its usage.
    */
-  const refreshAfterCredentialChange = (
+  const refreshAfterCredentialChange: (
     usageProvider?: SubscriptionUsageProvider,
-  ): HostEffect =>
-    Effect.gen(function* () {
-      if (usageProvider) yield* usage.invalidate(usageProvider);
-      yield* bindings.refreshCredentialStatus;
-      yield* allSettledVoid<Error, ProcessServices>([
-        bindings.refreshCatalogs(),
-        postProfile,
-        postModelSelection,
-        ...(usageProvider ? [postUsage(false)] : []),
-      ]);
-    });
+  ) => HostEffect = Effect.fn('refreshAfterCredentialChange')(function* (
+    usageProvider?: SubscriptionUsageProvider,
+  ) {
+    if (usageProvider) yield* usage.invalidate(usageProvider);
+    yield* bindings.refreshCredentialStatus;
+    yield* allSettledVoid<Error, ProcessServices>([
+      bindings.refreshCatalogs(),
+      postProfile,
+      postModelSelection,
+      ...(usageProvider ? [postUsage(false)] : []),
+    ]);
+  });
   /** Run a subscription mutation, report its failure, and repaint what the
    *  subscription feeds whatever the mutation did. */
   const subscriptionChange = <E>(
@@ -204,9 +200,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       reported(failure, work),
       allSettledVoid<Error, ProcessServices>([
         postAuthStatus(providerId),
-        refreshAfterCredentialChange(
-          SUBSCRIPTION_USAGE_PROVIDERS_BY_ID[providerId],
-        ),
+        refreshAfterCredentialChange(),
       ]),
     );
   const signInSubscription = (providerId: SubscriptionProviderId) =>
@@ -240,9 +234,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
 
   // ── Catalog-backed settings rows ──
 
-  // Checked as a `Record`, so a new snapshot variant fails this literal's
-  // type check; read by a row's snapshot id, which the catalog types `string`.
-  const stateSnapshotPosters: Partial<Record<string, () => HostEffect>> = {
+  // One poster per snapshot, so a new snapshot variant fails this literal's
+  // type check.
+  const stateSnapshotPosters: Record<SettingsViewSnapshot, () => HostEffect> = {
     approval: () => postSnapshot('approval'),
     'git-author': () => postSnapshot('git-author'),
     latex: () => postSnapshot('latex'),
@@ -252,42 +246,40 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     profile: () => postProfile,
     skills: () => Effect.andThen(postSnapshot('skills'), postSkills),
     telemetry: () => postSnapshot('telemetry'),
-  } satisfies Record<SettingsViewSnapshot, () => HostEffect>;
-  const updateStateSetting = (key: string, value: unknown) =>
-    Effect.gen(function* () {
-      const result = yield* applyStateSettingUpdate(key, value, {
-        host: ports.host,
-        stores: roots,
-        requiresOpenWorkspace: bindings.requiresOpenWorkspace,
-      });
-      if (result.kind === 'ignored') return;
-      const label = result.entry.title ?? result.entry.key;
-      if (result.kind === 'rejected') {
-        yield* report(`Invalid value for “${label}”`, result.error);
-      } else if (result.kind === 'failed') {
-        yield* report(`Failed to update “${label}”`, result.error);
-      } else if (result.kind === 'workspace-required') {
-        yield* notice(
-          `Open a workspace folder before changing the “${label}” setting.`,
-        );
-      }
-      const snapshot = result.entry.surfaces.settingsView;
-      const post = stateSnapshotPosters[snapshot];
-      yield* post === undefined
-        ? Effect.logWarning(`"${key}" names no settings snapshot: ${snapshot}`)
-        : post();
-      if (result.kind !== 'applied') return;
-      if (result.entry.onWrite?.invalidatesModelOptions) {
-        yield* refreshAfterCredentialChange();
-      }
-      if (codingPlanForUsageSetting(key) !== undefined) {
-        yield* postUsage(false);
-      }
-      if (key === APPROVAL_POLICY_CONFIG_KEY) {
-        yield* bindings.refreshCatalogs();
-        yield* emitAppSignal('approvalPolicyChanged', undefined);
-      }
+  };
+  const updateStateSetting = Effect.fn('updateStateSetting')(function* (
+    key: string,
+    value: unknown,
+  ) {
+    const result = yield* applyStateSettingUpdate(key, value, {
+      host: ports.host,
+      stores: roots,
+      requiresOpenWorkspace: bindings.requiresOpenWorkspace,
     });
+    if (result.kind === 'ignored') return;
+    const label = result.entry.title ?? result.entry.key;
+    if (result.kind === 'rejected') {
+      yield* report(`Invalid value for “${label}”`, result.error);
+    } else if (result.kind === 'failed') {
+      yield* report(`Failed to update “${label}”`, result.error);
+    } else if (result.kind === 'workspace-required') {
+      yield* notice(
+        `Open a workspace folder before changing the “${label}” setting.`,
+      );
+    }
+    yield* stateSnapshotPosters[result.entry.surfaces.settingsView]();
+    if (result.kind !== 'applied') return;
+    if (result.entry.onWrite?.invalidatesModelOptions) {
+      yield* refreshAfterCredentialChange();
+    }
+    if (codingPlanForUsageSetting(key) !== undefined) {
+      yield* postUsage(false);
+    }
+    if (key === APPROVAL_POLICY_CONFIG_KEY) {
+      yield* bindings.refreshCatalogs();
+      yield* emitAppSignal('approvalPolicyChanged', undefined);
+    }
+  });
 
   // One read-modify-write at a time per list: two switches handled at once
   // would each read the list without the other's item.
@@ -391,27 +383,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     ...pluginsPage.handlers,
   } satisfies Partial<SettingsArms>;
 
-  /**
-   * What each app signal the view follows repaints: a run that binds a
-   * GitHub subscription, the setup agent's `apply_team`, and a provider key
-   * written by any writer (the setup agent's `unset_api_key`, another
-   * window). OAuth tokens and other secrets are not provider keys, so they
-   * repaint nothing.
-   */
-  const repaintOn = {
-    githubSubscriptionsChanged: () => gitPage.postSubscriptions,
-    workspaceAgentsChanged: () =>
-      agents.refreshAfterAgentMutation(undefined, true),
-    credentialChanged: ({ key }: { readonly key: string }) => {
-      const provider = apiProviderOfSecretName(key);
-      return provider === undefined
-        ? undefined
-        : refreshAfterCredentialChange(
-            CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
-          );
-    },
-  };
-
   // ── The boundary every settings program finishes on ──
 
   const settle = <E>(
@@ -446,7 +417,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     /**
      * Repaint the view, until interrupted, on what it follows: its
      * workspace's tool availability (the Plugins page) and each app signal
-     * `repaintOn` names. Every follower is a child fiber started at once,
+     * it follows below. Every follower is a child fiber started at once,
      * so it is subscribed by the end of the turn that forks this. `start`
      * is how the host runs a repaint nobody awaits; each is finished and
      * reported as a message's would be.
@@ -455,20 +426,42 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       start: (
         repaint: Effect.Effect<void, never, ProcessServices>,
       ) => Effect.Effect<void, never, ProcessServices>,
-    ): Effect.Effect<never, never, ProcessServices> =>
-      Effect.forEach(
+    ): Effect.Effect<never, never, ProcessServices> => {
+      /** Start what `repaint` answers each `signal` payload with. */
+      const follow = <K extends AppSignal, E>(
+        signal: K,
+        repaint: (
+          payload: AppSignalPayloads[K],
+        ) => Effect.Effect<void, E, ProcessServices | StorageFs> | undefined,
+      ) =>
+        Stream.runForEach(appSignalStream(signal), (payload) => {
+          const work = repaint(payload);
+          return work ? start(settle(work)) : Effect.void;
+        });
+      return Effect.forEach(
         [
           toolsPage.followToolAvailability(settle),
-          ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map(
-            (signal) =>
-              Stream.runForEach(appSignalStream(signal), (payload) => {
-                const work = repaintOn[signal](payload as never);
-                return work ? start(settle(work)) : Effect.void;
-              }),
+          // The app signals the view follows: a run that binds a GitHub
+          // subscription, the setup agent's `apply_team`, and a provider key
+          // written by any writer (the setup agent's `unset_api_key`, another
+          // window). OAuth tokens and other secrets are not provider keys, so
+          // they repaint nothing.
+          follow('githubSubscriptionsChanged', () => gitPage.postSubscriptions),
+          follow('workspaceAgentsChanged', () =>
+            agents.refreshAfterAgentMutation(undefined, true),
           ),
+          follow('credentialChanged', ({ key }) => {
+            const provider = apiProviderOfSecretName(key);
+            return provider === undefined
+              ? undefined
+              : refreshAfterCredentialChange(
+                  CODING_PLAN_BY_API_PROVIDER.get(provider)?.usageProvider,
+                );
+          }),
         ],
         (follower) => Effect.forkChild(follower, { startImmediately: true }),
         { discard: true },
-      ).pipe(Effect.andThen(Effect.never)),
+      ).pipe(Effect.andThen(Effect.never));
+    },
   };
 }

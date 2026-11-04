@@ -1,41 +1,47 @@
-import { Effect } from 'effect';
-import { it } from '@effect/vitest';
-// Test composition imports
-
-// Local imports
-
 // Third-party imports
-import { beforeEach, describe, expect } from 'vitest';
-import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { Effect, Context, Layer } from 'effect';
+import { layer } from '@effect/vitest';
+import { expect } from 'vitest';
 
 // Local imports
-
-import type { RunId } from '@shared/schemas';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { generateRunId, type RunId } from '@texra-ai/harness/schemas';
+import { requestToolEditApproval } from '@texra-ai/harness/plugins';
+import { humanGrant } from '@agent/runtime/runApprovalQueue';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Approvals } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { requestBashApproval } from '@tools/approval/bashApproval';
-import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import { generateRunId } from '@utils/core';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 
 // Local file imports
-import { autoDecideRequests, createRecordingHost } from '../progressTestUtils';
+import {
+  autoDecideRequests,
+  commandTool,
+  createRecordingHost,
+} from '../progressTestUtils';
+
+type Session = Context.Context<SessionServices>;
 
 function inToolContext<A, E, R>(
+  session: Session,
   interactions: ReturnType<typeof createRecordingHost>['interactions'],
   runId: RunId,
   run: () => Effect.Effect<A, E, R>,
 ) {
   return Effect.acquireUseRelease(
-    Effect.sync(() =>
-      Effect.runSync(testDefaultSession().interactions.use(interactions)),
-    ),
+    Context.get(session, Interactions).use(interactions),
     () =>
       run().pipe(
         Effect.provide(
           nativeToolTestLayer({
-            run: { runId, session: testDefaultSession(), toolPolicy: {} },
+            run: { runId, session, toolPolicy: {} },
           }),
         ),
       ),
@@ -44,78 +50,92 @@ function inToolContext<A, E, R>(
 }
 
 /** A run whose existence fact the request rows below hang off. */
-function startedRun(): RunId {
+function startedRun(session: Session): RunId {
   const runId = generateRunId();
-  publishTestRunStart(testDefaultSession(), runId);
+  publishTestRunStart(session, runId);
   return runId;
 }
 
-describe('human prompt progress events', () => {
-  beforeEach(async () => {
-    await installPlatform({});
-  });
+// The file's session over a fresh host's roots, opened as a host whose
+// person answers from the view: its runs' requests wait for a decision.
+layer(
+  TestSession.layer(undefined, { host: {} }).pipe(
+    Layer.provideMerge(SessionGraph.layer),
+    Layer.provideMerge(FakeHost.layer()),
+  ),
+  { excludeTestServices: true },
+)('human prompt progress events', (it) => {
+  it.effect('keeps bash and edit session bypasses independent', () =>
+    Effect.flatMap(Effect.flatMap(TestSession, sessionHandleOf), (session) =>
+      Effect.gen(function* () {
+        const explicit = createRecordingHost();
+        const runId = startedRun(session);
+        const decided = yield* autoDecideRequests(session, () => ({
+          action: 'approve',
+        }));
+        yield* Context.get(session, Approvals).change(
+          runId,
+          humanGrant(['toolEdit'], true),
+        );
 
-  it.live('keeps bash and edit session bypasses independent', () =>
-    Effect.gen(function* () {
-      const explicit = createRecordingHost();
-      const runId = startedRun();
-      const decided = autoDecideRequests(testDefaultSession(), () => ({
-        action: 'approve',
-      }));
-      yield* Effect.addFinalizer(() => Effect.sync(decided.detach));
-      yield* testDefaultSession().approvals.change(
-        runId,
-        humanGrant(['toolEdit'], true),
-      );
+        const approval = yield* inToolContext(
+          session,
+          explicit.interactions,
+          runId,
+          () => guardedToolCall(commandTool, { command: 'echo still asks' }),
+        );
 
-      const approval = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo still asks', grant: 'bash' }),
-      );
+        expect(approval).toMatchObject({ status: 'executed' });
+        expect(decided.opened.at(-1)?.payload).toMatchObject({
+          kind: 'bash',
+          data: { command: 'echo still asks' },
+        });
 
-      expect(approval).toMatchObject({ action: 'approve' });
-      expect(decided.opened.at(-1)?.payload).toMatchObject({
-        kind: 'bash',
-        data: { command: 'echo still asks' },
-      });
+        // A bash bypass answers without asking; the edit bypass above is not
+        // what silenced it.
+        yield* Context.get(session, Approvals).change(
+          runId,
+          humanGrant(['bash'], true),
+        );
 
-      // A bash bypass answers without asking; the edit bypass above is not
-      // what silenced it.
-      yield* testDefaultSession().approvals.change(
-        runId,
-        humanGrant(['bash'], true),
-      );
+        const bypassed = yield* inToolContext(
+          session,
+          explicit.interactions,
+          runId,
+          () => guardedToolCall(commandTool, { command: 'echo bypassed' }),
+        );
 
-      const bypassed = yield* inToolContext(explicit.interactions, runId, () =>
-        requestBashApproval({ command: 'echo bypassed', grant: 'bash' }),
-      );
+        expect(bypassed).toMatchObject({ status: 'executed' });
+        expect(decided.opened).toHaveLength(1);
 
-      expect(bypassed).toEqual({ action: 'approve' });
-      expect(decided.opened).toHaveLength(1);
+        yield* Context.get(session, Approvals).change(
+          runId,
+          humanGrant(['toolEdit'], false),
+        );
 
-      yield* testDefaultSession().approvals.change(
-        runId,
-        humanGrant(['toolEdit'], false),
-      );
+        const editApproval = yield* inToolContext(
+          session,
+          explicit.interactions,
+          runId,
+          () =>
+            requestToolEditApproval({
+              path: 'draft.tex',
+              originalContent: 'old',
+              proposedContent: 'new',
+              sourceTool: 'test',
+            }),
+        );
 
-      const editApproval = yield* inToolContext(
-        explicit.interactions,
-        runId,
-        () =>
-          requestToolEditApproval({
-            path: 'draft.tex',
-            originalContent: 'old',
-            proposedContent: 'new',
-            sourceTool: 'test',
-          }),
-      );
-
-      expect(
-        decided.opened.filter((request) => request.payload.kind === 'toolEdit'),
-      ).toHaveLength(1);
-      expect(editApproval).toMatchObject({
-        action: 'apply',
-        appliedContent: 'new',
-      });
-    }).pipe(Effect.provide(nativeToolTestLayer())),
+        expect(
+          decided.opened.filter(
+            (request) => request.payload.kind === 'toolEdit',
+          ),
+        ).toHaveLength(1);
+        expect(editApproval).toMatchObject({
+          action: 'apply',
+          appliedContent: 'new',
+        });
+      }).pipe(Effect.provide(nativeToolTestLayer())),
+    ),
   );
 });

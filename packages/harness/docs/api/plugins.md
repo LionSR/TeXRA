@@ -16,7 +16,8 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
   `Sessions.layer({ platform, plugins })`.
-- **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+- **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+  [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
   [`executed`](#executed), [`errorResult`](#errorresult),
   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
@@ -30,7 +31,7 @@ Built-in plugins (`harnessBuiltins`) and the plugin authoring surface for
   [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
   [`ProcessPluginLayer`](#processpluginlayer),
   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
-  [`RequestDecisionHook`](#requestdecisionhook), [`PluginArm`](#pluginarm),
+  [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
 
 ## AGENT_TOOL_NAME
@@ -177,36 +178,30 @@ const assertNoParentTraversal: (targetPath: string) => Effect<void, ToolError, n
 
 ## BoundModel
 
-One bound model: the llm `Model` and the facts of its binding the run
-reads. Everything else a binding needs (its credential, its reasoning
-choice, the toggles it was bound under) stays inside model access.
+One bound model: llm's `Binding` (or the validation model's) and the facts
+of the run the binding serves. Everything else a binding needs (its
+credential, its reasoning choice, the toggles it was bound under) stays
+inside model access.
 
 ```ts
-interface BoundModel {
+interface BoundModel extends Binding {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
-  /**
-   * The config the model runs and bills with on its route: its window, its
-   * prices, and the media its route carries (`capabilities`).
-   */
-  readonly config: ModelConfig;
-  readonly model: Model;
-  readonly origin: ModelOrigin;
-  /** The route decision this binding carries out. */
-  readonly route: ModelRoute;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
+  /** The route decision this binding carries out, or the validation model. */
+  readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
   /** Bound for a text-only persona, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
-  /** The route can be told to call one named tool. */
-  readonly forcedToolChoice: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
-  /** The service tier and subscription plan pricing bills, where the route names them. */
-  readonly billing: { readonly serviceTier?: 'fast'; readonly plan?: string };
+  /** The ChatGPT plan the subscription's token names; display-only. */
+  readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
   /** How the next turn is delivered, from the live toggles. */
@@ -299,24 +294,20 @@ interface CallRequests {
    *  it opens. */
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionRequests.ask` does. */
+   *  decision. The returned payload is the request actually answered,
+   *  which on resume may differ from the proposal recomputed by the caller.
+   *  `blobs` are the strings the payload names by address, stored with its row. */
   readonly open: <P extends PermissionPayload>(
     payload: P,
-  ) => Effect.Effect<DecisionOf<P['kind']>, DatabaseNotOwner | CellError>;
+    blobs?: readonly DraftBlob[],
+  ) => Effect.Effect<
+    {
+      readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
+      readonly decision: DecisionOf<P['kind']>;
+    },
+    DatabaseNotOwner | CellError
+  >;
 }
-```
-
-## CallServices
-
-The runtime's services a call reads: the process's, the rooted
-filesystems of the session the call works in, and the call
-(`ToolContext`, the run included). A tool takes `WorkspaceFs` from
-context instead of resolving a static against whichever roots its fiber
-happens to carry.
-
-```ts
-type CallServices =
-  ProcessServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 ```
 
 ## CellError
@@ -331,40 +322,47 @@ type CellError =
 ## ChildLaunch
 
 One child launch as the shared core runs it: the agent and its prompt,
-the files a task works over (empty for a chat), and the recipe a task's
-run opens on. `tool` names the launching tool in its reuse key and its
-copy.
+and what the child is. A chat (`task: null`) may ask for a value of
+`schema` and attaches `mediaFiles` to its prompt. A task opens on what
+the launching plugin builds for the approved agent (`configFor`: its
+recipe and outputs, null for an agent with no task block) and works over
+`files` with `options`, as its proposal says. `tool` names the launching
+tool in its reuse key and its copy.
 
 ```ts
-interface ChildLaunch {
+type ChildLaunch = {
   readonly tool: string;
   readonly agentName: string;
   /** An agent the call defines, named `agentName`: no catalog entry. */
   readonly persona?: AgentProposal['persona'];
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly schema: Record<string, unknown> | null | undefined;
   readonly memories: readonly string[];
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
   readonly timeoutMs: number | null | undefined;
   readonly background: boolean | null | undefined;
-  readonly files: {
-    readonly inputFiles: readonly string[];
-    readonly contextFiles: readonly string[];
-    readonly mediaFiles: readonly string[];
-    readonly outputFiles: readonly string[];
-  };
-  /** A task: the child opens on what the launching plugin builds for the
-   *  approved agent (its recipe and outputs; null for an agent with no task
-   *  block); the proposal says it works over `files` with `options`. */
-  readonly task: {
-    readonly configFor: (
-      chosen: AgentProposal,
-    ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-    readonly options: NonNullable<AgentProposal['options']>;
-  } | null;
-}
+} & (
+  | {
+      readonly task: null;
+      readonly schema: Record<string, unknown> | null | undefined;
+      readonly mediaFiles: readonly string[];
+    }
+  | {
+      readonly task: {
+        readonly configFor: (
+          chosen: AgentProposal,
+        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
+        readonly options: NonNullable<AgentProposal['options']>;
+      };
+      readonly files: {
+        readonly inputFiles: readonly string[];
+        readonly contextFiles: readonly string[];
+        readonly mediaFiles: readonly string[];
+        readonly outputFiles: readonly string[];
+      };
+    }
+);
 ```
 
 ## ChildRunDelivery
@@ -376,7 +374,10 @@ always render it the same way and in the same place.
 
 ```ts
 interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). */
+  /** Root element name (`subagent-result`, `background-error`, …). A
+   *  plugin's is `<family>-result` or `<family>-error`, `family` being
+   *  lowercase words joined by `-`: every render surface recognizes that
+   *  shape as a delivery, so a plugin registers no tag. */
   readonly tag: string;
   readonly runId: string;
   /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
@@ -434,35 +435,50 @@ its call's run: an agent's (`launch`: the child's settled result, or its
 receipt for a background launch, within the issuing script's concurrency
 budget) or an external process's (`launchProcess`: its run id, outside
 the budget); a plugin's tool reaches no other launch. And it reaches a
-run of the session by id: its input, live parent edge, records and
-rows. Each needs the call's run; a standalone host call has none.
+run of the session by id: its input, live parent edge, records, whether
+it holds a request, and the plugin's own facts on it. Each needs the
+call's run; a standalone host call has none.
 
 ```ts
 interface ChildRunsShape {
   readonly launch: (
     launch: ChildLaunch,
-  ) => Effect.Effect<ToolResult, Error, CallServices>;
+  ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
   readonly launchProcess: <TTurn>(
     launch: ProcessChildLaunch<TTurn>,
   ) => Effect.Effect<RunId, Error>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent while it is live in this process: null for a root run,
-   *  undefined when it is not live here. */
-  readonly parent: (
-    runId: RunId,
-  ) => Effect.Effect<RunId | null | undefined, Error>;
+  /** Its attached parent as the rows record it (`run.start`, then a
+   *  `run.detach`): null for a root, or a run that is not there. */
+  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
     readonly exists: Effect.Effect<boolean, Error>;
     readonly end: Effect.Effect<RunEnd | null, Error>;
   };
-  /** Its committed rows, with `types` only those. */
-  readonly rows: (
+  /** The latest value of `arm`'s kind among the run's own facts, decoded
+   *  by the arm's schema; undefined while the run recorded none. */
+  readonly fact: <A>(
     runId: RunId,
-    types?: readonly SessionEvent['type'][],
-  ) => Effect.Effect<readonly SessionEvent[], Error>;
+    arm: {
+      readonly plugin: string;
+      readonly kind: string;
+      readonly schema: Schema.Codec<A, unknown>;
+    },
+  ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the launching run's work runs unasked (the Auto-approve policy,
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
+  readonly autoApproved: Effect.Effect<boolean, Error>;
+  /** Whether the run holds the request `requestId`, open or decided: what
+   *  a tool that posted one reads after a failed post. */
+  readonly requested: (
+    runId: RunId,
+    requestId: string,
+  ) => Effect.Effect<boolean, Error>;
 }
 ```
 
@@ -513,22 +529,29 @@ const codemode: Plugin
 ## DecisionOf
 
 The decisions a request of kind `K` takes: its own actions and the three
-refusals.
+refusals. A plugin's request declares its actions on its row, so its
+type admits any decision.
 
 ```ts
 type DecisionOf<K extends PermissionPayload['kind']> =
-  | Extract<RequestDecision, { action: (typeof KIND_ANSWERS)[K][number] }>
+  | Extract<
+      RequestDecision,
+      {
+        action: (typeof OWN_ANSWERS & {
+          readonly plugin: PluginRequest['answers'];
+        })[K][number];
+      }
+    >
   | RefusalDecision;
 ```
 
 ## definePlugin
 
-A plugin value from its definition, its own services erased.
+A plugin value from its definition, its own services erased: the
+harness's built-ins and an app's plugins are written the same way.
 
 ```ts
-const definePlugin: <ROut = never>(
-  plugin: PluginDefinition<ROut>,
-) => Plugin
+const definePlugin: <ROut = never>(plugin: PluginDefinition<ROut>) => Plugin
 ```
 
 ## DefineToolOptions
@@ -559,7 +582,7 @@ type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -601,6 +624,49 @@ function executed(
 ): Extract<ToolResult, { status: 'executed' }>
 ```
 
+## FactKind
+
+One row kind a plugin owns (`plugin.fact`): the version it writes, the
+schema of that version's value, and adjacent upcasters from
+`version - upcasters.length` to `version`, oldest first.
+The store checks every row of the kind against its fact kind, and reads a
+row whose fact kind the process's plugins lack (its plugin removed, or not
+listed here) as written, marked `unavailable`; a run holding one does not
+resume. Fact kinds live beside their readers, in modules webviews can
+import.
+
+```ts
+interface FactKind {
+  /** The plugin's id: a fact kind is its own plugin's, never another's. */
+  readonly plugin: string;
+  readonly kind: string;
+  readonly version: number;
+  readonly schema: Schema.Codec<unknown, unknown>;
+  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
+  /** What a fork of a run (a conversation's, or a script's `self()` child)
+   *  starts with of the run's own row of the kind: `copy` the row the run
+   *  held at the cut, `drop` none. A row about the plugin's own aggregate
+   *  belongs to that aggregate and stays with it. */
+  readonly fork: 'copy' | 'drop';
+  /** The kind's own transition rule, checked by the store in the writing
+   *  transaction against the aggregate's latest row of the kind (none
+   *  before the first): the rejection's reason, or null to accept. */
+  readonly accepts?: (
+    previous: PluginRow | undefined,
+    next: PluginRow,
+  ) => string | null;
+  /** Whether the aggregate's `latest` row already says more than `next`
+   *  (a call's fact that lagged behind a later writer): the call's batch
+   *  then leaves `next` out instead of failing on `accepts`. */
+  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
+  /** The workspace files a row of the kind says its run wrote past the
+   *  editor's own write path: every process that folds the run announces
+   *  them (`workspaceFilesWritten`), a window hearing a service task's
+   *  write as it hears its own. */
+  readonly writes?: (value: JsonValue) => readonly string[];
+}
+```
+
 ## fileList
 
 A list of file paths, empty when the call names none.
@@ -621,21 +687,22 @@ const fileOps: (options?: { readonly writeFilter?: WriteFilter | undefined; }) =
 ## FollowUpFailureReason
 
 Why a submission could not be admitted, worded for the user by
-{@link presentFollowUpResult}: a resume's refusal (`ResumeRefusal`; a
-message to a run with no loop here is admitted only as a resume would be,
-and `not_resumable` there also covers a closed input, a disposed session,
-or a message that does not wake the run), or one of the message's alone:
+{@link presentFollowUpResult}: the kind of a resume's refusal
+(`ResumeRefusal`; a message to a run with no loop here is admitted only as
+a resume would be, and `notResumable` there also covers a closed input, a
+disposed session, or a message that does not wake the run), or one of the
+message's alone:
 
-- `read_failed`: the run's claim or state could not be read just now
+- `readFailed`: the run's claim or state could not be read just now
   (a busy or failing store), which says nothing about the run itself.
-- `one_shot`: the run's live loop ends after its current turn and reads
+- `oneShot`: the run's live loop ends after its current turn and reads
   no message (headless, or an in-band child), or the run has no loop of
   its own and its launch takes none (a background command).
-- `not_parent`: the sender is not the run's parent.
+- `notParent`: the sender is not the run's parent.
 
 ```ts
 type FollowUpFailureReason =
-  ResumeRefusal | 'read_failed' | 'one_shot' | 'not_parent';
+  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
 ```
 
 ## FollowUpSenderInput
@@ -701,7 +768,8 @@ type GitignoreMatcher = {
 
 Plans and goals: the `plan` tool proposes a plan, which the user may run
 as a goal: a background script of the conversation that runs its agent
-in rounds through `self()` (`goalScript`).
+in rounds through `self()` (`goalScript`), on the default strategy, its
+module `builtIn:goal`, unless `goal.strategy` names another.
 
 ```ts
 const goal: Plugin
@@ -747,6 +815,10 @@ interface InboxItem {
   readonly deliveryId?: string;
   /** A request of the run's own (`/compact`, a model switch), not a message. */
   readonly control?: QueuedFollowUp['control'];
+  /** The id a caller named the message by (`followUp.send`; `deliveryId`
+   *  is its `sentFollowUpId`): a retry under it answers with the first
+   *  send's receipt, another message under it fails `Conflict`. */
+  readonly caller?: string;
 }
 ```
 
@@ -804,10 +876,10 @@ function jitteredExponentialBackoffMs(
 
 ```ts
 interface JsonRpcConnection {
-  readonly request: <T>(
+  readonly request: (
     method: string,
     params?: unknown,
-  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  ) => Effect.Effect<unknown, JsonRpcRequestError | JsonRpcConnectionDisposed>;
   /** Send a notification; after `close` it is dropped. */
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
@@ -1017,40 +1089,57 @@ function parseWorkingDirectory(
 ): Result.Result<string | undefined, ToolError>
 ```
 
-## PluginArm
+## Plugin
 
-One row kind a plugin owns (`plugin.fact`): the version it writes, the
-schema of that version's value, and the adjacent upcasters (`upcasters[i]`
-maps version `i + 1` to `i + 2`) the store reads an older value through.
-The store checks every row of the kind against its arm, and keeps a row
-whose arm the process's plugins lack (its plugin removed, or not listed
-here) without reading it. Arms live beside their readers, in modules
-webviews can import.
+One plugin: what it contributes to a run. How an app shows it (a
+dashboard card's copy, its setup guide, its settings rows) is the app's
+own record, keyed by `id`.
 
 ```ts
-interface PluginArm {
-  /** The plugin's id: an arm is its own plugin's, never another's. */
-  readonly plugin: string;
-  readonly kind: string;
-  readonly version: number;
-  readonly schema: Schema.Codec<unknown, unknown>;
-  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
-  /** The kind's own transition rule, checked by the store in the writing
-   *  transaction against the aggregate's latest row of the kind (none
-   *  before the first): the refusal's reason, or null to admit. */
-  readonly admits?: (
-    previous: PluginRow | undefined,
-    next: PluginRow,
-  ) => string | null;
-  /** Whether the aggregate's `latest` row already says more than `next`
-   *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `admits`. */
-  readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
-  /** The workspace files a row of the kind says its run wrote past the
-   *  editor's own write path: every process that folds the run announces
-   *  them (`workspaceFilesWritten`), a window hearing a service task's
-   *  write as it hears its own. */
-  readonly writes?: (value: JsonValue) => readonly string[];
+interface Plugin {
+  /** Stable, persisted identifier (the switch key, the plugin a run's
+   *  offered tool records, and the name of its `resources/plugins/<id>/`
+   *  directory): lowercase letters, digits and dashes, starting with a
+   *  letter or digit. A list with any other id is refused. */
+  readonly id: string;
+  /** Its tools, registered by each tool's `definition.name`, in order. */
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
+  /**
+   * Present when the plugin has an external dependency: it is probed, and
+   * its tools are withheld while the dependency is missing. Without it the
+   * plugin is built in and always available.
+   */
+  readonly availability?: ToolAvailabilityChecks;
+  /** The plugin has a user switch, which a fresh install sets to this
+   *  position; while off, its tools are withheld from every agent. It must
+   *  be probed (`availability`, `ALWAYS_AVAILABLE` when it needs nothing
+   *  installed). Without one the plugin is always on. */
+  readonly toggle?: 'on' | 'off';
+  /** Tools of this plugin offered to every agent with tools, declared or not,
+   *  while the plugin is on and a boolean catalog setting is on: tool name to
+   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  injected tool still passes the host and approval gates; a script's
+   *  run (a task's recipe) and a text-only persona get none. */
+  readonly injectedWhen?: Readonly<Record<string, string | true>>;
+  /** Its section of each request's system text, pinned while it is on. */
+  readonly prompt?: PromptSection;
+  /** Process-lifetime services, up while the plugin is switched on or a step
+   *  pins it. A host-supplied one (VS Code's Lean services) is passed with
+   *  the host's plugin value. */
+  readonly processLayer?: ProcessPluginLayer;
+  /** Session-lifetime services, one per open session, up while the plugin
+   *  is switched on or a step of that session pins it. */
+  readonly sessionLayer?: SessionPluginLayer;
+  /** Its side of a decision on a pending request it opened, on or off. */
+  readonly decision?: RequestDecisionHook;
+  /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
+  readonly factKinds?: readonly FactKind[];
+  /** The agent-file block it owns (`AgentBlock`), on or off. */
+  readonly agentBlock?: AgentBlock;
+  /** Script module sources by name, imported as `builtIn:<name>`. */
+  readonly scriptModules?: Readonly<Record<string, string>>;
+  /** The plugins it runs on, by id; a list lacking one is rejected. */
+  readonly requires?: readonly string[];
 }
 ```
 
@@ -1061,14 +1150,14 @@ require `ROut`, the services its own layers serve, beside the harness's.
 `definePlugin` checks that at compile time (a tool that needs a service no
 layer of its plugin serves does not compile) and erases it: the table
 holds every plugin alike, and the step that pins a plugin provides its
-layers' services to its calls. `C`: what a tool's calls are served.
+layers' services to its calls.
 
 ```ts
-interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
+interface PluginDefinition<ROut> extends Omit<
   Plugin,
   'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: readonly ITool<Error, C | ROut>[];
+  readonly tools?: readonly ITool<Error, PluginToolServices | ROut>[];
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
@@ -1111,7 +1200,7 @@ type PluginLayerServices =
 
 ## PluginRow
 
-One stored row of a plugin's kind, as its arm's transition rule reads
+One stored row of a plugin's kind, as its fact kind's transition rule reads
 it: the row's decoded value and the run it is parented to, if any.
 
 ```ts
@@ -1123,13 +1212,19 @@ interface PluginRow {
 
 ## PluginToolServices
 
-Services the runtime supplies to a plugin's tool: the call's. The
-child-launch door (`ChildRuns`) and the call's place in its run
-(`RunCall`) are references with defaults, never requirements; a plugin's
-tool reads the door and never the session's `Runs`.
+The services the runtime supplies to a tool's call, a plugin's and a
+built-in's alike: the process's, the rooted filesystems of the session
+the call works in, and the call (`ToolContext`, the run included). A
+tool takes `WorkspaceFs` from context instead of resolving a static
+against whichever roots its fiber happens to carry. The child-launch
+door (`ChildRuns`) and the call's place in its run (`RunCall`) are
+references with defaults, never requirements; a plugin's tool reads the
+door and never the session's `Runs`, which only the engine door carries
+(`RunCallShape.session`).
 
 ```ts
-type PluginToolServices = CallServices;
+type PluginToolServices =
+  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 ```
 
 ## ProcessChildLaunch
@@ -1156,34 +1251,43 @@ interface ProcessChildLaunch<TTurn> {
 ## ProcessChildStrategy
 
 An external process's strategy (agent CLI, background bash): each turn's
-result commits in the loop, which then waits for the child's next batch.
+result commits in the loop, which then waits for the child's next batch:
+a one-turn command whose killed process still has a result, or a coding
+agent's CLI session (`cli`), a turn per batch of follow-ups.
 
 ```ts
-interface ProcessChildStrategy<
+type ProcessChildStrategy<TTurn, R = never> = ChildStrategyBase<
   TTurn,
-  R = never,
-> extends ChildStrategyBase<TTurn, R> {
+  R
+> & {
   /** A stop interrupts the turn's fiber: a foreign call takes its signal
    *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
   launch(): Effect.Effect<TTurn, Error, R>;
-  /** The next turn, from the queued follow-ups. Absent: the first turn is
-   *  the only one (a background shell). */
-  runTurn?(
-    followUps: readonly FollowUpContent[],
-  ): Effect.Effect<TTurn, Error, R>;
-  /** The turn a stop cut short, rebuilt from what the child buffered, and
-   *  delivered: only a killed OS process, whose exit code and output are a
-   *  complete result. */
-  interruptedTurn?(): TTurn;
-  /** A stop pauses this child rather than cancelling it: what it had done
-   *  and how the parent's model continues it; undefined cancels it. */
-  pauseNotice?(): ChildRunPause | undefined;
-  /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
-  /** Release provider-owned registry entries; called once, before a failed
-   *  or interrupted delivery or at the end. */
-  releaseSessionOwnership?(): void;
-}
+} & (
+    | {
+        /** The turn a stop cut short, rebuilt from what the child buffered
+         *  and delivered: a killed OS process's exit code and output. */
+        interruptedTurn(): TTurn;
+        readonly cli?: undefined;
+      }
+    | {
+        readonly cli: {
+          /** The next turn, from the queued follow-ups. */
+          runTurn(
+            followUps: readonly FollowUpContent[],
+          ): Effect.Effect<TTurn, Error, R>;
+          /** What the paused child had done and how the parent's model
+           *  continues it; undefined cancels it instead. */
+          pauseNotice(): ChildRunPause | undefined;
+          /** After a successful turn: register the session/thread id, etc. */
+          onTurnSuccess(turn: TTurn): void;
+          /** Release provider-owned registry entries; called once, before a
+           *  failed or interrupted delivery or at the end. */
+          releaseSessionOwnership(): void;
+        };
+        readonly interruptedTurn?: undefined;
+      }
+  );
 ```
 
 ## ProcessPluginLayer
@@ -1269,20 +1373,18 @@ const renderPrompt: (prompt: string, variables: Record<string, unknown>) => Effe
 
 ## RequestDecisionHook
 
-A plugin's side of a decision on a pending request of the kind it owns
-(the external inquiry's answer, recorded on its cross-project thread). The
-session runs it before the decision's row commits, under the request's
-decision lane, so a process that exits in between leaves the request
-pending and answerable rather than settled with nothing recorded. It may
-send a run of the session its input (`inbox`), and commit facts about its
-own aggregates, hung under the request's run (`commit`).
+A plugin's side of a decision on a pending request it opened (a
+`PluginRequest` naming it). The session runs it before the decision's row
+commits, under the request's decision lane, so a process that exits in
+between leaves the request pending and answerable rather than settled
+with nothing recorded. It may send a run of the session its input
+(`inbox`), and commit facts about its own aggregates, hung under the
+request's run (`commit`).
 
 ```ts
 interface RequestDecisionHook {
-  /** The request kind whose decisions this plugin records. */
-  readonly kind: PermissionPayload['kind'];
   readonly record: (request: {
-    readonly payload: PermissionPayload;
+    readonly payload: PluginRequest;
     readonly decision: RequestDecision;
     readonly inbox: (runId: RunId) => RunInbox;
     readonly commit: (
@@ -1295,12 +1397,13 @@ interface RequestDecisionHook {
 ## requestToolEditApproval
 
 Ask the person for an edit when `sessionPermission` (`loop/toolGuard.ts`),
-given what the call's hooks said, asks: a `request.opened` on the run with
-its content held in the session's
-tool-edit store, serialized behind the run's other prompts, answered by a
-surface's `request.decide`. An approve applies the file as the user left
-it: the decision's content, else the edit a surface recorded, else the
-proposal.
+given what the call's hooks said, asks: a `request.opened` on the run
+that names the proposal's content (the original and proposed text with
+their diff) by its address in the session's blob store, stored with the
+row, so every process the request reaches shows the same diff
+(`request.preview`); serialized behind the run's other prompts, answered
+by a surface's `request.decide`. An approve applies the file as the
+person left it: the decision's content, else the proposal.
 
 ```ts
 const requestToolEditApproval: (request: ToolEditProposal) => Effect<ToolEditApprovalResult, Error, ToolContext>
@@ -1333,10 +1436,7 @@ directories are registered external roots).
 outside path.
 
 ```ts
-function resolveToolPath(
-  call: ToolPathCall,
-  targetPath?: string,
-): Effect.Effect<ToolPathResolution, Error>
+const resolveToolPath: (call: ToolPathCall, targetPath?: string | undefined) => Effect<ToolPathResolution, Error, never>
 ```
 
 ## retryTransientFetch
@@ -1463,6 +1563,9 @@ Which arms are reachable, and from where:
   `load`, and from `RunCell.append` before it publishes: a batch is applied
   first and refused with nothing committed, because a published row the
   row handlers reject is a run no later `load` can read.
+- `foreign-protocol`: from a resume's activation, before its rows: a turn
+  the history replays was recorded on another protocol than the run's
+  binding speaks now, so no request could replay it.
 A violated `RunCell.append` precondition is a caller defect
 (`Effect.die`), not an arm: the loop must not handle it.
 
@@ -1475,6 +1578,7 @@ class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
       'unsafe-endpoint',
       'unprepared-history',
       'inconsistent',
+      'foreign-protocol',
     ]),
     runId: RunIdSchema,
     detail: Schema.String,
@@ -1700,34 +1804,26 @@ type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
 ## ToolAvailabilityChecks
 
-How a plugin with an external dependency answers "is it available": an
-optional shared `probe` whose result the availability layer caches and
-hands back to `check` (availability), `statusLabel` (dashboard badge) and
-`detailCheck` (the line below the description).
+How a plugin with an external dependency answers "is it available": one
+check returns availability and its dashboard explanation from the same
+observations. The availability layer owns caching, refresh and deadlines.
 
 ```ts
 interface ToolAvailabilityChecks<R = ToolProbeServices> {
   /**
-   * Optional shared probe result passed to check/status/detail callbacks.
-   * Takes the asking workspace as data: a probe may ask whether that folder
-   * is a git repository, or read a port out of that workspace's
-   * configuration.
+   * Check the asking workspace and return its availability with an optional
+   * short badge and explanation. A failed optional detail belongs here:
+   * log its cause and retain the availability already established.
    */
-  readonly probe?: (
-    inputs: ToolProbeInputs,
-  ) => Effect.Effect<unknown, ToolProbeError, R>;
-  /** Returns true if the external dependency is available. */
-  readonly check: (
-    probeResult?: unknown,
-  ) => Effect.Effect<boolean, ToolProbeError, R>;
-  /** Optional detailed status string resolved at check time (shown below description). */
-  readonly detailCheck?: (
-    probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
-  /** Optional short status label for the dashboard badge. */
-  readonly statusLabel?: (
-    probeResult?: unknown,
-  ) => Effect.Effect<string | undefined, ToolProbeError, R>;
+  readonly check: (inputs: ToolProbeInputs) => Effect.Effect<
+    {
+      readonly available: boolean;
+      readonly statusLabel?: string;
+      readonly statusDetail?: string;
+    },
+    ToolProbeError,
+    R
+  >;
   /**
    * The secret-store keys this plugin's answer reads. A committed write to any
    * of them (`credentialChanged`) re-probes every open workspace, so a plugin
@@ -1800,6 +1896,10 @@ type ToolEditApprovalResult =
   | {
       readonly action: 'apply';
       readonly appliedContent: string;
+      /** The reviewed base, used to reconcile changes made while waiting. */
+      readonly originalContent: string | null;
+      /** The reviewed proposal, before any edits made in the approval view. */
+      readonly proposedContent: string;
       readonly lineChanges?: {
         readonly added: number;
         readonly removed: number;
@@ -1818,7 +1918,8 @@ the permission every surface lists.
 ```ts
 interface ToolEditProposal {
   readonly path: string;
-  readonly originalContent: string;
+  /** Null when the file did not exist when this edit was proposed. */
+  readonly originalContent: string | null;
   readonly proposedContent: string;
   readonly sourceTool: string;
 }
@@ -1864,7 +1965,7 @@ either is asked for, so no tool body opens its own approval prompt or
 re-checks its own roots.
 
 ```ts
-interface ToolGuard<T, R = never> {
+interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -1872,22 +1973,30 @@ interface ToolGuard<T, R = never> {
    */
   readonly writes?: (input: T) => readonly string[];
   /**
-   * The command this call runs, spelled as the approval prompt shows it. The
-   * loop puts it through the session's bash approval before the body runs.
-   * Only the `bash` tool's commands take the run's command grant; any other
-   * tool's call is asked about per call.
-   * An Effect because the spelling can depend on settings the prompt must
-   * show (a Codex sandbox mode, a Claude permission mode).
+   * The command this call runs. Present: the loop puts it through the
+   * session's command approval before the body runs.
    */
-  readonly bash?: (input: T) => Effect.Effect<string, Error, R>;
-  /**
-   * Where the approved command actually runs, when that is not the call's own
-   * directory. Omitted: the call's working directory, else the workspace,
-   * which is what a shell-shaped tool uses. `'unknown'`: the executor cannot name one, so the
-   * prompt names none rather than a directory the command may not run in
-   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
-   */
-  readonly cwd?: 'unknown';
+  readonly command?: {
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
+    /**
+     * The standing grant that answers this tool's commands. `'bash'`: the
+     * run's command grant ("approve all commands in this task"), which the
+     * shell declares. Omitted: each call is asked about and only the
+     * delegated-work grant covers it, so a tool whose prompt looks like a
+     * command (an MCP tool, codex) never inherits shell permission.
+     */
+    readonly grant?: 'bash';
+    /**
+     * Where the approved command actually runs, when that is not the call's
+     * own directory. Omitted: the call's working directory, else the
+     * workspace, which is what a shell-shaped tool uses. `'unknown'`: the
+     * executor cannot name one, so the prompt names none rather than a
+     * directory the command may not run in (`send_to_terminal` reuses a
+     * terminal whose shell has its own directory).
+     */
+    readonly cwd?: 'unknown';
+  };
 }
 ```
 
@@ -2021,8 +2130,6 @@ interface ToolTable {
   /** The tool registered under `name` in any plugin, typed as plugins
    *  declare their tools (`Plugin.tools`). */
   readonly get: (name: string) => ITool<Error, PluginToolServices> | undefined;
-  /** Each request kind's decision hook, from the plugin that owns it. */
-  readonly decisions: ReadonlyMap<string, RequestDecisionHook>;
   /** The agent-file blocks the plugins own, by key (`Plugin.agentBlock`). */
   readonly blocks: ReadonlyMap<string, AgentBlock>;
 }

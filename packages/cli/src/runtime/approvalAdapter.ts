@@ -19,7 +19,6 @@ import {
 import {
   type RequestDecision,
   approvalPolicyDenialMessage,
-  requestParksItsCaller,
   type PermissionPayload,
   type RunId,
   type UserQuestionAnswers,
@@ -58,18 +57,14 @@ interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
 }
 
 /**
- * The kinds this host answers: every request that parks the tool which
- * opened it. An external inquiry parks nothing — the inquiry tool is
- * unavailable on the CLI, so one listed in the fold was opened by another
- * host in a shared session and is answered from its own thread. Deciding it
- * here because a headless CLI happened to observe the session would drop
- * that thread, so {@link createHeadlessCliHostInteractions} filters the kind
- * out on the same predicate the TUI queue and both folds read.
+ * The kinds this host answers: the harness's own, never a plugin's request.
+ * The only plugin that opens one, the external inquiry, is unavailable on
+ * the CLI, so one listed in the fold was opened by another host in a shared
+ * session and is answered from its own thread. Deciding it here because a
+ * headless CLI happened to observe the session would drop that thread, so
+ * {@link createHeadlessCliHostInteractions} filters plugin requests out.
  */
-type AnswerablePayload = Exclude<
-  PermissionPayload,
-  { kind: 'externalInquiry' }
->;
+type AnswerablePayload = Exclude<PermissionPayload, { kind: 'plugin' }>;
 
 /** A pending request under {@link AnswerablePayload}. */
 type AnswerableRequest = PendingRequest & {
@@ -85,8 +80,9 @@ const askHeadlessUserQuestion = Effect.fn(
 ) {
   const answers: Record<string, UserQuestionAnswers[string]> = {};
   const asked = yield* Effect.result(
-    Effect.forEach(payload.questions, (question) =>
-      Effect.gen(function* () {
+    Effect.forEach(
+      payload.questions,
+      Effect.fnUntraced(function* (question) {
         // The two helpers parse caller content, so either can throw. Left as
         // bare calls their throw is a defect, which `Effect.result` does not
         // capture — the fallback below would be skipped and the whole
@@ -283,8 +279,9 @@ export function createHeadlessCliHostInteractions(
       followPendingRequests(
         session.view,
         (view) =>
-          view.requests.filter((pending): pending is AnswerableRequest =>
-            requestParksItsCaller(pending.payload),
+          view.requests.filter(
+            (pending): pending is AnswerableRequest =>
+              pending.payload.kind !== 'plugin',
           ),
         (pending) =>
           answer(pending.runId, pending.payload).pipe(

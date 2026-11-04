@@ -15,6 +15,7 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_EVENT_TYPES,
   pluginFactFloor,
+  RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   type AggregateId,
   type JsonValue,
@@ -27,7 +28,7 @@ import {
   type DatabaseRowCorrupt,
   type DatabaseStoreNewer,
 } from '@shared/session/database';
-import type { PluginArms } from '@tools/plugins';
+import type { FactKinds } from '@tools/plugins';
 import { sha256Hex } from '@utils/core/idHash';
 
 import {
@@ -35,7 +36,7 @@ import {
   decodable,
   decodeRow,
   EARLIER_RUNS,
-  pluginFactArm,
+  factKindOf,
   EVENT_COLUMNS,
   EVENT_FROM,
   EVENT_JOINS,
@@ -102,11 +103,14 @@ const BlobRowSchema = Schema.Struct({
   digest: Schema.String,
   value: Schema.instanceOf(Uint8Array),
 });
+const decodeBlobText = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.String),
+);
 /** One blob's string, verified against its address. */
 function inflateBlob(value: Uint8Array, digest: string): string {
   const text = zstdDecompressSync(value).toString('utf8');
   if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
-  return Schema.decodeUnknownSync(Schema.String)(JSON.parse(text));
+  return decodeBlobText(text);
 }
 /** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
  *  the data of the rows this build decodes. A payload's own `$b` key is
@@ -162,7 +166,8 @@ export interface RowReader<E> {
    *  decode fails a strict read (`whole`: a run's history and its records),
    *  so no decision is made from part of a run's rows, and is left out of a
    *  wide read (tail, listing, projections) with one warning, so one bad row
-   *  never costs the session. An absent plugin's kind is left out, warned.
+   *  never costs the session. An absent plugin's fact reads unavailable,
+   *  and a retired display row is skipped (warned once per kind).
    *  A strict read of a run an earlier build wrote fails as that build's,
    *  whichever of its rows it selected. */
   /** The strings stored under `digests`, inflated and verified; a digest
@@ -182,14 +187,14 @@ export interface RowReader<E> {
 }
 
 /**
- * The reader of the store at `path`, over the process's plugin `arms`. Its
+ * The reader of the store at `path`, over the process's plugin `factKinds`. Its
  * first strict read or `damaged` finds, through `exec`, every run holding an
  * earlier build's row, which the listing (it never reads a run's history)
  * would not meet: one finding, read by the listing, history and resume alike.
  */
 export function rowReader<E>(
   path: string,
-  arms: PluginArms,
+  factKinds: FactKinds,
   exec: Exec<E>,
 ): RowReader<E> {
   const warned = new Set<string>();
@@ -215,8 +220,11 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  // Only an arm with a floor can hold an earlier build's fact.
-  const floored = Object.values(arms).some((arm) => pluginFactFloor(arm) > 1);
+  // Only a retired fact kind, or one with a floor, can hold an earlier
+  // build's fact.
+  const floored =
+    RETIRED_PLUGIN_FACTS.size > 0 ||
+    Object.values(factKinds).some((factKind) => pluginFactFloor(factKind) > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;
@@ -234,15 +242,15 @@ export function rowReader<E>(
         EarlierRowSchema.mapFields(Struct.omit(['type'])),
       )(row);
       const header = factHeader(row.data);
-      const arm = header && pluginFactArm(header, commit, arms);
+      const factKind = header && factKindOf(header, commit, factKinds);
       if (
-        arm &&
-        Result.isFailure(arm) &&
-        arm.failure._tag === 'DatabaseRowEarlier'
+        factKind &&
+        Result.isFailure(factKind) &&
+        factKind.failure._tag === 'DatabaseRowEarlier'
       )
         markEarlier(
           Schema.decodeUnknownSync(RunIdSchema)(logicalId),
-          arm.failure,
+          factKind.failure,
         );
     }
     scanned = true;
@@ -272,50 +280,54 @@ export function rowReader<E>(
         throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
       return texts;
     });
-  const read = (rows: readonly SqlRow[], whole: boolean) =>
-    Effect.gen(function* () {
-      if (whole) {
-        yield* scan;
-        const [refusal] = rows.flatMap((row) => {
-          const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
-          return kind === 'run'
-            ? (earlier.get(Schema.decodeUnknownSync(RunIdSchema)(logicalId)) ??
-                [])
-            : [];
-        });
-        if (refusal !== undefined) return yield* refusal;
-      }
-      // The batch's blobs in one statement: a row carries addresses only.
-      const texts: Blobs = yield* stored(blobDigests(rows));
-      const events: SessionEvent[] = [];
-      for (const row of rows) {
-        const decoded = decodeRow(row, arms, texts);
-        if (Result.isSuccess(decoded)) {
-          if (!('_tag' in decoded.success)) events.push(decoded.success);
-          else
-            yield* warnOnce(
-              decoded.success.kind,
-              `${path} holds rows of the plugin kind ${decoded.success.kind}, whose plugin this build lacks; they stay in the store and are left out of every read.`,
-            );
-          continue;
-        }
-        if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
-          return yield* decoded.failure;
-        yield* warnOnce(
-          `${decoded.failure.commit}`,
-          `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,
-        );
+  const read = Effect.fnUntraced(function* (
+    rows: readonly SqlRow[],
+    whole: boolean,
+  ) {
+    if (whole) {
+      yield* scan;
+      const [refusal] = rows.flatMap((row) => {
         const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
-        if (kind === 'run')
-          mark(
-            Schema.decodeUnknownSync(RunIdSchema)(logicalId),
-            decoded.failure._tag === 'DatabaseRowEarlier',
+        return kind === 'run'
+          ? (earlier.get(Schema.decodeUnknownSync(RunIdSchema)(logicalId)) ??
+              [])
+          : [];
+      });
+      if (refusal !== undefined) return yield* refusal;
+    }
+    // The batch's blobs in one statement: a row carries addresses only.
+    const texts: Blobs = yield* stored(blobDigests(rows));
+    const events: SessionEvent[] = [];
+    for (const row of rows) {
+      const decoded = decodeRow(row, factKinds, texts);
+      if (Result.isSuccess(decoded)) {
+        if (decoded.success !== undefined) events.push(decoded.success);
+        else {
+          const { type } = Schema.decodeUnknownSync(RowSchema)(row);
+          yield* warnOnce(
+            type,
+            `${path}: rows of the retired kind ${type} fed only what a view showed; they are skipped, and their runs still resume.`,
           );
-        const start = bareStart(row);
-        if (start !== null) events.push(start);
+        }
+        continue;
       }
-      return events;
-    });
+      if (whole || decoded.failure._tag === 'DatabaseStoreNewer')
+        return yield* decoded.failure;
+      yield* warnOnce(
+        `${decoded.failure.commit}`,
+        `${path}: ${decoded.failure.message} It is left out of the listing and the tail, and its run is shown as unreadable and cannot be opened.`,
+      );
+      const { kind, logicalId } = Schema.decodeUnknownSync(RowSchema)(row);
+      if (kind === 'run')
+        mark(
+          Schema.decodeUnknownSync(RunIdSchema)(logicalId),
+          decoded.failure._tag === 'DatabaseRowEarlier',
+        );
+      const start = bareStart(row);
+      if (start !== null) events.push(start);
+    }
+    return events;
+  });
   return {
     read,
     blobs,

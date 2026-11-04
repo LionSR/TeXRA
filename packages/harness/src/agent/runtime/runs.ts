@@ -4,17 +4,9 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { SessionOwner } from '@platform/processRuntime';
-import type { CommitOrdinal, RunId } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
-import type { Effect, Scope } from 'effect';
-import type { RootLaunchOptions, RootLaunchRequest } from './rootLaunch';
-
-/** A root launch: what to run, and with which options. */
-export interface RootLaunch {
-  readonly request: RootLaunchRequest;
-  readonly options: RootLaunchOptions;
-}
+import type { RunId, RunStopReason } from '@shared/schemas';
+import type { Effect } from 'effect';
+import type { SessionServices } from './rootLaunch';
 
 /**
  * What a host can ask of a running tool-use loop: the members something
@@ -34,48 +26,45 @@ export interface RunControls {
   switchModel(model: string): Effect.Effect<void, Error>;
 }
 
-/** What this process holds for one run, read when asked. */
+/** What this process holds for one run: a launch or resume of it in flight
+ *  here, from the call (before its fiber claims the lane) until its fiber
+ *  exits, which is what a stop reaches. Read when asked; a run with none
+ *  has no record (`RunsShape.get`). */
 export interface LiveRun {
   readonly runId: RunId;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
-  /** A generation of it is live here: its fiber, a hold, or a launch. */
-  readonly live: boolean;
-  /** A launch or resume of it is in flight here, from the call (before its
-   *  fiber claims the lane) until its fiber exits: what a stop reaches. */
-  readonly launched: boolean;
-  /** Its attached parent: the view's edge, or for a child whose `run.start`
-   *  the view has not folded yet, the parent its activation launched under;
-   *  null for a root. */
-  readonly parent: RunId | null;
   /** Whether the generation live here reads a message: a one-shot loop
    *  (headless, or an in-band child) ends after its turn and reads none,
    *  and a run with no loop of its own (a background command) reads what
    *  its launch said it takes. */
   readonly readsMessages: boolean;
-  /** Why it was stopped here, while it unwinds from that stop. */
-  readonly stopReason: StopCause | undefined;
   /** Resolves once every owner of it here has left. */
   readonly drained: Effect.Effect<void>;
 }
 
 /**
- * A session's runs, as hosts and tools reach them: launch one (a root, or a
- * hold on a stopped one), stop one, and read what this process holds of
- * them; a run resumes through `resumeRun`. A root launch requires the
- * composition root's `SessionOwner`, which no tool is given.
+ * A session's runs, as hosts and tools reach them: stop one, and read what
+ * this process holds of them. A root starts through `session.start`
+ * (`rootRun`, which requires the composition root's `SessionOwner`, given
+ * to no tool); a run resumes through `resumeRun`.
  */
 export interface RunsShape {
-  /** Launch a root run: the commit of its opening, once that commits. */
-  launch(spec: RootLaunch): Effect.Effect<CommitOrdinal, Error, SessionOwner>;
-  /** Hold a stopped run for the caller's scope, its claim taken: refused
-   *  while it is live here or held elsewhere. */
-  launch(spec: {
-    readonly hold: RunId;
-  }): Effect.Effect<void, Error, Scope.Scope>;
-  stop(runId: RunId, options: RunStopOptions): RunStop;
+  /** Stop a run for `reason`. A `user` stop is an explicit stop of the
+   *  work: the run cancels the remote background operation it is observing,
+   *  and its children follow the session's "Keep agents running" setting,
+   *  read as the stop runs (a detached child runs on as a root, and an
+   *  in-band call awaiting it stops only its wait). A `shutdown` stop only
+   *  ends this process's hold on the run, leaving that operation for a
+   *  resume to observe, and ends its children's holds with it. */
+  stop(runId: RunId, reason: RunStopReason): RunStop;
+  /** What this process holds for `runId`, or undefined while no launch of
+   *  it is in flight here. */
   get(runId: RunId): LiveRun | undefined;
   get(): readonly LiveRun[];
+  /** Why the launch of `runId` here is stopping, while it unwinds from that
+   *  stop: the one answer to whether a stop reached it, and how. */
+  stopCause(runId: RunId): StopCause | undefined;
 }
 
 /**
@@ -89,8 +78,9 @@ export interface RunStop {
   /** Whether a live interrupt target took the stop. */
   readonly accepted: () => boolean;
   /** Fails when a durable fact the stop owed storage was refused: a detach
-   *  batch, or the terminal row of a stop that reached no live target. */
-  readonly settlement: Effect.Effect<void, Error>;
+   *  batch, or the terminal row of a stop that reached no live target, which
+   *  it writes over the session's services from its caller's context. */
+  readonly settlement: Effect.Effect<void, Error, SessionServices>;
 }
 
 /** Why a run here stops: a stop's reason, or `released`: its holder let go
@@ -99,18 +89,3 @@ export interface RunStop {
  *  like `shutdown`, writes no end and leaves the run resumable; an admitted
  *  run that is interrupted ends `cancelled` through its lifecycle. */
 export type StopCause = RunStopReason | 'released';
-
-/** What a stop does to the run's children, decided once by the stop
- *  (`RunRegistry.stop`): `detachActiveChildren` when the caller sets it (the
- *  session's close and the headless CLI's shutdown always cascade), else the
- *  session's "Keep subagents running" setting, read as the stop runs. A
- *  detached child runs on as a root, and an in-band call awaiting it stops
- *  only its wait. */
-export interface RunStopOptions {
-  readonly detachActiveChildren?: boolean;
-  /** Why the run stops. A `user` stop is an explicit stop of the work: the
-   *  run cancels the remote background operation it is observing. A
-   *  `shutdown` stop only ends this process's hold on the run, leaving that
-   *  operation for a resume to observe. */
-  readonly reason: RunStopReason;
-}

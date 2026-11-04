@@ -4,17 +4,25 @@
  * One controller per window follows its session's pending tool-edit
  * requests. For each, the host stages the original and proposed content as
  * the files its diff view shows, for as long as the view lists the request.
- * The content and the user's edit of it are the session's
- * (`request.preview`, `request.edit`), so any window of the project shows
- * the same edit and an approval from anywhere applies it; the decision is
- * the request's `request.decide`. Everything a host owns (staging the files,
- * its diff view, reading back what the user typed) lives behind
- * {@link ToolEditApprovalHost}.
+ * The content is the request's (`request.preview`), so every window of the
+ * project shows the same proposal, and no window changes it; what the user
+ * types into the proposed side is this window's until its Approve sends it
+ * as the decision's content (`request.decide`), which the tool applies. The
+ * session records one decision per request: an Approve sent after another
+ * window answered is refused, never applied over that answer. Everything a
+ * host owns (staging the files, its diff view, reading back what the user
+ * typed) lives behind {@link ToolEditApprovalHost}.
  *
  * Each request's preview lives in a scope of its own, closed when the view
  * drops the request or the window goes. Closing it interrupts what the user
  * started on it (a LaTeX preview stops its subprocess), waits for a host
- * build still reading the staged files, and then removes them.
+ * build still reading the staged files and for an approval still on its
+ * way, and then removes them. A request that ended without the proposed
+ * side as the user left it here (another window or the terminal answered
+ * it, a session approval or a stop decided it) leaves that text with the
+ * host, which keeps it where the user can reach it and says so; a copy the
+ * user never changed just goes. A window that goes while the request still
+ * waits takes its edits with it.
  */
 import {
   Cause,
@@ -23,8 +31,8 @@ import {
   Fiber,
   type FileSystem,
   type Path,
+  Ref,
   Scope,
-  Stream,
 } from 'effect';
 
 import {
@@ -39,6 +47,7 @@ import {
   type ToolEditContent,
   type ToolEditPermission,
 } from '@texra-ai/harness/schemas';
+import { HostCallFailed } from '@texra/controllers/session/hostCallFailure';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import {
@@ -74,10 +83,13 @@ export interface ToolEditPreview {
   openProposed(): PreviewCall<void>;
   /** Proposed content including edits the user made in the host's view. */
   readProposedContent(): PreviewCall<string>;
-  /** The proposed content each time the user edits it. */
-  readonly edits: Stream.Stream<string, never, PreviewServices>;
-  /** Close the view and remove everything staged for this request. */
-  dispose(): PreviewCall<void>;
+  /**
+   * Close the view and remove everything staged for this request. When the
+   * request ended without the proposed content as the user left it here,
+   * that content is `unapplied`: the host keeps it where the user can still
+   * reach it, and tells the user it was not applied and where it is.
+   */
+  dispose(unapplied?: string): PreviewCall<void>;
 }
 
 export interface ToolEditApprovalHost {
@@ -104,9 +116,9 @@ interface StagedPreview extends LatexPreviewEntry {
   readonly pending: PendingRequest;
   readonly preview: ToolEditPreview;
   readonly scope: Scope.Scope;
-  /** The proposed content as this window last told the session, so an
-   *  untouched buffer never replaces another window's edit. */
-  sent: string;
+  /** Whether the session recorded this window's approval, which carried
+   *  the proposed content as the user left it here. */
+  readonly applied: Ref.Ref<boolean>;
 }
 
 type ToolEditRequest = PendingRequest & {
@@ -156,7 +168,7 @@ export class ToolEditApprovalController {
       const entry = this.staged.get(payload.requestId);
       if (entry === undefined) {
         // Nothing staged here: an approval decides from the payload, which
-        // applies the edit the session holds, if any.
+        // applies the proposal.
         if (payload.action !== 'approve') return Effect.void;
         const pending = this.options.session.view
           .current()
@@ -187,13 +199,19 @@ export class ToolEditApprovalController {
             });
         }
       };
-      // In the request's scope: the scope's close interrupts it and waits.
-      return Effect.forkIn(
-        Effect.suspend(action).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause) ? Effect.void : this.report(cause),
-          ),
+      const program = Effect.suspend(action).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause) ? Effect.void : this.report(cause),
         ),
+      );
+      // In the request's scope: the scope's close interrupts it and waits.
+      // An approval runs to its answer, which the close then reads: the
+      // view can drop the request (this approval recorded, or another
+      // window's) before the answer comes back.
+      return Effect.forkIn(
+        payload.action === 'approve'
+          ? Effect.uninterruptible(program)
+          : program,
         entry.scope,
       ).pipe(Effect.asVoid);
     });
@@ -219,23 +237,23 @@ export class ToolEditApprovalController {
         ).pipe(withLogChannel(CHANNEL));
         return yield* Effect.never;
       }
-      // What the user edited, in this window or one that went before it,
-      // is what this window's proposed side shows.
-      const { edited, ...content } = outcome.preview;
-      const proposedContent = edited ?? content.proposedContent;
+      const content = outcome.preview;
       const scope = yield* Scope.Scope;
       const settled = yield* Deferred.make<void>();
+      const applied = yield* Ref.make(false);
       const workspaceTempCleanup: StagedPreview['workspaceTempCleanup'] = [];
       const preview = yield* Effect.acquireRelease(
-        host.stagePreview({
-          ...pending.payload.data,
-          ...content,
-          proposedContent,
-        }),
+        host.stagePreview({ ...pending.payload.data, ...content }),
         // The files the LaTeX previews wrote go even when the view's close
         // fails, as it can at window teardown.
         (staged) =>
-          staged.dispose().pipe(
+          this.unapplied(
+            pending,
+            staged,
+            content.proposedContent,
+            applied,
+          ).pipe(
+            Effect.flatMap((unapplied) => staged.dispose(unapplied)),
             Effect.ensuring(
               Effect.all(workspaceTempCleanup, { discard: true }),
             ),
@@ -246,17 +264,17 @@ export class ToolEditApprovalController {
         pending,
         scope,
         preview,
+        applied,
         request: { path: pending.payload.data.path, roots },
         originalUri: { fsPath: preview.originalPath },
         proposedUri: { fsPath: preview.proposedPath },
         originalContent: content.originalContent,
-        proposedContent,
+        proposedContent: content.proposedContent,
         isSettled: () => Deferred.isDoneUnsafe(settled),
         settled,
         workspaceTempCleanup,
         latexOperationInProgress: false,
         onError: (message) => host.reportError(message),
-        sent: proposedContent,
       };
       yield* Effect.acquireRelease(
         Effect.sync(() => this.staged.set(requestId, entry)),
@@ -265,29 +283,6 @@ export class ToolEditApprovalController {
             this.staged.delete(requestId);
             Deferred.doneUnsafe(settled, Effect.void);
           }),
-      );
-      // A window that goes while the request still waits leaves the user's
-      // last buffer with the session, where the next window picks it up.
-      yield* Effect.addFinalizer(() =>
-        session.view
-          .current()
-          .requests.some((request) => request.requestId === requestId)
-          ? entry.preview.readProposedContent().pipe(
-              Effect.flatMap((edited) => this.edit(entry, edited)),
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `The edit of tool edit ${requestId} did not reach the session as its window closed: ${toErrorMessage(error)}`,
-                ).pipe(withLogChannel(CHANNEL)),
-              ),
-            )
-          : Effect.void,
-      );
-      yield* Effect.forkScoped(
-        Stream.runForEach(entry.preview.edits, (edited) =>
-          this.edit(entry, edited).pipe(
-            Effect.catch((error) => this.report(error)),
-          ),
-        ),
       );
       if (host.focused())
         yield* Effect.uninterruptible(entry.preview.showDiff()).pipe(
@@ -298,35 +293,65 @@ export class ToolEditApprovalController {
   }
 
   /** Approve as the Approve button does: the document as the user left it
-   *  in this view becomes the session's edit, which the approval applies. */
+   *  in this view goes with the decision, which applies it. */
   private approve(entry: StagedPreview, grant?: Grant): PreviewCall<void> {
     return entry.preview.readProposedContent().pipe(
-      Effect.flatMap((edited) => this.edit(entry, edited)),
-      Effect.andThen(this.decide(entry.pending, grant)),
+      Effect.flatMap((content) => this.decide(entry.pending, grant, content)),
+      Effect.andThen(Ref.set(entry.applied, true)),
     );
   }
 
-  /** Tell the session the user's edit, when this view changed it. */
-  private edit(
-    entry: StagedPreview,
-    content: string,
-  ): Effect.Effect<void, HostRequestFailure> {
-    if (content === entry.sent) return Effect.void;
-    const { runId, requestId } = entry.pending;
-    return this.options.session
-      .request({ kind: 'request.edit', runId, requestId, content })
-      .pipe(
-        Effect.andThen(
-          Effect.sync(() => {
-            entry.sent = content;
-          }),
+  /**
+   * The proposed content as the user left it in this window, when its
+   * request ended without it: the session recorded no approval from here,
+   * and the user changed the proposal. None while the view still lists the
+   * request, which is this window going; its edits go with it. A copy that
+   * cannot be read may hold the user's edits, so the read fails the release
+   * before its dispose: the staged files stay, and the report names where.
+   */
+  private readonly unapplied: (
+    pending: ToolEditRequest,
+    preview: ToolEditPreview,
+    proposal: string,
+    applied: Ref.Ref<boolean>,
+  ) => PreviewCall<string | undefined> = Effect.fn(
+    'ToolEditApprovalController.unapplied',
+  )(
+    { self: this },
+    function* (
+      pending: ToolEditRequest,
+      preview: ToolEditPreview,
+      proposal: string,
+      applied: Ref.Ref<boolean>,
+    ) {
+      if (yield* Ref.get(applied)) return undefined;
+      const listed = this.options.session.view
+        .current()
+        .requests.some(
+          (r) => r.runId === pending.runId && r.requestId === pending.requestId,
+        );
+      if (listed) return undefined;
+      const left = yield* preview.readProposedContent().pipe(
+        Effect.mapError(
+          (cause) =>
+            new HostCallFailed({
+              member: 'readProposedContent',
+              message: `${toErrorMessage(cause)} The proposed ${pending.payload.data.path} as you left it is kept at ${preview.proposedPath}.`,
+              cause,
+            }),
         ),
       );
-  }
+      // A host may read its copy back with CRLF line ends.
+      return left.replaceAll('\r\n', '\n') === proposal.replaceAll('\r\n', '\n')
+        ? undefined
+        : left;
+    },
+  );
 
   private decide(
     pending: PendingRequest,
     grant?: Grant,
+    content?: string,
   ): Effect.Effect<void, HostRequestFailure> {
     const { runId, requestId } = pending;
     return this.options.session
@@ -334,7 +359,10 @@ export class ToolEditApprovalController {
         kind: 'request.decide',
         runId,
         requestId,
-        decision: { action: 'approve' },
+        decision: {
+          action: 'approve',
+          ...(content !== undefined && { content }),
+        },
         grant,
       })
       .pipe(Effect.asVoid);

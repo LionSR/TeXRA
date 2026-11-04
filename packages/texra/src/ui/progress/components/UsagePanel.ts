@@ -1,0 +1,379 @@
+// Third-party imports
+import { Number as Num } from 'effect';
+import {
+  formatCompactTokenCount,
+  formatCostUsd,
+} from '@texra-ai/harness/transcript';
+import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
+import { join } from 'lit/directives/join.js';
+import { styleMap } from 'lit/directives/style-map.js';
+
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import '@awesome.me/webawesome/dist/components/progress-bar/progress-bar.js';
+import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
+
+// Local imports - shared schemas, styles, and constants
+import {
+  isEmptyUsage,
+  type ContextStateData,
+  type TokenUsageStats,
+} from '@texra-ai/harness/schemas';
+import {
+  contextGaugeBand,
+  roundedContextPercent,
+} from '@texra/shared/contextGauge';
+import type { IconName } from '@ui/wa/iconNames';
+import { designTokens } from '@ui/styles';
+import { usageCostLabel, usageRouteBadge } from '@ui/copy/modelAccess';
+import { focusRingStyles } from '@ui/styles/controlStyles';
+
+// Local imports - shared icons and utils
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+
+/** The usage strip's token counters in order: each one's icon and tooltip,
+ *  and the words the strip's aria summary reads. Only the `always` ones show
+ *  at zero; the rest stay hidden until the run reports them. */
+const TOKEN_STATS = [
+  {
+    key: 'inputTokens',
+    icon: 'arrow-up',
+    id: 'usage-input-icon',
+    tooltip: 'Input tokens',
+    label: 'input tokens',
+    always: true,
+  },
+  {
+    key: 'cachedInputTokens',
+    icon: 'cloud-arrow-down',
+    id: 'usage-cache-read-icon',
+    tooltip: 'Cache read tokens (discounted)',
+    label: 'cache read tokens',
+  },
+  {
+    key: 'cacheMissInputTokens',
+    icon: 'cloud-arrow-up',
+    id: 'usage-cache-miss-icon',
+    tooltip: 'Cache miss tokens (full price)',
+    label: 'cache miss tokens',
+  },
+  {
+    key: 'cacheWriteTokens',
+    icon: 'database',
+    id: 'usage-cache-write-icon',
+    tooltip: 'Cache creation tokens (1.25× cost)',
+    label: 'cache creation tokens',
+  },
+  {
+    key: 'outputTokens',
+    icon: 'arrow-down',
+    id: 'usage-output-icon',
+    tooltip: 'Output tokens',
+    label: 'output tokens',
+    always: true,
+  },
+  {
+    key: 'reasoningTokens',
+    icon: 'comments',
+    id: 'usage-reasoning-icon',
+    tooltip: 'Reasoning tokens',
+    label: 'reasoning tokens',
+  },
+] as const satisfies readonly {
+  key: keyof TokenUsageStats;
+  icon: IconName;
+  id: string;
+  tooltip: string;
+  label: string;
+  always?: true;
+}[];
+
+type TokenStat = (typeof TOKEN_STATS)[number] & { value: number };
+
+function visibleTokenStats(usage: TokenUsageStats): TokenStat[] {
+  return TOKEN_STATS.flatMap((stat) => {
+    const value = usage[stat.key] ?? 0;
+    return 'always' in stat || value > 0 ? [{ ...stat, value }] : [];
+  });
+}
+
+function renderTokenStat(stat: TokenStat): TemplateResult {
+  const tooltip = `${stat.tooltip}: ${stat.value.toLocaleString('en-US')}`;
+  // prettier-ignore
+  return html`<span id=${stat.id} class="token-stat" tabindex="0">${waIcon(stat.icon)}<span class="token-value">${formatCompactTokenCount(stat.value)}</span></span><wa-tooltip for=${stat.id}>${tooltip}</wa-tooltip>`;
+}
+
+/** Solid fill color based on context utilization. */
+function fillColor(percent: number): string {
+  const band = contextGaugeBand(percent);
+  if (band === 'error') return 'var(--color-status-error)';
+  if (band === 'warning') return 'var(--color-warning)';
+  return 'var(--color-success)';
+}
+
+@customElement('usage-panel')
+export class UsagePanel extends LitElement {
+  static override styles = [
+    designTokens,
+    focusRingStyles,
+    css`
+      :host {
+        display: block;
+      }
+
+      .usage-summary-footer {
+        padding: var(--wa-space-xs) 0;
+        column-gap: var(--wa-space-s);
+        display: flex;
+        flex-wrap: wrap;
+        row-gap: var(--wa-space-3xs);
+        justify-content: space-between;
+        align-items: center;
+        font-size: var(--font-size-sm);
+        color: var(--color-text-secondary);
+      }
+
+      /* No opacity here or on the icons below. --color-text-secondary is
+         already color-mix(… 70%, transparent), so the extra 0.85 (and a
+         further 0.7 on icons) compounded to 0.595 / 0.4165 effective alpha:
+         text measured 4.32:1 (Dark+) and 3.34:1 (Light Modern) against AA's
+         4.5:1, and the icons missed the 3:1 non-text minimum in all four
+         default themes. The token carries the de-emphasis on its own. */
+      :is(.run-summary, .context-state) {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        color: var(--color-text-secondary);
+        font-size: var(--font-size-sm);
+      }
+
+      :is(.run-summary, .context-state) wa-icon {
+        font-size: var(--font-size-icon-sm);
+        display: block;
+        flex: 0 0 var(--font-size-icon-sm);
+        width: var(--font-size-icon-sm);
+        height: var(--font-size-icon-sm);
+      }
+
+      /* Each compact counter needs a keyboard-reachable explanation. Keeping
+         the icon and value together also prevents either half wrapping away
+         from the other at narrow widths. */
+      .token-stat {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-3xs);
+        border-radius: var(--border-radius-small);
+        white-space: nowrap;
+      }
+
+      .run-summary__route {
+        font-weight: var(--font-weight-normal);
+        white-space: nowrap;
+      }
+
+      .run-summary__route--covered {
+        color: var(--color-text-secondary);
+      }
+
+      /* Context gauge bar */
+      .context-gauge {
+        --gauge-height: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--wa-space-2xs);
+        border-radius: var(--border-radius-small);
+      }
+
+      .context-gauge__track {
+        width: 80px;
+        height: var(--gauge-height);
+      }
+
+      .context-gauge__bar {
+        width: 100%;
+        --track-height: var(--gauge-height);
+        --track-color: var(--wa-color-surface-border);
+      }
+
+      .run-summary {
+        min-width: 0;
+        margin-inline-start: auto;
+      }
+
+      /* Token counts and cost tick on every stream event inside a
+         right-aligned strip, so proportional digits shifted the whole footer
+         on each update. Same treatment ToolTimer and WorktreeChip already use. */
+      :is(.run-summary__value, .context-state__value) {
+        color: var(--wa-color-text-normal);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .run-summary__value {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: var(--wa-space-xs);
+        min-width: 0;
+      }
+
+      .token-value,
+      .context-state__value {
+        display: block;
+        line-height: var(--line-height-normal);
+      }
+    `,
+  ];
+
+  /** The total this footer shows: the run and every agent under it
+   *  (`RunView.treeUsage`). */
+  @property({ attribute: false }) usage: TokenUsageStats | null = null;
+  /** The run's own model calls (`RunView.usage`): its share of `usage`,
+   *  named on hover when its agents spent too. */
+  @property({ attribute: false }) ownUsage: TokenUsageStats | null = null;
+  @property({ attribute: false }) contextState: ContextStateData | null = null;
+
+  /** Whether the usage stats have any non-zero values worth displaying. */
+  private get hasUsage(): boolean {
+    return this.usage != null && !isEmptyUsage(this.usage);
+  }
+
+  /** `ContextStateDataSchema` requires both gauge fields, so presence is all
+   *  there is to test. `renderContext` owns visibility from here. */
+  private get hasContext(): boolean {
+    return this.contextState != null;
+  }
+
+  override render(): TemplateResult | typeof nothing {
+    if (!this.hasUsage && !this.hasContext) {
+      return nothing;
+    }
+
+    return html`
+      <div class="usage-summary-footer">
+        <span class="context-state"> ${this.renderContext()} </span>
+        <span
+          class="run-summary focus-ring-inset"
+          role=${this.usage ? 'group' : nothing}
+          aria-label=${this.buildUsageLabel()}
+          tabindex=${this.usage ? '0' : nothing}
+        >
+          ${this.renderUsage()}
+        </span>
+      </div>
+    `;
+  }
+
+  private renderUsage(): TemplateResult | typeof nothing {
+    if (!this.usage) return nothing;
+
+    const { cost } = this.usage;
+    const ownShare = this.ownShareLabel();
+    // prettier-ignore
+    const costRoute = ownShare === undefined
+      ? this.renderCostRoute(cost)
+      : html`<span id="usage-cost" class="token-stat">${this.renderCostRoute(cost)}</span><wa-tooltip for="usage-cost" placement="top-end">${ownShare}</wa-tooltip>`;
+    return html`
+      <span class="run-summary__value">
+        ${join(
+          visibleTokenStats(this.usage).map(renderTokenStat),
+          html`<span aria-hidden="true">·</span>`,
+        )}
+        <span aria-hidden="true">·</span>${costRoute}
+      </span>
+    `;
+  }
+
+  /** The run's own share, when its agents spent too; undefined otherwise. */
+  private ownShareLabel(): string | undefined {
+    const own = this.ownUsage;
+    const total = this.usage;
+    // Tokens too, not cost alone: under a subscription both costs can be
+    // zero while the agents' tokens are in the total.
+    if (
+      !total ||
+      !own ||
+      (own.cost === total.cost &&
+        own.inputTokens === total.inputTokens &&
+        own.outputTokens === total.outputTokens)
+    )
+      return undefined;
+    return `Own model calls: ${formatCompactTokenCount(own.inputTokens)} input, ${formatCompactTokenCount(own.outputTokens)} output tokens, ${usageCostLabel(own)}. The total includes its agents.`;
+  }
+
+  /**
+   * The visible footer cost: a plain amount when the route carries no badge,
+   * the covering plan alone (`ChatGPT Pro`) for a subscription route that
+   * billed nothing, and the amount beside the route otherwise. The aria
+   * summary's shared {@link usageCostLabel} re-derives the same
+   * `subscription && cost === 0` predicate from `usageRouteBadge`, so
+   * changing a subscription route touches both.
+   */
+  private renderCostRoute(cost: number): TemplateResult {
+    const badge = usageRouteBadge(
+      this.usage?.usageRoute,
+      this.usage?.usagePlan,
+    );
+    if (!badge) return html`${formatCostUsd(cost)}`;
+
+    if (badge.subscription && cost === 0) {
+      return html`<span
+        id="usage-route-badge"
+        class="run-summary__route run-summary__route--covered"
+        >${badge.compactLabel}</span
+      >`;
+    }
+
+    return html`${formatCostUsd(cost)} ·
+      <span id="usage-route-badge" class="run-summary__route">
+        ${badge.compactLabel}
+      </span>`;
+  }
+
+  private renderContext(): TemplateResult | typeof nothing {
+    if (!this.contextState) return nothing;
+    const { inputTokens, contextWindow, utilizationPercent } =
+      this.contextState;
+    // The bar is a widget that cannot overflow its own track, so it takes the
+    // clamped value. The *text* states what the handler measured, floored at
+    // 1% so a window that is genuinely in use never reads as `0% context
+    // used` — the rule `roundedContextPercent` sets and the CLI status bar
+    // already applies to this same number.
+    const clamped = Num.clamp(utilizationPercent, { minimum: 0, maximum: 100 });
+    const roundedPercent = roundedContextPercent(utilizationPercent);
+    const percentLabel = `${roundedPercent}% context used`;
+
+    return html`
+      <span id="usage-context-gauge" class="context-gauge" tabindex="0">
+        <span class="context-label">Context</span>
+        <span class="context-gauge__track">
+          <wa-progress-bar
+            class="context-gauge__bar"
+            value=${clamped}
+            label=${percentLabel}
+            style=${styleMap({ '--indicator-color': fillColor(clamped) })}
+          ></wa-progress-bar>
+        </span>
+        <span class="context-state__value">
+          ${formatCompactTokenCount(inputTokens)} /
+          ${formatCompactTokenCount(contextWindow)}
+        </span>
+      </span>
+      <wa-tooltip for="usage-context-gauge"
+        >${percentLabel} (${formatCompactTokenCount(inputTokens)} of
+        ${formatCompactTokenCount(contextWindow)} tokens)</wa-tooltip
+      >
+    `;
+  }
+
+  private buildUsageLabel(): string {
+    if (!this.usage) return '';
+    const parts = visibleTokenStats(this.usage).map(
+      ({ value, label }) => `${formatCompactTokenCount(value)} ${label}`,
+    );
+    parts.push(usageCostLabel(this.usage));
+    const ownShare = this.ownShareLabel();
+    return `Total usage: ${parts.join(', ')}${ownShare === undefined ? '' : `. ${ownShare}`}`;
+  }
+}

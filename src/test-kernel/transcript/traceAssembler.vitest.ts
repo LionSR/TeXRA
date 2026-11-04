@@ -1,41 +1,48 @@
-import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer, Schema, Context } from 'effect';
+import { expect } from 'vitest';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   emptyRunEndOutput,
-  LOG_LEVELS,
   MESSAGE_TYPES,
+  qualifyAggregateId,
   type RunId,
-  USER_FOLLOW_UP_SUPPORT,
-} from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
+} from '@texra-ai/harness/schemas';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { assembleTrace } from '@transcript/traceAssembler';
 import { parseTraceData } from '../../../packages/trace-viewer/src/traceDataSchema';
 
 const tempDirs = useTempDirs();
 
-describe('assembleTrace', () => {
-  setupPlatform(() => createTempDirPlatform('texra-trace-', tempDirs));
-
+layer(
+  SessionGraph.layer.pipe(
+    Layer.provideMerge(
+      FakeHost.layer(() => createTempDirPlatform('texra-trace-', tempDirs)),
+    ),
+  ),
+  { excludeTestServices: true },
+)('assembleTrace', (it) => {
   it.effect('assembles a full trace document for a run', () =>
     Effect.gen(function* () {
-      const session: SessionHandle = yield* createTestSession({
-        roots: testWorkspaceRoots(),
-      });
+      // An ephemeral session over the host's own roots.
+      const session: Context.Context<SessionServices> = yield* sessionHandleOf(
+        yield* TestSession.open(),
+      );
       const runId = 'aa11bb22cc33' as RunId;
       const aggregateId = qualifyAggregateId('run', runId);
       const planFact = {
@@ -46,7 +53,7 @@ describe('assembleTrace', () => {
       };
 
       publishTestRunStart(session, runId);
-      yield* session.log.settled;
+      yield* Context.get(session, SessionLog).settled;
       yield* seedRunRecord(
         session,
         runId,
@@ -58,7 +65,7 @@ describe('assembleTrace', () => {
         }),
       );
       // The terminal fact is `run.end`; the view's outcome is folded from it.
-      yield* session.log.transact([
+      yield* Context.get(session, SessionLog).transact([
         {
           type: 'run.end',
           aggregateId,
@@ -66,7 +73,7 @@ describe('assembleTrace', () => {
           output: emptyRunEndOutput(),
         },
       ]);
-      yield* session.log.transact([
+      yield* Context.get(session, SessionLog).transact([
         {
           type: 'log',
           aggregateId,
@@ -75,11 +82,11 @@ describe('assembleTrace', () => {
           message: 'hello',
         },
       ]);
-      yield* session.log.transact([
+      yield* Context.get(session, SessionLog).transact([
         { type: 'plugin.fact', aggregateId, parent: null, ...planFact },
       ]);
 
-      const result = yield* assembleTrace(runId, session);
+      const result = yield* assembleTrace(runId).pipe(Effect.provide(session));
       if (result.status !== 'ok') {
         throw new Error(`expected an ok trace, got ${result.status}`);
       }

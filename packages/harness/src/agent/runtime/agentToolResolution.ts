@@ -20,7 +20,8 @@
  *      MCP servers'), which the plugin's enablement offers every top-level
  *      tool-use run but a plugin agent that names its tools. The script-only
  *      functions (`scriptGlobal.withScript`, `self()`) come with the script
- *      tool (the one that has `describe`).
+ *      tool (the one that has `describe`), recorded as offered and never
+ *      sent: the script's declarations describe them.
  *   3. The run's own tools (caller-supplied, and the structured-output
  *      terminal tool) laid over the result: each replaces a same-named
  *      entry and wins the name in the returned registry. That registry holds
@@ -40,14 +41,11 @@
 
 import { Context, Effect, SubscriptionRef } from 'effect';
 
-import type {
-  RuntimeTool as ITool,
-  RuntimeToolRegistry,
-} from '@agent/runtime/ToolServices';
-import type { ITool as ToolDeclaration } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
-import type { SettingsStores } from '@shared/config/settings';
+import { SessionRoots } from '@platform/rootedFs';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import {
@@ -67,9 +65,9 @@ import { ToolRegistry } from '@tools/toolTable';
 
 /** Whether `tool` may ask a person, so a run nobody can ask withholds it. */
 export const asksApproval = <E, R>(
-  tool: Pick<ToolDeclaration<E, R>, 'guard' | 'requiresApproval'>,
+  tool: Pick<ITool<E, R>, 'guard' | 'requiresApproval'>,
 ): boolean =>
-  tool.guard?.bash !== undefined || tool.requiresApproval !== undefined;
+  tool.guard?.command !== undefined || tool.requiresApproval !== undefined;
 /**
  * The host capabilities a session's host serves now (`ITool.hostCapability`
  * names one), by the session's storage root: what a plugin whose tools need
@@ -92,17 +90,12 @@ export interface StepToolInputs {
    *  needs a capability missing here is withheld. */
   readonly hostCapabilities: ReadonlySet<string>;
   /** Tools only this run holds, laid over the resolved list (step 3). */
-  readonly runTools: readonly ITool[];
+  readonly runTools: readonly ITool<Error, PluginToolServices>[];
   /** Whether the plugins' injected tools join (step 2). */
   readonly injectTools: boolean;
   /** Whether the installed plugins' tools join (step 2): a top-level run's,
    *  unless it is a plugin agent that names its own tools. */
   readonly injectInstalled: boolean;
-  /** The run's stores, which the injections' settings read. */
-  readonly stores: SettingsStores;
-  /** The run's workspace root: the tool-availability probes answer per
-   *  workspace. */
-  readonly workspaceRoot: string | undefined;
   /** The loaded plugins the run holds, from its open. */
   readonly held: HeldPlugins;
 }
@@ -113,21 +106,20 @@ export const declaredToolNames = (tools: Persona['tools']): readonly string[] =>
     typeof toolConfig === 'string' ? toolConfig : toolConfig.name,
   );
 
-/** Resolve the tools one step offers from the catalog entries it pinned. */
+/** Resolve the tools one step offers from the catalog entries it pinned,
+ *  reading the settings and the probes of the session it runs in. */
 export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   catalog: ReadonlyMap<string, ToolEntry>,
   input: StepToolInputs,
 ) {
   const table = yield* ToolRegistry;
+  const roots = yield* SessionRoots;
   const warnings: string[] = [];
   const injected: string[] = [];
   if (input.injectTools) {
     for (const { injectedWhen } of table.entries.values()) {
       for (const [name, setting] of Object.entries(injectedWhen ?? {})) {
-        if (
-          setting === true ||
-          (yield* Settings.get<boolean>(input.stores, setting))
-        )
+        if (setting === true || (yield* Settings.get<boolean>(roots, setting)))
           injected.push(name);
       }
     }
@@ -140,7 +132,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // withheld on its account.
   const probed =
     (yield* SubscriptionRef.get((yield* ToolAvailability).results)).get(
-      input.workspaceRoot,
+      roots.workspace,
     ) ?? [];
   const probedOff = new Map(
     probed.flatMap((result) =>
@@ -182,8 +174,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         `this host does not serve "${tool.hostCapability}".`,
       );
     if (tool && asksApproval(tool) && input.approvalPromptsUnavailable) {
-      // One whose plugin is off is withheld for that, silently.
-      if (enabled.has(name)) withheldForApproval.push(name);
+      // Only a declared one is reported; an injected one, or one whose
+      // plugin is off, is withheld silently.
+      if (source === 'declared' && enabled.has(name))
+        withheldForApproval.push(name);
       return false;
     }
     return true;
@@ -274,7 +268,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     for (const name of enabled.keys())
       if (scriptOnly(name)) offer(name, 'injected');
 
-  const overlay = new Map<string, ITool>();
+  const overlay = new Map<string, ITool<Error, PluginToolServices>>();
   for (const tool of input.runTools) {
     const { name } = tool.definition;
     const index = definitions.findIndex((entry) => entry.name === name);
@@ -288,9 +282,9 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
   const scriptAlone =
     [...resolvedNames].some(isScript) &&
-    (yield* Settings.get<boolean>(input.stores, GlobalStateKey.SCRIPT_ONLY));
+    (yield* Settings.get<boolean>(roots, GlobalStateKey.SCRIPT_ONLY));
   // Dispatch answers only the names the model was offered.
-  const offeredTools = new Map<string, ITool>();
+  const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];
   // Recorded as shown: the definition sent.
   for (const definition of definitions) {
@@ -315,7 +309,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         shown: toolDigests({ definition }).shown,
         plugin: entry.plugin,
         revision: entry.revision,
-        sent: !scriptAlone || isScript(name),
+        // A script's own function (`self`) is reached from a script alone.
+        sent: !scriptOnly(name) && (!scriptAlone || isScript(name)),
       });
     }
   }
@@ -332,7 +327,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
 export interface ResolvedTools {
   readonly definitions: readonly ToolDefinition[];
   /** The offered tools by name: dispatch runs nothing else. */
-  readonly registry: RuntimeToolRegistry;
+  readonly registry: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Each offered tool's identity, in offer order. */
   readonly offered: readonly OfferedTool[];
 }

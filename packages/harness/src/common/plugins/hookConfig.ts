@@ -5,13 +5,13 @@
 // (`2026-09-28-code-plugins-hooks-v1.md`).
 
 // Third-party imports
-import { Schema } from 'effect';
+import { Predicate, Schema } from 'effect';
 
 // Local imports - shared contracts
 import { SUPPORTED_HOOK_EVENTS, type HookEvent } from '@shared/schemas';
 
 const isSupportedEvent = (event: string): event is HookEvent =>
-  (SUPPORTED_HOOK_EVENTS as readonly string[]).includes(event);
+  SUPPORTED_HOOK_EVENTS.some((supported) => supported === event);
 
 /** One handler as the reference declares it; the fields the harness does not
  *  read are stripped. */
@@ -164,7 +164,7 @@ export function matchesHook(
 /** A tool input, field by field. */
 type Fields = Readonly<Record<string, unknown>>;
 
-/** A file path made absolute against the workspace; absent stays absent. */
+/** A file path made absolute against the run's working directory; absent stays absent. */
 type Absolute = (path: unknown) => unknown;
 
 /** A harness tool's input both ways: `input` is what a hook sees; `back`
@@ -213,9 +213,15 @@ const CLAUDE_TOOLS: Readonly<
   read_file: {
     name: 'Read',
     input: (input, abs) => {
-      const range = (input.range ?? {}) as { start?: unknown; end?: unknown };
-      const start = typeof range.start === 'number' ? range.start : undefined;
-      const end = typeof range.end === 'number' ? range.end : undefined;
+      const { range } = input;
+      const start =
+        Predicate.hasProperty(range, 'start') && typeof range.start === 'number'
+          ? range.start
+          : undefined;
+      const end =
+        Predicate.hasProperty(range, 'end') && typeof range.end === 'number'
+          ? range.end
+          : undefined;
       return {
         file_path: abs(input.path),
         offset: start,
@@ -297,7 +303,7 @@ export function claudeToolCall(
 } {
   const tool = CLAUDE_TOOLS[name];
   // The hook saw the harness's own input, so its rewrite is one.
-  if (tool === undefined || typeof input !== 'object' || input === null)
+  if (tool === undefined || !Predicate.isObjectOrArray(input))
     return { toolName: name, toolInput: input, fromHook: (input) => input };
   // cast: an object, as checked above.
   const issued = input as Fields;

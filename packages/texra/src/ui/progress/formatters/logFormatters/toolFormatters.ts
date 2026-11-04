@@ -1,0 +1,175 @@
+/**
+ * Tool-use row painter.
+ *
+ * Everything this card says about a call — its header label and preview, the
+ * structured sections, whether the output block is shown at all, the error
+ * text and the user instruction — comes from `ToolRow.model`
+ * (`toolRowModel` in `@texra-ai/harness/transcript`), except the error note of
+ * a call the run's end cut short (`ToolRow.cutByRunEnd`), which is the app's
+ * copy. This file paints that model with Lit and applies the webview's own
+ * widths, icons, and live controls.
+ *
+ * IMPORTANT: Lit templates preserve whitespace literally. Multi-line templates
+ * with indentation will render with unwanted spaces in the output. Always use
+ * single-line templates with `// prettier-ignore` to prevent whitespace issues.
+ */
+
+// Third-party imports - Lit template utilities
+import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
+import { html, nothing, type TemplateResult } from 'lit';
+
+// Local imports - shared utilities
+import {
+  toolDisplayKind,
+  normalizeToolName,
+} from '@texra-ai/harness/transcript';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import { TOOL_CUT_BY_RUN_END_NOTE } from '@ui/copy/scriptStage';
+import { ICON_NAMES, type IconName } from '@ui/wa/iconNames';
+
+// Local imports - formatter helpers
+import {
+  buildToolUseSection,
+  wrapInPre,
+  SPINNER_ICON_NAME,
+} from '../htmlBuilders';
+
+import {
+  buildTerminalSection,
+  buildToolSection,
+  buildToolUseDetails,
+  getToolTimeoutMs,
+} from './toolFormatters/helpers';
+import { renderToolSections } from './toolFormatters/toolSections';
+import type { ToolRow } from '@texra-ai/harness/transcript';
+import type { FormatResult } from '../baseLogFormatter';
+
+// Side-effect import - register the <tool-timer> element rendered below
+import '@ui/progress/components/ToolTimer';
+
+/** The names the toolkit draws: a plugin names its tools' icons as plain
+ *  strings, since the app's modules do not import the toolkit. */
+const DRAWN_ICONS: ReadonlyMap<string, IconName> = new Map(
+  ICON_NAMES.map((name) => [name, name]),
+);
+
+/** Header width for this surface; the model carries the preview untruncated. */
+const HEADER_PREVIEW_MAX_CHARS = 120;
+
+/**
+ * Format tool use log entry as TemplateResult. On a run that is
+ * `interrupted` (its process died), an open call is not running: nothing
+ * works on it until Resume, so it shows no spinner or timer.
+ */
+export function formatToolUseTemplate(
+  row: ToolRow,
+  interrupted: boolean,
+  tools: HostSnapshot['tools'],
+): FormatResult {
+  const { toolUse, model } = row;
+  const running = model.isInProgress && !interrupted;
+  const stopped = model.isInProgress && interrupted;
+  const { toolName, input } = toolUse;
+  const normalizedToolName = normalizeToolName(toolName);
+  const displayKind = toolDisplayKind(toolName);
+  const showAsError = model.isError && !model.isUserFeedback;
+
+  let iconName: IconName | typeof SPINNER_ICON_NAME;
+  if (model.isUserFeedback) {
+    iconName = 'comment';
+  } else if (running) {
+    iconName = SPINNER_ICON_NAME;
+  } else if (stopped || showAsError) {
+    iconName = 'circle-exclamation';
+  } else {
+    const icon = tools.icons[normalizedToolName];
+    iconName =
+      (icon === undefined ? undefined : DRAWN_ICONS.get(icon)) ?? 'wrench';
+  }
+
+  const headerPreview = truncateWithEllipsis(
+    model.headerPreview,
+    HEADER_PREVIEW_MAX_CHARS,
+  );
+  const titleText = headerPreview
+    ? `${model.headerLabel}: ${headerPreview}`
+    : model.headerLabel;
+
+  const sections: TemplateResult[] = renderToolSections(
+    model.sections,
+    toolName,
+  );
+
+  // Output is shown unless the model suppressed it (empty, already said by
+  // the header, the error, or the sections above).
+  if (model.output) {
+    sections.push(
+      displayKind === 'bash' ||
+        tools.terminalOutput.includes(normalizedToolName)
+        ? buildTerminalSection('', model.output.full)
+        : buildToolSection('', model.output.full, {
+            toolName,
+            extraClass: 'tool-output-full',
+          }),
+    );
+  }
+
+  // The shell exit status a failed call reported. Only meaningful on failure:
+  // a successful command's `exit 0` says nothing the status icon does not.
+  if (model.isError && model.exitCode !== undefined) {
+    // prettier-ignore
+    sections.push(html`<div class="tool-use-section tool-exit-code" dir="ltr">exit ${model.exitCode}</div>`);
+  }
+
+  // A call the run's end cut short shows the note in place of an error.
+  const errorText =
+    row.cutByRunEnd === true
+      ? TOOL_CUT_BY_RUN_END_NOTE
+      : model.errorPreview?.full;
+  if (errorText !== undefined) {
+    sections.push(
+      buildToolUseSection('Error:', wrapInPre(errorText, 'tool-error-content')),
+    );
+  }
+
+  if (model.userInstruction) {
+    sections.push(
+      buildToolUseSection(
+        'User Instruction:',
+        wrapInPre(model.userInstruction.full, 'tool-user-feedback'),
+      ),
+    );
+  }
+
+  if (model.showsNoOutputMarker) {
+    // prettier-ignore
+    sections.push(html`<div class="tool-use-section tool-no-output">(no output)</div>`);
+  }
+
+  const shouldOpen = running;
+
+  // Live timer for in-progress tools, with timeout limit when available
+  const toolTimeoutMs = getToolTimeoutMs(toolName, input);
+  // prettier-ignore
+  const timerTemplate = running ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
+
+  // prettier-ignore
+  const stoppedTemplate = stopped ? html`<span class="tool-interrupted">Interrupted</span>` : nothing;
+  // prettier-ignore
+  const extraContent = html`${timerTemplate}${stoppedTemplate}`;
+
+  return buildToolUseDetails({
+    row,
+    iconName,
+    label: titleText,
+    isError: showAsError,
+    content: html`${sections}`,
+    defaultOpen: shouldOpen,
+    extraClasses: {
+      'tool-use-user-feedback': model.isUserFeedback,
+      'tool-use-in-progress': running,
+      'tool-use-interrupted': stopped,
+    },
+    extraContent,
+  });
+}

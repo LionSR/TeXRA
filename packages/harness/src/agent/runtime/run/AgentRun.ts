@@ -10,7 +10,8 @@
 import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   declaredToolNames,
@@ -23,24 +24,33 @@ import {
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
+import { RunFileService } from '@common/storage/runStorage';
+import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
-import type { Persona, SessionEventDraft } from '@shared/schemas';
-import { RunHistory } from '@shared/session/runHistory';
-import type { RunHistoryDraft, RunState } from '@shared/session/runState';
-import type { Alongside } from '@shared/session/sessionEvents';
 import {
+  type Persona,
   AGENT_SOURCE,
   type DeclinableUsageRoute,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type {
+  RegisterRunOptions,
+  Registration,
+} from '@shared/session/runFacts';
+import { RunHistory } from '@shared/session/runHistory';
+import type { RunState } from '@shared/session/runState';
+import type { Alongside } from '@shared/session/sessionEvents';
+import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
-import { RunFileService } from '@utils/files/runStorage';
+import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
 import type { HttpClient } from 'effect/http';
 
-import type { OpenStep } from '../loop/step';
-import type { SessionHandle } from '../SessionHandle';
+/** Model access over the session's roots. */
+const sessionModelAccess = Layer.unwrap(
+  Effect.map(SessionRoots, modelAccessLayer),
+);
 
 /**
  * How a launch enters its run's cell: a fresh run's `registration` rides
@@ -56,10 +66,11 @@ interface LaunchEntry {
    *  fresh run's launch, else its rows' edge): a child detached mid-run
    *  keeps child behaviour until its next activation. */
   readonly parent: RunId | null;
-  readonly registration: readonly SessionEventDraft[] | null;
-  readonly seed?: readonly RunHistoryDraft[] | null;
+  readonly registration: Registration | null;
+  readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
-  readonly entered: (state: RunState) => Effect.Effect<void>;
+  /** Fails when a fresh run's claim, its birth's, cannot be held. */
+  readonly entered: (state: RunState) => Effect.Effect<void, ClaimError>;
   readonly initialUserMessage: string | undefined;
 }
 
@@ -87,7 +98,6 @@ const SCRIPT_TOOL = 'script';
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
   readonly runId: RunId;
-  readonly session: SessionHandle;
   readonly config: AgentConfig;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
@@ -118,7 +128,13 @@ export interface AgentRunShape extends RunLaunch {
   readonly steps: SynchronizedRef.SynchronizedRef<OpenStep | null>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
-  /** The run's live model binding; replaced only through `swapModel`. */
+  /**
+   * The binding in force, this activation's resource (its route, socket,
+   * ping fiber and uploads), replaced only through `swapModel`. The run's
+   * model is a row fact, its newest `run.config`, read from the run state;
+   * the binding says only what was bound for it, and is read for what the
+   * bound model can do.
+   */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
   /**
    * Replace the binding: `next` binds into a scope of its own, forked from
@@ -132,14 +148,6 @@ export interface AgentRunShape extends RunLaunch {
   readonly swapModel: <E, R>(
     next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
   ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
-  /**
-   * Subscription routes this run's launch declined (its own-API-key
-   * fallback). Its `run.config` binding records them, and the fold adds
-   * every retry the user answered with their own key, so a resume rebinds
-   * under the same choice and the user's stored preferences are never
-   * rewritten to express it.
-   */
-  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
    * the run's layer is released. What the run holds for its whole life (its
@@ -159,7 +167,7 @@ interface AgentRunLayerInput {
    *  which the run binds first; a mid-run switch rebinds in `model`. */
   readonly modelConfig: ModelConfig;
   /** Caller-supplied tools available only to this run. */
-  readonly tools?: readonly ITool[];
+  readonly tools?: readonly ITool<Error, PluginToolServices>[];
   readonly callbacks: RunCallbacks;
 }
 
@@ -176,13 +184,14 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun | ModelAccess,
   Error,
-  RunHistory | HttpClient.HttpClient | Secrets
+  RunHistory | ProjectTools | SessionRoots | HttpClient.HttpClient | Secrets
 > =>
   Layer.effect(
     AgentRun,
     Effect.gen(function* () {
-      const { runId, session, logger, config, persona } = launch;
+      const { runId, logger, config, persona } = launch;
       const runHistory = yield* RunHistory;
+      const roots = yield* SessionRoots;
       const layerScope = yield* Effect.scope;
       // One parallel child holds what the run holds for its life; at close
       // each release runs concurrently under its own deadline.
@@ -231,7 +240,7 @@ export const agentRunLayer = (
       // the project's catalog for the run's life and started with its
       // variables; the read's problems reach its transcript.
       const declared = declaredToolNames(tools);
-      const held = yield* session.tools
+      const held = yield* (yield* ProjectTools)
         .hold(declared, root)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
@@ -255,15 +264,10 @@ export const agentRunLayer = (
           !textOnly &&
           (root || config.asCaller === true || inherits) &&
           (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
-        stores: session.roots,
-        workspaceRoot: session.roots.workspace,
         held,
       };
-      // A fork binds as its source was bound at the cut (its seed's row).
-      const seeded = launch.entry.seed?.findLast(
-        (row) => row.type === 'run.config',
-      );
-      const fromSeed = seeded?.type === 'run.config' ? seeded.binding : null;
+      // A fork binds as its source was bound at the cut (its seed's binding).
+      const fromSeed = launch.entry.seed?.binding ?? null;
       const persisted = folded?.backend != null ? folded : fromSeed;
       const backend = persisted?.backend ?? undefined;
       const modelId = config.model;
@@ -289,8 +293,9 @@ export const agentRunLayer = (
         .pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
       const swapModel: AgentRunShape['swapModel'] = (next) =>
-        SynchronizedRef.updateAndGetEffect(model, (current) =>
-          Effect.gen(function* () {
+        SynchronizedRef.updateAndGetEffect(
+          model,
+          Effect.fnUntraced(function* (current) {
             const fork = yield* Scope.fork(scope);
             const replacement = yield* next(current).pipe(
               Scope.provide(fork),
@@ -310,15 +315,14 @@ export const agentRunLayer = (
 
       return {
         ...launch,
-        fileService: new RunFileService(runId, session.roots),
+        fileService: new RunFileService(runId, roots),
         toolInputs,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
         model,
         swapModel,
-        declinedRoutes,
         scope,
         callbacks: input.callbacks,
       };
     }),
-  ).pipe(Layer.provideMerge(modelAccessLayer(launch.session.roots)));
+  ).pipe(Layer.provideMerge(sessionModelAccess));

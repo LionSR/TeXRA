@@ -6,6 +6,16 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 import type { RunId } from '@texra-ai/harness/schemas';
 
+/** The task id `texra resume` was given, refused as a usage error when it
+ *  does not parse. `setup` refuses it before the run opens anything. */
+function resumeRunId(raw: string): RunId {
+  const runId = parseCliHistoryId(raw);
+  if (runId === undefined) {
+    throw new CliUsageError({ message: `Invalid task id: ${raw}` });
+  }
+  return runId;
+}
+
 // Resume is dual-mode, so it takes the full run flag set: a tool-use task
 // reopens the interactive chat, while a workflow run resumes headless like
 // `texra run`.
@@ -28,11 +38,8 @@ export const resumeCommand = defineCliCommand({
     },
   },
   setup(ctx) {
-    if (!parseCliHistoryId(ctx.args.id)) {
-      throw new CliUsageError({ message: `Invalid task id: ${ctx.args.id}` });
-    }
+    resumeRunId(ctx.args.id);
   },
-  // `setup` refused every id that does not parse.
   run: (context, ctx) =>
-    runResumeCommand(context, ctx.args.id as RunId, ctx.args.fork === true),
+    runResumeCommand(context, resumeRunId(ctx.args.id), ctx.args.fork === true),
 });

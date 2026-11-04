@@ -6,26 +6,26 @@
 // the two can never drift.
 
 import { Schema } from 'effect';
-import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
-  qualifyAggregateId,
   AgentConfigSchema,
-  emptyRunEndOutput,
-  MESSAGE_TYPES,
-  RunIdSchema,
-  type SessionViewInput,
-  type LocalRuntimeState,
-  type RunIdentity,
+  type ApprovalGrants,
   type DisplaySessionEvent,
+  emptyRunEndOutput,
+  type LocalRuntimeState,
+  MESSAGE_TYPES,
+  qualifyAggregateId,
   type RunId,
-  type RunParent,
-} from '@shared/schemas';
+  type RunIdentity,
+  RunIdSchema,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import type { RunParent } from '@shared/schemas';
 import {
   makeSessionViewUpdater,
   type SessionViewUpdater,
 } from '@shared/session/sessionViewUpdate';
-import type { SessionView } from '@shared/session/sessionView';
-import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
+import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
+import type { SessionViewInput } from '@texra-ai/harness/transcript';
 
 /** A process identity, never a lease token. */
 export const OWNER = '["test-host",4242,"2026-09-04T00:00:00.000Z"]';
@@ -58,8 +58,8 @@ export const T = {
   rootDone: BOARD_NOW - sec(8),
 } as const;
 
-export const ROOT_IDENTITY: RunIdentity = { kind: 'script', title: 'review' };
-export const CHILD_IDENTITY: RunIdentity = {
+const ROOT_IDENTITY: RunIdentity = { kind: 'script', title: 'review' };
+const CHILD_IDENTITY: RunIdentity = {
   kind: 'agent',
   agent: 'custom:search',
 };
@@ -295,9 +295,9 @@ export function buildScenario({ proposal = false } = {}) {
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'plugin.fact',
-    plugin: DOCUMENTS_OUTPUT_ARM.plugin,
-    kind: DOCUMENTS_OUTPUT_ARM.kind,
-    version: DOCUMENTS_OUTPUT_ARM.version,
+    plugin: DOCUMENTS_OUTPUT_KIND.plugin,
+    kind: DOCUMENTS_OUTPUT_KIND.kind,
+    version: DOCUMENTS_OUTPUT_KIND.version,
     parent: null,
     value: {
       rounds: [

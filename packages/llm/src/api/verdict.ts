@@ -23,7 +23,7 @@ import {
   type Fields,
   type Reply,
 } from './failureReply.js';
-import type { Model } from '../turn.js';
+import type { Model, ResolvedTurn } from '../turn.js';
 
 type Quota = NonNullable<ModelError['quota']>;
 
@@ -115,18 +115,19 @@ const withReset = (
 ): Quota =>
   seconds === undefined ? quota : { ...quota, resetsInMs: seconds * 1000 };
 
-/** The Codex backend's own `usage_limit_reached` reply, unique to the ChatGPT plan. */
+/**
+ * The ChatGPT plan's own limit reply, unique to its token-sharing route. Its
+ * `subscription_sharing_usage_unavailable` is a temporary 503, not a limit.
+ */
 function chatgptPlanLimit(body: unknown): Quota | undefined {
   const candidate = envelopes(body).find(
-    (fields) => stringField(fields, 'type') === 'usage_limit_reached',
+    (fields) =>
+      stringField(fields, 'code') ===
+      'subscription_sharing_usage_limit_exceeded',
   );
   if (candidate === undefined) return undefined;
-  const planType = stringField(candidate, 'plan_type');
   return withReset(
-    {
-      plan: 'chatgpt-subscription',
-      ...(planType === undefined ? {} : { planType }),
-    },
+    { plan: 'chatgpt-subscription' },
     numberField(candidate, 'resets_in_seconds'),
   );
 }
@@ -161,14 +162,14 @@ function glmPlanLimit(body: unknown): Quota | undefined {
   );
 }
 
-/** The account itself is out of credit: OpenAI's `insufficient_quota`, Anthropic's low balance. */
+/** The account itself is out of credit: OpenAI's `insufficient_quota`, DeepSeek's `insufficient_balance_error`, Anthropic's low balance. */
 const creditDepleted = (body: unknown): boolean =>
   envelopes(body).some((candidate) => {
     const type = stringField(candidate, 'type');
     const message = stringField(candidate, 'message')?.toLowerCase() ?? '';
     return (
-      stringField(candidate, 'code') === 'insufficient_quota' ||
-      type === 'insufficient_quota' ||
+      [stringField(candidate, 'code'), type].includes('insufficient_quota') ||
+      type === 'insufficient_balance_error' ||
       (type === 'invalid_request_error' &&
         message.includes('credit balance is too low')) ||
       message.includes('exceeded your current quota')
@@ -259,30 +260,24 @@ function networkFailed(error: ModelError): boolean {
 }
 
 /**
- * Whether repeating the request can succeed. Never for the package's own
- * refusals, an overflow (even under a retryable status: a rate limit that
- * mentions tokens is not one to repeat blindly), a used-up quota, or a
- * rejected credential; nor for a reply the SDK surfaced with no status,
- * which says nothing to repeat for. A status-less transport failure can.
+ * Where the reply rules out repeating the request that the judged kind's
+ * default (`ModelError`) would allow: an overflow, even under a retryable
+ * status (a rate limit that mentions tokens is not one to repeat blindly), a
+ * status that cannot succeed again, and a rejection the SDK surfaced with no
+ * status, which says nothing to repeat for. `undefined` keeps the default.
  */
-function retryable(
+function notRetryable(
   error: ModelError,
   reply: Reply,
   overflow: boolean,
-  quota: Quota | undefined,
-): boolean {
+): false | undefined {
   const { status } = reply;
-  if (
-    error.kind === 'invalid-request' ||
-    error.kind === 'unsupported' ||
-    error.kind === 'authentication' ||
+  const ruledOut =
     overflow ||
-    quota !== undefined
-  )
-    return false;
-  if (status !== undefined)
-    return status !== 401 && status !== 403 && isRetryableStatus(status);
-  return !(error.kind === 'provider-rejection' && error.cause instanceof Error);
+    (status === undefined
+      ? error.kind === 'provider-rejection' && error.cause instanceof Error
+      : !isRetryableStatus(status));
+  return ruledOut ? false : undefined;
 }
 
 /** A chained request's stored response is missing or past retention. */
@@ -292,16 +287,21 @@ const continuationGone = ({ status, message }: Reply): boolean =>
     /previous[_ ]?(response|interaction)/i.test(message) &&
     /not found|expired|no longer|does not exist/i.test(message));
 
-/** The failure's kind, refined by what the reply proves. */
+/**
+ * The failure's kind, refined by what the reply proves. Only a request that
+ * chained on a stored response can have lost it: a 404 on one that chained
+ * nothing (a missing model) keeps its kind.
+ */
 function kindOf(
   error: ModelError,
   reply: Reply,
   terminalOverflow: boolean,
   quota: Quota | undefined,
+  chained: boolean,
 ): ModelError['kind'] {
   if (terminalOverflow) return 'context-overflow';
   if (quota !== undefined) return 'quota-exhausted';
-  if (continuationGone(reply)) return 'continuation-gone';
+  if (chained && continuationGone(reply)) return 'continuation-gone';
   return reply.status === 429 ? 'rate-limited' : error.kind;
 }
 
@@ -337,10 +337,14 @@ function messageOf(reply: Reply, terminalOverflow: boolean): string {
     : reply.message;
 }
 
-/** `error` with the verdict its reply supports, for a binding that bills through `route`. */
+/**
+ * `error` with the verdict its reply supports, for a binding that bills
+ * through `route`, on a request that `chained` on a stored response or not.
+ */
 export function judgeFailure(
   error: ModelError,
   route: BillingRoute,
+  chained: boolean,
 ): ModelError {
   const reply = readReply(error);
   const overflow = overflowsWindow(error, reply);
@@ -352,10 +356,10 @@ export function judgeFailure(
   const quota = terminalOverflow ? undefined : exhaustedQuota(reply, route);
   return new ModelError({
     ...error,
-    kind: kindOf(error, reply, terminalOverflow, quota),
+    kind: kindOf(error, reply, terminalOverflow, quota, chained),
     message: messageOf(reply, terminalOverflow),
     cause: error.cause,
-    retryable: retryable(error, reply, overflow, quota),
+    retryable: notRetryable(error, reply, overflow),
     ...(reply.status === undefined ? {} : { status: reply.status }),
     ...(quota === undefined ? {} : { quota }),
     ...scopeOf(error, reply, quota),
@@ -364,18 +368,28 @@ export function judgeFailure(
 
 /** `model` with every failure judged against the vendor's reply. */
 export function judgedModel(model: Model, billing: BillingRoute): Model {
-  const judge = (error: ModelError) => judgeFailure(error, billing);
+  const judge = (error: ModelError) => judgeFailure(error, billing, false);
+  // A turn chains when it sends a stored response's anchor; an observation
+  // polls its operation and chains nothing.
+  const judgeTurn = (turn: ResolvedTurn) => (error: ModelError) =>
+    judgeFailure(
+      error,
+      billing,
+      'continuation' in turn && turn.continuation !== undefined,
+    );
   const { uploadFile, background } = model;
   return {
     prepareTurn: (request) =>
       Effect.mapError(model.prepareTurn(request), judge),
-    streamTurn: (turn) => Stream.mapError(model.streamTurn(turn), judge),
+    streamTurn: (turn) =>
+      Stream.mapError(model.streamTurn(turn), judgeTurn(turn)),
     ...(uploadFile && {
       uploadFile: (file) => Effect.mapError(uploadFile(file), judge),
     }),
     ...(background && {
       background: {
-        submit: (turn) => Effect.mapError(background.submit(turn), judge),
+        submit: (turn) =>
+          Effect.mapError(background.submit(turn), judgeTurn(turn)),
         observe: (turn, operation, policy) =>
           Stream.mapError(background.observe(turn, operation, policy), judge),
         cancel: (operation) =>

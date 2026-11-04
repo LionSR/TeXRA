@@ -1,7 +1,8 @@
 /**
- * The helper model: one configured "helper model" setting behind session
- * descriptions and draft polishing. Every use is one non-streaming turn, text
- * in, text out, on a binding `ModelAccess` makes for the helper.
+ * The helper model: one "helper model" setting behind session descriptions
+ * and draft polishing, else the asking run's own model. Every use is one
+ * non-streaming turn, text in, text out, on a binding `ModelAccess` makes for
+ * the helper.
  *
  * A helper call is gated, priced and reported to the usage log like every
  * model call; it writes no run history row, because it belongs to no run's history.
@@ -15,10 +16,10 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
+import { turnText } from '@shared/session/runFacts';
 import type { UsageLog } from '@shared/usageLog';
 
 import { callModel } from './run/modelCall';
-import { turnText } from './run/turnText';
 import type { RouteRetries } from './run/invocation';
 import type { UsageAttribution } from './run/pricing';
 import type { HttpClient } from 'effect/http';
@@ -32,20 +33,29 @@ export interface HelperPrompt {
 }
 
 /**
- * One helper call: bind the configured helper model for this call alone and
- * run one completion through the one retry loop (`run/invocation.ts`),
- * gated on the process's retry gate, priced and reported to the usage log as
- * `attribution`. No row is written. Returns the turn's assistant text.
- * `stores` are the asking session's setting slots: the binding, the retry
- * limit and the usage consent read them, beside the process `Secrets`.
+ * One helper call: bind the configured helper model (else `runModel`) for
+ * this call alone and run one completion through the one retry loop
+ * (`run/invocation.ts`), gated on the process's retry gate, priced and
+ * reported to the usage log as `attribution`. No row is written. Returns the
+ * turn's assistant text. `stores` are the asking session's setting slots: the
+ * binding, the retry limit and the usage consent read them, beside the
+ * process `Secrets`.
  */
 export const helperCall = Effect.fn('helperCall')(
   function* (
     stores: SettingsStores,
     { userPrompt, systemPrompt }: HelperPrompt,
     attribution: UsageAttribution,
-    /** Automatic retries; the configured batch when absent. */
-    retries?: number,
+    {
+      retries,
+      runModel,
+    }: {
+      /** Automatic retries; the configured batch when absent. */
+      readonly retries?: number;
+      /** The asking run's model, used when no helper model is configured;
+       *  with neither, the call fails as unavailable. */
+      readonly runModel?: string;
+    } = {},
   ): Effect.fn.Return<
     string,
     CallFailure | Error,
@@ -55,7 +65,9 @@ export const helperCall = Effect.fn('helperCall')(
     // ScopedRef masks its acquisition; a caller's deadline must still
     // cancel a bind in progress.
     const acquire = (rejected?: string) =>
-      access.bind({ purpose: 'helper', rejected }).pipe(Effect.interruptible);
+      access
+        .bind({ purpose: 'helper', runModel, rejected })
+        .pipe(Effect.interruptible);
     const held = yield* ScopedRef.fromAcquire(acquire());
     const { turn } = yield* callModel({
       purpose: 'helper',

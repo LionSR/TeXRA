@@ -8,7 +8,7 @@
 import { Schema } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { QualifiedSkillNameSchema } from './skillName';
 import { DeclinableUsageRouteSchema } from './usage';
 

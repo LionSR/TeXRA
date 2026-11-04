@@ -10,32 +10,28 @@
  * for its whole life, so a request that waits while its run is
  * deleted can only miss, never land on a different run.
  * The union carries the arms the runtime answers today; a lane that routes
- * another retained command adds its arm with its handler.
+ * another retained command adds its arm with its handler. A start is not a
+ * request: it is `StartRequestSchema`, beside it.
  */
-import { type HashMap, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
 import {
   APPROVAL_BYPASS_KINDS,
   APPROVAL_POLICY_LIMITS,
 } from '@shared/approvalBypassKind';
+import { ApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
+  AgentConfigSchema,
+  FollowUpReceiptSchema,
+  InlinePersonaSchema,
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
+  RunStopReasonSchema,
+  ToolEditContentSchema,
 } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
-
-/**
- * Why a run stops. `user` is an explicit stop of the work (a stop button,
- * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
- * background operation it is observing. `shutdown` only ends this process's
- * hold on the run (an exit, a signal, a session close), leaving that
- * operation for a resume to observe.
- */
-const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
-/** Why a run stops: a `user` stop or this process's `shutdown`. */
-export type RunStopReason = typeof RunStopReasonSchema.Type;
 
 /** Every request a surface issues to its session's runtime, one arm per
  *  `group.action` tag. */
@@ -43,7 +39,6 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.stop'),
     ...runScoped,
-    detachActiveChildren: Schema.optional(Schema.NullOr(Schema.Boolean)),
     reason: RunStopReasonSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('run.delete'), ...runScoped }),
@@ -88,9 +83,15 @@ export const RuntimeRequestSchema = Schema.Union([
       Schema.Struct({ op: Schema.Literal('remove') }),
     ]),
   }),
+  /** A message to the run, under the caller's `id` (minted when absent): a
+   *  retry under it answers with the first send's receipt, even once the run
+   *  takes no more input; another message under it is a {@link Conflict}. */
   Schema.Struct({
     kind: Schema.Literal('followUp.send'),
     ...runScoped,
+    id: Schema.optional(
+      Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
+    ),
     text: Schema.String.check(Schema.isMinLength(1)),
     displayText: Schema.optional(Schema.NullOr(Schema.String)),
     /** What the message attaches: a file (a pasted image's), read and
@@ -103,6 +104,14 @@ export const RuntimeRequestSchema = Schema.Union([
     /** `turn`: the run reads the message when its current turn ends, not
      *  at the turn's next model request. Absent: at the next request. */
     holdUntil: Schema.optional(Schema.NullOr(Schema.Literal('turn'))),
+  }),
+  /** The receipt of the message sent under `id`; with `wait`, once it is
+   *  answered or unanswered. */
+  Schema.Struct({
+    kind: Schema.Literal('followUp.receipt'),
+    ...runScoped,
+    id: Schema.String.check(Schema.isMinLength(1)),
+    wait: Schema.optional(Schema.NullOr(Schema.Boolean)),
   }),
   /**
    * The one answer to a `request.opened` (one run model, section 3.7): the
@@ -123,21 +132,12 @@ export const RuntimeRequestSchema = Schema.Union([
       Schema.NullOr(Schema.Literals(APPROVAL_BYPASS_KINDS)),
     ),
   }),
-  /** A pending tool edit's preview, as the session staged it beside the
-   *  request: answered `preview`, null when none is staged. */
+  /** A pending tool edit's content, stored with its request: answered
+   *  `preview`, null once the request is no longer pending. */
   Schema.Struct({
     kind: Schema.Literal('request.preview'),
     ...runScoped,
     requestId: Schema.String.check(Schema.isMinLength(1)),
-  }),
-  /** The user's edit of a pending tool edit's proposed file: an approval
-   *  that names no content applies it. Refused once the request is no
-   *  longer pending. */
-  Schema.Struct({
-    kind: Schema.Literal('request.edit'),
-    ...runScoped,
-    requestId: Schema.String.check(Schema.isMinLength(1)),
-    content: Schema.String,
   }),
   /** The field-level mutation, not a snapshot: the authority applies it and
    *  publishes the resulting `approval.policy`. */
@@ -165,56 +165,6 @@ export const RuntimeRequestSchema = Schema.Union([
 /** One request a surface issues to its session's runtime. */
 export type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 
-/** One unified-diff hunk: the line ranges it spans on each side, and its
- *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
-const DiffHunkSchema = Schema.Struct({
-  oldStart: Schema.Int,
-  oldLines: Schema.Int,
-  newStart: Schema.Int,
-  newLines: Schema.Int,
-  lines: Schema.Array(Schema.String),
-});
-
-/** What a pending tool edit would change: the original and proposed
- *  content a host shows beside the request's path and line counts, and
- *  the diff between them, computed once where the request is built: its
- *  hunks and the 0-based line of the proposed text a diff view reveals
- *  first (null when nothing changed). */
-const ToolEditContentSchema = Schema.Struct({
-  originalContent: Schema.String,
-  proposedContent: Schema.String,
-  hunks: Schema.Array(DiffHunkSchema),
-  firstChangedLine: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
-});
-/** A pending tool edit's staged content. */
-export type ToolEditContent = typeof ToolEditContentSchema.Type;
-
-/** A pending tool edit as the session holds it while the request waits
- *  (`request.preview`): its content, and the user's edit of the proposed
- *  file (`request.edit`), null until there is one. */
-const StagedToolEditSchema = ToolEditContentSchema.mapFields(
-  Struct.assign({ edited: Schema.NullOr(Schema.String) }),
-);
-/** A pending tool edit as the session holds it. */
-export type StagedToolEdit = typeof StagedToolEditSchema.Type;
-/** Every pending tool edit the session holds, by request id. */
-export type StagedToolEdits = HashMap.HashMap<string, StagedToolEdit>;
-
-/**
- * Hunks as unified-diff text lines, each preceded by its header. One header
- * policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
- */
-export function formatHunkLines(hunks: ToolEditContent['hunks']): string[] {
-  const range = (start: number, lines: number) =>
-    lines === 1 ? String(start) : `${start},${lines}`;
-  return hunks.flatMap((hunk) => [
-    `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`,
-    ...hunk.lines,
-  ]);
-}
-
 /** What a `run.files` did: `done` (with the copy's folder), no directory
  *  to act on, or the failure that stopped it. */
 const RunFilesResultSchema = Schema.Union([
@@ -231,16 +181,23 @@ export type RunFilesResult = typeof RunFilesResultSchema.Type;
 /** What the runtime answers with: a typed value the host renders. */
 export const OutcomeSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('done') }),
+  /** A message accepted, now or by an earlier send under its `id`. */
   Schema.Struct({
     kind: Schema.Literal('followUp'),
+    id: Schema.String,
     status: Schema.Literals(['sent', 'queued']),
     /** A queued input whose recovery wake did not reach the run. */
     wake: Schema.optional(Schema.NullOr(Schema.Literal('failed'))),
+    receipt: FollowUpReceiptSchema,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal('receipt'),
+    receipt: FollowUpReceiptSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('forked'), runId: RunIdSchema }),
   Schema.Struct({
     kind: Schema.Literal('preview'),
-    preview: Schema.NullOr(StagedToolEditSchema),
+    preview: Schema.NullOr(ToolEditContentSchema),
   }),
   Schema.Struct({
     kind: Schema.Literal('runFiles'),
@@ -255,6 +212,7 @@ const OUTCOME_KIND = {
   'run.fork': 'forked',
   'run.files': 'runFiles',
   'followUp.send': 'followUp',
+  'followUp.receipt': 'receipt',
   'request.preview': 'preview',
 } as const satisfies Partial<Record<RuntimeRequest['kind'], Outcome['kind']>>;
 
@@ -300,17 +258,34 @@ export class Unavailable extends Schema.TaggedError<Unavailable>()(
   { runId: RunIdSchema, reason: Schema.String },
 ) {}
 
-/** The user cancelled the operation. No refusal notice is needed. */
+/** A `followUp.send` under an `id` the run holds another message under. */
+export class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
+  runId: RunIdSchema,
+  id: Schema.String,
+}) {
+  override get message(): string {
+    return `A different message was already sent under id ${this.id}.`;
+  }
+}
+
+/** Nothing is left to tell the user: they cancelled the operation, or the
+ *  host has already told them why it did not go through. No refusal notice
+ *  is needed. */
 export class Cancelled extends Schema.TaggedError<Cancelled>()(
   'Cancelled',
   {},
 ) {}
 
-/** The runtime refused the request for a worded reason. */
+/** The runtime refused the request for a worded reason, which is also its
+ *  `message`, so a caller that only formats errors still shows why. */
 export class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
   reason: Schema.String,
   docsPage: Schema.optional(Schema.String),
-}) {}
+}) {
+  override get message(): string {
+    return this.reason;
+  }
+}
 
 /** A handler died. The cause is in the host log under `ref` (the request
  *  id); the surface hears that the request failed, never the text. */
@@ -329,6 +304,7 @@ export const RequestErrorSchema = Schema.Union([
   Unavailable,
   Cancelled,
   Rejected,
+  Conflict,
   Invalid,
   Internal,
 ]);
@@ -336,7 +312,7 @@ export const RequestErrorSchema = Schema.Union([
 export type RequestError = typeof RequestErrorSchema.Type;
 
 /**
- * How a host's request handler fails: with a tagged error, always. Three tags are the refusals the bridge folds
+ * How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
  * onto the wire ({@link RequestRefusal}); every other tag is a defect it
  * logs and answers `Internal` — but it is a *named* defect, so the log says
  * which capability produced it. The bound is structural because the tags a
@@ -349,17 +325,65 @@ export interface HostRequestFailure extends Error {
 }
 
 /**
- * A request's refusal, as opposed to its defect: the three a handler may
+ * A request's refusal, as opposed to its defect: the four a handler may
  * answer the surface with. The bridge folds these onto the wire; every other
  * tag is `Internal`.
  */
-export type RequestRefusal = Cancelled | Unavailable | Rejected;
+export type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
 
-/** Whether a failure is one of the three the bridge answers on the wire. */
+/** Whether a failure is one of the four the bridge answers on the wire. */
 export function isRequestRefusal(error: unknown): error is RequestRefusal {
   return (
     error instanceof Cancelled ||
     error instanceof Unavailable ||
-    error instanceof Rejected
+    error instanceof Rejected ||
+    error instanceof Conflict
   );
 }
+
+/** What a start takes besides its agent, whichever way the agent is given.
+ *  Each is read once, as the run opens: its effect lands in the opening's
+ *  rows, or the loop reads it and a resume passes it again (`interactive`).
+ *  An option a resumed run must keep goes on `AgentConfigSchema` instead. */
+export const StartOptionsSchema = Schema.Struct({
+  /** The run's id. Absent, one is generated. */
+  runId: Schema.optional(RunIdSchema),
+  /** The earlier run this one continues in a chat: the new run starts with
+   *  the approvals the person granted there. */
+  continues: Schema.optional(RunIdSchema),
+  /** Run on the configured helper model instead of the selected one. */
+  helperModel: Schema.optional(Schema.Boolean),
+  /** A stricter approval policy for this run (it only narrows the
+   *  project's), and whether the work it delegates starts approved. */
+  approval: Schema.optional(
+    Schema.Struct({
+      policy: Schema.optional(ApprovalPolicySchema),
+      delegated: Schema.optional(Schema.Boolean),
+    }),
+  ),
+  /** Keep the run open for follow-up messages after each answer, as a chat
+   *  window does. Absent, the run ends after its first answer. */
+  interactive: Schema.optional(Schema.Boolean),
+});
+
+/**
+ * A start as data: all of `StartInput` but the run's own tools. Either an
+ * agent (a name from the agent directories, or a persona written inline,
+ * which the run stores so a resume needs no file) and the instruction to
+ * give it, or `config`, a complete configuration an application host has
+ * already resolved. A host sends it to a service as it is.
+ */
+export const StartRequestSchema = Schema.Union([
+  StartOptionsSchema.mapFields(
+    Struct.assign({
+      // The persona as an embedder writes it; the start decodes it.
+      agent: Schema.Union([
+        Schema.String,
+        Schema.toEncoded(InlinePersonaSchema),
+      ]),
+      instruction: Schema.String,
+      model: Schema.optional(Schema.String),
+    }),
+  ),
+  StartOptionsSchema.mapFields(Struct.assign({ config: AgentConfigSchema })),
+]);

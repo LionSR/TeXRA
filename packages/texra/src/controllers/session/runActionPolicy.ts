@@ -19,7 +19,7 @@ import type { RunId } from '@texra-ai/harness/schemas';
 /**
  * Resume `runId` on `session`: the run that continues (the one asked for,
  * or the parent that owns it), `'waiting'` when it waits for what blocks it
- * (its agent, a plugin) and continues once that is back, or the refusal
+ * (its agent, a plugin) to be back before it can continue, or the refusal
  * that says why it does not continue. A run that fails to start is a
  * `RunFailure`, not a refusal.
  */
@@ -30,7 +30,7 @@ export const resumeRun = (
   session.resume(runId, { interactive: true }).pipe(
     Effect.catchTags({
       ResumeRefused: (refusal) =>
-        refusal.reason === 'blocked'
+        refusal.reason.kind === 'blocked'
           ? Effect.succeed('waiting' as const)
           : Effect.fail(new Unavailable({ runId, reason: refusal.message })),
       ToolsRefused: (refusal) =>

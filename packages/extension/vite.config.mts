@@ -4,7 +4,12 @@ import { resolve } from 'node:path';
 // Shared path aliases from tsconfig.json (single source of truth)
 import { aliases } from '../../scripts/aliases.mjs';
 
-const webviews = ['progressView', 'settingsView'] as const;
+// Each webview's entry module: the progress view renders from the app's UI
+// kit, the settings view from this package.
+const webviewEntries = {
+  progressView: '../texra/src/ui/progress/index.ts',
+  settingsView: 'src/settingsView/frontend/index.ts',
+} as const;
 
 /**
  * Builds a single webview, named by VITE_WEBVIEW.
@@ -16,9 +21,9 @@ const webviews = ['progressView', 'settingsView'] as const;
 export default defineConfig(({ mode }) => {
   const isDev = mode === 'development';
   const webviewName = process.env.VITE_WEBVIEW;
-  if (!webviewName || !(webviews as readonly string[]).includes(webviewName)) {
+  if (!webviewName || !Object.hasOwn(webviewEntries, webviewName)) {
     throw new Error(
-      `VITE_WEBVIEW must name a webview (${webviews.join(', ')}), got: ${
+      `VITE_WEBVIEW must name a webview (${Object.keys(webviewEntries).join(', ')}), got: ${
         webviewName ?? '<unset>'
       }`,
     );
@@ -45,7 +50,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: resolve(
           import.meta.dirname,
-          `src/${webviewName}/frontend/index.ts`,
+          webviewEntries[webviewName as keyof typeof webviewEntries],
         ),
         output: {
           // Single self-contained bundle per webview

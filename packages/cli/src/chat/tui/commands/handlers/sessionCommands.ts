@@ -150,7 +150,7 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
  * `/resume all`: the open-time notice's bulk answer. Each interrupted task
  * resumes on the session beside this chat, as `texra.resumeOnOpen: auto`
  * resumes them, and joins the agent list (Tab); one a resume finds blocked
- * continues once what it needs is back.
+ * is listed again once what it needs is back.
  */
 export function resumeInterruptedTasks(
   runSession: Session,
@@ -232,8 +232,8 @@ function renameCliTask(
  * history and stays in `/resume`. Its transcript starts empty, so a line
  * says where it came from.
  */
-function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
-  return Effect.gen(function* () {
+const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
+  Effect.fn('forkCliTask')(function* (context: SlashCommandContext) {
     const runId = selectedRunIdSignal.get() ?? context.session.runId;
     if (runId === undefined) {
       setTransientNotice('No conversation to fork yet.');
@@ -283,7 +283,6 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       fork,
     );
   });
-}
 
 /** The task commands: compacting the focused agent's context, and leaving.
  *  The agent list (Tab) lists and focuses the task's agents; typing to a
@@ -329,13 +328,6 @@ export function sessionContributions(
               // that policy and skips the interrupt for a resumable-idle root,
               // so `/exit` agrees with Ctrl-C by construction instead of
               // pre-empting it.
-              //
-              // `stopRequested` stays and is the sole writer on this path. The
-              // teardown awaits the follow-up queue's `idle` BEFORE setting the
-              // flag itself, and the queued task polls this flag — dropping it
-              // would hang `/exit` forever with a follow-up queued and no
-              // stream id yet.
-              context.session.askStop('shutdown');
               context.requestInputExit();
             }),
         },

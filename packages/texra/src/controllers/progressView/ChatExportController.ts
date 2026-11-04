@@ -107,6 +107,17 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
         }[traceResult.status],
       });
     const { trace, record } = traceResult;
+    // The first row, the creation row when the run has one, carries the
+    // launch time the filename is stamped with.
+    const firstEvent = trace.events.at(0);
+    if (firstEvent === undefined) {
+      const cause = new Error(`The assembled trace of run ${runId} is empty.`);
+      return yield* new TranscriptExportFailed({
+        step: 'assembleTrace',
+        message: cause.message,
+        cause,
+      });
+    }
 
     // The bundle path is absolute and host-supplied, so the process
     // filesystem reads it. Missing bundles give the host a rebuild hint.
@@ -126,14 +137,7 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
     const html = injectStandaloneTrace(template, trace);
     const filename = generateExportFilename(
       {
-        // The assembler guarantees a non-empty document; the creation
-        // row, when present, supplies the original launch time.
-        timestamp: new Date(
-          (
-            trace.events.find((event) => event.type === 'run.start') ??
-            trace.events[0]!
-          ).at,
-        ).toISOString(),
+        timestamp: new Date(firstEvent.at).toISOString(),
         config: record,
       },
       'html',
@@ -163,6 +167,11 @@ export const writeTranscript = Effect.fn('writeTranscript')(function* (
   const compiled = yield* compileLatex2Pdf(
     pathToLocationIn(options.roots.workspace, result.absolutePath),
     options.roots,
+  ).pipe(
+    // No compiler still leaves the written source; the reason is its log.
+    Effect.catchTag('ToolMissing', (missing) =>
+      Effect.succeed({ ok: false, logTail: missing.message } as const),
+    ),
   );
   return {
     ...result,

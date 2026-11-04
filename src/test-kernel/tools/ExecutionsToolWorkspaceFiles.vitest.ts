@@ -1,20 +1,13 @@
-import '@test/support/sessionGraphTestSetup';
-
-// Test composition imports
-
 // Node imports
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 
-import { Effect } from 'effect';
+import { Effect, Layer, Context } from 'effect';
 
-import { beforeEach, describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { type RunId } from '@shared/schemas';
-import { openTestDefaultSession } from '@test/support/sessionEnd';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
 import {
@@ -22,84 +15,85 @@ import {
   useTempDirs,
   withTempDirEffect,
 } from '@test/support/tempDirPlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import type { AgentConfig, RunId } from '@texra-ai/harness/schemas';
 
 const tempDirs = useTempDirs();
 
-describe('ExecutionsTool', () => {
-  setupPlatform(() => createTempDirPlatform('texra-executions-', tempDirs));
+/** The test's session over the host's roots, as the harness holds it. */
+const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 
-  beforeEach(async () => {
-    await Effect.runPromise(
-      openTestDefaultSession({
-        roots: testWorkspaceRoots(),
-        transcriptMode: { kind: 'ephemeral' },
-      }),
-    );
-  });
+/** A tool call under the test session's `tool-test` run. */
+const toolTestCall = Layer.unwrap(
+  Effect.map(sessionHandle, (session) =>
+    nativeToolTestLayer({
+      run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
+    }),
+  ),
+);
 
-  it.live("rejects '..' path traversal in /executions/{id}/files/{path}", () =>
-    Effect.gen(function* () {
-      const result = yield* ExecutionsTool.call({
-        path: '/executions/abc123def456/files/../../../../../../etc/passwd',
-      });
+/** A host in a temp directory of its own per test, and a session over its
+ *  roots whose requests a person answers from the view. */
+const perTest = Layer.provideMerge(
+  TestSession.layer(undefined, { host: {} }),
+  FakeHost.layer(() => createTempDirPlatform('texra-executions-', tempDirs)),
+);
 
-      expect(result.status).toBe('error');
-      expect(result.error).toContain("must not contain '..'");
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
+// Live clock: the session's publisher and readers run on real turns.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'ExecutionsTool',
+  (it) => {
+    it.layer(perTest, { buildPerTest: true })((it) => {
+      it.effect(
+        "rejects '..' path traversal in /executions/{id}/files/{path}",
+        () =>
+          Effect.gen(function* () {
+            const result = yield* ExecutionsTool.call({
+              path: '/executions/abc123def456/files/../../../../../../etc/passwd',
+            });
 
-  it.live('refuses unrecorded workspace file reads', () =>
-    Effect.gen(function* () {
-      yield* withTempDirEffect('texra-exec-files-', (workspace) =>
+            expect(result.status).toBe('error');
+            expect(result.error).toContain("must not contain '..'");
+          }).pipe(Effect.provide(toolTestCall)),
+      );
+
+      it.effect('refuses unrecorded workspace file reads', () =>
         Effect.gen(function* () {
-          yield* Effect.promise(() =>
-            writeFile(path.join(workspace, 'secret.md'), 'secret'),
+          const session = yield* sessionHandle;
+          yield* withTempDirEffect('texra-exec-files-', (workspace) =>
+            Effect.gen(function* () {
+              yield* Effect.promise(() =>
+                writeFile(path.join(workspace, 'secret.md'), 'secret'),
+              );
+              // A stored run in this workspace whose settled calls edited
+              // only `review.md`.
+              const runId = 'abc123' as RunId;
+              publishTestRunStart(session, runId);
+              yield* Context.get(session, SessionLog).settled;
+              yield* seedRunRecord(session, runId, {
+                agent: 'chat',
+                model: 'deepseek/deepseek-v4-flash',
+                workingDirectory: workspace,
+              } as AgentConfig);
+              yield* seedEditedFiles(session, runId, ['review.md']);
+
+              const result = yield* ExecutionsTool.call({
+                path: '/executions/abc123/workspace-files/secret.md',
+              }).pipe(Effect.provide(toolTestCall));
+
+              expect(result.status).toBe('error');
+              expect(result.error).toContain('Workspace file not found');
+            }),
           );
-          // A stored run in this workspace whose settled calls edited
-          // only `review.md`.
-          const runId = 'abc123' as RunId;
-          const session = testDefaultSession();
-          publishTestRunStart(session, runId);
-          yield* session.log.settled;
-          yield* seedRunRecord(session, runId, {
-            agent: 'chat',
-            model: 'deepseek/deepseek-v4-flash',
-            workingDirectory: workspace,
-          } as AgentConfig);
-          yield* seedEditedFiles(session, runId, ['review.md']);
-
-          const result = yield* ExecutionsTool.call({
-            path: '/executions/abc123/workspace-files/secret.md',
-          });
-
-          expect(result.status).toBe('error');
-          expect(result.error).toContain('Workspace file not found');
         }),
       );
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-});
+    });
+  },
+);

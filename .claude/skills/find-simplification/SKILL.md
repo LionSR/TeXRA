@@ -18,7 +18,6 @@ This skill turns a broad "find things to simplify" request into evidence-backed 
 
 Treat these as intentional by default; removing an unused method _inside_ one can still be valid, but collapsing the seam itself must beat the recorded rationale:
 
-- The checked-in architectural ratchets under `config/ratchets/` (listed in `AGENTS.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to _shrink_ one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen harness SDK surface (`@texra-ai/harness`, `packages/harness/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
 - The one run program (`packages/harness/src/agent/runtime/loop/toolUse.ts`; a document task is a run of it on the recipe script in `packages/texra/src/agent/output/documentRecipe.ts`) over the run history. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the run history.
 - The three hosts (extension, desktop, CLI), the trace viewer, and each host's composition root over `processLayer()`. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
@@ -28,7 +27,7 @@ Treat these as intentional by default; removing an unused method _inside_ one ca
 
 A strong simplification removes, folds, or demotes something real and has clear evidence that the current design costs more than it buys:
 
-- An exported symbol, command, config key, event, manager method, or packaged resource has no production consumer. The dead-export ratchet (`npm run check:dead-code-ratchet`, per-symbol baseline in `config/ratchets/knip-baseline.json`) already knows about grandfathered ones — a _new_ dead export, or proof that a baselined one can now leave the baseline, is the find.
+- An exported symbol, command, config key, event, manager method, or packaged resource has no production consumer.
 - Tests or docs are the only consumers, and the behavior they pin is not load-bearing. Per "Testing discipline", tests pinning retired behavior get deleted with the behavior, not rewritten around the new implementation.
 - Compatibility machinery for earlier internal formats: readers, aliases, migrations, or dual-format unions. Under 1.0, "Compatibility and format retirement" makes these deletable by policy, with no window; only external export formats and wire protocols are exempt.
 - Two representations mirror the same fact — e.g. a fact derivable upstream that is instead re-derived by a `resolve*`/`derive*`/`infer*` helper at multiple call sites (checklist §15 names the precedents).
@@ -47,7 +46,7 @@ Use parallel subagents when the user asks for breadth or many candidates. Give e
 - Model protocol and binding: `packages/llm/src/`, `packages/harness/src/agent/runtime/modelAccess/`.
 - Tools: `packages/harness/src/tools/`, delegation, tool schema defaults.
 - Platform and hosts: port interfaces versus their actual consumers, `packages/texra/src/hosts/`, per-host wiring in `packages/*/`.
-- Webviews and renderers: the extension's `progressView` and `settingsView` trees and the desktop renderer — duplicated logic across them is a recurring find; the shared kit is `packages/texra/src/ui/`.
+- Webviews and renderers: the progress view (`packages/texra/src/ui/progress/`), the extension's `settingsView` tree and the desktop renderer — duplicated logic across them is a recurring find; the shared kit is `packages/texra/src/ui/`.
 - Storage and compatibility: `packages/harness/src/common/storage/`, persisted-state schemas, format readers with introduction dates.
 - Packages, scripts, resources: `packages/extension/resources/`, `scripts/`, `supabase/functions/` — splits and inventories that outlived their consumer.
 
@@ -73,7 +72,7 @@ For every symbol or behavior, classify consumers before writing:
 - Non-production corpus: `src/test-kernel/`, docs, snapshots, comments.
 - Ambiguous corpus: `scripts/` and `docs/scripts/` — some are release/CI tooling that counts as production. Inspect usage before classifying.
 
-Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`packages/harness/src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settingsView/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports. `npm run check:dead-code-ratchet` (knip) can help, but it is not a substitute for reading public interfaces, dynamic event names, tests, and docs. When a ratchet baseline lists the symbol, the find is proving the baseline entry can shrink, not discovering the dead code.
+Use `rg` first: the exact symbol, `.name(` and `name(`, command IDs and config keys as string literals, event names, and any wire strings. VS Code commands are wired through `packages/extension/package.json` contributions and `packages/extension/src/commands.ts`; settings keys are declared by owner (`packages/harness/src/shared/state/stateSettings.ts`, `packages/texra/src/shared/settingsView/texraSettings.ts`, or a plugin's `settings`) and consumed by the native settings view. Grep those boundaries as well as imports.
 
 Reject or downgrade a candidate when:
 
@@ -103,7 +102,7 @@ Diff the sibling branch against `origin/main`, not against the current PR branch
 
 ## Validation And PR Hygiene
 
-For docs-only proposal work, run `npm run format`, `npm run check:guidance-refs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run compile:safe` (or targeted `typecheck:*` during development), `npm run lint`, `npm test`, and `npm run check:dead-code-ratchet` when exports were deleted (the baseline shrinks in the same PR).
+For docs-only proposal work, run `npm run format`, `npm run check:guidance-refs`, and `git diff --check`. For code-touching implementation, run the checks AGENTS.md requires before committing: `npm run format`, `npm run compile:safe` (or targeted `typecheck:*` during development), `npm run lint`, and `npm test`.
 
 A PR implementing a simplification is usually titled `refactor:` / `simplify:` / `consolidate:` / `dedupe:` — which activates the letter-level template requirements (checklist §14): the body must carry `## Net elements (R6)` (files, `^[+-]export` symbols, class/interface/enum declarations, net LoC from `git diff --stat origin/main`) and `## Consumer counts (R8)` (grepped subscriber/caller counts for every deleted emit path or public symbol). Build implies delete in the same PR; a net-positive-LOC "reduction" needs its stated reason. Use Conventional Commits.
 

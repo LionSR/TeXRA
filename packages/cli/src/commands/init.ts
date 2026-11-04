@@ -211,11 +211,6 @@ export const initCommand = defineCliCommand({
   },
   args: {
     ...GLOBAL_ARGS,
-    cwd: {
-      ...GLOBAL_ARGS.cwd,
-      type: 'string',
-      description: 'Working directory to initialize (defaults to $PWD)',
-    },
     yes: {
       type: 'boolean',
       alias: 'y',

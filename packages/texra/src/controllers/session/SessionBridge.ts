@@ -192,10 +192,11 @@ export class SessionBridge {
     else entry.port.send(message);
   }
 
-  attach(
-    port: SessionPort,
-  ): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
-    return Effect.gen({ self: this }, function* () {
+  readonly attach = Effect.fn('SessionBridge.attach')(
+    { self: this },
+    function* (
+      port: SessionPort,
+    ): Effect.fn.Return<AttachedPort, SessionBridgeClosedError> {
       // A port re-attaching under a live id supersedes the previous one.
       // Close it to completion before installing the replacement so the old
       // entry's cleanup cannot be skipped by the new map entry.
@@ -241,8 +242,8 @@ export class SessionBridge {
         },
         close: entry.close,
       };
-    });
-  }
+    },
+  );
 
   /**
    * Answer a `Subscribe`: the next replay's fiber interrupts the one in

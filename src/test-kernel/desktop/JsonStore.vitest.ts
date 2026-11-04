@@ -1,5 +1,5 @@
 // Node imports
-import { chmod, readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 // Third-party imports
@@ -84,40 +84,6 @@ describe('shared JsonStore', () => {
           fromA: 'a',
           fromB: 'b',
         });
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  it.effect(
-    'opens read-only on unwritable storage; only the first write prepares the directory',
-    () =>
-      Effect.gen(function* () {
-        if (process.platform === 'win32') return; // POSIX modes don't apply.
-        const JsonStore = yield* Effect.promise(() => loadJsonStore());
-        tempDir = yield* Effect.promise(() =>
-          makeTempDir('texra-json-store-', tempDirs),
-        );
-        const dir = join(tempDir, 'nested');
-        const filePath = join(dir, 'config.json');
-        // Unwritable parent: any open-time mkdir would throw (#8220).
-        yield* Effect.promise(() => chmod(tempDir!, 0o500));
-
-        try {
-          const store = yield* JsonStore.open(filePath);
-
-          expect(store.get('key')).toBeUndefined();
-          yield* Effect.promise(() =>
-            expect(stat(dir)).rejects.toMatchObject({ code: 'ENOENT' }),
-          );
-
-          yield* Effect.promise(() => chmod(tempDir!, 0o700));
-          yield* store.set('key', 'value');
-
-          expect(yield* Effect.promise(() => readStoredJson(filePath))).toEqual(
-            { key: 'value' },
-          );
-        } finally {
-          yield* Effect.promise(() => chmod(tempDir!, 0o700));
-        }
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

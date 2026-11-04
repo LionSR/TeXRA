@@ -3,12 +3,13 @@ import { Effect, Schema } from 'effect';
 
 // Internal imports
 import { withLogChannel, Settings } from '@texra-ai/harness/host';
-import { executeCommand, type ExecResult } from '@texra-ai/harness/node';
+import { runTool } from '@texra/utils/system/toolChecks';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 
 // Local file imports
 import { LATEX_CITATION_COMMANDS } from '../latexParsingUtils';
+import type { ExecResult } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -136,16 +137,18 @@ export class DiffCommandExecutor {
     ];
   }
 
-  private buildLatexdiffCommand(
-    inputFile: string,
-    editedFile: string,
-    useFlatten: boolean,
-    options: DiffExecutionOptions,
-  ) {
-    return Effect.gen({ self: this }, function* () {
+  private readonly buildLatexdiffCommand = Effect.fn(
+    'DiffCommandExecutor.buildLatexdiffCommand',
+  )(
+    { self: this },
+    function* (
+      inputFile: string,
+      editedFile: string,
+      useFlatten: boolean,
+      options: DiffExecutionOptions,
+    ) {
       const { mathMarkup, subtype } = yield* this.getLatexdiffConfig(options);
       return [
-        'latexdiff',
         ...(useFlatten ? ['--flatten'] : []),
         '--encoding=utf8',
         '-c',
@@ -154,19 +157,21 @@ export class DiffCommandExecutor {
         inputFile,
         editedFile,
       ];
-    });
-  }
+    },
+  );
 
-  private buildLatexdiffVcCommand(
-    inputFile: string,
-    commitHash: string,
-    useFlatten: boolean,
-    options: DiffExecutionOptions,
-  ) {
-    return Effect.gen({ self: this }, function* () {
+  private readonly buildLatexdiffVcCommand = Effect.fn(
+    'DiffCommandExecutor.buildLatexdiffVcCommand',
+  )(
+    { self: this },
+    function* (
+      inputFile: string,
+      commitHash: string,
+      useFlatten: boolean,
+      options: DiffExecutionOptions,
+    ) {
       const { mathMarkup, subtype } = yield* this.getLatexdiffConfig(options);
       return [
-        'latexdiff-vc',
         '--encoding=utf8',
         '-c',
         `PICTUREENV=${LATEXDIFF_PICTURE_ENVIRONMENTS}`,
@@ -178,20 +183,24 @@ export class DiffCommandExecutor {
         commitHash,
         inputFile,
       ];
-    });
-  }
+    },
+  );
 
   /**
    * Run `commandBuilder(true)`, and on a bibliography failure retry it without
    * `--flatten`. The subprocess is torn down by the fiber's own interruption:
    * `executeCommand` kills the process group from its own finalizer.
+   * `commandBuilder` answers the tool's arguments.
    */
-  private executeWithFallback(
-    commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
-    commandType: string,
-    cwd: string | undefined,
-  ): Effect.Effect<ExecResult, Error, ChildProcessSpawner> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly executeWithFallback = Effect.fn(
+    'DiffCommandExecutor.executeWithFallback',
+  )(
+    { self: this },
+    function* (
+      commandBuilder: (useFlatten: boolean) => Effect.Effect<string[], Error>,
+      commandType: 'latexdiff' | 'latexdiff-vc',
+      cwd: string | undefined,
+    ): Effect.fn.Return<ExecResult, Error, ChildProcessSpawner> {
       // Read the timeout once per invocation so the --flatten attempt and any
       // retry use the same value, while each diff run still picks up a value
       // the user changed since the last one.
@@ -203,13 +212,21 @@ export class DiffCommandExecutor {
         timeout: timeoutMs,
         cwd,
       };
-      const attempt = (flatten: boolean) =>
-        Effect.gen({ self: this }, function* () {
+      const attempt = Effect.fn('attempt')(
+        { self: this },
+        function* (flatten: boolean) {
           const variant = flatten ? 'with --flatten' : 'without --flatten';
           yield* Effect.logDebug(`Running ${commandType} ${variant}`);
-          const result = yield* this.exec(
+          // A missing tool fails with its `ToolMissing`, which the
+          // bibliography retry below leaves alone.
+          const result = yield* runTool(
+            commandType,
             yield* commandBuilder(flatten),
-            execOptions,
+            {
+              ...execOptions,
+              // The roots of the workspace being diffed, held by this executor.
+              settings: this.roots,
+            },
           );
           if (!result.success) {
             return yield* new LatexdiffFailed({
@@ -224,7 +241,8 @@ export class DiffCommandExecutor {
             `${commandType} completed successfully (${variant})`,
           );
           return result;
-        });
+        },
+      );
 
       return yield* attempt(true).pipe(
         Effect.catchIf(
@@ -238,20 +256,8 @@ export class DiffCommandExecutor {
             ).pipe(Effect.andThen(attempt(false))),
         ),
       );
-    });
-  }
-
-  /** One `executeCommand` invocation, cancelled by the running fiber. */
-  private exec(
-    command: string[],
-    execOptions: CommandExecOptions,
-  ): Effect.Effect<ExecResult, never, ChildProcessSpawner> {
-    return executeCommand(command, {
-      ...execOptions,
-      // The roots of the workspace being diffed, held by this executor.
-      settings: this.roots,
-    });
-  }
+    },
+  );
 
   private isBibliographyError(errorOutput: string): boolean {
     return BIBLIOGRAPHY_ERROR_PATTERNS.every((pattern) =>
@@ -259,22 +265,22 @@ export class DiffCommandExecutor {
     );
   }
 
-  private getLatexdiffConfig(options: DiffExecutionOptions) {
-    return Effect.gen({ self: this }, function* () {
-      const changesOnly = yield* this.setting<boolean>(
-        DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
-      );
+  private readonly getLatexdiffConfig = Effect.fn(
+    'DiffCommandExecutor.getLatexdiffConfig',
+  )({ self: this }, function* (options: DiffExecutionOptions) {
+    const changesOnly = yield* this.setting<boolean>(
+      DocumentsStateKey.LATEXDIFF_CHANGES_ONLY,
+    );
 
-      return {
-        mathMarkup:
-          options.mathMarkup ??
-          (yield* this.setting<LatexdiffMathMarkupValue>(
-            DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-          )),
-        subtype:
-          options.subtype ??
-          (changesOnly ? LATEXDIFF_CHANGES_ONLY_SUBTYPE : undefined),
-      };
-    });
-  }
+    return {
+      mathMarkup:
+        options.mathMarkup ??
+        (yield* this.setting<LatexdiffMathMarkupValue>(
+          DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
+        )),
+      subtype:
+        options.subtype ??
+        (changesOnly ? LATEXDIFF_CHANGES_ONLY_SUBTYPE : undefined),
+    };
+  });
 }

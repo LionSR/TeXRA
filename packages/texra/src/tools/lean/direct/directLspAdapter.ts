@@ -27,19 +27,22 @@ import {
   type Path,
 } from 'effect';
 
-import { LeanAdapterStopped, LeanServerPool } from './leanServerPool';
+import { adapterStopped, LeanServerPool } from './leanServerPool';
 import {
-  LeanFileCommandFailed,
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '../leanLanguageServices';
-import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-import type {
-  LspHover,
-  LspResult,
-  PlainGoal,
-  PlainTermGoal,
+import {
+  LspHoverSchema,
+  PlainGoalSchema,
+  PlainTermGoalSchema,
+  type LeanUnavailable,
+  type LspHover,
+  type LspResult,
+  type PlainGoal,
+  type PlainTermGoal,
 } from '../leanTypes';
+import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /** Long-lived CLI/desktop hosts otherwise keep unused servers forever. */
 const LEAN_IDLE_TIMEOUT = Duration.minutes(30);
@@ -78,11 +81,7 @@ const portOverPool = (
   listServers: () => pool.listServers(),
 
   fetchDiagnosticsForFile: (file, runId) =>
-    foldStopped(pool.fetchDiagnosticsForFile(file, runId), () => ({
-      ok: false,
-      kind: 'toolchain_unavailable',
-      message: STOPPED_MESSAGE,
-    })),
+    failStopped(pool.fetchDiagnosticsForFile(file, runId)),
 
   // No navigateToFirstError here: CLI/desktop have no editor to move the
   // cursor, and the interface declares it an optional host capability so
@@ -91,37 +90,19 @@ const portOverPool = (
   // on.
 
   executeFileCommand: (command, filePath, runId) =>
-    pool.executeFileCommand(filePath, runId).pipe(
-      Effect.catchCause((cause) =>
-        Cause.hasInterrupts(cause)
-          ? Effect.fail(
-              new LeanFileCommandFailed({
-                reason: 'failed',
-                message: STOPPED_MESSAGE,
-              }),
-            )
-          : Effect.failCause(cause),
-      ),
-    ),
+    failStopped(pool.executeFileCommand(filePath, runId)),
 
   executeProjectCommand: (command, runId) =>
-    pool
-      .executeProjectCommand(command, runId)
-      .pipe(
-        Effect.catchCause((cause) =>
-          Cause.hasInterrupts(cause)
-            ? Effect.fail(new LeanAdapterStopped())
-            : Effect.failCause(cause),
-        ),
-      ),
+    failStopped(pool.executeProjectCommand(command, runId)),
 
   getGoalState: (filePath, line, column, runId) =>
     foldStopped(
-      pool.positionRequest<PlainGoal>(
+      pool.positionRequest(
         filePath,
         line,
         column,
         '$/lean/plainGoal',
+        PlainGoalSchema,
         runId,
       ),
       stoppedLspResult<PlainGoal>,
@@ -129,11 +110,12 @@ const portOverPool = (
 
   getTermGoal: (filePath, line, column, runId) =>
     foldStopped(
-      pool.positionRequest<PlainTermGoal>(
+      pool.positionRequest(
         filePath,
         line,
         column,
         '$/lean/plainTermGoal',
+        PlainTermGoalSchema,
         runId,
       ),
       stoppedLspResult<PlainTermGoal>,
@@ -141,11 +123,12 @@ const portOverPool = (
 
   getHoverInfo: (filePath, line, column, runId) =>
     foldStopped(
-      pool.positionRequest<LspHover>(
+      pool.positionRequest(
         filePath,
         line,
         column,
         'textDocument/hover',
+        LspHoverSchema,
         runId,
       ),
       stoppedLspResult<LspHover>,
@@ -157,23 +140,21 @@ const portOverPool = (
     foldStopped(pool.stopSessionsForRun(runId), () => undefined),
 });
 
-/** The one message a stopped adapter reports, however the call was stopped. */
-const STOPPED_MESSAGE = new LeanAdapterStopped().message;
-
 const stoppedLspResult = <T>(): LspResult<T> => ({
   data: null,
-  error: STOPPED_MESSAGE,
+  error: adapterStopped().message,
 });
 
 /**
- * Convert an interrupted pool operation into the value that same call gets
+ * Convert an interrupted pool operation into the answer that same call gets
  * after the pool's scope has closed. Closing the scope interrupts an
  * in-flight build and, with it, the fiber awaiting it; interruption is not a
  * failure the pool can convert into its total results, so the conversion happens at
- * this port edge, keeping {@link LeanAdapterStopped} the one shape a stopped
- * adapter reports. This is the same conversion the old Promise edge applied at
- * `runPromiseExit`, so a tool-call interruption is converted exactly as it was
- * there.
+ * this port edge, keeping {@link adapterStopped} the one shape a stopped
+ * adapter reports: a value for the calls that answer with one, the
+ * `LeanUnavailable` failure for the rest ({@link failStopped}). This is the
+ * same conversion the old Promise edge applied at `runPromiseExit`, so a
+ * tool-call interruption is converted exactly as it was there.
  */
 const foldStopped = <A, E>(
   operation: Effect.Effect<A, E>,
@@ -183,6 +164,18 @@ const foldStopped = <A, E>(
     Effect.catchCause((cause) =>
       Cause.hasInterrupts(cause)
         ? Effect.succeed(whenStopped())
+        : Effect.failCause(cause),
+    ),
+  );
+
+/** {@link foldStopped} for a call whose stopped answer is its failure. */
+const failStopped = <A, E>(
+  operation: Effect.Effect<A, E>,
+): Effect.Effect<A, E | LeanUnavailable> =>
+  operation.pipe(
+    Effect.catchCause((cause): Effect.Effect<never, E | LeanUnavailable> =>
+      Cause.hasInterrupts(cause)
+        ? Effect.fail(adapterStopped())
         : Effect.failCause(cause),
     ),
   );

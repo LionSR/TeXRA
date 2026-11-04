@@ -1,5 +1,5 @@
 import * as os from 'node:os';
-import { Effect, Semaphore } from 'effect';
+import { Context, type Deferred, Effect, Semaphore } from 'effect';
 /**
  * One child-run concurrency budget per session: the cap on concurrently live
  * native child model conversations, one semaphore held by the session's runs
@@ -14,13 +14,15 @@ import { Effect, Semaphore } from 'effect';
  * its slot never starts fresh model work.
  */
 
-import type { StateReadFailed } from '@platform/interfaces';
+import {
+  Settings,
+  type SettingsStores,
+  type StateReadFailed,
+} from '@shared/config/settings';
 import {
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
 
 import type { ScriptScope } from './RunCall';
 
@@ -50,6 +52,12 @@ export const resolveChildRunConcurrencyBudget = Effect.fn(
   );
 });
 
+/** The key of a script's child-run budget (`ScriptScope.shared`). */
+const AgentBudget =
+  Context.Service<Deferred.Deferred<Semaphore.Semaphore, StateReadFailed>>(
+    'agent:budget',
+  );
+
 /**
  * The budget as one script's awaited child calls share it (`agent()`,
  * `self()`): each holds one for its whole call, taken first thing, so they
@@ -61,7 +69,7 @@ export const scriptChildBudget = (
   script: ScriptScope,
 ): Effect.Effect<Semaphore.Semaphore, StateReadFailed> =>
   script.shared(
-    'agent:budget',
+    AgentBudget,
     Effect.flatMap(resolveChildRunConcurrencyBudget(stores), (permits) =>
       Semaphore.make(permits),
     ),

@@ -1,14 +1,18 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { it } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
-import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer, Schema, Context } from 'effect';
+import { afterAll, assert, beforeAll, expect, vi } from 'vitest';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import {
+  AppSignals,
+  AppState,
+  mcpConfigPathOf,
+  Secrets,
+} from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
@@ -18,17 +22,12 @@ import {
   agentRunLayer,
   type RunLaunch,
 } from '@agent/runtime/run/AgentRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/validationModel';
-import { mcpConfigPathOf } from '@common/plugins/mcpServers';
-import { AppSignals } from '@platform/appSignals';
-import { AppState } from '@platform/interfaces';
-import { Secrets } from '@platform/secrets';
-import { AgentConfigSchema } from '@shared/schemas';
 import { RunHistory } from '@shared/session/runHistory';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeHostAppState, setupPlatform } from '@test/support/setupPlatform';
+import { fakeHostAppState } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -37,12 +36,16 @@ import {
   createFakeWorkspaceRoots,
   FakeSecrets,
 } from '@test/support/FakePlatform';
+import {
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 import { texraPlugins } from '@texra/tools/registry';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { generateRunId } from '@utils/core';
 
-import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
+import type { ITool } from '@texra-ai/harness';
 
 function tool(name: string): ITool {
   return {
@@ -77,7 +80,12 @@ function observingInvokerLayer(seen: InvokeRequest[]) {
 }
 
 /** The run's layer over a launch, with the given run-scoped tools. */
-function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
+function runLayer(
+  session: Context.Context<SessionServices>,
+  ctx: RunLaunch,
+  tools: ITool[],
+  seen: InvokeRequest[] = [],
+) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
     nativeToolTestLayer(),
@@ -89,7 +97,7 @@ function runLayer(ctx: RunLaunch, tools: ITool[], seen: InvokeRequest[] = []) {
         callbacks: {},
       }),
     ),
-    Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
+    Layer.provideMerge(Layer.succeedContext(session)),
     Layer.provideMerge(testHttpClientLayer),
     // No key is read: every launch here binds the validation model.
     Layer.provideMerge(Secrets.layer(new FakeSecrets())),
@@ -127,14 +135,18 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-describe('run-scoped tool resolution', () => {
-  setupPlatform({ workspacePath: process.cwd() });
-
+layer(
+  Layer.provideMerge(
+    SessionGraph.layer,
+    FakeHost.layer({ workspacePath: process.cwd() }),
+  ),
+  { excludeTestServices: true },
+)('run-scoped tool resolution', (it) => {
   it.effect(
     'a resumed step offers the recorded tools that are still the same tool, and names each one gone',
     () =>
       Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const config = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -142,18 +154,18 @@ describe('run-scoped tool resolution', () => {
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
-        const ctx = validationLaunch({ runId, session }, config);
+        const ctx = validationLaunch({ runId }, config);
         yield* runToolUse({ resume: false }).pipe(
-          Effect.provide(runLayer(ctx, [tool('gone'), tool('kept')])),
+          Effect.provide(runLayer(session, ctx, [tool('gone'), tool('kept')])),
           Effect.orDie,
         );
 
         // `gone` vanished and `added` appeared since the run opened.
         const step = yield* Effect.gen(function* () {
-          const state = yield* session.runHistory.load(runId);
+          const state = yield* Context.get(session, RunHistory).load(runId);
           return yield* stepFor(yield* AgentRun, state!, 'request', false);
         }).pipe(
-          Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
+          Effect.provide(runLayer(session, ctx, [tool('kept'), tool('added')])),
           Effect.orDie,
         );
 
@@ -180,7 +192,6 @@ describe('run-scoped tool resolution', () => {
             },
           ],
         });
-        yield* closeSessionOf(session);
       }),
   );
 });

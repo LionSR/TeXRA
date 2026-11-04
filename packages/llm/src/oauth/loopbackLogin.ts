@@ -17,6 +17,7 @@ import { Deferred, Duration, Effect, Fiber, Result, Schema } from 'effect';
 import type { HttpClient } from 'effect/http';
 
 import type {
+  SubscriptionCallback,
   SubscriptionCoordinator,
   SubscriptionSession,
 } from './subscriptionCoordinator.js';
@@ -68,7 +69,7 @@ export interface LoopbackLoginOptions<S extends SubscriptionSession> {
 interface OAuthLoopbackLoginOptions<
   S extends SubscriptionSession,
 > extends LoopbackLoginOptions<S> {
-  /** Registered callback ports, tried in order. */
+  /** Registered callback ports, tried in order; 0 takes any free port. */
   ports: readonly number[];
   /** Path segment of the registered redirect URI (e.g. `/auth/callback`). */
   callbackPath: string;
@@ -100,11 +101,12 @@ const ERROR_HTML = `<!doctype html><html><head><meta charset="utf-8"><title>Sign
 <p>Return to TeXRA and try signing in again.</p>
 </body></html>`;
 
-/** One bind attempt; succeeds with undefined when the port is unavailable. */
+/** One bind attempt; succeeds with undefined when the port is unavailable.
+ *  Port 0 asks the system for a free one. */
 function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
   // Non-failing: the registration below resumes on `listening` or on `error`,
   // and `listen` reports a bind failure through that `error` listener rather
-  // than throwing (every caller passes a fixed, in-range registered port).
+  // than throwing (every caller passes a fixed, in-range port or 0).
   return Effect.callback<http.Server | undefined>((resume) => {
     const server = http.createServer();
     const onError = () => {
@@ -122,28 +124,28 @@ function listenAttempt(port: number): Effect.Effect<http.Server | undefined> {
   });
 }
 
-function bindLoopbackServer(
+const bindLoopbackServer = Effect.fnUntraced(function* (
   ports: readonly number[],
   displayName: string,
-): Effect.Effect<
+): Effect.fn.Return<
   { server: http.Server; port: number },
   LoopbackTransportUnavailableError
 > {
-  return Effect.gen(function* () {
-    for (const port of ports) {
-      const server = yield* listenAttempt(port);
-      if (server) return { server, port };
-    }
-    const portList = ports.join(' or ');
-    return yield* Effect.fail(
-      new LoopbackTransportUnavailableError({
-        message:
-          `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
-          'Close whatever is using them, or use device-code sign-in instead.',
-      }),
-    );
-  });
-}
+  for (const port of ports) {
+    const server = yield* listenAttempt(port);
+    const address = server?.address();
+    if (server && address !== null && typeof address === 'object')
+      return { server, port: address.port };
+  }
+  const portList = ports.join(' or ');
+  return yield* Effect.fail(
+    new LoopbackTransportUnavailableError({
+      message:
+        `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
+        'Close whatever is using them, or use device-code sign-in instead.',
+    }),
+  );
+});
 
 /**
  * What one callback request asks the login flow to do. Parsed as a pure
@@ -156,7 +158,12 @@ type CallbackDecision =
   | { readonly kind: 'stale-state' }
   | { readonly kind: 'oauth-error'; readonly error: string }
   | { readonly kind: 'missing-code' }
-  | { readonly kind: 'code'; readonly code: string };
+  | {
+      readonly kind: 'code';
+      readonly code: string;
+      /** The client a registering provider issued, when the callback names one. */
+      readonly clientId: string | undefined;
+    };
 
 function decideCallback(
   rawUrl: string | undefined,
@@ -183,7 +190,11 @@ function decideCallback(
       if (!authCode) {
         return { kind: 'missing-code' };
       }
-      return { kind: 'code', code: authCode };
+      return {
+        kind: 'code',
+        code: authCode,
+        clientId: url.searchParams.get('client_id') ?? undefined,
+      };
     },
     catch: (cause) =>
       new Error(
@@ -218,8 +229,8 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
             bound.server.close();
           }),
       );
-      const authorize = coordinator.buildAuthorizeRequest(port);
-      const code = yield* Deferred.make<string, Error>();
+      const authorize = yield* coordinator.buildAuthorizeRequest(port);
+      const code = yield* Deferred.make<SubscriptionCallback, Error>();
 
       const onRequest = (
         req: http.IncomingMessage,
@@ -259,7 +270,13 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
             return;
           case 'code':
             respondHtml(res, successHtml(displayName));
-            Deferred.doneUnsafe(code, Effect.succeed(decision.success.code));
+            Deferred.doneUnsafe(
+              code,
+              Effect.succeed({
+                code: decision.success.code,
+                clientId: decision.success.clientId,
+              }),
+            );
             return;
         }
       };
@@ -289,7 +306,7 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
 
       yield* Fiber.join(browserLaunch);
 
-      const authCode = yield* Deferred.await(code).pipe(
+      const callback = yield* Deferred.await(code).pipe(
         Effect.timeoutOrElse({
           duration: Duration.millis(AUTH_CALLBACK_TIMEOUT_MS),
           orElse: () =>
@@ -301,11 +318,7 @@ function loginWithOAuthLoopback<S extends SubscriptionSession>(
         }),
       );
 
-      return yield* coordinator.loginWithCode({
-        code: authCode,
-        verifier: authorize.verifier,
-        redirectUri: authorize.redirectUri,
-      });
+      return yield* coordinator.loginWithCode(authorize, callback);
     }),
   );
 }

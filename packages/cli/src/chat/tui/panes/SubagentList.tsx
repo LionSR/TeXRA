@@ -10,8 +10,8 @@ import { finishedToolCalls } from '@cli/runtime/runProgressRenderer';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 
-import { activeStartedAt, childElapsed } from '../state/childControls';
-import { killableRunId, runPhaseOf } from '../state/sessionView';
+import { childElapsed } from '../state/childControls';
+import { killableRunId } from '../state/sessionView';
 import {
   CHILD_ROW_METADATA_MIN_COLUMNS,
   CHILD_STATUS_MARKER,
@@ -97,12 +97,8 @@ function SessionRow({
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly run: RunView;
 }): React.JSX.Element {
-  const status = runPhaseOf(run);
   const statusLabel = runStatusLabel(run.statusKey);
-  const elapsed = childElapsed(
-    { status, startedAt: activeStartedAt(run) },
-    nowMs,
-  );
+  const elapsed = childElapsed(run.runStartedAt ?? undefined, nowMs);
   const approval = pendingApprovalRowDisplay(pendingKinds);
   const positionLabel = formatLoopPositionLabel(run.turn);
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
@@ -200,7 +196,7 @@ export function SubagentList(
   const startedAts = useMemo(
     () =>
       rows.flatMap((row) =>
-        row.kind === 'run' ? [activeStartedAt(row.run)] : [],
+        row.kind === 'run' ? [row.run.runStartedAt ?? undefined] : [],
       ),
     [rows],
   );

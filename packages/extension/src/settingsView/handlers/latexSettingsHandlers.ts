@@ -3,7 +3,7 @@
  * editor settings and installing extensions. The rest of the Tools and LaTeX
  * pages is the shared settings body's (`settingsToolCommands`).
  */
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 import { ensureError } from '@texra-ai/harness/schemas';
@@ -41,10 +41,10 @@ function isRecommendedValueSet(field: LatexRecommendedSettingField): boolean {
     return current === setting.value;
   }
 
-  if (typeof current !== 'object' || current === null) return false;
-  const currentObject = current as Record<string, unknown>;
+  if (!Predicate.isObjectOrArray(current)) return false;
+  const currentEntries = new Map<string, unknown>(Object.entries(current));
   return Object.entries(setting.value).every(
-    ([key, value]) => currentObject[key] === value,
+    ([key, value]) => currentEntries.get(key) === value,
   );
 }
 
@@ -64,10 +64,9 @@ function resolveUpdateValue(
   const globalValue = vscode.workspace
     .getConfiguration()
     .inspect<Record<string, unknown>>(setting.key)?.globalValue;
-  const remaining =
-    typeof globalValue === 'object' && globalValue !== null
-      ? { ...globalValue }
-      : {};
+  const remaining = Predicate.isObjectOrArray(globalValue)
+    ? { ...globalValue }
+    : {};
 
   if (reset) {
     for (const recommendedKey of Object.keys(setting.value)) {

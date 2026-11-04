@@ -117,13 +117,13 @@ export function globEscape(
       segment !== null;
       segment = segment.rest()
     ) {
+      // A literal segment is a string, `**` is a symbol that never matches
+      // `..`, and a segment with magic is the matcher the walker tests
+      // directory entries with.
       const matcher = segment.pattern();
-      // minimatch overrides `test` on some compiled segments with a fast
-      // path (with `dot`, `*.` becomes `endsWith('.')`, true for '..'), so
-      // the check runs the underlying regex.
       if (
         matcher === '..' ||
-        (matcher instanceof RegExp && RegExp.prototype.test.call(matcher, '..'))
+        (typeof matcher === 'object' && matcher.test('..'))
       ) {
         return alternative.globString();
       }
@@ -187,7 +187,7 @@ export function rootedFileSystem(
    * and `suffix` accepted only as filename fragments, and the created path
    * checked against the root once more before it is handed back.
    */
-  const temp = <R>(
+  const temp = Effect.fn('temp')(function* <R>(
     method: string,
     options:
       | {
@@ -199,20 +199,19 @@ export function rootedFileSystem(
     create: (
       directory: string,
     ) => Effect.Effect<string, PlatformError.PlatformError, R>,
-  ) =>
-    Effect.gen(function* () {
-      const fragment = tempNameEscape(options ?? {});
-      if (fragment !== undefined) {
-        return yield* PlatformError.badArgument({
-          module: MODULE,
-          method,
-          description: `temp name fragment is not a file name: ${fragment}`,
-        });
-      }
-      const directory = yield* inRoot(method, options?.directory);
-      const created = yield* create(directory);
-      return yield* at(method, created);
-    });
+  ) {
+    const fragment = tempNameEscape(options ?? {});
+    if (fragment !== undefined) {
+      return yield* PlatformError.badArgument({
+        module: MODULE,
+        method,
+        description: `temp name fragment is not a file name: ${fragment}`,
+      });
+    }
+    const directory = yield* inRoot(method, options?.directory);
+    const created = yield* create(directory);
+    return yield* at(method, created);
+  });
 
   const base = FileSystem.make({
     access: (target, options) =>

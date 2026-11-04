@@ -16,7 +16,7 @@
 import { Schema } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 
 /** Provider bytes, kept verbatim and never interpreted by storage. */
 const ProviderEvidenceSchema = Schema.Struct({
@@ -24,12 +24,9 @@ const ProviderEvidenceSchema = Schema.Struct({
   data: Schema.Record(Schema.String, JsonValueSchema),
 });
 
-/** Every wire surface a stored turn or usage record names. */
-export const StoredProtocolSchema = Schema.Literals([
-  'google-interactions',
-  'openai-responses',
-  'anthropic-messages',
-]);
+/** The wire surface recorded by a turn or usage fact. Its identity outlives
+ *  the installed adapters; the execution boundary validates support. */
+export const StoredProtocolSchema = Schema.String.check(Schema.isMinLength(1));
 
 /** The selected binding: protocol, deployment and model, never a secret. */
 export const StoredOriginSchema = Schema.Struct({
@@ -132,7 +129,6 @@ export const StoredTurnSchema = Schema.Struct({
     'tool-calls',
     'stop-sequence',
     'refusal',
-    'context-window-exceeded',
   ]),
   stopSequence: Schema.optional(Schema.String),
   finishEvidence: Schema.optional(ProviderEvidenceSchema),
@@ -143,7 +139,9 @@ export const StoredTurnSchema = Schema.Struct({
       outputTokens: TokenCount,
       totalTokens: TokenCount,
       cachedInputTokens: TokenCount,
+      cacheWriteTokens: TokenCount,
       reasoningTokens: TokenCount,
+      toolUsePromptTokens: TokenCount,
       providerUsage: Schema.optional(ProviderEvidenceSchema),
     }),
   ),

@@ -5,7 +5,7 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
+import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 
 function withStoreEffect<A, E, R>(

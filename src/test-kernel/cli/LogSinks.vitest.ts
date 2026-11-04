@@ -1,21 +1,20 @@
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 // Local imports
 import { NdjsonStdoutSink, setCliLogRuntime } from '@cli/runtime/logSinks';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { SessionGraph } from '@test/support/testKernel';
 
 // The sink queues each record on a FIFO lane of the runtime its composition
-// root hands it; here that root is this suite.
-beforeEach(() => {
-  setCliLogRuntime(testRuntime());
-});
-
-afterEach(() => {
-  setCliLogRuntime(null);
-});
+// root hands it; here that root is this suite, for the test's scope.
+const useCliLogRuntime = Effect.acquireRelease(
+  Effect.tap(SessionGraph.runtime, (runtime) =>
+    Effect.sync(() => setCliLogRuntime(runtime)),
+  ),
+  () => Effect.sync(() => setCliLogRuntime(null)),
+);
 
 function createStdoutStub(writeResults: boolean[] = [true]) {
   const lines: string[] = [];
@@ -41,9 +40,10 @@ function createStdoutStub(writeResults: boolean[] = [true]) {
   };
 }
 
-describe('NdjsonStdoutSink', () => {
+layer(SessionGraph.hosted)('NdjsonStdoutSink', (it) => {
   it.effect('preserves records added while stdout is backpressured', () =>
     Effect.gen(function* () {
+      yield* useCliLogRuntime;
       const { emit, lines, stdout } = createStdoutStub([false, true]);
       const sink = new NdjsonStdoutSink(stdout);
 

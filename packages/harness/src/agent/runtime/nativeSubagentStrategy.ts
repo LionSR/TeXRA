@@ -7,10 +7,8 @@
 import { Effect } from 'effect';
 
 import { type RunReport } from '@agent/runtime/runReport';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { RegisterRunOptions } from '@agent/storage/runLifecycle';
 import {
   registryOf,
   type AgentRunServices,
@@ -22,6 +20,9 @@ import {
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
+import { SessionRoots } from '@platform/rootedFs';
+import type { RegisterRunOptions } from '@shared/session/runFacts';
+import type { SessionLog } from '@shared/session/runHistory';
 import { emptyRunEndOutput, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readRecipeResult } from './recipeResult';
@@ -36,7 +37,6 @@ import { formatSubagentDelivery, formatSubagentError } from './subagentResults';
  * registration's, a resumed one's its rows'.
  */
 export interface ChildRunLaunchOptions {
-  readonly session: SessionHandle;
   /** The history a fresh child is born on: a fork's (`forkSeed`). */
   readonly seed?: RegisterRunOptions['seed'];
 }
@@ -45,9 +45,6 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly runId: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
-  /** An awaited call's child: it ends after one cycle, fresh or resumed,
-   *  and its report is persisted, not delivered: its caller reads it. */
-  readonly inBand?: true;
 }
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
@@ -56,6 +53,8 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         readonly definition: PreparedAgentDefinition;
         /** The child's registration, which its opening commits. */
         readonly registration: RegisterRunOptions;
+        /** Told the commit of the child's opening (`ExecuteAgentOptions`). */
+        readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
         readonly resume?: never;
       }
     | {
@@ -63,12 +62,9 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         /** A persisted child, resumed under its stored config with the
          *  parent its rows hold (`parent`), read as its run starts, under
          *  the claim its loop holds. */
-        readonly resume: Pick<
-          ExecuteAgentOptions,
-          'onRun' | 'onAdmitted' | 'tools'
-        > & {
+        readonly resume: Pick<ExecuteAgentOptions, 'onAdmitted' | 'tools'> & {
           readonly config: AgentConfig;
-          readonly parent: Effect.Effect<RunId | undefined, Error>;
+          readonly parent: Effect.Effect<RunId | undefined, Error, SessionLog>;
           readonly stopAfterCycle?: boolean;
         };
       }
@@ -81,8 +77,8 @@ export function createNativeSubagentStrategy(
     ? params.definition.config
     : params.resume.config;
   // A child's provider/runtime failure rides its report's `failure`
-  // (`runWithLifecycle` returns a terminal failed result rather than
-  // rejecting); a thrown call reaches `formatError` as its `err`.
+  // (`endRun` returns a terminal failed result rather than rejecting); a
+  // thrown call reaches `formatError` as its `err`.
   let lastResult: RunReport | undefined;
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
@@ -97,23 +93,15 @@ export function createNativeSubagentStrategy(
   return {
     // Not used as a trace stage for native delegation (the loop gates
     // `logger.openStage` on `childRun`, which native delegation never
-    // passes) — its only reader is the loop's non-throwing-failure message,
-    // which becomes the persisted terminal `error.message` for the run
-    // record.
+    // passes) — its only reader is the loop's message for a failed turn
+    // that carries no message of its own (`turnErrorMessage`).
     stageLabel: config.script == null ? 'Native subagent' : 'Native recipe run',
-
-    // An awaited child has no later turn to consume a follow-up delivery;
-    // its awaiting caller reads the persisted report/result instead.
-    ...(params.inBand === true && {
-      deliveryMode: 'persistOnly' as const,
-    }),
 
     launch: (notify, turns) =>
       runNative(
         Effect.gen(function* () {
           const { programs } = registryOf(yield* Runs);
           const options = {
-            session: params.session,
             onProgress: notify,
             turns: {
               turnPermit: turns.turnPermit,
@@ -133,7 +121,6 @@ export function createNativeSubagentStrategy(
             const { config, parent, stopAfterCycle, ...launch } = params.resume;
             const definition = yield* prepareAgentDefinition({
               config,
-              session: params.session,
               stopAfterCycle,
             });
             return yield* programs.executeAgent(definition, params.runId, {
@@ -145,13 +132,14 @@ export function createNativeSubagentStrategy(
           return yield* programs.executeAgent(params.definition, params.runId, {
             ...options,
             registration: { ...params.registration, seed: params.seed },
+            ...(params.onAdmitted && { onAdmitted: params.onAdmitted }),
           });
         }),
       ),
 
-    isTurnInterrupted: (turn) =>
-      params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
+    isTurnInterrupted: (turn) => turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: (turn) => turn.failure !== undefined,
+    turnErrorMessage: (turn) => turn.failure?.message,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: RunReport,
@@ -166,7 +154,7 @@ export function createNativeSubagentStrategy(
               config,
               turn.output,
               params.runId,
-              params.session.roots,
+              yield* SessionRoots,
             )
           : undefined;
       // A formatter throw is this turn's failure, not a defect.

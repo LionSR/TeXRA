@@ -2,17 +2,19 @@ import './themeTokens.css';
 import './shell.css';
 
 // The page-local host installs at module evaluation, before the progress
-// bundle resolves its bridge; the shell then mounts on the
-// `<progress-app data-session>` the HTML carries, as in every host. This
-// page owns the mount (rather than the bundle's entry) because the scrubber
-// remounts it: a fresh shell is a fresh generation, and the bridge answers
-// that generation at the new cut.
+// bundle resolves its bridge: modules evaluate in import order, and the
+// progress bundle reads the bridge as it loads, so this bare import comes
+// before every bundle import (`import/order` leaves bare imports where they
+// are). The shell then mounts on the `<progress-app data-session>` the HTML
+// carries, as in every host. This page owns the mount (rather than the
+// bundle's entry) because the scrubber remounts it: a fresh shell is a fresh
+// generation, and the bridge answers that generation at the new cut.
+import './traceHostBridge';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import '@ui/wa';
 import 'katex/dist/katex.min.css';
-import '@progressView/frontend/ProgressApp';
-import { mountProgressWebview } from '@progressView/frontend/progressWebview';
-import type { ProgressApp } from '@progressView/frontend/ProgressApp';
+import { mountProgressWebview } from '@ui/progress/progressWebview';
+import { ProgressApp } from '@ui/progress/ProgressApp';
 import { formatLoopPositionLabel } from '@ui/copy/runStatus';
 
 import { setTraceCut, trace } from './traceHostBridge';
@@ -83,14 +85,17 @@ function installScrubber(loaded: TraceDocument, remount: () => void): void {
   scrubber.hidden = false;
 }
 
-const app = document.querySelector<ProgressApp>('progress-app');
-if (!app) throw new Error('The trace viewer HTML carries no <progress-app>');
+const app = document.querySelector('progress-app');
+if (!(app instanceof ProgressApp))
+  throw new Error('The trace viewer HTML carries no <progress-app>');
 let mounted = { app, unmount: mountProgressWebview(app) };
 
 /** Replace the shell with a fresh one: a new graph, generation, and session view. */
 function remount(): void {
   mounted.unmount();
-  const fresh = mounted.app.cloneNode(false) as ProgressApp;
+  const fresh = mounted.app.cloneNode(false);
+  if (!(fresh instanceof ProgressApp))
+    throw new Error('A cloned <progress-app> is a ProgressApp');
   mounted.app.replaceWith(fresh);
   mounted = { app: fresh, unmount: mountProgressWebview(fresh) };
 }

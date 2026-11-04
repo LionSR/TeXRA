@@ -4,6 +4,9 @@
  * details of `vscode-languageserver-protocol`.
  */
 
+// Third-party imports
+import { Schema } from 'effect';
+
 // Local imports - utils
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 
@@ -107,17 +110,32 @@ export const LEAN_SERVER_MODE_LABELS = Object.freeze({
 
 // LSP contracts
 
-type LspMarkupContent = {
-  kind: 'plaintext' | 'markdown' | string;
-  value: string;
-};
+const LspPositionSchema = Schema.Struct({
+  line: Schema.Finite,
+  character: Schema.Finite,
+});
 
-type LspMarkedString = string | { language: string; value: string };
+const LspRangeSchema = Schema.Struct({
+  start: LspPositionSchema,
+  end: LspPositionSchema,
+});
+type LspRange = typeof LspRangeSchema.Type;
 
-export interface LspHover {
-  contents: LspMarkedString | LspMarkupContent | LspMarkedString[];
-  range?: LspRange;
-}
+const LspMarkedStringSchema = Schema.Union([
+  Schema.String,
+  Schema.Struct({ language: Schema.String, value: Schema.String }),
+]);
+
+/** Reply to `textDocument/hover`. */
+export const LspHoverSchema = Schema.Struct({
+  contents: Schema.Union([
+    LspMarkedStringSchema,
+    Schema.Struct({ kind: Schema.String, value: Schema.String }),
+    Schema.Array(LspMarkedStringSchema),
+  ]),
+  range: Schema.optional(LspRangeSchema),
+});
+export type LspHover = typeof LspHoverSchema.Type;
 
 export interface LspDiagnostic {
   range: LspRange;
@@ -141,28 +159,18 @@ export interface LeanFileProgressParams {
   processing: { range: LspRange; kind?: number }[];
 }
 
-interface LspRange {
-  start: LspPosition;
-  end: LspPosition;
-}
-
-interface LspPosition {
-  line: number;
-  character: number;
-}
-
 // Lean tool contracts
 
 /** Response from $/lean/plainGoal LSP request */
-export interface PlainGoal {
-  goals: string[];
-  rendered: string;
-}
+export const PlainGoalSchema = Schema.Struct({
+  goals: Schema.Array(Schema.String),
+  rendered: Schema.String,
+});
+export type PlainGoal = typeof PlainGoalSchema.Type;
 
 /** Response from $/lean/plainTermGoal LSP request */
-export interface PlainTermGoal {
-  goal: string;
-}
+export const PlainTermGoalSchema = Schema.Struct({ goal: Schema.String });
+export type PlainTermGoal = typeof PlainTermGoalSchema.Type;
 
 /** Typed result from an LSP request */
 export interface LspResult<T> {
@@ -179,28 +187,53 @@ export interface LeanDiagnostic extends GenericDiagnostic {
 }
 
 /**
- * Result of {@link LeanLanguageServices.fetchDiagnosticsForFile}. A
- * discriminated result so callers can tell a genuinely missing/unopenable file
- * apart from a broken or absent Lean toolchain (no `lake`/`lean`, or the file
- * is not inside a Lake project) — the two failure modes the old
- * `LeanDiagnostic[] | null` contract conflated, which forced every failure to
- * read as "could not open file".
+ * A file's diagnostics, the answer of
+ * {@link LeanLanguageServices.fetchDiagnosticsForFile}. A file that could not
+ * be opened and a Lean that could not serve it are that call's failures, not
+ * values here.
  */
-export type FetchDiagnosticsResult =
-  | {
-      readonly ok: true;
-      readonly diagnostics: LeanDiagnostic[];
-      /**
-       * False when Lean had not reported the file elaborated by the end of
-       * the wait: `diagnostics` are the ones so far, not the file's verdict.
-       */
-      readonly complete: boolean;
-    }
-  | {
-      readonly ok: false;
-      readonly kind: 'file_missing' | 'toolchain_unavailable';
-      readonly message: string;
-    };
+export interface FetchDiagnosticsResult {
+  readonly diagnostics: LeanDiagnostic[];
+  /**
+   * False when Lean had not reported the file elaborated by the end of the
+   * wait: `diagnostics` are the ones so far, not the file's verdict.
+   */
+  readonly complete: boolean;
+}
+
+/**
+ * Lean cannot serve the call: no Lake project above the file (`no-project`),
+ * no usable toolchain (no `lake`/`lean` to start a server, no Lean 4
+ * extension: `toolchain`, the one reason the tool answers with setup
+ * guidance), or the adapter or its server stopped under the call (`stopped`,
+ * a crash included).
+ */
+export class LeanUnavailable extends Schema.TaggedError<LeanUnavailable>()(
+  'LeanUnavailable',
+  {
+    reason: Schema.Literals(['no-project', 'toolchain', 'stopped']),
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/** The file to diagnose could not be read or opened. */
+export class LeanFileUnreadable extends Schema.TaggedError<LeanFileUnreadable>()(
+  'LeanFileUnreadable',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+/** A `lean_file` command ran into a failure of its own, reported by `message`. */
+export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFailed>()(
+  'LeanFileCommandFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
 
 // Helpers
 
@@ -210,11 +243,11 @@ export function extractHoverText(contents: LspHover['contents']): string {
     return contents;
   }
 
-  if (Array.isArray(contents)) {
-    return contents
-      .map((item) => (typeof item === 'string' ? item : item.value))
-      .join('\n\n');
+  if ('value' in contents) {
+    return contents.value;
   }
 
-  return contents.value;
+  return contents
+    .map((item) => (typeof item === 'string' ? item : item.value))
+    .join('\n\n');
 }

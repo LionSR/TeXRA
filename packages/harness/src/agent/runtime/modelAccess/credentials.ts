@@ -8,15 +8,16 @@ import { Effect } from 'effect';
 
 import {
   type ApiKeyProviderId,
+  type CredentialRoute,
   exposeApiKey,
-  type HostRouteFacts,
   lookupApiKey,
   type ModelConfig,
-  type ModelRoute,
+  PLAN_ROUTES,
   resolveRouteEndpoint,
+  type RouteFacts,
 } from '@texra-ai/llm';
 import {
-  codexCoordinator,
+  chatgptCoordinator,
   SubscriptionOAuthError,
   xaiCoordinator,
 } from '@texra-ai/llm/node';
@@ -25,40 +26,10 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readProviderEndpoint } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
-import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
-import type { UsageRoute } from '@shared/schemas';
 import type { HttpClient } from 'effect/http';
 
-/** The routes that bill a credential. */
-type CredentialRoute = Extract<
-  ModelRoute,
-  {
-    kind:
-      'api-key' | 'no-api-key' | 'chatgpt-subscription' | 'xai-subscription';
-  }
->;
-
-/**
- * What a route bills: the plan a direct key pays through, a subscription, or
- * the user's own key (the validation model). The one
- * owner of the fact: the binding sends it as the wire's billing and pricing
- * stamps it on each turn's usage.
- */
-export function usageRouteOf(route: ModelRoute): UsageRoute {
-  switch (route.kind) {
-    case 'api-key':
-      return route.usageRoute;
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      return route.kind;
-    case 'validation':
-    case 'no-api-key':
-    case 'unserved': // never bound: the route decision refuses it
-      return 'api-key';
-    default:
-      return route satisfies never;
-  }
-}
+/** A route that bills a signed-in subscription session. */
+type SessionRoute = Exclude<CredentialRoute['kind'], 'api-key'>;
 
 /** The credential and endpoint of one route, resolved together. */
 export type RouteCredential = {
@@ -70,35 +41,29 @@ export type RouteCredential = {
   | { readonly route: 'api-key' | 'xai-subscription' }
   | {
       readonly route: 'chatgpt-subscription';
-      readonly accountId: string | null;
       /** The ChatGPT plan the session's token names; display-only. */
       readonly plan: string | undefined;
     }
 );
 
 /**
- * A subscription session failure as the user's instruction: "sign in again,
- * or turn off the preference", not a raw auth error.
+ * A subscription session failure as its facts: the route that could not
+ * bill, the session's own failure, and whether only a fresh sign-in helps.
+ * `providerErrorOf` words them; a host's copy may word them its own way.
  */
-function subscriptionUnavailable(
-  route: 'chatgpt-subscription' | 'xai-subscription',
+const subscriptionUnavailable = (
+  route: SessionRoute,
   error: Error,
-): RouteUnavailable {
-  const copy =
-    SUBSCRIPTION_AUTH_NAMES[
-      route === 'chatgpt-subscription' ? 'chatgpt' : 'grok'
-    ];
-  const turnOff = `turn off "${copy.subscriptionLabel}".`;
-  const action =
-    error instanceof SubscriptionOAuthError && error.needsReauth
-      ? `${copy.signInLabel} again, or ${turnOff}`
-      : `Try again in a moment, or ${turnOff}`;
-  return new RouteUnavailable({
+): RouteUnavailable =>
+  new RouteUnavailable({
     reason: 'unavailable',
-    message: `${copy.subscriptionLabel} unavailable: ${error.message} ${action}`,
+    message: error.message,
+    session: {
+      route,
+      needsReauth: error instanceof SubscriptionOAuthError && error.needsReauth,
+    },
     cause: error,
   });
-}
 
 /**
  * The endpoint `route` sends `config`'s requests to. A provider the catalog
@@ -106,8 +71,8 @@ function subscriptionUnavailable(
  */
 const routeEndpoint = (
   config: ModelConfig,
-  route: Exclude<CredentialRoute, { kind: 'no-api-key' }>,
-  facts: Pick<HostRouteFacts, 'endpoints'>,
+  route: CredentialRoute,
+  facts: Pick<RouteFacts, 'endpoints'>,
 ): Effect.Effect<string> => {
   const endpoint = resolveRouteEndpoint(config, route, facts);
   return endpoint === undefined
@@ -130,7 +95,7 @@ const routeEndpoint = (
  * is refreshed first, while stored.
  */
 const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
-  route: 'chatgpt-subscription' | 'xai-subscription',
+  route: SessionRoute,
   endpoint: string,
   rejected: string | undefined,
 ): Effect.fn.Return<
@@ -139,25 +104,25 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   HttpClient.HttpClient | Secrets
 > {
   const secrets = yield* Secrets;
+  const { provider } = PLAN_ROUTES[route];
   const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
     route === 'chatgpt-subscription'
-      ? Effect.map(codexCoordinator(secrets).getFreshSession(), (fresh) => ({
+      ? Effect.map(chatgptCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
-          provider: 'openai',
+          provider,
           bearer: fresh.accessToken,
-          accountId: fresh.accountId ?? null,
           plan: fresh.planType,
           endpoint,
         }))
       : Effect.map(xaiCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
-          provider: 'xai',
+          provider,
           bearer: fresh.accessToken,
           endpoint,
         }));
   const refresh = (token: string) =>
     route === 'chatgpt-subscription'
-      ? codexCoordinator(secrets).refreshRejected(token)
+      ? chatgptCoordinator(secrets).refreshRejected(token)
       : xaiCoordinator(secrets).refreshRejected(token);
   return yield* (
     rejected === undefined
@@ -175,7 +140,7 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
 const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   route: Extract<CredentialRoute, { kind: 'api-key' }>,
   config: ModelConfig,
-  facts: Pick<HostRouteFacts, 'endpoints'>,
+  facts: Pick<RouteFacts, 'endpoints'>,
 ): Effect.fn.Return<RouteCredential, RouteUnavailable, Secrets> {
   const { provider } = route;
   const key = yield* lookupApiKey(yield* Secrets, provider).pipe(
@@ -208,29 +173,18 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
 export function routeCredential(
   route: CredentialRoute,
   config: ModelConfig,
-  facts: Pick<HostRouteFacts, 'endpoints'>,
+  facts: Pick<RouteFacts, 'endpoints'>,
   rejected: string | undefined,
 ): Effect.Effect<
   RouteCredential,
   RouteUnavailable,
   HttpClient.HttpClient | Secrets
 > {
-  switch (route.kind) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      return Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
+  return route.kind === 'api-key'
+    ? apiKeyCredential(route, config, facts)
+    : Effect.flatMap(routeEndpoint(config, route, facts), (endpoint) =>
         subscriptionCredential(route.kind, endpoint, rejected),
       );
-    case 'no-api-key':
-      return Effect.fail(
-        new RouteUnavailable({
-          reason: 'unavailable',
-          message: `Model "${config.label}" has no direct API-key provider.`,
-        }),
-      );
-    default:
-      return apiKeyCredential(route, config, facts);
-  }
 }
 
 /**

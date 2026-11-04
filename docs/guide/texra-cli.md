@@ -56,7 +56,7 @@ Working from an Overleaf or ShareLaTeX project? Clone it into a directory
 first, by URL, git URL, or 24-character project id:
 
 ```bash
-texra clone <project> --cwd ./project
+texra clone <project> ./project
 ```
 
 ## Running agents
@@ -123,6 +123,10 @@ last; the next revision reads its critique. The revision count is unchanged:
 ```bash
 texra run polish --input paper.tex --output paper.polished.tex --reflect
 ```
+
+The launch form's other task switches are flags of the same names:
+`--attachTeXCount`, `--autoExtractFigure`, `--autoExtractTikzFigure` and
+`--autoCompileInputPdf`.
 
 Document tasks always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
@@ -198,7 +202,7 @@ the CLI says so, and `TEXRA_NO_SERVICE=1` keeps the task in this terminal.
 Coding Plan can serve model calls in place of an API key:
 
 ```bash
-texra auth chatgpt login    # Codex models through your ChatGPT plan
+texra auth chatgpt login    # OpenAI models through your ChatGPT plan
 texra auth grok login       # Grok models through an xAI subscription
 ```
 
@@ -215,17 +219,26 @@ Subscriptions sign in through `texra auth <provider> login`:
 ```bash
 texra auth chatgpt login              # browser sign-in
 texra auth chatgpt login --no-browser # print the loopback sign-in URL
-texra auth chatgpt login --device     # device code: approve from a browser on any device
 texra auth chatgpt status
 texra auth chatgpt logout
+texra auth grok login --device        # device code: approve from a browser on any device
 ```
 
 `grok` takes the same verbs. `--no-browser` still uses a local callback server.
 Open the printed URL in a browser that can reach the terminal session; SSH and
-container sessions may need callback port forwarding. `--device` needs no
-callback at all: the CLI prints a short code and a verification URL. Open the
-URL in a browser on any device, including your phone, and approve the code.
-This is the recommended path on SSH, WSL2, and containers.
+container sessions may need callback port forwarding.
+
+ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source agents, and
+it is browser-only: OpenAI returns the sign-in to `127.0.0.1` on the machine
+running TeXRA, and `--device` signs in through the browser too. On SSH, WSL2
+or a container, forward port 1455 from the machine with the browser. On the
+consent page, allow TeXRA to use your ChatGPT plan; without it, sign-in stops
+with an error. ChatGPT plan usage is shown in ChatGPT's own settings.
+
+Grok's `--device` needs no callback at all: the CLI prints a short code and a
+verification URL. Open the URL in a browser on any device, including your
+phone, and approve the code. This is the recommended path for Grok on SSH,
+WSL2, and containers.
 
 Run `texra doctor` at any time to see which dependencies are detected and which
 models the CLI can reach with the current credentials.
@@ -436,9 +449,9 @@ closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
 "auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
 default, `ask`, lists them above the input, where `/resume all` continues
 them and anything else you send hides the list. A task whose agent is missing, or
-comes from a plugin that is off or not trusted, waits until that is fixed
-and then continues by itself. `texra run` never resumes anything on its
-own.
+comes from a plugin that is off or not trusted, waits until that is fixed;
+under `auto` it then continues by itself, under `ask` it is listed again.
+`texra run` never resumes anything on its own.
 
 A run another TeXRA process still holds is refused, and the message names
 that process's pid and host. A holder that cannot be reached (it ran on another
@@ -557,13 +570,13 @@ configuration view. Its **Agents** section has three distinct choices:
 The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
-texra config agents                         # inspect the effective agents
-texra config agents --all                   # make every agent visible in this folder
-texra config agents --team lean-project     # use a named team
-texra config agents --inherit               # follow the user default
-texra config agents --default-team physicist
+texra config agents                               # inspect the effective agents
+texra config agents --agents all                  # make every agent visible in this folder
+texra config agents --agents team:lean-project    # use a named team
+texra config agents --agents inherit              # follow the user default
 texra config agents --agents correct,polish,assistant,review
-texra config agents --default-agent builtIn:assistant
+texra config agents --default-team physicist      # or `none` to clear it
+texra config agents --default-agent builtIn:assistant   # or `none` for the automatic default
 ```
 
 `texra agents list` and `texra team list|show|run` keep narrower
@@ -603,12 +616,11 @@ agent as an argument). Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
 built-in CLI model default is `deepseek/deepseek-v4-pro`.
 
-The approval policy (`texra.approvalPolicy`) and the two approval switches
-(`texra.toolUse.requireEditApproval`, `texra.toolUse.requireBashApproval`) are
-never read from `.texra/config.json`, because a repository you clone can
-carry that file. Set them with `/config` or the settings view: they are kept
-in your own storage for the current workspace, and a value in your user
-configuration file is the default for every workspace. A project file that sets one is ignored and `texra doctor` reports the key.
+The approval policy (`texra.approvalPolicy`) is never read from
+`.texra/config.json`, because a repository you clone can carry that file. Set
+it with `/config` or the settings view: it is kept in your own storage for the
+current workspace, and a value in your user configuration file is the default
+for every workspace. A project file that sets it is ignored and `texra doctor` reports the key.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run

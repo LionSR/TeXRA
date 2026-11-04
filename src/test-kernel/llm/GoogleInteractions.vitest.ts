@@ -231,8 +231,9 @@ describe('canonical Google Interactions protocol', () => {
             outputTokens: 8,
             totalTokens: 20,
             cachedInputTokens: 3,
+            cacheWriteTokens: null,
             reasoningTokens: 2,
-            providerUsage: { kind: 'google', toolUsePromptTokens: 5 },
+            toolUsePromptTokens: 5,
           },
         });
         expect(completed.result.continuation).toMatchObject({

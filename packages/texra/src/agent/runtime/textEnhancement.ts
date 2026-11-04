@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import {
   helperCall,
   withLogChannel,
-  getSdkErrorMessage,
+  normalizeProviderError,
 } from '@texra-ai/harness/host';
 import { extractTextFromTag } from '@texra/utils/text/xmlExtraction';
 
@@ -61,7 +61,7 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
     return (corrected || responseText).trim();
   }).pipe(
     Effect.catch((error) => {
-      const message = getSdkErrorMessage(error);
+      const { message } = normalizeProviderError(error);
       return Effect.logError(`Error polishing text: ${message}`).pipe(
         withLogChannel(CHANNEL),
         Effect.andThen(Effect.fail(new Error(message, { cause: error }))),

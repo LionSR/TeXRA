@@ -26,7 +26,7 @@ export type DefinedTool<T, R = never, Name extends string = string> = Omit<
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T, R>;
+  readonly guard?: ToolGuard<T>;
 };
 
 export type DefineToolOptions<T, R = never> = Required<
@@ -54,7 +54,7 @@ export type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -65,6 +65,13 @@ export type DefineToolOptions<T, R = never> = Required<
  * Define a tool: validate the model's input against `schema`, run `execute`,
  * and turn ordinary failures into `{ status: 'error' }` feedback.
  * Interruption, run history refusals and database write failures propagate.
+ *
+ * A tool whose `execute` succeeds with a `ToolResult` carrying a `value`
+ * hands a script that value in place of `{ output, summary }`. Declare its
+ * TypeScript type in `scriptReturns`, which is what a script is told the
+ * call resolves to. Nothing derives one from the other: a tool that returns
+ * a `value` without `scriptReturns` is declared to scripts as resolving to
+ * `ToolOutput`, so change the two together.
  */
 export function defineTool<T, R = never, const Name extends string = string>(
   def: DefineToolOptions<T, R> & { readonly name: Name },

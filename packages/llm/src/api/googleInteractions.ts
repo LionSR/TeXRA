@@ -6,7 +6,6 @@ import { Effect, Ref, Result, Schema, Stream } from 'effect';
 import { prefixFingerprint } from './prefixFingerprint.js';
 import {
   completedTurn,
-  decodeModelConfiguration,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
@@ -377,11 +376,9 @@ const usageParts = (
             outputTokens: usage.total_output_tokens ?? null,
             totalTokens: usage.total_tokens ?? null,
             cachedInputTokens: usage.total_cached_tokens ?? null,
+            cacheWriteTokens: null,
             reasoningTokens: usage.total_thought_tokens ?? null,
-            providerUsage: {
-              kind: 'google',
-              toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
-            },
+            toolUsePromptTokens: usage.total_tool_use_tokens ?? null,
           },
         },
       ];
@@ -555,14 +552,11 @@ const googleContinuation = Effect.fn('llm.google.continuation')(function* (
 
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
 export function googleInteractionsModel(
-  configuration: GoogleInteractionsConfiguration,
+  config: GoogleInteractionsConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
-  const config = decodeModelConfiguration(configuration);
-  if (config.protocol !== 'google-interactions' || !transport.apiKey) {
-    throw new TypeError(
-      'Google Interactions requires its configuration and an explicit API key.',
-    );
+  if (!transport.apiKey) {
+    throw new TypeError('Google Interactions requires an explicit API key.');
   }
   const origin = originOf(config);
   const client = new GoogleGenAI({
@@ -581,7 +575,7 @@ export function googleInteractionsModel(
       origin,
       background,
       (input) => {
-        const store = input.store ?? config.defaults.store;
+        const store = config.defaults.store;
         return input.mode === 'background' && !store
           ? Effect.fail(
               new ModelError({
@@ -724,81 +718,79 @@ export function googleInteractionsModel(
     );
   const lifecycle = backgroundLifecycle({
     origin,
-    submit: (turn, learned) =>
-      Effect.gen(function* () {
-        if (!turn.controls.store)
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message:
-              'Google background execution requires an enabled route and store:true.',
-          });
-        const inputSteps = yield* invocationInput(turn, origin);
+    submit: Effect.fnUntraced(function* (turn, learned) {
+      if (!turn.controls.store)
+        return yield* new ModelError({
+          kind: 'unsupported',
+          message:
+            'Google background execution requires an enabled route and store:true.',
+        });
+      const inputSteps = yield* invocationInput(turn, origin);
+      const raw = yield* ownedAbortSafeRequest(
+        (signal) =>
+          client.interactions.create(
+            {
+              ...createInput(turn, inputSteps),
+              background: true,
+              stream: false,
+            },
+            { maxRetries: 0, fetchOptions: { signal } },
+          ),
+        sdkFailure,
+        { isAbortMatch: googleAbortMatch },
+      );
+      // Retain a real accepted identifier even if later snapshot validation fails.
+      const identity = Schema.decodeUnknownResult(
+        Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
+      )(raw);
+      if (!Result.isSuccess(identity))
+        return yield* new ModelError({
+          kind: 'malformed-output',
+          message: 'Google returned no background interaction identifier.',
+          cause: identity.failure,
+        });
+      const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
+        origin,
+        providerResponseId: identity.success.id,
+        afterSequence: null,
+      });
+      yield* Ref.set(learned, { operation });
+      const interaction = yield* snapshot(raw, operation);
+      yield* Ref.set(learned, { operation, model: interaction.model });
+      return IN_FLIGHT_STATUSES.includes(interaction.status)
+        ? undefined
+        : yield* completedSnapshot(interaction);
+    }),
+    observe: {
+      poll: Effect.fnUntraced(function* (operation, learned) {
         const raw = yield* ownedAbortSafeRequest(
           (signal) =>
-            client.interactions.create(
-              {
-                ...createInput(turn, inputSteps),
-                background: true,
-                stream: false,
-              },
+            client.interactions.get(
+              operation.providerResponseId,
+              { stream: false, include_input: false },
               { maxRetries: 0, fetchOptions: { signal } },
             ),
           sdkFailure,
           { isAbortMatch: googleAbortMatch },
         );
-        // Retain a real accepted identifier even if later snapshot validation fails.
-        const identity = Schema.decodeUnknownResult(
-          Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
-        )(raw);
-        if (!Result.isSuccess(identity))
+        const interaction = yield* snapshot(raw, operation);
+        const { model } = yield* Ref.get(learned);
+        if (
+          interaction.model !== undefined &&
+          model !== undefined &&
+          model !== interaction.model
+        )
           return yield* new ModelError({
             kind: 'malformed-output',
-            message: 'Google returned no background interaction identifier.',
-            cause: identity.failure,
+            message:
+              'Google changed the returned model for an accepted interaction.',
           });
-        const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
-          origin,
-          providerResponseId: identity.success.id,
-          afterSequence: null,
-        });
-        yield* Ref.set(learned, { operation });
-        const interaction = yield* snapshot(raw, operation);
-        yield* Ref.set(learned, { operation, model: interaction.model });
+        const returned = interaction.model ?? model;
+        yield* Ref.set(learned, { operation, model: returned });
         return IN_FLIGHT_STATUSES.includes(interaction.status)
           ? undefined
-          : yield* completedSnapshot(interaction);
+          : yield* completedSnapshot({ ...interaction, model: returned });
       }),
-    observe: {
-      poll: (operation, learned) =>
-        Effect.gen(function* () {
-          const raw = yield* ownedAbortSafeRequest(
-            (signal) =>
-              client.interactions.get(
-                operation.providerResponseId,
-                { stream: false, include_input: false },
-                { maxRetries: 0, fetchOptions: { signal } },
-              ),
-            sdkFailure,
-            { isAbortMatch: googleAbortMatch },
-          );
-          const interaction = yield* snapshot(raw, operation);
-          const { model } = yield* Ref.get(learned);
-          if (
-            interaction.model !== undefined &&
-            model !== undefined &&
-            model !== interaction.model
-          )
-            return yield* new ModelError({
-              kind: 'malformed-output',
-              message:
-                'Google changed the returned model for an accepted interaction.',
-            });
-          const returned = interaction.model ?? model;
-          yield* Ref.set(learned, { operation, model: returned });
-          return IN_FLIGHT_STATUSES.includes(interaction.status)
-            ? undefined
-            : yield* completedSnapshot({ ...interaction, model: returned });
-        }),
     },
     cancel: (operation) =>
       ownedAbortSafeRequest(

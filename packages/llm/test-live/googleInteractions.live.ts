@@ -1,5 +1,4 @@
 // Local imports
-import { googleInteractionsModel } from '../src/api/googleInteractions.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({
@@ -8,22 +7,6 @@ liveProtocol({
   // A stored interaction leaves an anchor over the steps it already holds;
   // the next turn sends only what follows them.
   continuation: 'supported',
-  bind: (apiKey) =>
-    googleInteractionsModel(
-      {
-        protocol: 'google-interactions',
-        requestedModel: 'gemini-flash-latest',
-        deployment: {
-          endpoint: 'https://generativelanguage.googleapis.com',
-          credentialScope: 'live',
-        },
-        background: 'unsupported',
-        defaults: {
-          maxOutputTokens: 2048,
-          store: true,
-          thinkingLevel: 'low',
-        },
-      },
-      { apiKey },
-    ),
+  model: 'google/gemini-flash-latest@low',
+  endpoint: 'https://generativelanguage.googleapis.com',
 });

@@ -1,11 +1,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import {
-  isFileNotFoundError,
-  isNotADirectoryError,
-} from '@common/errors/errorPredicates';
 import { isPathWithin } from '@utils/core/pathCore';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 /**
  * Allowlist of external filesystem roots that tools may read or write.
@@ -113,15 +110,10 @@ function canonicalizeFollowingLinks(p: string, linkHops: number): string {
   try {
     return fs.realpathSync(resolved);
   } catch (err) {
-    if (!isFileNotFoundError(err) && !isNotADirectoryError(err)) {
-      throw err;
-    }
+    if (!absentReason(err)) throw err;
     // realpath fails the same way on a dangling link and on a missing entry;
     // readlink tells them apart. The hop bound matches the kernel's ELOOP.
-    const target =
-      isFileNotFoundError(err) && linkHops < 32
-        ? readLinkOrUndefined(resolved)
-        : undefined;
+    const target = linkHops < 32 ? readLinkOrUndefined(resolved) : undefined;
     if (target !== undefined) {
       return canonicalizeFollowingLinks(
         path.resolve(path.dirname(resolved), target),
@@ -142,7 +134,8 @@ function readLinkOrUndefined(entry: string): string | undefined {
   try {
     return fs.readlinkSync(entry);
   } catch {
-    // EINVAL (not a link) or ENOENT (nothing there): not a dangling link.
+    // EINVAL (not a link), or ENOENT or ENOTDIR (nothing there): not a
+    // dangling link.
     return undefined;
   }
 }

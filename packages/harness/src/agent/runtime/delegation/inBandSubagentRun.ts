@@ -3,9 +3,10 @@
  * result.
  *
  * The child runs under the same `childRunLoop` every detached delegation
- * drives, with the same single-cycle native strategy and persist-only
- * delivery; "in-band" is only this caller blocking on the loop's completion,
- * and XML presentation remains a delivery adapter. The child's own run
+ * drives, awaited: no delivery or notice reaches the parent, and this
+ * caller reads its last turn; "in-band" is only this caller blocking on the
+ * loop's completion, and XML presentation remains a delivery adapter. The
+ * child's own run
  * aggregate is the durable record of what happened, so whether an earlier
  * child already answered a logical call belongs to whoever owns that call
  * identity (the `agent` tool derives the attempt's run id and probes it);
@@ -26,8 +27,11 @@ import type {
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import { runRejection } from '@agent/storage/resumability';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import {
+  registryOf,
+  Runs,
+  type AgentRunServices,
+} from '@agent/runtime/runRegistry';
 import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
@@ -110,9 +114,9 @@ const defectsAsErrors = <A, R>(
 
 /**
  * Execute one child through the one shared driver and read its typed result
- * back from the durable record. The child runs under the same detached
- * child-run loop every native child uses (single-cycle strategy, persist-only
- * delivery); "in-band" is only this caller awaiting the loop's completion.
+ * back from the durable record. The child runs under the same child-run
+ * loop every native child uses, awaited (no delivery or notice reaches the
+ * parent); "in-band" is only this caller awaiting the loop's completion.
  * Once the run reaches its own terminal persistence, later caller
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
@@ -143,7 +147,6 @@ const executeInBand = Effect.fn('executeInBand')(
     const startedAt = yield* Clock.currentTimeMillis;
     const workingDirectory = config.workingDirectory ?? undefined;
     const { fiber, lastTurn } = yield* startDetachedChildRunLoop({
-      session: options.session,
       runId,
       parentRunId: options.parentRunId,
       agentName: config.agent,
@@ -167,14 +170,13 @@ const executeInBand = Effect.fn('executeInBand')(
             {
               resume: {
                 config,
-                parent: persistedParentRunId(options.session, runId),
+                parent: persistedParentRunId(runId),
                 stopAfterCycle: true,
               },
             }),
         runId,
         startedAt,
         workingDirectory,
-        inBand: true,
       }),
     });
 
@@ -199,9 +201,7 @@ const executeInBand = Effect.fn('executeInBand')(
     // own lifecycle; the manifest carries only the output as this turn's
     // delivery enriched it. A read failure is kept apart from an absent row
     // so the thrown error can name the I/O cause.
-    const endExit = yield* Effect.exit(
-      getRunRecords(options.session, runId).readRunEnd(),
-    );
+    const endExit = yield* Effect.exit(getRunRecords(runId).readRunEnd());
     const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
     const endFailure = Exit.isFailure(endExit)
       ? Cause.squash(endExit.cause)
@@ -230,7 +230,7 @@ const executeInBand = Effect.fn('executeInBand')(
     // thrown error blames the I/O cause rather than persistence.
     {
       const persistedExit = yield* Effect.exit(
-        getRunRecords(options.session, runId).readResultMeta(),
+        getRunRecords(runId).readResultMeta(),
       );
       const readFailure = Exit.isFailure(persistedExit)
         ? Cause.squash(persistedExit.cause)
@@ -314,7 +314,6 @@ export const executeSubagentInBand = (
         config: Schema.decodeUnknownSync(AgentConfigSchema)(
           options.configPayload,
         ),
-        session: options.session,
         stopAfterCycle: true,
       });
       return yield* executeInBand(options, { kind: 'fresh', definition });
@@ -334,15 +333,12 @@ export const resumeSubagentInBand = (
   awaitInBand(
     options.runId,
     Effect.gen(function* () {
-      const rejection = yield* runRejection(options.runId, options.session);
+      const rejection = yield* runRejection(options.runId);
       if (rejection !== null)
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} cannot be resumed here (${rejection.kind}).`,
         });
-      const config = yield* getRunRecords(
-        options.session,
-        options.runId,
-      ).readConfig();
+      const config = yield* getRunRecords(options.runId).readConfig();
       if (config === null)
         return yield* new SubagentDurabilityError({
           message: `Subagent ${options.runId} has no stored configuration to resume.`,
@@ -364,7 +360,13 @@ const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   return yield* Fiber.join(child).pipe(
     Effect.onInterrupt(() =>
       Effect.suspend(() => {
-        if (runs.get(runId)?.parent === null) return Effect.void;
+        // A child the registry holds with no parent edge was detached: it
+        // runs on as a root. One it does not hold yet is stopped below.
+        if (
+          runs.get(runId) !== undefined &&
+          runs.attachedParent(runId) === null
+        )
+          return Effect.void;
         if (runs.interrupt(runId)) return Fiber.await(child);
         // No run to stop yet: a loop the launch's hand-off started meanwhile
         // is stopped once it returns, and awaited to the end.

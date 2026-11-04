@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - platform
-import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+import { resolveWorkspaceStoragePath } from '@texra-ai/harness/node';
 import { nodePlatformLayer, pathExists } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -62,7 +62,7 @@ describe('workspace storage defaults', () => {
         const warnings: string[] = [];
 
         const stores = yield* openTexraConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           root,
           workspacePath,
           (m: string) => warnings.push(m),

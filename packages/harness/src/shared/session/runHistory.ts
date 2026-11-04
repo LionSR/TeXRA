@@ -1,8 +1,11 @@
 /**
- * The run history: the only reader of run-history-private payloads and the
- * only writer of the rows a run's state is rebuilt from, each through one
- * run's {@link RunCell}. `load` reads, `open` hands out the cell every write
- * of the run goes through.
+ * The session's history: the run history, the only reader of
+ * run-history-private payloads and the only writer of the rows a run's state
+ * is rebuilt from, each through one run's {@link RunCell} (`load` reads,
+ * `open` hands out the cell every write of the run goes through); the
+ * session log it commits through; the view folded from that log; and the
+ * history query, the model's SQL over the session's display rows. Beside
+ * them, the session's approvals, which every run's gated call reads.
  *
  * Stateless by construction. A cell holds its run's `RunState`, rebuilt
  * from the batches it commits; that is what makes `applyRunRows` the same
@@ -30,6 +33,9 @@ import {
   type RunState,
 } from './runState';
 import type { Alongside, Append } from './sessionEvents';
+import type { ApprovalsWithPermission } from './sessionApprovals';
+import type { SessionLogShape } from './sessionLog';
+import type { SessionViewAccessShape } from './sessionViewAccess';
 
 /**
  * A refusal the run history itself decided. Database failures are kept OUT of
@@ -56,6 +62,9 @@ import type { Alongside, Append } from './sessionEvents';
  *   `load`, and from `RunCell.append` before it publishes: a batch is applied
  *   first and refused with nothing committed, because a published row the
  *   row handlers reject is a run no later `load` can read.
+ * - `foreign-protocol`: from a resume's activation, before its rows: a turn
+ *   the history replays was recorded on another protocol than the run's
+ *   binding speaks now, so no request could replay it.
  * A violated `RunCell.append` precondition is a caller defect
  * (`Effect.die`), not an arm: the loop must not handle it.
  */
@@ -67,6 +76,7 @@ export class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
       'unsafe-endpoint',
       'unprepared-history',
       'inconsistent',
+      'foreign-protocol',
     ]),
     runId: RunIdSchema,
     detail: Schema.String,
@@ -278,3 +288,79 @@ export class RunHistory extends Context.Service<
     >;
   }
 >()('@texra-ai/harness/session/RunHistory') {}
+
+/** The session's approvals: approval policy, prompt lanes and each run's
+ *  grants. */
+export class Approvals extends Context.Service<
+  Approvals,
+  ApprovalsWithPermission
+>()('@texra-ai/harness/session/Approvals') {}
+
+/** The session log: the session's doors to its store, on its one publisher,
+ *  which the run history commits through. */
+export class SessionLog extends Context.Service<SessionLog, SessionLogShape>()(
+  '@texra-ai/harness/session/SessionLog',
+) {}
+
+/** The session's view: the one state every renderer reads, and the local
+ *  state it keeps beside the rows. */
+export class SessionViewAccess extends Context.Service<
+  SessionViewAccess,
+  SessionViewAccessShape
+>()('@texra-ai/harness/session/SessionViewAccess') {}
+
+/** A correctable query refusal: SQLite's error or the exceeded limit. */
+export class HistoryQueryRefused extends Schema.TaggedError<HistoryQueryRefused>()(
+  'HistoryQueryRefused',
+  {
+    reason: Schema.Literals([
+      'not-a-read',
+      'rejected',
+      'timeout',
+      'result-too-large',
+    ]),
+    message: Schema.String,
+  },
+) {}
+
+/** A store failure: process startup, exit, or rejected history rows. */
+export class HistoryQueryFailed extends Schema.TaggedError<HistoryQueryFailed>()(
+  'HistoryQueryFailed',
+  {
+    message: Schema.String,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+const HistoryCellSchema = Schema.Union([
+  Schema.String,
+  Schema.Number,
+  Schema.Null,
+]);
+/** One value of a history query's result row. */
+export type HistoryCell = typeof HistoryCellSchema.Type;
+/** One page of a history query's result: its columns, its rows (capped), and
+ *  whether more exist. */
+export const HistoryPageSchema = Schema.Struct({
+  columns: Schema.Array(Schema.String),
+  rows: Schema.Array(Schema.Array(HistoryCellSchema)),
+  more: Schema.Boolean,
+});
+/** {@link HistoryPageSchema}'s value. */
+export type HistoryPage = typeof HistoryPageSchema.Type;
+
+/** The session's history query (`executions` `query`): one read over the
+ *  session's display rows and runs as of the call, in a store closed with
+ *  the session. */
+export class HistoryQuery extends Context.Service<
+  HistoryQuery,
+  {
+    readonly query: (
+      sql: string,
+      params: readonly HistoryCell[],
+    ) => Effect.Effect<
+      HistoryPage,
+      HistoryQueryRefused | HistoryQueryFailed | DatabaseReadFailed
+    >;
+  }
+>()('@texra-ai/harness/session/HistoryQuery') {}

@@ -2,7 +2,8 @@
 import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
-import { ModelOriginSchema } from './protocol.js';
+import { ModelOriginSchema, TurnUsageSchema } from './protocol.js';
+import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
 // Local imports - canonical messages
 
@@ -37,15 +38,46 @@ export const RemoteOperationSchema = Schema.Union([
 /** {@link RemoteOperationSchema}'s value. */
 export type RemoteOperation = typeof RemoteOperationSchema.Type;
 
-/** A subscription plan whose quota a request can exhaust, named by its route. */
-const PlanRouteSchema = Schema.Literals([
-  'chatgpt-subscription',
-  'xai-subscription',
-  'kimi-code-subscription',
-  'glm-coding-plan-subscription',
-]);
+/**
+ * The subscription plans a model can bill through instead of the caller's
+ * API credit, keyed by the route that bills through each. `provider` is the
+ * account the plan bills. A `session` plan signs in with an OAuth session,
+ * is its own route kind, and renews its token once on a 401; a used-up quota
+ * asks before moving onto an API key, because the move starts spending API
+ * credit. A `key` plan pays for an `api-key` route on a provider console
+ * key, as that route's `usageRoute`; a used-up quota falls back to the
+ * model's own key without asking. Hosts store these spellings, so a key is
+ * never renamed.
+ */
+export const PLAN_ROUTES = Object.freeze({
+  'chatgpt-subscription': Object.freeze({
+    provider: 'openai',
+    credential: 'session',
+  }),
+  'xai-subscription': Object.freeze({ provider: 'xai', credential: 'session' }),
+  'kimi-code-subscription': Object.freeze({
+    provider: 'kimiCode',
+    credential: 'key',
+  }),
+  'glm-coding-plan-subscription': Object.freeze({
+    provider: 'glm',
+    credential: 'key',
+  }),
+}) satisfies Readonly<
+  Record<
+    string,
+    {
+      readonly provider: ApiKeyProviderId;
+      readonly credential: 'session' | 'key';
+    }
+  >
+>;
+
 /** A subscription plan, named by the route that bills through it. */
-export type PlanRoute = typeof PlanRouteSchema.Type;
+export type PlanRoute = keyof typeof PLAN_ROUTES;
+
+/** A plan whose quota a request can exhaust. */
+const PlanRouteSchema = Schema.Literals(Struct.keys(PLAN_ROUTES));
 /** The route a binding bills through: a plan, or the caller's API key. */
 export type BillingRoute = PlanRoute | 'api-key';
 
@@ -65,6 +97,11 @@ const ModelErrorFieldsSchema = Schema.Struct({
     'observation-deadline',
   ]),
   message: Schema.String,
+  /** Text emitted before this attempt failed, when the caller observed it. */
+  partialText: Schema.optional(Schema.String),
+  /** What the provider billed for a response it refused to finish, when it
+   *  reported it (Anthropic's overflowed turn). */
+  usage: Schema.optional(TurnUsageSchema),
   requestId: Schema.optional(Schema.String),
   responseId: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
@@ -152,7 +189,7 @@ export class ModelError extends Schema.TaggedError<ModelError>()('ModelError', {
       retryable: fields.retryable ?? retryableByDefault(fields.kind, status),
       ...(fields.scope === undefined &&
       status !== undefined &&
-      (status >= 500 || status === 408 || status === 429)
+      isRetryableStatus(status)
         ? { scope: 'route' as const }
         : {}),
     });

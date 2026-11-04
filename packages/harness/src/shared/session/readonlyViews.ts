@@ -20,7 +20,7 @@ export type RunView = ReadonlyDeep<
 >;
 /** A stream's transcript slice: what hosts paint. */
 export type TranscriptView = RunView['transcript'];
-/** A request a run waits on a person for, as {@link SessionView} lists it:
+/** A request a run waits on a person for, as `SessionView` lists it:
  *  which run asks, the request's id, and its payload (`payload.kind` is
  *  what is asked: a command, an edit, a plan, a retry, a question). */
 export type PendingRequest = SessionView['requests'][number];

@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
-import { afterEach, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
 
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import {
   codexBackendModelId,
   DEFAULT_MODEL_CAPABILITIES,
@@ -11,13 +11,10 @@ import {
   ReasoningEffort,
   routeConfig,
 } from '@texra-ai/llm';
+import { Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { Secrets } from '@platform/secrets';
-import {
-  fakeHostSecrets,
-  installedHost,
-  installPlatform,
-} from '@test/support/setupPlatform';
+import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;
@@ -28,14 +25,13 @@ const chatgptConfig = (config: ModelConfig) =>
     Effect.provideService(Secrets, fakeHostSecrets),
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
-      routeConfig(
-        config,
-        {
-          kind: 'chatgpt-subscription',
-          contextWindow: config.codexSubscription?.contextWindow ?? Number.NaN,
-        },
-        facts,
-      ),
+      routeConfig(config, {
+        kind: 'chatgpt-subscription',
+        contextWindow:
+          facts.chatgptContextWindow ??
+          config.codexSubscription?.contextWindow ??
+          Number.NaN,
+      }),
     ),
   );
 
@@ -59,14 +55,12 @@ const gpt55Config: ModelConfig = {
 };
 
 describe('provider capabilities', () => {
-  afterEach(() => installPlatform());
-
   it.effect(
     'falls back when the configured context window is out of range',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
+        yield* Layer.build(
+          FakeHost.layer({
             config: {
               'chatgptCodex.preferSubscription': true,
               'chatgptCodex.contextWindowK': 900,

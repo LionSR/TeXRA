@@ -7,7 +7,6 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import {
@@ -20,6 +19,7 @@ import {
 } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { toolDependencyStatusLabel } from '@texra/shared/tools/toolDependencyStatusLabels';
@@ -30,7 +30,7 @@ import type {
   ToolDashboardItem,
   ToolInstallAction,
 } from '@texra/shared/settingsView/settingsViewMessages';
-import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
+import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
 import {
   PLUGINS_PAGE,
   pluginRowName,
@@ -46,7 +46,6 @@ import { renderStatusBadge } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { catalogDetailStyles } from '../shared/catalogDetailStyles';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 type TexraRow = Extract<PluginRow, { kind: 'texra' }>;
 
@@ -385,7 +384,10 @@ export class PluginCard extends LitElement {
       checked,
       disabled,
       onChange: (event: Event) =>
-        onChange(Boolean((event.currentTarget as WaSwitch | null)?.checked)),
+        onChange(
+          event.currentTarget instanceof WaSwitch &&
+            event.currentTarget.checked,
+        ),
     });
   }
 

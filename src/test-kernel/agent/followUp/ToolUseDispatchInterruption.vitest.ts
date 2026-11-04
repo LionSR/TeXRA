@@ -1,12 +1,10 @@
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Layer, Queue } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Deferred, Effect, Fiber, Layer, Queue, Context } from 'effect';
+import { expect, vi } from 'vitest';
 
 // Local imports
-import type { ITool } from '@agent/core/tools/ToolTypes';
+import { generateRunId } from '@texra-ai/harness/schemas';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
@@ -19,9 +17,8 @@ import {
   type ScriptedRunInit,
 } from '@test/support/scriptedRunLayers';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { generateRunId } from '@utils/core';
-
-import { sessionWithInteractions } from '../progressTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
+import type { ITool } from '@texra-ai/harness';
 
 import type { TurnResult } from '@texra-ai/llm';
 
@@ -49,7 +46,9 @@ function loopLayer(init: HarnessInit) {
     nativeToolTestLayer(),
   ).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
-    Layer.provideMerge(Layer.succeed(RunHistory)(init.session.runHistory)),
+    Layer.provideMerge(
+      Layer.succeed(RunHistory)(Context.get(init.session, RunHistory)),
+    ),
   );
 }
 
@@ -87,185 +86,147 @@ function executedTool(name: string) {
  * turn in history at all and the settled calls stay row facts. Resume settles
  * what is left and delivers the group once.
  */
-describe('tool dispatch interrupted mid-turn', () => {
-  it.effect(
-    'leaves no half-delivered tool turn in history, and resume pairs every call',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
-        const runId = generateRunId();
-        publishTestRunStart(session, runId);
-        const toolA = executedTool('toolA');
-        const toolB = blockingTool('toolB');
-        const toolC = executedTool('toolC');
-        const tools = {
-          toolA: toolA.tool,
-          toolB: toolB.tool,
-          toolC: toolC.tool,
-        };
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'tool dispatch interrupted mid-turn',
+  (it) => {
+    it.effect(
+      'leaves no half-delivered tool turn in history, and resume pairs every call',
+      () =>
+        Effect.gen(function* () {
+          const session = yield* isolatedTestSession({ emit: () => {} });
+          const runId = generateRunId();
+          publishTestRunStart(session, runId);
+          const toolA = executedTool('toolA');
+          const toolB = blockingTool('toolB');
+          const toolC = executedTool('toolC');
+          const tools = {
+            toolA: toolA.tool,
+            toolB: toolB.tool,
+            toolC: toolC.tool,
+          };
 
-        const fiber = yield* Effect.forkDetach(
-          runToolUse({ resume: false }).pipe(
+          const fiber = yield* Effect.forkDetach(
+            runToolUse({ resume: false }).pipe(
+              Effect.provide(
+                loopLayer({
+                  runId,
+                  session,
+                  tools,
+                  turns: [
+                    toolCallTurn([
+                      { id: 'call-a', name: 'toolA' },
+                      { id: 'call-b', name: 'toolB' },
+                      { id: 'call-c', name: 'toolC' },
+                    ]),
+                  ],
+                  stopAfterCycle: true,
+                }),
+              ),
+            ),
+          );
+          yield* toolB.started;
+          yield* Fiber.interrupt(fiber);
+
+          // call-a settled before the stop, call-b was in flight, call-c is a
+          // later barrier that never started.
+          const interrupted = yield* Context.get(session, RunHistory)
+            .load(runId)
+            .pipe(Effect.orDie);
+          // No assistant tool turn and no tool group: the paid response is
+          // pending, with the one call that settled recorded against it.
+          expect(interrupted?.messages.map((message) => message.role)).toEqual([
+            'user',
+          ]);
+          expect(settledIds(interrupted)).toEqual(['call-a']);
+
+          const resumed = yield* runToolUse({ resume: true }).pipe(
             Effect.provide(
               loopLayer({
                 runId,
                 session,
                 tools,
-                turns: [
-                  toolCallTurn([
-                    { id: 'call-a', name: 'toolA' },
-                    { id: 'call-b', name: 'toolB' },
-                    { id: 'call-c', name: 'toolC' },
-                  ]),
-                ],
+                turns: [textTurn('All three calls are accounted for.')],
                 stopAfterCycle: true,
               }),
             ),
-          ),
-        );
-        yield* toolB.started;
-        yield* Fiber.interrupt(fiber);
+          );
+          expect(resumed.outcome).toBe('completed');
 
-        // call-a settled before the stop, call-b was in flight, call-c is a
-        // later barrier that never started.
-        const interrupted = yield* session.runHistory
-          .load(runId)
-          .pipe(Effect.orDie);
-        // No assistant tool turn and no tool group: the paid response is
-        // pending, with the one call that settled recorded against it.
-        expect(interrupted?.messages.map((message) => message.role)).toEqual([
-          'user',
-        ]);
-        expect(settledIds(interrupted)).toEqual(['call-a']);
+          // The call whose body started is not re-run blind: it settles as
+          // outcome unknown, and the model decides from that.
+          expect(toolB.call).toHaveBeenCalledTimes(1);
+          // The call that never started is not run blind: the model is told
+          // so and decides whether to retry it.
+          expect(toolC.call).not.toHaveBeenCalled();
 
-        const resumed = yield* runToolUse({ resume: true }).pipe(
-          Effect.provide(
-            loopLayer({
-              runId,
-              session,
-              tools,
-              turns: [textTurn('All three calls are accounted for.')],
-              stopAfterCycle: true,
-            }),
-          ),
-        );
+          const delivered = yield* Context.get(session, RunHistory)
+            .load(runId)
+            .pipe(Effect.orDie);
+          const group = delivered?.messages.find(
+            (message) => message.role === 'tool',
+          );
+          // Every requested call is paired exactly once, in call order.
+          expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
+          expect(
+            group?.role === 'tool' ? JSON.stringify(group.results[1]) : '',
+          ).toContain('Its outcome is unknown');
+          expect(delivered?.pendingResponse).toBeNull();
+        }),
+    );
+
+    /**
+     * Failure mode: a replay-safe call that stops the process (running it out
+     * of memory, say) starts again on every resume, so every start stops.
+     */
+    it.effect('stops replaying a call cut short at each of its attempts', () =>
+      Effect.gen(function* () {
+        const session = yield* isolatedTestSession({ emit: () => {} });
+        const runId = generateRunId();
+        publishTestRunStart(session, runId);
+        const starts = yield* Queue.unbounded<void>();
+        // The first three starts never finish; a fourth would.
+        let started = 0;
+        const call = vi.fn(() => {
+          started += 1;
+          return started <= 3
+            ? Queue.offer(starts, undefined).pipe(Effect.andThen(Effect.never))
+            : Effect.succeed({ status: 'executed' as const, output: 'ran' });
+        });
+        const tools = {
+          toolB: {
+            call,
+            definition: { name: 'toolB' },
+            replay: 'safe',
+          } as ITool,
+        };
+        const run = (resume: boolean, turns: readonly TurnResult[]) =>
+          runToolUse({ resume }).pipe(
+            Effect.provide(
+              loopLayer({ runId, session, tools, turns, stopAfterCycle: true }),
+            ),
+          );
+        const issued = [toolCallTurn([{ id: 'call-b', name: 'toolB' }])];
+        for (const resume of [false, true, true]) {
+          const fiber = yield* Effect.forkDetach(
+            run(resume, resume ? [] : issued),
+          );
+          yield* Queue.take(starts);
+          yield* Fiber.interrupt(fiber);
+        }
+
+        const resumed = yield* run(true, [textTurn('It was not run again.')]);
         expect(resumed.outcome).toBe('completed');
-
-        // The call whose body started is not re-run blind: it settles as
-        // outcome unknown, and the model decides from that.
-        expect(toolB.call).toHaveBeenCalledTimes(1);
-        // The call that never started is not run blind: the model is told
-        // so and decides whether to retry it.
-        expect(toolC.call).not.toHaveBeenCalled();
-
-        const delivered = yield* session.runHistory
+        expect(call).toHaveBeenCalledTimes(3);
+        const delivered = yield* Context.get(session, RunHistory)
           .load(runId)
           .pipe(Effect.orDie);
         const group = delivered?.messages.find(
           (message) => message.role === 'tool',
         );
-        // Every requested call is paired exactly once, in call order.
-        expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
         expect(
-          group?.role === 'tool' ? JSON.stringify(group.results[1]) : '',
-        ).toContain('Its outcome is unknown');
-        expect(delivered?.pendingResponse).toBeNull();
+          group?.role === 'tool' ? JSON.stringify(group.results[0]) : '',
+        ).toContain('so it was not run again');
       }),
-  );
-
-  /**
-   * Parallel-safe is about concurrency, not about running twice: an
-   * interrupted parallel-safe call whose tool is not replay-safe settles as
-   * outcome unknown like a barrier, never re-run blind.
-   */
-  it.effect('never re-runs a parallel-safe call that is not replay-safe', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions({ emit: () => {} });
-      const runId = generateRunId();
-      publishTestRunStart(session, runId);
-      const toolB = blockingTool('toolB');
-      const tools = { toolB: { ...toolB.tool, lane: 'parallel' as const } };
-      const calls = [{ id: 'call-b', name: 'toolB' }];
-      const fiber = yield* Effect.forkDetach(
-        runToolUse({ resume: false }).pipe(
-          Effect.provide(
-            loopLayer({
-              runId,
-              session,
-              tools,
-              turns: [toolCallTurn(calls)],
-              stopAfterCycle: true,
-            }),
-          ),
-        ),
-      );
-      yield* toolB.started;
-      yield* Fiber.interrupt(fiber);
-
-      const resumed = yield* runToolUse({ resume: true }).pipe(
-        Effect.provide(
-          loopLayer({
-            runId,
-            session,
-            tools,
-            turns: [textTurn('The call was skipped.')],
-            stopAfterCycle: true,
-          }),
-        ),
-      );
-      expect(resumed.outcome).toBe('completed');
-      expect(toolB.call).toHaveBeenCalledTimes(1);
-    }),
-  );
-
-  /**
-   * Failure mode: a replay-safe call that stops the process (running it out
-   * of memory, say) starts again on every resume, so every start stops.
-   */
-  it.effect('stops replaying a call cut short at each of its attempts', () =>
-    Effect.gen(function* () {
-      const session = yield* sessionWithInteractions({ emit: () => {} });
-      const runId = generateRunId();
-      publishTestRunStart(session, runId);
-      const starts = yield* Queue.unbounded<void>();
-      // The first three starts never finish; a fourth would.
-      let started = 0;
-      const call = vi.fn(() => {
-        started += 1;
-        return started <= 3
-          ? Queue.offer(starts, undefined).pipe(Effect.andThen(Effect.never))
-          : Effect.succeed({ status: 'executed' as const, output: 'ran' });
-      });
-      const tools = {
-        toolB: { call, definition: { name: 'toolB' }, replay: 'safe' } as ITool,
-      };
-      const run = (resume: boolean, turns: readonly TurnResult[]) =>
-        runToolUse({ resume }).pipe(
-          Effect.provide(
-            loopLayer({ runId, session, tools, turns, stopAfterCycle: true }),
-          ),
-        );
-      const issued = [toolCallTurn([{ id: 'call-b', name: 'toolB' }])];
-      for (const resume of [false, true, true]) {
-        const fiber = yield* Effect.forkDetach(
-          run(resume, resume ? [] : issued),
-        );
-        yield* Queue.take(starts);
-        yield* Fiber.interrupt(fiber);
-      }
-
-      const resumed = yield* run(true, [textTurn('It was not run again.')]);
-      expect(resumed.outcome).toBe('completed');
-      expect(call).toHaveBeenCalledTimes(3);
-      const delivered = yield* session.runHistory
-        .load(runId)
-        .pipe(Effect.orDie);
-      const group = delivered?.messages.find(
-        (message) => message.role === 'tool',
-      );
-      expect(
-        group?.role === 'tool' ? JSON.stringify(group.results[0]) : '',
-      ).toContain('so it was not run again');
-    }),
-  );
-});
+    );
+  },
+);

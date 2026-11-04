@@ -12,9 +12,8 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import { SUPPORTED_LATEX_COMPILERS } from '@texra/shared/constants/latexToolchain';
-import { runToolWithCheck } from '@texra/utils/system/toolChecks';
+import { runTool, type ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
-import type { ExecResult } from '@texra-ai/harness/node';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -178,6 +177,8 @@ export type CompileLatex2PdfResult =
  * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
  * absolute path the engine wrote to; `logTail` is always populated on failure.
+ * Fails with `ToolMissing` when no engine it drives is installed: a missing
+ * latexmk falls back to pdflatex, and a missing pdflatex is that failure.
  */
 export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   latexLocation: FileLocation,
@@ -185,7 +186,7 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
   options: LaTeXCompileOptions = {},
 ): Effect.fn.Return<
   CompileLatex2PdfResult,
-  never,
+  ToolMissing,
   FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
 > {
   // Schema provides compiler default; channel defaults to module constant
@@ -264,34 +265,33 @@ export const compileLatex2Pdf = Effect.fn('compileLatex2Pdf')(function* (
     // has no children to reach, and the tree kill's detached spawn would move
     // it out of our process group, where a hard host kill no longer reaches
     // it, so it keeps the single-process form.
-    const runTool = (tool: string, args: string[], showError: boolean) =>
-      runToolWithCheck(tool, args, {
+    const runEngine = (tool: 'latexmk' | 'pdflatex', args: string[]) =>
+      runTool(tool, args, {
         channel,
         cwd: workspacePath,
         // A TeX engine spawns no git command that an identity could mark.
         settings: undefined,
         env,
         timeout,
-        showError,
         killProcessTree: tool === 'latexmk',
-      }).pipe(Effect.mapError((cause) => new LatexCompilerNotRun({ cause })));
+      });
+    const pdflatex = runEngine('pdflatex', pdflatexArgs);
 
-    let result: ExecResult | false;
-    if (compiler === 'latexmk') {
-      // Suppress error for latexmk to try pdflatex as fallback
-      result = yield* runTool('latexmk', latexmkArgs, false);
-      if (!result) {
-        yield* Effect.logWarning(
-          'latexmk not found, falling back to single-pass pdflatex — ' +
-            'bibliography, cross-references, and index may be incomplete',
-        ).pipe(withLogChannel(channel));
-        result = yield* runTool('pdflatex', pdflatexArgs, true);
-      }
-    } else {
-      result = yield* runTool('pdflatex', pdflatexArgs, true);
-    }
+    // A missing latexmk falls back to pdflatex; a missing pdflatex is the
+    // caller's `ToolMissing`.
+    const result =
+      compiler === 'latexmk'
+        ? yield* runEngine('latexmk', latexmkArgs).pipe(
+            Effect.catchTag('ToolMissing', () =>
+              Effect.logWarning(
+                'latexmk not found, falling back to single-pass pdflatex: ' +
+                  'bibliography, cross-references, and index may be incomplete',
+              ).pipe(withLogChannel(channel), Effect.andThen(pdflatex)),
+            ),
+          )
+        : yield* pdflatex;
 
-    if (result && result.success) {
+    if (result.success) {
       yield* Effect.logDebug(`Successfully compiled ${latexFile}`).pipe(
         withLogChannel(channel),
       );

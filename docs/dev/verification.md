@@ -2,7 +2,7 @@
 
 Use this checklist after touching shared frontend code (`packages/harness/src/shared/`,
 `packages/extension/src/common/webview/`,
-`packages/extension/src/{progressView,settingsView}/frontend/`,
+`packages/texra/src/ui/`, `packages/extension/src/settingsView/frontend/`,
 `packages/desktop/src/renderer/`) to confirm each major surface still mounts
 in both hosts.
 
@@ -80,7 +80,7 @@ These have been consolidated and must stay shared. If you find yourself
 re-implementing one of these per host, push the new code into
 `packages/texra/src/ui/wa/` instead.
 
-- Theme body classes + WA color scheme: `packages/texra/src/ui/wa/hostTheme.ts`
+- Theme body classes + WA color scheme: `packages/desktop/src/renderer/hostTheme.ts`
 - WA color scheme observer: `packages/texra/src/ui/wa/waColorScheme.ts`
 - Action button helper: `packages/texra/src/ui/wa/actionButtons.ts`
 - Empty state helper: `packages/texra/src/ui/wa/emptyState.ts`

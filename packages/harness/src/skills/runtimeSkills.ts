@@ -84,37 +84,35 @@ export type SkillRoots = SettingsStores & {
  * replaces the host's options for one call: the CLI's `skills list`
  * flags.
  */
-function discoverRuntimeSkills(
+const discoverRuntimeSkills = Effect.fn('discoverRuntimeSkills')(function* (
   roots: Pick<SkillRoots, 'workspace' | 'storageRoot'>,
   plugins: InstalledPluginLoad,
   options?: SkillSourceOptions,
 ) {
-  return Effect.gen(function* () {
-    const host = yield* HostSkillSources;
-    // An unresolvable home directory is logged by `homeDirectory`; the
-    // `/nonexistent` root then holds no user skills to discover.
-    const home = (yield* homeDirectory) ?? '/nonexistent';
-    const result = yield* discoverSkillSources(
-      foldSkillSources(host.contributions, {
-        cwd: roots.workspace,
-        home,
-        storageRoot: roots.storageRoot,
-        resourcesPath: host.resourcesPath,
-        options: options ?? host.options,
-        plugins: plugins.loadable,
-      }),
-    );
-    return {
-      skills: result.skills,
-      errors: [
-        ...plugins.withheld.map((message) =>
-          issue('warning', 'invalid_source', message),
-        ),
-        ...result.errors,
-      ],
-    } satisfies DiscoverSkillSourcesResult;
-  });
-}
+  const host = yield* HostSkillSources;
+  // An unresolvable home directory is logged by `homeDirectory`; the
+  // `/nonexistent` root then holds no user skills to discover.
+  const home = (yield* homeDirectory) ?? '/nonexistent';
+  const result = yield* discoverSkillSources(
+    foldSkillSources(host.contributions, {
+      cwd: roots.workspace,
+      home,
+      storageRoot: roots.storageRoot,
+      resourcesPath: host.resourcesPath,
+      options: options ?? host.options,
+      plugins: plugins.loadable,
+    }),
+  );
+  return {
+    skills: result.skills,
+    errors: [
+      ...plugins.withheld.map(({ reason }) =>
+        issue('warning', 'invalid_source', reason),
+      ),
+      ...result.errors,
+    ],
+  } satisfies DiscoverSkillSourcesResult;
+});
 
 function sourceLabel(source: SkillSource): string {
   return source.label ?? source.scope;
@@ -156,18 +154,18 @@ function readSkillSwitches(stores: SettingsStores) {
  * tool catalog reads them: an unreadable record fails the listing rather
  * than showing every plugin's skills.
  */
-function readDisabledSkills(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    const stored = yield* stores.globalState.get(GlobalStateKey.DISABLED_TOOLS);
-    const plugins = yield* Effect.fromResult(
-      Result.mapBoth(decodeDisabledTools(stored), {
-        onSuccess: (ids) => [...(ids ?? [])],
-        onFailure: ({ message, cause }) => new Error(message, { cause }),
-      }),
-    );
-    return { ...(yield* readSkillSwitches(stores)), plugins };
-  });
-}
+const readDisabledSkills = Effect.fn('readDisabledSkills')(function* (
+  stores: SettingsStores,
+) {
+  const stored = yield* stores.globalState.get(GlobalStateKey.DISABLED_TOOLS);
+  const plugins = yield* Effect.fromResult(
+    Result.mapBoth(decodeDisabledTools(stored), {
+      onSuccess: (ids) => [...(ids ?? [])],
+      onFailure: ({ message, cause }) => new Error(message, { cause }),
+    }),
+  );
+  return { ...(yield* readSkillSwitches(stores)), plugins };
+});
 
 /** One discovered skill projected for a host display. */
 function skillDisplayItem(

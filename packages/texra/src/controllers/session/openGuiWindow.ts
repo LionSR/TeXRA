@@ -20,16 +20,19 @@ import {
   Exit,
   FiberSet,
   Layer,
+  Option,
   Scope,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
 import {
+  Cancelled,
   Rejected,
   Unavailable,
   type HostRequestFailure,
   type LocalSession,
+  type Run,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -37,11 +40,13 @@ import {
   Secrets,
   SessionHostInteractions,
   sessionFsLayer,
+  withLogChannel,
   workspaceEnvironmentLayer,
   type ProcessServices,
   type StorageFs,
   type WorkspaceFs,
 } from '@texra-ai/harness/host';
+import { ToolRegistry } from '@texra-ai/harness/plugins';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type {
   FileOpResult,
@@ -54,6 +59,7 @@ import type {
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import type { MessageHost } from '@texra/hosts/uiHosts';
+import type { TexraPlugin } from '@texra/tools/registry';
 import {
   ToolEditApprovalController,
   type ToolEditApprovalHost,
@@ -76,7 +82,6 @@ import {
   type WindowHost,
 } from '@texra/controllers/server/windowHost';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
-import { hostFailure } from './hostCallFailure';
 import {
   createHostRunActions,
   type HostRunActionPorts,
@@ -198,7 +203,7 @@ export interface SharedHostRequestBindings {
   openGuide(page: string, anchor?: string): HostVerb<void>;
   readonly openCustomAgentDirectory: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
-  openInstallGuide(tool: string): HostVerb<void>;
+  readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
    *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
    *  takes. */
@@ -229,7 +234,7 @@ interface GuiWindowHost extends Pick<
   readonly window: WindowHost;
   readonly runs: Pick<
     HostRunActionPorts,
-    'launched' | 'openFinalOutput' | 'promptForApiKey'
+    'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
   >;
   readonly files: Omit<
     ConstructorParameters<
@@ -256,7 +261,7 @@ interface GuiWindowPorts {
   /** The snapshot reads only this host answers. */
   readonly snapshot: Omit<
     Parameters<typeof createHostSnapshotSource>[0],
-    'project' | 'root' | 'stores' | 'publish'
+    'project' | 'tools' | 'root' | 'stores' | 'publish'
   >;
   readonly toolEdits: ToolEditApprovalHost;
   /** Emits when the window gains focus, so the project's calls come here
@@ -270,7 +275,13 @@ interface GuiWindowPorts {
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
 
+const CHANNEL = 'GuiWindow';
+
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
+
+/** How long a run this window started may take to reach the window's view
+ *  before the window stops waiting to show it. */
+const SHOW_LAUNCHED_WITHIN = '10 seconds';
 
 /** What the window tells the user after a pack or clean, at which severity
  *  (the latexdiff pack's counterpart is `latexdiffPackMessage`). */
@@ -329,9 +340,19 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     Effect.asVoid(Effect.forkDetach(Scope.close(bridgeScope, Exit.void))),
   );
   const hostSnapshot = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+  // cast: the table holds TeXRA's list as listed, each entry a `TexraPlugin`.
+  const plugins = [
+    ...(yield* ToolRegistry).entries.values(),
+  ] as readonly TexraPlugin[];
   const snapshot = createHostSnapshotSource({
     ...ports.snapshot,
     project: ports.project,
+    tools: {
+      icons: Object.fromEntries(
+        plugins.flatMap((plugin) => Object.entries(plugin.icons ?? {})),
+      ),
+      terminalOutput: plugins.flatMap((plugin) => plugin.terminalOutput ?? []),
+    },
     root: roots.workspace,
     stores: roots,
     publish: (next) => SubscriptionRef.set(hostSnapshot, next),
@@ -405,8 +426,48 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   });
   yield* Effect.forkScoped(toolEditApprovals.follow);
 
+  /** A run this window started is in the window's view before it is in a
+   *  surface's, whose frames are cut from the session after it, so each
+   *  surface selects the run once its own view holds it, told the commit of
+   *  the first level here that held it. A run the window's view does not
+   *  hold in time is not selected, and the window says so. */
+  const showLaunched = (run: Run) =>
+    Stream.runHead(run.view).pipe(
+      Effect.timeoutOption(SHOW_LAUNCHED_WITHIN),
+      Effect.map(Option.flatten),
+      Effect.flatMap(
+        Option.match({
+          onSome: (level) =>
+            Effect.sync(() =>
+              bridge.surfaceAction({
+                kind: 'selectOnArrival',
+                runId: run.runId,
+                cursor: level.cursor,
+              }),
+            ),
+          onNone: () =>
+            Effect.logWarning(
+              `Run ${run.runId} started, but this window's view did not hold it within ${SHOW_LAUNCHED_WITHIN}`,
+            ).pipe(
+              withLogChannel(CHANNEL),
+              Effect.andThen(
+                host.showWarningMessage(
+                  'The task started, but this window could not show it. Find it in the task list.',
+                ),
+              ),
+              Effect.ignore({ log: 'Warn' }),
+            ),
+        }),
+      ),
+    );
   const runActions = yield* createHostRunActions({
     ...host.runs,
+    // The wait outlives the launch request; the missing-agent warning the
+    // run's agent resolved goes at once.
+    launched: (run) =>
+      Effect.forkIn(showLaunched(run), scope).pipe(
+        Effect.andThen(snapshot.clearAgentConfigBanner),
+      ),
     roots,
     readConfig,
     present,
@@ -499,48 +560,46 @@ function answerShared(
   const { bindings: host, bridge } = parts;
 
   /** The Tools sheet's verbs over the launcher's base and edited files. */
-  const latexdiffs = (sheet: LatexdiffsRequest) =>
-    Effect.gen(function* () {
-      const { action } = sheet;
-      const baseFile = sheet.baseFile ?? '';
-      const editedFile = sheet.editedFile ?? '';
-      if (
-        action === 'latexdiffvc' ||
-        action === 'packLatexdiffvc' ||
-        action === 'cleanLatexdiffvc'
-      ) {
-        yield* host.latexdiffAgainstCommit(
-          action,
-          baseFile,
-          sheet.commit ?? 'HEAD',
-        );
+  const latexdiffs = Effect.fn('latexdiffs')(function* (
+    sheet: LatexdiffsRequest,
+  ) {
+    const { action } = sheet;
+    const baseFile = sheet.baseFile ?? '';
+    const editedFile = sheet.editedFile ?? '';
+    if (
+      action === 'latexdiffvc' ||
+      action === 'packLatexdiffvc' ||
+      action === 'cleanLatexdiffvc'
+    ) {
+      yield* host.latexdiffAgainstCommit(
+        action,
+        baseFile,
+        sheet.commit ?? 'HEAD',
+      );
+      return;
+    }
+    if (!baseFile || !editedFile) {
+      return yield* Effect.fail(
+        new Rejected({
+          reason: 'Choose a base file and an edited file first.',
+        }),
+      );
+    }
+    switch (action) {
+      case 'compare':
+        yield* parts.workflowFileActions.compareOriginal(editedFile, baseFile);
         return;
-      }
-      if (!baseFile || !editedFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason: 'Choose a base file and an edited file first.',
-          }),
-        );
-      }
-      switch (action) {
-        case 'compare':
-          yield* parts.workflowFileActions.compareOriginal(
-            editedFile,
-            baseFile,
-          );
-          return;
-        case 'accept':
-          yield* parts.workflowFileActions.acceptFile(editedFile, baseFile);
-          return;
-        case 'merge':
-          yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
-          return;
-        case 'latexdiff':
-          yield* parts.workflowFileActions.latexdiffFile(editedFile, baseFile);
-          return;
-      }
-    });
+      case 'accept':
+        yield* parts.workflowFileActions.acceptFile(editedFile, baseFile);
+        return;
+      case 'merge':
+        yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
+        return;
+      case 'latexdiff':
+        yield* parts.workflowFileActions.latexdiffFile(editedFile, baseFile);
+        return;
+    }
+  });
 
   return Effect.gen(function* () {
     switch (request.kind) {
@@ -584,18 +643,17 @@ function answerShared(
         }
         return { kind: 'files', paths: attached.paths };
       }
-      case 'launch':
+      case 'launch': {
         yield* host.admitLaunch(request.launch);
-        yield* prepareSurfaceLaunch(request, parts.roots).pipe(
-          Effect.flatMap((prepared) =>
-            parts.runActions
-              .runValidated(prepared, launchApprovalOptions(request))
-              .pipe(
-                Effect.mapError((cause) => hostFailure('runValidated', cause)),
-              ),
-          ),
-        );
+        const config = yield* prepareSurfaceLaunch(request, parts.roots);
+        // The launcher has told, in this window, why a run did not start:
+        // `Cancelled` is the answer the form shows nothing for, and it keeps
+        // the instruction to send again.
+        yield* parts.runActions
+          .runValidated(config, launchApprovalOptions(request))
+          .pipe(Effect.mapError(() => new Cancelled()));
         return done;
+      }
       case 'resume':
         yield* parts.runActions.resume(request.runId);
         return done;
@@ -729,7 +787,7 @@ function answerShared(
         yield* host.recheckDependencies;
         return done;
       case 'openInstallGuide':
-        yield* host.openInstallGuide(request.tool);
+        yield* host.openInstallGuide;
         return done;
       case 'onboarding':
         switch (request.action) {

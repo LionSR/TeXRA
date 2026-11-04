@@ -1,18 +1,10 @@
 /**
- * The models the harness starts with: the run default, the helper default
- * and the curated picker list. They are the app's choices over the llm catalog, not
+ * The models the harness starts with: the run default and the curated picker
+ * list. They are the app's choices over the llm catalog, not
  * catalog facts, and the stored agent config (`agentConfig.ts`)
  * default to them, so they live with the storage and not in
  * `@texra-ai/llm`.
  */
-
-/**
- * Default model used for auxiliary/helper tasks (polishing, agent creation,
- * merge, session descriptions). DeepSeek V4.1 Flash is the cheapest capable
- * option (~$0.15/$0.60 per MTok) and keeps these one-shot, non-streaming
- * helper calls fast.
- */
-export const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
 
 /**
  * Default model used when a new agent run / proposal omits one. Single source of

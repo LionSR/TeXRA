@@ -5,8 +5,10 @@
  * keeps the section type definitions, the header preview, output suppression,
  * and the fold itself — the dispatch table is the only boundary between them.
  */
-import { Predicate, Result, Schema } from 'effect';
+import { Option, Predicate, Result, Schema } from 'effect';
 import {
+  AGENT_TOOL_NAME,
+  LineChangesSchema,
   McpToolOutputSchema,
   getProposalFileGroups,
   type ProposalFileGroup,
@@ -15,7 +17,6 @@ import {
   executionsWaitTimeoutSeconds,
   TOOL_RESULT_METADATA_FIELDS,
 } from '@shared/toolUse';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {
@@ -53,7 +54,7 @@ function asString(value: unknown): string | undefined {
 
 function toStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  return value.filter((item): item is string => typeof item === 'string');
+  return value.filter(Predicate.isString);
 }
 
 /** The label of the section that carries an `agent` call's delivered answer. */
@@ -79,12 +80,21 @@ function fileGroupsSection(
     : { kind: 'fileGroups', label: 'Files:', groups };
 }
 
-/** Typed `edits` array a tool attaches to its structured output. */
-function outputEdits<T>(output: unknown): T[] | undefined {
-  return Predicate.isObject(output)
-    ? (output.edits as T[] | undefined)
-    : undefined;
+/** The `edits` array a tool attaches to its structured output, undecoded. */
+function outputEdits(output: unknown): readonly unknown[] {
+  return Predicate.hasProperty(output, 'edits') && Array.isArray(output.edits)
+    ? output.edits
+    : [];
 }
+
+/** The fields the cards read from one of a tool's output `edits`. */
+const decodeOutputEdit = Schema.decodeUnknownOption(
+  Schema.Struct({
+    path: Schema.optional(Schema.String),
+    lineChanges: Schema.optional(LineChangesSchema),
+    startLine: Schema.optional(Schema.Finite),
+  }),
+);
 
 /**
  * The old/new pair an edit-like call carries. No schema spans every producer:
@@ -115,8 +125,9 @@ function buildEditSections(ctx: SectionContext): ToolSection[] {
   const candidates = editCandidates(ctx.input);
   if (candidates.length === 0) return [];
   const sections: ToolSection[] = [];
-  const startLine = outputEdits<{ startLine?: number }>(ctx.parsedOutput)?.[0]
-    ?.startLine;
+  const startLine = Option.getOrUndefined(
+    decodeOutputEdit(outputEdits(ctx.parsedOutput)[0]),
+  )?.startLine;
   // Tracks which file the diffs emitted so far belong to. Painters label a run
   // of diff sections by the most recent `file` section above them, so this is
   // the state that keeps a multi-file edit honest. `edit` preserves the CLI's
@@ -304,14 +315,12 @@ function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
   const raw = Array.isArray(input.files) ? input.files : [];
   if (raw.length === 0) return sections;
-  const edits = outputEdits<{
-    path?: string;
-    lineChanges?: { added: number; removed: number };
-  }>(ctx.parsedOutput);
   const editsByPath = new Map(
-    (edits ?? [])
-      .filter((edit) => edit.path)
-      .map((edit) => [edit.path as string, edit] as const),
+    outputEdits(ctx.parsedOutput).flatMap((raw) =>
+      Option.toArray(decodeOutputEdit(raw)).flatMap((edit) =>
+        edit.path ? [[edit.path, edit] as const] : [],
+      ),
+    ),
   );
   const files: ToolSectionFile[] = raw.map((entry) => {
     const source = Predicate.isObject(entry)
@@ -354,15 +363,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
 
   const instruction = asString(input.prompt);
   if (instruction) sections.push(textSection('Instruction:', instruction));
-
-  const badges = [
-    input.extractFigures ? 'Extract figures' : undefined,
-    input.extractTikz ? 'Extract TikZ' : undefined,
-    input.reflect ? 'Critic review' : undefined,
-  ].filter(Predicate.isNotNullish);
-  if (badges.length > 0) {
-    sections.push({ kind: 'badges', label: 'Extraction:', badges });
-  }
 
   const files = fileGroupsSection(
     getProposalFileGroups({

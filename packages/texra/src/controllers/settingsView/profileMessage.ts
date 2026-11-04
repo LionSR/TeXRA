@@ -21,20 +21,19 @@ export const buildProfileMessage = Effect.fn('buildProfileMessage')(function* (
     command: SETTINGS_VIEW_COMMANDS.UPDATE_PROFILE,
     providerKeyStatuses: yield* Effect.forEach(
       API_KEY_PROVIDER_IDS,
-      (provider) =>
-        Effect.gen(function* () {
-          const endpointKey = providerEndpointKey(provider);
-          return {
-            provider,
-            displayName: yield* getProviderDisplayName(stores, provider),
-            status: secretStatuses[provider],
-            customEndpoint: endpointKey
-              ? yield* Settings.get<string>(stores, endpointKey)
-              : '',
-            supportsCustomEndpoint: endpointKey !== undefined,
-            providerSettings: yield* providerSettings(stores, provider),
-          };
-        }),
+      Effect.fnUntraced(function* (provider) {
+        const endpointKey = providerEndpointKey(provider);
+        return {
+          provider,
+          displayName: yield* getProviderDisplayName(stores, provider),
+          status: secretStatuses[provider],
+          customEndpoint: endpointKey
+            ? yield* Settings.get<string>(stores, endpointKey)
+            : '',
+          supportsCustomEndpoint: endpointKey !== undefined,
+          providerSettings: yield* providerSettings(stores, provider),
+        };
+      }),
     ),
   };
 });
@@ -44,10 +43,11 @@ function providerSettings(stores: SettingsStores, provider: string) {
     TEXRA_SETTINGS.modelsTab(provider),
     ({ entry, surface }) =>
       Settings.get(stores, entry.key).pipe(
-        Effect.map((value) => {
-          const { provider: _provider, ...display } = surface;
-          return { ...display, key: entry.key, value: value === true };
-        }),
+        Effect.map((value) => ({
+          ...surface,
+          key: entry.key,
+          value: value === true,
+        })),
       ),
   );
 }

@@ -1,8 +1,6 @@
 import {
   previewLabel,
   truncateSummary,
-  type ExternalInquiryPermission,
-  type InquiryThreadId,
   type RunId,
   type RequestDecision,
 } from '@texra-ai/harness/schemas';
@@ -25,6 +23,8 @@ import { withLogChannel } from '@texra-ai/harness/host';
 import {
   InquiryRecords,
   inquiryThreadFact,
+  type InquiryRequest,
+  type InquiryThreadId,
   type InquiryThreadRecord,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
@@ -155,7 +155,7 @@ const closedByEarlierAttempt = Effect.fn('inquiryClosedByEarlierAttempt')(
  */
 export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   function* (
-    permission: ExternalInquiryPermission,
+    permission: InquiryRequest,
     decision: RequestDecision,
     inbox: (runId: RunId) => RunInbox,
     commit: CommitFacts,

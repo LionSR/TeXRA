@@ -42,31 +42,21 @@ import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings'
 import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActions';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
-
 /**
- * Run a latexdiff command body, skipping it when the tool is missing and
- * reporting any failure under `errorMessage`: every command in this file goes
- * through this one terminal boundary. `catchCause` answers a typed failure and
- * a defect alike through `Cause.squash`; an interrupt is re-raised (#12841).
+ * Run a latexdiff command body, reporting any failure under `errorMessage`:
+ * every command in this file goes through this one terminal boundary, so a
+ * missing latexdiff reaches the user here with its install steps.
+ * `catchCause` answers a typed failure and a defect alike through
+ * `Cause.squash`; an interrupt is re-raised (#12841).
  */
-const withLatexdiffTool = <E, R>(
-  tool: LatexdiffTool,
+const reportingFailure = <E, R>(
   errorMessage: string,
   action: Effect.Effect<void, E, R>,
-): Effect.Effect<void, never, R | ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const installed = yield* checkToolInstalled(tool);
-    if (!installed) {
-      yield* Effect.logWarning(`${tool} is not installed; skipping.`);
-      return;
-    }
-    yield* action;
-  }).pipe(
+): Effect.Effect<void, never, R> =>
+  action.pipe(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
@@ -151,7 +141,7 @@ const restorePreparedViewerTarget = (
  * viewer handoff, in the caller's scope, for the last viewer-ready diff.
  *
  * Each file-open/build phase stays settled and serialized, so setup failures
- * reach `withLatexdiffTool`. The viewer is restored to the last viewer-ready
+ * reach `reportingFailure`. The viewer is restored to the last viewer-ready
  * diff whenever a later processed diff is not viewer-ready, including on
  * normal completion (#10553) — the handoff is an `onExit` finalizer, so it
  * runs on the failing path exactly as the `finally` it replaces did.
@@ -183,8 +173,8 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
       }
     }
   }).pipe(
-    Effect.onExit((exit) =>
-      Effect.gen(function* () {
+    Effect.onExit(
+      Effect.fnUntraced(function* (exit) {
         if (!lastViewerLocation) return;
         let viewerTargetReady = true;
         if (
@@ -270,8 +260,7 @@ export const handleLatexdiff = Effect.fnUntraced(function* (
     return;
   }
 
-  yield* withLatexdiffTool(
-    'latexdiff',
+  yield* reportingFailure(
     'Error creating LaTeX diff',
     runDiffAndOpen(roots, 'latexdiff', (mathMarkup) =>
       new LaTeXdiffService(CHANNEL, roots).runDiff(
@@ -292,8 +281,7 @@ const handleLatexdiffvc = Effect.fnUntraced(function* (
 ) {
   const fileToUse = yield* resolveDiffBase(baseFile);
   if (!fileToUse) return;
-  yield* withLatexdiffTool(
-    'latexdiff-vc',
+  yield* reportingFailure(
     'Error creating LaTeX diff',
     runDiffAndOpen(roots, 'latexdiff-vc', (mathMarkup) =>
       new LaTeXdiffService(CHANNEL, roots).runDiffVc(
@@ -311,8 +299,7 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
   commitHash: string,
   clean: boolean,
 ) {
-  yield* withLatexdiffTool(
-    'latexdiff-vc',
+  yield* reportingFailure(
     clean ? 'Error cleaning LaTeX diff' : 'Error packing LaTeX diff',
     Effect.gen(function* () {
       yield* Effect.logDebug(
@@ -355,8 +342,7 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
   session: Session,
   request: WorkflowDiffRequest,
 ) {
-  yield* withLatexdiffTool(
-    'latexdiff',
+  yield* reportingFailure(
     'Error running LaTeX diffs',
     Effect.gen(function* () {
       const mathMarkup = yield* configuredMathMarkup(roots);

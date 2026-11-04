@@ -1,8 +1,11 @@
 /**
  * TeXRA's plugin list: the harness's built-ins with TeXRA's options, beside
  * the app's own plugins, in the order the Tools dashboard lists them. Each
- * TeXRA entry passes it to `processLayer`; nothing in the harness
- * names an app plugin.
+ * TeXRA host passes it to `processLayer`; nothing in the harness names an
+ * app plugin. A plugin the dashboard lists carries its card, and a plugin
+ * whose tools the transcript paints with an icon carries those icons; an
+ * integration's plugin, availability check, card and icons sit in one
+ * module beside its tools.
  */
 
 // Third-party imports
@@ -26,23 +29,16 @@ import replacementEngine, {
 } from '@replacement/engine';
 import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import {
-  claudeAgent,
-  codex,
-  externalInquiry,
-  githubActivity,
-  lean4,
-  wolfram,
-  zotero,
-} from '@texra/tools/integrationPlugins';
+import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { isTexFile } from '@texra/shared/latexFileTypes';
 
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
-import { ArxivDownloadTool } from './arxiv/ArxivDownloadTool';
-import { ArxivSearchTool } from './arxiv/ArxivSearchTool';
+import { arxiv } from './arxiv/plugin';
+import { claudeAgent } from './agentCli/claudeAgentPlugin';
+import { codex } from './agentCli/codexPlugin';
 import {
   InlineComments,
   InlineCommentTool,
@@ -65,6 +61,9 @@ import { DOCUMENTS_MODULE } from './documents/documentsModule';
 import { ExtractBibliographyTool } from './latex/ExtractBibliographyTool';
 import { ExtractLatexFiguresTool } from './latex/ExtractFiguresTool';
 import { ExtractTikzFiguresTool } from './latex/ExtractTikzFiguresTool';
+import { githubActivity } from './github/plugin';
+import { externalInquiry } from './inquiry/plugin';
+import { lean4 } from './lean/plugin';
 import { LeanLoogleTool } from './lean/LoogleTool';
 import { OpenPdfTool } from './OpenPdfTool';
 /**
@@ -104,9 +103,52 @@ import {
   SetupPlatform,
   type SetupPlatformShape,
 } from './setup/platform';
+import { wolfram } from './wolframPlugin';
+import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
 import type { Plugin } from '@texra-ai/harness';
+
+/** How a user gets a probed plugin's dependency installed and signed in. */
+export interface ToolPluginSetup {
+  readonly installGuide?: string;
+  readonly installUrl?: string;
+  /** VS Code extension ID: when present, the dashboard offers a direct "Install" button. */
+  readonly installExtensionId?: string;
+  /** Shell command the dashboard can run in an integrated terminal to install the tool. */
+  readonly installCommand?: string;
+  /** Shell command the dashboard can run to sign the user in (e.g. `codex login`). */
+  readonly authCommand?: string;
+  readonly configNotes?: string;
+  /** Short auth/billing note shown as a badge (e.g. "Uses ChatGPT subscription"). */
+  readonly authNote?: string;
+}
+
+/** How the settings view's Plugins page and the CLI's `/plugins` show a
+ *  plugin. */
+export interface PluginCard {
+  readonly name: string;
+  readonly description: string;
+  /** The plugin's catalog rows the card renders inline, in order; the
+   *  catalog itself takes them from TeXRA's rows (`@texra/shared/settingsView/texraSettings`). */
+  readonly settings?: readonly PluginSettingRow[];
+  /** Install and sign-in copy and actions; only a probed plugin's card
+   *  shows them. */
+  readonly setup?: ToolPluginSetup;
+}
+
+/** A plugin of TeXRA's list, with the card the Tools dashboard shows for
+ *  it (a plugin without one is listed on no dashboard) and the icon the
+ *  transcript paints each of its tool calls with, by normalized tool name,
+ *  from the UI toolkit's set (`@ui/wa/iconNames`). A call with no icon, or
+ *  with a name the toolkit does not draw, gets the generic one. */
+export type TexraPlugin = Plugin & {
+  readonly card?: PluginCard;
+  readonly icons?: Readonly<Record<string, string>>;
+  /** The tools, by normalized tool name, whose output the transcript paints
+   *  as a terminal session, as it paints `bash`'s. */
+  readonly terminalOutput?: readonly string[];
+};
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
  *  replacement rules of the call's workspace. */
@@ -123,20 +165,30 @@ const texWriteFilter: WriteFilter = (path, content, config) => {
 const serves = (capabilities: () => readonly string[]) =>
   Layer.succeed(HostCapabilities)({ of: () => new Set(capabilities()) });
 
-const latexExtract: Plugin = {
+const latexExtract: TexraPlugin = {
   id: 'latex-extract',
   tools: [
     ExtractLatexFiguresTool,
     ExtractTikzFiguresTool,
     ExtractBibliographyTool,
   ],
+  icons: {
+    extract_figures: 'image',
+    extract_tikz_figures: 'image',
+    extract_bib_entries: 'book',
+  },
+  card: {
+    name: 'LaTeX Extraction',
+    description:
+      'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
+  },
 };
 
 /** The editor's diagnostics, offered while an editor attached for the
  *  session reads them: the plugin serves `HostCapabilities` from the same
  *  registry its tool reads. */
-const latexDiagnostics = (editors: EditorRegistry) =>
-  definePlugin<EditorHost>({
+const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
+  ...definePlugin<EditorHost>({
     id: 'latex-diagnostics',
     tools: [DiagnosticsTool],
     processLayer: {
@@ -145,12 +197,14 @@ const latexDiagnostics = (editors: EditorRegistry) =>
         Layer.succeed(HostCapabilities)(editors),
       ),
     },
-  });
-
-const arxiv: Plugin = {
-  id: 'arxiv',
-  tools: [ArxivSearchTool, ArxivDownloadTool],
-};
+  }),
+  icons: { diagnostics: 'list-check' },
+  card: {
+    name: 'LaTeX Diagnostics',
+    description:
+      'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
+  },
+});
 
 const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.g., \`find . -name "*.tex"\`).\nFor math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.`;
 
@@ -161,8 +215,11 @@ const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.
  * prompt section, at every step of every run, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
-const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
-  definePlugin<EditorHost>({
+const core = (
+  editors: EditorRegistry,
+  provider?: InlineCommentProvider,
+): TexraPlugin => ({
+  ...definePlugin<EditorHost>({
     id: 'core',
     tools: [
       InlineCommentTool,
@@ -191,7 +248,9 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
             ]),
       ),
     },
-  });
+  }),
+  icons: { lean_loogle: 'magnifying-glass' },
+});
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
  *  setup capabilities: a tool that needs a member the host left undefined
@@ -225,8 +284,9 @@ const setup = (platform: SetupPlatformShape, host: SetupHost['Service']) =>
 /** Document tasks: the `task:` block of an agent file, the tools their
  *  recipe calls, launching one as a child (`document_task`), and accepting
  *  the documents a run produced into the workspace. */
-const documents: Plugin = {
+const documents: TexraPlugin = {
   id: 'documents',
+  icons: { accept_run_files: 'check' },
   // The `task:` block, and how its runs read (`DOCUMENT_TASK_RESULT`).
   agentBlock: Object.freeze({
     ...DOCUMENT_TASK_BLOCK,
@@ -255,7 +315,7 @@ const documents: Plugin = {
     DocumentReviewTool,
     DocumentProposeTool,
   ],
-  arms: APP_PLUGIN_ARMS.documents,
+  factKinds: APP_FACT_KINDS.documents,
 };
 
 /** TeXRA's plugins, in dashboard order. */
@@ -276,20 +336,74 @@ export const texraPlugins = (host: {
   /** The host shows external inquiries (VS Code, desktop): the `inquiry`
    *  tool is offered only there. */
   readonly inquiryPanel?: true;
-}): readonly Plugin[] => {
+}): readonly TexraPlugin[] => {
   const editors = host.editors ?? makeEditorHost();
   return [
-    fileOps({ writeFilter: texWriteFilter }),
+    {
+      ...fileOps({ writeFilter: texWriteFilter }),
+      icons: {
+        bash: 'terminal',
+        read_file: 'file',
+        write_file: 'file-circle-plus',
+        edit_file: 'pencil',
+        glob: 'magnifying-glass',
+        grep: 'magnifying-glass',
+      },
+      card: {
+        name: 'File & Shell Operations',
+        description:
+          'Read, write, edit files and run shell commands. Includes glob/grep search.',
+      },
+    },
     latexExtract,
     latexDiagnostics(editors),
     arxiv,
-    web,
-    memoryWorkflow,
-    goal,
+    {
+      ...web,
+      icons: { web_search: 'globe', web_fetch: 'globe' },
+      card: {
+        name: 'Web Search & Fetch',
+        description:
+          'Search the web with DuckDuckGo Instant Answers and fetch or extract content from URLs.',
+      },
+    },
+    {
+      ...memoryWorkflow,
+      icons: { memory: 'database', executions: 'clock-rotate-left' },
+      card: {
+        name: 'Memory & Executions',
+        description:
+          'Persistent memory across sessions and the executions view of the runs an agent launched.',
+      },
+    },
+    {
+      ...goal,
+      card: {
+        name: 'Goal Mode',
+        description:
+          'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
+        setup: {
+          configNotes:
+            "No local install required. Turning this off removes the plan tool from every agent and stops goal turns, from each run's next step.",
+        },
+      },
+    },
     wolfram,
     zotero,
     lean4({ setup: host.setup ?? {}, services: host.lean }),
-    multiAgent,
+    {
+      ...multiAgent,
+      icons: { agent: 'circle-user' },
+      card: {
+        name: 'Multi-Agent Workflow',
+        description:
+          'Run named agents as children of a run: one at a time, or fanned out and joined from a script, resuming safely after interruption. An agent only gets the agent tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
+        setup: {
+          configNotes:
+            'No local install required. Turning this off removes the agent tool from every agent tool list, even agents whose configuration names it explicitly, so no agent can delegate.',
+        },
+      },
+    },
     githubActivity,
     host.inquiryPanel
       ? {
@@ -304,7 +418,7 @@ export const texraPlugins = (host: {
     codex,
     claudeAgent,
     core(editors, host.inlineComments),
-    codemode,
+    { ...codemode, icons: { script: 'code' } },
     setup(host.setup ?? {}, host.name),
     documents,
   ];

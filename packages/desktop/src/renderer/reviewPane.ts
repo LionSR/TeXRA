@@ -1,6 +1,6 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import './TexraDiffView';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
@@ -12,14 +12,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { buildEditorTree, type EditorTreeNode } from './editorTree';
 import type { DesktopShowDiffMessage } from '../shared/desktopDiffMessages';
 import './reviewPane.css';
-
-interface DiffViewElement extends HTMLElement {
-  fill: boolean;
-  hostTheme: Theme;
-  language: string;
-  originalText: string;
-  proposedText: string;
-}
 
 interface ReviewPaneController {
   readonly element: HTMLElement;
@@ -39,7 +31,7 @@ interface ReviewPaneController {
 export function createReviewPane(): ReviewPaneController {
   const element = document.createElement('section');
   element.className = 'desktop-review-pane';
-  const diffView = document.createElement('texra-diff-view') as DiffViewElement;
+  const diffView = document.createElement('texra-diff-view');
   diffView.className = 'desktop-review-diff';
   diffView.fill = true;
 
@@ -185,7 +177,8 @@ export function createReviewPane(): ReviewPaneController {
               aria-label="Filter changed files"
               .value=${filter}
               @input=${(event: Event) => {
-                filter = (event.currentTarget as HTMLInputElement).value;
+                if (!(event.currentTarget instanceof WaInput)) return;
+                filter = event.currentTarget.value ?? '';
                 rerender();
               }}
             >

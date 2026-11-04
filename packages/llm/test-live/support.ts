@@ -11,8 +11,9 @@
  * The shared requests carry no optional controls. Each codec refuses a
  * different subset of them (Google refuses temperature and parallel calls,
  * the Chat codecs refuse storage and reasoning controls, and so on), so the
- * one request every codec admits is system text, messages and tools. A route
- * that needs more states it in its own configuration defaults.
+ * one request every codec admits is system text, messages and tools. Each
+ * route binds the configuration a run builds for its model
+ * (`configurationFor`), so its defaults are the production ones.
  *
  * Model ids here are the cheapest generally available model on each route at
  * the time of writing. A provider retiring one fails its own suite and
@@ -29,6 +30,17 @@ import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - the package under test
+import { anthropicMessagesModel } from '../src/api/anthropicMessages.js';
+import { configurationFor } from '../src/api/configuration.js';
+import { googleInteractionsModel } from '../src/api/googleInteractions.js';
+import { openaiResponsesModel } from '../src/api/openaiResponses.js';
+import {
+  decideModelRoute,
+  OWN_KEY_ROUTE_FACTS,
+  type RouteDecisionFacts,
+} from '../src/models/modelRoute.js';
+import { chooseReasoning } from '../src/models/reasoningChoice.js';
+import { selectModel } from '../src/models/modelSelection.js';
 import { assistantMessageFromResult, completedTurn } from '../src/turn.js';
 import type { Continuation } from '../src/message.js';
 import type { Model, TurnRequest, TurnResult } from '../src/turn.js';
@@ -94,13 +106,15 @@ const FOREIGN_CONTINUATION: Continuation = {
 };
 
 /** One live turn, folded to its completed result. */
-const completeTurn = (model: Model, request: TurnRequest) =>
-  Effect.gen(function* () {
-    const turn = yield* model.prepareTurn(request);
-    assert(turn.mode === 'foreground');
-    const result = yield* completedTurn(model.streamTurn(turn));
-    return result;
-  });
+const completeTurn = Effect.fn('completeTurn')(function* (
+  model: Model,
+  request: TurnRequest,
+) {
+  const turn = yield* model.prepareTurn(request);
+  assert(turn.mode === 'foreground');
+  const result = yield* completedTurn(model.streamTurn(turn));
+  return result;
+});
 
 function assistantText(result: TurnResult): string {
   return result.content
@@ -158,14 +172,50 @@ interface LiveProtocol {
   readonly protocol: string;
   /** The environment variable holding this route's credential. */
   readonly apiKeyEnv: string;
-  /** Bind the model to this route with that credential. */
-  readonly bind: (apiKey: string) => Model;
+  /** The catalog model (`provider/id[@effort]`), bound as a run binds it. */
+  readonly model: string;
+  readonly endpoint: string;
+  /** Route preferences beyond the model's own key (a coding plan). */
+  readonly route?: Partial<RouteDecisionFacts>;
   /**
    * Whether the codec accepts an authored `continuation`. Where it does, the
    * matrix chains a second turn on the anchor the first returned; where it
    * does not, it asserts the explicit refusal the contract promises.
    */
   readonly continuation: 'supported' | 'unsupported';
+}
+
+/** `spec`'s model on the configuration a run builds, with a short output. */
+function bind(spec: LiveProtocol, apiKey: string): Model {
+  const selected = selectModel(spec.model);
+  assert(selected !== undefined, `The catalog has no ${spec.model}.`);
+  const route = decideModelRoute(selected.config, {
+    ...OWN_KEY_ROUTE_FACTS,
+    ...spec.route,
+  });
+  assert(route.kind === 'api-key', `${spec.model} takes no API key.`);
+  const { configuration } = configurationFor({
+    model: selected.config,
+    route,
+    endpoint: spec.endpoint,
+    credential: { kind: 'api-key', apiKey },
+    options: {
+      maxOutputTokens: 2048,
+      temperature: 0,
+      reasoning: chooseReasoning(selected.config, selected.request),
+      serverState: true,
+    },
+  });
+  switch (configuration.protocol) {
+    case 'anthropic-messages':
+      return anthropicMessagesModel(configuration, { apiKey });
+    case 'google-interactions':
+      return googleInteractionsModel(configuration, { apiKey });
+    case 'openai-responses':
+      return openaiResponsesModel(configuration, {
+        authentication: { kind: 'api-key', apiKey },
+      });
+  }
 }
 
 /**
@@ -176,7 +226,7 @@ interface LiveProtocol {
 export function liveProtocol(spec: LiveProtocol): void {
   const apiKey = process.env[spec.apiKeyEnv]?.trim();
   const bound =
-    apiKey === undefined || apiKey === '' ? null : spec.bind(apiKey);
+    apiKey === undefined || apiKey === '' ? null : bind(spec, apiKey);
   const model = (): Model => {
     assert(bound !== null, `${spec.apiKeyEnv} is set`);
     return bound;
@@ -184,8 +234,9 @@ export function liveProtocol(spec: LiveProtocol): void {
 
   describe.skipIf(bound === null)(spec.protocol, () => {
     describe('a text turn', () => {
-      it.live('streams assistant text into a completed result', () =>
-        Effect.gen(function* () {
+      it.live(
+        'streams assistant text into a completed result',
+        Effect.fnUntraced(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           expect(result.finishReason).toBe('stop');
           expect(assistantText(result).length).toBeGreaterThan(0);
@@ -194,8 +245,9 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('a tool call round trip', () => {
-      it.live('calls the tool, then answers from the result it is given', () =>
-        Effect.gen(function* () {
+      it.live(
+        'calls the tool, then answers from the result it is given',
+        Effect.fnUntraced(function* () {
           const configured = model();
           const called = yield* completeTurn(configured, TOOL_REQUEST);
           expect(called.finishReason).toBe('tool-calls');
@@ -210,8 +262,9 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('an abort mid-stream', () => {
-      it.live('interrupts the reader while the response is still open', () =>
-        Effect.gen(function* () {
+      it.live(
+        'interrupts the reader while the response is still open',
+        Effect.fnUntraced(function* () {
           const configured = model();
           const turn = yield* configured.prepareTurn(TEXT_REQUEST);
           assert(turn.mode === 'foreground');
@@ -243,8 +296,9 @@ export function liveProtocol(spec: LiveProtocol): void {
     });
 
     describe('the usage shape', () => {
-      it.live('reports the counts this route bills on', () =>
-        Effect.gen(function* () {
+      it.live(
+        'reports the counts this route bills on',
+        Effect.fnUntraced(function* () {
           const result = yield* completeTurn(model(), TEXT_REQUEST);
           const usage = result.usage;
           // Every principal count in `UsageSchema` is nullable, and the
@@ -264,8 +318,9 @@ export function liveProtocol(spec: LiveProtocol): void {
 
     describe('a continuation', () => {
       if (spec.continuation === 'supported') {
-        it.live('chains the next turn on the anchor the first left', () =>
-          Effect.gen(function* () {
+        it.live(
+          'chains the next turn on the anchor the first left',
+          Effect.fnUntraced(function* () {
             const configured = model();
             const first = yield* completeTurn(configured, TEXT_REQUEST);
             const continuation = first.continuation;
@@ -279,8 +334,9 @@ export function liveProtocol(spec: LiveProtocol): void {
           }),
         );
       } else {
-        it.live('refuses an authored continuation', () =>
-          Effect.gen(function* () {
+        it.live(
+          'refuses an authored continuation',
+          Effect.fnUntraced(function* () {
             const error = yield* Effect.flip(
               model().prepareTurn({
                 ...TEXT_REQUEST,

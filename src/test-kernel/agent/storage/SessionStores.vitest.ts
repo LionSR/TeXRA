@@ -1,33 +1,30 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
-import { Effect, SubscriptionRef } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, SubscriptionRef, Context } from 'effect';
+import { expect } from 'vitest';
 
 // Local imports
-import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import { closeSessionOf } from '@test/support/sessionEnd';
+import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
-  createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
-describe('committed run removal', () => {
-  it.live(
-    'detaches a retained child when the session receives a committed parent removal',
-    () =>
-      Effect.acquireUseRelease(
-        createTestSession(),
-        (session) =>
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'committed run removal',
+  (it) => {
+    it.effect(
+      'detaches a retained child when the session receives a committed parent removal',
+      () =>
+        Effect.flatMap(isolatedTestSession(), (session) =>
           Effect.gen(function* () {
             const parent = 'aa0001' as RunId;
             const child = 'bb0002' as RunId;
             publishTestRunStart(session, parent);
             publishTestRunStart(session, child, { parent });
-            yield* session.log.settled;
+            yield* Context.get(session, SessionLog).settled;
             publishTestRows(session, [
               {
                 type: 'request.opened',
@@ -52,25 +49,31 @@ describe('committed run removal', () => {
                 },
               },
             ]);
-            yield* session.log.settled;
+            yield* Context.get(session, SessionLog).settled;
             expect(
-              SubscriptionRef.getUnsafe(session.view.ref).requests,
+              SubscriptionRef.getUnsafe(
+                Context.get(session, SessionViewAccess).ref,
+              ).requests,
             ).toHaveLength(1);
-            const before = session.log.now();
+            const before = Context.get(session, SessionLog).now();
             publishTestRows(session, [
               {
                 type: 'run.removed',
                 aggregateId: qualifyAggregateId('run', parent),
               },
             ]);
-            yield* session.log.settled;
+            yield* Context.get(session, SessionLog).settled;
             expect(
-              SubscriptionRef.getUnsafe(session.view.ref).requests,
+              SubscriptionRef.getUnsafe(
+                Context.get(session, SessionViewAccess).ref,
+              ).requests,
             ).toEqual([]);
-            expect(session.view.run(child)?.parentId).not.toBe(parent);
-            expect(session.log.now()).toBe(before + 1);
+            expect(
+              Context.get(session, SessionViewAccess).run(child)?.parentId,
+            ).not.toBe(parent);
+            expect(Context.get(session, SessionLog).now()).toBe(before + 1);
           }),
-        closeSessionOf,
-      ),
-  );
-});
+        ),
+    );
+  },
+);

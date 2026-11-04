@@ -4,9 +4,10 @@
  * labels every host shows for them. Plain data, so browser webviews render
  * the same catalog; the app attaches each plan's preference toggle
  * (`model/codingPlanSubscriptions.ts`). What a used-up plan falls back to is
- * the harness's retry copy (`quotaFallbackRouteFor`), not this catalog's.
+ * the payment copy's (`planFallbackName` in `@ui/copy/modelAccess`), not
+ * this catalog's.
  */
-import type { DeclinableUsageRoute } from '@texra-ai/harness/schemas';
+import type { ApiKeyUsageRoute } from '@texra-ai/llm';
 
 /** One coding plan's identity and presentation, keyed by its usage route. */
 interface CodingPlanSubscriptionDescriptor {
@@ -17,10 +18,7 @@ interface CodingPlanSubscriptionDescriptor {
   readonly credentialName: string;
   readonly credentialSetupUrl: string;
   readonly usageProvider: 'glmCodingPlan' | 'kimiCode';
-  readonly usageRoute: Extract<
-    DeclinableUsageRoute,
-    'glm-coding-plan-subscription' | 'kimi-code-subscription'
-  >;
+  readonly usageRoute: Exclude<ApiKeyUsageRoute, 'api-key'>;
   readonly displayName: string;
   readonly preferenceLabel: string;
   readonly modelFamily: string;

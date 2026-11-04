@@ -74,3 +74,7 @@ packages/extension/serve/
 # form against every `agent/` directory when `packages` is the search path, so
 # `rg <pattern> packages` silently skipped packages/*/src/agent/.
 packages/agent/**
+
+# Real-model acceptance runs (`example:acceptance`): the session database a
+# run copies beside its text evidence stays local.
+.agents/docs/evidence/*-harness-real-model/**/store/

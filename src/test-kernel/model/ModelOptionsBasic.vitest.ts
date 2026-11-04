@@ -2,16 +2,21 @@
 import { describe, expect, it } from 'vitest';
 
 import { modelConfig } from '@texra-ai/llm';
-import {
-  DEFAULT_HELPER_MODEL,
-  DEFAULT_MODELS,
-} from '@shared/constants/defaultModels';
+import { Settings } from '@texra-ai/harness/host';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
+import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 // Local imports - model
 
-describe('default helper model', () => {
+describe("TeXRA's default helper model", () => {
   it('resolves to a valid, non-deprecated DeepSeek model in llm-zoo', () => {
-    const config = modelConfig(DEFAULT_HELPER_MODEL);
+    const config = modelConfig(
+      Settings.defaultOf<string>(
+        TEXRA_SETTINGS.catalog,
+        GlobalStateKey.HELPER_MODEL,
+      ),
+    );
 
     expect(config).toBeDefined();
     expect(config?.provider).toBe('deepseek');

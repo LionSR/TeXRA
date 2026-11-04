@@ -29,8 +29,11 @@ import { Schema, Struct } from 'effect';
 import {
   InstalledPluginSchema,
   RUN_OUTCOME,
+  RunEndSchema,
+  RunIdSchema,
   type RunOutcome,
 } from '@texra-ai/harness/schemas';
+import { DocumentsResultSchema } from '@texra/shared/plugins/documentOutputs';
 
 /**
  * The two keys every line carries beyond the record a command builds: `ts`,
@@ -66,15 +69,40 @@ const CliPluginPinSchema = InstalledPluginSchema.mapFields(
 export type CliPluginPin = typeof CliPluginPinSchema.Type;
 
 /**
- * The provenance an agent run's result carries beside its own fields: the
- * plugins installed when it started or resumed. Absent on a result that is
- * not a run's; the tools each step offered are the run's `tools.offered`
- * rows.
+ * A run's result: its stored end named by its run, with the plugins
+ * installed when this invocation started or resumed it (the tools each step
+ * offered are the run's `tools.offered` rows) and the folder it ran in.
  */
-const runResultPayload = Schema.StructWithRest(
-  Schema.Struct({
+const CliRunResultSchema = RunEndSchema.mapFields(
+  Struct.assign({
+    runId: RunIdSchema,
     plugins: Schema.optional(Schema.Array(CliPluginPinSchema)),
+    workingDirectory: Schema.optional(Schema.String),
   }),
+);
+export type CliRunResult = typeof CliRunResultSchema.Type;
+
+/**
+ * A document task's result: its output carries its documents (the run's
+ * `structured` value, under the CLI's name), with the run's storage folder
+ * and where `--output` or `--output-dir` copied the outputs.
+ */
+const CliWorkflowRunResultSchema = CliRunResultSchema.mapFields(
+  Struct.assign({
+    output: RunEndSchema.fields.output
+      .mapFields(Struct.omit(['structured']))
+      .mapFields(Struct.assign({ documents: DocumentsResultSchema })),
+    runDirectory: Schema.String,
+    copiedOutput: Schema.optional(Schema.String),
+    copiedOutputs: Schema.optional(Schema.Array(Schema.String)),
+  }),
+);
+export type CliWorkflowRunResult = typeof CliWorkflowRunResultSchema.Type;
+
+/** A command's result that is not a run's (`plugin`, `clone`): named by
+ *  its command, its fields the command's own. */
+const CliCommandResultSchema = Schema.StructWithRest(
+  Schema.Struct({ command: Schema.String }),
   [Schema.Record(Schema.String, Schema.Unknown)],
 );
 
@@ -183,12 +211,18 @@ const CliNdjsonRecordSchema = Schema.Union([
   Schema.StructWithRest(
     Schema.Struct({
       kind: Schema.Literal('agent-result'),
-      result: runResultPayload,
+      result: CliRunResultSchema,
     }),
     [Schema.Record(Schema.String, Schema.Unknown)],
   ),
   Schema.StructWithRest(
-    Schema.Struct({ kind: Schema.Literal('result'), result: runResultPayload }),
+    Schema.Struct({
+      kind: Schema.Literal('result'),
+      result: Schema.Union([
+        CliWorkflowRunResultSchema,
+        CliCommandResultSchema,
+      ]),
+    }),
     [Schema.Record(Schema.String, Schema.Unknown)],
   ),
   Schema.StructWithRest(

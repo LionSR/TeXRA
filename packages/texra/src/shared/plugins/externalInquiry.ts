@@ -1,5 +1,5 @@
 /**
- * The external-inquiry plugin's rows (its `arms`, `@tools/plugins`): each thread is an aggregate the plugin owns,
+ * The external-inquiry plugin's rows (its `factKinds`, `@tools/plugins`): each thread is an aggregate the plugin owns,
  * `('plugin', 'external-inquiry:<threadId>')`, and its latest `plugin.fact`
  * of kind `thread` is the summary the Background Tasks panel lists under the
  * run that asked, the row's `parent`. The thread's full record stays in the
@@ -8,19 +8,93 @@
  * schema, its writer and its one reader, beside the service over the
  * thread records. Browser-safe: it imports only schemas and `effect`.
  */
-import { Context, type Effect, Result, Schema, Struct } from 'effect';
+import {
+  Context,
+  type Effect,
+  Result,
+  Schema,
+  SchemaGetter,
+  Struct,
+} from 'effect';
 
 import {
-  ExternalInquiryTurnRecordSchema,
-  InquiryThreadIdSchema,
   RunIdSchema,
-  type InquiryThreadId,
   type JsonValue,
   type RunId,
   type ToolFact,
 } from '@texra-ai/harness/schemas';
 import type { ValueFamily } from '@texra-ai/harness/host';
 import type { SessionView } from '@texra-ai/harness/schemas';
+
+/** The links a person cites beside an answer. */
+const InquirySessionLinksSchema = Schema.Array(
+  Schema.Trim.check(Schema.isMinLength(1)),
+);
+
+// The inquiry record service mints the 12-hex suffix. The explicit bound
+// rejects truncated or extended identifiers at storage and tool-input
+// boundaries.
+export const InquiryThreadIdSchema = Schema.String.check(
+  Schema.isPattern(/^ei_[0-9a-f]{12}$/i),
+).pipe(
+  Schema.decodeTo(Schema.String, {
+    decode: SchemaGetter.transform((value) => value.toLowerCase()),
+    encode: SchemaGetter.passthrough(),
+  }),
+);
+export type InquiryThreadId = typeof InquiryThreadIdSchema.Type;
+
+/** One turn of a thread, as its full record keeps it. */
+const InquiryTurnBaseShape = {
+  turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
+  timestamp: Schema.String.check(Schema.isMinLength(1)),
+  question: Schema.String,
+  context: Schema.optional(Schema.NullOr(Schema.String)),
+  suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  attachFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+};
+
+/** A turn awaiting the person's answer. Panel drafts belong to view state. */
+const OpenInquiryTurnSchema = Schema.Struct({
+  ...InquiryTurnBaseShape,
+  kind: Schema.Literal('open'),
+});
+export type OpenInquiryTurn = typeof OpenInquiryTurnSchema.Type;
+
+/** A turn with its answer recorded. */
+const AnsweredInquiryTurnSchema = Schema.Struct({
+  ...InquiryTurnBaseShape,
+  kind: Schema.Literal('answered'),
+  answer: Schema.String,
+  answeredAt: Schema.String.check(Schema.isMinLength(1)),
+  sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
+});
+export type AnsweredInquiryTurn = typeof AnsweredInquiryTurnSchema.Type;
+
+const InquiryTurnRecordSchema = Schema.Union([
+  OpenInquiryTurnSchema,
+  AnsweredInquiryTurnSchema,
+]);
+
+/**
+ * What an inquiry's request holds (its `data`): the question and the thread
+ * it continues. First and follow-up turns carry one field set, told apart
+ * by `transcript` (the thread's turns so far, the last one this question).
+ */
+export const InquiryRequestSchema = Schema.Struct({
+  requestId: Schema.String,
+  runId: RunIdSchema,
+  question: Schema.String,
+  threadId: InquiryThreadIdSchema,
+  context: Schema.optional(Schema.NullOr(Schema.String)),
+  suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
+  attachFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+  sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
+  transcript: Schema.optional(
+    Schema.NullOr(Schema.Array(InquiryTurnRecordSchema)),
+  ),
+});
+export type InquiryRequest = typeof InquiryRequestSchema.Type;
 
 const InquiryThreadStatusSchema = Schema.Literals([
   'open',
@@ -65,7 +139,7 @@ const InquiryThreadRecordSchema = Schema.Struct({
   status: InquiryThreadSummarySchema.fields.status,
   createdAt: Schema.String.check(Schema.isMinLength(1)),
   updatedAt: Schema.String.check(Schema.isMinLength(1)),
-  turns: Schema.Array(ExternalInquiryTurnRecordSchema),
+  turns: Schema.Array(InquiryTurnRecordSchema),
 });
 /** A thread's full record, as the global database stores it. */
 export type InquiryThreadRecord = typeof InquiryThreadRecordSchema.Type;
@@ -92,11 +166,11 @@ interface ThreadRow {
 }
 
 /**
- * Refuse a thread row its latest row does not admit, so a delayed or
+ * Refuse a thread row its latest row does not accept, so a delayed or
  * replayed update can neither regress the thread nor move it to an earlier
  * asker. Only a reopen of an answered thread (a new turn) changes parents.
  */
-function admitsThreadRow(
+function acceptsThreadRow(
   previous: ThreadRow | undefined,
   next: ThreadRow,
 ): string | null {
@@ -143,15 +217,27 @@ function supersedesThreadRow(latest: ThreadRow, next: ThreadRow): boolean {
 }
 
 /** The external-inquiry plugin's one row kind. */
-export const EXTERNAL_INQUIRY_THREAD_ARM = {
+export const EXTERNAL_INQUIRY_THREAD_KIND = {
   plugin: 'external-inquiry',
   kind: 'thread',
   version: 1,
   schema: InquiryThreadRowSchema,
   upcasters: [],
-  admits: admitsThreadRow,
+  // A thread is the plugin's own aggregate, never a run's row.
+  fork: 'drop',
+  accepts: acceptsThreadRow,
   supersedes: supersedesThreadRow,
 } as const;
+
+/** The inquiry's request, declared once: its `ask` returns at once, so the
+ *  run never waits on it, and it is answered or skipped. Each `ask` posts
+ *  it with an {@link InquiryRequest} as its data. */
+export const INQUIRY_REQUEST = Object.freeze({
+  kind: 'plugin',
+  plugin: EXTERNAL_INQUIRY_THREAD_KIND.plugin,
+  blocksCaller: false,
+  answers: Object.freeze(['answer', 'skip'] as const),
+} as const);
 
 /** The fact that makes `summary` its thread's displayed state: an `ask`
  *  states it in its call's result, so it commits with the `tool.result`.
@@ -162,11 +248,11 @@ export function inquiryThreadFact(
 ): ToolFact & { readonly aggregate: string } {
   const { parentRunId: _, ...value } = summary;
   return {
-    plugin: EXTERNAL_INQUIRY_THREAD_ARM.plugin,
-    kind: EXTERNAL_INQUIRY_THREAD_ARM.kind,
-    version: EXTERNAL_INQUIRY_THREAD_ARM.version,
+    plugin: EXTERNAL_INQUIRY_THREAD_KIND.plugin,
+    kind: EXTERNAL_INQUIRY_THREAD_KIND.kind,
+    version: EXTERNAL_INQUIRY_THREAD_KIND.version,
     value: Schema.decodeUnknownSync(InquiryThreadRowSchema)(value),
-    aggregate: `${EXTERNAL_INQUIRY_THREAD_ARM.plugin}:${summary.threadId}`,
+    aggregate: `${EXTERNAL_INQUIRY_THREAD_KIND.plugin}:${summary.threadId}`,
   };
 }
 
@@ -176,8 +262,8 @@ export function inquiryThreadsUnder(
   runId: RunId,
 ): InquiryThreadSummary[] {
   return view.pluginFacts.flatMap((fact) =>
-    fact.plugin === EXTERNAL_INQUIRY_THREAD_ARM.plugin &&
-    fact.kind === EXTERNAL_INQUIRY_THREAD_ARM.kind &&
+    fact.plugin === EXTERNAL_INQUIRY_THREAD_KIND.plugin &&
+    fact.kind === EXTERNAL_INQUIRY_THREAD_KIND.kind &&
     fact.parent === runId
       ? [
           {

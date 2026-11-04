@@ -1,6 +1,6 @@
 // Test harness: seed the session fold with synthetic runs and rows, render
 // <App /> to the real terminal. Every fixture is published through the
-// runtime session (`SessionHandle.log`, the transcript store, the
+// runtime session (its log, the transcript store, the
 // interaction port), so the TUI under test renders the same `SessionView` a
 // live chat does. Used to verify the TUI without API access. Exits on Ctrl-C.
 
@@ -16,14 +16,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 import { render } from 'ink';
-import {
-  Context,
-  Effect,
-  Fiber,
-  HashMap,
-  Schema,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, Fiber, Schema, SubscriptionRef } from 'effect';
 import { nanoid } from 'nanoid';
 import React from 'react';
 
@@ -33,10 +26,19 @@ import {
   describeFollowUpFailure,
   Secrets,
 } from '@texra-ai/harness/host';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { SessionOwner } from '@platform/processRuntime';
+import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
+import {
+  RunHistory,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
+import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import { runBypasses } from '@shared/approvalBypassKind';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
@@ -71,14 +73,14 @@ import {
   type SessionEventDraft,
   type UserQuestionPermission,
   aggregateTarget,
+  type ToolEditContent,
 } from '@shared/schemas';
-import type { StagedToolEdit } from '@shared/session/runtimeRequest';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
   buildScenario,
@@ -91,15 +93,16 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { runStatusLabel } from '@ui/copy/runStatus';
-import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
-import { nodeFileServices } from '@utils/files/fsDurability';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   buildDiffHunks,
   countLineChanges,
   firstChangedLine,
-} from '@utils/text/unifiedDiff';
+} from '@tools/unifiedDiff';
+import { runStatusLabel } from '@ui/copy/runStatus';
+import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
+import { blobAddress } from '@utils/core/idHash';
+import { nodeFileServices } from '@utils/files/fsDurability';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
@@ -265,7 +268,7 @@ const HARNESS_RESOURCES_PATH = await Effect.runPromise(
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: APPROVAL_POLICY_DEFAULT,
-  config: new MemoryConfigProvider(TEXRA_SETTINGS),
+  config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog),
   commandName: 'texra',
   configWarnings: [],
   configDegradations: [],
@@ -381,7 +384,7 @@ if (HARNESS_MEMORY_FILES.length > 0) {
   });
 }
 // The persistent session `initCliPlatform` opened over the harness roots,
-// and its internal handle, which the fixtures seed rows through: the same
+// and its internal owners, which the fixtures seed rows through: the same
 // root's, from the process's session owner.
 const harnessRunSession = await harnessRuntime.runPromise(
   HARNESS_PLATFORM_SERVICES.session,
@@ -419,9 +422,18 @@ await harnessRuntime.runPromise(AgentCatalog.use((catalog) => catalog.refresh));
 
 const HARNESS_DISPOSERS: Array<() => void> = [];
 
-/** The session every fixture publishes into and the TUI renders. */
+/** The owners of the session every fixture publishes into and the TUI
+ *  renders. */
+const harnessOwners = {
+  log: Context.get(harnessRuntimeSession, SessionLog),
+  runHistory: Context.get(harnessRuntimeSession, RunHistory),
+  view: Context.get(harnessRuntimeSession, SessionViewAccess),
+  interactions: Context.get(harnessRuntimeSession, Interactions),
+  requests: Context.get(harnessRuntimeSession, SessionRequests),
+  roots: Context.get(harnessRuntimeSession, SessionRoots),
+};
 function session() {
-  return harnessRuntimeSession;
+  return harnessOwners;
 }
 
 /**
@@ -503,7 +515,13 @@ HARNESS_DISPOSERS.push(
   Effect.runSync(
     session().interactions.use(
       createTuiHostInteractions(harnessRuntimeHost, HARNESS_CLI_CONTEXT, {
-        requests: { request: session().requests.request, view: session().view },
+        requests: {
+          request: (req) =>
+            session()
+              .requests.request(req)
+              .pipe(Effect.provide(harnessRuntimeSession)),
+          view: session().view,
+        },
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,
       }),
@@ -954,21 +972,28 @@ function makeRetryApprovalPayload(): RetryPermission {
     runId: HARNESS_RUN_ID,
     operation: 'Model request',
     model: HARNESS_MODEL,
-    errorMessage: RETRY_APPROVAL_CHATGPT
-      ? 'ChatGPT subscription usage limit reached. Resets in 2h.'
-      : 'HTTP 429 Too Many Requests',
-    errorDetails: {
-      classification: {
-        // The default stays upstream-credit: that classification requires an
-        // explicit user decision before changing credentials, so this fixture
-        // remains interactive.
-        kind: RETRY_APPROVAL_CHATGPT
-          ? 'chatgpt-subscription'
-          : 'upstream-credit',
-      },
-      provider: 'openai',
-      statusCode: 429,
-    },
+    // The failure as the harness records it: its own plain words, and the
+    // facts the modal words in the app's (the plan and its reset).
+    errorDetails: RETRY_APPROVAL_CHATGPT
+      ? {
+          message:
+            'Usage limit reached on your OpenAI plan. Resets in 2h. Switch to your own API key to keep working, or wait until the limit resets.',
+          classification: {
+            kind: 'chatgpt-subscription',
+            resetsInMs: 7_200_000,
+          },
+          provider: 'openai',
+          statusCode: 429,
+        }
+      : {
+          message: 'HTTP 429 Too Many Requests',
+          // The default stays upstream-credit: that classification requires
+          // an explicit user decision before changing credentials, so this
+          // fixture remains interactive.
+          classification: { kind: 'upstream-credit' },
+          provider: 'openai',
+          statusCode: 429,
+        },
     // The invoker decides the offer (#13236); a subscription quota declines
     // its route for the model's own key.
     credentialSwitch: RETRY_APPROVAL_CHATGPT
@@ -1120,9 +1145,13 @@ function requestHarnessApproval(
   runId: RunId,
   payload: PermissionPayload,
   onSettled: (decision: RequestDecision) => void | Promise<void>,
+  /** What the payload names by address, stored with the request's row. */
+  blobs?: readonly DraftBlob[],
 ): void {
   void harnessRuntime
-    .runPromise(session().requests.ask(runId, payload))
+    .runPromise(
+      session().requests.ask(runId, payload, { ...(blobs && { blobs }) }),
+    )
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1359,13 +1388,20 @@ if (SHOW_PLAN) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    // The payload and the preview `requestToolEditApproval` builds, the
-    // preview held in the session's store as it holds it.
+    // The payload and the content `requestToolEditApproval` builds, the
+    // content stored with the request's row as it stores it.
     const { hunks } = buildDiffHunks(
       request.originalContent,
       request.proposedContent,
     );
     const lines = countLineChanges(hunks);
+    const content: ToolEditContent = {
+      originalContent: request.originalContent,
+      proposedContent: request.proposedContent,
+      hunks,
+      firstChangedLine: firstChangedLine(hunks, request.proposedContent),
+    };
+    const text = JSON.stringify(content);
     const permission = {
       requestId: 'harness-edit-approval',
       path: request.path,
@@ -1375,23 +1411,13 @@ if (SHOW_EDIT_APPROVAL) {
       runId: request.runId,
       addedLines: lines.added,
       removedLines: lines.removed,
+      content: blobAddress(text),
     };
-    harnessRuntime.runSync(
-      SubscriptionRef.update(
-        session().view.toolEdits,
-        HashMap.set<string, StagedToolEdit>(permission.requestId, {
-          originalContent: request.originalContent,
-          proposedContent: request.proposedContent,
-          hunks,
-          firstChangedLine: firstChangedLine(hunks, request.proposedContent),
-          edited: null,
-        }),
-      ),
-    );
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },
       () => undefined,
+      [{ digest: permission.content, text }],
     );
   };
 
@@ -1581,7 +1607,7 @@ function handleHarnessSubmit(line: string): void {
     // The session refuses a message to an agent that takes none.
     if (!acceptsFollowUp(focused)) {
       appendHarnessAssistantTranscript(
-        describeFollowUpFailure('not_resumable'),
+        describeFollowUpFailure('notResumable'),
         focused.id,
       );
       return;
@@ -1764,7 +1790,7 @@ registerBuiltinSlashCommands({
 // run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
 // does.
 if (canInterrupt) {
-  harnessSession.markRunPending(Effect.never);
+  harnessSession.markRunPending(Effect.never, Effect.void);
   harnessSession.runId = HARNESS_RUN_ID;
 }
 
@@ -1856,8 +1882,11 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
           ? [
               {
                 runId: interrupted,
-                reason: { kind: 'pluginOff', name: 'zotero' },
-                retry: false,
+                reason: {
+                  kind: 'blocked',
+                  blocker: 'pluginOff',
+                  name: 'zotero',
+                },
               },
             ]
           : [],

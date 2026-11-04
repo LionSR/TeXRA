@@ -2,17 +2,17 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, expect, vi } from 'vitest';
 
 // Shared mock registrations must evaluate before anything that loads
 // the mocked modules — keep these imports immediately after the vitest
 // import.
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { layer } from '@effect/vitest';
+import { Effect, Context, Schema } from 'effect';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -20,16 +20,21 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import { qualifyAggregateId, RUN_OUTCOME, type RunId } from '@shared/schemas';
-import { closeSessionOf } from '@test/support/sessionEnd';
-import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
-  fakeProcessServices,
-  installedHost,
-} from '@test/support/setupPlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+} from '@texra-ai/harness/schemas';
+import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
+import { installedHost } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
+import {
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog } from '@shared/session/runHistory';
 
 const mocks = vi.hoisted(() => {
   return {
@@ -41,8 +46,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@utils/files/runStorageFs', async (importActual) => ({
-  ...(await importActual<typeof import('@utils/files/runStorageFs')>()),
+vi.mock('@common/storage/storageLayout', async (importActual) => ({
+  ...(await importActual<typeof import('@common/storage/storageLayout')>()),
   runDirUnder: vi.fn(
     (_storageRoot: string, runId: string) => `/tmp/runs/${runId}`,
   ),
@@ -101,18 +106,19 @@ type WorkflowRunPayload = Extract<
   { ok: true }
 >['result'];
 
-/** The session the suite's init installs, as the command resolved it. */
-let fixtureSession: SessionHandle | undefined;
-
 /** Run ids the mocked launch has reported, waiting for the opening row its
  *  real counterpart would have committed. */
 let pendingRunStarts: string[] = [];
 
-/** The workflow command's program over the shared happy-path inputs. */
+/**
+ * The workflow command's program over the shared happy-path inputs, on the
+ * test's session: the CLI init hands its caller the platform's stores, and
+ * the commands under test read `secrets`/`globalState` off what it returns.
+ */
 function workflowProgram(
   init: Partial<WorkflowRunInit> = {},
   context: CliContext = createRunCommandCliContext(),
-): Effect.Effect<number, Error> {
+) {
   // The mocked launch boundary skips the launch's own `run.start` commit, so
   // the fixture session opens the run the mock reports first: an aggregate's
   // first row must be that start, and the claim it takes is the one the
@@ -120,21 +126,26 @@ function workflowProgram(
   const starts = pendingRunStarts;
   pendingRunStarts = [];
   return Effect.gen(function* () {
-    yield* Effect.forEach(
-      starts,
-      (runId) => seedStartedRun(fixtureSession!, runId),
-      { discard: true },
-    );
-    return yield* Effect.provide(
-      nativeRun(context, {
-        agent: 'polish',
-        inputFiles: ['paper.tex'],
-        contextFiles: [],
-        instruction: '',
-        ...init,
+    const session = yield* TestSession;
+    const handle = yield* sessionHandleOf(session);
+    cliInitPlatformMock.initCliPlatform.mockReturnValue(
+      Effect.succeed({
+        ...installedHost().platform,
+        session: Effect.succeed(session),
+        runtime: yield* SessionGraph.runtime,
       }),
-      fakeProcessServices(),
     );
+    yield* Effect.forEach(starts, (runId) => seedStartedRun(handle, runId), {
+      discard: true,
+    });
+    return yield* nativeRun(context, {
+      agent: 'polish',
+      inputFiles: ['paper.tex'],
+      contextFiles: [],
+      instruction: '',
+      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
+      ...init,
+    });
   });
 }
 
@@ -206,8 +217,11 @@ async function writeGeneratedOutput(root: string): Promise<string> {
  * append claims the aggregate for this process, the way the launch's own
  * commit claims it before finalization writes.
  */
-const seedStartedRun = (session: SessionHandle, runId: string) =>
-  session.log.transact([
+const seedStartedRun = (
+  session: Context.Context<SessionServices>,
+  runId: string,
+) =>
+  Context.get(session, SessionLog).transact([
     {
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId as RunId),
@@ -218,22 +232,10 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
     },
   ]);
 
-describe('CLI run command, workflow agents', () => {
-  beforeEach(async () => {
+layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
+  beforeEach(() => {
     vi.clearAllMocks();
     pendingRunStarts = [];
-    // The CLI init hands its caller the platform's stores; the commands
-    // under test read `secrets`/`globalState` off what it returns.
-    const session = await Effect.runPromise(createTestSession());
-    fixtureSession = session;
-    const platform = {
-      ...installedHost().platform,
-      session: Effect.succeed(testSessionOf(session)),
-      runtime: testRuntime(),
-    };
-    cliInitPlatformMock.initCliPlatform.mockReturnValue(
-      Effect.succeed(platform),
-    );
     mocks.resolveCliRunAgent.mockReturnValue(
       Effect.succeed({
         name: 'polish',
@@ -242,7 +244,6 @@ describe('CLI run command, workflow agents', () => {
         tools: [],
         blocks: {
           task: {
-            rewrite: true,
             outputs: [],
             files: {},
             prefix: '',
@@ -270,51 +271,49 @@ describe('CLI run command, workflow agents', () => {
     );
   });
 
-  afterEach(async () => {
-    if (fixtureSession) await Effect.runPromise(closeSessionOf(fixtureSession));
-    fixtureSession = undefined;
-  });
+  // A session of its own per case, released with it.
+  it.layer(TestSession.layer(), { buildPerTest: true })((it) => {
+    it.effect(
+      'keeps failed output in run storage and preserves the requested --output destination',
+      () =>
+        withTempDirEffect('texra-workflow-', (root) =>
+          Effect.gen(function* () {
+            const generated = yield* Effect.promise(() =>
+              writeGeneratedOutput(root),
+            );
+            const outputSummary = runOutputSummary(
+              generated,
+              path.join(root, 'paper.tex'),
+            );
+            mockWorkflowRun(
+              workflowRun('abc00a', {
+                outcome: RUN_OUTCOME.FAILED,
+                outputs: [outputSummary],
+              }),
+            );
+            const target = path.join(root, 'polished.tex');
+            yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
 
-  it.effect(
-    'keeps failed output in run storage and preserves the requested --output destination',
-    () =>
-      withTempDirEffect('texra-workflow-', (root) =>
-        Effect.gen(function* () {
-          const generated = yield* Effect.promise(() =>
-            writeGeneratedOutput(root),
-          );
-          const outputSummary = runOutputSummary(
-            generated,
-            path.join(root, 'paper.tex'),
-          );
-          mockWorkflowRun(
-            workflowRun('abc00a', {
+            const exitCode = yield* workflowProgram(
+              { output: 'polished.tex' },
+              createRunCommandCliContext({ cwd: root }),
+            );
+
+            expect(exitCode).toBe(CliExitCode.AgentError);
+            expect(
+              yield* Effect.promise(() => fs.readFile(target, 'utf8')),
+            ).toBe('keep-me');
+            const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+            expect(emission?.json).toMatchObject({
               outcome: RUN_OUTCOME.FAILED,
-              outputs: [outputSummary],
-            }),
-          );
-          const target = path.join(root, 'polished.tex');
-          yield* Effect.promise(() => fs.writeFile(target, 'keep-me'));
-
-          const exitCode = yield* workflowProgram(
-            { output: 'polished.tex' },
-            createRunCommandCliContext({ cwd: root }),
-          );
-
-          expect(exitCode).toBe(CliExitCode.AgentError);
-          expect(yield* Effect.promise(() => fs.readFile(target, 'utf8'))).toBe(
-            'keep-me',
-          );
-          const emission = mocks.emitCliResult.mock.calls[0]?.[1];
-          expect(emission?.json).toMatchObject({
-            outcome: RUN_OUTCOME.FAILED,
-            output: { documents: { outputs: [outputSummary] } },
-            runDirectory: '/tmp/runs/abc00a',
-          });
-          expect(emission?.json).not.toHaveProperty('copiedOutput');
-          expect(emission?.json).not.toHaveProperty('copiedOutputs');
-          expect(emission?.text).toContain('/tmp/runs/abc00a');
-        }),
-      ),
-  );
+              output: { documents: { outputs: [outputSummary] } },
+              runDirectory: '/tmp/runs/abc00a',
+            });
+            expect(emission?.json).not.toHaveProperty('copiedOutput');
+            expect(emission?.json).not.toHaveProperty('copiedOutputs');
+            expect(emission?.text).toContain('/tmp/runs/abc00a');
+          }),
+        ),
+    );
+  });
 });

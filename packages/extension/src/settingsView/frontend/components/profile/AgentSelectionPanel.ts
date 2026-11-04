@@ -49,11 +49,13 @@ function sourceMeta(source: AgentSource): {
   displayName: string;
   badge?: { icon: IconName };
 } {
-  const { properties } = AGENT_DECORATORS;
-  if (!(source in properties)) {
+  const properties: Partial<
+    Record<AgentSource, { readonly label: string; readonly icon: IconName }>
+  > = AGENT_DECORATORS.properties;
+  const badge = properties[source];
+  if (!badge) {
     return { displayName: 'Built-in' };
   }
-  const badge = properties[source as keyof typeof properties];
   return { displayName: badge.label, badge };
 }
 

@@ -1,22 +1,24 @@
 import * as path from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
-import { ToolError } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import {
+  resolveToolPath,
+  type StepRoot,
+  ToolError,
+} from '@texra-ai/harness/plugins';
 import {
   activatedSkillNames,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { testSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { resolveToolPath } from '@tools/pathResolution';
-import type { StepRoot } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
@@ -30,18 +32,11 @@ async function createTempRoot(): Promise<string> {
 }
 
 const WORKSPACE_ROOT = '/workspace';
-setupPlatform({ workspacePath: WORKSPACE_ROOT });
 
-afterEach(async () => {
-  await Effect.runPromise(
-    testWorkspaceRoots().config.update(
-      WorkspaceStateKey.DISABLED_SKILLS,
-      undefined,
-    ),
-  );
-});
-
-describe('runtime skills', () => {
+// Each test's host is its own, so a skill one disables reaches no other.
+layer(FakeHost.layer({ workspacePath: WORKSPACE_ROOT }), {
+  buildPerTest: true,
+})('runtime skills', (it) => {
   it.effect('filters runtime skills disabled by name', () =>
     Effect.gen(function* () {
       const projectRoot = yield* Effect.promise(() => createTempRoot());

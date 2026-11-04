@@ -9,7 +9,9 @@ import {
   formatError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
+import { ToolMissing } from '@texra/utils/system/toolChecks';
 
 /** Valid documentation identifiers for error messages. */
 type DocId = 'custom-agents' | 'latex-diff';
@@ -36,47 +38,69 @@ export function announce<A>(
   );
 }
 
-/** Log a formatted error message and display it to the user. */
+const INSTALL_GUIDE_ACTION = 'View Installation Guide';
+
+/**
+ * Log a formatted error message and display it to the user. A missing tool's
+ * message carries its install steps, and the notice offers the installation
+ * guide: this is where the editor shows every `ToolMissing`.
+ */
 export function showLoggedErrorMessage(
   channel: string,
   prefix: string,
   err: unknown,
 ): Effect.Effect<string> {
-  return showLoggedMessage(channel, formatError(prefix, err));
+  if (!(err instanceof ToolMissing))
+    return showLoggedMessage(channel, formatError(prefix, err));
+  // Whole, not truncated as `formatError` would: the install steps are the
+  // point of the notice.
+  const message = `${prefix}: ${err.message}`;
+  return Effect.gen(function* () {
+    yield* Effect.logError(message).pipe(withLogChannel(channel));
+    const choice = yield* announce(
+      channel,
+      vscodeUi.error(message, { items: [INSTALL_GUIDE_ACTION] }),
+      undefined,
+    );
+    if (choice === INSTALL_GUIDE_ACTION)
+      yield* openGuidePage('installation').pipe(
+        Effect.catch((error) =>
+          Effect.logError('Could not open the installation guide', error).pipe(
+            withLogChannel(channel),
+          ),
+        ),
+      );
+    return message;
+  });
 }
 
 /** Log a pre-formatted message and display it to the user as an error. */
-export function showLoggedMessage(
+export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
   channel: string,
   message: string,
-): Effect.Effect<string> {
-  return Effect.gen(function* () {
-    yield* Effect.logError(message).pipe(withLogChannel(channel));
-    yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
-    return message;
-  });
-}
+): Effect.fn.Return<string> {
+  yield* Effect.logError(message).pipe(withLogChannel(channel));
+  yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
+  return message;
+});
 
 /** Log a message and display it to the user as an information notification. */
-export function showLoggedInfoMessage(
-  channel: string,
-  message: string,
-): Effect.Effect<string> {
-  return Effect.gen(function* () {
+export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
+  function* (channel: string, message: string): Effect.fn.Return<string> {
     yield* Effect.logInfo(message).pipe(withLogChannel(channel));
     yield* announce(channel, vscodeUi.showInfoMessage(message), undefined);
     return message;
-  });
-}
+  },
+);
 
 /** Log an error message, display it with a docs action, and open the docs if selected. */
-export function showLoggedMessageWithDocs(
-  channel: string,
-  message: string,
-  docId: DocId,
-  actionLabel = 'View Docs',
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
+export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
+  function* (
+    channel: string,
+    message: string,
+    docId: DocId,
+    actionLabel = 'View Docs',
+  ): Effect.fn.Return<void> {
     yield* Effect.logError(message).pipe(withLogChannel(channel));
     const selection = yield* announce(
       channel,
@@ -97,5 +121,5 @@ export function showLoggedMessageWithDocs(
         ).pipe(withLogChannel(channel)),
       ),
     );
-  });
-}
+  },
+);

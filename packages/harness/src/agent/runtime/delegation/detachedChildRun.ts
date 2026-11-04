@@ -10,10 +10,11 @@
  * opens on its loop's fiber, whose end is the loop's.
  */
 // Third-party imports
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Deferred, Effect, Fiber } from 'effect';
 
 // Local imports
-import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
+import { activationIfOpened } from '@agent/runtime/AgentLaunchContext';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   startChildRunLoop,
@@ -25,10 +26,12 @@ import {
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentTrace } from '@agent/trace';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { withLogChannel } from '@logger/effectLog';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   USER_FOLLOW_UP_SUPPORT,
+  type CommitOrdinal,
   type RunId,
   type RunIdentity,
 } from '@shared/schemas';
@@ -41,7 +44,16 @@ import {
 /** A native child's loop parameters, or a process child's with the setup
  *  the launch guard runs: its trace, then its strategy around it. */
 type DetachedChildRunInput<TTurn, R> =
-  | Extract<ChildRunLoopParams<TTurn, R>, { readonly childRun?: undefined }>
+  | (Extract<
+      ChildRunLoopParams<TTurn, R>,
+      { readonly childRun?: undefined }
+    > & {
+      /** The deferred the strategy's `onAdmitted` completes with the run's
+       *  opening commit. Given, the start waits for it: the caller's receipt
+       *  names a run that exists, and a loop that ends before the opening
+       *  fails the start with the launch's failure. */
+      readonly opened?: Deferred.Deferred<CommitOrdinal>;
+    })
   | (Omit<ChildRunLoopParams<never>, 'strategy' | 'childRun'> & {
       /** Create the stream inside the launch guard, before any stream-dependent setup. */
       readonly createChildRun: () => Effect.Effect<ChildRunPort>;
@@ -50,7 +62,11 @@ type DetachedChildRunInput<TTurn, R> =
        * session's `Runs` (the agent-CLI strategies resolve their registry there). */
       readonly buildLaunch: (
         childRun: ChildRunPort,
-      ) => Effect.Effect<ProcessChildStrategy<TTurn, R>, Error, R | Runs>;
+      ) => Effect.Effect<
+        ProcessChildStrategy<TTurn, R>,
+        Error,
+        R | SessionServices
+      >;
     });
 
 /**
@@ -63,20 +79,28 @@ export function startDetachedChildRunLoop<
   R extends AgentRunServices = never,
 >(
   input: DetachedChildRunInput<TTurn, R>,
-): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | Runs> {
+): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | SessionServices> {
   if (!('createChildRun' in input)) {
-    const started = startChildRunLoop(input);
-    return Effect.uninterruptible(
-      input.awaited === true
-        ? started
-        : Effect.tap(started, (loop) =>
-            logLateFailure(input.agentName, loop.fiber),
+    const { opened, ...params } = input;
+    const started = Effect.uninterruptible(
+      params.awaited === true
+        ? startChildRunLoop(params)
+        : Effect.tap(startChildRunLoop(params), (loop) =>
+            logLateFailure(params.agentName, loop.fiber),
           ),
     );
+    // Interruptible: a cancelled caller stops waiting, not the child.
+    return opened === undefined
+      ? started
+      : Effect.tap(started, ({ fiber }) =>
+          Effect.raceFirst(
+            Deferred.await(opened),
+            Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
+          ),
+        );
   }
   const { createChildRun, buildLaunch, ...loopParams } = input;
   return runWithLaunchGuard(
-    input.session,
     input.runId,
     Effect.gen(function* () {
       const port = yield* createChildRun();
@@ -95,7 +119,8 @@ export function startDetachedChildRunLoop<
 
 /** Log, detached, how a loop nobody awaits failed: on the loop's log
  *  channel always (the child's trace may be closed by its end by then),
- *  and on the child's trace when it has one. */
+ *  and on the child's trace when it has one. An interruption alone is the
+ *  loop's stop, whose end its terminal recorded, not a failure. */
 const logLateFailure = (
   agentName: string,
   fiber: Fiber.Fiber<unknown, Error>,
@@ -105,6 +130,7 @@ const logLateFailure = (
   return Effect.forkDetach(
     Fiber.join(fiber).pipe(
       Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.void;
         const error = Cause.squash(cause);
         return Effect.sync(() => trace?.error(message, { data: error })).pipe(
           Effect.andThen(
@@ -145,25 +171,23 @@ export interface ProcessChildLaunch<TTurn> {
  * a setup failure after it dies with the choreography's error.
  */
 export const launchProcessChild = <TTurn>(
-  session: SessionHandle,
   parentRunId: RunId,
   launch: ProcessChildLaunch<TTurn>,
-): Effect.Effect<RunId, Error, Runs> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+): Effect.Effect<RunId, Error, SessionServices> =>
+  Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
+      const log = yield* SessionLog;
       const runId = yield* resumedChildRunId({
-        session,
         parentRunId,
         resumeId: launch.resumeId,
       });
-      yield* registerRun(session, runId, launch.config, {
+      yield* registerRun(runId, launch.config, {
         identity: launch.identity,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
         parentRunId,
         description: childRunDescription(launch.description),
       });
       yield* startDetachedChildRunLoop({
-        session,
         runId,
         parentRunId,
         agentName: launch.identity.agent,
@@ -171,7 +195,7 @@ export const launchProcessChild = <TTurn>(
         // uninterruptible, so a cancel arriving once the record committed
         // leaves the run CANCELLED with no loop behind it.
         createChildRun: () =>
-          restore(Effect.void).pipe(Effect.as(createChildRun(session, runId))),
+          restore(Effect.void).pipe(Effect.as(createChildRun(log, runId))),
         buildLaunch: (childRun) =>
           launch.buildLaunch({ logger: childRun.logger, runId }),
       }).pipe(Effect.orDie);

@@ -57,18 +57,17 @@ interface CollectionNode {
 }
 
 function buildTree(collections: readonly BbtCollection[]): CollectionNode[] {
-  const nodeMap = new Map<string, CollectionNode>();
+  const entries = collections.map(
+    (collection): { collection: BbtCollection; node: CollectionNode } => ({
+      collection,
+      node: { key: collection.key, name: collection.name, children: [] },
+    }),
+  );
+  const nodeMap = new Map(entries.map(({ node }) => [node.key, node]));
   const roots: CollectionNode[] = [];
 
-  for (const c of collections) {
-    nodeMap.set(c.key, { key: c.key, name: c.name, children: [] });
-  }
-
-  // Link children to parents. Safe: this loop walks the same `collections`
-  // array the first loop just used to key every node by `c.key`, so the
-  // lookup below can never miss.
-  for (const c of collections) {
-    const node = nodeMap.get(c.key)!;
+  // Link children to parents.
+  for (const { collection: c, node } of entries) {
     if (typeof c.parentCollection === 'string') {
       const parent = nodeMap.get(c.parentCollection);
       if (parent) {

@@ -1,32 +1,14 @@
 import { Effect } from 'effect';
 
 import { InstalledPlugins, type SettingsStores } from '@texra-ai/harness/host';
+import { RUN_OUTCOME, type RunOutcome } from '@texra-ai/harness/schemas';
 import {
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@texra-ai/harness/schemas';
-import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
+  runOutcomeToCliRunStatus,
+  type CliPluginPin,
+  type CliRunResult,
+} from '@cli/schemas/cliOutput';
 
 import { CliExitCode } from './exitCodes';
-import type { RunEnd } from '@texra-ai/harness';
-import type { CliPluginPin } from '../schemas/cliOutput';
-
-// A type alias, not an interface: the result line types its payload as a
-// loose object, which an interface (no implicit index signature) cannot meet.
-type CliRunResultMetadata = {
-  /** The plugins installed when this invocation started or resumed the run. */
-  readonly plugins?: readonly CliPluginPin[];
-  readonly workingDirectory?: string;
-  readonly runDirectory?: string;
-  readonly copiedOutput?: string;
-  readonly copiedOutputs?: string[];
-};
-
-/** A run's stored end, named by its run, with the CLI-only metadata. */
-export type CliRunResult = RunEnd & {
-  readonly runId: RunId;
-} & CliRunResultMetadata;
 
 /**
  * The plugins that load as a run result names them, read the way this

@@ -13,8 +13,6 @@ import {
   type StateStore,
   type WorkspaceAgentsController,
 } from '@texra-ai/harness/host';
-import { planTeamRun } from '@texra-ai/harness/host';
-import { findTeamPreset, type TeamPreset } from '@texra-ai/harness/host';
 import { type AgentSelectionItem } from '@texra/shared/settingsView/settingsViewMessages';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
@@ -49,25 +47,25 @@ export class SettingsAgentCatalogController {
     this.deps = deps;
   }
 
-  buildSelectionItems() {
-    return Effect.gen({ self: this }, function* () {
-      const enabledKeys = yield* this.enabledKeys();
-      return this.deps
-        .getAgents()
-        .map((entry) => this.toSelectionItem(entry, enabledKeys))
-        .sort((a, b) => a.name.localeCompare(b.name));
-    });
-  }
+  readonly buildSelectionItems = Effect.fn(
+    'SettingsAgentCatalogController.buildSelectionItems',
+  )({ self: this }, function* () {
+    const enabledKeys = yield* this.enabledKeys();
+    return this.deps
+      .getAgents()
+      .map((entry) => this.toSelectionItem(entry, enabledKeys))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  });
 
-  getCustomPreset(presetId: string) {
-    return Effect.gen({ self: this }, function* () {
-      return (
-        parseAgentModePresets(
-          yield* this.deps.repoState.get(CUSTOM_TEAMS_KEY),
-        ).find((preset) => preset.id === presetId) ?? null
-      );
-    });
-  }
+  readonly getCustomPreset = Effect.fn(
+    'SettingsAgentCatalogController.getCustomPreset',
+  )({ self: this }, function* (presetId: string) {
+    return (
+      parseAgentModePresets(
+        yield* this.deps.repoState.get(CUSTOM_TEAMS_KEY),
+      ).find((preset) => preset.id === presetId) ?? null
+    );
+  });
 
   getOrchestratorAgentNames(): string[] {
     const names = new Set<string>(BUILTIN_TEAM_ROOT_AGENT_NAMES);
@@ -77,83 +75,45 @@ export class SettingsAgentCatalogController {
     return [...names].sort();
   }
 
-  /**
-   * Preview the team root for a preset's member list. Mirrors launch
-   * semantics: the preview plans with the preset's own members only, so a
-   * custom team with no delegating members previews no root — the same state
-   * the launcher disables with "no runnable team root".
-   *
-   * When `presetId` resolves to a launchable preset, the preview reuses that
-   * preset's provenance and member lists so a built-in team plans with
-   * built-in root semantics (search only BUILTIN_TEAM_ROOT_AGENT_NAMES, no
-   * preset-order-first or first-delegating-member fallback) — the same root
-   * `planTeamRun` picks for that team at launch. Ad-hoc member lists without
-   * a resolvable id keep custom-preset semantics.
-   */
-  getPresetRoot(members: readonly string[], presetId?: string) {
-    return Effect.gen({ self: this }, function* () {
-      const knownPreset = presetId
-        ? findTeamPreset(
-            yield* this.deps.workspaceAgents.allPresets(),
-            presetId,
-          )
-        : undefined;
-      const preset: TeamPreset = knownPreset ?? {
-        id: 'settings-preview',
-        name: 'Settings preview',
-        description: '',
-        icon: 'bookmark',
-        agents: members,
-        source: 'custom',
-      };
-      return planTeamRun(preset, {
-        resolveAgent: (identifier) =>
-          this.deps.workspaceAgents.resolveAgent(identifier),
-        rootAgentNames: BUILTIN_TEAM_ROOT_AGENT_NAMES,
-      }).rootAgent?.name;
-    });
-  }
+  readonly saveCurrentPreset = Effect.fn(
+    'SettingsAgentCatalogController.saveCurrentPreset',
+  )({ self: this }, function* (name: string) {
+    const trimmedName = name.trim();
+    const agents = (yield* this.deps.workspaceAgents.getVisibleAgents()).map(
+      (entry) => entry.name,
+    );
+    const preset: AgentModePreset = {
+      id: `custom-${yield* Clock.currentTimeMillis}`,
+      name: trimmedName,
+      description: `Custom team: ${agents.join(', ')}`,
+      icon: 'bookmark',
+      agents,
+    };
 
-  saveCurrentPreset(name: string) {
-    return Effect.gen({ self: this }, function* () {
-      const trimmedName = name.trim();
-      const agents = (yield* this.deps.workspaceAgents.getVisibleAgents()).map(
-        (entry) => entry.name,
-      );
-      const preset: AgentModePreset = {
-        id: `custom-${yield* Clock.currentTimeMillis}`,
-        name: trimmedName,
-        description: `Custom team: ${agents.join(', ')}`,
-        icon: 'bookmark',
-        agents,
-      };
+    return yield* this.deps.repoState
+      .modify(CUSTOM_TEAMS_KEY, (stored) =>
+        Result.map(presetRecords(stored), (records) => [...records, preset]),
+      )
+      .pipe(Effect.as(preset));
+  });
 
-      return yield* this.deps.repoState
+  readonly deleteCustomPreset = Effect.fn(
+    'SettingsAgentCatalogController.deleteCustomPreset',
+  )({ self: this }, function* (presetId: string) {
+    if (!(yield* this.getCustomPreset(presetId))) return;
+
+    yield* this.deps.workspaceAgents.removeTeamPreset(presetId, () =>
+      this.deps.repoState
         .modify(CUSTOM_TEAMS_KEY, (stored) =>
-          Result.map(presetRecords(stored), (records) => [...records, preset]),
-        )
-        .pipe(Effect.as(preset));
-    });
-  }
-
-  deleteCustomPreset(presetId: string) {
-    return Effect.gen({ self: this }, function* () {
-      if (!(yield* this.getCustomPreset(presetId))) return;
-
-      yield* this.deps.workspaceAgents.removeTeamPreset(presetId, () =>
-        this.deps.repoState
-          .modify(CUSTOM_TEAMS_KEY, (stored) =>
-            Result.map(presetRecords(stored), (records) =>
-              records.filter(
-                (record) =>
-                  !Predicate.isObject(record) || record.id !== presetId,
-              ),
+          Result.map(presetRecords(stored), (records) =>
+            records.filter(
+              (record) => !Predicate.isObject(record) || record.id !== presetId,
             ),
-          )
-          .pipe(Effect.asVoid),
-      );
-    });
-  }
+          ),
+        )
+        .pipe(Effect.asVoid),
+    );
+  });
 
   /**
    * Enable or disable every agent from one source, in the workspace agents'
@@ -173,14 +133,14 @@ export class SettingsAgentCatalogController {
 
   /** The enabled keys; an `all` agent list enables every visible agent, never a
    *  custom agent the user hid. */
-  private enabledKeys() {
-    return Effect.gen({ self: this }, function* () {
-      return (
-        (yield* this.deps.workspaceAgents.getEnabledAgentKeys()) ??
-        (yield* this.deps.workspaceAgents.getVisibleAgents()).map(agentKeyOf)
-      );
-    });
-  }
+  private readonly enabledKeys = Effect.fn(
+    'SettingsAgentCatalogController.enabledKeys',
+  )({ self: this }, function* () {
+    return (
+      (yield* this.deps.workspaceAgents.getEnabledAgentKeys()) ??
+      (yield* this.deps.workspaceAgents.getVisibleAgents()).map(agentKeyOf)
+    );
+  });
 
   private toSelectionItem(
     entry: SettingsAgentCatalogEntry,

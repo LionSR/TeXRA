@@ -28,7 +28,6 @@ import {
   sumUsageStats,
   TokenUsageStatsSchema,
   type AggregateId,
-  type ExtendedTokenUsageStats,
   type SessionEvent,
   type TokenUsageStats,
 } from '@shared/schemas';
@@ -91,28 +90,24 @@ interface Projector {
   ) => readonly ProjectionOp[];
 }
 
-/** A priced row's spend as the `usage` display row carries it; an absent
- *  field stays absent, as `JSON.stringify` and `sumUsageStats` read it. */
-function pricedUsage(event: SessionEvent): ExtendedTokenUsageStats | null {
+/** A priced row's spend as the `usage` display row carries it: its counts,
+ *  cost, route and plan, without the call's surface and response time. */
+function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
-  if (event.type === 'model.message' && event.payload.kind === 'response')
-    priced = event.payload.usage;
+  if (
+    event.type === 'model.message' &&
+    (event.payload.kind === 'response' || event.payload.kind === 'failed')
+  )
+    priced = event.payload.usage ?? null;
   if (priced == null) return null;
-  return {
-    inputTokens: priced.inputTokens,
-    outputTokens: priced.outputTokens,
-    cost: priced.cost,
-    cacheReadInputTokens: priced.cachedInputTokens,
-    cacheMissInputTokens: priced.cacheMissInputTokens,
-    cacheCreationInputTokens: priced.cacheCreationTokens,
-    reasoningTokens: priced.reasoningTokens,
-    toolUseTokens: priced.toolUsePromptTokens,
-    elapsedTime: priced.responseTimeMs / 1000,
-    usageRoute: priced.usageRoute,
-    usagePlan: priced.usagePlan,
-  };
+  const { provider, responseTimeMs, ...usage } = priced;
+  return usage;
 }
+
+/** The projections this build maintains; {@link PROJECTORS} has one each. */
+const PROJECTION_NAMES = ['listing', 'usage', 'model'] as const;
+type ProjectionName = (typeof PROJECTION_NAMES)[number];
 
 const PROJECTORS = {
   listing: {
@@ -135,7 +130,8 @@ const PROJECTORS = {
     },
   },
   usage: {
-    version: 1,
+    // v2: the rows carry `TurnUsage`'s count names and no `elapsedTime`.
+    version: 2,
     inputs: ['model.message', 'context.edit', 'usage'],
     prior: 'run_usage',
     table: 'run_usage',
@@ -198,10 +194,8 @@ const PROJECTORS = {
       ];
     },
   },
-} as const satisfies Record<string, Projector>;
+} as const satisfies Record<ProjectionName, Projector>;
 
-type ProjectionName = keyof typeof PROJECTORS;
-const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
 const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );
@@ -231,6 +225,9 @@ const isCurrent = (
     : state.version === PROJECTORS[name].version && state.through >= top;
 
 const RunUsageSchema = Schema.Struct({ usage: TokenUsageStatsSchema });
+const decodeStoredUsage = Schema.decodeUnknownSync(
+  Schema.fromJsonString(RunUsageSchema),
+);
 const RunModelSchema = Schema.Struct({
   model: Schema.String,
   commit: Schema.NullOr(Schema.Int),
@@ -309,8 +306,9 @@ export function projectionUpkeep<E>(
     names: readonly ProjectionName[],
   ) =>
     Effect.forEach(events, (event) =>
-      Effect.forEach(names, (name) =>
-        Effect.gen(function* () {
+      Effect.forEach(
+        names,
+        Effect.fnUntraced(function* (name) {
           if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
           const projector = PROJECTORS[name];
           const row =
@@ -322,9 +320,7 @@ export function projectionUpkeep<E>(
                 ))[0];
           let prior: ProjectionPrior = {};
           if (row !== undefined && projector.prior === 'run_usage')
-            prior = Schema.decodeUnknownSync(RunUsageSchema)(
-              JSON.parse(String(row.usage)),
-            );
+            prior = decodeStoredUsage(String(row.usage));
           if (row !== undefined && projector.prior === 'run_model')
             prior = { model: Schema.decodeUnknownSync(RunModelSchema)(row) };
           for (const op of projector.project(event, prior))

@@ -18,7 +18,7 @@ import { Schema } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
 import { RunInputSchema } from './runInput';
 import { NormalizedUsageSchema } from './usage';
@@ -62,8 +62,9 @@ export type InvocationPurpose = typeof InvocationPurposeSchema.Type;
 /**
  * What follows a failed attempt: another attempt (`retry`, or `unchain`,
  * which also drops the provider continuation the vendor no longer holds),
- * the person's answer to the retry request `requestId` (`ask`), the end of
- * the invocation as failed (`stop`) or as a user abort (`cancel`).
+ * the person's answer to the retry request `requestId` (`ask`), or the end
+ * of the invocation as failed (`stop`). A person's cancel is their answer
+ * to the `ask`.
  */
 const FailedNextSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('retry') }),
@@ -73,7 +74,6 @@ const FailedNextSchema = Schema.Union([
     requestId: Schema.String.check(Schema.isMinLength(1)),
   }),
   Schema.Struct({ kind: Schema.Literal('stop') }),
-  Schema.Struct({ kind: Schema.Literal('cancel') }),
 ]);
 /** The move a `failed` row records after its attempt. */
 export type FailedNext = typeof FailedNextSchema.Type;
@@ -104,23 +104,26 @@ export const RunPositionPayloadSchema = Schema.Struct({
   turn: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
   ),
-  /** The loop's own terminal word. The canonical terminal fact stays
-   *  `run.end`, which also covers failures before the runtime starts. */
+  /** A halt's: the loop's own terminal word (the canonical terminal fact
+   *  stays `run.end`, which also covers failures before the runtime
+   *  starts). A `turn.end`'s: how the turn ended, `completed` with its
+   *  answer or `failed` without one, which a follow-up's receipt reads. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
 }).check(
-  Schema.makeFilter((p) => (p.at === 'halted') === (p.outcome != null), {
-    message:
-      'Only a halted position carries an outcome, and it always carries one.',
-  }),
+  Schema.makeFilter(
+    (p) => (p.at === 'halted' || p.at === 'turn.end') === (p.outcome != null),
+    {
+      message:
+        'Only a halted or turn.end position carries an outcome, and it always carries one.',
+    },
+  ),
 );
 
 /* ---------------------------------------------------------- model.message */
 
-/**
- * Per-call dispatch facts, stamped at append time so the fold and the resume
- * rule stay data-only and need no tool registry. One entry per local-call
- * part of the response, in content order.
- */
+/** Per-call dispatch facts, stamped at append time so the fold and the resume
+ *  rule stay data-only and need no tool registry. One entry per local-call
+ *  part of the response, in content order. */
 const DispatchFactsSchema = Schema.Struct({
   callId: CallIdSchema,
   toolName: Schema.String.check(Schema.isMinLength(1)),
@@ -164,6 +167,9 @@ export const ModelMessagePayloadSchema = Schema.Union([
     purpose: InvocationPurposeSchema,
     error: RetryErrorInfoSchema,
     next: FailedNextSchema,
+    /** The priced usage of a response the provider billed before refusing
+     *  it (Anthropic's overflowed turn), counted like a response's. */
+    usage: Schema.optional(NormalizedUsageSchema),
   }),
   /** The commit barrier: the accepted remote operation, committed before
    *  `observe` is called. `deadlineAtMs` is the limit admitted with the
@@ -293,8 +299,8 @@ export const ModelMessagePayloadSchema = Schema.Union([
  * applies to) are replaced by `messages`. An edit drops the provider-side
  * continuation, which was over the old view, and the offered system text.
  * `trigger` says what asked for a compaction: the threshold
- * (`context-limit`) or the user's `/compact` (`user`); null for the other
- * causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
+ * (`context-limit`), the user's `/compact` (`user`), or a request the
+ * model's window could not hold (`overflow`); null for the other causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
  * was computed (`null`: none), and the fold refuses an edit whose base is no
  * longer the latest. `usage` is a summary call's priced usage, folded as a
  * response's (`null` when no model was called). Compaction (`run/compaction.ts`)
@@ -304,7 +310,9 @@ export const ModelMessagePayloadSchema = Schema.Union([
  */
 export const ContextEditPayloadSchema = Schema.Struct({
   cause: Schema.Literals(['compaction', 'fork']),
-  trigger: Schema.NullOr(Schema.Literals(['context-limit', 'user'])),
+  trigger: Schema.NullOr(
+    Schema.Literals(['context-limit', 'user', 'overflow']),
+  ),
   base: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
   range: Schema.Struct({
     from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
@@ -373,9 +381,8 @@ const ToolIntentOriginSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('script'), scriptCallId: CallIdSchema }),
 ]);
 
-/** One call's body starts: committed after its PreToolUse hooks, its guard
- *  and its approval, so before it nothing of the attempt has run and after
- *  it the body may have. */
+/** One call's body starts: committed after its PreToolUse hooks, guard and
+ *  approval, so before it nothing of the attempt ran and after it the body may. */
 export const ToolIntentPayloadSchema = Schema.Struct({
   origin: ToolIntentOriginSchema,
   callId: CallIdSchema,
@@ -396,15 +403,9 @@ export const ToolResultPayloadSchema = Schema.Struct({
   responseId: ResponseIdSchema,
   callId: CallIdSchema,
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
-  /** The fold's key fact: a cancelled call is a disposition, never a
-   *  match on the English prose of an error message. */
-  disposition: Schema.Literals([
-    'executed',
-    'failed',
-    'cancelled',
-    'skipped',
-    'duplicate',
-  ]),
+  /** How the call ended, read as a fact, never matched from the English
+   *  prose of an error message. */
+  disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),
   duplicateOf: Schema.NullOr(CallIdSchema),
   result: SettledToolResultSchema,
   attachments: Schema.Array(SettledAttachmentSchema),
@@ -420,7 +421,7 @@ export const ToolResultPayloadSchema = Schema.Struct({
     }
     // Both directions. The provider-facing status of the delivered tool group
     // is derived from `result.status` alone, so a call the run recorded as
-    // failed, cancelled or skipped carrying an executed result is delivered to
+    // failed or skipped carrying an executed result is delivered to
     // the model as a success. A duplicate is the one disposition that copies
     // its primary's status, whichever that was.
     if (

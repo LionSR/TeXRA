@@ -27,6 +27,7 @@ import {
   LayerMap,
   RcMap,
   Ref,
+  Predicate,
   Result,
   Schema,
 } from 'effect';
@@ -38,15 +39,17 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
-import { LeanFileCommandFailed } from '../leanLanguageServices';
 import { createLeanServerRoster } from '../leanServerRegistry';
+import {
+  LeanFileCommandFailed,
+  LeanFileUnreadable,
+  LeanUnavailable,
+  type LeanProjectCommand,
+  type FetchDiagnosticsResult,
+  type LspResult,
+} from '../leanTypes';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { LeanServerInfo } from '../leanServerRegistry';
-import type {
-  LeanProjectCommand,
-  FetchDiagnosticsResult,
-  LspResult,
-} from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
 
@@ -62,20 +65,38 @@ const LAKE_PROJECT_ARGS = {
 } satisfies Partial<Record<LeanProjectCommand, readonly string[]>>;
 
 /** The pool was disposed before or while this call ran. */
-export class LeanAdapterStopped extends Schema.TaggedError<LeanAdapterStopped>()(
-  'LeanAdapterStopped',
-  {},
-) {
-  override readonly message = 'Lean adapter was stopped.';
-}
+export const adapterStopped = (): LeanUnavailable =>
+  new LeanUnavailable({
+    reason: 'stopped',
+    message: 'Lean adapter was stopped.',
+  });
 
-/** No `lakefile.lean` / `lakefile.toml` above the file. */
-class LeanProjectNotFound extends Schema.TaggedError<LeanProjectNotFound>()(
-  'LeanProjectNotFound',
-  {
-    message: Schema.String,
-  },
-) {}
+/**
+ * The session errors that mean the root's server ended under the call or its
+ * connection closed: a stop or a crash, never a missing toolchain. A request
+ * error is the server's answer, not an end, so it is not one of them.
+ */
+const SERVER_ENDED = [
+  'LeanSessionDisposed',
+  'LeanSessionNotRunning',
+  'JsonRpcConnectionDisposed',
+] as const;
+
+/** The root's server ended under the call: it was stopped or crashed. */
+const serverStopped = (error: Error): LeanUnavailable =>
+  new LeanUnavailable({
+    reason: 'stopped',
+    message: `The Lean server stopped: ${error.message}`,
+    cause: error,
+  });
+
+/** No `lake env lean --server` could be started for the root. */
+const noToolchain = (error: LeanStartError): LeanUnavailable =>
+  new LeanUnavailable({
+    reason: 'toolchain',
+    message: error.message,
+    cause: error,
+  });
 
 /** A project command could not run or reported failure. */
 export class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError>()(
@@ -113,23 +134,28 @@ export class LeanServerPool extends Context.Service<
     readonly fetchDiagnosticsForFile: (
       file: string,
       runId: RunId | undefined,
-    ) => Effect.Effect<FetchDiagnosticsResult>;
+    ) => Effect.Effect<
+      FetchDiagnosticsResult,
+      LeanUnavailable | LeanFileUnreadable
+    >;
     readonly executeFileCommand: (
       filePath: string,
       runId: RunId | undefined,
-    ) => Effect.Effect<void, LeanFileCommandFailed>;
+    ) => Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable>;
     readonly executeProjectCommand: (
       command: LeanProjectCommand,
       runId: RunId | undefined,
     ) => Effect.Effect<
       void,
-      LeanProjectCommandError | LeanStartError | LeanAdapterStopped
+      LeanProjectCommandError | LeanStartError | LeanUnavailable
     >;
+    /** `reply` decodes Lean's non-null answer; a mismatch is the result's error. */
     readonly positionRequest: <T>(
       filePath: string,
       line: number,
       column: number,
       method: string,
+      reply: Schema.Codec<T, unknown>,
       runId: RunId | undefined,
     ) => Effect.Effect<LspResult<T>>;
     /** See {@link LeanLanguageServices.stopSessionsForRun}. */
@@ -210,14 +236,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   )(function* (exceptRoot: string) {
     const live = yield* liveEntries;
     yield* Effect.forEach(
-      [...live].filter(
-        ([root, entry]) =>
-          root !== exceptRoot && entry.leases === 0 && entry.server,
+      [...live].flatMap(([root, { leases, server }]) =>
+        root !== exceptRoot && leases === 0 && server ? [{ root, server }] : [],
       ),
-      ([root, entry]) =>
+      ({ root, server }) =>
         servers
           .invalidate(root)
-          .pipe(Effect.andThen(Deferred.await(entry.server!.closed))),
+          .pipe(Effect.andThen(Deferred.await(server.closed))),
       { concurrency: 'unbounded', discard: true },
     );
   });
@@ -231,7 +256,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     );
 
   const acquire = Effect.fn('LeanServerPool.acquire')(function* (root: string) {
-    if (yield* Ref.get(stopped)) return yield* new LeanAdapterStopped();
+    if (yield* Ref.get(stopped)) return yield* adapterStopped();
     // A server the map dropped but whose scope is still closing keeps the
     // root reserved: its replacement spawns once the descriptors are back.
     const previous = (yield* Ref.get(entries)).get(root)?.server;
@@ -241,18 +266,17 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     return yield* serverFor(root).pipe(
       Effect.catchIf(
         (error) => isFileTableExhausted(error),
-        (error) =>
-          Effect.gen(function* () {
-            const others = [...(yield* liveEntries).keys()].some(
-              (other) => other !== root,
-            );
-            if (!others) return yield* Effect.fail(error);
-            yield* Effect.logWarning(
-              `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
-            ).pipe(withLogChannel(LOG_CHANNEL));
-            yield* evictOthersForExhausted(root);
-            return yield* serverFor(root);
-          }),
+        Effect.fnUntraced(function* (error) {
+          const others = [...(yield* liveEntries).keys()].some(
+            (other) => other !== root,
+          );
+          if (!others) return yield* Effect.fail(error);
+          yield* Effect.logWarning(
+            `Lean spawn hit a full file table; stopping other servers and retrying (${toErrorMessage(error)})`,
+          ).pipe(withLogChannel(LOG_CHANNEL));
+          yield* evictOthersForExhausted(root);
+          return yield* serverFor(root);
+        }),
       ),
     );
   });
@@ -306,7 +330,8 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     const absolute = path.resolve(filePath);
     const root = yield* resolveWorkspaceRoot(fs, absolute);
     if (!root) {
-      return yield* new LeanProjectNotFound({
+      return yield* new LeanUnavailable({
+        reason: 'no-project',
         message: `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
       });
     }
@@ -477,56 +502,30 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     'LeanServerPool.fetchDiagnosticsForFile',
   )(function* (file: string, runId: RunId | undefined) {
     return yield* withServer(file, runId, (server) =>
-      server.diagnostics(file).pipe(
-        Effect.map((result): FetchDiagnosticsResult => ({
-          ok: true,
-          ...result,
-        })),
-        Effect.catchTag(
-          [
-            'LeanSessionDisposed',
-            'LeanSessionNotRunning',
-            'JsonRpcRequestError',
-            'JsonRpcConnectionDisposed',
-          ],
-          (error): Effect.Effect<FetchDiagnosticsResult> => {
-            const message = toErrorMessage(error);
-            return Effect.logWarning(
-              `fetchDiagnosticsForFile: session interrupted for ${file}: ${message}`,
-            ).pipe(
-              withLogChannel(LOG_CHANNEL),
-              Effect.as({ ok: false, kind: 'toolchain_unavailable', message }),
-            );
-          },
-        ),
-        Effect.catchTag(
-          'LeanFileReadError',
-          (error): Effect.Effect<FetchDiagnosticsResult> => {
-            // Reading the file itself failed (e.g. ENOENT) — the file is the
-            // problem, so the tool keeps its "could not open file" framing.
-            const message = error.message;
-            return Effect.logWarning(
-              `fetchDiagnosticsForFile: could not read ${file}: ${message}`,
-            ).pipe(
-              withLogChannel(LOG_CHANNEL),
-              Effect.as({ ok: false, kind: 'file_missing', message }),
-            );
-          },
+      server.diagnostics(file),
+    ).pipe(
+      Effect.catchTag(SERVER_ENDED, (error) =>
+        Effect.fail(serverStopped(error)),
+      ),
+      Effect.catchTag('LeanStartError', (error) =>
+        Effect.fail(noToolchain(error)),
+      ),
+      // Reading the file, or the folders above it for its project, failed
+      // (e.g. ENOENT): the file is the problem, so the tool keeps its
+      // "could not open file" framing.
+      Effect.catchTag(['LeanFileReadError', 'PlatformError'], (error) =>
+        Effect.fail(
+          new LeanFileUnreadable({ message: error.message, cause: error }),
         ),
       ),
-    ).pipe(
-      Effect.catch((error): Effect.Effect<FetchDiagnosticsResult> => {
-        // Server start covers both "not a Lake project" and a missing or
-        // broken `lake`/`lean` toolchain — report it as toolchain_unavailable
-        // so the tool gives setup guidance, not "could not open file".
-        const message = toErrorMessage(error);
-        return Effect.logWarning(
-          `fetchDiagnosticsForFile: no Lean session for ${file}: ${message}`,
-        ).pipe(
-          withLogChannel(LOG_CHANNEL),
-          Effect.as({ ok: false, kind: 'toolchain_unavailable', message }),
-        );
-      }),
+      // Diagnostics only send notifications, so no request can be refused:
+      // a request error here is a defect, never a file's verdict.
+      Effect.catchTag('JsonRpcRequestError', (error) => Effect.die(error)),
+      Effect.tapError((error) =>
+        Effect.logWarning(
+          `fetchDiagnosticsForFile: no diagnostics for ${file}: ${error.message}`,
+        ).pipe(withLogChannel(LOG_CHANNEL)),
+      ),
     );
   });
 
@@ -537,18 +536,21 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       return yield* withServer(filePath, runId, (server) =>
         server.restartFile(filePath),
       ).pipe(
-        Effect.mapError(
+        Effect.catchTag(SERVER_ENDED, (error) =>
+          Effect.fail(serverStopped(error)),
+        ),
+        Effect.catchTag('LeanStartError', (error) =>
+          Effect.fail(noToolchain(error)),
+        ),
+        Effect.catchTag(
+          ['LeanFileReadError', 'PlatformError', 'JsonRpcRequestError'],
           (error) =>
-            new LeanFileCommandFailed({
-              // No Lake project, or no `lake env lean --server` to talk to.
-              reason:
-                error._tag === 'LeanProjectNotFound' ||
-                error._tag === 'LeanStartError'
-                  ? 'toolchain_unavailable'
-                  : 'failed',
-              message: toErrorMessage(error),
-              cause: error,
-            }),
+            Effect.fail(
+              new LeanFileCommandFailed({
+                message: error.message,
+                cause: error,
+              }),
+            ),
         ),
       );
     },
@@ -560,11 +562,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       line: number,
       column: number,
       method: string,
+      reply: Schema.Codec<T, unknown>,
       runId: RunId | undefined,
     ) {
       return yield* withServer(filePath, runId, (server) =>
-        server.requestSettled<T | null>(filePath, line, column, method),
+        server.requestSettled(filePath, line, column, method),
       ).pipe(
+        Effect.flatMap(Schema.decodeUnknownEffect(Schema.NullOr(reply))),
         Effect.map((data): LspResult<T> =>
           data
             ? { data }
@@ -593,9 +597,13 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
 function isFileTableExhausted(error: unknown): boolean {
   let current: unknown = error;
   for (let depth = 0; current != null && depth < 4; depth += 1) {
-    const code = (current as NodeJS.ErrnoException).code;
+    const code = Predicate.hasProperty(current, 'code')
+      ? current.code
+      : undefined;
     if (code === 'EMFILE' || code === 'ENFILE') return true;
-    current = (current as { cause?: unknown }).cause;
+    current = Predicate.hasProperty(current, 'cause')
+      ? current.cause
+      : undefined;
   }
   return false;
 }

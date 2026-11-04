@@ -220,9 +220,8 @@ the same POLICY implemented per host, the simplification is to hoist it:
 - **The adjudicated KEEP line**: per-host *vocabulary* isolation (#7622) and
   Platform ports are deliberate — never unify UI strings across hosts and
   never collapse a port. Share logic, not grammar.
-- The ratchets bound HOW you hoist: no new `@agent/*` deep-import specifier
-  from a host (type-only included) — route through the existing alias
-  surface or extend the port.
+- No new `@agent/*` deep-import specifier from a host (type-only included):
+  route through a harness entry or extend the port.
 
 ## Concurrency discipline (this repo merges dozens of PRs a day)
 
@@ -247,8 +246,8 @@ the same POLICY implemented per host, the simplification is to hoist it:
 - Run-scoped facts extend `AgentEvent`; session-authored facts extend the
   `SessionEvent` schema and commit via the session log's `transact`.
   No new `bus.emit` from a VS Code-free zone.
-- No new `@agent/*` deep-import specifiers from hosts (ratchet-frozen); use
-  repo-root path aliases.
+- No new `@agent/*` deep-import specifiers from hosts; import through a
+  harness entry.
 
 ## Operating discipline (you are usually one worker in a fleet)
 

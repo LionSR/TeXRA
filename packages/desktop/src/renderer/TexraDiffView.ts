@@ -3,18 +3,15 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared modules
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
-import {
-  loadMonaco,
-  type MonacoModule,
-} from '@texra/shared/monaco/monacoLoader';
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
+import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@ui/wa/loadingState';
-import { applyMonacoTheme } from '@ui/wa/monacoTheme';
-import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
-import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
+import { applyMonacoTheme } from './monacoTheme';
+import { monacoPresentationOptions } from './monacoOptions';
+import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
 
 type DiffEditor = ReturnType<MonacoModule['editor']['createDiffEditor']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;

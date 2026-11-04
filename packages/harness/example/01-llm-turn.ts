@@ -4,15 +4,14 @@
  * Uses `@texra-ai/llm` and `@texra-ai/llm/node` standalone:
  * 1. Selects a catalog model (`selectModel`), decides its route (`decideModelRoute`),
  *    and resolves its endpoint (`resolveRouteEndpoint`).
- * 2. Binds `anthropic-messages` against an in-process SSE `fetch`, prepares a
- *    turn (`prepareTurn`), streams `TurnEvent`s (`streamTurn`), and computes the
- *    turn's USD cost (`turnCost`).
+ * 2. Binds the route against an in-process SSE `fetch` (an Anthropic model
+ *    takes `anthropic-messages`), prepares a turn (`prepareTurn`), streams
+ *    `TurnEvent`s (`streamTurn`), and computes the turn's USD cost (`turnCost`).
  * 3. Binds against a 401 `fetch` to show how transport failures classify into
  *    a single typed `ModelError` (`kind`, `retryable`, `scope`, `status`).
  */
 import { Effect, Stream } from 'effect';
 import {
-  chooseReasoning,
   completedTurn,
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -90,28 +89,14 @@ const unauthorizedFetch: typeof fetch = async () =>
     { status: 401 },
   );
 
-const baseOptions = {
-  maxOutputTokens: 1024,
-  temperature: 0,
-  reasoning: chooseReasoning(selected.config, selected.request),
-  parallelToolCalls: false,
-  reasoningSummary: false,
-  serverState: false,
-  fastTier: false,
-  webSocket: false,
-  background: false,
-} as const;
-
 const program = Effect.gen(function* () {
   // 1. Streamed turn over synthetic SSE
   const okBinding = yield* bindModel({
-    protocol: 'anthropic-messages',
     model: selected.config,
+    route,
     endpoint,
-    credentialScope: `${route.provider}:api-key`,
     credential: { kind: 'api-key', apiKey: 'test-key' },
-    billing: 'api-key',
-    options: { ...baseOptions, fetch: mockSseFetch },
+    options: { fetch: mockSseFetch },
   });
   console.log('[01] bound:', okBinding.origin.protocol);
 
@@ -137,7 +122,7 @@ const program = Effect.gen(function* () {
     completedTurn,
   );
   const cost = completed.usage
-    ? turnCost(selected.config, completed.usage, { plan: false })
+    ? turnCost(okBinding.config, completed.usage, { plan: false })
     : null;
   console.log(
     `[01] streamed: "${deltas.join('')}" (finish=${completed.finishReason}, tokens=${completed.usage?.totalTokens ?? 0}, cost=$${cost?.toFixed(6) ?? '0'})`,
@@ -145,13 +130,11 @@ const program = Effect.gen(function* () {
 
   // 2. Typed ModelError classification on HTTP 401
   const badBinding = yield* bindModel({
-    protocol: 'anthropic-messages',
     model: selected.config,
+    route,
     endpoint,
-    credentialScope: `${route.provider}:api-key`,
     credential: { kind: 'api-key', apiKey: 'not-a-real-key' },
-    billing: 'api-key',
-    options: { ...baseOptions, fetch: unauthorizedFetch },
+    options: { fetch: unauthorizedFetch },
   });
   const badTurn = yield* badBinding.model.prepareTurn({
     messages: [{ role: 'user', content: [{ kind: 'text', text: 'Hello.' }] }],

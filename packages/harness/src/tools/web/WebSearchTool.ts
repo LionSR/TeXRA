@@ -46,50 +46,38 @@ interface DuckDuckGoResult {
 
 const DuckDuckGoResultSchema: Schema.Codec<DuckDuckGoResult> = Schema.suspend(
   () =>
-    Schema.StructWithRest(
+    Schema.Struct({
+      Text: Schema.optional(Schema.NullOr(Schema.String)),
+      FirstURL: Schema.optional(Schema.NullOr(Schema.String)),
+      Topics: Schema.optional(
+        Schema.NullOr(Schema.Array(DuckDuckGoResultSchema)),
+      ),
+    }),
+);
+
+const DuckDuckGoInfoboxContentItemSchema = Schema.Struct({
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  value: Schema.optional(Schema.NullOr(Schema.String)),
+});
+
+const DuckDuckGoResponseSchema = Schema.Struct({
+  Abstract: Schema.optional(Schema.NullOr(Schema.String)),
+  AbstractText: Schema.optional(Schema.NullOr(Schema.String)),
+  AbstractURL: Schema.optional(Schema.NullOr(Schema.String)),
+  AbstractSource: Schema.optional(Schema.NullOr(Schema.String)),
+  RelatedTopics: Schema.optional(
+    Schema.NullOr(Schema.Array(DuckDuckGoResultSchema)),
+  ),
+  Infobox: Schema.optional(
+    Schema.NullOr(
       Schema.Struct({
-        Text: Schema.optional(Schema.NullOr(Schema.String)),
-        FirstURL: Schema.optional(Schema.NullOr(Schema.String)),
-        Topics: Schema.optional(
-          Schema.NullOr(Schema.Array(DuckDuckGoResultSchema)),
+        content: Schema.optional(
+          Schema.NullOr(Schema.Array(DuckDuckGoInfoboxContentItemSchema)),
         ),
       }),
-      [Schema.Record(Schema.String, Schema.Unknown)],
     ),
-);
-
-const DuckDuckGoInfoboxContentItemSchema = Schema.StructWithRest(
-  Schema.Struct({
-    label: Schema.optional(Schema.NullOr(Schema.String)),
-    value: Schema.optional(Schema.NullOr(Schema.String)),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
-
-const DuckDuckGoResponseSchema = Schema.StructWithRest(
-  Schema.Struct({
-    Abstract: Schema.optional(Schema.NullOr(Schema.String)),
-    AbstractText: Schema.optional(Schema.NullOr(Schema.String)),
-    AbstractURL: Schema.optional(Schema.NullOr(Schema.String)),
-    AbstractSource: Schema.optional(Schema.NullOr(Schema.String)),
-    RelatedTopics: Schema.optional(
-      Schema.NullOr(Schema.Array(DuckDuckGoResultSchema)),
-    ),
-    Infobox: Schema.optional(
-      Schema.NullOr(
-        Schema.StructWithRest(
-          Schema.Struct({
-            content: Schema.optional(
-              Schema.NullOr(Schema.Array(DuckDuckGoInfoboxContentItemSchema)),
-            ),
-          }),
-          [Schema.Record(Schema.String, Schema.Unknown)],
-        ),
-      ),
-    ),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
+  ),
+});
 
 type DuckDuckGoResponse = typeof DuckDuckGoResponseSchema.Type;
 

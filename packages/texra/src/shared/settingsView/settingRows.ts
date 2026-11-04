@@ -6,15 +6,13 @@
  */
 import { Schema, SchemaAST } from 'effect';
 
-import type {
-  StateSettingEntry,
-  SurfacedSettingEntry,
-} from '@texra-ai/harness/schemas';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
+import type { StateSettingEntry } from '@texra-ai/harness/schemas';
 
 /** A row a plugin declares, with the short label its Plugins-page card shows
  *  (the card already names the plugin, so 'Model' rather than 'Codex model'). */
 export interface PluginSettingRow {
-  readonly row: SurfacedSettingEntry;
+  readonly row: TexraSettingRow;
   readonly label: string;
 }
 
@@ -63,6 +61,7 @@ export function settingEnumChoices<T extends string = string>(
   const values = settingEnumOptions(entry);
   if (!values) return undefined;
   return values.map((value, index) => ({
+    // cast: `T` is the caller's name for this entry's literal union, read here off its AST.
     value: value as T,
     label: entry.enumLabels?.[index] ?? value,
     ...(entry.enumDescriptions?.[index] && {

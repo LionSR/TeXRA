@@ -15,6 +15,8 @@ export function requestErrorText(error: RequestError): string {
     case 'Rejected':
     case 'Invalid':
       return error.reason;
+    case 'Conflict':
+      return error.message;
     case 'Internal':
       return `The request failed inside TeXRA (reference ${error.ref}); see the TeXRA log.`;
   }

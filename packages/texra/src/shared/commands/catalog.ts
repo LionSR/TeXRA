@@ -40,11 +40,18 @@ export interface CommandCatalogEntry {
    * out of the extension manifest.
    */
   host?: 'desktop';
+  /**
+   * Set on the commands the setup agent's `invoke_command` tool may run:
+   * each opens an existing, trusted UI flow. Never set it on a command that
+   * deletes, resets or cleans anything.
+   */
+  setupInvokable?: true;
 }
 
 export const commandCatalog = [
   {
     id: 'texra.createSampleProject',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Create Sample Project',
     category: 'TeXRA',
@@ -58,6 +65,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.openGettingStarted',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Open Getting Started Walkthrough',
     category: 'TeXRA',
@@ -72,6 +80,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.cloneOverleafProject',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Clone Overleaf/ShareLaTeX Project',
     category: 'TeXRA',
@@ -109,6 +118,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.downloadArXivSource',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Download arXiv Source',
     category: 'TeXRA',
@@ -126,12 +136,14 @@ export const commandCatalog = [
   },
   {
     id: 'texra.setApiKey',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Set API Key',
     category: 'TeXRA',
   },
   {
     id: 'texra.removeApiKey',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Remove API Key',
     category: 'TeXRA',
@@ -145,6 +157,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showMemory',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Memory Settings',
     category: 'TeXRA',
@@ -153,6 +166,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showModels',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Model Settings',
     category: 'TeXRA',
@@ -161,6 +175,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showAgents',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Agent Settings',
     category: 'TeXRA',
@@ -169,6 +184,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showTools',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Plugin Settings',
     category: 'TeXRA',
@@ -185,6 +201,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showTeamSettings',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Agent Team Settings',
     category: 'TeXRA',
@@ -193,6 +210,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showGitSettings',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Git Settings',
     category: 'TeXRA',
@@ -201,6 +219,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showMainView',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'New Task',
     category: 'TeXRA',
@@ -233,6 +252,7 @@ export const commandCatalog = [
   },
   {
     id: 'texra.showDashboard',
+    setupInvokable: true,
     extensionRegistry: true,
     title: 'Open Settings',
     shortTitle: 'Settings',
@@ -365,6 +385,7 @@ export type SettingsTabCommandId = Extract<
  * Command → settings panel, derived from the `settingsTab` catalog field.
  * Both hosts build their `showSettings` handler rows from this map.
  */
+// cast: each entry with a `settingsTab` keys its own id: exactly SettingsTabCommandId.
 export const settingsTabByCommand = Object.fromEntries(
   commandCatalog.flatMap((entry) =>
     'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],

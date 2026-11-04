@@ -18,7 +18,7 @@
 import { createHash } from 'node:crypto';
 
 // Third-party imports
-import { Effect, FileSystem, Stream } from 'effect';
+import { Context, type Deferred, Effect, FileSystem, Stream } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
@@ -27,7 +27,6 @@ import {
   callChildRunId,
   readChildTurnState,
 } from '@agent/storage/runRecords';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
@@ -38,7 +37,8 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
-import type { SessionView } from '@shared/session/sessionView';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { type SessionView } from '@shared/session/sessionView';
 import { errorResult } from '@tools/core/result';
 
 // Local file imports
@@ -46,6 +46,10 @@ import { resumeSubagentInBand } from './inBandSubagentRun';
 
 /** Most children one script may launch, by `agent()` and `self()` together. */
 const AGENT_CALL_LIMIT = 1000;
+
+/** The key of the children a script has launched (`ScriptScope.shared`). */
+const AgentLaunches =
+  Context.Service<Deferred.Deferred<{ count: number }>>('agent:launches');
 
 /**
  * Counts the child `script` is about to launch, or returns the error result
@@ -59,7 +63,7 @@ export const countLaunch = (
 ): Effect.Effect<ToolResult | null> =>
   Effect.map(
     script.shared(
-      'agent:launches',
+      AgentLaunches,
       Effect.sync(() => ({ count: 0 })),
     ),
     (launches) => {
@@ -89,10 +93,10 @@ export const agentChildRunId = (
 /** The child the latest earlier attempt of this call launched, if any. */
 export const earlierChild = Effect.fn('agent.earlierChild')(function* (
   call: RunToolCall,
-): Effect.fn.Return<RunId | null, DatabaseReadFailed> {
+): Effect.fn.Return<RunId | null, DatabaseReadFailed, SessionLog> {
   for (let earlier = call.attempt - 1; earlier >= 1; earlier -= 1) {
     const runId = agentChildRunId(call, earlier);
-    if (yield* getRunRecords(call.run.session, runId).exists()) return runId;
+    if (yield* getRunRecords(runId).exists()) return runId;
   }
   return null;
 });
@@ -107,12 +111,11 @@ type ChildStanding =
   | { readonly kind: 'fresh' };
 
 const standingOf = Effect.fn('agent.childStanding')(function* (
-  session: SessionHandle,
   runId: RunId,
-): Effect.fn.Return<ChildStanding, DatabaseReadFailed> {
-  const records = getRunRecords(session, runId);
+): Effect.fn.Return<ChildStanding, DatabaseReadFailed, AgentRunServices> {
+  const records = getRunRecords(runId);
   const end = yield* records.readRunEnd();
-  const turns = yield* readChildTurnState(session, runId);
+  const turns = yield* readChildTurnState(runId);
   // `childRunLoop` commits a turn's acceptance just before the turn runs:
   // one that never settled was cut short, and continues where it stopped.
   // A child with no end continues too: resuming one that settled its turn
@@ -187,10 +190,10 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     ) => Effect.Effect<A, Error, R>;
   },
 ): Effect.fn.Return<Recovered, Error, AgentRunServices> {
-  const { session, runId: parentRunId } = call.run;
+  const { runId: parentRunId } = call.run;
   const earlier = yield* earlierChild(call);
   if (earlier === null) return { kind: 'launch' };
-  const standing = yield* standingOf(session, earlier);
+  const standing = yield* standingOf(earlier);
   switch (standing.kind) {
     case 'answered':
       return { kind: 'ended', runId: earlier, result: standing.result };
@@ -199,7 +202,6 @@ export const recoverAgentChild = Effect.fn('agent.recoverChild')(function* (
     case 'resume': {
       const { result } = yield* recovery.running(
         resumeSubagentInBand({
-          session,
           runId: earlier,
           parentRunId,
           notify: recovery.notify,
@@ -246,8 +248,8 @@ export const fingerprint = Effect.fn('agent.fingerprint')(function* (
  * was, so a script the person kept running stays in the scope.
  */
 const reuseScope = Effect.fn('agent.reuseScope')(function* (call: RunToolCall) {
-  const { session, runId } = call.run;
-  const view = yield* session.view.read([]);
+  const { runId } = call.run;
+  const view = yield* (yield* SessionViewAccess).read([]);
   const self = view.runs.get(runId);
   const root =
     self?.identity.kind === 'script' ? (self.launchParentId ?? runId) : runId;
@@ -269,9 +271,15 @@ export function treeCostOf(view: SessionView, runId: RunId): number {
 
 /** What the calling run and every run under it have spent so far. */
 const spentBy = (call: RunToolCall) =>
-  Effect.map(call.run.session.view.read([]), (view) =>
-    treeCostOf(view, call.run.runId),
+  Effect.map(
+    SessionViewAccess.use((access) => access.read([])),
+    (view) => treeCostOf(view, call.run.runId),
   );
+
+/** The key of the reuse keys a script's calls claimed, each with the call
+ *  that claimed it (`ScriptScope.shared`). */
+const AgentKeys =
+  Context.Service<Deferred.Deferred<Map<string, string>>>('agent:keys');
 
 /**
  * A completed call in the reuse scope whose key is `key`, or a rejection when
@@ -285,7 +293,7 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   key: string,
 ) {
   const siblings = yield* script.shared(
-    'agent:keys',
+    AgentKeys,
     Effect.sync(() => new Map<string, string>()),
   );
   const { callId } = call;
@@ -297,15 +305,13 @@ export const reusable = Effect.fn('agent.reusable')(function* (
   const claimed = siblings.get(key);
   if (claimed !== undefined && claimed !== callId) return duplicate;
   siblings.set(key, callId);
-  const { log } = call.run.session;
-  const rows = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
-    log.rows(qualifyAggregateId('run', runId), ['tool.result']),
-  )).flat();
-  const found = rows.flatMap((row) =>
-    row.type === 'tool.result' &&
-    row.payload.result.status === 'executed' &&
-    row.payload.result.reuseKey === key
-      ? [{ ...row.payload, result: row.payload.result }]
+  const log = yield* SessionLog;
+  const results = (yield* Effect.forEach(yield* reuseScope(call), (runId) =>
+    log.runRows(qualifyAggregateId('run', runId), 'results'),
+  )).flatMap((run) => run.results);
+  const found = results.flatMap((payload) =>
+    payload.result.status === 'executed' && payload.result.reuseKey === key
+      ? [{ ...payload, result: payload.result }]
       : [],
   );
   const mine = `${script.callId}/`;

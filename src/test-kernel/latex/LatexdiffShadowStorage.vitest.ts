@@ -2,19 +2,19 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
+} from '@texra-ai/harness/node';
+import { createExternalLocation } from '@texra-ai/harness/host';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { createExternalLocation } from '@utils/files/fileLocation';
+import { FakeHost } from '@test/support/testKernel';
 
 const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
@@ -46,7 +46,9 @@ describe('LaTeXdiffService shadow output', () => {
           path.join(sourceDir, 'revised.tex'),
           '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
         );
-        await installPlatform(
+      });
+      yield* Layer.build(
+        FakeHost.layer(
           {
             workspacePath: sourceDir,
             storagePath: resolveWorkspaceStoragePath(storageRoot, sourceDir),
@@ -56,8 +58,8 @@ describe('LaTeXdiffService shadow output', () => {
             globalState: new MemoryStateStore(),
             workspaceState: new MemoryStateStore(),
           },
-        );
-      });
+        ),
+      );
       mocks.executeCommand.mockReturnValueOnce(
         Effect.succeed({
           success: false,

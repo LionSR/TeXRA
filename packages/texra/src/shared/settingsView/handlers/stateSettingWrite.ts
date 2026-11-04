@@ -16,9 +16,9 @@ import { Effect, Result, Schema } from 'effect';
 
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type {
-  SettingsViewStateSettingEntry,
-  SurfacedSettingEntry,
-} from '@texra-ai/harness/schemas';
+  SettingsViewRow,
+  TexraSettingRow,
+} from '@texra/shared/settingsView/settingSurfaces';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 /** The surfaces that write a setting: a settings view's host, or the CLI. */
@@ -29,12 +29,21 @@ type SettingSurface = 'vscode' | 'desktop' | 'cli';
  * the rows they render, the CLI writes the rows its `/config` panel lists.
  */
 type WritableEntry<H extends SettingSurface> = H extends 'cli'
-  ? SurfacedSettingEntry
-  : SettingsViewStateSettingEntry;
+  ? TexraSettingRow
+  : SettingsViewRow;
+
+/** Each surface's lookup of the rows it may write. */
+const WRITABLE_ENTRY_BY_KEY: {
+  readonly [H in SettingSurface]: (key: string) => WritableEntry<H> | undefined;
+} = {
+  vscode: TEXRA_SETTINGS.settingsViewByKey,
+  desktop: TEXRA_SETTINGS.settingsViewByKey,
+  cli: TEXRA_SETTINGS.cliByKey,
+};
 
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
 export type StateSettingUpdateResult<
-  E extends SurfacedSettingEntry = SurfacedSettingEntry,
+  E extends TexraSettingRow = TexraSettingRow,
 > =
   | { readonly kind: 'ignored' }
   | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
@@ -70,12 +79,7 @@ export function applyStateSettingUpdate<H extends SettingSurface>(
   ports: StateSettingUpdatePorts<H>,
 ): Effect.Effect<StateSettingUpdateResult<WritableEntry<H>>> {
   if (value === undefined) return Effect.succeed({ kind: 'ignored' });
-  // Sound: the lookup matches the host, which is what `WritableEntry` keys on.
-  const entry = (
-    ports.host === 'cli'
-      ? TEXRA_SETTINGS.cliByKey(key)
-      : TEXRA_SETTINGS.settingsViewByKey(key)
-  ) as WritableEntry<H> | undefined;
+  const entry = WRITABLE_ENTRY_BY_KEY[ports.host](key);
   if (!entry) return Effect.succeed({ kind: 'ignored' });
   const parsed =
     value === null ? null : Schema.decodeUnknownResult(entry.schema)(value);

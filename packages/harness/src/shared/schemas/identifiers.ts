@@ -13,6 +13,15 @@ export type RunId = typeof RunIdSchema.Type;
 /** Whether a string is a run id, as {@link RunIdSchema} reads it. */
 export const isRunId = Schema.is(RunIdSchema);
 
+/** Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first
+ *  digits of a random UUID, every one of which is random. One of the two
+ *  minting sites (`deriveRunId` is the other), so the brand is applied here
+ *  and nowhere downstream. Any other random id is `crypto.randomUUID()`. */
+export function generateRunId(): RunId {
+  // cast: this is a minting site; the value is 12 hex digits by construction.
+  return crypto.randomUUID().replaceAll('-', '').slice(0, 12) as RunId;
+}
+
 /** A run id, or the empty-string sentinel meaning "no active run". */
 export const RunSelectionSchema = Schema.Union([
   RunIdSchema,
@@ -147,3 +156,8 @@ export function aggregateTarget(key: AggregateId): AggregateTarget {
     ? { kind, id: Schema.decodeUnknownSync(RunIdSchema)(id) }
     : { kind, id };
 }
+
+/** A content address: the sha256 of a value's canonical JSON. */
+export const Sha256Schema = Schema.String.check(
+  Schema.isPattern(/^[0-9a-f]{64}$/),
+);

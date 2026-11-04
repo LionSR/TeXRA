@@ -1,7 +1,8 @@
 /**
  * How a script stage reads in every renderer (the progress view, the terminal
  * popup, `texra run`'s plain output): each call's status word, detail and
- * plain line, and the stage's summary, so one status cannot read two ways.
+ * plain line, and the stage's summary, so one status cannot read two ways;
+ * and what a tool card the run's end cut short says.
  */
 import {
   formatCostUsd,
@@ -10,6 +11,12 @@ import {
   type ScriptCallView,
   type ScriptStageView,
 } from '@texra-ai/harness/transcript';
+
+/** The error a tool card shows when the run's end cut its call short
+ *  (`ToolRow.cutByRunEnd`): the call never finished, so nothing records how
+ *  it ended. */
+export const TOOL_CUT_BY_RUN_END_NOTE =
+  'The task ended before this tool completed.';
 
 export const SCRIPT_CALL_STATUS_LABEL = {
   queued: 'Queued',
@@ -42,8 +49,8 @@ function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
       return 'Wants approval for a proposal';
     case 'planApproval':
       return 'Wants approval for a plan';
-    case 'externalInquiry':
-      return 'Wants an answer to an inquiry';
+    case 'plugin':
+      return 'Wants an answer';
     case 'userQuestion':
       return 'Wants an answer to a question';
     default:

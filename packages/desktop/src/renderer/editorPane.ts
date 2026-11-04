@@ -5,7 +5,7 @@
 // deliberately minimal — open, read, edit, save. No debugger, no extensions, no
 // multi-root workspaces.
 //
-// Monaco arrives through the shared @texra/shared/monaco/monacoLoader so the worker
+// Monaco arrives through the shared @ui/monaco/monacoLoader so the worker
 // setup is identical to the diff viewer's (that config is a module global; two
 // copies would race).
 //
@@ -17,19 +17,16 @@ import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
-import { monacoLanguageForPath } from '@texra/shared/monaco/monacoLanguage';
-import {
-  loadMonaco,
-  type MonacoModule,
-} from '@texra/shared/monaco/monacoLoader';
 import type { Theme } from '@texra/shared/ipc';
+import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { applyMonacoTheme } from '@ui/wa/monacoTheme';
-import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
-import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { applyMonacoTheme } from './monacoTheme';
+import { monacoPresentationOptions } from './monacoOptions';
+import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
+import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
 import { createEditorFileNotice } from './editorFileNotice';
 import {
@@ -227,9 +224,8 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
    * unopenable from the tree.
    */
   function handleTreeClick(event: MouseEvent): void {
-    const row = (event.target as HTMLElement | null)?.closest<HTMLElement>(
-      'wa-tree-item',
-    );
+    if (!(event.target instanceof Element)) return;
+    const row = event.target.closest<HTMLElement>('wa-tree-item');
     if (row?.hasAttribute('selected')) requestOpenFromRow(row);
   }
 

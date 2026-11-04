@@ -27,9 +27,9 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import type { AgentEvent } from './events';
 import type {
   AgentTrace,
   AgentTraceSink,
@@ -71,7 +71,7 @@ export class TraceEmitter implements AgentTrace {
         // recursing into the trace stream.
         // `warn`, not `debug`: swallowing a sink fault at debug level is
         // the quiet-degradation shape the guardrail forbids, and it matches the
-        // sibling session plane (`SessionHandle.trace`) and the app-signal
+        // sibling session plane (the session log's trace sink) and the app-signal
         // bus, whose delivery fiber warns and keeps its subscription.
         writeLogLine(
           CHANNEL,
