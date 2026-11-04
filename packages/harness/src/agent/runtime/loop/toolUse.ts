@@ -15,8 +15,8 @@
  * run. Every branch reads the fold: a `waiting` phase re-enters the wait (a
  * batch consumed at `turn.ready` runs its turn), an unanswered open attempt
  * invokes again under its gate, a pending response dispatches what is
- * unsettled, a committed text response runs its policy, and a halted run
- * launched again waits for its input.
+ * unsettled, a committed text response runs its policy, and a run whose turn
+ * ended (`turn.ended`) launched again waits for its input.
  *
  * A run opened on a script (`AgentConfig.script`: a background script, a
  * task's recipe) opens on that one call, handed down in its opening batch
@@ -286,7 +286,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   ): Effect.fn.Return<RunExit, Error, TurnServices> {
     let state = yield* cell.current;
     // A turn begins at a settled boundary; a resumed one where its rows left.
-    const begins = state.phase === 'waiting' || state.phase === 'halted';
+    const begins = state.phase === 'waiting' || state.phase === 'turn.ended';
     const body = Effect.gen(function* () {
       if (begins) {
         state = yield* cell.append([
@@ -409,7 +409,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     for (;;) {
       let state = yield* cell.current;
       const parked =
-        (state.phase === 'waiting' || state.phase === 'halted') &&
+        (state.phase === 'waiting' || state.phase === 'turn.ended') &&
         state.at !== 'turn.ready';
       // The invoker commits the run's failure fact and the input that
       // recovers the run clears it, so the fold is the one place to read it.

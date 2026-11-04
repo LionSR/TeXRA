@@ -7,9 +7,9 @@
  *   say: its own owner id, the owners whose runs it may not touch (alive or
  *   unprovable, written by the liveness prober in `ownerLiveness.ts`), and
  *   the runs whose `run.start` is damaged (written by the session inputs).
- * - `TextChunkSource`: the in-flight text per streaming row, keyed
- *   `${runId}/${rowId}`; the ordered input reader derives suffixes from
- *   successive chunk tails after reading the events committed before them.
+ * - `TextChunkSource`: the in-flight text per streaming row, by run and
+ *   row id; the ordered input reader derives suffixes from successive chunk
+ *   tails after reading the events committed before them.
  * - `TranscriptSubscriptions`: the aggregates some surface holds a
  *   transcript subscription on, the union of one set per port.
  *
@@ -22,6 +22,7 @@ import { Context, Effect, Layer, SubscriptionRef } from 'effect';
 import type {
   AggregateId,
   LocalRuntimeState,
+  RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -54,8 +55,29 @@ export interface InflightTextChunk {
   readonly length: number;
 }
 
-/** The `${runId}/${rowId}` key of one streaming row's current chunk tail. */
-export type InflightText = ReadonlyMap<string, InflightTextChunk>;
+/** Each run's streaming rows, by row id, each at its current chunk tail. */
+export type InflightText = ReadonlyMap<
+  RunId,
+  ReadonlyMap<string, InflightTextChunk>
+>;
+
+/** The text `chunk` holds past `tail`, from the tail's length when `chunk`
+ *  extends it, else the whole chain from 0 (no tail, or a new chain). */
+export function textSince(
+  chunk: InflightTextChunk,
+  tail?: InflightTextChunk,
+): { readonly from: number; readonly text: string } {
+  const parts: string[] = [];
+  let at: InflightTextChunk | undefined = chunk;
+  while (at !== undefined && at !== tail) {
+    parts.push(at.text);
+    at = at.previous;
+  }
+  return {
+    from: at === tail ? (tail?.length ?? 0) : 0,
+    text: parts.toReversed().join(''),
+  };
+}
 
 export class TextChunkSource extends Context.Service<
   TextChunkSource,

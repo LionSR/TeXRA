@@ -1,9 +1,5 @@
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
-  toElectronAccelerator,
-  type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
-import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
@@ -15,6 +11,7 @@ import {
 } from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
 import { texraGuideUrl } from '@ui/copy/guide';
+import { toElectronAccelerator, type DesktopPlatform } from './accelerators';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopOpenSettingsMessageSchema,

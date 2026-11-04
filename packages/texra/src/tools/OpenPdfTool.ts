@@ -11,6 +11,7 @@ import {
   isPathWithin,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import {
   normalizeFilePath,
   fileLocationDisplayPath,
@@ -94,14 +95,9 @@ export const OpenPdfTool = defineTool({
     // whose parent is not a directory, is "not found"; anything else (a
     // permission denial) is the caller's to see, as the facade's own stat was.
     const fs = yield* FileSystem.FileSystem;
-    const info = yield* fs.stat(location.absolutePath).pipe(
-      Effect.catchIf(
-        (error) =>
-          error.reason._tag === 'NotFound' ||
-          error.reason._tag === 'BadResource',
-        () => Effect.succeed(undefined),
-      ),
-    );
+    const info = yield* fs
+      .stat(location.absolutePath)
+      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
     if (info?.type !== 'File') {
       return yield* Effect.fail(
         new ToolError(`PDF file not found: ${displayPath}`),

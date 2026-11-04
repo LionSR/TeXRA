@@ -1,11 +1,12 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
 import {
   closeTexraApp,
+  dismissOnboarding,
   launchTexraApp,
   type LaunchedApp,
 } from './electronApp.js';
@@ -136,4 +137,40 @@ test('application menu releases a closed window and binds once to its replacemen
       ),
     )
     .toBe('1');
+});
+
+test('a closed project is offered in the empty rail and reopens from it', async () => {
+  userDataPath = mkdtempSync(join(tmpdir(), 'texra-recent-projects-'));
+  launched = await launchTexraApp({ userDataPath });
+  const { page, app, workspacePath } = launched;
+  await dismissOnboarding(page);
+  const name = basename(workspacePath);
+  // The app stores the folder canonicalized (macOS: /tmp is /private/tmp).
+  const root = realpathSync(workspacePath);
+  const rail = page.getByRole('region', { name: 'Open projects' });
+
+  await page.getByRole('button', { name: `Actions for ${name}` }).click();
+  await page.getByRole('menuitem', { name: 'Close project' }).click();
+  const reopen = rail.getByRole('button', { name, exact: true });
+  await expect(reopen).toBeVisible();
+  await expect(reopen).toHaveAttribute('title', `Reopen ${root}`);
+  // The rail offers what File > Open Recent holds.
+  const menuRecent = await app.evaluate(({ Menu }) =>
+    Menu.getApplicationMenu()
+      ?.items.find((item) => item.label === 'File')
+      ?.submenu?.items.find((item) => item.label === 'Open Recent')
+      ?.submenu?.items.map((item) => item.label),
+  );
+  expect(menuRecent).toContain(root);
+  await page.screenshot({
+    path: test.info().outputPath('empty-rail-recent.png'),
+  });
+
+  await reopen.click();
+  await expect(
+    rail.getByRole('button', { name: `Actions for ${name}` }),
+  ).toBeVisible();
+  // An open project is not offered again (the rail offers recent ones only
+  // while no project is open).
+  await expect(rail.locator('[title^="Reopen "]')).toHaveCount(0);
 });

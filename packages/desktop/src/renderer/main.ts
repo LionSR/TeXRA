@@ -21,27 +21,27 @@ import { repeat } from 'lit/directives/repeat.js';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
-import { type Shell } from '@texra/shared/session/shell';
 import {
   PersistedState,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
 
-import {
-  formatDesktopAccelerator,
-  type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { ProgressApp } from '@ui/progress/ProgressApp';
 
-import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
+import { applyHostBodyTheme } from './hostTheme';
+import {
+  formatDesktopAccelerator,
+  type DesktopPlatform,
+} from '../shared/accelerators';
+import { type Shell } from './shell';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
@@ -72,6 +72,7 @@ import {
   resolveSessionWire,
 } from '../shared/hostBridgeChannels';
 import { createDesktopPromptOverlay } from './promptOverlay';
+import { createDiscardChangesDialog } from './discardDialog';
 import {
   createDesktopSettingsDialog,
   DesktopThemePreferenceSchema,
@@ -175,6 +176,8 @@ let shell: Shell = {
   collapsed: persistedShell.getState().collapsed,
 };
 let projectsKnown = false;
+/** The main process's recent list, as its last projects message sent it. */
+let recentProjects: readonly string[] = [];
 let applyingProjectList = false;
 // The no-workspace session is never among the open projects; how a project
 // is named is its host snapshot's.
@@ -387,6 +390,7 @@ const logsPane = logsController.element;
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
 );
+const confirmDiscard = createDiscardChangesDialog(appRoot);
 applyTheme();
 
 function shellWorkspaceToolbarTemplate(): TemplateResult {
@@ -538,6 +542,7 @@ function shellTemplate(): TemplateResult {
           ${shellSidebarTemplate(
             {
               projects: railProjects(),
+              recent: recentProjects,
               renamingProjectKey,
               shell,
               commandsLabel: commandLabel(DESKTOP_COMMAND_PALETTE_ID),
@@ -548,6 +553,8 @@ function shellTemplate(): TemplateResult {
               onOpenCommands: () => palette.open(),
               onOpenFolder: () =>
                 postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER),
+              onOpenRecent: (root) =>
+                postMessage(DESKTOP_PROJECT_COMMANDS.OPEN_RECENT, { root }),
               onSelectProject: selectProject,
               onProjectAction: (key, action) => {
                 if (action !== 'rename')
@@ -790,6 +797,7 @@ const routeMessage = createMessageRoutes({
     applyingProjectList = true;
     try {
       projectsKnown = true;
+      recentProjects = message.recent;
       const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
       for (const [key, project] of projectWorkbenches) {
@@ -813,6 +821,7 @@ const routeMessage = createMessageRoutes({
           isActive: () => shell.active === key,
           isBrowserCovered: () =>
             settingsDialog.isOpen() || nativeViewOverlays.isCovered(),
+          confirmDiscard,
           onLayoutChanged: layoutChanged,
         });
         projectWorkbenches.set(key, project);
