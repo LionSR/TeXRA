@@ -140,7 +140,6 @@ const AnthropicControlsSchema = Schema.Struct({
   thinking: AnthropicThinkingSchema,
   effort: EffortSchema,
   cache: CacheSchema,
-  stopSequences: Schema.Array(Schema.String),
 });
 /**
  * A protocol binding and its defaults, as `bindModel` builds it; never
@@ -280,10 +279,8 @@ export const TurnResultSchema = Schema.Struct({
     'length',
     'content-filter',
     'tool-calls',
-    'stop-sequence',
     'refusal',
   ]),
-  stopSequence: Schema.optional(Schema.String),
   finishEvidence: Schema.optional(
     Schema.Union([
       Schema.Struct({
@@ -338,16 +335,6 @@ export const TurnResultSchema = Schema.Struct({
       result.requestedOrigin,
       result.content,
     );
-    if (
-      (result.finishReason === 'stop-sequence') !==
-      (result.stopSequence !== undefined)
-    ) {
-      issues.push({
-        path: ['stopSequence'],
-        issue:
-          'A stop-sequence outcome requires its exact matched sequence, and no other outcome has one.',
-      });
-    }
     const usageKind = result.usage?.providerUsage?.kind;
     const finishKind = result.finishEvidence?.kind;
     if (
@@ -440,56 +427,6 @@ export const BackgroundSubmissionSchema = Schema.Union([
 ]);
 /** {@link BackgroundSubmissionSchema}'s value. */
 export type BackgroundSubmission = typeof BackgroundSubmissionSchema.Type;
-const SequenceSchema = Schema.Struct({
-  afterSequence: CountSchema,
-});
-/** A delivered sequence is not a durable acknowledgement by its consumer. */
-const SequencedBackgroundEventSchema = Schema.Union([
-  IdentifiedEventSchema.mapFields(
-    Struct.assign({
-      ...SequenceSchema.fields,
-      requestedOrigin: ModelOriginSchema.mapFields(
-        Struct.assign({ protocol: Schema.Literal('openai-responses') }),
-      ),
-    }),
-  ),
-  DeltaEventSchema.mapFields(Struct.assign(SequenceSchema.fields)),
-  CompletedEventSchema.mapFields(
-    Struct.assign({
-      ...SequenceSchema.fields,
-      result: TurnResultSchema.check(
-        Schema.makeFilter(
-          (result) => result.requestedOrigin.protocol === 'openai-responses',
-        ),
-      ),
-    }),
-  ),
-  SequenceSchema.mapFields(Struct.assign({ kind: Schema.Literal('cursor') })),
-]);
-/** Polling can report identity and completion, but cannot invent stream progress. */
-export const BackgroundEventSchema = Schema.Union([
-  SequencedBackgroundEventSchema,
-  IdentifiedEventSchema.mapFields(
-    Struct.assign({
-      afterSequence: Schema.Null,
-      requestedOrigin: ModelOriginSchema.mapFields(
-        Struct.assign({ protocol: Schema.Literal('google-interactions') }),
-      ),
-    }),
-  ),
-  CompletedEventSchema.mapFields(
-    Struct.assign({
-      afterSequence: Schema.Null,
-      result: TurnResultSchema.check(
-        Schema.makeFilter(
-          (result) => result.requestedOrigin.protocol === 'google-interactions',
-        ),
-      ),
-    }),
-  ),
-]);
-/** An event of observed background work; polling reports no sequence. */
-export type BackgroundEvent = typeof BackgroundEventSchema.Type;
 /** Absolute original deadline; reconnecting does not replenish it. */
 export const ObservationPolicySchema = Schema.Struct({
   deadlineAtMs: CountSchema,
@@ -547,13 +484,15 @@ export interface Model {
     /**
      * Observe remote work against the exact turn recorded at submission.
      * Its completion anchors to that turn's history; the operation handle
-     * deliberately carries no duplicate transcript.
+     * deliberately carries no duplicate transcript. A polled operation
+     * reports only its identity and its completion; a streamed one also
+     * reports deltas.
      */
     observe(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,
       operation: RemoteOperation,
       policy: typeof ObservationPolicySchema.Type,
-    ): Stream.Stream<BackgroundEvent, ModelError>;
+    ): Stream.Stream<TurnEvent, ModelError>;
     /** Cancel the work; fails unless the provider confirms it stopped. */
     cancel(operation: RemoteOperation): Effect.Effect<void, ModelError>;
   };

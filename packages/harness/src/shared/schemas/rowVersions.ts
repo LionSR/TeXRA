@@ -270,7 +270,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v12: a failed attempt's error carries no `userRetryable`; whether a
   // person is offered a retry is the row's own `next` (no upcaster: a v11
   // row's flag would otherwise be silently dropped).
-  'model.message': { version: 12, upcast: [], listing: 'none' },
+  // v13: no `stop-sequence` finish reason or `stopSequence`, and an
+  // accepted operation is its origin and response id alone, with no stream
+  // position (no upcaster: an earlier build's operation would have its
+  // position silently dropped).
+  'model.message': { version: 13, upcast: [], listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).

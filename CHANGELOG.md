@@ -329,6 +329,16 @@ All notable changes to this project will be documented in this file.
   address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
   `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
+- **SDK: no stop sequences or background stream positions in
+  `@texra-ai/llm`.** A turn result has no `stop-sequence` finish reason or
+  `stopSequence`, and the Anthropic defaults no `stopSequences`: nothing
+  could set one. A `RemoteOperation` is its `origin` and
+  `providerResponseId`, with no `afterSequence`; `Model.background.observe`
+  streams `TurnEvent`s, so `BackgroundEvent` and its `cursor` events are
+  gone, and an observed OpenAI response replays from its start.
+  Conversations saved by an earlier build show as written by that build and
+  cannot be resumed by this one.
+
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
   floor `^4.1.0`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now

@@ -18,10 +18,10 @@ import OpenAI from 'openai';
 import {
   completedTurn,
   FILE_UPLOAD_LIFETIME_SECONDS,
-  type BackgroundEvent,
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
+  type TurnEvent,
 } from '../turn.js';
 import {
   ModelError,
@@ -200,14 +200,13 @@ export function openaiResponsesModel(
           message: 'Background acceptance is malformed.',
           cause: parsed.failure,
         });
-      const { response, type, sequence_number } = parsed.success;
+      const { response, type } = parsed.success;
       yield* Ref.update(learned, (known) => ({
         ...known,
         model: response.model,
         operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
           origin,
           providerResponseId: response.id,
-          afterSequence: sequence_number,
         }),
       }));
       if (
@@ -250,13 +249,10 @@ export function openaiResponsesModel(
                 client.responses
                   .retrieve(
                     operation.providerResponseId,
-                    {
-                      stream: true,
-                      ...(operation.afterSequence !== null
-                        ? { starting_after: operation.afterSequence }
-                        : {}),
-                      include: ['reasoning.encrypted_content'],
-                    },
+                    // From the stream's start: the operation records no
+                    // position, and the replayed opening events only restate
+                    // the identity.
+                    { stream: true, include: ['reasoning.encrypted_content'] },
                     { signal },
                   )
                   .withResponse(),
@@ -267,21 +263,19 @@ export function openaiResponsesModel(
               requestId: opened.request_id ?? undefined,
             }));
             const events = yield* sdkEvents(opened.data, identity);
-            // The observation may join mid-item: what it missed, the
-            // terminal snapshot supplies.
+            // The terminal snapshot supplies any item the replay did not
+            // show whole.
             const assembly = turnAssembly({
               origin,
               provider: 'The model',
               responseId: operation.providerResponseId,
               partial: true,
             });
-            let sequence = operation.afterSequence ?? -1;
             const progress = events.pipe(
-              Stream.mapEffect(responsesWire(sequence)),
+              Stream.mapEffect(responsesWire()),
               Stream.takeUntil((event) => event.terminal),
               Stream.mapEffect(
                 Effect.fnUntraced(function* (event) {
-                  sequence = event.sequence;
                   const turnEvents = (yield* Effect.forEach(
                     event.parts,
                     assembly.step,
@@ -294,36 +288,18 @@ export function openaiResponsesModel(
                       ...known,
                       model: identified.returnedModel ?? undefined,
                     }));
-                  // The terminal cursor is delivered only with its result below.
+                  // The result is delivered once, by the completion below.
                   if (event.terminal) return [];
-                  const observed = turnEvents.flatMap(
-                    (turnEvent): BackgroundEvent[] => {
-                      if (turnEvent.kind === 'delta')
-                        return [{ ...turnEvent, afterSequence: sequence }];
-                      if (turnEvent.kind !== 'identified') return [];
-                      return [
-                        {
-                          ...turnEvent,
-                          requestedOrigin: origin,
-                          afterSequence: sequence,
-                        },
-                      ];
-                    },
+                  return turnEvents.filter(
+                    (turnEvent) => turnEvent.kind !== 'completed',
                   );
-                  return observed.length > 0
-                    ? observed
-                    : [{ kind: 'cursor' as const, afterSequence: sequence }];
                 }),
               ),
               Stream.flattenIterable,
             );
             const completion = Effect.map(
               assembly.complete,
-              (result): BackgroundEvent => ({
-                kind: 'completed',
-                afterSequence: sequence,
-                result,
-              }),
+              (result): TurnEvent => ({ kind: 'completed', result }),
             );
             return Stream.concat(progress, Stream.fromEffect(completion)).pipe(
               Stream.mapError(assembly.enrich),

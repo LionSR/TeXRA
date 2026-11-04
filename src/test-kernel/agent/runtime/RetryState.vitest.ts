@@ -85,7 +85,6 @@ import {
 } from '@test/support/testKernel';
 import { judgeFailure } from '../../../../packages/llm/src/api/verdict.js';
 import {
-  BackgroundEventSchema,
   BackgroundSubmissionSchema,
   ResolvedTurnSchema,
 } from '../../../../packages/llm/src/turn.js';
@@ -643,7 +642,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
               origin: ORIGIN,
               providerResponseId: PROVIDER_RESPONSE_ID,
-              afterSequence: 0,
             });
             const scenario = Effect.fn('scenario')(function* (
               reason: 'user' | 'shutdown',
@@ -674,13 +672,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       ? Stream.fromEffect(
                           Deferred.succeed(observing, undefined),
                         ).pipe(Stream.drain, Stream.concat(Stream.never))
-                      : Stream.make(
-                          Schema.decodeUnknownSync(BackgroundEventSchema)({
-                            kind: 'completed',
-                            afterSequence: 1,
-                            result: completedTurn('observed'),
-                          }),
-                        );
+                      : Stream.make({
+                          kind: 'completed' as const,
+                          result: completedTurn('observed'),
+                        });
                   },
                   cancel: () =>
                     Effect.sync(() => {
