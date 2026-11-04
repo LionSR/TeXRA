@@ -61,7 +61,7 @@ const isQuiet = (state: RunState): boolean =>
  * request. A cut anywhere else would carry a result nobody produced.
  */
 const isSettled = (state: RunState): boolean =>
-  (state.phase === 'waiting' || state.phase === 'halted') &&
+  (state.phase === 'waiting' || state.phase === 'turn.ended') &&
   // Input consumed for a turn that has not run is inside that turn.
   state.at !== 'turn.ready' &&
   isQuiet(state);

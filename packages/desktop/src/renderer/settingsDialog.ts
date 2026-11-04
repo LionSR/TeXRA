@@ -5,8 +5,8 @@ import '@settingsView/frontend';
 import { html, render } from 'lit';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin';
 import { readSelectValue } from '@ui/wa/selectTemplates';
+import { resolvePostMessageTargetOrigin } from '../shared/postMessageOrigin';
 
 import { createOverlayDialog } from './overlayDialog';
 

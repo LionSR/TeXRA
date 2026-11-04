@@ -21,7 +21,7 @@
 // or interface member (Context.Service shapes included), or a parameter of
 // an exported function/signature, including const functions and Effect.fn.
 
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { build } from 'esbuild';
@@ -1393,6 +1393,15 @@ function valueImportOf(statement) {
 /** A core package, which a test may name directly. */
 const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
 
+/** Where suites live under `rootDir`: the cross-package kernel and each package's own test/. */
+const testRoots = (rootDir) =>
+  [
+    'src/test-kernel',
+    ...readdirSync(path.join(rootDir, 'packages')).map(
+      (name) => `packages/${name}/test`,
+    ),
+  ].filter((root) => existsSync(path.join(rootDir, root)));
+
 /**
  * Study rule 12: literal module mocks of a core module, including shared
  * test support. A target is core when it resolves (alias or relative path)
@@ -1401,9 +1410,11 @@ const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
  */
 function measureMocks(rootDir, files, options, byRule) {
   const core = new Set(files);
-  const tests = walkFiles(path.join(rootDir, 'src/test-kernel'), {
-    include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
-  });
+  const tests = testRoots(rootDir).flatMap((root) =>
+    walkFiles(path.join(rootDir, root), {
+      include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
+    }),
+  );
   for (const { absolutePath } of tests) {
     const file = path.relative(rootDir, absolutePath).replaceAll('\\', '/');
     const source = ts.createSourceFile(
@@ -1437,7 +1448,9 @@ function measureMocks(rootDir, files, options, byRule) {
         if (
           CORE_PACKAGE.test(target) ||
           core.has(resolvedFile) ||
-          (/^src\/test-kernel\/(?:cli|desktop|support)\//.test(file) &&
+          (/^(?:src\/test-kernel|packages\/[^/]+\/test)\/(?:cli|desktop|support)\//.test(
+            file,
+          ) &&
             /^@agent(?:\/|$)/.test(target))
         ) {
           const { line } = source.getLineAndCharacterOfPosition(
@@ -1503,12 +1516,11 @@ function measureInvariants(rootDir, byRule) {
   }
   const tests = `${readme} (tests)`;
   const cited = new Set();
-  for (const { absolutePath } of walkFiles(
-    path.join(rootDir, 'src/test-kernel'),
-    {
+  for (const { absolutePath } of testRoots(rootDir).flatMap((root) =>
+    walkFiles(path.join(rootDir, root), {
       include: (file) =>
         file.endsWith('.vitest.ts') || file === 'support/crashConformance.ts',
-    },
+    }),
   )) {
     for (const match of readFileSync(absolutePath, 'utf8').matchAll(
       /\binvariant (I\d+)\b/g,

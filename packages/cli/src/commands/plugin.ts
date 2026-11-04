@@ -212,13 +212,19 @@ const pluginListCommand = defineCliCommand({
 
 /** One plugin in full: its listing, each hook it runs, and every hook or
  *  event it configures that TeXRA does not run. */
-function formatPluginShow(plugin: PluginListing): string {
+const formatPluginShow = Effect.fn('formatPluginShow')(function* (
+  plugin: PluginListing,
+) {
   const listed = formatPluginList([plugin]);
   if (plugin.problem) return listed;
+  const hooks = yield* Effect.forEach(
+    plugin.hooks,
+    InstalledPlugins.describeHook,
+  );
   return [
     listed,
     plugin.hooks.length === 0 ? '  hooks: none' : '  hooks:',
-    ...plugin.hooks.map((hook) => `    ${InstalledPlugins.describeHook(hook)}`),
+    ...hooks.map((line) => `    ${line}`),
     ...(plugin.unsupportedHooks.length === 0
       ? []
       : [
@@ -226,7 +232,7 @@ function formatPluginShow(plugin: PluginListing): string {
           ...plugin.unsupportedHooks.map((line) => `    ${line}`),
         ]),
   ].join('\n');
-}
+});
 
 const pluginShowCommand = defineCliCommand({
   meta: {
@@ -247,12 +253,14 @@ const pluginShowCommand = defineCliCommand({
                 message: `No plugin named ${ctx.args.name} is installed.`,
               }),
             );
-          emitCliResult(context, {
-            json: plugin,
-            ndjson: { kind: 'plugin' as const, plugin },
-            text: formatPluginShow(plugin),
+          return Effect.map(formatPluginShow(plugin), (text) => {
+            emitCliResult(context, {
+              json: plugin,
+              ndjson: { kind: 'plugin' as const, plugin },
+              text,
+            });
+            return CliExitCode.Success;
           });
-          return Effect.succeed(CliExitCode.Success);
         }),
       ),
     ),

@@ -266,9 +266,8 @@ function withConsultedKeyStatuses(
   ctx: ModelAvailabilityContext,
 ): Effect.Effect<ModelAvailabilityContext, never, Secrets> {
   const consulted = new Set<ApiKeyProviderId>();
-  for (const { rawConfig, route } of routed.values()) {
+  for (const { route } of routed.values()) {
     if (
-      !rawConfig.retired &&
       route.kind === 'api-key' &&
       ctx.keyStatuses[route.provider] === undefined
     ) {
@@ -588,7 +587,6 @@ function visibleModelsForAccess(
   if (!facts.plans.includes('chatgpt-subscription')) return [...models];
   for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
     if (
-      !isUnservedModel(config) &&
       !config.deprecated &&
       decideModelRoute(config, facts).kind === 'chatgpt-subscription'
     ) {

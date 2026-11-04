@@ -61,11 +61,16 @@ export function isInFlightPhase(
 
 /**
  * Where the loop stands, as its own branches read it: between turns
- * (`waiting`, `halted`) or somewhere inside a turn. Never written: derived
- * from the run's `run.position` rows.
+ * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
+ * from the run's `run.position` rows, so it is not the stored `halted`
+ * position, which changes no phase.
  */
 export type RunLoopPhase =
-  'model.ready' | 'model.submitted' | 'results.ready' | 'waiting' | 'halted';
+  | 'model.ready'
+  | 'model.submitted'
+  | 'results.ready'
+  | 'waiting'
+  | 'turn.ended';
 
 /**
  * The phase a position leaves an opened loop in. A `halted` position changes
@@ -82,7 +87,7 @@ const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
     'turn.begin': 'model.ready',
     'response.ready': 'model.submitted',
     'results.ready': 'results.ready',
-    'turn.end': 'halted',
+    'turn.end': 'turn.ended',
     waiting: 'waiting',
   };
 export const phaseAfter = (

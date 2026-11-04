@@ -49,7 +49,6 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // decides file by file.
 const PURE_DIRS = [
   'agent',
-  'architecture',
   'auth',
   'cli',
   'commands',
@@ -102,11 +101,16 @@ const DOM_DIRS = ['desktop', 'progressView', 'settings'];
 // project's `exclude` after its `include`, so `isolated` must exclude exactly
 // the files the other two run, not the directories they came from.
 const sharedSuites = { pure: [], kernel: [] };
-for (const file of globSync('src/test-kernel/**/*.vitest.ts', {
-  cwd: rootDir,
-  posix: true,
-}).sort()) {
-  const [, , dir] = file.split('/');
+// A suite lives with the package it tests (packages/<name>/test/) or, when it
+// composes several packages, in src/test-kernel/; either way its tier
+// directory is the first one under that test root.
+const SUITES = [
+  'src/test-kernel/**/*.vitest.ts',
+  'packages/*/test/**/*.vitest.ts',
+];
+for (const file of globSync(SUITES, { cwd: rootDir, posix: true }).sort()) {
+  const parts = file.split('/');
+  const dir = parts[0] === 'packages' ? parts[3] : parts[2];
   const source = readFileSync(resolve(rootDir, file), 'utf8');
   if (DOM_DIRS.includes(dir) || NEEDS_OWN_REGISTRY.some((p) => p.test(source)))
     continue;
@@ -183,7 +187,7 @@ export default defineConfig({
           isolate: true,
           // Every suite the other two do not run, so one the scan has not
           // seen yet (a file added while a watcher runs) runs isolated.
-          include: ['src/test-kernel/**/*.vitest.ts'],
+          include: SUITES,
           exclude: [...sharedSuites.pure, ...sharedSuites.kernel],
           setupFiles: HOME_SETUP_FILES,
         },
