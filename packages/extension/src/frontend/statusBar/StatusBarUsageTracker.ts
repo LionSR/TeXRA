@@ -3,7 +3,6 @@
 import {
   descendantRuns,
   isLiveRun,
-  isWorkingRun,
   sessionActivity,
   sumUsageStats,
   type TokenUsageStats,
@@ -37,7 +36,7 @@ export class StatusBarUsageTracker {
 
   public get activeRunCount(): number {
     const { runs } = this.session.view.current();
-    return [...runs.values()].filter(isWorkingRun).length;
+    return [...runs.values()].filter((run) => run.working).length;
   }
 
   /** The spend of every run tree still in flight: a root counts, with all

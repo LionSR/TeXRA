@@ -7,7 +7,6 @@
 import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
 import {
-  isTerminalOutcomePhase,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
@@ -57,7 +56,7 @@ function scriptPlainLines(
         `Script total: ${formatCostUsd(stage.costUsd)}`,
       );
   }
-  if (isTerminalOutcomePhase(run.status) && run.identity.kind === 'script')
+  if (run.durableOutcome !== null && run.identity.kind === 'script')
     lines.set(
       'outcome',
       `${runStatusLabel(run.statusKey)}: ${run.identity.title}`,

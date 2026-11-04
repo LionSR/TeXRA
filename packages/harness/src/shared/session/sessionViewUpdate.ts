@@ -334,6 +334,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     createdAt: event.commit,
     launchedAt: event.at,
     runStartedAt: null,
+    working: false,
     lastTimestamp: event.at,
     turn: null,
     followUpSupport: event.userFollowUpSupport,
@@ -444,6 +445,10 @@ function withAggregates(u: Update, run: RunView): RunView {
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
+  const working =
+    !interrupted &&
+    run.substate !== RUN_SUBSTATE.PAUSED &&
+    run.status === RUN_PHASE.RUNNING;
   const unreadable = local.unreadable.find(
     (entry) => entry.runId === run.id,
   )?.reason;
@@ -489,6 +494,8 @@ function withAggregates(u: Update, run: RunView): RunView {
     ownedHere: own,
     forceExpanded,
     durableOutcome,
+    working,
+    runStartedAt: working ? run.runStartedAt : null,
     rollup: rollupOf(children),
     treeUsage,
     ...status,

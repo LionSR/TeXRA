@@ -1,7 +1,6 @@
 import { computed, signal } from '@lit-labs/signals';
 
 import {
-  isActivePhase,
   RUN_PHASE,
   type RunPhase,
   type RunId,
@@ -55,10 +54,12 @@ registerCliStateResetHook(() => rootRunClaim.set(NO_CLAIM));
  *  status bar's Ctrl-C hint and the terminal title. */
 export const runStopFacts = computed((): ChatTuiRunStopFacts => {
   const claim = rootRunClaim.get();
+  const run = runViewOf(sessionView().get(), claim.runId);
   return {
     runPending: chatTuiRunPending(claim),
     runId: claim.runId,
-    status: runPhaseOf(runViewOf(sessionView().get(), claim.runId)),
+    status: runPhaseOf(run),
+    working: run?.working === true,
   };
 });
 
@@ -226,18 +227,18 @@ interface ChatTuiRunStopFacts {
   readonly runPending: boolean;
   readonly runId: RunId | undefined;
   readonly status: RunPhase | undefined;
+  readonly working: boolean;
 }
 
 export function chatTuiCanStopActiveRun(facts: ChatTuiRunStopFacts): boolean {
   if (!facts.runPending) return false;
   if (!facts.runId) return true;
-  return facts.status === undefined || isActivePhase(facts.status);
+  return facts.status === undefined || facts.working;
 }
 
 export function chatTuiCanStopVisibleRun(facts: ChatTuiRunStopFacts): boolean {
   return (
-    chatTuiCanStopActiveRun(facts) ||
-    Boolean(facts.runId && isActivePhase(facts.status))
+    chatTuiCanStopActiveRun(facts) || Boolean(facts.runId && facts.working)
   );
 }
 

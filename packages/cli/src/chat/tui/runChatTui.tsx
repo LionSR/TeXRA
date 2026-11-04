@@ -29,7 +29,6 @@ import {
   RUN_PHASE,
   isLiveRun,
   type ApprovalPolicy,
-  isActivePhase,
   isTranscriptSettlementPhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -560,12 +559,12 @@ export async function runChat(
 
   const resetSessionForClear = (): boolean => {
     const currentRunId = session.runId ?? selectedRunIdSignal.get();
-    const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
+    const activeRun = runViewOf(currentView(), currentRunId);
     const isRunPending = chatTuiRunPending(session);
 
     if (
-      (isRunPending && activeStatus !== RUN_PHASE.WAITING) ||
-      isActivePhase(activeStatus)
+      (isRunPending && runPhaseOf(activeRun) !== RUN_PHASE.WAITING) ||
+      activeRun?.working === true
     ) {
       setTransientNotice(
         'Wait for the active response to finish, or press Ctrl-C first.',

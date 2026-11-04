@@ -15,7 +15,6 @@ import {
   RUN_PHASE,
   type RunId,
   type RunPhase,
-  isTerminalOutcomePhase,
 } from '@texra-ai/harness/schemas';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 
@@ -189,7 +188,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private get rootRunTerminal(): boolean {
-    return isTerminalOutcomePhase(this.root()?.status);
+    return this.root()?.durableOutcome != null;
   }
 
   private applyView(view: SessionView): void {
@@ -199,11 +198,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       this.rootRunId ??= this.wantedRunId;
     const root = this.root();
     if (!root) return;
-    const wasTerminal = isTerminalOutcomePhase(
-      previous && this.rootRunId
-        ? previous.runs.get(this.rootRunId)?.status
-        : undefined,
-    );
+    const wasTerminal =
+      (previous && this.rootRunId
+        ? previous.runs.get(this.rootRunId)?.durableOutcome
+        : null) != null;
     const phase = root.status;
     const phaseChanged = phase !== 'ready' && phase !== this.paintedPhase;
     if (phaseChanged) this.paintedPhase = phase;

@@ -40,7 +40,7 @@ import {
   type PermissionPayload,
   type RunId,
 } from '@shared/schemas';
-import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   RUN_STATUS_KEYS,
   RUN_STATUS_TONE,
@@ -148,7 +148,11 @@ const RunViewSchema = Schema.Struct({
   /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
    *  host prints. `createdAt` orders; this never does. */
   launchedAt: Positive,
+  /** The turn's start, ms since the epoch, while the run is working; else null. */
   runStartedAt: Schema.NullOr(Positive),
+  /** Working right now: live (not paused, interrupted or ended) and in a
+   *  turn, not waiting on its user. The one reading of activity. */
+  working: Schema.Boolean,
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
@@ -384,11 +388,6 @@ export function attentionOf<View extends ReadSessionView>(
   };
 }
 
-/** A live run working right now: not a conversation waiting on its user. */
-export function isWorkingRun(run: ReadRunView): boolean {
-  return isLiveRun(run) && isActivePhase(run.status);
-}
-
 /** How busy a session reads in a title: idle, running, or awaiting approval. */
 export type SessionTitleState = 'idle' | 'running' | 'approval';
 /**
@@ -398,7 +397,7 @@ export type SessionTitleState = 'idle' | 'running' | 'approval';
  */
 export function sessionActivity(view: ReadSessionView): SessionTitleState {
   if (answerableRequests(view).length > 0) return 'approval';
-  for (const run of view.runs.values()) if (isWorkingRun(run)) return 'running';
+  for (const run of view.runs.values()) if (run.working) return 'running';
   return 'idle';
 }
 

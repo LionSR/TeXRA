@@ -250,6 +250,19 @@ Acceptance: no host file imports `isActivePhase`, `isTerminalOutcomePhase` or
 `isLiveRun`; `grep -rn 'view.status\|run.status' packages/{cli,texra,extension,desktop}/src`
 hits renderers of the status word only.
 
+_Landed 2026-11-04 (every row but `runsHere`): `RunView.working` is the
+fold's (`sessionViewUpdate.ts`), `runStartedAt` is null unless it holds, and
+`isWorkingRun` and `isActivePhase` are deleted with the host sites above,
+which read `working`, `runStartedAt` and `durableOutcome`; a run listing
+entry's `status` became `outcome` (the view's `durableOutcome`), so `texra
+history` no longer reads an outcome off the status word. The TUI's Ctrl-C
+predicate reads `working`, not `actions`: it asks whether a turn is in
+progress, and `actions` offers a stop at a wait too, where the TUI's exit
+leaves the run resumable. Still open: `runsHere` and the
+`ownedHere && isLiveRun` sites, `handlers.ts`'s `durableOutcome ?? CANCELLED`
+and `/clear`'s `isTranscriptSettlementPhase` read, which change meaning under
+slice 3 (the service holds the run) and land with it._
+
 ### C. Host attachment and the CLI process lifecycle
 
 Audit verdict: a dual by ruling (the service is a client of the claim model),
@@ -377,8 +390,8 @@ Three counting checks, each shrink-only against the merge base like the
 core-quality rules, in `scripts/check-core-quality.mjs`'s style:
 
 - **Predicate spread.** For each predicate in a short list (`Cause.hasInterrupts`,
-  `Cause.squash`, `isTerminalOutcomePhase`, `isActivePhase`, `isLiveRun`,
-  `ownedHere`, `readOnly`, `parentId`, `withPerKeyLane`, `toErrorMessage`),
+  `Cause.squash`, `isTerminalOutcomePhase`, `isLiveRun`, `ownedHere`,
+  `readOnly`, `parentId`, `withPerKeyLane`, `toErrorMessage`),
   the number of files that contain it. A fact decided in more files than
   before fails.
 - **Vocabulary overlap.** Two `Schema.Literals` or `as const` string sets in
@@ -405,6 +418,7 @@ sets `completed`/`failed`/`cancelled` and `cancelled`/`failed`/`skipped` 10,
 the finish reasons and the llm wire enums 4, the rest 6). The month's fix
 churn: 171 fixes, 31 in stop/resume/ownership, 18 in model/retry/route, 15 in
 desktop/windows, 6 in view/fold, 2 in cli/tui: three areas over ten.
+`isActivePhase` left the list with the predicate (area B).
 
 ## Surface inventory
 

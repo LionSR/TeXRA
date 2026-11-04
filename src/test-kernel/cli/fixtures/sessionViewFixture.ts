@@ -88,6 +88,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     createdAt: 1,
     launchedAt: 1,
     runStartedAt: null,
+    working: false,
     lastTimestamp: 1,
     turn: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

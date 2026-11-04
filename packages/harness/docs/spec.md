@@ -495,10 +495,10 @@ position MUST fail the load as `inconsistent`
 The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
 `results.ready` to `results.ready`, and `turn.end` to `halted`
-(`shared/runs/runStatus.ts:83-96`).
+(`shared/runs/runStatus.ts:79-92`).
 
 A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/runs/runStatus.ts:96`).
+from there (`shared/runs/runStatus.ts:92`).
 
 ### 5.4 The commit path
 

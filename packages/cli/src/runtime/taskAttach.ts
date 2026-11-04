@@ -21,11 +21,7 @@ import {
 } from 'effect';
 import stripAnsi from 'strip-ansi';
 
-import {
-  isTerminalOutcomePhase,
-  qualifyAggregateId,
-  type RunOutcome,
-} from '@texra-ai/harness/schemas';
+import { qualifyAggregateId, type RunOutcome } from '@texra-ai/harness/schemas';
 import { fullTranscriptEntryLayout } from '@cli/chat/tui/panes/transcriptEntryLayout';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
@@ -178,9 +174,9 @@ export const attachTask = Effect.fn('attachTask')(function* (
   }).pipe(
     Stream.map((view) => view.runs.get(task.runId)),
     Stream.filter(Predicate.isNotUndefined),
-    Stream.takeUntil((run) => isTerminalOutcomePhase(run.status)),
+    Stream.takeUntil((run) => run.durableOutcome !== null),
     Stream.tap((run) =>
-      Effect.sync(() => printSettled(run, isTerminalOutcomePhase(run.status))),
+      Effect.sync(() => printSettled(run, run.durableOutcome !== null)),
     ),
     Stream.runLast,
   );
