@@ -75,37 +75,32 @@ export function showLoggedErrorMessage(
 }
 
 /** Log a pre-formatted message and display it to the user as an error. */
-export function showLoggedMessage(
+export const showLoggedMessage = Effect.fn('showLoggedMessage')(function* (
   channel: string,
   message: string,
-): Effect.Effect<string> {
-  return Effect.gen(function* () {
-    yield* Effect.logError(message).pipe(withLogChannel(channel));
-    yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
-    return message;
-  });
-}
+): Effect.fn.Return<string> {
+  yield* Effect.logError(message).pipe(withLogChannel(channel));
+  yield* announce(channel, vscodeUi.showErrorMessage(message), undefined);
+  return message;
+});
 
 /** Log a message and display it to the user as an information notification. */
-export function showLoggedInfoMessage(
-  channel: string,
-  message: string,
-): Effect.Effect<string> {
-  return Effect.gen(function* () {
+export const showLoggedInfoMessage = Effect.fn('showLoggedInfoMessage')(
+  function* (channel: string, message: string): Effect.fn.Return<string> {
     yield* Effect.logInfo(message).pipe(withLogChannel(channel));
     yield* announce(channel, vscodeUi.showInfoMessage(message), undefined);
     return message;
-  });
-}
+  },
+);
 
 /** Log an error message, display it with a docs action, and open the docs if selected. */
-export function showLoggedMessageWithDocs(
-  channel: string,
-  message: string,
-  docId: DocId,
-  actionLabel = 'View Docs',
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
+export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
+  function* (
+    channel: string,
+    message: string,
+    docId: DocId,
+    actionLabel = 'View Docs',
+  ): Effect.fn.Return<void> {
     yield* Effect.logError(message).pipe(withLogChannel(channel));
     const selection = yield* announce(
       channel,
@@ -126,5 +121,5 @@ export function showLoggedMessageWithDocs(
         ).pipe(withLogChannel(channel)),
       ),
     );
-  });
-}
+  },
+);

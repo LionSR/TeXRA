@@ -13,10 +13,9 @@
  *   load only the requested protocol (`anthropic-messages`, `openai-responses`,
  *   `google-interactions`), manage scoped connections and file uploads in the
  *   caller's `Scope`, and classify provider failures into `ModelError`.
- * - **Subscription sign-in (`codex`, `xai`)**: ChatGPT
- *   ([`codexCoordinator`](#codexcoordinator),
- *   [`codexLoginWithLoopback`](#codexloginwithloopback),
- *   [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
+ * - **Subscription sign-in (`chatgpt`, `xai`)**: ChatGPT
+ *   ([`chatgptCoordinator`](#chatgptcoordinator),
+ *   [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
  *   ([`xaiCoordinator`](#xaicoordinator),
  *   [`xaiLoginWithLoopback`](#xailoginwithloopback),
  *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
@@ -34,16 +33,12 @@ import type { Model, ModelConfiguration } from './turn.js';
 
 /**
  * The credential a binding sends: an API key (or any bearer token the
- * endpoint takes as one), or a ChatGPT (Codex) session token, which also
- * names its account and is served on the Responses protocol only.
+ * endpoint takes as one), or a ChatGPT plan's access token, which the
+ * Responses protocol alone serves, under that plan's request rules.
  */
 export type ModelCredential =
   | { readonly kind: 'api-key'; readonly apiKey: string }
-  | {
-      readonly kind: 'codex';
-      readonly accessToken: string;
-      readonly accountId: string | null;
-    };
+  | { readonly kind: 'chatgpt'; readonly accessToken: string };
 
 /**
  * One model on one decided route, and what the caller asks of it. The
@@ -65,9 +60,6 @@ export interface BindSpec {
     readonly temperature?: number;
     /** The model's default reasoning (`chooseReasoning`) unless given. */
     readonly reasoning?: ReasoningChoice;
-    readonly parallelToolCalls?: boolean;
-    /** GPT-5 sends a reasoning summary only when asked. */
-    readonly reasoningSummary?: boolean;
     /** Google keeps the conversation server-side. */
     readonly serverState?: boolean;
     /** OpenAI's fast service tier, where the model offers it. */
@@ -96,8 +88,6 @@ export interface Binding {
   readonly maxOutputTokens: number | null;
   /** Turns can run as background work (submit and observe). */
   readonly background: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
   readonly serviceTier: 'fast' | null;
   /** The route takes a tool choice naming one function. */
   readonly forcedToolChoice: boolean;
@@ -160,11 +150,7 @@ const construct = Effect.fn('llm.construct')(function* (
       const authentication =
         credential.kind === 'api-key'
           ? credential
-          : {
-              kind: credential.kind,
-              accessToken: credential.accessToken,
-              accountId: credential.accountId,
-            };
+          : { kind: credential.kind, accessToken: credential.accessToken };
       if (webSocket) {
         const { openaiResponsesWebSocketModel } = yield* Effect.promise(
           () => import('./api/openaiResponsesWebSocket.js'),
@@ -199,7 +185,11 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
   const { config, options, configuration } = yield* constructed(() =>
     wire.configurationFor(spec),
   );
-  const webSocket = wire.servesWebSocket(options, configuration);
+  // A ChatGPT plan's token is served over HTTP: OpenAI documents the
+  // token-sharing route's requests as HTTP streams.
+  const webSocket =
+    spec.credential.kind === 'api-key' &&
+    wire.servesWebSocket(options, configuration);
   const model = yield* construct(
     configuration,
     spec.credential,
@@ -229,7 +219,6 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
     billing,
     maxOutputTokens: configuration.defaults.maxOutputTokens,
     background: model.background !== undefined,
-    persistentConnection: webSocket,
     serviceTier:
       configuration.protocol === 'openai-responses'
         ? configuration.defaults.serviceTier
@@ -249,18 +238,18 @@ export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
 export type { LoopbackLoginOptions } from './oauth/loopbackLogin.js';
 export type {
   SubscriptionAuthorizeRequest,
+  SubscriptionCallback,
   SubscriptionCoordinator,
   SubscriptionSession,
   SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from './oauth/subscriptionCoordinator.js';
 export {
-  codexCoordinator,
-  codexLoginWithLoopback,
-  getCodexStatus,
-  type CodexSession,
-} from './oauth/codex/codexProvider.js';
-export { codexLoginWithDeviceCode } from './oauth/codex/codexDeviceLogin.js';
+  chatgptCoordinator,
+  chatgptLoginWithLoopback,
+  getChatgptStatus,
+  type ChatgptSession,
+} from './oauth/chatgpt/chatgptProvider.js';
 export {
   getXaiStatus,
   xaiCoordinator,

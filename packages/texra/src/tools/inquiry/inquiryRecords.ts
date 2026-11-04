@@ -2,18 +2,16 @@
 import { randomBytes } from 'node:crypto';
 import { Context, DateTime, Effect, Layer, Result, Schema } from 'effect';
 
-import {
-  ensureError,
-  InquiryThreadIdSchema,
-  type InquiryThreadId,
-  type OpenInquiryTurn,
-  type AnsweredInquiryTurn,
-} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { GlobalValues } from '@texra-ai/harness/host';
 import { ToolError } from '@texra-ai/harness/plugins';
 import {
   INQUIRY_THREADS,
   InquiryRecords,
+  InquiryThreadIdSchema,
+  type AnsweredInquiryTurn,
+  type InquiryThreadId,
+  type OpenInquiryTurn,
   type InquiryThreadRecord,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
@@ -25,37 +23,38 @@ function inquiryOperations(
   values: Context.Service.Shape<typeof GlobalValues>,
 ): Context.Service.Shape<typeof InquiryRecords> {
   /** One thread's transition under the write lock; `null` writes nothing. */
-  const changeThread = <A extends InquiryThreadRecord | null>(
+  const changeThread = Effect.fn('changeThread')(function* <
+    A extends InquiryThreadRecord | null,
+  >(
     id: InquiryThreadId,
     change: (current: InquiryThreadRecord | null, timestamp: string) => A,
-  ) =>
-    Effect.gen(function* () {
-      const timestamp = DateTime.formatIso(yield* DateTime.now);
-      return yield* values.modify(INQUIRY_THREADS, id, (current) =>
-        Result.flatMap(
-          // A transition rejects a request by throwing its ToolError.
-          Result.try({
-            try: () => change(current ?? null, timestamp),
-            catch: ensureError,
-          }),
-          (
-            next,
-          ): Result.Result<
-            readonly [A] | readonly [A, InquiryThreadRecord],
-            Error
-          > => {
-            if (next === null) return Result.succeed([next] as const);
-            if (next.threadId !== id)
-              return Result.fail(
-                new Error(
-                  'An inquiry transition cannot change its thread identity.',
-                ),
-              );
-            return Result.succeed([next, next] as const);
-          },
-        ),
-      );
-    });
+  ) {
+    const timestamp = DateTime.formatIso(yield* DateTime.now);
+    return yield* values.modify(INQUIRY_THREADS, id, (current) =>
+      Result.flatMap(
+        // A transition rejects a request by throwing its ToolError.
+        Result.try({
+          try: () => change(current ?? null, timestamp),
+          catch: ensureError,
+        }),
+        (
+          next,
+        ): Result.Result<
+          readonly [A] | readonly [A, InquiryThreadRecord],
+          Error
+        > => {
+          if (next === null) return Result.succeed([next] as const);
+          if (next.threadId !== id)
+            return Result.fail(
+              new Error(
+                'An inquiry transition cannot change its thread identity.',
+              ),
+            );
+          return Result.succeed([next, next] as const);
+        },
+      ),
+    );
+  });
 
   function normalizeSessionLinks(
     links?: readonly string[] | null,
@@ -92,9 +91,8 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['recordOpenQuestion']
     >[0],
   ) {
-    const threadId =
-      params.threadId ??
-      (`ei_${randomBytes(6).toString('hex')}` as InquiryThreadId);
+    const threadId: InquiryThreadId =
+      params.threadId ?? `ei_${randomBytes(6).toString('hex')}`;
 
     return changeThread(threadId, (existing, timestamp) => {
       if (params.threadId && !existing) {
@@ -164,16 +162,13 @@ function inquiryOperations(
     >[0],
   ) {
     return changeThread(params.threadId, (existing, timestamp) => {
+      if (!existing || existing.status !== 'open') return null;
+      const lastTurn = existing.turns.at(-1);
       if (
-        !existing ||
-        existing.status !== 'open' ||
-        existing.turns.length === 0
+        lastTurn === undefined ||
+        lastTurn.kind !== 'open' ||
+        lastTurn.turnIndex !== params.turnIndex
       )
-        return null;
-
-      // Safe: the length check above guarantees at least one turn.
-      const lastTurn = existing.turns.at(-1)!;
-      if (lastTurn.kind !== 'open' || lastTurn.turnIndex !== params.turnIndex)
         return null;
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
@@ -266,30 +261,26 @@ function inquiryOperations(
     );
   }
 
-  function listThreadsByStatus(
+  const listThreadsByStatus = Effect.fn('listThreadsByStatus')(function* (
     params: Parameters<
       Context.Service.Shape<typeof InquiryRecords>['listThreadsByStatus']
     >[0],
   ) {
-    return Effect.gen(function* () {
-      const all = (yield* values.list(INQUIRY_THREADS)).map(
-        ({ value }) => value,
-      );
+    const all = (yield* values.list(INQUIRY_THREADS)).map(({ value }) => value);
 
-      const filtered = all.filter((m) => {
-        if (params.status !== 'any' && m.status !== params.status) return false;
-        if (params.scope === 'run') {
-          if (!params.runId) return false;
-          if (m.parentRunId !== params.runId) return false;
-        }
-        return true;
-      });
-
-      return filtered
-        .toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
-        .map(manifestToSummary);
+    const filtered = all.filter((m) => {
+      if (params.status !== 'any' && m.status !== params.status) return false;
+      if (params.scope === 'run') {
+        if (!params.runId) return false;
+        if (m.parentRunId !== params.runId) return false;
+      }
+      return true;
     });
-  }
+
+    return filtered
+      .toSorted((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+      .map(manifestToSummary);
+  });
 
   return {
     recordOpenQuestion,

@@ -1,16 +1,16 @@
 /**
  * Per-workspace roots: the four host services whose value depends on which
- * project (workspace folder) a piece of code is working on. They live on the
- * owning `SessionHandle` rather than on a process-wide object,
+ * project (workspace folder) a piece of code is working on. They are the
+ * owning session's (`SessionRoots`) rather than a process-wide object,
  * so one process can hold many sessions, each rooted in its own folder.
  *
  * Resolution is by hand, not by ambient scope: a caller answers for the
  * workspace whose roots it was given — a tool call's `call.roots`, a run's
- * `session.roots`, a host command's `session.roots`. There is no ambient
+ * or a request's `SessionRoots`, a host command's `session.roots`. There is no ambient
  * holder: `SessionHandleInit.roots` is required, so every session is opened over roots its composition root named, and this
  * module declares the record without holding one.
  */
-import type { ConfigProvider, StateStore } from './interfaces';
+import type { ConfigProvider, StateStore } from '@shared/config/settings';
 
 /** One workspace's host services: its folder, storage, configuration and
  *  state stores, as the session opened over it holds them. */
@@ -20,7 +20,8 @@ export interface WorkspaceRoots {
   /**
    * The storage root this process opened (a host's per-user directory, an
    * SDK embedder's `storageDir`): every storage path below derives from it, and
-   * the files a person keeps there (the MCP config) are found beside it.
+   * the files a person keeps there (the MCP config, their skills and the
+   * `AGENTS.md` a workspace without one falls back to) are found in it.
    */
   readonly storageRoot: string;
   /** Application-owned storage for this project's state. Custom hosts must

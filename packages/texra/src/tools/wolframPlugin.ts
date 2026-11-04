@@ -1,12 +1,22 @@
 /** The Wolfram plugin: a probe and a card; agents run `wolframscript` in `bash`. */
 
+// Third-party imports
+import { Effect } from 'effect';
+
 // Local imports
-import { WOLFRAM_AVAILABILITY } from '@texra/tools/pluginAvailability';
 import type { TexraPlugin } from '@texra/tools/registry';
+import { probeCommand } from '@texra/utils/system/toolChecks';
 
 export const wolfram: TexraPlugin = {
   id: 'wolfram',
-  availability: WOLFRAM_AVAILABILITY,
+  // Interruption reaches the spawned `wolframscript -version`, so an
+  // interrupted dashboard refresh kills the probe instead of abandoning it.
+  availability: {
+    check: () =>
+      Effect.map(probeCommand('wolframscript', ['-version']), (available) => ({
+        available,
+      })),
+  },
   card: {
     name: 'Wolfram Language',
     description:

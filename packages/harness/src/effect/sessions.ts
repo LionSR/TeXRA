@@ -6,7 +6,6 @@
  * behind them are `sessionPrograms.ts`'s.
  */
 
-import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type {
   HostInteractions,
@@ -15,6 +14,7 @@ import type {
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentPlatform } from '@platform/agentPlatform';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
   CommitOrdinal,
   DisplaySessionEvent,
@@ -88,13 +88,15 @@ export interface OpenOptions {
    * answer until a host with an `approve` handler attaches
    * ({@link Session.attach}), so every request is denied.
    *
-   * `interruptedTasks` handles runs that a closed or crashed process left
-   * unfinished. Both values resume such a run once what it was missing (an
-   * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `resumeOnOpen` setting is
-   * `auto`.
+   * `interruptedTasks` is what the session does at open with the root
+   * runs a closed or crashed process left unfinished, the one place that
+   * decides it. Both values mark what blocks each one (an agent, a plugin:
+   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
+   * leaves them for the host to list and resume; `resume` continues them,
+   * and a blocked one once it is back. Absent, the session recovers
+   * nothing at open.
    */
-  readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
+  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
 }
 
 /**
@@ -185,7 +187,9 @@ export interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host.
+   * returned to you and shown to no host: a launch refused for an unknown
+   * model, or for a `config` naming an unknown agent, carries the notice a
+   * host shows for it (`launchNoticeOf` in `./host`).
    */
   readonly start: (
     input: StartInput,
@@ -244,6 +248,13 @@ export interface LocalSession extends Session {
      * {@link head}, or a snapshot's `cursor`), in write order, then each
      * new one as it is written. `drained`, if given, is updated to the
      * position each read reached.
+     *
+     * Another process's commit reaches this stream and the view on the same
+     * poll of the store (about 250 ms), but the view applies it on its own
+     * update fiber, so `current` read right after an event here can still
+     * be the snapshot before it. A caller that acts on an event and then
+     * needs the snapshot to show it waits on `changes` rather than reading
+     * `current` once.
      */
     readonly events: (
       from: CommitOrdinal,
@@ -270,9 +281,8 @@ export interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been

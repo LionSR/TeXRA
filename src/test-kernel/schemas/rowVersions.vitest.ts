@@ -25,7 +25,7 @@ import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
 import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
 import {
   productionFilesUnder,
   productionRoots,
@@ -35,7 +35,7 @@ import {
 /**
  * The release watermark of the session store:
  * `config/storage/frozen/<name>.v<N>.json` is the JSON Schema of version N of
- * a row kind, plugin arm or current-value family as a release shipped it, and
+ * a row kind, fact kind or current-value family as a release shipped it, and
  * the frozen versions bound that name's released history. A later build reads
  * a released version forever, so its schema never changes in place: a change
  * is a new version with an upcaster from the released one.
@@ -76,12 +76,12 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...Object.entries(armsOf(texraPlugins({ name: 'vscode' }))).map(
-    ([name, arm]) => ({
+  ...Object.entries(factKindsOf(texraPlugins({ name: 'vscode' }))).map(
+    ([name, factKind]) => ({
       name: `plugin.fact.${name.replace('/', '.')}`,
-      version: arm.version,
-      upcasts: arm.upcasters.length,
-      schema: arm.schema,
+      version: factKind.version,
+      upcasts: factKind.upcasters.length,
+      schema: factKind.schema,
     }),
   ),
   ...VALUE_FAMILIES.map(({ name, schema }) => ({
@@ -128,7 +128,7 @@ describe('row versions', () => {
 
   it('reads or retires every row kind ever stored', () => {
     // A kind deleted without a retirement would make every store that holds
-    // it refuse to open. The list only grows: check-ratchet-baselines fails a
+    // it refuse to open. The list only grows: check-row-kinds-ever fails a
     // name the base branch lists and the tree does not.
     const { kinds } = Schema.decodeUnknownSync(
       Schema.Struct({ kinds: Schema.Array(Schema.String) }),
@@ -155,7 +155,7 @@ describe('row versions', () => {
       'a deleted row kind moves to RETIRED_ROW_KINDS',
     ).toEqual([]);
     expect(
-      [...RETIRED_ROW_KINDS].filter((kind) => !kinds.includes(kind)),
+      [...RETIRED_ROW_KINDS.keys()].filter((kind) => !kinds.includes(kind)),
       'a retired row kind stays in config/storage/row-kinds-ever.json',
     ).toEqual([]);
   });

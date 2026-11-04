@@ -1,29 +1,29 @@
 // Third-party imports
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer } from 'effect';
+import { afterEach, expect, vi } from 'vitest';
 
 // Local imports
-import * as codexAuth from '@texra-ai/llm/node';
-import {
-  fakeProcessServices,
-  installedHost,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import * as chatgptAuth from '@texra-ai/llm/node';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { getChatGptSubscriptionStatus } from '@texra/tools/setup/platform';
 
-setupPlatform({}, { setup: {} });
+/** The process over a host that passes a setup platform. */
+const perTest = Layer.provideMerge(
+  SessionGraph.layer,
+  FakeHost.layer({}, { setup: {} }),
+);
 
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('shared setup capabilities', () => {
+layer(perTest, { buildPerTest: true })('shared setup capabilities', (it) => {
   it.effect(
     'does not expose ChatGPT account identifiers through setup tools',
     () =>
       Effect.gen(function* () {
-        vi.spyOn(codexAuth, 'getCodexStatus').mockReturnValue(
+        vi.spyOn(chatgptAuth, 'getChatgptStatus').mockReturnValue(
           Effect.succeed({
             signedIn: true,
             email: 'researcher@example.com',
@@ -32,13 +32,13 @@ describe('shared setup capabilities', () => {
         );
 
         const status = yield* getChatGptSubscriptionStatus(
-          installedHost().roots,
+          (yield* FakeHost).roots,
         );
 
         expect(status.signedIn).toBe(true);
         expect(status).not.toHaveProperty('account');
         expect(JSON.stringify(status)).not.toContain('researcher@example.com');
         expect(JSON.stringify(status)).not.toContain('account-private-id');
-      }).pipe(Effect.provide(fakeProcessServices())),
+      }),
   );
 });

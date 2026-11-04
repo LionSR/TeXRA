@@ -7,6 +7,13 @@ operation, was never built: codemode made it unnecessary, because a script calls
 `tools.executions({ action: 'query', … })` and replays its `tool.result` like any
 other nested call.
 
+Since 2026-11-03 the store holds no display rows: its tables (`runs`,
+`run_tree`, `tool_calls`, `model_calls`) are filled from each run's decoded
+call facts and the session view, and `events`, `messages` and `usage` are
+gone. The current contract is the "SQL 的能力范围" section of
+`.agents/docs/proposed/architecture/2026-10-28-harness-1-release-prd.md`;
+the design below is the first version.
+
 ## Thesis
 
 The harness supplies ground truth; it does not guess at the model's

@@ -1,0 +1,96 @@
+/**
+ * Entry point for progress-view formatters: one painter per transcript-row
+ * kind.
+ *
+ * Membership (which rows exist at all) is decided once by the transcript
+ * row builders (`@texra-ai/harness/transcript`). This map is exhaustive over
+ * `TranscriptRowKind`, so a new row kind is a compile error here rather than a
+ * row that silently never paints.
+ */
+
+// Third-party imports - Lit template utilities
+import { html, nothing, type TemplateResult } from 'lit';
+
+// Local imports - shared transcript model
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
+
+// Local imports - formatter helpers
+import { formatBannerContentTemplate } from './logFormatters/bannerFormatters';
+import { formatCompactionActivityTemplate } from './logFormatters/compactionActivityFormatter';
+import { formatContextManagementTemplate } from './logFormatters/contextManagementFormatters';
+import { formatFileListTemplate } from './logFormatters/dataFormatters';
+import {
+  formatDefaultLogMessageTemplate,
+  formatErrorTemplate,
+  formatProgressStatusTemplate,
+  formatUserMessageTemplate,
+} from './logFormatters/messageFormatters';
+import { formatToolUseTemplate } from './logFormatters/toolFormatters';
+import { formatWebSearchTemplate } from './logFormatters/toolFormatters/webFormatters';
+import type {
+  TranscriptRow,
+  TranscriptRowKind,
+} from '@texra-ai/harness/transcript';
+import type { FormatResult } from './baseLogFormatter';
+
+/** Each row kind's row: indexing it by a kind parameter keeps the pairing. */
+type RowMap = { [K in TranscriptRowKind]: TranscriptRow & { kind: K } };
+
+/** `interrupted`: the row's run is interrupted (its process died), so an
+ *  open call is not running. `tools`: how the host paints tool calls. */
+type RowFormatters = {
+  [K in TranscriptRowKind]: (
+    row: RowMap[K],
+    interrupted: boolean,
+    tools: HostSnapshot['tools'],
+  ) => FormatResult;
+};
+
+/** One painter per row kind. Exhaustive by construction. */
+const ROW_FORMATTERS: RowFormatters = {
+  assistant: formatBannerContentTemplate,
+  thinking: formatBannerContentTemplate,
+  scratchpad: formatBannerContentTemplate,
+  user: formatUserMessageTemplate,
+  error: formatErrorTemplate,
+  tool: formatToolUseTemplate,
+  webSearch: formatWebSearchTemplate,
+  fileList: formatFileListTemplate,
+  contextManagement: formatContextManagementTemplate,
+  progressStatus: formatProgressStatusTemplate,
+  compactionActivity: formatCompactionActivityTemplate,
+  log: formatDefaultLogMessageTemplate,
+};
+
+/** Label a render failure by what failed to render. */
+function renderLabel(row: TranscriptRow): string {
+  if (row.kind !== 'tool') return row.kind;
+  const toolName = row.toolUse.toolName.trim();
+  return toolName ? `tool use (${toolName})` : 'tool use';
+}
+
+/** Create an error fallback template when formatting fails. */
+function formatRenderError(label: string, errorMsg: string): TemplateResult {
+  // prettier-ignore
+  return html`<div class="log-line log-line--render-error"><span class="render-error-icon">${waIcon('triangle-exclamation')}</span><span class="render-error-text">Failed to render ${label}: ${errorMsg}</span></div>`;
+}
+
+/** Format a transcript row as a TemplateResult for direct Lit rendering. */
+export function formatLogEntry(
+  row: TranscriptRow,
+  interrupted: boolean,
+  tools: HostSnapshot['tools'],
+): TemplateResult | typeof nothing {
+  try {
+    // Generic over the kind, so the painter and its row share one `K`.
+    const paint = <K extends TranscriptRowKind>(kind: K, of: RowMap[K]) =>
+      ROW_FORMATTERS[kind](of, interrupted, tools);
+    return paint(row.kind, row) ?? nothing;
+  } catch (e) {
+    const label = renderLabel(row);
+    console.error(`Error rendering ${label}:`, e);
+    return formatRenderError(label, toErrorMessage(e));
+  }
+}

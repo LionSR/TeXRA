@@ -2,11 +2,11 @@
  * Proposal/approval handshake and agent/model resolution for delegation tools.
  *
  * If proposal bypass is active for a stream, launches immediately; otherwise
- * waits for user approval via `session.interactions` before executing.
+ * waits for user approval through the session's requests before executing.
  */
 
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Context, type Deferred, Effect, Exit } from 'effect';
 
 // Local imports
 import {
@@ -29,7 +29,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import type { RunHistoryRefused } from '@shared/session/runHistory';
+import { Approvals, type RunHistoryRefused } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -134,6 +134,13 @@ type ProposalRequestError =
   | DatabaseWriteFailed
   | RunHistoryRefused;
 
+/** The key of the request the `agent` calls of one script share
+ *  (`ScriptScope.shared`): the `ask` {@link decideDelegation} takes. */
+export const AgentRequest =
+  Context.Service<Deferred.Deferred<RequestDecision, ProposalRequestError>>(
+    'agent:request',
+  );
+
 /** How a child records an approval the run's delegated-work grant gave. */
 const GRANTED_CHILD = {
   goal: 'goal-approved',
@@ -148,25 +155,30 @@ const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     proposal: AgentProposal,
     parent: RunToolCall,
     ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
-  ): Effect.fn.Return<DelegationProposalDecision, ProposalRequestError> {
-    const { session, runId, config } = parent.run;
+  ): Effect.fn.Return<
+    DelegationProposalDecision,
+    ProposalRequestError,
+    Approvals
+  > {
+    const { runId, config } = parent.run;
+    const approvals = yield* Approvals;
     const hook = (yield* RunCall)?.hook;
     // A trusted recipe's delegation is approved unless a hook asked for it.
     if (isTrustedScript(config) && hook !== 'ask')
       return { result: { action: 'approve' }, childApproval: 'inherit' };
-    const answer = session.approvals.permission(runId, 'proposal', hook);
+    const answer = approvals.permission(runId, 'proposal', hook);
     if (answer !== 'allow' && answer !== 'ask')
       return { result: answer, childApproval: 'inherit' };
     if (answer === 'allow') {
       // Under `yolo` alone the child inherits, so its bash and edits still
       // gate; the run's delegated-work grant approves them too.
-      const granted = session.approvals.bypass(runId, 'superYolo');
+      const granted = approvals.bypass(runId, 'superYolo');
       const childApproval = granted ? GRANTED_CHILD[granted] : 'inherit';
       return { result: { action: 'approve' }, childApproval };
     }
     // The script's shared request may answer from its recorded row.
     if (ask !== undefined) {
-      const result = yield* recordedDecision('proposal', yield* ask);
+      const result = yield* recordedDecision({ kind: 'proposal' }, yield* ask);
       return { result, childApproval: 'inherit' };
     }
 

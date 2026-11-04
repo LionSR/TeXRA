@@ -116,12 +116,10 @@ export const collectFilesFromPatterns = Effect.fn(
     <A>(value: A) =>
     <R>(effect: Effect.Effect<A, PlatformError.PlatformError, R>) =>
       effect.pipe(
-        Effect.catch((error) =>
-          error.reason._tag === 'NotFound' ||
-          error.reason._tag === 'BadResource'
-            ? Effect.succeed(value)
-            : Effect.fail(error),
-        ),
+        Effect.catchReasons('PlatformError', {
+          NotFound: () => Effect.succeed(value),
+          BadResource: () => Effect.succeed(value),
+        }),
       );
 
   const files = new Set<string>();
@@ -162,28 +160,27 @@ export const collectFilesFromPatterns = Effect.fn(
     patterns.flatMap((pattern) =>
       extensions.map((ext) => [pattern, ext] as const),
     ),
-    ([pattern, ext]) =>
-      Effect.gen(function* () {
-        if (!ext.endsWith('*')) {
-          // Exact extensions prefer the input directory; `build/` is only the
-          // fallback when the corresponding root-level artifact is absent.
-          for (const dir of searchDirs) {
-            const match = path.join(dir, pattern + ext);
-            if (yield* isFile(match)) return [match];
-          }
-          return [];
+    Effect.fnUntraced(function* ([pattern, ext]) {
+      if (!ext.endsWith('*')) {
+        // Exact extensions prefer the input directory; `build/` is only the
+        // fallback when the corresponding root-level artifact is absent.
+        for (const dir of searchDirs) {
+          const match = path.join(dir, pattern + ext);
+          if (yield* isFile(match)) return [match];
         }
-        const wanted = foldCase(pattern + ext.slice(0, -1));
-        const candidates = searchDirs.flatMap((dir) =>
-          (listings.get(dir) ?? [])
-            .filter((name) => foldCase(name).startsWith(wanted))
-            .map((name) => path.join(dir, name)),
-        );
-        const found = yield* Effect.forEach(candidates, isFile, {
-          concurrency: 16,
-        });
-        return candidates.filter((_, i) => found[i]);
-      }),
+        return [];
+      }
+      const wanted = foldCase(pattern + ext.slice(0, -1));
+      const candidates = searchDirs.flatMap((dir) =>
+        (listings.get(dir) ?? [])
+          .filter((name) => foldCase(name).startsWith(wanted))
+          .map((name) => path.join(dir, name)),
+      );
+      const found = yield* Effect.forEach(candidates, isFile, {
+        concurrency: 16,
+      });
+      return candidates.filter((_, i) => found[i]);
+    }),
     { concurrency: 8 },
   );
   for (const match of matches.flat()) yield* record(match);

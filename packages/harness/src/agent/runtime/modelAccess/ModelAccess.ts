@@ -15,6 +15,7 @@ import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
 import {
   type ModelConfig,
+  type ModelError,
   type ModelRoute,
   selectModel,
   type TurnRequest,
@@ -24,14 +25,12 @@ import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readModelSettings } from '@model/modelSettings';
-import type { StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import type { SettingsStores } from '@shared/config/settings';
+import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,
   ModelBackend,
-  RetryErrorInfo,
 } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
@@ -56,6 +55,10 @@ export interface BoundModel extends Binding {
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The route decision this binding carries out, or the validation model. */
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
@@ -93,6 +96,8 @@ export interface BindRequest {
 /** The configured helper model, for one call; `rejected` as for a run's. */
 interface HelperRequest {
   readonly purpose: 'helper';
+  /** The asking run's model, bound when no helper model is configured. */
+  readonly runModel?: string;
   readonly rejected?: string;
 }
 
@@ -110,10 +115,11 @@ export class ModelAccess extends Context.Service<
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<SwitchRefusal | null, RouteUnavailable>;
-    /** The move onto the user's own credential a failure on `failed` offers. */
+    /** The move onto the user's own credential a used-up `quota` (llm's
+     *  verdict on a failure of `failed`) offers. */
     readonly credentialSwitch: (
       failed: BoundModel,
-      recorded: RetryErrorInfo,
+      quota: ModelError['quota'],
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CredentialSwitch | null>;
   }
@@ -123,15 +129,20 @@ export class ModelAccess extends Context.Service<
 const settingsOf = (stores: SettingsStores) =>
   Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
 
-/** The helper model's request: the configured model. Its bind decides
- *  whether it can serve now, as a run's does. */
+/** The helper model's request: the configured model, else the asking run's.
+ *  Its bind decides whether it can serve now, as a run's does. */
 const helperRequest = Effect.fn('ModelAccess.helper')(function* (
   stores: SettingsStores,
+  runModel: string | undefined,
 ): Effect.fn.Return<BindRequest, RouteUnavailable> {
-  const modelId = yield* Effect.mapError(
-    getHelperModelName(stores),
-    RouteUnavailable.of,
-  );
+  const modelId =
+    (yield* Effect.mapError(getHelperModelName(stores), RouteUnavailable.of)) ??
+    runModel;
+  if (modelId === undefined) {
+    return yield* RouteUnavailable.of(
+      new Error('No helper model is configured, and no run model to use.'),
+    );
+  }
   // One-shot deterministic text: the whole output budget, never sampled.
   return { modelId, declinedRoutes: [], textOnly: true, temperature: 0 };
 });
@@ -169,14 +180,7 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
     mode: ask.mode,
   });
   return yield* bindRoute(
-    {
-      request,
-      requested,
-      ask,
-      settings,
-      decision,
-      backend: request.backend ?? decision.backend,
-    },
+    { request, requested, ask, settings, decision },
     stores,
   );
 });
@@ -207,8 +211,10 @@ export const modelAccessLayer = (
         bind: (request) =>
           inProject(
             'purpose' in request
-              ? Effect.flatMap(helperRequest(stores), (helper) =>
-                  bindOver(stores, { ...helper, rejected: request.rejected }),
+              ? Effect.flatMap(
+                  helperRequest(stores, request.runModel),
+                  (helper) =>
+                    bindOver(stores, { ...helper, rejected: request.rejected }),
                 )
               : bindOver(stores, request),
           ),
@@ -225,8 +231,8 @@ export const modelAccessLayer = (
             ),
           );
         },
-        credentialSwitch: (failed, recorded, declined) =>
-          credentialSwitch(failed, recorded, declined).pipe(
+        credentialSwitch: (failed, quota, declined) =>
+          credentialSwitch(failed, quota, declined).pipe(
             Effect.provideService(Secrets, secrets),
           ),
       };

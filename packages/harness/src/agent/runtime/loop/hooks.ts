@@ -32,6 +32,7 @@ import {
 } from '@common/plugins/hookProtocol';
 import { pluginDataDir, runHook } from '@common/plugins/pluginHooks';
 import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   qualifyAggregateId,
   SUPPORTED_HOOK_EVENTS,
@@ -40,8 +41,9 @@ import {
 } from '@shared/schemas';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
-import type { RunCell } from '@shared/session/runHistory';
-import { executableDecision } from '../requestPolicy';
+import { type RunCell, SessionViewAccess } from '@shared/session/runHistory';
+import { workAutoApproved } from '../requestPolicy';
+import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
 import type { StepTools } from './step';
@@ -139,7 +141,7 @@ interface HookPoint {
   readonly context: string | null;
 }
 
-type Services = ChildProcessSpawner | FileSystem.FileSystem;
+type Services = ChildProcessSpawner | FileSystem.FileSystem | SessionServices;
 
 /** How a stale hook ends, never run, and what a `PreToolUse` one answers. */
 const STALE_MESSAGE = 'the hook this call was offered under is gone or changed';
@@ -189,7 +191,7 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
       (names === undefined || matchesHook(hook.matcher, names)),
   );
   if (matched.length === 0) return pointOf([]);
-  const { workspace, globalStorage } = run.session.roots;
+  const { workspace, globalStorage } = yield* SessionRoots;
   if (workspace === undefined) {
     run.logger.warn(
       `Not running ${matched.length} ${event} hook(s): this run has no workspace to run them in.`,
@@ -199,44 +201,42 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
   const stdin = encodeHookInput(input);
   const outcomes = yield* Effect.forEach(
     matched,
-    (step) =>
-      Effect.gen(function* () {
-        const { run: ended, durationMs } = step.stale
-          ? { run: STALE.run, durationMs: 0 }
-          : yield* runHook(step.hook, stdin, {
-              pluginRoot: step.root,
-              projectDir: workspace,
-              pluginData: pluginDataDir(globalStorage, step.name),
-            });
-        const { status, warning, systemMessage, ...said } = interpretHookRun(
-          input,
-          ended,
-        );
-        if (warning !== null)
-          run.logger.warn(`${warning} (plugin ${step.name})`);
-        if (systemMessage !== null)
-          run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
-        // A failure keeps the start of stderr, or why the process never ran.
-        const stderr =
-          status === 'ok' || ended.kind === 'timeout'
-            ? ''
-            : (ended.kind === 'unstartable'
-                ? ended.message
-                : ended.stderr
-              ).slice(0, 2_000);
-        return {
-          point,
-          event,
-          plugin: step.plugin,
-          hook: step.hook.id,
-          durationMs,
-          status,
-          exitCode: ended.kind === 'exited' ? ended.exitCode : null,
-          ...said,
-          ...(step.stale && event === 'PreToolUse' && STALE.denial),
-          stderr: stderr === '' ? null : stderr,
-        } satisfies HookOutcomePayload;
-      }),
+    Effect.fnUntraced(function* (step) {
+      const { run: ended, durationMs } = step.stale
+        ? { run: STALE.run, durationMs: 0 }
+        : yield* runHook(step.hook, stdin, {
+            pluginRoot: step.root,
+            projectDir: workspace,
+            pluginData: pluginDataDir(globalStorage, step.name),
+          });
+      const { status, warning, systemMessage, ...said } = interpretHookRun(
+        input,
+        ended,
+      );
+      if (warning !== null) run.logger.warn(`${warning} (plugin ${step.name})`);
+      if (systemMessage !== null)
+        run.logger.info(`${event} hook of ${step.name}: ${systemMessage}`);
+      // A failure keeps the start of stderr, or why the process never ran.
+      const stderr =
+        status === 'ok' || ended.kind === 'timeout'
+          ? ''
+          : (ended.kind === 'unstartable' ? ended.message : ended.stderr).slice(
+              0,
+              2_000,
+            );
+      return {
+        point,
+        event,
+        plugin: step.plugin,
+        hook: step.hook.id,
+        durationMs,
+        status,
+        exitCode: ended.kind === 'exited' ? ended.exitCode : null,
+        ...said,
+        ...(step.stale && event === 'PreToolUse' && STALE.denial),
+        stderr: stderr === '' ? null : stderr,
+      } satisfies HookOutcomePayload;
+    }),
     { concurrency: 'unbounded' },
   );
   return pointOf(
@@ -250,30 +250,29 @@ const hooksAt = Effect.fn('Hooks.at')(function* (
 });
 
 /** The root of `run`'s parent chain: the session its hooks see. */
-const rootOf = (run: AgentRunShape) => {
-  let [root, up] = [run.runId, run.entry.parent];
-  while (up !== null)
-    [root, up] = [up, run.session.view.run(up)?.parentId ?? null];
-  return root;
-};
+const rootOf = (run: AgentRunShape) =>
+  Effect.map(SessionViewAccess, (view) => {
+    let [root, up] = [run.runId, run.entry.parent];
+    while (up !== null) [root, up] = [up, view.run(up)?.parentId ?? null];
+    return root;
+  });
 
 /** The fields every event's input carries for `run`: its root run's id as
  *  the session, its permission mode as its approvals decide, and for a child
  *  its own id and agent, as the reference gives a subagent's hooks. */
-const inputBase = (run: AgentRunShape) => {
-  const root = rootOf(run);
+const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
+  const root = yield* rootOf(run);
   return {
     session_id: root,
-    cwd: run.workingDirectory ?? run.session.roots.workspace ?? '',
-    permission_mode:
-      executableDecision(run.session, run.runId) === 'allow'
-        ? ('bypassPermissions' as const)
-        : ('default' as const),
+    cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
+    permission_mode: (yield* workAutoApproved(run.runId))
+      ? ('bypassPermissions' as const)
+      : ('default' as const),
     ...(root === run.runId
       ? {}
       : { agent_id: run.runId, agent_type: run.config.agent }),
   };
-};
+});
 
 /** The hooks of the run's current step. */
 const currentHooks = (run: AgentRunShape) =>
@@ -299,9 +298,9 @@ export const openingHooks = Effect.fn('Hooks.opening')(function* (
   state: RunState,
   prompt: string,
 ): Effect.fn.Return<PromptPoint, never, Services> {
-  if (rootOf(run) !== run.runId) return { rows: [], parts: [] };
+  if ((yield* rootOf(run)) !== run.runId) return { rows: [], parts: [] };
   const hooks = yield* currentHooks(run);
-  const base = inputBase(run);
+  const base = yield* inputBase(run);
   const model = (yield* SynchronizedRef.get(run.model)).modelId;
   const start = yield* hooksAt(
     run,
@@ -329,13 +328,13 @@ export const promptHooks = Effect.fn('Hooks.prompt')(function* (
   key: string,
   prompt: string,
 ): Effect.fn.Return<PromptPoint, never, Services> {
-  if (rootOf(run) !== run.runId) return { rows: [], parts: [] };
+  if ((yield* rootOf(run)) !== run.runId) return { rows: [], parts: [] };
   const submit = yield* hooksAt(
     run,
     state,
     yield* currentHooks(run),
     `UserPromptSubmit:${key}`,
-    { ...inputBase(run), hook_event_name: 'UserPromptSubmit', prompt },
+    { ...(yield* inputBase(run)), hook_event_name: 'UserPromptSubmit', prompt },
   );
   return { rows: submit.rows, parts: partsOf(submit.context) };
 });
@@ -353,8 +352,8 @@ export const stopHooks = Effect.fn('Hooks.stop')(function* (
 ): Effect.fn.Return<StopPoint, never, Services> {
   if (turn.outcome !== 'completed') return { rows: [], block: null };
   const { state } = turn;
-  const base = inputBase(run);
-  const child = rootOf(run) !== run.runId;
+  const base = yield* inputBase(run);
+  const child = (yield* rootOf(run)) !== run.runId;
   const blocked = state.hookOutcomes[`Stop:${state.turn - 1}`] ?? [];
   const common = {
     stop_hook_active:
@@ -401,7 +400,7 @@ export const preToolUse = Effect.fn('Hooks.preToolUse')(function* (
   const schema = step.registry.get(call.toolName)?.definition.schema;
   const read = schema && Schema.decodeUnknownResult(schema)(toolInput);
   const issued = read && Result.isSuccess(read) ? read.success : toolInput;
-  const input = inputBase(run);
+  const input = yield* inputBase(run);
   const claude = claudeToolCall(call.toolName, issued, (file) =>
     typeof file === 'string' ? path.resolve(input.cwd, file.trim()) : file,
   );

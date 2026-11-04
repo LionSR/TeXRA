@@ -1,6 +1,5 @@
 /**
- * Core utilities: browser-safe path basics, abort and failure helpers, and
- * id minting.
+ * Core utilities: browser-safe path basics, abort and failure helpers.
  *
  * NOTE: pathCore stays a separate module because it depends on Node.js
  * 'path' while this file is reached from browser code through
@@ -11,8 +10,6 @@
  * import from '@utils/core/pathCore' instead.
  */
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
-
-import type { RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
 // pathBasics (browser-safe; Node-dependent path helpers live in pathCore.ts)
@@ -100,16 +97,4 @@ export function jitteredExponentialBackoffMs(
   );
   const jitter = 1 - JITTER_FRACTION + unitRandom * 2 * JITTER_FRACTION;
   return Math.min(maxMs, Math.round(exponential * jitter));
-}
-
-// ---------------------------------------------------------------------------
-// runId
-// ---------------------------------------------------------------------------
-
-/** Mint a run id: 12 lowercase hex chars (48 bits of entropy), the first
- *  digits of a random UUID, every one of which is random. One of the two
- *  minting sites (`deriveRunId` is the other), so the brand is applied here
- *  and nowhere downstream. Any other random id is `crypto.randomUUID()`. */
-export function generateRunId(): RunId {
-  return crypto.randomUUID().replaceAll('-', '').slice(0, 12) as RunId;
 }

@@ -1,14 +1,21 @@
-/** The Lean 4 plugin: its language-server tools, and its card. */
+/** The Lean 4 plugin: its language-server tools, its availability check,
+ *  its icons and its card. */
+
+// Third-party imports
+import { formatResultCount } from '@texra-ai/harness/transcript';
+import { Effect, Option } from 'effect';
 
 // Local imports
 import {
   definePlugin,
   type ProcessPluginLayer,
 } from '@texra-ai/harness/plugins';
-import { lean4Availability } from '@texra/tools/pluginAvailability';
 import type { TexraPlugin } from '@texra/tools/registry';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import { directLeanLanguageServices } from './direct/directLspAdapter';
+import { LeanLanguageServices } from './leanLanguageServices';
+import { isLeanServerActive, summarizeLeanServers } from './leanServerRegistry';
 import { LEAN4_EXTENSION_ID } from './leanTypes';
 import {
   LeanDiagnosticsTool,
@@ -16,7 +23,6 @@ import {
   LeanInspectTool,
   LeanProjectTool,
 } from './LspTools';
-import type { LeanLanguageServices } from './leanLanguageServices';
 
 /**
  * Lean 4 over the direct `lake env lean --server` pool, or over the host's
@@ -35,9 +41,53 @@ export const lean4 = (host: {
       LeanProjectTool,
       LeanInspectTool,
     ],
-    availability: lean4Availability(host.setup),
+    availability: {
+      check: Effect.fn('lean4.availability')(function* () {
+        // A probe reads the plugin's roster while its layer is up; it never
+        // brings that layer up itself.
+        const lean = yield* Effect.serviceOption(LeanLanguageServices);
+        const servers = Option.isSome(lean) ? lean.value.listServers() : [];
+        const { extensions } = host.setup;
+        const extensionAvailable =
+          extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
+        const lakeAvailable = (yield* findCommand('lake')) !== null;
+        const requiresExtension = extensions !== undefined;
+        // VS Code drives Lean through its extension; other hosts spawn lake.
+        const available = requiresExtension
+          ? extensionAvailable
+          : lakeAvailable;
+        const activeCount = servers.filter(isLeanServerActive).length;
+        let statusLabel: string | undefined;
+        if (!available) statusLabel = 'Needs setup';
+        else if (activeCount > 0)
+          statusLabel = `${formatResultCount(activeCount, 'server')} active`;
+        const lines: string[] = [];
+        if (extensionAvailable)
+          lines.push('VS Code Lean 4 extension installed.');
+        if (lakeAvailable && !requiresExtension)
+          lines.push('Direct LSP mode available (`lake` on PATH).');
+        if (!available)
+          lines.push(
+            requiresExtension
+              ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
+              : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
+          );
+        lines.push('', summarizeLeanServers(servers));
+        return {
+          available,
+          statusLabel,
+          statusDetail: lines.join('\n'),
+        };
+      }),
+    },
     processLayer: { layer: host.services ?? directLeanLanguageServices() },
   }),
+  icons: {
+    lean_diagnostics: 'triangle-exclamation',
+    lean_file: 'file-code',
+    lean_project: 'folder-tree',
+    lean_inspect: 'magnifying-glass-chart',
+  },
   card: {
     name: 'Lean 4 Proof Assistant',
     description:

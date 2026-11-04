@@ -58,7 +58,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   grants?: ApprovalGrants,
 ) {
   const { run } = call;
-  const { session, runId: parentRunId } = run;
+  const { runId: parentRunId } = run;
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* SynchronizedRef.get(run.model);
@@ -95,11 +95,10 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         kind: 'background',
       },
     }),
-    session,
   });
   const opened = yield* Deferred.make<CommitOrdinal>();
+  // The script launches under the session's runs the engine door holds.
   yield* startDetachedChildRunLoop({
-    session,
     runId,
     parentRunId,
     agentName: title,
@@ -114,7 +113,6 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         ...(grants !== undefined && { grants }),
       },
       runId,
-      session,
       startedAt: yield* Clock.currentTimeMillis,
       ...(workingDirectory != null && { workingDirectory }),
       title,

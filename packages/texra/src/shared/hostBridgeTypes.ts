@@ -7,3 +7,8 @@ export interface HostBridgeApi {
   getState(): unknown;
   setState(state: unknown): void;
 }
+
+// Where every host installs its bridge (`HOST_BRIDGE_API_KEY`).
+declare global {
+  var __texraHostBridgeApi: HostBridgeApi | undefined;
+}

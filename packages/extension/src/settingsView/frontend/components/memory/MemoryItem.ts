@@ -20,12 +20,14 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { DetailsOpenController } from '@texra/shared/litControllers/DetailsOpenController';
-import type { IconName } from '@ui/wa/iconNames';
+import { DetailsOpenController } from '@ui/litControllers/DetailsOpenController';
 import { getLightweightMd } from '@ui/markdown/lightweightMd';
 import { markdownStyles } from '@ui/styles/markdownStyles';
 import { designTokens, commonViewStyles } from '@ui/styles';
-import { renderIconActionButtonParts } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButtonParts,
+  type IconActionButtonOptions,
+} from '@ui/wa/actionButtons';
 import { metaStripStyles, renderDotMeta } from '@ui/wa/metaStrip';
 import { cachedDateTimeFormat } from '@ui/formatting/dateTimeFormat';
 import { formatBytes } from '@ui/copy/format';
@@ -206,29 +208,32 @@ export class MemoryItem extends LitElement {
   private renderActionGroup(): TemplateResult {
     const pinned = this.item?.pinned === true;
     const memoryPath = this.item?.displayPath;
-    const actions = [
+    const actionOptions: readonly (IconActionButtonOptions & {
+      readonly id: string;
+    })[] = [
       {
         id: 'memory-pin-button',
-        icon: (pinned ? 'thumbtack-slash' : 'thumbtack') as IconName,
+        icon: pinned ? 'thumbtack-slash' : 'thumbtack',
         label: pinned ? 'Unpin' : 'Pin',
         tooltip: pinned ? 'Unpin this memory' : 'Pin as core long-term memory',
         onClick: this.handleTogglePin,
       },
       {
         id: 'memory-open-button',
-        icon: 'file-export' as IconName,
+        icon: 'file-export',
         label: 'Open',
         tooltip: 'Open in editor',
         onClick: this.handleOpen,
       },
       {
         id: 'memory-delete-button',
-        icon: 'trash' as IconName,
+        icon: 'trash',
         label: 'Delete',
         tooltip: 'Delete this memory',
         onClick: this.handleDelete,
       },
-    ].map((action) => ({
+    ];
+    const actions = actionOptions.map((action) => ({
       id: action.id,
       // Name each control by the memory it acts on: three identical "Delete"s
       // down a list tell a screen-reader user nothing about which one they hit.

@@ -30,10 +30,11 @@ is the module map by concern. Run-loop rules are in
   ends a run's driver does not write: a failed process-child hand-off, a
   held child's end, and the children a dead process left under a resuming
   run).
-- **Start, resume and end**: `rootLaunch` (what `Runs.launch({ request, options })`
-  runs: assigns the `runId`, registers, runs); `executeAgent` (the one
-  run program, fresh or resumed: the run's entry, its services, its
-  description, and the masked region whose exit is its terminal);
+- **Start, resume and end**: `rootLaunch` (what `session.start` runs:
+  registers the run under the id the start minted, and runs it);
+  `executeAgent` (the one run program, fresh or resumed: the run's entry,
+  its services, its description, and the masked region whose exit is its
+  terminal);
   `AgentRunLifecycle` (the end: `endRun`, the terminal's classification of
   an exit, and `endActivation`, the one end of an activation, through
   `agent/storage/runLifecycle`'s `finalizeRun`); `runReport` (a run's
@@ -45,11 +46,11 @@ is the module map by concern. Run-loop rules are in
   activation, serial lane; the single in-process liveness authority, with
   admission, lookup and stop); `runs` (the session's `Runs` as hosts and
   tools see them, and a loop's `RunControls`).
-- **Session events**: `SessionHandle` (one composition record per session);
-  `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
+- **Session events**: `sessionServices` (every owner of a session, each its
+  own service, as its runs and requests read them); `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
   `runtimePresentationEvents`; `HostInteractions` /
   `SessionHostInteractions` (the session's host port: diagnostics, approvals,
-  retries, user questions, external inquiry, and other notices, and what a
+  retries, user questions, plugin requests, and other notices, and what a
   failed run presents on it).
 - **History and per-call services**: `RunHistory` (claims through
   `Database`, reads and writes through `SessionLog`); `FollowUps` (pending
@@ -68,7 +69,9 @@ is the module map by concern. Run-loop rules are in
 - **Control**: `runApprovalQueue`;
   `requestPolicy` (what the approval policy decides when a request opens).
 - **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged
-  one-shot path through `ModelAccess`); `helperModelName`;
+  one-shot path through `ModelAccess`); `helperModelName` (the configured
+  helper model, else the app catalog's default; with neither, a run's helper
+  calls use its own model);
   `sessionDescription` (the AI session summary).
 
 A native child keeps one run scope and live handle across follow-ups. The

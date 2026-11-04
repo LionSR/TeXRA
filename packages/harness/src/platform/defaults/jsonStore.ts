@@ -12,11 +12,11 @@ import {
 } from 'effect';
 
 // Local imports
-import { isFileNotFoundError } from '@common/errors/errorPredicates';
 import { writeLogLine } from '@logger/logSink';
 import { ensureError } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { nodeFileServices, writeFileAtomic } from '@utils/files/fsDurability';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -60,7 +60,7 @@ function readJsonRecordSync(filePath: string): JsonRecord {
   try {
     content = readFileSync(filePath, 'utf8');
   } catch (error) {
-    if (isFileNotFoundError(error)) return {};
+    if (absentReason(error)) return {};
     throw error;
   }
   const parsed: unknown = JSON.parse(content);
@@ -83,13 +83,14 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   const content = yield* fs.readFile(filePath).pipe(
     // Preserve the existing UTF-8 decoding, including a leading BOM.
     Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
+    Effect.catchIf(absentReason, () => Effect.void),
     Effect.mapError(storageError),
-    Effect.catchIf(isFileNotFoundError, () => Effect.void),
   );
   if (content === undefined) return { ...missingFallback };
   const parsed: unknown = yield* Effect.try({
     try: () => JSON.parse(content),
-    catch: (cause) => cause as SyntaxError,
+    // JSON.parse throws a SyntaxError, which passes through unchanged.
+    catch: ensureError,
   });
   if (Predicate.isObject(parsed)) return parsed;
   return yield* Effect.fail(
@@ -234,8 +235,8 @@ export class JsonStore {
     return new JsonStore(storePath, data, options.follow === true);
   });
 
-  get<T>(key: string): T | undefined {
-    return this.current()[key] as T | undefined;
+  get(key: string): unknown {
+    return this.current()[key];
   }
 
   /**

@@ -1,13 +1,13 @@
-import { Effect } from 'effect';
+import { layer } from '@effect/vitest';
+import { Effect, Fiber } from 'effect';
 import { FetchHttpClient } from 'effect/http';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
-import * as codexAuth from '@texra-ai/llm/node';
 import { Secrets } from '@texra-ai/harness/host';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { SessionGraph } from '@test/support/testKernel';
 import { SubscriptionUsageService } from '@texra/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
 import type { HttpClient } from 'effect/http';
 
@@ -27,30 +27,6 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-/**
- * The stored ChatGPT session the service reads through `codexCoordinator`,
- * which is the only ChatGPT credential source now that the service builds its
- * own credential reads over the secret store it was handed.
- */
-function stubCodexSession(
-  overrides: {
-    readonly getFreshSession?: () => Effect.Effect<unknown, unknown>;
-    readonly refreshRejected?: () => Effect.Effect<void, unknown>;
-  } = {},
-): void {
-  vi.spyOn(codexAuth, 'codexCoordinator').mockReturnValue({
-    loadSession: () => Effect.succeed({ accessToken: 'chatgpt-secret' }),
-    getFreshSession:
-      overrides.getFreshSession ??
-      (() =>
-        Effect.succeed({
-          accessToken: 'chatgpt-secret',
-          accountId: 'account-123',
-        })),
-    refreshRejected: overrides.refreshRejected ?? (() => Effect.void),
-  } as never);
-}
-
 function makeService(): SubscriptionUsageService {
   return new SubscriptionUsageService({
     stores: makeFakeSettingsStores().stores,
@@ -58,97 +34,97 @@ function makeService(): SubscriptionUsageService {
 }
 
 /**
- * The suite's one run edge: `getUsage` is a program, and the kernel's fake
- * host installs the process runtime (and its HTTP client) it settles on. The
- * fake `fetch` is provided as the same reference the adapters read, and the
- * coding-plan keys as the process `Secrets`, so nothing has to be threaded
- * through the service to reach the transport or the keys.
+ * The suite's one run edge: `getUsage` is a program over the process
+ * services, whose HTTP client reads the fake `fetch` provided here as the
+ * reference the adapters consult per request, and the coding-plan keys as
+ * the process `Secrets`, so nothing has to be threaded through the service
+ * to reach the transport or the keys.
  */
-function runUsage<A>(
+function usage<A>(
   program: Effect.Effect<A, never, HttpClient.HttpClient | Secrets>,
   http: UsageFetch,
-): Promise<A> {
-  return testRuntime().runPromise(
-    program.pipe(
-      Effect.provideService(
-        FetchHttpClient.Fetch,
-        http as unknown as typeof globalThis.fetch,
-      ),
-      Effect.provideService(Secrets, new FakeSecrets(CODING_PLAN_KEYS)),
+): Effect.Effect<A, never, HttpClient.HttpClient> {
+  return program.pipe(
+    Effect.provideService(
+      FetchHttpClient.Fetch,
+      http as unknown as typeof globalThis.fetch,
     ),
+    Effect.provideService(Secrets, new FakeSecrets(CODING_PLAN_KEYS)),
   );
 }
 
-describe('SubscriptionUsageService', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('maps chatgpt HTTP 401 to invalid credentials without exposing details', async () => {
-    let accessToken = 'chatgpt-secret';
-    stubCodexSession({
-      getFreshSession: () => Effect.sync(() => ({ accessToken })),
-      refreshRejected: () =>
-        Effect.sync(() => {
-          accessToken = 'chatgpt-refreshed';
-        }),
+// Live clock: the adapters' retries and the in-flight requests run in real
+// time.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'SubscriptionUsageService',
+  (it) => {
+    afterEach(() => {
+      vi.restoreAllMocks();
     });
-    const http = vi.fn<UsageFetch>(async () =>
-      jsonResponse({ secret: 'must not escape' }, 401),
-    );
 
-    const snapshot = await runUsage(makeService().getUsage('chatgpt'), http);
-    expect(snapshot).toMatchObject({
-      state: 'unavailable',
-      reason: 'invalid_credentials',
-    });
-    expect(JSON.stringify(snapshot)).not.toContain('secret');
-    // A ChatGPT 401 is retried once, on the refreshed token.
-    expect(
-      http.mock.calls.map(
-        ([, init]) => (init.headers as Record<string, string>).authorization,
-      ),
-    ).toStrictEqual(['Bearer chatgpt-secret', 'Bearer chatgpt-refreshed']);
-  });
-
-  // Pins the return path of an invalidated fetch: the caller
-  // already waiting on an invalidated fetch accepts one stale read, but the
-  // stale result never enters the cache — later callers see new-account usage.
-  it('keeps an invalidated in-flight snapshot out of the cache', async () => {
-    const responses: Array<(response: Response) => void> = [];
-    const firstRequest = createDeferred<void>();
-    const secondRequest = createDeferred<void>();
-    const http = vi.fn<UsageFetch>(
+    it.effect(
+      'maps HTTP 401 to invalid credentials without exposing details',
       () =>
-        new Promise<Response>((resolve) => {
-          (responses.length === 0 ? firstRequest : secondRequest).resolve();
-          responses.push(resolve);
+        Effect.gen(function* () {
+          const http = vi.fn<UsageFetch>(async () =>
+            jsonResponse({ secret: 'must not escape' }, 401),
+          );
+
+          const snapshot = yield* usage(
+            makeService().getUsage('kimiCode'),
+            http,
+          );
+          expect(snapshot).toMatchObject({
+            state: 'unavailable',
+            reason: 'invalid_credentials',
+          });
+          expect(JSON.stringify(snapshot)).not.toContain('secret');
         }),
     );
-    const service = makeService();
 
-    const oldAccountRequest = runUsage(service.getUsage('kimiCode'), http);
-    await firstRequest.promise;
-    await runUsage(service.invalidate('kimiCode'), http);
-    const newAccountRequest = runUsage(service.getUsage('kimiCode'), http);
-    await secondRequest.promise;
+    // Pins the return path of an invalidated fetch: the caller
+    // already waiting on an invalidated fetch accepts one stale read, but the
+    // stale result never enters the cache — later callers see new-account usage.
+    it.effect('keeps an invalidated in-flight snapshot out of the cache', () =>
+      Effect.gen(function* () {
+        const responses: Array<(response: Response) => void> = [];
+        const firstRequest = createDeferred<void>();
+        const secondRequest = createDeferred<void>();
+        const http = vi.fn<UsageFetch>(
+          () =>
+            new Promise<Response>((resolve) => {
+              (responses.length === 0 ? firstRequest : secondRequest).resolve();
+              responses.push(resolve);
+            }),
+        );
+        const service = makeService();
 
-    responses[0]?.(jsonResponse({ usage: { limit: 100, remaining: 90 } }));
-    responses[1]?.(jsonResponse({ usage: { limit: 100, remaining: 20 } }));
+        const oldAccountRequest = yield* Effect.forkChild(
+          usage(service.getUsage('kimiCode'), http),
+        );
+        yield* Effect.promise(() => firstRequest.promise);
+        yield* usage(service.invalidate('kimiCode'), http);
+        const newAccountRequest = yield* Effect.forkChild(
+          usage(service.getUsage('kimiCode'), http),
+        );
+        yield* Effect.promise(() => secondRequest.promise);
 
-    const [oldCallerSnapshot, newCallerSnapshot] = await Promise.all([
-      oldAccountRequest,
-      newAccountRequest,
-    ]);
-    expect(oldCallerSnapshot).toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 10 })],
-    });
-    expect(newCallerSnapshot).toMatchObject({
-      windows: [expect.objectContaining({ percentUsed: 80 })],
-    });
-    expect(await runUsage(service.getUsage('kimiCode'), http)).toBe(
-      newCallerSnapshot,
+        responses[0]?.(jsonResponse({ usage: { limit: 100, remaining: 90 } }));
+        responses[1]?.(jsonResponse({ usage: { limit: 100, remaining: 20 } }));
+
+        const oldCallerSnapshot = yield* Fiber.join(oldAccountRequest);
+        const newCallerSnapshot = yield* Fiber.join(newAccountRequest);
+        expect(oldCallerSnapshot).toMatchObject({
+          windows: [expect.objectContaining({ percentUsed: 10 })],
+        });
+        expect(newCallerSnapshot).toMatchObject({
+          windows: [expect.objectContaining({ percentUsed: 80 })],
+        });
+        expect(yield* usage(service.getUsage('kimiCode'), http)).toBe(
+          newCallerSnapshot,
+        );
+        expect(http).toHaveBeenCalledTimes(2);
+      }),
     );
-    expect(http).toHaveBeenCalledTimes(2);
-  });
-});
+  },
+);

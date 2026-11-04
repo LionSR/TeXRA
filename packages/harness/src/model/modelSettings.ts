@@ -15,10 +15,14 @@ import {
   type RegionalProviderId,
   type RouteFacts,
 } from '@texra-ai/llm';
-import { getCodexStatus, getXaiStatus } from '@texra-ai/llm/node';
+import { getChatgptStatus, getXaiStatus } from '@texra-ai/llm/node';
 
-import { StateReadFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import {
+  Settings,
+  StateReadFailed,
+  type SettingsStores,
+} from '@shared/config/settings';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -32,8 +36,6 @@ import {
   providerRegionSetting,
 } from '@shared/state/providerSettings';
 
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
 import { reasoningEffortOverrides } from './reasoningLevel';
 import { SubscriptionPreference } from './subscriptionAccess';
 
@@ -78,35 +80,22 @@ export interface ModelSettings {
   readonly preferShortModelNames: boolean;
   /** Automatic retries after a failed attempt. */
   readonly automaticRetries: number;
-  /** The providers' background-delivery toggles. */
-  readonly background: BackgroundToggles;
+  /** Google text-only turns go out as background Interactions. */
+  readonly googleBackground: boolean;
   /** The vendor knobs a binding sends. */
   readonly wire: {
-    readonly parallelToolCalls: boolean;
-    readonly reasoningSummary: boolean;
     readonly serverState: boolean;
     readonly fastTier: boolean;
     readonly webSocket: boolean;
   };
 }
 
-/** The providers' background-delivery toggles, which a run reads again each turn. */
-export interface BackgroundToggles {
-  readonly responses: boolean;
-  readonly googleInteractions: boolean;
-}
-
-/** Read the background-delivery toggles alone. */
-export function readBackgroundToggles(
+/** Whether Google text-only turns go out as background Interactions, read
+ *  again each turn; a Responses turn goes out so whenever its route can. */
+export function readGoogleBackground(
   stores: SettingsStores,
-): Effect.Effect<BackgroundToggles, StateReadFailed> {
-  return Effect.all({
-    responses: Settings.get<boolean>(stores, 'model.useBackgroundResponses'),
-    googleInteractions: Settings.get<boolean>(
-      stores,
-      'model.useGoogleBackgroundResponses',
-    ),
-  });
+): Effect.Effect<boolean, StateReadFailed> {
+  return Settings.get<boolean>(stores, 'model.useGoogleBackgroundResponses');
 }
 
 /**
@@ -189,7 +178,7 @@ const subscriptionOn = (
     Effect.flatMap((on) =>
       on
         ? Effect.flatMap(Secrets, (secrets) =>
-            (provider === 'chatgpt' ? getCodexStatus : getXaiStatus)(secrets),
+            (provider === 'chatgpt' ? getChatgptStatus : getXaiStatus)(secrets),
           ).pipe(
             Effect.map((status) => status.signedIn),
             Effect.mapError(
@@ -266,15 +255,13 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
       Effect.all({
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
         preferShortModelNames: flag(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-        background: readBackgroundToggles(stores),
+        googleBackground: readGoogleBackground(stores),
         automaticRetries: Settings.get<number>(
           stores,
           MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
         ),
       }),
       Effect.all({
-        parallelToolCalls: flag('model.openaiParallelToolCalls'),
-        reasoningSummary: flag('model.gpt5ReasoningSummary'),
         serverState: flag('model.useGoogleInteractionsServerState'),
         fastTier: flag('model.openaiFastTier'),
         webSocket: flag(GlobalStateKey.WEBSOCKET_OPENAI),

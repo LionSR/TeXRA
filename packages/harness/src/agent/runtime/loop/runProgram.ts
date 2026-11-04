@@ -6,10 +6,18 @@
  * `Effect.acquireUseRelease`.
  */
 
-import { Cause, Effect, Exit, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Context,
+  Effect,
+  Exit,
+  SubscriptionRef,
+  SynchronizedRef,
+} from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import { SessionRoots } from '@platform/rootedFs';
 import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {
   RUN_OUTCOME,
@@ -18,12 +26,20 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { outcomeFromCause } from '@shared/runs/runStatus';
-import { RunHistory, type RunCell } from '@shared/session/runHistory';
+import {
+  Approvals,
+  RunHistory,
+  RunHistoryRefused,
+  SessionLog,
+  type RunCell,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { registryOf, Runs } from '../runRegistry';
+import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -34,17 +50,19 @@ import type { FollowUps } from '../FollowUps';
  * that parent.
  */
 const birthRows = (
-  run: Pick<AgentRunShape, 'runId' | 'session' | 'entry'>,
+  run: Pick<AgentRunShape, 'runId' | 'entry'>,
+  runs: Runs['Service'],
+  view: SessionViewAccess['Service'],
 ): readonly SessionEventDraft[] => {
   const { rows, start } = run.entry.registration ?? { rows: [], start: null };
   if (
     start === null ||
     start.parent === null ||
-    !registryOf(run.session.runs).bornDetached(run.runId)
+    !registryOf(runs).bornDetached(run.runId)
   )
     return rows;
   const snapshot = grantsKept(
-    SubscriptionRef.getUnsafe(run.session.view.ref),
+    SubscriptionRef.getUnsafe(view.ref),
     run.runId,
     start.parent.id,
     start.approvalPolicy ?? NO_APPROVAL_GRANTS,
@@ -55,9 +73,43 @@ const birthRows = (
   ];
 };
 
+/** What a resume's activation rows read of the session. */
+type ActivationServices = SessionLog | SessionRoots | Approvals;
+
 /** Why a run its rows never opened cannot be continued. */
 const NOT_RESUMABLE_MESSAGE =
   'This run stopped before it recorded any state to resume from. Start a new run instead.';
+
+/**
+ * The refusal of a resume of `runId` from `state`, or null when none is due:
+ * a turn the next request replays (an assistant message, the pending
+ * response's, or the continuation) was recorded on another protocol than
+ * `bound` speaks now, so its provider evidence cannot be sent.
+ */
+const foreignProtocol = (
+  runId: RunId,
+  state: RunState,
+  bound: Pick<BoundModel, 'backend' | 'origin'>,
+): RunHistoryRefused | null => {
+  const { pendingResponse, continuation } = state;
+  const recorded = [
+    ...[
+      ...state.messages,
+      ...(pendingResponse === null ? [] : [pendingResponse.assistant]),
+    ].flatMap((message) =>
+      message.role === 'assistant' && message.origin !== null
+        ? [message.origin.protocol]
+        : [],
+    ),
+    ...(continuation === null ? [] : [continuation.origin.protocol]),
+  ].find((protocol) => protocol !== bound.origin.protocol);
+  if (recorded === undefined) return null;
+  return new RunHistoryRefused({
+    reason: 'foreign-protocol',
+    runId,
+    detail: `its turns were recorded on ${recorded}, and its ${bound.backend} backend now binds ${bound.origin.protocol}`,
+  });
+};
 
 /**
  * The run's entry: its cell. A fresh run's registration rides the cell's
@@ -70,20 +122,43 @@ const NOT_RESUMABLE_MESSAGE =
 export const openRun = Effect.fn('runProgram.openRun')(function* (
   runId: RunId,
   resume: boolean,
-): Effect.fn.Return<RunCell, Error, RunHistory | AgentRun> {
+): Effect.fn.Return<
+  RunCell,
+  Error,
+  RunHistory | AgentRun | Runs | SessionViewAccess | ActivationServices
+> {
   const runHistory = yield* RunHistory;
   const run = yield* AgentRun;
+  const runs = yield* Runs;
+  const view = yield* SessionViewAccess;
+  // The activation's rows are read in its publisher job, outside this fiber.
+  const owners = Context.pick(
+    SessionLog,
+    SessionRoots,
+    Approvals,
+  )(yield* Effect.context<ActivationServices>());
   const cell = yield* runHistory
     .open(
       runId,
       resume
         ? {
-            activation: (state: RunState | null) =>
-              state?.phase == null
-                ? Effect.fail(new Error(NOT_RESUMABLE_MESSAGE))
-                : activationRows(run.session, runId, run.config),
+            activation: Effect.fn('activation')(function* (
+              state: RunState | null,
+            ) {
+              if (state?.phase == null)
+                return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+              const refused = foreignProtocol(
+                runId,
+                state,
+                yield* SynchronizedRef.get(run.model),
+              );
+              if (refused !== null) return yield* refused;
+              return yield* activationRows(runId, run.config).pipe(
+                Effect.provide(owners),
+              );
+            }),
           }
-        : { registration: Effect.sync(() => birthRows(run)) },
+        : { registration: Effect.sync(() => birthRows(run, runs, view)) },
     )
     .pipe(
       // A resume enters once its activation settled, with the state it

@@ -12,7 +12,7 @@ import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 // Relative import: `packages/trace-viewer` is a separate workspace package
 // with no path alias into the root vitest config, but this suite exercises
-// the real replay pipeline (`@progressView/frontend`'s dispatcher + slices),
+// the real replay pipeline (`@ui/progress`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
 
 const RUN_ID = 'abc123' as RunId;

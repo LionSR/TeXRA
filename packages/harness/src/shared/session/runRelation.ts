@@ -1,9 +1,12 @@
 /**
  * The one reading of where two runs stand in the supervision tree, for
  * every surface that says it: admission stamping a message's sender, the
- * `/executions` listing. Parentage is the view's
- * `parentId`, so a detached run is top level here as everywhere else.
+ * `/executions` listing. A job that stamps reads parentage off the rows
+ * (`run.start`, then a `run.detach`); a listing reads the view's `parentId`,
+ * their projection; a detached run is top level in both.
  */
+import { Effect } from 'effect';
+
 import type { RunId, RunRelation } from '@shared/schemas';
 
 type ParentOf = (runId: RunId) => RunId | null | undefined;
@@ -34,3 +37,27 @@ export function runRelation(
   if (aLine[0] !== undefined && aLine[0] === bLine[0]) return 'sibling';
   return 'peer';
 }
+
+/**
+ * The rows of each run from the `starts` up to their roots, by run: what a
+ * job reads parentage or grants from. `read` answers a run's rows, or null
+ * for one that is not there; a parent that is not there ends its line.
+ */
+export const ancestryRows = Effect.fnUntraced(function* <
+  Rows extends { readonly parent: { readonly id: RunId } | null },
+  E,
+>(
+  read: (runId: RunId) => Effect.Effect<Rows | null, E>,
+  ...starts: readonly (RunId | null)[]
+): Effect.fn.Return<ReadonlyMap<RunId, Rows>, E> {
+  const rows = new Map<RunId, Rows>();
+  for (const start of starts) {
+    for (let id = start; id !== null && !rows.has(id);) {
+      const own = yield* read(id);
+      if (own === null) break;
+      rows.set(id, own);
+      id = own.parent?.id ?? null;
+    }
+  }
+  return rows;
+});

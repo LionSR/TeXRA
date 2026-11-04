@@ -40,15 +40,22 @@ export function quickPick<T extends string | vscode.QuickPickItem>(
   items: readonly T[],
   options: vscode.QuickPickOptions,
 ): Effect.Effect<T | undefined, HostPromptFailed> {
-  return withCancellationToken(
-    async (token) =>
-      (await vscode.window.showQuickPick(
-        items as readonly vscode.QuickPickItem[],
-        options,
-        token,
-      )) as T | undefined,
-    hostPromptFailed,
-  );
+  // A string shows as an item with that label; the pick maps back to its entry.
+  const entries = items.map((item) => {
+    const shown: string | vscode.QuickPickItem = item;
+    return {
+      item,
+      pick: typeof shown === 'string' ? { label: shown } : shown,
+    };
+  });
+  return withCancellationToken(async (token) => {
+    const picked = await vscode.window.showQuickPick(
+      entries.map(({ pick }) => pick),
+      options,
+      token,
+    );
+    return entries.find(({ pick }) => pick === picked)?.item;
+  }, hostPromptFailed);
 }
 
 export function inputBox(
@@ -73,47 +80,45 @@ interface FileDialogOptions {
  * Show a multi-select open file dialog in the workspace and return the
  * selected workspace-relative paths.
  */
-export function selectFiles(
+export const selectFiles = Effect.fn('selectFiles')(function* (
   options: FileDialogOptions,
-): Effect.Effect<string[] | null, OpenDialogFailed> {
-  return Effect.gen(function* () {
-    const { workspacePath } = options;
-    if (!workspacePath) {
-      // The notice is detached, as the caller's `runFork` left it: the picker
-      // answers "nothing picked" straight away rather than waiting on a toast
-      // the user may never dismiss.
-      yield* Effect.forkDetach(
-        showLoggedMessage(CHANNEL, 'No workspace folder open'),
-      );
-      return null;
-    }
-
-    const fileUris = yield* Effect.tryPromise({
-      try: async () =>
-        vscode.window.showOpenDialog({
-          canSelectMany: true,
-          openLabel: options.openLabel,
-          canSelectFiles: true,
-          canSelectFolders: false,
-          defaultUri: vscode.Uri.file(workspacePath),
-          filters: options.filters,
-        }),
-      catch: (cause) =>
-        new OpenDialogFailed({
-          member: 'selectFiles',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    });
-
-    if (!fileUris?.length) {
-      return null;
-    }
-    return fileUris.map((uri) =>
-      workspaceRelativePath(workspacePath, uri.fsPath),
+): Effect.fn.Return<string[] | null, OpenDialogFailed> {
+  const { workspacePath } = options;
+  if (!workspacePath) {
+    // The notice is detached, as the caller's `runFork` left it: the picker
+    // answers "nothing picked" straight away rather than waiting on a toast
+    // the user may never dismiss.
+    yield* Effect.forkDetach(
+      showLoggedMessage(CHANNEL, 'No workspace folder open'),
     );
+    return null;
+  }
+
+  const fileUris = yield* Effect.tryPromise({
+    try: async () =>
+      vscode.window.showOpenDialog({
+        canSelectMany: true,
+        openLabel: options.openLabel,
+        canSelectFiles: true,
+        canSelectFolders: false,
+        defaultUri: vscode.Uri.file(workspacePath),
+        filters: options.filters,
+      }),
+    catch: (cause) =>
+      new OpenDialogFailed({
+        member: 'selectFiles',
+        message: toErrorMessage(cause),
+        cause,
+      }),
   });
-}
+
+  if (!fileUris?.length) {
+    return null;
+  }
+  return fileUris.map((uri) =>
+    workspaceRelativePath(workspacePath, uri.fsPath),
+  );
+});
 
 interface FolderDialogOptions {
   /** Label for the open button */

@@ -5,7 +5,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - common
-import { isNotADirectoryError } from '@common/errors/errorPredicates';
 import type { ActiveSkillSourceScope } from '@shared/schemas';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -111,7 +110,7 @@ const scanSkillRoot = Effect.fn('skills.scanSkillRoot')(function* (
   const names: string[] | undefined = yield* fs.readDirectory(root).pipe(
     Effect.catch((error) =>
       Effect.sync(() => {
-        if (error.reason._tag !== 'NotFound') {
+        if (!absentReason(error)) {
           errors.push(
             issue('error', 'read_error', error.message, { path: root }),
           );
@@ -214,29 +213,21 @@ const scanCommandFile = Effect.fn('skills.scanCommandFile')(function* (
 function validateRequiredSource(
   source: SkillSource,
 ): Effect.Effect<SkillLoadIssue | undefined, never, FileSystem.FileSystem> {
-  const notADirectory = () =>
-    issue('error', 'invalid_source', 'Skill source is not a directory', {
-      path: source.path,
-    });
   return FileSystem.FileSystem.use((fs) => fs.stat(source.path)).pipe(
     Effect.map((info) =>
       info.type === (source.command ? 'File' : 'Directory')
         ? undefined
-        : notADirectory(),
+        : issue('error', 'invalid_source', 'Skill source is not a directory', {
+            path: source.path,
+          }),
     ),
     Effect.catch((error) => {
-      if (error.reason._tag === 'NotFound') {
+      if (absentReason(error)) {
         return Effect.succeed(
           issue('error', 'missing_source', 'Skill source does not exist', {
             path: source.path,
           }),
         );
-      }
-      if (
-        error.reason._tag === 'BadResource' &&
-        isNotADirectoryError(error.reason.cause)
-      ) {
-        return Effect.succeed(notADirectory());
       }
       return Effect.succeed(
         issue('error', 'source_read_error', error.message, {

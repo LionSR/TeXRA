@@ -13,22 +13,18 @@
  * tool belongs to exactly one plugin (checked when the table is built). No
  * hooks or second event channels; one agent-file block at most. A plugin
  * holds state only in its process or session layer and writes rows only of
- * its own kinds (`arms`), through the one publisher.
+ * its own kinds (`factKinds`), through the one publisher.
  */
 
 // Third-party imports
 import { Cause, Effect, type Layer, Result, Schema } from 'effect';
 
 // Local imports
-import type { SessionLog } from '@agent/runtime/SessionHandle';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type {
-  PluginToolServices,
-  ToolServices,
-} from '@agent/runtime/ToolServices';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { withLogChannel } from '@logger/effectLog';
 import { type AppSignals, emitAppSignal } from '@platform/appSignals';
-import { StateReadFailed, type StateStore } from '@platform/interfaces';
+import { StateReadFailed, type StateStore } from '@shared/config/settings';
 import {
   aggregateTarget,
   qualifyAggregateId,
@@ -43,6 +39,7 @@ import { recordOf } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { decodeDisabledTools, GlobalStateKey } from '@shared/state/stateKeys';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import type {
   AgentBlock,
@@ -53,7 +50,7 @@ import type {
   SessionPluginLayer,
 } from '@tools/toolTable';
 
-/** One stored row of a plugin's kind, as its arm's transition rule reads
+/** One stored row of a plugin's kind, as its fact kind's transition rule reads
  *  it: the row's decoded value and the run it is parented to, if any. */
 export interface PluginRow {
   readonly value: JsonValue;
@@ -64,28 +61,34 @@ export interface PluginRow {
  * One row kind a plugin owns (`plugin.fact`): the version it writes, the
  * schema of that version's value, and adjacent upcasters from
  * `version - upcasters.length` to `version`, oldest first.
- * The store checks every row of the kind against its arm, and keeps a row
- * whose arm the process's plugins lack (its plugin removed, or not listed
- * here) without reading it. Arms live beside their readers, in modules
- * webviews can import.
+ * The store checks every row of the kind against its fact kind, and reads a
+ * row whose fact kind the process's plugins lack (its plugin removed, or not
+ * listed here) as written, marked `unavailable`; a run holding one does not
+ * resume. Fact kinds live beside their readers, in modules webviews can
+ * import.
  */
-export interface PluginArm {
-  /** The plugin's id: an arm is its own plugin's, never another's. */
+export interface FactKind {
+  /** The plugin's id: a fact kind is its own plugin's, never another's. */
   readonly plugin: string;
   readonly kind: string;
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
   readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
+  /** What a fork of a run (a conversation's, or a script's `self()` child)
+   *  starts with of the run's own row of the kind: `copy` the row the run
+   *  held at the cut, `drop` none. A row about the plugin's own aggregate
+   *  belongs to that aggregate and stays with it. */
+  readonly fork: 'copy' | 'drop';
   /** The kind's own transition rule, checked by the store in the writing
    *  transaction against the aggregate's latest row of the kind (none
-   *  before the first): the refusal's reason, or null to admit. */
-  readonly admits?: (
+   *  before the first): the rejection's reason, or null to accept. */
+  readonly accepts?: (
     previous: PluginRow | undefined,
     next: PluginRow,
   ) => string | null;
   /** Whether the aggregate's `latest` row already says more than `next`
    *  (a call's fact that lagged behind a later writer): the call's batch
-   *  then leaves `next` out instead of failing on `admits`. */
+   *  then leaves `next` out instead of failing on `accepts`. */
   readonly supersedes?: (latest: PluginRow, next: PluginRow) => boolean;
   /** The workspace files a row of the kind says its run wrote past the
    *  editor's own write path: every process that folds the run announces
@@ -133,10 +136,10 @@ export interface Plugin {
   /** Session-lifetime services, one per open session, up while the plugin
    *  is switched on or a step of that session pins it. */
   readonly sessionLayer?: SessionPluginLayer;
-  /** Its side of a decision on a pending request of its kind, on or off. */
+  /** Its side of a decision on a pending request it opened, on or off. */
   readonly decision?: RequestDecisionHook;
   /** The row kinds it owns (`plugin.fact`), on or off: rows outlive it. */
-  readonly arms?: readonly PluginArm[];
+  readonly factKinds?: readonly FactKind[];
   /** The agent-file block it owns (`AgentBlock`), on or off. */
   readonly agentBlock?: AgentBlock;
   /** Script module sources by name, imported as `builtIn:<name>`. */
@@ -151,12 +154,12 @@ export interface Plugin {
  * `definePlugin` checks that at compile time (a tool that needs a service no
  * layer of its plugin serves does not compile) and erases it: the table
  * holds every plugin alike, and the step that pins a plugin provides its
- * layers' services to its calls. `C`: what a tool's calls are served. */
-export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
+ * layers' services to its calls. */
+export interface PluginDefinition<ROut> extends Omit<
   Plugin,
   'tools' | 'processLayer' | 'sessionLayer' | 'availability'
 > {
-  readonly tools?: readonly ITool<Error, C | ROut>[];
+  readonly tools?: readonly ITool<Error, PluginToolServices | ROut>[];
   readonly processLayer?: ProcessPluginLayer<ROut>;
   readonly sessionLayer?: Layer.Layer<ROut, never, PluginHold>;
   /** Probed outside any step, whether or not the plugin is on: it may
@@ -165,18 +168,14 @@ export interface PluginDefinition<ROut, C = PluginToolServices> extends Omit<
   readonly availability?: ToolAvailabilityChecks;
 }
 
-const erase = <ROut, C>(plugin: PluginDefinition<ROut, C>): Plugin =>
-  plugin as unknown as Plugin;
-
-/** A plugin value from its definition, its own services erased. */
-export const definePlugin: <ROut = never>(
+/** A plugin value from its definition, its own services erased: the
+ *  harness's built-ins and an app's plugins are written the same way. */
+export const definePlugin = <ROut = never>(
   plugin: PluginDefinition<ROut>,
-) => Plugin = erase;
-
-/** A built-in's value: its tools may read `ToolServices`. */
-export const defineBuiltinPlugin: <ROut = never>(
-  plugin: PluginDefinition<ROut, ToolServices>,
-) => Plugin = erase;
+): Plugin =>
+  // The step that pins the plugin serves its layers' services to its calls.
+  // cast: `ROut` is checked by the parameter type and erased here.
+  plugin as unknown as Plugin;
 
 /** {@link decodeDisabledTools}, failing as the state read it is. */
 export function storedDisabledTools(
@@ -199,7 +198,7 @@ export function readDisabledTools(store: StateStore) {
 
 /**
  * Announce the workspace files a committed row says its run wrote past the
- * editor's own write path (an arm's `writes`): a run records such a change
+ * editor's own write path (a fact kind's `writes`): a run records such a change
  * as a fact on its own rows, and every process that reads the run's rows
  * announces it (`workspaceFilesWritten`), so a window hears a background
  * service task's change as it hears its own. Run over the session's folded
@@ -208,10 +207,10 @@ export function readDisabledTools(store: StateStore) {
  * announces nothing.
  */
 export const announceWrites = (
-  arms: PluginArms,
+  factKinds: FactKinds,
 ): ((row: SessionEvent) => Effect.Effect<void, never, AppSignals>) => {
   const writing = new Map(
-    Object.entries(arms).flatMap(([name, { writes }]) =>
+    Object.entries(factKinds).flatMap(([name, { writes }]) =>
       writes === undefined ? [] : [[name, writes] as const],
     ),
   );
@@ -249,31 +248,31 @@ export const announceWrites = (
   };
 };
 
-/** The plugin arms a store reads, by `plugin/kind`. */
-export type PluginArms = Readonly<Record<string, PluginArm>>;
+/** The plugin fact kinds a store reads, by `plugin/kind`. */
+export type FactKinds = Readonly<Record<string, FactKind>>;
 
 /**
- * The arms `plugins` contribute, by `plugin/kind`. An arm of another
+ * The fact kinds `plugins` contribute, by `plugin/kind`. A fact kind of another
  * plugin's id, or a kind contributed twice, is a defect of the plugin list.
  */
-export function armsOf(plugins: Iterable<Plugin>): PluginArms {
-  const arms = new Map<string, PluginArm>();
-  for (const { id, arms: own = [] } of plugins)
-    for (const arm of own) {
-      const name = `${arm.plugin}/${arm.kind}`;
-      if (arm.plugin !== id || arms.has(name))
+export function factKindsOf(plugins: Iterable<Plugin>): FactKinds {
+  const factKinds = new Map<string, FactKind>();
+  for (const { id, factKinds: own = [] } of plugins)
+    for (const factKind of own) {
+      const name = `${factKind.plugin}/${factKind.kind}`;
+      if (factKind.plugin !== id || factKinds.has(name))
         throw new Error(
           `The plugin list is not valid: plugin ${id} contributes the row kind ${name}, which is not its own or is contributed twice.`,
         );
-      arms.set(name, arm);
+      factKinds.set(name, factKind);
     }
-  return Object.fromEntries(arms);
+  return Object.fromEntries(factKinds);
 }
 
 /**
  * Throw unless every fact a call of `plugin`'s tool states is a row of one of
- * that plugin's own arms, at the arm's version, with a value its schema
- * accepts: the dispatch turns the throw into the call's error result, so a
+ * that plugin's own fact kinds, at the kind's version, with a value its
+ * schema accepts: the dispatch turns the throw into the call's error result, so a
  * fact the store could not read back, or one that would mark the store as
  * written by a newer build, never commits.
  */
@@ -282,14 +281,18 @@ export function checkOwnFacts(
   facts: readonly ToolFact[],
 ): void {
   for (const { kind, version, value, aggregate, ...fact } of facts) {
-    const arm = plugin?.arms?.find((own) => own.kind === kind);
-    if (arm === undefined || fact.plugin !== plugin?.id)
+    const factKind = plugin?.factKinds?.find((own) => own.kind === kind);
+    if (factKind === undefined || fact.plugin !== plugin?.id)
       throw new Error(`the fact ${fact.plugin}/${kind} is not its plugin's`);
-    if (aggregate !== undefined && !aggregate.startsWith(`${arm.plugin}:`))
-      throw new Error(`${arm.plugin}/${kind} names another plugin's aggregate`);
-    if (version !== arm.version)
-      throw new Error(`${arm.plugin}/${kind} is at version ${arm.version}`);
-    Schema.decodeUnknownSync(arm.schema)(value);
+    if (aggregate !== undefined && !aggregate.startsWith(`${factKind.plugin}:`))
+      throw new Error(
+        `${factKind.plugin}/${kind} names another plugin's aggregate`,
+      );
+    if (version !== factKind.version)
+      throw new Error(
+        `${factKind.plugin}/${kind} is at version ${factKind.version}`,
+      );
+    Schema.decodeUnknownSync(factKind.schema)(value);
   }
 }
 
@@ -313,14 +316,14 @@ export const ownFactRow = (
  * plugin's own aggregate (`aggregate`), hung under the run, appended
  * beside the batch (`alongside`), so each commits with the result or not
  * at all. `alongside` reads the aggregate in the job's transaction: a row
- * its latest one already supersedes (the arm's `supersedes`) is left out,
+ * its latest one already supersedes (the fact kind's `supersedes`) is left out,
  * since the call only lagged behind it; any other refusal stays the store's.
  */
 export function factRows(
   facts: readonly ToolFact[],
   runId: RunId,
   plugin: Plugin | undefined,
-  log: Pick<SessionLog, 'runRows'>,
+  log: Pick<SessionLogShape, 'runRows'>,
 ): {
   readonly run: readonly RunHistoryDraft[];
   readonly alongside: Alongside<DatabaseWriteFailed>;
@@ -336,19 +339,19 @@ export function factRows(
         parent: null,
       });
     else own.push(ownFactRow({ ...fact, aggregate }, runId));
-  const current = (draft: OwnFactRow) =>
-    Effect.gen(function* () {
-      const arm = plugin?.arms?.find((one) => one.kind === draft.kind);
-      if (arm?.supersedes === undefined) return true;
-      const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
-        `${draft.plugin}/${draft.kind}`
-      ];
-      if (latest === undefined || !arm.supersedes(latest, draft)) return true;
-      yield* Effect.logDebug(
-        `${arm.plugin}/${arm.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
-      );
-      return false;
-    });
+  const current = Effect.fn('current')(function* (draft: OwnFactRow) {
+    const factKind = plugin?.factKinds?.find((one) => one.kind === draft.kind);
+    if (factKind?.supersedes === undefined) return true;
+    const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
+      `${draft.plugin}/${draft.kind}`
+    ];
+    if (latest === undefined || !factKind.supersedes(latest, draft))
+      return true;
+    yield* Effect.logDebug(
+      `${factKind.plugin}/${factKind.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
+    );
+    return false;
+  });
   return {
     run,
     alongside: Effect.filter(own, current).pipe(

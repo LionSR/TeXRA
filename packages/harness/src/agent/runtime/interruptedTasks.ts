@@ -1,21 +1,21 @@
 /**
- * Open-time continuation, for a session an interactive host window opened.
- * Headless runs and the SDK never start it: their policy is `off`. An
- * explicit resume of one run starts only its retries: an open-time resume
- * beside that one would race it.
+ * Open-time recovery: what a session does with the tasks a closed or
+ * crashed process left interrupted, started by the open that asks for it
+ * (`OpenOptions.host.interruptedTasks`, `list` or `resume`). A session
+ * opened without it recovers nothing at open.
  *
  * At open it finds the interrupted roots: runs no process holds that did not
  * end, launched by a user (an owned child is resumed by its parent's call).
  * Each one a resume would find blocked gets its reason in the
- * projection (`RunView.resumeBlocked`). Under `resumeOnOpen: auto` the
- * rest are resumed, and a blocked one is resumed once it is unblocked; under
- * `ask` they are left for the window to list.
+ * projection (`RunView.resumeBlocked`). Under `resume` the rest are resumed,
+ * and a blocked one is resumed once it is unblocked; under `list` they are
+ * left for the host to list.
  *
  * Then it follows the agent catalog, which reloads when an agent file or a
  * plugin's switch or trust changes: each run a resume found blocked is
  * checked again, its reason cleared once nothing blocks it, and the run
- * resumed under `auto`. The policy is read once, at open: what an earlier
- * resume asked for is not kept, by this process or any other.
+ * resumed under `resume`. What an earlier open asked for is not kept, by
+ * this process or any other.
  */
 import { Deferred, Effect, Queue, type Scope } from 'effect';
 
@@ -25,33 +25,28 @@ import type { AgentCatalog } from '@agent/index/agentCatalog';
 import type { AgentCatalogServices } from '@agent/index/agentEntry';
 import { withLogChannel } from '@logger/effectLog';
 import { onAppSignal } from '@platform/appSignals';
-import {
-  RESUME_ON_OPEN_SETTING,
-  RESTING_SUBSTATES,
-  type ResumeOnOpen,
-  type RunId,
-} from '@shared/schemas';
+import { RESTING_SUBSTATES, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { claimStanding } from '@shared/session/database';
-import { Settings } from '@shared/config/settings';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 
 import { resumeBlocker } from './resumeBlocker';
-import type { SessionHandle } from './SessionHandle';
+import { Runs } from './runRegistry';
+import type { SessionServices } from './rootLaunch';
 
 const CHANNEL = 'InterruptedTasks';
 
 /** Check a run again: mark what blocks it, or resume it when `resume`. */
-const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
+const checkRun = (runId: RunId, resume: boolean) =>
   Effect.gen(function* () {
-    const config = yield* getRunRecords(session, runId).readConfig();
-    if (config === null)
-      return yield* session.view.markResumeBlocked(runId, null);
-    const blocker = yield* resumeBlocker(session, config);
+    const view = yield* SessionViewAccess;
+    const config = yield* getRunRecords(runId).readConfig();
+    if (config === null) return yield* view.markResumeBlocked(runId, null);
+    const blocker = yield* resumeBlocker(config);
     // Nothing blocks it now: a resume that finds it blocked again records
     // that itself; one refused for any other reason leaves no stale block.
-    yield* session.view.markResumeBlocked(runId, blocker);
-    if (blocker === null && resume)
-      yield* Effect.flatten(wakeRun(runId, session));
+    yield* view.markResumeBlocked(runId, blocker);
+    if (blocker === null && resume) yield* Effect.flatten(wakeRun(runId));
   }).pipe(
     Effect.catch((error) =>
       Effect.logWarning(
@@ -62,11 +57,11 @@ const checkRun = (session: SessionHandle, runId: RunId, resume: boolean) =>
 
 export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
   function* (
-    session: SessionHandle,
-    /** Find the interrupted tasks at open too, not only retry blocked
-     *  resumes. */
-    offer: boolean,
+    /** What an unblocked task does: waits to be listed, or is resumed. */
+    recovery: 'list' | 'resume',
   ) {
+    const resume = recovery === 'resume';
+    const sessionView = yield* SessionViewAccess;
     // Subscribed before the open-time pass, so a catalog change during it
     // is not missed.
     const changed = yield* Queue.sliding<void>(1);
@@ -79,12 +74,6 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
       ),
     );
     yield* Deferred.await(subscribed);
-    // What an unblocked run does: under `auto` it is resumed.
-    const policy = yield* Settings.get<ResumeOnOpen>(
-      session.roots,
-      RESUME_ON_OPEN_SETTING.configKey,
-    );
-    const resume = policy === 'auto';
 
     // One check of a run at a time: a resume runs until the run is idle,
     // and a change meanwhile must not resume it twice. A change that lands
@@ -96,7 +85,7 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
     ): Effect.Effect<
       void,
       never,
-      Scope.Scope | AgentCatalog | AgentCatalogServices
+      Scope.Scope | AgentCatalog | AgentCatalogServices | SessionServices
     > =>
       Effect.suspend(() => {
         const running = checking.get(runId);
@@ -108,11 +97,11 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
         checking.set(runId, entry);
         return Effect.asVoid(
           Effect.forkScoped(
-            checkRun(session, runId, resume).pipe(
+            checkRun(runId, resume).pipe(
               Effect.ensuring(
                 Effect.suspend(() => {
                   checking.delete(runId);
-                  const blocked = session.view
+                  const blocked = sessionView
                     .resumeBlocks()
                     .some((b) => b.runId === runId);
                   return entry.again && blocked ? check(runId) : Effect.void;
@@ -122,30 +111,30 @@ export const followInterruptedTasks = Effect.fn('followInterruptedTasks')(
           ),
         );
       });
-    if (offer) {
-      const view = yield* session.view.read([]);
-      const roots = [...view.runs.values()].filter(
-        (run) =>
-          run.parentId === null &&
-          run.identity.kind === 'agent' &&
-          !RESTING_SUBSTATES.has(run.substate) &&
-          !isTerminalOutcomePhase(run.status) &&
-          session.runs.get(run.id) === undefined,
-      );
-      // Interrupted: no live process holds it (the claim's owner is proved
-      // dead, or there is none).
-      const interrupted = yield* Effect.filter(roots, (run) =>
-        Effect.map(
-          session.log.owner(run.id),
-          (claim) => claimStanding(claim).kind === 'free',
-        ),
-      );
-      for (const run of interrupted) yield* check(run.id);
-    }
+    const view = yield* sessionView.read([]);
+    const runs = yield* Runs;
+    const log = yield* SessionLog;
+    const roots = [...view.runs.values()].filter(
+      (run) =>
+        run.parentId === null &&
+        run.identity.kind === 'agent' &&
+        !RESTING_SUBSTATES.has(run.substate) &&
+        !isTerminalOutcomePhase(run.status) &&
+        runs.get(run.id) === undefined,
+    );
+    // Interrupted: no live process holds it (the claim's owner is proved
+    // dead, or there is none).
+    const interrupted = yield* Effect.filter(roots, (run) =>
+      Effect.map(
+        log.owner(run.id),
+        (claim) => claimStanding(claim).kind === 'free',
+      ),
+    );
+    for (const run of interrupted) yield* check(run.id);
     return yield* Effect.forever(
       Effect.andThen(Queue.take(changed), () =>
         Effect.forEach(
-          session.view.resumeBlocks(),
+          sessionView.resumeBlocks(),
           ({ runId }) => check(runId),
           { discard: true },
         ),

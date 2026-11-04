@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 
 import {
   apiKeySecretName,
@@ -15,12 +15,8 @@ import {
 } from '@texra-ai/harness/schemas';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
-import {
-  fakeHostSecrets,
-  installedHost,
-  installPlatform,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { modelOptionsFrom } from '@texra/model/modelOptions';
 
 const GPT55 = 'openai/gpt-5.5-2026-04-23';
@@ -42,13 +38,13 @@ const readHostModelOptions = (models: readonly string[]) =>
     Effect.provideService(Secrets, fakeHostSecrets),
   );
 
-/** Reinstall the fake platform mid-test with the access state the case needs. */
+/** Install, for the test, a host with the access state the case needs. */
 function installAccessPlatform(options: {
   secrets?: Record<string, string>;
   config?: Record<string, unknown>;
 }) {
-  return Effect.promise(() =>
-    installPlatform({
+  return Layer.build(
+    FakeHost.layer({
       config: options.config,
       globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]) },
       secrets: options.secrets ?? OPENAI_KEY_SECRETS,
@@ -71,11 +67,6 @@ describe('model catalogue direct-route key ownership', () => {
 });
 
 describe('model availability', () => {
-  setupPlatform({
-    globalState: { [GlobalStateKey.MODEL_SELECTION]: onlyEnabled([GPT55]) },
-    secrets: OPENAI_KEY_SECRETS,
-  });
-
   it.effect('does not treat a Moonshot key as a Kimi Code credential', () =>
     Effect.gen(function* () {
       yield* installAccessPlatform({

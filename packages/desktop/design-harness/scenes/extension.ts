@@ -36,7 +36,7 @@ import {
   withWaitingGrandchild,
 } from '@test/shared/session/fanOutScenario';
 import type { MissingTool } from '@texra/shared/session/hostSnapshot';
-import { DOCUMENTS_OUTPUT_ARM } from '@texra/shared/plugins/documents';
+import { DOCUMENTS_OUTPUT_KIND } from '@texra/shared/plugins/documents';
 import {
   emptyHostSnapshot,
   type HostSnapshot,
@@ -153,14 +153,12 @@ function sidebar(
 /** A first open: no sessions yet, the host's notices as the funnel and
  *  the folder leave them. */
 const LATEXINDENT: MissingTool = {
-  id: 'latexindent',
   label: 'latexindent',
   interchangeable: false,
   usedFor: 'format .tex files',
 };
 const IMAGE_TOOLS: MissingTool[] = ['GraphicsMagick', 'ImageMagick'].map(
   (label) => ({
-    id: label === 'GraphicsMagick' ? 'gm' : 'magick',
     label,
     interchangeable: true,
     usedFor: 'turn PDF figures into images',
@@ -286,7 +284,7 @@ function interruptedTasksView(): SessionView {
       resumeBlocked: [
         {
           runId: ABSTRACT_TASK,
-          reason: { kind: 'pluginOff', name: 'zotero' },
+          reason: { kind: 'blocked', blocker: 'pluginOff', name: 'zotero' },
         },
       ],
     }),
@@ -635,9 +633,9 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     log.emit(ROOT, T.root, { type: 'run.activate' });
     log.emit(ROOT, T.root + 1, {
       type: 'plugin.fact',
-      plugin: DOCUMENTS_OUTPUT_ARM.plugin,
-      kind: DOCUMENTS_OUTPUT_ARM.kind,
-      version: DOCUMENTS_OUTPUT_ARM.version,
+      plugin: DOCUMENTS_OUTPUT_KIND.plugin,
+      kind: DOCUMENTS_OUTPUT_KIND.kind,
+      version: DOCUMENTS_OUTPUT_KIND.version,
       parent: null,
       value: {
         rounds: [0, 1].map((round) => ({

@@ -11,7 +11,6 @@ import {
   type RunId,
   type TokenUsageStats,
   type UsageRoute,
-  isActivePhase,
 } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
@@ -38,7 +37,7 @@ import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
-import { runPhaseOf, runViewOf } from '../state/sessionView';
+import { runViewOf } from '../state/sessionView';
 import type {
   ApprovalPolicy,
   RunView,
@@ -99,9 +98,7 @@ export function subscriptionUsageProviderForStatus({
   readonly usageRoute: UsageRoute | undefined;
   readonly prospectiveRoute: UsageRoute | undefined;
 }): SubscriptionUsageProvider | undefined {
-  const route = usageRoute ?? prospectiveRoute;
-  if (route === 'chatgpt-subscription') return 'chatgpt';
-  return codingPlanForUsageRoute(route)?.usageProvider;
+  return codingPlanForUsageRoute(usageRoute ?? prospectiveRoute)?.usageProvider;
 }
 
 interface StatusBarSegment {
@@ -700,34 +697,22 @@ interface StatusBarRunTarget {
 
 /**
  * Which run the status bar describes (the active run when the view
- * holds it), and what Ctrl-C does there.
+ * holds it), and what Ctrl-C does there. `canStop` is the SIGINT handler's
+ * own predicate (`chatTuiCanStopVisibleRun`), so the hint cannot disagree
+ * with what the key does.
  */
 export function statusBarRunTarget({
   activeRunId,
-  canStopActiveRun,
-  canStopPendingRun = false,
-  ownedRunIds,
+  canStop,
   view,
 }: {
   readonly activeRunId: RunId | undefined;
-  readonly canStopActiveRun: boolean;
-  readonly canStopPendingRun?: boolean;
-  /** The runs this TUI runs: the root run and its descendants. */
-  readonly ownedRunIds: readonly RunId[];
+  readonly canStop: boolean;
   readonly view: SessionView;
 }): StatusBarRunTarget {
   const active = runViewOf(view, activeRunId);
-  const isLive = (runId: RunId): boolean =>
-    isActivePhase(runPhaseOf(runViewOf(view, runId)));
-  const hasLiveRun = ownedRunIds.some(isLive);
-  const canStopVisibleRun =
-    canStopActiveRun && (canStopPendingRun || hasLiveRun);
-  let ctrlCAction: CtrlCAction;
-  if (!canStopVisibleRun) {
-    ctrlCAction = 'exit';
-  } else {
-    ctrlCAction = active?.parentId ? 'stop root' : 'stop';
-  }
+  let ctrlCAction: CtrlCAction = 'exit';
+  if (canStop) ctrlCAction = active?.parentId ? 'stop root' : 'stop';
   return {
     ctrlCAction,
     displayRunId: active?.id,
@@ -800,8 +785,7 @@ export function buildStatusBarDisplay(
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
   const turn = input.turn;
-  const status = runPhaseOf(run);
-  const active = isActivePhase(status);
+  const active = run?.working === true;
   const queuedCount =
     run === undefined ? 0 : (view.queuedFollowUps.get(run.id)?.length ?? 0);
 

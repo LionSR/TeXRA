@@ -10,6 +10,7 @@ import {
 import {
   AGENT_SOURCE,
   agentKey,
+  agentKeyOf,
   agentName,
   type AgentConfig,
 } from '@texra-ai/harness/schemas';
@@ -18,7 +19,7 @@ import {
   formatUnknownTeamMessage,
   resolveTeamLaunch,
 } from '@texra/shared/teamLaunch';
-import { isPastedImage } from '@texra/utils/files/pastedImageName';
+import { isPastedImage } from '@texra/shared/utils/pastedImageName';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
@@ -53,9 +54,10 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   // does not know launches as a chat, whose own resolution shows the
   // agent-config banner. A failed load refuses the launch: the catalog may
   // still serve the agent, which would then run as a chat without its task.
+  const catalog = yield* AgentCatalog;
   const resolved = team
     ? { entry: null }
-    : yield* (yield* AgentCatalog).forLaunch(roots, agent).pipe(
+    : yield* catalog.forLaunch(roots, agent).pipe(
         Effect.map((entry) => ({ entry })),
         Effect.catchTags({
           AgentNotFound: () => Effect.succeed({ entry: null }),
@@ -66,6 +68,20 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
   if ('failed' in resolved)
     return yield* new Rejected({ reason: resolved.failed });
   const { entry } = resolved;
+  // The form lists the workspace's visible agents (`agentOptionsData`) and
+  // reads the mode from the one its selection names, so a launch runs only
+  // one of them. The catalog also finds an agent hidden since it was chosen
+  // (or the hidden agent of a run Run again… opened the form on); the form
+  // shows no agent and no mode for it, so its launch is refused.
+  if (
+    entry !== null &&
+    !(yield* catalog.visible(roots)).some(
+      (shown) => agentKeyOf(shown) === agentKeyOf(entry),
+    )
+  )
+    return yield* new Rejected({
+      reason: `Choose an agent first: ${entry.name} is hidden from the agent selector.`,
+    });
   const task = entry !== null && documentTaskOf(entry) !== null ? entry : null;
   // A task revises its input files, or reads its media alone (a recording
   // to transcribe, a scan to OCR).
@@ -119,11 +135,9 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
       isPastedImage(file) ? pastedImageFullPath(roots.storage, file) : file,
     ),
   };
-  // A document task runs its agent's recipe over the files.
-  const patch =
-    task && optionsResult !== undefined && Result.isSuccess(optionsResult)
-      ? documentTaskPatch(config, task, optionsResult.success)
-      : null;
+  // A document task runs its agent's recipe over the files, with the
+  // form's switches checked above.
+  const patch = task ? documentTaskPatch(config, task, launch) : null;
   return yield* decodeLaunchConfig(patch ? { ...config, ...patch } : config);
 });
 

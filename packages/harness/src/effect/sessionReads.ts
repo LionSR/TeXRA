@@ -6,29 +6,37 @@
  * row type the run history keeps private, no store facet and no claim leaves
  * here.
  */
-import { Effect, type PlatformError, Stream, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  type PlatformError,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
+import { Interactions } from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { LiveRun } from '@agent/runtime/runs';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  deriveResumability,
-  runRejection,
-  type RunRejection,
-} from '@agent/storage/resumability';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { deriveResumability, runRejection } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords, type RunResult } from '@agent/storage/runRecords';
 import {
   listRunWorkspaceFiles,
   type RunWorkspaceFile,
 } from '@agent/storage/runWorkspaceFiles';
+import { SessionRoots } from '@platform/rootedFs';
 import {
+  type ResumeRefusal,
   type RunEnd,
   type RunId,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
 import {
@@ -78,8 +86,10 @@ export interface RunRecords {
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
-  /** Why a resume of it here is rejected, or null when it may go ahead. */
-  readonly readRejection: () => Effect.Effect<RunRejection | null, Error>;
+  /** Why a resume of it here is refused before its agent is checked
+   *  (`finished`, `ownedElsewhere`, `earlierBuild` or `pluginUnavailable`),
+   *  or null when it may go ahead; a fact that cannot be read fails. */
+  readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
   readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
@@ -122,13 +132,13 @@ const heldRun = (run: LiveRun): HeldRun => ({
     run.controls?.modelSwitchDisabledReason(model) ?? Effect.succeed(undefined),
 });
 
-/** The runs `handle` holds here: one, or all. */
-function heldRuns(handle: SessionHandle): LocalSession['held'] {
+/** The runs `runs` holds here: one, or all. */
+function heldRuns(runs: Runs['Service']): LocalSession['held'] {
   function held(runId: RunId): HeldRun | undefined;
   function held(): readonly HeldRun[];
   function held(runId?: RunId): HeldRun | undefined | readonly HeldRun[] {
-    if (runId === undefined) return handle.runs.get().map(heldRun);
-    const run = handle.runs.get(runId);
+    if (runId === undefined) return runs.get().map(heldRun);
+    const run = runs.get(runId);
     return run && heldRun(run);
   }
   return held;
@@ -140,12 +150,12 @@ function heldRuns(handle: SessionHandle): LocalSession['held'] {
  * listed it: a run that changed since is refused rather than deleted.
  */
 const deleteRuns =
-  (handle: SessionHandle): LocalSession['deleteRuns'] =>
+  (session: Context.Context<SessionServices>): LocalSession['deleteRuns'] =>
   (target) =>
     Effect.gen(function* () {
       // The listing as the cold view folds it: each run it still holds, at
       // the commit of its `run.start`.
-      const { runs } = yield* handle.view.read([]);
+      const { runs } = yield* Context.get(session, SessionViewAccess).read([]);
       const listed = [...runs.values()].flatMap((run) =>
         target === 'all' || run.id === target
           ? [{ runId: run.id, commit: run.createdAt }]
@@ -156,11 +166,9 @@ const deleteRuns =
       const failed: { runId: RunId; error: RequestError }[] = [];
       for (const { runId, commit } of listed) {
         const removal = yield* Effect.result(
-          handle.requests.removeRun(
-            runId,
-            target === 'all' ? 'bulk' : 'single',
-            commit,
-          ),
+          Context.get(session, SessionRequests)
+            .removeRun(runId, target === 'all' ? 'bulk' : 'single', commit)
+            .pipe(Effect.provide(session)),
         );
         if (removal._tag === 'Success') deleted.push(runId);
         else if (removal.failure._tag === 'NotOwner') active.push(runId);
@@ -169,9 +177,10 @@ const deleteRuns =
       return { listed: listed.length, deleted, active, failed };
     });
 
-/** The members of the {@link LocalSession} over `handle` that read it. */
+/** The members of the {@link LocalSession} over `session` (its owners'
+ *  services) that read it. */
 export function sessionReads(
-  handle: SessionHandle,
+  session: Context.Context<SessionServices>,
 ): Pick<
   LocalSession,
   | 'storeMovedAside'
@@ -183,41 +192,44 @@ export function sessionReads(
   | 'emit'
   | 'settled'
 > {
+  const view = Context.get(session, SessionViewAccess);
+  const log = Context.get(session, SessionLog);
+  const interactions = Context.get(session, Interactions);
+  /** Reads over this session's services. */
+  const read = <A, E>(effect: Effect.Effect<A, E, SessionServices>) =>
+    Effect.provide(effect, session);
   /** One reader port per subscription, so no reader disturbs another's
    *  set; the port leaves with the caller's scope. */
   const subscribe = (set: readonly TranscriptSubscription[]) =>
     Effect.acquireRelease(
       Effect.suspend(() => {
         const port = `sdk/reader/${(readerPorts += 1)}`;
-        return Effect.as(handle.view.subscribe(port, set), port);
+        return Effect.as(view.subscribe(port, set), port);
       }),
-      (port) => handle.view.subscribe(port, []),
+      (port) => view.subscribe(port, []),
     ).pipe(Effect.asVoid);
   return {
-    storeMovedAside: handle.log.movedAside,
+    storeMovedAside: log.movedAside,
     view: {
-      current: () => SubscriptionRef.getUnsafe(handle.view.ref),
-      changes: handle.view.changes,
+      current: () => SubscriptionRef.getUnsafe(view.ref),
+      changes: view.changes,
       watch: (set, from) =>
         Stream.unwrap(
-          Effect.as(
-            subscribe(set),
-            handle.view.inputs(set, from.cursor, from.debug),
-          ),
+          Effect.as(subscribe(set), view.inputs(set, from.cursor, from.debug)),
         ),
       subscribe,
-      read: handle.view.read,
-      head: handle.log.now,
-      events: handle.log.tail,
+      read: view.read,
+      head: log.now,
+      events: log.tail,
     },
     records: (runId) => {
-      const stored = getRunRecords(handle, runId);
+      const stored = getRunRecords(runId);
       return {
-        exists: stored.exists,
-        readConfig: stored.readConfig,
-        readReport: stored.readReport,
-        readRunEnd: stored.readRunEnd,
-        readResult: stored.readResult,
+        exists: () => read(stored.exists()),
+        readConfig: () => read(stored.readConfig()),
+        readReport: () => read(stored.readReport()),
+        readRunEnd: () => read(stored.readRunEnd()),
+        readResult: () => read(stored.readResult()),
         readWorkspaceFiles: () =>
           Effect.all([stored.readConfig(), stored.readWorkspaceFiles()], {
             concurrency: 2,
@@ -225,24 +237,31 @@ export function sessionReads(
             Effect.flatMap(([config, paths]) =>
               listRunWorkspaceFiles(config, paths),
             ),
+            read,
           ),
-        readSkills: stored.readSkills,
-        readModelFailed: stored.readModelFailed,
+        readSkills: () => read(stored.readSkills()),
+        readModelFailed: () => read(stored.readModelFailed()),
         readResumable: () =>
           Effect.map(
-            deriveResumability(runId, handle),
+            read(deriveResumability(runId)),
             (decision) => decision.kind === 'checkpoint',
           ),
-        readRejection: () => runRejection(runId, handle),
-        readConversation: () => readCompletedRunConversation(runId, handle),
-        readTrace: () => assembleTrace(runId, handle),
+        readRejection: () => read(runRejection(runId)),
+        readConversation: () =>
+          read(
+            readCompletedRunConversation(
+              runId,
+              Context.get(session, SessionRoots).config,
+            ),
+          ),
+        readTrace: () => read(assembleTrace(runId)),
       };
     },
-    listRuns: () => listRuns(handle),
-    held: heldRuns(handle),
-    deleteRuns: deleteRuns(handle),
+    listRuns: () => read(listRuns()),
+    held: heldRuns(Context.get(session, Runs)),
+    deleteRuns: deleteRuns(session),
     // Bound: the session's presentation owner keeps its attachments.
-    emit: handle.interactions.emit.bind(handle.interactions),
-    settled: handle.log.settled,
+    emit: interactions.emit.bind(interactions),
+    settled: log.settled,
   };
 }

@@ -2,8 +2,10 @@
  * TeXRA's plugin list: the harness's built-ins with TeXRA's options, beside
  * the app's own plugins, in the order the Tools dashboard lists them. Each
  * TeXRA host passes it to `processLayer`; nothing in the harness names an
- * app plugin. A plugin the dashboard lists carries its card; an
- * integration's plugin and card sit in one module beside its tools.
+ * app plugin. A plugin the dashboard lists carries its card, and a plugin
+ * whose tools the transcript paints with an icon carries those icons; an
+ * integration's plugin, availability check, card and icons sit in one
+ * module beside its tools.
  */
 
 // Third-party imports
@@ -29,14 +31,14 @@ import { AskUserQuestionTool } from '@texra/tools/userQuestion/UserQuestionTool'
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { PluginSettingRow } from '@texra/shared/settingsView/settingRows';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
-import { APP_PLUGIN_ARMS } from '@texra/shared/plugins/appArms';
+import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import { isTexFile } from '@texra/shared/latexFileTypes';
 
 // Local file imports
 import { AcceptRunFilesTool } from './AcceptRunFilesTool';
 import { arxiv } from './arxiv/plugin';
-import { claudeAgent } from './claudeAgentPlugin';
-import { codex } from './codexPlugin';
+import { claudeAgent } from './agentCli/claudeAgentPlugin';
+import { codex } from './agentCli/codexPlugin';
 import {
   InlineComments,
   InlineCommentTool,
@@ -136,8 +138,17 @@ export interface PluginCard {
 }
 
 /** A plugin of TeXRA's list, with the card the Tools dashboard shows for
- *  it; a plugin without one is listed on no dashboard. */
-export type TexraPlugin = Plugin & { readonly card?: PluginCard };
+ *  it (a plugin without one is listed on no dashboard) and the icon the
+ *  transcript paints each of its tool calls with, by normalized tool name,
+ *  from the UI toolkit's set (`@ui/wa/iconNames`). A call with no icon, or
+ *  with a name the toolkit does not draw, gets the generic one. */
+export type TexraPlugin = Plugin & {
+  readonly card?: PluginCard;
+  readonly icons?: Readonly<Record<string, string>>;
+  /** The tools, by normalized tool name, whose output the transcript paints
+   *  as a terminal session, as it paints `bash`'s. */
+  readonly terminalOutput?: readonly string[];
+};
 
 /** TeXRA's filter on `write_file`: a `.tex` file's content goes through the
  *  replacement rules of the call's workspace. */
@@ -161,6 +172,11 @@ const latexExtract: TexraPlugin = {
     ExtractTikzFiguresTool,
     ExtractBibliographyTool,
   ],
+  icons: {
+    extract_figures: 'image',
+    extract_tikz_figures: 'image',
+    extract_bib_entries: 'book',
+  },
   card: {
     name: 'LaTeX Extraction',
     description:
@@ -182,6 +198,7 @@ const latexDiagnostics = (editors: EditorRegistry): TexraPlugin => ({
       ),
     },
   }),
+  icons: { diagnostics: 'list-check' },
   card: {
     name: 'LaTeX Diagnostics',
     description:
@@ -198,8 +215,11 @@ const TEX_INSTRUCTIONS = `Find the project's TeX sources with relative paths (e.
  * prompt section, at every step of every run, finds the TeX sources, says how
  * replies write math, and names the configured default bibliography.
  */
-const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
-  definePlugin<EditorHost>({
+const core = (
+  editors: EditorRegistry,
+  provider?: InlineCommentProvider,
+): TexraPlugin => ({
+  ...definePlugin<EditorHost>({
     id: 'core',
     tools: [
       InlineCommentTool,
@@ -228,7 +248,9 @@ const core = (editors: EditorRegistry, provider?: InlineCommentProvider) =>
             ]),
       ),
     },
-  });
+  }),
+  icons: { lean_loogle: 'magnifying-glass' },
+});
 
 /** The onboarding agent's narrow set, one concern per tool, over the host's
  *  setup capabilities: a tool that needs a member the host left undefined
@@ -262,8 +284,9 @@ const setup = (platform: SetupPlatformShape, host: SetupHost['Service']) =>
 /** Document tasks: the `task:` block of an agent file, the tools their
  *  recipe calls, launching one as a child (`document_task`), and accepting
  *  the documents a run produced into the workspace. */
-const documents: Plugin = {
+const documents: TexraPlugin = {
   id: 'documents',
+  icons: { accept_run_files: 'check' },
   // The `task:` block, and how its runs read (`DOCUMENT_TASK_RESULT`).
   agentBlock: Object.freeze({
     ...DOCUMENT_TASK_BLOCK,
@@ -292,7 +315,7 @@ const documents: Plugin = {
     DocumentReviewTool,
     DocumentProposeTool,
   ],
-  arms: APP_PLUGIN_ARMS.documents,
+  factKinds: APP_FACT_KINDS.documents,
 };
 
 /** TeXRA's plugins, in dashboard order. */
@@ -318,6 +341,14 @@ export const texraPlugins = (host: {
   return [
     {
       ...fileOps({ writeFilter: texWriteFilter }),
+      icons: {
+        bash: 'terminal',
+        read_file: 'file',
+        write_file: 'file-circle-plus',
+        edit_file: 'pencil',
+        glob: 'magnifying-glass',
+        grep: 'magnifying-glass',
+      },
       card: {
         name: 'File & Shell Operations',
         description:
@@ -329,6 +360,7 @@ export const texraPlugins = (host: {
     arxiv,
     {
       ...web,
+      icons: { web_search: 'globe', web_fetch: 'globe' },
       card: {
         name: 'Web Search & Fetch',
         description:
@@ -337,6 +369,7 @@ export const texraPlugins = (host: {
     },
     {
       ...memoryWorkflow,
+      icons: { memory: 'database', executions: 'clock-rotate-left' },
       card: {
         name: 'Memory & Executions',
         description:
@@ -360,6 +393,7 @@ export const texraPlugins = (host: {
     lean4({ setup: host.setup ?? {}, services: host.lean }),
     {
       ...multiAgent,
+      icons: { agent: 'circle-user' },
       card: {
         name: 'Multi-Agent Workflow',
         description:
@@ -384,7 +418,7 @@ export const texraPlugins = (host: {
     codex,
     claudeAgent,
     core(editors, host.inlineComments),
-    codemode,
+    { ...codemode, icons: { script: 'code' } },
     setup(host.setup ?? {}, host.name),
     documents,
   ];

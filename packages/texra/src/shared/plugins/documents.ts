@@ -1,5 +1,5 @@
 /**
- * The documents plugin's rows (its `arms`, `@tools/plugins`): a
+ * The documents plugin's rows (its `factKinds`, `@tools/plugins`): a
  * document task's documents are its latest `plugin.fact` of kind
  * `documents/output`, which carries every revision's outputs, and the files
  * a run last accepted into the workspace are its `documents/accepted`. Core
@@ -9,7 +9,7 @@
  * file the plugin owns (`DOCUMENT_TASK_BLOCK`), which the catalog scans
  * with. Browser-safe: it imports only schemas.
  */
-import { Effect, Result, Schema, Struct } from 'effect';
+import { Effect, Record as Rec, Result, Schema, Struct } from 'effect';
 
 import { type FileLocation, type ToolFact } from '@texra-ai/harness/schemas';
 import {
@@ -40,7 +40,7 @@ const DocumentsOutputSchema = Schema.Struct({
 });
 
 /** The documents plugin's one row kind. */
-export const DOCUMENTS_OUTPUT_ARM = {
+export const DOCUMENTS_OUTPUT_KIND = {
   plugin: 'documents',
   kind: 'output',
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
@@ -50,10 +50,12 @@ export const DOCUMENTS_OUTPUT_ARM = {
   version: 3,
   schema: DocumentsOutputSchema,
   upcasters: [],
+  // A document task runs a recipe script, which is never forked.
+  fork: 'drop',
 } as const;
 
 /** The key a run's documents are kept under in `RunView.facts`. */
-const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_ARM.plugin}/${DOCUMENTS_OUTPUT_ARM.kind}`;
+const DOCUMENTS_OUTPUT_KEY = `${DOCUMENTS_OUTPUT_KIND.plugin}/${DOCUMENTS_OUTPUT_KIND.kind}`;
 
 /** The fact that makes `rounds` (and, once proposed, the final `diffs`)
  *  the calling run's documents, for its call's result (`ToolResult.facts`). */
@@ -62,9 +64,9 @@ export function documentsOutputFact(
   diffs: DocumentDiffs = {},
 ): ToolFact {
   return {
-    plugin: DOCUMENTS_OUTPUT_ARM.plugin,
-    kind: DOCUMENTS_OUTPUT_ARM.kind,
-    version: DOCUMENTS_OUTPUT_ARM.version,
+    plugin: DOCUMENTS_OUTPUT_KIND.plugin,
+    kind: DOCUMENTS_OUTPUT_KIND.kind,
+    version: DOCUMENTS_OUTPUT_KIND.version,
     value: Schema.decodeUnknownSync(DocumentsOutputSchema)({
       rounds,
       ...diffs,
@@ -82,12 +84,14 @@ const DocumentsAcceptedSchema = Schema.Struct({
 /** The files a run last accepted into the workspace, past the editor's own
  *  write path: what every process that applies the run announces
  *  (`workspaceFilesWritten`). */
-export const DOCUMENTS_ACCEPTED_ARM = {
+export const DOCUMENTS_ACCEPTED_KIND = {
   plugin: 'documents',
   kind: 'accepted',
   version: 1,
   schema: DocumentsAcceptedSchema,
   upcasters: [],
+  // The source wrote those files; a fork wrote none.
+  fork: 'drop',
   writes: (value: unknown): readonly string[] =>
     Schema.decodeUnknownSync(DocumentsAcceptedSchema)(value).absolutePaths,
 } as const;
@@ -99,9 +103,9 @@ export function documentsAcceptedFact(
   acceptedAt: number,
 ): ToolFact {
   return {
-    plugin: DOCUMENTS_ACCEPTED_ARM.plugin,
-    kind: DOCUMENTS_ACCEPTED_ARM.kind,
-    version: DOCUMENTS_ACCEPTED_ARM.version,
+    plugin: DOCUMENTS_ACCEPTED_KIND.plugin,
+    kind: DOCUMENTS_ACCEPTED_KIND.kind,
+    version: DOCUMENTS_ACCEPTED_KIND.version,
     value: Schema.decodeUnknownSync(DocumentsAcceptedSchema)({
       absolutePaths: [...absolutePaths],
       acceptedAt,
@@ -172,11 +176,6 @@ export function documentsOf(run: Pick<RunView, 'facts'>): {
  * the YAML (`X` renders as `X_FILE` and `X_CONTENT`).
  */
 const DocumentTaskSchema = Schema.Struct({
-  /** Edits existing documents (diffed against them), rather than writing
-   *  new ones. */
-  rewrite: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(true)),
-  ),
   outputs: Schema.Array(Schema.String).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -210,30 +209,56 @@ export const DocumentAgentOptionSchema = AgentOptionDataSchema.mapFields(
 export type DocumentAgentOption = typeof DocumentAgentOptionSchema.Type;
 
 /**
- * A document task's launch options, as its recipe's run records them
- * (`script.options`) and its approval shows them (`AgentProposal.options`):
- * the figure, TeXCount and compile switches and the critic review. The main
- * view's launch composer offers the same switches (`LaunchSurfaceSchema`).
+ * The switches a document task's launch may set, under the key its run's
+ * `script.options` stores them by and its approval shows them
+ * (`AgentProposal.options`). The launch form's menu items, the
+ * `document_task` tool's fields and `texra run`'s flags render from this
+ * table; `menu` is the launch form's file group whose header menu offers
+ * the switch.
  */
-export const DocumentTaskOptionsSchema = Schema.Struct({
-  autoExtractFigure: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
+export const DOCUMENT_TASK_OPTIONS = Object.freeze({
+  attachTeXCount: Object.freeze({
+    label: 'Attach TeX Count',
+    description:
+      "Add each input document's texcount statistics to the prompt, so the agent knows its size and structure.",
+    menu: 'input',
+  }),
+  reflect: Object.freeze({
+    label: 'Critic review',
+    description:
+      'Have the `critic` agent review each revision but the last; the next revision reads its critique.',
+    menu: 'input',
+  }),
+  autoExtractFigure: Object.freeze({
+    label: 'Figures',
+    description: 'Attach the figures the input LaTeX includes as media.',
+    menu: 'media',
+  }),
+  autoExtractTikzFigure: Object.freeze({
+    label: 'TikZ Figures',
+    description: 'Compile the input LaTeX TikZ figures and attach them.',
+    menu: 'media',
+  }),
+  autoCompileInputPdf: Object.freeze({
+    label: 'Compile Input PDF',
+    description: 'Compile each input LaTeX file and attach its PDF.',
+    menu: 'media',
+  }),
+} satisfies Record<
+  string,
+  {
+    readonly label: string;
+    readonly description: string;
+    readonly menu: 'input' | 'media';
+  }
+>);
+
+/** The switches as a run stores them, each off unless the launch set it. */
+export const DocumentTaskOptionsSchema = Schema.Struct(
+  Rec.map(DOCUMENT_TASK_OPTIONS, () =>
+    Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   ),
-  autoExtractTikzFigure: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-  attachTeXCount: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-  autoCompileInputPdf: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-  /** A task reviews each revision but the last with the bundled `critic`
-   *  and feeds its critique into the next revision. */
-  reflect: Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(false)),
-  ),
-});
+);
 /** A document task's launch options with their defaults applied. */
 export type DocumentTaskOptions = typeof DocumentTaskOptionsSchema.Type;
 

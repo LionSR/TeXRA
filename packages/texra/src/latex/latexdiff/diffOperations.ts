@@ -162,7 +162,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     for (const [round, infos] of roundIndexedEntries(rounds)) {
       for (const info of infos) {
         // Extraction records every output's lineage; one with no base in it
-        // is a new document (a `rewrite: false` task's), not a failure.
+        // is a new document (a task that declares `outputs`), not a failure.
         // Only an output whose lineage was never recorded lacks a base the
         // run could have named.
         if (info.lineage !== null) continue;

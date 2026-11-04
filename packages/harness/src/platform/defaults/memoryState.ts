@@ -2,7 +2,7 @@
 import { Effect, Result } from 'effect';
 
 // Local imports - platform
-import type { StateStore, StateWriteFailed } from '../interfaces';
+import type { StateStore, StateWriteFailed } from '@shared/config/settings';
 
 /** In-memory platform state store for CLI, tests, and lightweight hosts. */
 export class MemoryStateStore implements StateStore {

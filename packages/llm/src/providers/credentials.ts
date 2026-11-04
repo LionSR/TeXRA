@@ -76,21 +76,19 @@ const envVar = (name: string): Effect.Effect<string | undefined> =>
  * both read through here, so the value and the origin a status surface
  * reports can never disagree.
  */
-export function resolveCredential(
+export const resolveCredential = Effect.fnUntraced(function* (
   store: Pick<CredentialStore, 'get'>,
   name: string,
   envNames: readonly string[],
-): Effect.Effect<
+): Effect.fn.Return<
   { readonly value: string | undefined; readonly origin: CredentialOrigin },
   SecretsFailed
 > {
-  return Effect.gen(function* () {
-    const stored = (yield* store.get(name))?.trim();
-    if (stored) return { value: stored, origin: 'secret' as const };
-    for (const envName of envNames) {
-      const fromEnv = (yield* envVar(envName))?.trim();
-      if (fromEnv) return { value: fromEnv, origin: 'env' as const };
-    }
-    return { value: undefined, origin: 'none' as const };
-  });
-}
+  const stored = (yield* store.get(name))?.trim();
+  if (stored) return { value: stored, origin: 'secret' as const };
+  for (const envName of envNames) {
+    const fromEnv = (yield* envVar(envName))?.trim();
+    if (fromEnv) return { value: fromEnv, origin: 'env' as const };
+  }
+  return { value: undefined, origin: 'none' as const };
+});

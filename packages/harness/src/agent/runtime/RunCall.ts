@@ -1,17 +1,17 @@
 /**
  * A tool call made under a run, as only the harness's built-in tools read
- * it (`RunCall`): the run's step and callbacks, the response and attempt
- * the call belongs to, the script that issued it, and, for a `script` call,
- * the door its guest calls the run's tools through. `RunCall` is a
- * `Context.Reference` whose default is null, so a standalone host
- * invocation outside a run provides nothing. The public contract every tool
- * reads, the run included, is `ToolContext`; an app's tool reads nothing
- * else. `requireFileReadForEdit` here answers an edit's read prerequisite
- * from the run's facts (`RunCallShape.facts`), so a resumed run counts the
- * reads its rows record.
+ * it (`RunCall`): the run's step and callbacks, the session's runs, the response and attempt the call belongs to, the script that
+ * issued it, and, for a `script` call, the door its guest calls the run's
+ * tools through. `RunCall` is a `Context.Reference` whose default is null,
+ * so a standalone host invocation outside a run provides nothing. The
+ * public contract every tool reads, the run included, is `ToolContext`; an
+ * app's tool reads nothing else. `requireFileReadForEdit` here answers an
+ * edit's read prerequisite from the run's facts (`RunCallShape.facts`), so
+ * a resumed run counts the reads its rows record.
  */
 import {
   Context,
+  type Deferred,
   Effect,
   Schema,
   type Scope,
@@ -28,9 +28,10 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
-  type PermissionPayload,
+  type PluginRequest,
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
@@ -38,10 +39,10 @@ import {
 import type { RunFacts } from '@shared/session/runFacts';
 import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
-import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
-import type { ToolServices } from './ToolServices';
+import type { SessionServices } from './rootLaunch';
+import type { PluginToolServices } from './ToolServices';
 import type { BoundModel } from './modelAccess/ModelAccess';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type {
@@ -128,13 +129,14 @@ export interface ScriptScope extends ScriptSource {
     readonly { readonly toolName: string; readonly input: unknown }[]
   >;
   /**
-   * The value the script's calls share under `key`: the first call to ask
+   * The value the script's calls share under `key`, a key its caller
+   * declares once with the value's type and failure: the first call to ask
    * makes it, and every later one, concurrent or not, gets what that made
    * (its failure included). Held in memory for the script's run in this
    * process; what must outlive a restart is made from rows.
    */
   readonly shared: <A, E, R>(
-    key: string,
+    key: Context.Key<unknown, Deferred.Deferred<A, E>>,
     make: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
 }
@@ -164,14 +166,18 @@ declare module '../core/tools/ToolTypes.js' {
   }
   interface CallRequests {
     /**
-     * Open a request the call does not wait on, under `requestId`: its
-     * `request.opened` commits on the run's history, and the plugin owning
-     * its kind takes the decision when it lands (`Plugin.decision`). A
-     * failed commit is not proof that nothing landed: the run's rows decide.
+     * Open a plugin's request the call does not wait on, under
+     * `requestId`: its `request.opened` commits on the run's history, with
+     * `data` stored as the JSON it writes, and the plugin's decision hook
+     * takes each answer when it lands (`Plugin.decision`). A failed commit
+     * is not proof that nothing landed: the run's rows decide.
      */
     readonly post: (
       requestId: string,
-      payload: PermissionPayload,
+      request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
+        readonly blocksCaller: false;
+        readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
+      },
     ) => Effect.Effect<void, CellError>;
     /** Show the person something on the session's host (a file opened
      *  beside what they are looking at, a notice), answered by nothing. */
@@ -183,15 +189,19 @@ declare module '../core/tools/ToolTypes.js' {
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with its session, its open step and its host
- *  callbacks. */
-type BuiltinRun = ToolRun &
-  Pick<AgentRunShape, 'session' | 'steps' | 'callbacks'>;
+ *  sees (`ToolRun`), with its open step and its host callbacks. A built-in
+ *  reads its session's owners from its run's context. */
+type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
   /** The run the call works for, as the built-ins read it. */
   readonly run: BuiltinRun;
+  /** The session's services, picked where the loop dispatched the call: a
+   *  built-in runs over them, and so do the doors a plugin's tool calls
+   *  through (its child runs, an edit's review); no plugin tool is served
+   *  them, a plugin's reaches the session's runs through `ChildRuns`. */
+  readonly session: Context.Context<SessionServices>;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
@@ -214,7 +224,11 @@ export interface RunCallShape {
    *  issues: an end of it other than an interrupt settles each still without
    *  a result as skipped, before the script's own result commits; an
    *  interrupt leaves the rows for the resume. Null for any other call. */
-  readonly scriptCalls: Effect.Effect<ScriptDoor, never, ToolServices> | null;
+  readonly scriptCalls: Effect.Effect<
+    ScriptDoor,
+    never,
+    PluginToolServices | SessionServices
+  > | null;
   /** What the call's `PreToolUse` hooks said, for the review its body
    *  opens (an edit, a plan, a delegation proposal); absent: no answer. */
   readonly hook?: 'allow' | 'ask';
@@ -227,14 +241,6 @@ export const RunCall = Context.Reference<RunCallShape | null>(
   '@texra-ai/harness/agent/RunCall',
   { defaultValue: () => null },
 );
-
-/** The session of a call's run, for the harness's own helpers a plugin's
- *  tool may call (an edit's approval, which `accept_run_files` asks for);
- *  a plugin's tool reads no session. */
-export const sessionOf = (run: ToolRun): AgentRunShape['session'] =>
-  // The run on every call the runtime makes is its `AgentRun`.
-  // cast: `toolUseDispatch` puts the `AgentRun`, which has its session.
-  (run as BuiltinRun).session;
 
 /** The run the current call works for; none for a standalone host call. */
 export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =

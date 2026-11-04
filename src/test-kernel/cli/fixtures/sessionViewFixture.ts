@@ -2,15 +2,15 @@
  * The TUI's one session state under test: a `SessionView` seeded straight
  * into the signal the Ink components read (`sessionView()`), so a suite
  * states the fold's output and asserts what the surface renders from it.
- * The runtime bridge is bound once over an empty level; `seedView` writes
- * the signal directly, which is what a folded change would do.
+ * The runtime bridge is bound over an empty level on the block's session
+ * graph (`boundTestSessionView`); `seedView` writes the signal directly,
+ * which is what a folded change would do.
  */
-import '@test/support/sessionGraphTestSetup';
-import { SubscriptionRef } from 'effect';
+import { Effect, Layer, SubscriptionRef } from 'effect';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
-  requestParksItsCaller,
+  blocksCaller,
   RUN_PHASE,
   type RunId,
   type RunView,
@@ -22,21 +22,24 @@ import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
 import { emptySessionView } from '@shared/session/sessionView';
 import { runActions } from '@shared/session/runActions';
 import { runStatus } from '@shared/runs/runStatusDisplay';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { SessionGraph } from '@test/support/testKernel';
 
-let unbind: (() => void) | undefined;
-
-/** Bind an empty view for the file; idempotent. */
-export async function bindTestSessionView(): Promise<void> {
-  if (unbind) return;
-  const ref = await testRuntime().runPromise(
-    SubscriptionRef.make(emptySessionView('test')),
-  );
-  unbind = bindSessionView(testRuntime(), {
-    current: () => SubscriptionRef.getUnsafe(ref),
-    changes: SubscriptionRef.changes(ref),
-  });
-}
+/**
+ * An empty view bound for the block's life, on a runtime over the block's
+ * session graph: `layer(Layer.provideMerge(boundTestSessionView,
+ * SessionGraph.hosted))`. The block's release unbinds it.
+ */
+export const boundTestSessionView = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const runtime = yield* SessionGraph.runtime;
+    const ref = yield* SubscriptionRef.make(emptySessionView('test'));
+    const unbind = bindSessionView(runtime, {
+      current: () => SubscriptionRef.getUnsafe(ref),
+      changes: SubscriptionRef.changes(ref),
+    });
+    yield* Effect.addFinalizer(() => Effect.sync(unbind));
+  }),
+);
 
 /** Replace the whole view the components read. */
 export function seedView(view: SessionView): void {
@@ -84,7 +87,9 @@ function runViewFields(over: RunViewOverrides): RunView {
     tone: copy.tone,
     createdAt: 1,
     launchedAt: 1,
+    turnStartedAt: null,
     runStartedAt: null,
+    working: false,
     lastTimestamp: 1,
     turn: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
@@ -188,7 +193,7 @@ export function viewWith(
       !run ||
       run.approval !== 'none' ||
       run.group === 'interrupted' ||
-      !requestParksItsCaller(request.payload)
+      !blocksCaller(request.payload)
     )
       continue;
     byId.set(run.id, {

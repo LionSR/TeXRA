@@ -1,13 +1,13 @@
-import { it } from '@effect/vitest';
+import { it, layer } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { createExternalLocation } from '@texra-ai/harness/host';
 
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
+import { FakeHost } from '@test/support/testKernel';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
@@ -48,7 +48,7 @@ function createXmlManager(
 }
 
 /** Seed the run directory: the fake host roots every path in a real temp
- *  directory, so the cases run as `it.live`. */
+ *  directory, so the cases run on the live clock. */
 const write = (target: string, content: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -186,16 +186,15 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
   ],
 ];
 
-describe('XmlOutputManager', () => {
-  beforeEach(async () => {
-    await installPlatform({
-      files: { '/tmp/run/output.xml': '<documents />' },
-      workspacePath: fakePath('workspace'),
-    });
-  });
-
+layer(
+  FakeHost.layer({
+    files: { '/tmp/run/output.xml': '<documents />' },
+    workspacePath: fakePath('workspace'),
+  }),
+  { buildPerTest: true, excludeTestServices: true },
+)('XmlOutputManager', (it) => {
   for (const [name, output, inputFiles, files] of RECOVERY_CASES) {
-    it.live(name, () =>
+    it.effect(name, () =>
       Effect.gen(function* () {
         const outputs = yield* writeAndSplitDocuments(
           output,
@@ -209,7 +208,7 @@ describe('XmlOutputManager', () => {
     );
   }
 
-  it.live(
+  it.effect(
     'falls back to content-similarity matching for unlabeled fenced blocks against the original inputs',
     () =>
       Effect.gen(function* () {
@@ -264,7 +263,7 @@ describe('XmlOutputManager', () => {
   // accepting several attached input files. The document tools then build
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
-  it.live(
+  it.effect(
     'concatenates multiple unlabeled fences under the sole declared output',
     () =>
       Effect.gen(function* () {
@@ -296,7 +295,7 @@ describe('XmlOutputManager', () => {
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it.live(
+  it.effect(
     'leaves an unlabeled block unmatched when identical base files make the match ambiguous',
     () =>
       Effect.gen(function* () {

@@ -8,7 +8,7 @@ import {
 } from 'effect';
 
 // Internal imports
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
   convertToolSchema,
   type JSONSchemaObject,
@@ -130,7 +130,7 @@ function assertSafeSandboxSchema(schema: unknown): void {
     }
     for (const key of SUBSCHEMA_RECORD_KEYS) {
       const schemas = record[key];
-      if (schemas !== null && typeof schemas === 'object') {
+      if (Predicate.isObjectOrArray(schemas)) {
         for (const name of Object.keys(schemas)) {
           if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
             throw new Error(

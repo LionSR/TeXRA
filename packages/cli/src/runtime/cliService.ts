@@ -14,6 +14,7 @@ import {
   Exit,
   FileSystem,
   Path,
+  Predicate,
   Scope,
 } from 'effect';
 
@@ -22,7 +23,6 @@ import { type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
-  setLogSink,
   withLogChannel,
   withPerKeyLane,
   type PerKeyLane,
@@ -35,6 +35,7 @@ import {
   resolveWorkspaceStoragePath,
   envFlag,
   JsonStore,
+  setLogSink,
 } from '@texra-ai/harness/node';
 import {
   ensureError,
@@ -43,6 +44,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
+import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
@@ -59,7 +61,6 @@ import {
   type ServiceLink,
   type ServiceUnavailable,
 } from '@texra/controllers/server/client';
-import { bootstrapHost } from '@texra/controllers/hostBootstrap';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { loginShellEnvironment } from './loginShellEnv';
@@ -73,9 +74,7 @@ const CHANNEL = 'cliService';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
- * closed with it. The process bootstrap (the tool seed) runs once here over
- * the no-workspace roots, as the desktop's does, so serving never records a
- * folder of its own as a project.
+ * closed with it.
  */
 export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   context: Pick<CliContext, 'storageRoot'>,
@@ -133,8 +132,6 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       globalState,
     });
   });
-  yield* bootstrapHost({ roots: yield* openRoots(undefined, scope) });
-
   // What opening a project reads, captured once: `open` is the port's,
   // called from handlers that hold no process context of their own. Exactly
   // these services, never the build's scope with them: provided over a
@@ -175,7 +172,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           const roots = yield* openRoots(root, projectScope);
           const session = yield* sessions.open(roots, {
             persistent: true,
-            host: { interruptedTasks: 'offer' },
+            host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
           });
           yield* recordFirstCompletedRun(session).pipe(
             Scope.provide(projectScope),
@@ -187,11 +184,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           if (moved) {
             const message = sessionStoreMovedAsideMessage(moved);
             yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
-            yield* session.emit(
-              'requestShowInstruction',
-              { key: `store-moved-aside-${moved.aside}`, message },
-              { replayWhenAttached: true },
-            );
+            yield* session.emit('requestShowInstruction', {
+              key: `store-moved-aside-${moved.aside}`,
+              message,
+            });
           }
           return { session };
         }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
@@ -256,7 +252,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           (root) => closeIfIdle(root, Duration.toMillis(idleFor)),
           { concurrency: 'unbounded' },
         ),
-        (closed) => closed.filter((session) => session !== undefined),
+        (closed) => closed.filter(Predicate.isNotUndefined),
       ),
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
@@ -326,17 +322,15 @@ function withCliService<A>(
  * asked (wedged, or its record unreadable) fails: the caller says why
  * instead of naming the holder as some other process.
  */
-export function heldByService(
+export const heldByService = Effect.fn('heldByService')(function* (
   owner: OwnerId,
-): Effect.Effect<boolean, ServiceUnavailable, GlobalValues> {
-  return Effect.gen(function* () {
-    if (yield* envFlag(NO_SERVICE)) return false;
-    const info = yield* probeCliService;
-    if (info === null) return false;
-    // It answered on this machine's socket; a recorded hostname may be stale.
-    return ownerIdentity(owner).pid === info.pid;
-  });
-}
+): Effect.fn.Return<boolean, ServiceUnavailable, GlobalValues> {
+  if (yield* envFlag(NO_SERVICE)) return false;
+  const info = yield* probeCliService;
+  if (info === null) return false;
+  // It answered on this machine's socket; a recorded hostname may be stale.
+  return ownerIdentity(owner).pid === info.pid;
+});
 
 /** {@link reachCliService} for a client command, whose process prints only
  *  its own result. */

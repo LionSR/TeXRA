@@ -34,6 +34,7 @@ import type {
   Secrets,
   SettingsStores,
 } from '@texra-ai/harness/host';
+import type { HttpClient } from 'effect/http';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login chatgpt [--no-browser] [--device]',
@@ -103,7 +104,11 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
 const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
   target: CliLogoutTarget,
   stores: SettingsStores,
-): Effect.fn.Return<readonly string[], never, Secrets | AgentCatalogServices> {
+): Effect.fn.Return<
+  readonly string[],
+  never,
+  Secrets | AgentCatalogServices | HttpClient.HttpClient
+> {
   const lines: string[] = [];
 
   for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {

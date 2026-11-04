@@ -1,24 +1,27 @@
-import { it } from '@effect/vitest';
-import { Effect, Exit, Schema, Scope } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Exit, Schema, Scope, type Context } from 'effect';
+import { expect } from 'vitest';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { createCliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import { attachCliSessionProgressProjection } from '@cli/runtime/sessionProgressSubscription';
 import { USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
-import { testSessionOf } from '@test/support/testProcessRuntime';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import {
-  createTestSession,
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
 import { waitForCondition } from '@test/support/asyncTestUtils';
+import {
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 
 /** Let the session's fibers catch up with what was just published: a few
  *  turns of the event loop cover the stream pipeline. */
@@ -29,7 +32,10 @@ async function settle(): Promise<void> {
 }
 /** A run on a real session: its `run.start`, the config the fold reads the
  *  inputs from, and the RUNNING transition. */
-function publishRun(session: SessionHandle, runId: RunId): void {
+function publishRun(
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+): void {
   const agent = 'polish';
   publishTestRows(session, [
     {
@@ -100,106 +106,120 @@ function ndjsonRecords(output: string): Record<string, unknown>[] {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-describe('CLI run progress renderer', () => {
-  it.live('writes human progress to stderr without polluting json stdout', () =>
-    Effect.gen(function* () {
-      const line = 'polish paper.tex · 0s';
-      let stderr = '';
-      const stdout = yield* captureStreamWrites(process.stdout, () =>
-        Effect.gen(function* () {
-          stderr = yield* captureStreamWrites(process.stderr, (written) =>
-            Effect.gen(function* () {
-              const session = yield* createTestSession();
-              const host = createCliRuntimeHost(
-                createTestCliContext({
-                  mode: 'interactive',
-                  outputFormat: 'json',
-                  renderRunProgress: true,
-                  stderrIsTty: true,
-                  stdoutColorEnabled: true,
-                  stderrColorEnabled: false,
-                }),
-              );
-              const scope = yield* Scope.make();
-              const runId = 'd4d4d4' as RunId;
-              yield* host
-                .attachRunProgressRenderer(testSessionOf(session), runId)
-                .pipe(Scope.provide(scope));
-              publishRun(session, runId);
-              // Painted once the renderer's fiber sees the running view, as
-              // many event-loop turns later as Effect's scheduling takes.
-              yield* Effect.promise(() =>
-                waitForCondition(() => written().includes(line), {
-                  timeoutMessage: 'The run progress line was never painted.',
-                }),
-              );
-              yield* Scope.close(scope, Exit.void);
-              yield* host.close();
-            }),
-          );
-        }),
+// Live clock: the renderer paints on real event-loop turns.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'CLI run progress renderer',
+  (it) => {
+    // A session of its own per case.
+    it.layer(TestSession.layer(), { buildPerTest: true })((it) => {
+      it.effect(
+        'writes human progress to stderr without polluting json stdout',
+        () =>
+          Effect.gen(function* () {
+            const line = 'polish paper.tex · 0s';
+            let stderr = '';
+            const stdout = yield* captureStreamWrites(process.stdout, () =>
+              Effect.gen(function* () {
+                stderr = yield* captureStreamWrites(process.stderr, (written) =>
+                  Effect.gen(function* () {
+                    const session = yield* TestSession;
+                    const handle = yield* sessionHandleOf(session);
+                    const host = createCliRuntimeHost(
+                      createTestCliContext({
+                        mode: 'interactive',
+                        outputFormat: 'json',
+                        renderRunProgress: true,
+                        stderrIsTty: true,
+                        stdoutColorEnabled: true,
+                        stderrColorEnabled: false,
+                      }),
+                    );
+                    const scope = yield* Scope.make();
+                    const runId = 'd4d4d4' as RunId;
+                    yield* host
+                      .attachRunProgressRenderer(session, runId)
+                      .pipe(Scope.provide(scope));
+                    publishRun(handle, runId);
+                    // Painted once the renderer's fiber sees the running
+                    // view, as many event-loop turns later as Effect's
+                    // scheduling takes.
+                    yield* Effect.promise(() =>
+                      waitForCondition(() => written().includes(line), {
+                        timeoutMessage:
+                          'The run progress line was never painted.',
+                      }),
+                    );
+                    yield* Scope.close(scope, Exit.void);
+                    yield* host.close();
+                  }),
+                );
+              }),
+            );
+
+            expect(stderr).toContain(line);
+            expect(stdout).toBe('');
+          }),
       );
 
-      expect(stderr).toContain(line);
-      expect(stdout).toBe('');
-    }),
-  );
-
-  it.live(
-    'writes projected subagent progress records to stdout in ndjson mode',
-    () =>
-      Effect.gen(function* () {
-        const parentRunId = 'a1a1a1' as RunId;
-        const childRunId = 'b1b1b1' as RunId;
-        const output = yield* captureStreamWrites(process.stdout, () =>
+      it.effect(
+        'writes projected subagent progress records to stdout in ndjson mode',
+        () =>
           Effect.gen(function* () {
-            const session = yield* createTestSession();
-            publishTestRunStart(session, parentRunId);
-            yield* Effect.promise(() => settle());
-            // The child list is the fold's: the parent's `childIds` and the child's own
-            // row, derived beside the line that folded them.
-            const detach = yield* attachCliSessionProgressProjection(
-              testSessionOf(session),
+            const parentRunId = 'a1a1a1' as RunId;
+            const childRunId = 'b1b1b1' as RunId;
+            const output = yield* captureStreamWrites(process.stdout, () =>
+              Effect.gen(function* () {
+                const session = yield* TestSession;
+                const handle = yield* sessionHandleOf(session);
+                publishTestRunStart(handle, parentRunId);
+                yield* Effect.promise(() => settle());
+                // The child list is the fold's: the parent's `childIds` and
+                // the child's own row, derived beside the line that folded
+                // them.
+                const detach =
+                  yield* attachCliSessionProgressProjection(session);
+                publishTestRows(handle, [
+                  {
+                    type: 'run.start',
+                    aggregateId: qualifyAggregateId('run', childRunId),
+                    identity: { kind: 'agent', agent: 'review' },
+                    userFollowUpSupport: 'unsupported',
+                    parent: { id: parentRunId, call: null },
+                    provenance: null,
+                  },
+                ]);
+                yield* Effect.promise(() => settle());
+                yield* detach;
+              }),
             );
-            publishTestRows(session, [
-              {
-                type: 'run.start',
-                aggregateId: qualifyAggregateId('run', childRunId),
-                identity: { kind: 'agent', agent: 'review' },
-                userFollowUpSupport: 'unsupported',
-                parent: { id: parentRunId, call: null },
-                provenance: null,
-              },
-            ]);
-            yield* Effect.promise(() => settle());
-            yield* detach;
-          }),
-        );
 
-        const records = ndjsonRecords(output).filter(
-          (record) => record.event === 'run.children',
-        );
+            const records = ndjsonRecords(output).filter(
+              (record) => record.event === 'run.children',
+            );
 
-        expect(records).toEqual([
-          expect.objectContaining({
-            kind: 'progress',
-            event: 'run.children',
-            // The row carries the child's run id and identity under their own
-            // names; `ready` is the fold's phase before the activation lands.
-            payload: {
-              runId: parentRunId,
-              children: [
-                {
-                  childRunId,
-                  agentName: 'review',
-                  identity: { kind: 'agent', agent: 'review' },
-                  status: 'ready',
+            expect(records).toEqual([
+              expect.objectContaining({
+                kind: 'progress',
+                event: 'run.children',
+                // The row carries the child's run id and identity under
+                // their own names; `ready` is the fold's phase before the
+                // activation lands.
+                payload: {
+                  runId: parentRunId,
+                  children: [
+                    {
+                      childRunId,
+                      agentName: 'review',
+                      identity: { kind: 'agent', agent: 'review' },
+                      status: 'ready',
+                    },
+                  ],
                 },
-              ],
-            },
-            contract: 2,
+                contract: 2,
+              }),
+            ]);
           }),
-        ]);
-      }),
-  );
-});
+      );
+    });
+  },
+);

@@ -13,7 +13,7 @@
  */
 import { Context } from 'effect';
 
-import type { ConfigProvider } from '@platform/interfaces';
+import type { ConfigProvider } from '@shared/config/settings';
 
 export class WorkspaceRoots extends Context.Service<
   WorkspaceRoots,

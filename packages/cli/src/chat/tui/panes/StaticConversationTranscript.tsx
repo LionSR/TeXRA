@@ -19,12 +19,7 @@ import {
   sessionMeta as sessionMetaSignal,
   type SessionMeta,
 } from '../state/cliState';
-import {
-  sessionView,
-  runLabelOf,
-  runPhaseOf,
-  runViewOf,
-} from '../state/sessionView';
+import { sessionView, runLabelOf, runViewOf } from '../state/sessionView';
 import { staticTranscriptEraseEpoch } from '../state/staticTranscriptRepaint';
 import {
   mergeLocalNotices,
@@ -205,7 +200,7 @@ export function StaticConversationTranscript({
           ? undefined
           : merged.rows,
       settledRows: merged.settledRows,
-      status: runPhaseOf(stream),
+      working: stream?.working === true,
       waitingForChildIdentity:
         stream !== undefined &&
         stream.parentId !== null &&

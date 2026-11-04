@@ -1,9 +1,9 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { it } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer, Schema, Context } from 'effect';
+import { expect } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -12,15 +12,18 @@ import {
 } from '@texra-ai/harness/schemas';
 import { ToolRegistry } from '@texra-ai/harness/plugins';
 import { resolveChildRunOutput } from '@agent/storage/childRunOutput';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  createProcessSession,
-  publishTestRunStart,
-  seedRows,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
+import { SessionLog } from '@shared/session/runHistory';
+import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 import {
   DOCUMENT_TASK_BLOCK,
   documentsOutputFact,
@@ -38,14 +41,9 @@ const childRunId = 'bbbbbb222222' as RunId;
 const otherParentRunId = 'cccccc333333' as RunId;
 const relativePath = 'r1/draft.tex';
 
-setupPlatform({
-  storagePath: fakePath('storage'),
-  workspacePath: fakePath('workspace'),
-});
-let session: SessionHandle;
-beforeEach(async () => {
-  session = await Effect.runPromise(createProcessSession());
-});
+/** The test's session over the process roots, whose storage the child's
+ *  output is resolved against. */
+const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
 
 /** The child's declared files, as its documents report them. */
 function workflowRounds(absolutePath: string): RoundOutput[] {
@@ -86,16 +84,19 @@ const resolveLayer = Layer.merge(
   ),
 );
 
-const persistCompletedChild = (parentId: RunId = parentRunId) =>
+const persistCompletedChild = (
+  session: Context.Context<SessionServices>,
+  parentId: RunId = parentRunId,
+) =>
   Effect.gen(function* () {
-    const storageRoot = session.roots.storage;
+    const storageRoot = Context.get(session, SessionRoots).storage;
     const absolutePath = path.join(
       storageRoot,
       `executions/${childRunId}/${relativePath}`,
     );
     publishTestRunStart(session, parentId);
-    yield* session.log.settled;
-    yield* seedRows(session.log)([
+    yield* Context.get(session, SessionLog).settled;
+    yield* seedRows(Context.get(session, SessionLog))([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -120,7 +121,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
         }),
       },
     ]);
-    yield* session.log.transact([
+    yield* Context.get(session, SessionLog).transact([
       {
         type: 'run.result',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -128,7 +129,7 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       },
     ]);
     // How the child ended, and what it declared, is its `run.end` row's.
-    yield* session.log.transact([
+    yield* Context.get(session, SessionLog).transact([
       {
         type: 'run.end',
         aggregateId: qualifyAggregateId('run', childRunId),
@@ -151,30 +152,44 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
     return absolutePath;
   });
 
-describe('resolveChildRunOutput', () => {
-  it.effect('rejects output references from an unrelated run tree', () =>
-    Effect.gen(function* () {
-      const absolutePath = yield* persistCompletedChild(otherParentRunId);
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'resolveChildRunOutput',
+  (it) => {
+    it.layer(
+      FakeHost.layer({
+        storagePath: fakePath('storage'),
+        workspacePath: fakePath('workspace'),
+      }),
+      { buildPerTest: true },
+    )((it) => {
+      it.effect('rejects output references from an unrelated run tree', () =>
+        Effect.gen(function* () {
+          const session = yield* processSession;
+          const absolutePath = yield* persistCompletedChild(
+            session,
+            otherParentRunId,
+          );
 
-      const error = yield* Effect.flip(
-        resolveChildRunOutput(parentRunId, absolutePath, session).pipe(
-          Effect.provide(resolveLayer),
-        ),
+          const error = yield* Effect.flip(
+            resolveChildRunOutput(parentRunId, absolutePath)
+              .pipe(Effect.provide(resolveLayer))
+              .pipe(Effect.provide(session)),
+          );
+          expect(error.message).toContain('is not a direct child');
+        }),
       );
-      expect(error.message).toContain('is not a direct child');
-    }),
-  );
 
-  it.effect('rejects paths outside run storage', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        resolveChildRunOutput(
-          parentRunId,
-          fakePath('workspace/draft.tex'),
-          session,
-        ).pipe(Effect.provide(resolveLayer)),
+      it.effect('rejects paths outside run storage', () =>
+        Effect.gen(function* () {
+          const session = yield* processSession;
+          const error = yield* Effect.flip(
+            resolveChildRunOutput(parentRunId, fakePath('workspace/draft.tex'))
+              .pipe(Effect.provide(resolveLayer))
+              .pipe(Effect.provide(session)),
+          );
+          expect(error.message).toContain('not inside run storage');
+        }),
       );
-      expect(error.message).toContain('not inside run storage');
-    }),
-  );
-});
+    });
+  },
+);

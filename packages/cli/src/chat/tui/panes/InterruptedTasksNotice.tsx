@@ -38,7 +38,7 @@ function taskLine(task: InterruptedTask): string {
       : `stopped ${formatRelativeTime(task.stoppedAt)}`,
     task.agents ?? undefined,
     task.blocked
-      ? `${resumeBlockerLine(task.blocked)}${task.blocked.kind === 'agentMissing' ? '' : ': /plugins'}`
+      ? `${resumeBlockerLine(task.blocked)}${task.blocked.blocker === 'agentMissing' ? '' : ': /plugins'}`
       : undefined,
   ]
     .filter(Boolean)

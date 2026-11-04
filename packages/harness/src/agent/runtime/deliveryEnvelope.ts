@@ -3,8 +3,7 @@
  * result/error builder for every child path: native subagents
  * (`formatSubagentDelivery`/`formatSubagentError` in subagentResults.ts),
  * background bash (bashDelivery.ts), background scripts (scriptRun.ts)
- * and the agent-CLI tools (codex.ts,
- * claudeAgent.ts).
+ * and a plugin's tools that run a child of their own (an agent CLI's).
  *
  * The child drivers decide what facts belong in the payload; callers differ
  * only in tag, id attributes, and the facts they pass. This module owns the
@@ -16,6 +15,7 @@
  */
 
 // Local imports
+import { deliveryTagOf } from '@shared/subagentFollowup';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 /** Maximum prompt length echoed back in a delivery/error XML attribute. */
@@ -28,7 +28,10 @@ const DELIVERY_PROMPT_MAX = 200;
  * always render it the same way and in the same place.
  */
 export interface ChildRunDelivery {
-  /** Root element name (`subagent-result`, `background-error`, …). */
+  /** Root element name (`subagent-result`, `background-error`, …). A
+   *  plugin's is `<family>-result` or `<family>-error`, `family` being
+   *  lowercase words joined by `-`: every render surface recognizes that
+   *  shape as a delivery, so a plugin registers no tag. */
   readonly tag: string;
   readonly runId: string;
   /** Echoed prompt attribute, for a child that took a prompt; truncated before escaping. */
@@ -91,5 +94,12 @@ export function formatDelivery(delivery: ChildRunDelivery): string {
   }
 
   const open = attrs ? `<${delivery.tag} ${attrs}>` : `<${delivery.tag}>`;
-  return [open, ...body, `</${delivery.tag}>`].join('\n');
+  const xml = [open, ...body, `</${delivery.tag}>`].join('\n');
+  // A tag outside the recognized shapes would reach every render surface as
+  // raw XML, so its producer fails at once instead.
+  if (deliveryTagOf(xml) !== delivery.tag)
+    throw new Error(
+      `"${delivery.tag}" is not a delivery tag: a plugin's is <family>-result or <family>-error, family in lowercase words joined by "-".`,
+    );
+  return xml;
 }

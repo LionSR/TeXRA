@@ -24,32 +24,31 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 
 // Suites are tiered by what they reach, and pay only for that.
 //
-// A suite's cost is its import closure evaluated once per file, so a suite of
-// a pure function that never touches a host must not pay for the fake platform,
-// the session runtime and everything behind them. The `pure` project runs the
-// directories whose modules need no host: no setup file, and a module registry
-// shared between files, which is safe there by construction — nothing in it
-// installs process-wide state, so nothing can leak. Measured on 136 suites:
-// 28s against 1m55s isolated, and deterministic.
+// A suite's cost is its import closure evaluated once per file, so every
+// suite a module registry shared between files can serve gets one: the fake
+// platform, the session runtime and everything behind them are evaluated once
+// per worker, not once per file. Three projects:
 //
-// The `kernel` project is everything else: the fake host installed per file,
-// each file in its own module registry, because module-scope state
-// (`platform()`, the process runtime, `vi.mock` factories) still leaks between
-// files when the registry is shared.
+// - `pure`: suites of host-free modules. No setup file, and nothing in them
+//   installs or replaces anything, so nothing can leak. Measured on 136
+//   suites: 28s against 1m55s isolated.
+// - `kernel`: the other suites a shared registry can serve. Each states the
+//   host it runs over as a layer its blocks build, and a block's scope
+//   releases what it built (`support/testKernel.ts`), so nothing a file
+//   installs outlives it.
+// - `isolated`: what a shared registry cannot serve, each file in its own
+//   registry and its own worker.
 //
-// Membership is computed from the suite's source, not declared: a suite under
-// one of these directories is `pure` unless it mocks a repository module
-// (`vi.mock` / `vi.doMock` — a partial factory left in a shared registry is
-// what the next suite imports) or reaches a host (`@platform/*`, or the
-// support modules that install or read one). Add a `vi.mock` and the suite
-// moves to `kernel` on its own; remove it and the suite moves back. The premise
-// — nothing in it installs or replaces anything, so nothing can leak — is
-// therefore true by construction, which is what makes the shared registry
-// deterministic here. A directory earns a place in this list by holding
-// suites of host-free modules; the scan decides file by file.
+// Membership is computed from the suite's source, not declared. A suite is
+// `isolated` when it needs its own registry (`NEEDS_OWN_REGISTRY`,
+// `DOM_DIRS`): add a `vi.mock` and it moves there on its own, remove it and
+// the suite moves back. Otherwise a suite under one of these directories is
+// `pure` unless it reaches a host (`@platform/*`, or the support modules that
+// install or read one), and every other suite is `kernel`. A directory earns
+// a place in this list by holding suites of host-free modules; the scan
+// decides file by file.
 const PURE_DIRS = [
   'agent',
-  'architecture',
   'auth',
   'cli',
   'commands',
@@ -71,34 +70,62 @@ const PURE_DIRS = [
   'utils',
 ];
 const REACHES_A_HOST = [
+  /from\s+['"]@platform\//,
+  /from\s+['"]@test\/support\/(?:setupPlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|crashConformance|testWorkspaceRoots|testKernel)['"]/,
+];
+// What a shared registry cannot serve: a `vi.mock` / `vi.doMock` factory (the
+// module it built stays in the registry, and a partial factory is what the
+// next suite imports); `vi.resetModules` (it empties the registry the next
+// suite would reuse); and a DOM (lit-html captures `document` when its module
+// first evaluates, so the second suite to bring its own jsdom window renders
+// into the first suite's dead document: `d.createComment is not a function`).
+const NEEDS_OWN_REGISTRY = [
   /\bvi\.(?:do)?[mM]ock\s*\(/,
-  // A DOM is a host too: lit-html captures `document` when its module first
-  // evaluates, so the second suite to bring its own jsdom window renders into
-  // the first suite's dead document (`d.createComment is not a function`).
+  /\bvi\.resetModules\s*\(/,
   /from\s+['"](?:lit|lit-html|lit\/|@lit\/|jsdom)/,
   /@vitest-environment\s+jsdom|new JSDOM\s*\(/,
-  /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|setupFakePlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|defaultSessionTestSetup|sessionGraphTestSetup|crashConformance|testProcessRuntime|testWorkspaceRoots)['"]/,
-  /import\s+['"]@test\/support\/(?:defaultSessionTestSetup|sessionGraphTestSetup)['"]/,
 ];
-// What the scan cannot see is a suite that changes process-wide state a
-// library reads once — an environment variable chalk takes its color level
-// from, say. File-order shuffles find those, and the fix is in the suite: set
-// the state on the instance it lives on and restore it after, so the order
-// the shared registry loads files in cannot matter.
+// The DOM directories: their suites bring a window or load modules afresh
+// through helpers a scan of the suite does not see
+// (`settings/litComponentTestUtils.ts`, `desktop/loadSourceModule.ts`), so
+// the directory decides for every suite in it.
+const DOM_DIRS = ['desktop', 'progressView', 'settings'];
+// What the scan cannot see is a suite that changes process-wide state: an
+// environment variable a library reads once (chalk's color level), a file
+// left in the worker's home or fake root. A shared worker runs file after
+// file, so file-order shuffles find those, and the fix is in the suite: set
+// the state on the instance it lives on and restore it after, so the order a
+// worker runs files in cannot matter.
 //
-// Resolved to a file list rather than left as globs: Vitest applies a
-// project's `exclude` after its `include`, so `kernel` must exclude exactly
-// the files `pure` runs, not the directories they came from.
-const pureSuites = globSync(
-  PURE_DIRS.map((dir) => `src/test-kernel/${dir}/**/*.vitest.ts`),
-  { cwd: rootDir, posix: true },
-)
-  .filter((file) => {
-    const source = readFileSync(resolve(rootDir, file), 'utf8');
-    return !REACHES_A_HOST.some((pattern) => pattern.test(source));
-  })
-  .sort();
+// Resolved to file lists rather than left as globs: Vitest applies a
+// project's `exclude` after its `include`, so `isolated` must exclude exactly
+// the files the other two run, not the directories they came from.
+const sharedSuites = { pure: [], kernel: [] };
+// A suite lives with the package it tests (packages/<name>/test/) or, when it
+// composes several packages, in src/test-kernel/; either way its tier
+// directory is the first one under that test root.
+const SUITES = [
+  'src/test-kernel/**/*.vitest.ts',
+  'packages/*/test/**/*.vitest.ts',
+];
+for (const file of globSync(SUITES, { cwd: rootDir, posix: true }).sort()) {
+  const parts = file.split('/');
+  const dir = parts[0] === 'packages' ? parts[3] : parts[2];
+  const source = readFileSync(resolve(rootDir, file), 'utf8');
+  if (DOM_DIRS.includes(dir) || NEEDS_OWN_REGISTRY.some((p) => p.test(source)))
+    continue;
+  const reachesAHost =
+    !PURE_DIRS.includes(dir) || REACHES_A_HOST.some((p) => p.test(source));
+  sharedSuites[reachesAHost ? 'kernel' : 'pure'].push(file);
+}
+// The temp home first, then the check that nothing still reaches the real
+// one: setup files run in order, so no module of the repository loads before
+// the real home is gone. They run before every file; a worker swaps its home
+// once, for its first file, and keeps it for every file it runs after.
+const HOME_SETUP_FILES = [
+  'src/test-kernel/support/isolateHome.ts',
+  'src/test-kernel/support/homeIsolationCheck.ts',
+];
 
 export default defineConfig({
   plugins: [
@@ -141,21 +168,28 @@ export default defineConfig({
         test: {
           name: 'pure',
           isolate: false,
-          include: pureSuites,
+          include: sharedSuites.pure,
         },
       },
       {
         extends: true,
         test: {
           name: 'kernel',
+          isolate: false,
+          include: sharedSuites.kernel,
+          setupFiles: HOME_SETUP_FILES,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'isolated',
           isolate: true,
-          include: ['src/test-kernel/**/*.vitest.ts'],
-          exclude: pureSuites,
-          // The temp home first: no module loads before the real one is gone.
-          setupFiles: [
-            'src/test-kernel/support/isolateHome.ts',
-            'src/test-kernel/support/setupFakePlatform.ts',
-          ],
+          // Every suite the other two do not run, so one the scan has not
+          // seen yet (a file added while a watcher runs) runs isolated.
+          include: SUITES,
+          exclude: [...sharedSuites.pure, ...sharedSuites.kernel],
+          setupFiles: HOME_SETUP_FILES,
         },
       },
     ],

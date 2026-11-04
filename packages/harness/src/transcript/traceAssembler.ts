@@ -14,7 +14,6 @@
 import { Effect } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { getRunRecords } from '@agent/storage/runRecords';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
   isDisplaySessionEvent,
@@ -22,6 +21,7 @@ import {
   type RequestDecision,
   type RunId,
 } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import { isRequestDecision, recordOf } from '@shared/session/runRowReads';
 
 import type { TraceDocument } from './traceDocumentSchema';
@@ -30,7 +30,7 @@ import type { TraceDocument } from './traceDocumentSchema';
  * A decision's action, without what the user typed or approved. The fold reads
  * a `request.decided` row for its id alone — it closes the pending request and
  * renders nothing from the decision — while the payload can hold a whole
- * edited document (`approve.content`), an inquiry answer and its session
+ * edited document (`approve.content`), a written answer and its session
  * links, question answers, or free-text feedback. An exported trace is a file
  * people share, so it carries the action and drops the content.
  */
@@ -73,10 +73,10 @@ export type AssembleTraceResult =
  */
 export const assembleTrace = Effect.fn('assembleTrace')(function* (
   runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<AssembleTraceResult, Error> {
+): Effect.fn.Return<AssembleTraceResult, Error, SessionLog> {
+  const log = yield* SessionLog;
   const [record, events] = yield* Effect.all(
-    [getRunRecords(session, runId).readRunRecord(), session.log.display(runId)],
+    [getRunRecords(runId).readRunRecord(), log.display(runId)],
     { concurrency: 2 },
   );
   if (!record) return { status: 'config_missing' };

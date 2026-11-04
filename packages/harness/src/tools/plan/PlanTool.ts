@@ -2,8 +2,9 @@
  * The plan tool: propose or replace the plan, a plain objective document
  * stating what to achieve, the approach, and a verifiable stopping
  * condition. Every proposal gates on the user's approval: approve, reject,
- * or run the plan as a goal, which runs the goal template (`goalScript`) as
- * a background script of this conversation with the plan as its objective.
+ * or run the plan as a goal, which runs the configured goal strategy
+ * (`goalScript`) as a background script of this conversation with the plan
+ * as its objective.
  */
 
 // Third-party imports
@@ -12,6 +13,7 @@ import { Effect, Result, Schema, SubscriptionRef } from 'effect';
 // Local imports
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import { goalGrant } from '@agent/runtime/runApprovalQueue';
+import { Runs } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   NO_APPROVAL_GRANTS,
@@ -19,8 +21,14 @@ import {
 } from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
 import {
+  RunHistory,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
+import {
   GOAL_MAX_COST_SETTING,
-  GOAL_PLAN_ARM,
+  GOAL_PLAN_KIND,
+  GOAL_STRATEGY_SETTING,
   qualifyAggregateId,
   RunIdSchema,
   type Plan,
@@ -71,17 +79,18 @@ type PlanToolInput = typeof PlanToolInputSchema.Type;
 
 /** `plan` as the run's approved plan: the approving result's fact. */
 const approvedPlan = (plan: Plan): ToolFact => ({
-  plugin: GOAL_PLAN_ARM.plugin,
-  kind: GOAL_PLAN_ARM.kind,
-  version: GOAL_PLAN_ARM.version,
+  plugin: GOAL_PLAN_KIND.plugin,
+  kind: GOAL_PLAN_KIND.kind,
+  version: GOAL_PLAN_KIND.version,
   value: plan,
 });
 
 /**
- * Run the just-approved plan as a goal: the goal template, a background
- * script of this conversation whose rounds are this agent again (`self()`),
- * with the plan document verbatim as its objective and the auto-approvals
- * the user's answer chose on the script's run, which its rounds inherit.
+ * Run the just-approved plan as a goal: a background script of this
+ * conversation that runs the strategy `goal.strategy` names, whose rounds
+ * are this agent again (`self()`), with the plan document verbatim as its
+ * objective and the auto-approvals the user's answer chose on the script's
+ * run, which its rounds inherit.
  * The conversation's own approvals stay as they were.
  */
 const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
@@ -104,14 +113,15 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
   // running while its run has not ended, or, unborn while it waits for the
   // child-run budget, while this process holds it. "Keep agents running"
   // detached, a goal is still found by the call that launched it.
-  const { session, runId } = call.run;
+  const { runId } = call.run;
   // A plan call, by the response its result names (`RunFacts.calls`).
-  const issued = (yield* session.runHistory.load(runId))?.calls ?? {};
-  const { results } = yield* session.log.runRows(
+  const issued = (yield* (yield* RunHistory).load(runId))?.calls ?? {};
+  const { results } = yield* (yield* SessionLog).runRows(
     qualifyAggregateId('run', runId),
     'results',
   );
-  const { runs } = SubscriptionRef.getUnsafe(session.view.ref);
+  const { runs } = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
+  const live = yield* Runs;
   // A goal that ended still holds the conversation while work it started
   // (a round's background agent) runs on.
   const stillRunning = (id: RunId): boolean => {
@@ -138,9 +148,7 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
         : [];
     })
     .find((goal) =>
-      runs.has(goal)
-        ? stillRunning(goal)
-        : session.runs.get(goal) !== undefined,
+      runs.has(goal) ? stillRunning(goal) : live.get(goal) !== undefined,
     );
   if (running !== undefined)
     return executed(
@@ -151,10 +159,14 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     call.env.roots,
     GOAL_MAX_COST_SETTING.configKey,
   );
+  const strategy = yield* Settings.get<string>(
+    call.env.roots,
+    GOAL_STRATEGY_SETTING.configKey,
+  );
   const launched = yield* launchBackgroundScript(
     call,
     {
-      code: goalScript(plan.objective, maxCostUsd),
+      code: goalScript(strategy, plan.objective, maxCostUsd),
       timeoutMs: GOAL_TIMEOUT_MS,
     },
     GOAL_TITLE,
@@ -164,8 +176,8 @@ const runPlanAsGoal = Effect.fn('PlanTool.runPlanAsGoal')(function* (
     ...launched,
     output:
       `The user approved this plan and runs it as a goal: a background ` +
-      `script runs you again in rounds, each continuing this conversation, ` +
-      `until a round verifies the stopping condition.\n\n` +
+      `script runs you again in rounds until a round verifies the stopping ` +
+      `condition or the goal pauses.\n\n` +
       `${launched.output ?? ''}\n\n` +
       `Leave the objective to the goal's rounds: end this turn, and report ` +
       `the goal's result to the user when it arrives.`,
@@ -293,6 +305,8 @@ export const PlanTool = defineTool({
   schema: PlanToolInputSchema,
   execute: (input: PlanToolInput) =>
     Effect.flatMap(requireToolRun('plan'), (call) =>
-      executeUpdate(call, { objective: input.objective }),
+      executeUpdate(call, { objective: input.objective }).pipe(
+        Effect.provide(call.session),
+      ),
     ),
 });

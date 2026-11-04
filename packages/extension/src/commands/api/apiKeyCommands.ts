@@ -98,71 +98,73 @@ function promptForApiKey(
   );
 }
 
-function pickApiProvider(placeHolder: string, prompt: string) {
-  return Effect.gen(function* () {
-    // One batched read of the key statuses: the pick shows each provider's
-    // stored/environment state.
-    const statuses = yield* loadApiKeyStatusMap(yield* Secrets);
-    const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
-      label: provider,
-      description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
-      provider,
-    }));
-    const providerPick = yield* quickPick<ApiProviderQuickPickItem>(
-      providerItems,
-      { placeHolder, prompt },
-    );
-    return providerPick?.provider;
-  });
-}
+const pickApiProvider = Effect.fn('pickApiProvider')(function* (
+  placeHolder: string,
+  prompt: string,
+) {
+  // One batched read of the key statuses: the pick shows each provider's
+  // stored/environment state.
+  const statuses = yield* loadApiKeyStatusMap(yield* Secrets);
+  const providerItems = API_KEY_PROVIDER_IDS.map((provider) => ({
+    label: provider,
+    description: statuses[provider] === 'not-set' ? 'not set' : 'key set',
+    provider,
+  }));
+  const providerPick = yield* quickPick<ApiProviderQuickPickItem>(
+    providerItems,
+    { placeHolder, prompt },
+  );
+  return providerPick?.provider;
+});
 
 /**
  * Set an API key. The command registry forwards a single typed argument, so
  * the optional `provider` is parsed at the dispatch boundary.
  */
-export function setApiKey(stores: SettingsStores, provider?: ApiKeyProviderId) {
-  return Effect.gen(function* () {
-    const target =
-      provider ??
-      (yield* pickApiProvider(
-        'Select API provider',
-        'Keys stay on this machine, in an owner-only folder (~/.texra/secrets).',
-      ));
+export const setApiKey = Effect.fn('setApiKey')(function* (
+  stores: SettingsStores,
+  provider?: ApiKeyProviderId,
+) {
+  const target =
+    provider ??
+    (yield* pickApiProvider(
+      'Select API provider',
+      'Keys stay on this machine, in an owner-only folder (~/.texra/secrets).',
+    ));
 
-    if (!target) return;
+  if (!target) return;
 
-    const keyUrl = yield* getProviderKeyUrl(stores, target);
-    const apiKey = yield* promptForApiKey(target, keyUrl);
-    if (!apiKey) return;
+  const keyUrl = yield* getProviderKeyUrl(stores, target);
+  const apiKey = yield* promptForApiKey(target, keyUrl);
+  if (!apiKey) return;
 
-    yield* createProfileKeyController(stores)
-      .commitProviderKey(target, apiKey)
-      .pipe(
-        Effect.catchTag('ProviderKeyActionFailed', (error) =>
-          showLoggedErrorMessage(CHANNEL, error.message, error.cause),
-        ),
-      );
-  });
-}
+  yield* createProfileKeyController(stores)
+    .commitProviderKey(target, apiKey)
+    .pipe(
+      Effect.catchTag('ProviderKeyActionFailed', (error) =>
+        showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+      ),
+    );
+});
 
 /** Remove an API key after a confirmation prompt. */
-export function removeApiKey(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    const provider = yield* pickApiProvider(
-      'Select API provider to remove key',
-      'Only removes the key from TeXRA — does not delete it from the provider.',
+export const removeApiKey = Effect.fn('removeApiKey')(function* (
+  stores: SettingsStores,
+) {
+  const provider = yield* pickApiProvider(
+    'Select API provider to remove key',
+    'Only removes the key from TeXRA — does not delete it from the provider.',
+  );
+
+  if (!provider) {
+    return;
+  }
+
+  yield* createProfileKeyController(stores)
+    .removeProviderKey(provider)
+    .pipe(
+      Effect.catchTag('ProviderKeyActionFailed', (error) =>
+        showLoggedErrorMessage(CHANNEL, error.message, error.cause),
+      ),
     );
-
-    if (!provider) {
-      return;
-    }
-
-    yield* createProfileKeyController(stores)
-      .removeProviderKey(provider)
-      .pipe(
-        Effect.catchTag('ProviderKeyActionFailed', (error) =>
-          showLoggedErrorMessage(CHANNEL, error.message, error.cause),
-        ),
-      );
-  });
-}
+});

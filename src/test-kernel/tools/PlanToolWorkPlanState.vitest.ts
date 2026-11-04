@@ -1,10 +1,7 @@
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Third-party imports
-import { it } from '@effect/vitest';
-import { Effect, Fiber } from 'effect';
-import { afterEach, describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Fiber, Layer, Context } from 'effect';
+import { expect } from 'vitest';
 import {
   APPROVAL_BYPASS_KINDS,
   generateRunId,
@@ -15,9 +12,15 @@ import {
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Approvals } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 import { PlanTool } from '@tools/plan/PlanTool';
 
 // Local file imports
@@ -25,7 +28,6 @@ import {
   autoDecideRequests,
   createRecordingHost,
   decideRequest,
-  sessionWithInteractions,
 } from '../agent/progressTestUtils';
 import { waitForCondition } from '../support/asyncTestUtils';
 
@@ -37,20 +39,17 @@ const followUpPlan: Plan = {
   ].join('\n'),
 };
 
-/** Request watchers the cases opened, released after each. */
-const cleanups: Array<() => void> = [];
-
 /**
  * A session whose plan requests park until the case answers them: the request
  * a run opens is a `request.opened` row, and a surface's `request.decide`
- * answers it (one run model, 3.7).
+ * answers it (one run model, 3.7). Its request watcher stops with the
+ * caller's scope.
  */
 const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   const { interactions } = createRecordingHost();
-  const session = yield* sessionWithInteractions(interactions);
+  const session = yield* isolatedTestSession(interactions);
   publishTestRunStart(session, runId);
-  const requests = autoDecideRequests(session, () => null);
-  cleanups.push(() => requests.detach());
+  const requests = yield* autoDecideRequests(session, () => null);
 
   /** The plan request the tool opened, and the way to answer it. */
   const awaitPlanRequest = async () => {
@@ -71,43 +70,47 @@ const planSession = Effect.fn('planSession')(function* (runId: RunId) {
   return { session, awaitPlanRequest };
 });
 
-describe('PlanTool — update (plan approval)', () => {
-  afterEach(() => {
-    for (const release of cleanups.splice(0)) release();
-  });
+/** The process, over a fresh default host for the test. */
+const perTest = Layer.provideMerge(SessionGraph.layer, FakeHost.layer());
 
-  it.live(
-    'keeps a later plan gated after delegated work approval is granted',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          yield* Effect.tryPromise(() => installFakePlatform());
-          const runId = generateRunId();
-          const { session, awaitPlanRequest } = yield* planSession(runId);
+// Live clock: the plan request is opened and answered on the session's log.
+layer(perTest, { buildPerTest: true, excludeTestServices: true })(
+  'PlanTool — update (plan approval)',
+  (it) => {
+    it.effect(
+      'keeps a later plan gated after delegated work approval is granted',
+      () =>
+        Effect.scoped(
+          Effect.gen(function* () {
+            const runId = generateRunId();
+            const { session, awaitPlanRequest } = yield* planSession(runId);
 
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => session.followUps.forget(runId)),
-          );
+            yield* Effect.addFinalizer(() =>
+              Effect.sync(() => Context.get(session, Inbox).forget(runId)),
+            );
 
-          yield* session.approvals.change(
-            runId,
-            humanGrant(APPROVAL_BYPASS_KINDS, true),
-          );
+            yield* Context.get(session, Approvals).change(
+              runId,
+              humanGrant(APPROVAL_BYPASS_KINDS, true),
+            );
 
-          const resultFiber = yield* Effect.forkScoped(
-            PlanTool.call(followUpPlan).pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  run: { runId, session, toolPolicy: {} },
-                }),
+            const resultFiber = yield* Effect.forkScoped(
+              PlanTool.call(followUpPlan).pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { runId, session, toolPolicy: {} },
+                  }),
+                ),
               ),
-            ),
-          );
+            );
 
-          const { decide } = yield* Effect.tryPromise(() => awaitPlanRequest());
-          decide({ action: 'approve' });
-          expect((yield* Fiber.join(resultFiber)).status).toBe('executed');
-        }),
-      ),
-  );
-});
+            const { decide } = yield* Effect.tryPromise(() =>
+              awaitPlanRequest(),
+            );
+            decide({ action: 'approve' });
+            expect((yield* Fiber.join(resultFiber)).status).toBe('executed');
+          }),
+        ),
+    );
+  },
+);

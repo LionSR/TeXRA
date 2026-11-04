@@ -1,11 +1,10 @@
 /** Completed-run display reads, keyed by run id. */
 import { Effect, Predicate, Result, Schema, absurd } from 'effect';
 import type { ExportNode } from '@agent/export/schemas';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatToolResultAsText } from '@agent/runtime/run/toolResultText';
 import { stringifyConversationValue } from '@agent/storage/conversationFormat';
 
-import { Settings } from '@shared/config/settings';
+import { Settings, type ConfigProvider } from '@shared/config/settings';
 import {
   DEBUG_MODE_KEY,
   TOOL_CALL_STATUS,
@@ -13,6 +12,7 @@ import {
   type RunId,
   type ToolUseLog,
 } from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import type { TranscriptView } from '@shared/session/sessionView';
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 
@@ -20,24 +20,43 @@ import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 // Conversation
 // ============================================================================
 
+/** The result a call the run's end cut short (`ToolRow.cutByRunEnd`)
+ *  reads with, for a model reading the run through `executions` and for an
+ *  export: nothing records how the call ended. */
+const CUT_BY_RUN_END_RESULT = 'The task ended before this tool completed.';
+
 /**
- * Deliberate non-goal (#7508): image blocks inside a tool result are not
- * reconstructed here. `ToolUseLog.output` carries either historical display
- * text or the attachment-stripped `ToolResult` fields; attachment bytes never
- * reach the transcript row, and the `tool-result` node is `{text}` only.
+ * A call's `tool-result` node, when it has a result: the text the model read
+ * and the structured `value` the call recorded, if any. Deliberate non-goal
+ * (#7508): image blocks inside a tool result are not reconstructed here.
+ * `ToolUseLog.output` carries either historical display text or the
+ * attachment-stripped `ToolResult` fields; attachment bytes never reach the
+ * transcript row.
  */
-function toolResultText(tool: ToolUseLog): string | undefined {
-  if (tool.error !== undefined) return tool.error;
-  if (typeof tool.output === 'string') return tool.output;
+function toolResultNodes(tool: ToolUseLog): ExportNode[] {
+  const node = (text: string): ExportNode[] => [{ kind: 'tool-result', text }];
+  if (tool.error !== undefined) return node(tool.error);
+  if (typeof tool.output === 'string') return node(tool.output);
   if (Predicate.isObject(tool.output)) {
     const result = Schema.decodeUnknownResult(ToolResultSchema)({
       ...tool.output,
       status: tool.status === TOOL_CALL_STATUS.FAILED ? 'error' : 'executed',
     });
-    if (Result.isSuccess(result)) return formatToolResultAsText(result.success);
+    if (Result.isSuccess(result)) {
+      const decoded = result.success;
+      return [
+        {
+          kind: 'tool-result',
+          text: formatToolResultAsText(decoded),
+          ...(decoded.status === 'executed' &&
+            decoded.value !== undefined && { value: decoded.value }),
+        },
+      ];
+    }
   }
-  if (tool.output !== undefined) return stringifyConversationValue(tool.output);
-  return tool.summary;
+  if (tool.output !== undefined)
+    return node(stringifyConversationValue(tool.output));
+  return tool.summary === undefined ? [] : node(tool.summary);
 }
 
 /**
@@ -74,17 +93,17 @@ function conversationNodesForRow(
       return [{ kind: 'assistant-text', text: row.text.full }];
     case 'thinking':
       return [{ kind: 'thinking', text: row.text.full }];
-    case 'tool': {
-      const text = toolResultText(row.log);
+    case 'tool':
       return [
         {
           kind: 'tool-call',
           name: row.log.toolName ?? 'unknown',
           input: row.log.input ?? {},
         },
-        ...(text !== undefined ? [{ kind: 'tool-result' as const, text }] : []),
+        ...(row.cutByRunEnd === true
+          ? [{ kind: 'tool-result' as const, text: CUT_BY_RUN_END_RESULT }]
+          : toolResultNodes(row.log)),
       ];
-    }
     case 'webSearch':
       return row.query ? [{ kind: 'web-search', query: row.query }] : [];
     // ── Deliberately skipped: not conversation content ──────────────────
@@ -114,14 +133,14 @@ export const readCompletedRunConversation = Effect.fn(
   'readCompletedRunConversation',
 )(function* (
   runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<ExportNode[], Error> {
+  config: ConfigProvider,
+): Effect.fn.Return<ExportNode[], Error, SessionLog> {
   // The transcript is built cold from the run's committed rows by the same
   // reducer the session view runs, at the verbosity the session's config
   // reads now; empty when the run never existed or was removed.
   const transcript = buildRunTranscript(
-    yield* session.log.display(runId),
-    Settings.getConfig<boolean>(session.roots.config, DEBUG_MODE_KEY),
+    yield* (yield* SessionLog).display(runId),
+    Settings.getConfig<boolean>(config, DEBUG_MODE_KEY),
   );
   return transcript.rows.flatMap(conversationNodesForRow);
 });

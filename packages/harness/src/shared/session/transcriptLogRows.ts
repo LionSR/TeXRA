@@ -43,7 +43,7 @@ export function recordLogRow(
       text: `Malformed ${messageType} payload`,
       payload: {
         messageType: MESSAGE_TYPES.ERROR,
-        data: { message: decoded.issue, userRetryable: false },
+        data: { message: decoded.issue },
       },
     });
     return;

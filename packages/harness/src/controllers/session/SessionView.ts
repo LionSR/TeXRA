@@ -29,7 +29,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { SessionViewAccess } from '@agent/runtime/SessionHandle';
 import {
   qualifyAggregateId,
   type LocalRuntimeState,
@@ -40,6 +39,7 @@ import type { SessionView as ReadonlySessionView } from '@shared/session/readonl
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
+import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
 import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -173,7 +173,7 @@ export class RemoteSessionView extends Context.Service<
 }
 
 /**
- * A session's view as its handle carries it (`SessionHandle.view`): the
+ * A session's view as its runs and readers take it (`SessionViewAccess`): the
  * current view, the replay it is built from, the transcript subscriptions
  * that decide which transcripts it holds, and the local runtime state it
  * applies beside the rows.
@@ -186,7 +186,7 @@ export const makeSessionViewAccess = Effect.fn(
   storage: string,
   closed: () => boolean,
 ): Effect.fn.Return<
-  SessionViewAccess,
+  SessionViewAccessShape,
   DatabaseReadFailed,
   | Scope.Scope
   | SessionViewService
@@ -246,7 +246,7 @@ export const makeSessionViewAccess = Effect.fn(
           blocked === null
             ? held === undefined
             : held !== undefined &&
-              held.reason.kind === blocked.kind &&
+              held.reason.blocker === blocked.blocker &&
               held.reason.name === blocked.name;
         if (same) return state;
         const rest = state.resumeBlocked.filter((b) => b.runId !== runId);

@@ -61,10 +61,15 @@ export const chatCommand = withUsageSections(
           }),
         });
       }
+      // An update that ran (or was cancelled) is the command's outcome: the
+      // next `texra` runs the new version, so no chat mounts.
       return notifyCliUpdate(context).pipe(
-        Effect.as({
-          chat: { agentOverride: optString(ctx.args.agent), modelOverride },
-        }),
+        Effect.map(
+          (code) =>
+            code ?? {
+              chat: { agentOverride: optString(ctx.args.agent), modelOverride },
+            },
+        ),
       );
     },
   }),

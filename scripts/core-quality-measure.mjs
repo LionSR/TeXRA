@@ -1,6 +1,6 @@
 // Measures the core-quality rules over CORE_QUALITY_DIRS (eslint.config.mjs).
 // Each rule yields its sites per file; check-core-quality.mjs compares the
-// per-file counts with config/ratchets/core-quality/<rule>.json.
+// per-file counts with the same measurement of the merge base's tree.
 //
 // The ESLint half runs ESLint's own rules without type information, so it
 // is fast and needs no project. The AST half reads each file with the
@@ -21,7 +21,7 @@
 // or interface member (Context.Service shapes included), or a parameter of
 // an exported function/signature, including const functions and Effect.fn.
 
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { build } from 'esbuild';
@@ -34,8 +34,20 @@ import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
-/** Lines a core file may hold before it needs a budget row. */
-const CORE_FILE_LINES = 400;
+/** Lines a core file may hold before file-size counts it. */
+export const CORE_FILE_LINES = 400;
+
+/**
+ * The reducer and fact-reader files, which file-size skips: a fact's reader
+ * belongs beside the rows that decide it, and a size cap would move it away.
+ */
+const FACT_FILES = new Set([
+  'packages/harness/src/shared/session/runRows.ts',
+  'packages/harness/src/shared/session/runState.ts',
+  'packages/harness/src/shared/session/runFacts.ts',
+  'packages/harness/src/shared/session/runRowReads.ts',
+  'packages/harness/src/shared/session/sessionViewUpdate.ts',
+]);
 
 const MIN_DEPTH_INTERFACE = 4;
 const MIN_MODULE_DEPTH = 3;
@@ -92,7 +104,7 @@ export const RULES = {
   'try-catch-effect':
     '`try/catch` around Effect code: errors belong in the typed error channel.',
   'silent-degradation':
-    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, and `Effect.ignore` without a log: a failure turned into a quiet default.',
+    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, `Effect.ignore` without a log, and `Effect.catch`, `catchCause` or `catchDefect` whose handler ignores its error and answers `Effect.succeed(...)` or `Effect.void`: a failure turned into a quiet default. `catchIf` and `catchTag` name the condition they absorb.',
   'missing-readme':
     'A core directory without a README holding a purpose line and a mermaid diagram.',
   'entry-files':
@@ -118,21 +130,24 @@ export const RULES = {
     'The shallow-modules rule over the source outside the core (the rest of the harness, the app, the hosts).',
   'wide-records-outside-core':
     'The wide-records rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'type-assertions-outside-core':
+    'The type-assertions rule over the source outside the core (the rest of the harness, the app, the hosts).',
 };
 
 /**
- * The depth rules, which hold everywhere: the source outside the core is
- * measured by the same code under its own rule name, so the core's rows and
- * the rest are budgeted apart.
+ * The rules that hold everywhere (the depth rules and unexplained `as`): the
+ * source outside the core is measured by the same code under its own rule
+ * name, so the core's rows and the rest are budgeted apart.
  */
 const OUTSIDE_CORE_RULES = {
   'pass-through': 'pass-through-outside-core',
   'shallow-modules': 'shallow-modules-outside-core',
   'wide-records': 'wide-records-outside-core',
+  'type-assertions': 'type-assertions-outside-core',
 };
 
 /** Every package's source; the part outside the core takes the depth rules. */
-const SOURCE_DIRS = [
+export const SOURCE_DIRS = Object.freeze([
   'packages/harness/src',
   'packages/llm/src',
   'packages/texra/src',
@@ -140,14 +155,21 @@ const SOURCE_DIRS = [
   'packages/desktop/src',
   'packages/cli/src',
   'packages/trace-viewer/src',
-];
+]);
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-/** The repo-relative source files under `dirs`, sorted. */
-function sourceFiles(rootDir, dirs) {
+/**
+ * The repo-relative source files under `dirs`, sorted. A directory or entry
+ * file a change adds to the list is absent from the merge base's tree: it
+ * has no files there, so the head's start at zero. Nothing else is guarded:
+ * the manifests, src/test-kernel and the harness README exist at every base
+ * the check runs against.
+ */
+export function sourceFiles(rootDir, dirs) {
   return dirs
+    .filter((dir) => existsSync(path.join(rootDir, dir)))
     .flatMap((dir) =>
       dir.endsWith('.ts')
         ? [dir]
@@ -255,6 +277,57 @@ function returnsQuietValue(handler) {
     ts.isNoSubstitutionTemplateLiteral(body) ||
     (ts.isArrayLiteralExpression(body) && body.elements.length === 0) ||
     (ts.isObjectLiteralExpression(body) && body.properties.length === 0)
+  );
+}
+
+const CATCH_ALLS = new Set(['catch', 'catchCause', 'catchDefect']);
+
+/** Whether `node` reads the identifier `name`: a property name of the same
+ *  spelling (`config.error`, `{ error: 1 }`) is not a read. */
+function mentions(node, name) {
+  if (ts.isIdentifier(node)) return node.text === name;
+  if (ts.isPropertyAccessExpression(node))
+    return mentions(node.expression, name);
+  if (ts.isPropertyAssignment(node)) {
+    const computed = ts.isComputedPropertyName(node.name);
+    if (computed && mentions(node.name.expression, name)) return true;
+    return mentions(node.initializer, name);
+  }
+  return (
+    ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
+    false
+  );
+}
+
+/** A catch-all whose handler never reads its error and answers
+ *  `Effect.succeed(...)` or `Effect.void`, as its body or its one `return`. */
+function dropsError(node) {
+  const call = node.parent;
+  if (!ts.isCallExpression(call) || call.expression !== node) return false;
+  const handler = call.arguments.at(-1);
+  if (
+    handler == null ||
+    !(ts.isArrowFunction(handler) || ts.isFunctionExpression(handler))
+  )
+    return false;
+  let body = handler.body;
+  if (ts.isBlock(body)) {
+    const [only, ...rest] = body.statements;
+    if (rest.length > 0 || only == null || !ts.isReturnStatement(only)) {
+      return false;
+    }
+    if (only.expression == null) return false;
+    body = only.expression;
+  }
+  while (ts.isParenthesizedExpression(body)) body = body.expression;
+  const readsError = handler.parameters.some(
+    ({ name }) => !ts.isIdentifier(name) || mentions(handler.body, name.text),
+  );
+  if (readsError) return false;
+  return (
+    body.getText() === 'Effect.void' ||
+    (ts.isCallExpression(body) &&
+      body.expression.getText() === 'Effect.succeed')
   );
 }
 
@@ -992,7 +1065,7 @@ function measureAst(rootDir, files, byRule) {
     const lines = text.endsWith('\n')
       ? text.split('\n').length - 1
       : text.split('\n').length;
-    if (lines > CORE_FILE_LINES) {
+    if (lines > CORE_FILE_LINES && !FACT_FILES.has(file)) {
       byRule.get('file-size').set(file, {
         value: lines,
         sites: [{ line: 1, detail: `${lines} lines` }],
@@ -1098,6 +1171,12 @@ function measureAst(rootDir, files, byRule) {
           isQuietIgnore(node)
         ) {
           site('silent-degradation', node, `Effect.${member} without a log`);
+        } else if (CATCH_ALLS.has(member) && dropsError(node)) {
+          site(
+            'silent-degradation',
+            node,
+            `Effect.${member} dropping its error`,
+          );
         }
       }
       ts.forEachChild(node, visit);
@@ -1314,6 +1393,15 @@ function valueImportOf(statement) {
 /** A core package, which a test may name directly. */
 const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
 
+/** Where suites live under `rootDir`: the cross-package kernel and each package's own test/. */
+const testRoots = (rootDir) =>
+  [
+    'src/test-kernel',
+    ...readdirSync(path.join(rootDir, 'packages')).map(
+      (name) => `packages/${name}/test`,
+    ),
+  ].filter((root) => existsSync(path.join(rootDir, root)));
+
 /**
  * Study rule 12: literal module mocks of a core module, including shared
  * test support. A target is core when it resolves (alias or relative path)
@@ -1322,9 +1410,11 @@ const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
  */
 function measureMocks(rootDir, files, options, byRule) {
   const core = new Set(files);
-  const tests = walkFiles(path.join(rootDir, 'src/test-kernel'), {
-    include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
-  });
+  const tests = testRoots(rootDir).flatMap((root) =>
+    walkFiles(path.join(rootDir, root), {
+      include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
+    }),
+  );
   for (const { absolutePath } of tests) {
     const file = path.relative(rootDir, absolutePath).replaceAll('\\', '/');
     const source = ts.createSourceFile(
@@ -1358,7 +1448,9 @@ function measureMocks(rootDir, files, options, byRule) {
         if (
           CORE_PACKAGE.test(target) ||
           core.has(resolvedFile) ||
-          (/^src\/test-kernel\/(?:cli|desktop|support)\//.test(file) &&
+          (/^(?:src\/test-kernel|packages\/[^/]+\/test)\/(?:cli|desktop|support)\//.test(
+            file,
+          ) &&
             /^@agent(?:\/|$)/.test(target))
         ) {
           const { line } = source.getLineAndCharacterOfPosition(
@@ -1424,12 +1516,11 @@ function measureInvariants(rootDir, byRule) {
   }
   const tests = `${readme} (tests)`;
   const cited = new Set();
-  for (const { absolutePath } of walkFiles(
-    path.join(rootDir, 'src/test-kernel'),
-    {
+  for (const { absolutePath } of testRoots(rootDir).flatMap((root) =>
+    walkFiles(path.join(rootDir, root), {
       include: (file) =>
         file.endsWith('.vitest.ts') || file === 'support/crashConformance.ts',
-    },
+    }),
   )) {
     for (const match of readFileSync(absolutePath, 'utf8').matchAll(
       /\binvariant (I\d+)\b/g,

@@ -1,6 +1,6 @@
 /**
- * How the bash and tool-edit approvals word a declined request. Pure and
- * host-neutral: it reaches `@shared/schemas` and nothing else.
+ * How the bash and tool-edit approvals word a declined request.
+ * Host-neutral.
  */
 
 import type { RefusalDecision } from '@shared/schemas';

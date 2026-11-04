@@ -19,8 +19,8 @@ import {
  * acknowledge each resumed turn separately.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
-import { runRejection } from '@agent/storage/resumability';
+import { Inbox, openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
+import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
@@ -34,11 +34,15 @@ import {
   type ResumeRefusal,
   type RunId,
 } from '@shared/schemas';
-import { DatabaseRowEarlier, heldElsewhereBy } from '@shared/session/database';
-import { RunHistoryRefused } from '@shared/session/runHistory';
-import { followUpReceipt } from '@shared/session/runFacts';
+import { heldElsewhereBy } from '@shared/session/database';
+import {
+  RunHistoryRefused,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
@@ -52,8 +56,13 @@ import {
 } from './AgentLaunchContext';
 import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
-import { registryOf, type AgentRunServices, RunLive } from './runRegistry';
-import type { SessionHandle } from './SessionHandle';
+import {
+  registryOf,
+  type AgentRunServices,
+  RunLive,
+  Runs,
+} from './runRegistry';
+import type { SessionServices } from './rootLaunch';
 
 /** A resume answers once the run rests with the input it was resumed for
  *  taken, or once the run ends, whether or not it took that input. */
@@ -73,27 +82,31 @@ export type ResumeHandOff =
   | { readonly activation: CommitOrdinal }
   | Exclude<ResumeAttempt, { readonly started: true }>;
 
-/** What a resume's caller supplies: the run's extra tools, whether it
- *  stops after one cycle, and the session it resumes in. */
+/** What a resume's caller supplies: the run's extra tools, and whether it
+ *  stops after one cycle. It resumes in the caller's session. */
 export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
   readonly stopAfterCycle?: boolean;
-  /** Session owning the resumed run's coordination state. */
-  readonly session: SessionHandle;
 }
 
 const CHANNEL = 'ResumeRun';
 
 /**
- * Only a run history refusal of the saved rows names an unusable checkpoint.
- * Ownership, metadata and lease failures remain operational errors.
+ * Only a run history refusal of the saved rows names an unusable checkpoint:
+ * rows that cannot be applied, a history the package's rules refuse, or turns
+ * on a protocol the run's binding no longer speaks. Ownership, metadata and
+ * lease failures remain operational errors.
  */
 function namesUnusableCheckpoint(error: unknown): boolean {
   const reason = findInCauseChain(error, (cause) =>
     cause instanceof RunHistoryRefused ? cause.reason : undefined,
   );
-  return reason === 'inconsistent' || reason === 'unprepared-history';
+  return (
+    reason === 'inconsistent' ||
+    reason === 'unprepared-history' ||
+    reason === 'foreign-protocol'
+  );
 }
 
 /**
@@ -106,13 +119,13 @@ function namesUnusableCheckpoint(error: unknown): boolean {
 export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
-): Effect.Effect<ResumeHandOff, Error> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
-      const runs = registryOf(options.session.runs);
+): Effect.Effect<ResumeHandOff, Error, SessionServices> =>
+  Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
+      const runs = registryOf(yield* Runs);
+      // Counted among the attempt's waiters as `openResume` returned it.
       const attempt = yield* openResume(runId, options, false);
       if (attempt === undefined) return REFUSED;
-      attempt.waiters += 1;
       const handOff = (activation: CommitOrdinal): ResumeHandOff => ({
         activation,
       });
@@ -161,56 +174,64 @@ export const decideResume = Effect.fn('decideResume')(function* (
   options: ResumeRunOptions,
   activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeAttempt, Error, AgentRunServices | Scope.Scope> {
-  const session = options.session;
-  const store = getRunRecords(session, runId);
-  const [config, exists] = yield* Effect.all([
-    store.readConfig(),
-    store.exists(),
-  ]);
+  const log = yield* SessionLog;
+  const inbox = yield* Inbox;
+  const store = getRunRecords(runId);
+  const records = yield* Effect.result(
+    Effect.all([store.readConfig(), store.exists()]),
+  );
+  // A record read refuses a run holding an earlier build's row, wherever
+  // the row sits: this build cannot open the run.
+  if (Result.isFailure(records)) {
+    const earlier = earlierBuildRefusal(records.failure);
+    if (earlier === undefined) return yield* Effect.fail(records.failure);
+    return { failed: earlier };
+  }
+  const [config, exists] = records.success;
   if (!config || !exists) {
     // A run whose records are gone: with nothing queued its input ends.
-    yield* session.followUps.closeInput(runId);
+    yield* inbox.closeInput(runId);
     return REFUSED;
   }
   // Deleted, or its input closed, while those reads ran.
-  if ((yield* session.followUps.read(runId)).inputClosed) return REFUSED;
+  if ((yield* inbox.read(runId)).inputClosed) return REFUSED;
   // Every resume reads the run's state under its claim and holds it until
   // the launched run holds its own, so two processes never both launch it,
   // neither launches from a state read before the other ran, and a host is
   // refused before it rearranges itself. A claim this process holds, or one
   // whose owner is provably dead, is taken over.
-  const heldBy = yield* session.log.hold(runId).pipe(
+  const heldBy = yield* log.hold(runId).pipe(
     Effect.as(null),
     Effect.catch((error) => {
       const holder = heldElsewhereBy(error);
       return holder === null ? Effect.fail(error) : Effect.succeed(holder);
     }),
   );
-  if (heldBy !== null) return { failed: 'owned_elsewhere' };
+  if (heldBy !== null)
+    return { failed: { kind: 'ownedElsewhere', owner: heldBy } };
   // Whether an open call owns it, read under its claim in this resume's
   // job, so the answer and the activation below are one decision.
-  const owner = yield* owningCall(session, runId);
+  const owner = yield* owningCall(runId);
   if (owner !== null) return { ownedBy: owner.parentRunId };
   // What its children hold for it, it reads once it runs here.
-  yield* deliverHeld(session, runId);
+  yield* deliverHeld(runId);
   // Nothing to continue from, or rows this build cannot open.
-  const rejected = yield* runRejection(runId, session);
-  if (rejected !== null) return { failed: rejected.kind };
+  const rejected = yield* runRejection(runId);
+  if (rejected !== null) return { failed: rejected };
   // An agent or plugin this process cannot run now leaves the run
   // interrupted with the reason, never failed, for the session's follower to
   // resume once it is back; nothing is launched. Another process's run
   // is refused as such above, whatever this process lacks.
-  const blocker = yield* resumeBlocker(session, config);
-  yield* session.view.markResumeBlocked(runId, blocker);
-  if (blocker !== null) return { failed: 'blocked' };
+  const blocker = yield* resumeBlocker(config);
+  yield* (yield* SessionViewAccess).markResumeBlocked(runId, blocker);
+  if (blocker !== null) return { failed: blocker };
   // The launched run is admitted once its `run.activate` commits.
-  return yield* resumeQueuedToolUse(session, runId, config, options, activated);
+  return yield* resumeQueuedToolUse(runId, config, options, activated);
 }, Effect.scoped);
 
-/** Whether every follow-up of `batch` has left the queue `rows` hold: its
- *  receipt is past `accepted`. */
+/** Whether every follow-up of `batch` has left the queue `rows` hold. */
 const taken = (rows: RunRows, batch: ReadonlySet<string>): boolean =>
-  [...batch].every((id) => followUpReceipt(rows, id)?.state !== 'accepted');
+  !rows.followUps.some(({ followUpId }) => batch.has(followUpId));
 
 /**
  * Whether `runId` rests with every follow-up of `batch` taken: its rows
@@ -221,7 +242,7 @@ const taken = (rows: RunRows, batch: ReadonlySet<string>): boolean =>
  * false if the tail ends first.
  */
 const restsWith = (
-  session: SessionHandle,
+  log: SessionLogShape,
   runId: RunId,
   batch: ReadonlySet<string>,
   from: CommitOrdinal,
@@ -229,7 +250,7 @@ const restsWith = (
 ) => {
   const run = qualifyAggregateId('run', runId);
   let rows = input;
-  return session.log.tail(from).pipe(
+  return log.tail(from).pipe(
     Stream.filter((row) => {
       if (row.aggregateId !== run || !isSharedRunRow(row)) return false;
       const verdict = applyRunRow(rows, row);
@@ -249,17 +270,18 @@ function refusalFor(
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
   // A live owner refused the claim, or took it after its owner was proved dead.
-  if (heldElsewhereBy(error) !== null)
-    return Effect.succeed({ failed: 'owned_elsewhere' });
-  if (error instanceof DatabaseRowEarlier)
-    return Effect.succeed({ failed: 'earlier_build' });
+  const owner = heldElsewhereBy(error);
+  if (owner !== null)
+    return Effect.succeed({ failed: { kind: 'ownedElsewhere', owner } });
+  const earlier = earlierBuildRefusal(error);
+  if (earlier !== undefined) return Effect.succeed({ failed: earlier });
   if (namesUnusableCheckpoint(error)) {
     return Effect.logWarning(
       `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
     ).pipe(
       Effect.annotateLogs({ data: error }),
       withLogChannel(CHANNEL),
-      Effect.as({ failed: 'unusable_checkpoint' } as const),
+      Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const),
     );
   }
   return Effect.succeed(undefined);
@@ -271,18 +293,19 @@ function refusalFor(
  * batch ({@link restsWith}), without ending the run's lifetime.
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
-  session: SessionHandle,
   runId: RunId,
   config: AgentConfig,
   options: ResumeRunOptions,
   activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
+  const log = yield* SessionLog;
+  const inbox = yield* Inbox;
   const resumed = yield* Effect.result(
     Effect.gen(function* () {
       // The receipt reads the rows committed from here on.
-      const from = session.log.now();
+      const from = log.now();
       // A model switch waits for a turn: the resume does not wait on it.
-      const input = yield* session.followUps.read(runId);
+      const input = yield* inbox.read(runId);
       const batch = new Set(
         input.followUps
           .filter((input) => input.control?.kind !== 'model')
@@ -297,26 +320,24 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       };
       // Its parent, read once under the claim: the run's edge for this
       // activation.
-      const parentRunId = yield* persistedParentRunId(session, runId);
+      const parentRunId = yield* persistedParentRunId(runId);
       let launched: Fiber.Fiber<RunReport | undefined, Error>;
       if (parentRunId === undefined) {
         const program = prepareAgentDefinition({
           config,
-          session,
           stopAfterCycle: options.stopAfterCycle,
         }).pipe(
           Effect.flatMap((definition) =>
             executeAgent(definition, runId, launchOptions),
           ),
         );
-        launched = yield* registryOf(session.runs).start(
+        launched = yield* registryOf(yield* Runs).start(
           runId,
           program,
           (admitted) => admitted,
         );
       } else {
         const native = {
-          session,
           runId,
           startedAt: yield* Clock.currentTimeMillis,
           workingDirectory: config.workingDirectory ?? undefined,
@@ -330,7 +351,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         };
         const { script } = config;
         ({ fiber: launched } = yield* startChildRunLoop({
-          session,
           runId,
           parentRunId,
           agentName: config.agent,
@@ -343,9 +363,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       // Interrupting either observation below cannot interrupt the
       // launched run's lifetime.
       const rested = yield* Effect.raceFirst(
-        restsWith(session, runId, batch, from, input).pipe(
-          Effect.interruptible,
-        ),
+        restsWith(log, runId, batch, from, input).pipe(Effect.interruptible),
         Fiber.join(launched).pipe(Effect.as(false), Effect.interruptible),
       );
       return { rested, batch };
@@ -358,7 +376,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   }
   const { rested, batch } = resumed.success;
   // A run that ended first delivered the batch if its rows took it.
-  const delivered =
-    rested || taken(yield* session.followUps.read(runId), batch);
+  const delivered = rested || taken(yield* inbox.read(runId), batch);
   return { started: true, delivered };
 });

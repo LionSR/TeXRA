@@ -115,18 +115,19 @@ const withReset = (
 ): Quota =>
   seconds === undefined ? quota : { ...quota, resetsInMs: seconds * 1000 };
 
-/** The Codex backend's own `usage_limit_reached` reply, unique to the ChatGPT plan. */
+/**
+ * The ChatGPT plan's own limit reply, unique to its token-sharing route. Its
+ * `subscription_sharing_usage_unavailable` is a temporary 503, not a limit.
+ */
 function chatgptPlanLimit(body: unknown): Quota | undefined {
   const candidate = envelopes(body).find(
-    (fields) => stringField(fields, 'type') === 'usage_limit_reached',
+    (fields) =>
+      stringField(fields, 'code') ===
+      'subscription_sharing_usage_limit_exceeded',
   );
   if (candidate === undefined) return undefined;
-  const planType = stringField(candidate, 'plan_type');
   return withReset(
-    {
-      plan: 'chatgpt-subscription',
-      ...(planType === undefined ? {} : { planType }),
-    },
+    { plan: 'chatgpt-subscription' },
     numberField(candidate, 'resets_in_seconds'),
   );
 }
@@ -161,14 +162,14 @@ function glmPlanLimit(body: unknown): Quota | undefined {
   );
 }
 
-/** The account itself is out of credit: OpenAI's `insufficient_quota`, Anthropic's low balance. */
+/** The account itself is out of credit: OpenAI's `insufficient_quota`, DeepSeek's `insufficient_balance_error`, Anthropic's low balance. */
 const creditDepleted = (body: unknown): boolean =>
   envelopes(body).some((candidate) => {
     const type = stringField(candidate, 'type');
     const message = stringField(candidate, 'message')?.toLowerCase() ?? '';
     return (
-      stringField(candidate, 'code') === 'insufficient_quota' ||
-      type === 'insufficient_quota' ||
+      [stringField(candidate, 'code'), type].includes('insufficient_quota') ||
+      type === 'insufficient_balance_error' ||
       (type === 'invalid_request_error' &&
         message.includes('credit balance is too low')) ||
       message.includes('exceeded your current quota')

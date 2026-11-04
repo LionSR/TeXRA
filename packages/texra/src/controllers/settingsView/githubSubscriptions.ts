@@ -1,5 +1,5 @@
 // Third-party imports
-import { type Context, Effect, Option } from 'effect';
+import { Context, Effect, Option } from 'effect';
 
 // Local imports - GitHub subscriptions
 import { ToolCatalog } from '@texra-ai/harness/host';
@@ -30,10 +30,11 @@ const whileUp = <A>(
         'github-pr-subscription',
       );
       return Option.isSome(services)
-        ? yield* Effect.provide(
+        ? yield* Effect.provideService(
             read,
-            // The GitHub plugin's own services, which its layer serves.
-            services.value as Context.Context<GitHubSubscriptions>,
+            GitHubSubscriptions,
+            // The GitHub plugin's own service, which its layer serves.
+            Context.getUnsafe(services.value, GitHubSubscriptions),
           )
         : none;
     }),

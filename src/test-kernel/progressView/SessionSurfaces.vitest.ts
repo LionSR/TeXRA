@@ -5,8 +5,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { Rejected } from '@texra-ai/harness';
-import type { WebviewTransport } from '@progressView/frontend/sessionTransport';
-import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import { emptySessionView } from '@shared/session/sessionView';
 import {
   buildScenario,
@@ -20,6 +18,8 @@ import {
   createWebviewStorage,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
+import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
+import type { WebviewTransport } from '@ui/progress/sessionTransport';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 const transport = vi.hoisted(() => ({
@@ -31,10 +31,8 @@ const transport = vi.hoisted(() => ({
   close: vi.fn(),
   dispose: vi.fn(),
 }));
-vi.mock('@progressView/frontend/sessionTransport', async (original) => ({
-  ...(await original<
-    typeof import('@progressView/frontend/sessionTransport')
-  >()),
+vi.mock('@ui/progress/sessionTransport', async (original) => ({
+  ...(await original<typeof import('@ui/progress/sessionTransport')>()),
   installWebviewTransport: () => transport,
 }));
 

@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
 import {
@@ -27,45 +27,48 @@ const SETUP_INSTRUCTION =
  * host's setup entry point comes through here. `already-running` when the
  * session holds a live setup run, `no-model` when the user's credentials
  * can call no setup model (the missing-credential case; a check that cannot
- * be answered fails). A failure once the run started is its result row's to
- * show, not a failure to launch.
+ * be answered fails), `not-started` when the launch path refused the run.
+ * That refusal is the launch path's to show, and a failure once the run
+ * started is its result row's: neither is a failure here.
  */
-export const launchSetup = <E>(options: {
+export const launchSetup = Effect.fn('launchSetup')(function* <E>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
-  /** This host's launch path for the setup request. */
+  /** This host's launch path for the setup request, which logs and shows a
+   *  failure to start (`HostRunActions.runValidated`). */
   readonly start: (config: AgentConfig) => Effect.Effect<Run, E>;
-}) =>
-  Effect.gen(function* () {
-    // A second setup conversation, however it was started, would race the
-    // first one's installs and config writes.
-    const live = [...options.session.view.current().runs.values()].some(
-      (run) =>
-        isLiveRun(run) &&
-        run.identity.kind === 'agent' &&
-        agentName(run.identity.agent) === SETUP_AGENT_NAME,
-    );
-    if (live) return 'already-running' as const;
-    // The launch model the credential predicate every host shares decides:
-    // adapter-level checks, so a blank env key does not count and fail later
-    // as "No model is available".
-    const model = yield* resolveSetupLaunchModel(options.roots);
-    if (model === null) return 'no-model' as const;
-    // An Error, as every host words a failed setup launch by its message.
-    const config = yield* decodeLaunchConfig({
-      agent: SETUP_AGENT_NAME,
-      model,
-      instruction: SETUP_INSTRUCTION,
-    }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
-    const run = yield* options.start(config);
-    yield* run.result.pipe(
-      Effect.asVoid,
-      Effect.catch((failure) =>
-        Effect.logDebug(`The setup run failed: ${failure.message}`),
-      ),
-    );
-    return 'launched' as const;
-  });
+}) {
+  // A second setup conversation, however it was started, would race the
+  // first one's installs and config writes.
+  const live = [...options.session.view.current().runs.values()].some(
+    (run) =>
+      isLiveRun(run) &&
+      run.identity.kind === 'agent' &&
+      agentName(run.identity.agent) === SETUP_AGENT_NAME,
+  );
+  if (live) return 'already-running' as const;
+  // The launch model the credential predicate every host shares decides:
+  // adapter-level checks, so a blank env key does not count and fail later
+  // as "No model is available".
+  const model = yield* resolveSetupLaunchModel(options.roots);
+  if (model === null) return 'no-model' as const;
+  // An Error, as every host words a failed setup launch by its message.
+  const config = yield* decodeLaunchConfig({
+    agent: SETUP_AGENT_NAME,
+    model,
+    instruction: SETUP_INSTRUCTION,
+  }).pipe(Effect.mapError(({ reason }) => new Error(reason)));
+  const started = yield* Effect.result(options.start(config));
+  if (Result.isFailure(started)) return 'not-started' as const;
+  const run = started.success;
+  yield* run.result.pipe(
+    Effect.asVoid,
+    Effect.catch((failure) =>
+      Effect.logDebug(`The setup run failed: ${failure.message}`),
+    ),
+  );
+  return 'launched' as const;
+});
 
 /**
  * Launch the setup conversation from the desktop's setup card through the
@@ -74,9 +77,9 @@ export const launchSetup = <E>(options: {
  * first suspension: the run and its presentation belong to it even when the
  * window moves to another project while the model resolves.
  * Setup continues after its initiating request has completed, so a failure
- * is presented here; the kickoff finishes with the setup run, so a second
- * Run Setup waits for it. A setup run already live in the project is left
- * to run alone.
+ * before the launch is presented here (the launch path presents its own);
+ * the kickoff finishes with the setup run, so a second Run Setup waits for
+ * it. A setup run already live in the project is left to run alone.
  */
 export const kickoffDesktopSetup = (options: {
   readonly project: {

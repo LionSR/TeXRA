@@ -24,6 +24,14 @@ import { ModelError } from '../errors.js';
 type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
 
 /**
+ * One pull's result, discriminated on `done`: a value while not done. A pull
+ * source's result type is constrained by this over its own {@link PullValue},
+ * so checking `done` narrows to the member that carries the value.
+ */
+type PullResult<A> =
+  { readonly done?: false; readonly value: A } | { readonly done: true };
+
+/**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
  * iterator — that ends when the source reports `done`.
  *
@@ -32,10 +40,7 @@ type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
  * ladder. Only the source and the failure classifier ever differed, so those
  * are the parameters.
  */
-export const pullStream = <
-  R extends { readonly done?: boolean; readonly value?: unknown },
-  E,
->(
+export const pullStream = <R extends PullResult<PullValue<R>>, E>(
   pull: () => PromiseLike<R>,
   onError: (cause: unknown) => E,
 ): Stream.Stream<PullValue<R>, E> =>
@@ -43,13 +48,7 @@ export const pullStream = <
     Effect.succeed(
       Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
         Effect.flatMap((next) =>
-          next.done
-            ? Cause.done()
-            : // `done` is false here, so the result is the value-carrying
-              // member of the union `PullValue` picked the type from.
-              Effect.succeed([
-                (next as { readonly value: PullValue<R> }).value,
-              ] as const),
+          next.done ? Cause.done() : Effect.succeed([next.value] as const),
         ),
       ),
     ),
@@ -70,9 +69,10 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
     Effect.sync(() => source[Symbol.asyncIterator]()),
     (iterator) => {
       source.controller.abort();
-      return iterator.return
+      const returnIterator = iterator.return?.bind(iterator);
+      return returnIterator
         ? Effect.tryPromise({
-            try: () => iterator.return!(),
+            try: () => returnIterator(),
             catch: cleanupFailure,
           }).pipe(Effect.orDie)
         : Effect.void;

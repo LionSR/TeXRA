@@ -17,7 +17,7 @@ import {
   type RouteFacts,
 } from '@texra-ai/llm';
 import {
-  codexCoordinator,
+  chatgptCoordinator,
   SubscriptionOAuthError,
   xaiCoordinator,
 } from '@texra-ai/llm/node';
@@ -26,7 +26,6 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { readProviderEndpoint } from '@model/modelSettings';
 import { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
-import { SUBSCRIPTION_AUTH_NAMES } from '@shared/model/subscriptionAuth';
 import type { HttpClient } from 'effect/http';
 
 /** A route that bills a signed-in subscription session. */
@@ -42,35 +41,29 @@ export type RouteCredential = {
   | { readonly route: 'api-key' | 'xai-subscription' }
   | {
       readonly route: 'chatgpt-subscription';
-      readonly accountId: string | null;
       /** The ChatGPT plan the session's token names; display-only. */
       readonly plan: string | undefined;
     }
 );
 
 /**
- * A subscription session failure as the user's instruction: "sign in again,
- * or turn off the preference", not a raw auth error.
+ * A subscription session failure as its facts: the route that could not
+ * bill, the session's own failure, and whether only a fresh sign-in helps.
+ * `providerErrorOf` words them; a host's copy may word them its own way.
  */
-function subscriptionUnavailable(
+const subscriptionUnavailable = (
   route: SessionRoute,
   error: Error,
-): RouteUnavailable {
-  const copy =
-    SUBSCRIPTION_AUTH_NAMES[
-      route === 'chatgpt-subscription' ? 'chatgpt' : 'grok'
-    ];
-  const turnOff = `turn off "${copy.subscriptionLabel}".`;
-  const action =
-    error instanceof SubscriptionOAuthError && error.needsReauth
-      ? `${copy.signInLabel} again, or ${turnOff}`
-      : `Try again in a moment, or ${turnOff}`;
-  return new RouteUnavailable({
+): RouteUnavailable =>
+  new RouteUnavailable({
     reason: 'unavailable',
-    message: `${copy.subscriptionLabel} unavailable: ${error.message} ${action}`,
+    message: error.message,
+    session: {
+      route,
+      needsReauth: error instanceof SubscriptionOAuthError && error.needsReauth,
+    },
     cause: error,
   });
-}
 
 /**
  * The endpoint `route` sends `config`'s requests to. A provider the catalog
@@ -114,11 +107,10 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
   const { provider } = PLAN_ROUTES[route];
   const session: Effect.Effect<RouteCredential, Error, HttpClient.HttpClient> =
     route === 'chatgpt-subscription'
-      ? Effect.map(codexCoordinator(secrets).getFreshSession(), (fresh) => ({
+      ? Effect.map(chatgptCoordinator(secrets).getFreshSession(), (fresh) => ({
           route,
           provider,
           bearer: fresh.accessToken,
-          accountId: fresh.accountId ?? null,
           plan: fresh.planType,
           endpoint,
         }))
@@ -130,7 +122,7 @@ const subscriptionCredential = Effect.fn('credentials.subscription')(function* (
         }));
   const refresh = (token: string) =>
     route === 'chatgpt-subscription'
-      ? codexCoordinator(secrets).refreshRejected(token)
+      ? chatgptCoordinator(secrets).refreshRejected(token)
       : xaiCoordinator(secrets).refreshRejected(token);
   return yield* (
     rejected === undefined

@@ -2,10 +2,7 @@ import { basename } from 'node:path';
 
 import { computed } from '@lit-labs/signals';
 
-import {
-  isWorkingRun,
-  stripControlCharacters,
-} from '@texra-ai/harness/schemas';
+import { stripControlCharacters } from '@texra-ai/harness/schemas';
 import { osc } from '@cli/runtime/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
@@ -52,7 +49,7 @@ const terminalTitleState = computed((): SessionTitleState => {
     chatTuiCanStopActiveRun(runStopFacts.get()) ||
     rootRunIds.get().some((id) => {
       const run = runs.get(id);
-      return run !== undefined && isWorkingRun(run);
+      return run !== undefined && run.working;
     })
   ) {
     return 'running';

@@ -12,7 +12,6 @@
 import {
   AGENT_SKILLS_CONFIG_KEY,
   APPROVAL_POLICY_CONFIG_KEY,
-  BASH_APPROVAL_CONFIG_KEY,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   GlobalStateKey,
@@ -20,8 +19,6 @@ import {
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
-  RESUME_ON_OPEN_SETTING,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   WorkspaceStateKey,
   type StateSettingEntry,
 } from '@texra-ai/harness/schemas';
@@ -94,7 +91,6 @@ const AGENTS_AND_CLI: Placement = {
 const APPROVAL_AND_CLI: Placement = {
   surfaces: { settingsView: 'approval', cliConfig: true },
 };
-const APPROVAL_ONLY: Placement = { surfaces: { settingsView: 'approval' } };
 const PROFILE_AND_CLI: Placement = {
   surfaces: { settingsView: 'profile', cliConfig: true },
 };
@@ -126,7 +122,6 @@ function providerToggle(
 export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
   // --- Config-file-backed rows ---------------------------------------------
   [CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY]: AGENTS_AND_CLI,
-  [RESUME_ON_OPEN_SETTING.configKey]: APPROVAL_AND_CLI,
   [GOAL_MAX_COST_SETTING.configKey]: APPROVAL_AND_CLI,
   'model.useGoogleInteractionsServerState': {
     surfaces: {
@@ -152,8 +147,6 @@ export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
   [AGENT_SKILLS_CONFIG_KEY]: {
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
-  [TOOL_EDIT_APPROVAL_CONFIG_KEY]: APPROVAL_ONLY,
-  [BASH_APPROVAL_CONFIG_KEY]: APPROVAL_ONLY,
   [APPROVAL_POLICY_CONFIG_KEY]: APPROVAL_AND_CLI,
 
   // --- Git ------------------------------------------------------------------

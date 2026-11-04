@@ -38,7 +38,7 @@ import {
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { onAppSignal, type AppSignals } from '@platform/appSignals';
-import type { StateStore } from '@platform/interfaces';
+import type { StateStore } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import type {
@@ -95,7 +95,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
       }),
     );
     if (!seeded) return;
-    yield* Effect.logInfo(
+    // Debug: the seed runs while a host's runtime builds, before the CLI's
+    // platform silences its stderr diagnostics.
+    yield* Effect.logDebug(
       `First install: plugins switched off by default: ${defaults.join(', ')}`,
     ).pipe(withLogChannel(CHANNEL));
   },

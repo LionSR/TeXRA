@@ -30,7 +30,7 @@ export const resumeRun = (
   session.resume(runId, { interactive: true }).pipe(
     Effect.catchTags({
       ResumeRefused: (refusal) =>
-        refusal.reason === 'blocked'
+        refusal.reason.kind === 'blocked'
           ? Effect.succeed('waiting' as const)
           : Effect.fail(new Unavailable({ runId, reason: refusal.message })),
       ToolsRefused: (refusal) =>

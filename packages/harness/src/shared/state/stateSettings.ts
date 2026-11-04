@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports - shared constants & state keys
 import {
@@ -11,23 +11,20 @@ import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
-  BASH_APPROVAL_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEBUG_MODE_KEY,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
   GOAL_MAX_COST_SETTING,
+  GOAL_STRATEGY_SETTING,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
-  RESUME_ON_OPEN_SETTING,
   INHERITED_WORKSPACE_AGENTS,
   QualifiedSkillNameSchema,
 } from '@shared/schemas';
-import { DEFAULT_HELPER_MODEL } from '@shared/constants/defaultModels';
 import {
   PROVIDER_ENDPOINT_STATE_ENTRIES,
   PROVIDER_REGION_SETTINGS,
@@ -169,19 +166,6 @@ const HARNESS_CONFIG_ROWS: Record<
     description: CHILD_RUN_CONCURRENCY_BUDGET_SETTING.description,
     category: 'agents',
   },
-  // Global: how one person wants their windows to open.
-  [RESUME_ON_OPEN_SETTING.configKey]: {
-    schema: Schema.Literals(RESUME_ON_OPEN_SETTING.values).pipe(
-      Schema.withDecodingDefault(
-        Effect.succeed(RESUME_ON_OPEN_SETTING.defaultValue),
-      ),
-    ),
-    configTarget: 'global',
-    title: 'Interrupted tasks',
-    description: RESUME_ON_OPEN_SETTING.description,
-    category: 'agents',
-    enumLabels: ['Ask', 'Resume automatically'],
-  },
   // Global: a committed project config must not raise or remove the user's cap.
   [GOAL_MAX_COST_SETTING.configKey]: {
     schema: Schema.Number.check(
@@ -198,16 +182,25 @@ const HARNESS_CONFIG_ROWS: Record<
     description: GOAL_MAX_COST_SETTING.description,
     category: 'tools',
   },
+  // Global, as the cap is: the strategy is what checks the cap, so a
+  // committed project config must not pick one that ignores it.
+  [GOAL_STRATEGY_SETTING.configKey]: {
+    schema: Schema.String.check(
+      Schema.isPattern(/^builtIn:[A-Za-z0-9_-]+$/),
+    ).pipe(
+      Schema.withDecodingDefault(
+        Effect.succeed(GOAL_STRATEGY_SETTING.defaultValue),
+      ),
+    ),
+    configTarget: 'global',
+    description: GOAL_STRATEGY_SETTING.description,
+  },
   // The provider toggles below are `configTarget: 'global'`: they describe how
   // you talk to a provider, not a property of one project. Writes go to the
   // global file past the open-workspace write guard; reads stay merged, so a
   // workspace override stays honored (stranded values: #11173). Only
   // server-side state is a user choice (data retention); the transport knobs
   // have no settings-view row and live in `.texra/config.json`.
-  'model.gpt5ReasoningSummary': configToggle(
-    false,
-    "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-  ),
   'model.useGoogleInteractionsServerState': {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
@@ -222,17 +215,9 @@ const HARNESS_CONFIG_ROWS: Record<
     false,
     'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
   ),
-  'model.useBackgroundResponses': configToggle(
-    true,
-    'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running a text-only agent (one without tools); ignored otherwise. Disable to fall back to synchronous streaming requests.',
-  ),
   'model.openaiFastTier': configToggle(
     false,
     "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
-  ),
-  'model.openaiParallelToolCalls': configToggle(
-    true,
-    'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   ),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `Settings.get`, so narrowing the row to the global scope would
@@ -335,25 +320,6 @@ const HARNESS_CONFIG_ROWS: Record<
       'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
   },
-  [TOOL_EDIT_APPROVAL_CONFIG_KEY]: {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    title: 'Require approval for file edits',
-    description:
-      'Show a diff and wait for your approval before an agent changes a project file.',
-    category: 'tools',
-    configTarget: 'local',
-  },
-  [BASH_APPROVAL_CONFIG_KEY]: {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    title: 'Require approval for shell commands',
-    description: 'Wait for your approval before an agent runs a shell command.',
-    category: 'tools',
-    configTarget: 'local',
-  },
 };
 
 /**
@@ -388,7 +354,7 @@ const APPROVAL_POLICY_SETTING: StateSettingEntry = {
   ),
   title: 'Approval policy',
   description:
-    'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
+    'Whether agents ask before running shell commands and editing files.',
   category: 'tools',
   slot: 'config',
   configTarget: 'local',
@@ -563,12 +529,13 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
   // --- Model picker preferences ---------------------------------------------
   {
     key: GlobalStateKey.HELPER_MODEL,
-    schema: Schema.String.check(Schema.isMinLength(1)).pipe(
-      Schema.withDecodingDefault(Effect.succeed(DEFAULT_HELPER_MODEL)),
-    ),
+    // No default here: absent means none is configured, and a helper call
+    // uses the run's own model. An app names its own (`settingsCatalog`'s
+    // `defaults`).
+    schema: Schema.UndefinedOr(Schema.String.check(Schema.isMinLength(1))),
     title: 'Helper model',
     description:
-      'Model used for auxiliary tasks: instruction polishing, merges, and session descriptions.',
+      "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",
     category: 'model',
     slot: 'globalState',
   },
@@ -668,12 +635,41 @@ export interface SettingsCatalog {
 }
 
 /** The harness's rows, then `rows` (an app's own, its plugins' included),
- *  stored under `namespace`. A key declared twice is a defect and throws. */
+ *  stored under `namespace`. A key declared twice is a defect and throws, and
+ *  so does a `defaults` key that names no harness row. */
 export function settingsCatalog(options: {
   readonly namespace: string;
   readonly rows: readonly StateSettingEntry[];
+  /** The app's own defaults for harness rows, by key: the value an absent
+   *  key reads as (the helper model, which the harness leaves unset). */
+  readonly defaults?: Readonly<Record<string, unknown>>;
 }): SettingsCatalog {
-  const rows = [...HARNESS_SETTINGS, ...options.rows];
+  const appDefaults = options.defaults ?? {};
+  const unowned = Object.keys(appDefaults).filter(
+    (key) => !HARNESS_SETTINGS.some((row) => row.key === key),
+  );
+  if (unowned.length > 0) {
+    throw new Error(`No harness setting has the key ${unowned.join(', ')}.`);
+  }
+  const harnessRows = HARNESS_SETTINGS.map((row) => {
+    if (!Object.hasOwn(appDefaults, row.key)) return row;
+    // An app default the row's own schema refuses is a defect of the app:
+    // it fails here, where the catalog is built, not at the first read. The
+    // default stands in for the absent stored value before decoding, so the
+    // value checked is the value an absent key decodes from; `undefined`
+    // would only mask the row's own default, and is refused.
+    if (appDefaults[row.key] === undefined) {
+      throw new Error(`The app default for ${row.key} is undefined.`);
+    }
+    Schema.decodeUnknownSync(row.schema)(appDefaults[row.key]);
+    return {
+      ...row,
+      schema: row.schema.pipe(
+        Schema.withDecodingDefault(Effect.succeed(appDefaults[row.key])),
+      ),
+    };
+  });
+  const rows = [...harnessRows, ...options.rows];
   const byKey = new Map<string, StateSettingEntry>();
   for (const row of rows) {
     if (byKey.has(row.key)) {
@@ -697,9 +693,7 @@ export function settingsCatalog(options: {
         defaults.set(key, Schema.decodeUnknownSync(entry.schema)(undefined));
       }
       const value = defaults.get(key);
-      return value !== null && typeof value === 'object'
-        ? structuredClone(value)
-        : value;
+      return Predicate.isObjectOrArray(value) ? structuredClone(value) : value;
     },
   };
 }

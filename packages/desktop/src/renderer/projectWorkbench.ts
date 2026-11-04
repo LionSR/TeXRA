@@ -4,12 +4,12 @@
 import { Result, Schema, Struct } from 'effect';
 
 import { isPackagedAgentSource } from '@texra-ai/harness/schemas';
-import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import type { SessionSurfaces } from '@progressView/frontend/sessionSurfaces';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import type { HostOutcome } from '@texra/shared/session/sessionFrames';
 import { postMessage } from '@texra/shared/hostBridge';
 import type { Theme } from '@texra/shared/ipc';
+import type { SessionSurfaces } from '@ui/progress/sessionSurfaces';
+import type { ProgressApp } from '@ui/progress/ProgressApp';
 
 import {
   DesktopShellStateSchema,
@@ -38,6 +38,7 @@ export function createProjectWorkbench(options: {
   conversationView: ProgressApp;
   isActive(): boolean;
   isBrowserCovered(): boolean;
+  confirmDiscard(title: string, discard: () => void): void;
   onLayoutChanged(
     session: string,
     previous: DesktopShellState,
@@ -192,6 +193,7 @@ export function createProjectWorkbench(options: {
     session,
     isActive: options.isActive,
     isBrowserCovered: options.isBrowserCovered,
+    confirmDiscard: options.confirmDiscard,
     conversationView: options.conversationView,
     fileTree,
     editorFor,

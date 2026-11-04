@@ -12,70 +12,69 @@
  */
 import { isDeepStrictEqual } from 'node:util';
 
-import { Effect, Result, Schema } from 'effect';
+import { Context, Effect, Result, Schema } from 'effect';
 
-import { ToolContext, type CallRequests } from '@agent/core/tools/ToolTypes';
+import {
+  ToolContext,
+  type CallRequests,
+  type ITool,
+} from '@agent/core/tools/ToolTypes';
 import {
   approvalPolicyDenialMessage,
   decideApproval,
   isApprovalDenied,
 } from '@shared/approvalPolicy';
-import { Settings } from '@shared/config/settings';
 import {
-  BASH_APPROVAL_CONFIG_KEY,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   qualifyAggregateId,
   type DecisionOf,
   type HookOutcomePayload,
   type PermissionPayload,
-  type RunId,
+  PermissionPayloadSchema,
+  toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
-import type { CellError, RunCell } from '@shared/session/runHistory';
+import {
+  Approvals,
+  SessionLog,
+  type CellError,
+  type RunCell,
+} from '@shared/session/runHistory';
 import { isRequestDecision } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
+import type {
+  ApprovalOperation,
+  ApprovalsWithPermission,
+  HookAnswer,
+  SessionApprovals,
+} from '@shared/session/sessionApprovals';
+import type { LogWriteError } from '@shared/session/sessionLog';
 import { assertWritable, resolveToolPath } from '@tools/pathResolution';
-import {
-  buildBashApprovalRejectedResult,
-  requestBashApproval,
-} from '@tools/approval/bashApproval';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { recordedDecision } from '../requestPolicy';
-import { RunCall, requireRun, sessionOf } from '../RunCall';
+import { Interactions } from '../HostInteractions';
+import { recordedDecision, SessionRequests } from '../requestPolicy';
+import { RunCall, requireToolRun } from '../RunCall';
+import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
-import type { SessionApprovals } from '../runApprovalQueue';
-import type { LogWriteError, SessionHandle } from '../SessionHandle';
-import type { RuntimeTool, ToolServices } from '../ToolServices';
+import type { SessionServices } from '../rootLaunch';
+import type { PluginToolServices } from '../ToolServices';
 import type { preToolUse } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
-/** Each operation a run asks permission for: the grant that answers it, the
- *  setting that says whether it is asked (none: always), and what a denial
- *  is told as. A call of a tool that declares no `guard.grant` takes the
- *  run's delegated-work grant, so a command grant never approves it. */
+/** Each operation a run asks permission for: the grant that answers it and
+ *  what a denial is told as. A call of a tool that declares no `command.grant`
+ *  takes the run's delegated-work grant, so a command grant never approves
+ *  it. */
 const OPERATIONS = {
-  bash: ['bash', BASH_APPROVAL_CONFIG_KEY, 'executable'],
-  call: ['superYolo', BASH_APPROVAL_CONFIG_KEY, 'executable'],
-  toolEdit: ['toolEdit', TOOL_EDIT_APPROVAL_CONFIG_KEY, 'executable'],
-  plan: ['superYolo', null, 'plan'],
-  proposal: ['superYolo', null, 'proposal'],
-} as const;
-
-type HookAnswer = 'allow' | 'ask' | undefined;
-
-/** The session's approvals, with the one reading of the policy
- *  ({@link sessionPermission}). */
-export type ApprovalsWithPermission = SessionApprovals & {
-  readonly permission: (
-    runId: RunId,
-    operation: keyof typeof OPERATIONS,
-    hook: HookAnswer,
-  ) => 'allow' | 'ask' | { readonly action: 'deny'; readonly reason: string };
-};
+  bash: ['bash', 'executable'],
+  call: ['superYolo', 'executable'],
+  toolEdit: ['toolEdit', 'executable'],
+  plan: ['superYolo', 'plan'],
+  proposal: ['superYolo', 'proposal'],
+} as const satisfies Record<ApprovalOperation, unknown>;
 
 /**
  * The one reading of the policy for an operation of a run, with what the
@@ -85,17 +84,15 @@ export type ApprovalsWithPermission = SessionApprovals & {
  */
 export const sessionPermission =
   (
-    session: () => Pick<SessionHandle, 'approvals' | 'interactions' | 'roots'>,
+    approvals: Pick<SessionApprovals, 'policy' | 'bypass'>,
+    interactions: Interactions['Service'],
   ): ApprovalsWithPermission['permission'] =>
   (runId, operation, hook) => {
-    const [grant, setting, kind] = OPERATIONS[operation];
-    const { approvals, interactions, roots } = session();
+    const [grant, kind] = OPERATIONS[operation];
     const canPresent = !interactions.approvalPromptsUnavailable;
     const policy = approvals.policy(runId);
     const decision = decideApproval({
       policy,
-      promptRequired:
-        setting === null || Settings.getConfig<boolean>(roots.config, setting),
       scopedBypass: approvals.bypass(runId, grant) !== null,
       canPresent,
     });
@@ -153,11 +150,11 @@ const hookDenied = (tool: string, why: string): ToolResult => ({
 /** The result that replaces the call when the chain stops it over its
  *  final `input`, and `undefined` when its body may run. */
 const rejection = Effect.fn('toolUse.guard')(function* (
-  tool: RuntimeTool,
+  tool: ITool<Error, PluginToolServices>,
   input: unknown,
   hook: HookAnswer,
   rewritten: boolean,
-): Effect.fn.Return<ToolResult | undefined, Error, ToolServices> {
+): Effect.fn.Return<ToolResult | undefined, Error, PluginToolServices> {
   const { guard, definition } = tool;
   // The loop asks about a command, a tool that requires approval, and a call
   // a hook asked about. A tool whose body opens its own request (`'inBody'`)
@@ -192,6 +189,10 @@ const rejection = Effect.fn('toolUse.guard')(function* (
           `it rewrote the call to an input ${definition.name} does not take.\n${parsed.failure.message}`,
         )
       : undefined;
+  // `ITool` erases the guard's input type to `never`. The guard was declared
+  // (`defineTool`) against the type `definition.schema` decodes, and a
+  // pass-through-schema tool's against the JSON object it checks.
+  // cast: the guard's declared input, per the note above.
   const decoded = (parsed ? parsed.success : input) as never;
   const call = yield* ToolContext;
 
@@ -211,7 +212,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // The call as the prompt shows it: the guard's spelling, else the tool's
   // name and its final input.
   const command = guard?.command
-    ? yield* guard.command.text(decoded)
+    ? guard.command.text(decoded)
     : `${definition.name} ${JSON.stringify(decoded)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather
@@ -226,36 +227,35 @@ const rejection = Effect.fn('toolUse.guard')(function* (
       : undefined;
 
   const operation = guard?.command?.grant ?? 'call';
-  const { run } = yield* requireRun('A call the loop asks about');
-  const answer = sessionOf(run).approvals.permission(
-    run.runId,
-    operation,
-    hook,
+  const { run, requests, session } = yield* requireToolRun(
+    'A call the loop asks about',
   );
+  const approvals = Context.get(session, Approvals);
+  const answer = approvals.permission(run.runId, operation, hook);
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask'
-      ? yield* requestBashApproval({
+      ? yield* askCommandApproval(run.runId, approvals, requests, {
           command,
           cwd,
-          grant: hook === 'ask' ? null : operation,
+          grant: hook === 'ask' ? null : OPERATIONS[operation][0],
         })
       : answer;
   return decision.action === 'approve'
     ? undefined
-    : buildBashApprovalRejectedResult(command, decision);
+    : commandRejectedResult(command, decision);
 });
 
 /** One call through the chain, over the `issued` input and its recorded
  *  `hooks`: its rejection, else the tool's body on the final input, which
  *  `bodyStarts` is handed (and records) once the chain has let it run. */
 export const guardedToolCall = (
-  tool: RuntimeTool,
+  tool: ITool<Error, PluginToolServices>,
   issued: unknown,
   hooks: CallHooks = { outcomes: [], fromHook: (input) => input },
   bodyStarts: (input: unknown) => Effect.Effect<void, Error> = () =>
     Effect.void,
-): ReturnType<RuntimeTool['call']> => {
+): ReturnType<ITool<Error, PluginToolServices>['call']> => {
   const { deny, hook, rewritten } = answerOf(hooks.outcomes);
   if (deny !== null)
     return Effect.succeed(hookDenied(tool.definition.name, deny));
@@ -282,7 +282,8 @@ export const guardedToolCall = (
  * of the call.
  */
 export const callRequests = (
-  run: Pick<AgentRunShape, 'session' | 'runId'>,
+  run: Pick<AgentRunShape, 'runId'>,
+  session: Context.Context<SessionServices>,
   cell: Pick<RunCell, 'opened'>,
   commit: (
     rows: readonly RunHistoryDraft[],
@@ -298,7 +299,10 @@ export const callRequests = (
     DatabaseReadFailed | LogWriteError
   >;
 } => {
-  const { session, runId } = run;
+  const { runId } = run;
+  const sessionRequests = Context.get(session, SessionRequests);
+  const log = Context.get(session, SessionLog);
+  const interactions = Context.get(session, Interactions);
   let reentering = standing;
   let opened = raised;
   // Through the decision authority's own check, so an answer a surface
@@ -310,7 +314,7 @@ export const callRequests = (
     reentering = null;
     if (open === null) return Effect.void;
     return Effect.asVoid(
-      session.requests.decide(runId, open.requestId, {
+      sessionRequests.decide(runId, open.requestId, {
         action: 'cancel',
         cause: retireCause,
       }),
@@ -341,11 +345,10 @@ export const callRequests = (
           decision,
         });
         if (reentered?.request.decision != null)
-          return recordedDecision<(typeof payload)['kind']>(
-            payload.kind,
-            reentered.request.decision,
-          ).pipe(Effect.map(answered));
-        return session.requests
+          return recordedDecision(payload, reentered.request.decision).pipe(
+            Effect.map(answered),
+          );
+        return sessionRequests
           .ask(runId, payload, {
             ...(blobs && { blobs }),
             open: (rows) => {
@@ -359,25 +362,29 @@ export const callRequests = (
                   : commit(decided).pipe(Effect.as(from));
               }
               return retireStanding.pipe(
-                Effect.andThen(Effect.sync(() => session.log.now())),
+                Effect.andThen(Effect.sync(() => log.now())),
                 Effect.flatMap((from) => commit(rows).pipe(Effect.as(from))),
               );
             },
           })
           .pipe(Effect.map(answered));
       }),
-    post: (requestId, payload) =>
-      Effect.asVoid(
+    post: (requestId, request) =>
+      Effect.suspend(() =>
         commit([
           {
             type: 'request.opened',
             aggregateId: qualifyAggregateId('run', runId),
             requestId,
-            payload,
+            // A plugin's data as the JSON its row stores; one that is not
+            // JSON is a defect of the plugin.
+            payload: Schema.decodeUnknownSync(PermissionPayloadSchema)(
+              toJsonValue(request),
+            ),
           },
         ]),
-      ),
-    present: session.interactions.emit.bind(session.interactions),
+      ).pipe(Effect.asVoid),
+    present: interactions.emit.bind(interactions),
   };
   return { requests, retireStanding };
 };

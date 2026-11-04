@@ -59,8 +59,9 @@ export type SettingsTarget =
     }[SettingsTabPanelName];
 
 export const SettingsTargetSchema = Schema.Literals(
-  // cast: `flatMap` over the page table yields `string[]`; every element is a
-  // page or one of its `page/section` pairs, which is exactly `SettingsTarget`.
+  // `flatMap` over the page table yields `string[]`; every element is a page
+  // or one of its `page/section` pairs, which is exactly `SettingsTarget`.
+  // cast: the elements are every page and page/section pair, none other.
   SETTINGS_TAB_ORDER.flatMap((page) => [
     page,
     ...SETTINGS_PAGE_SECTIONS[page].map((section) => `${page}/${section}`),

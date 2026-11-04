@@ -1,18 +1,15 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports
-import { AgentConfigSchema, ensureError } from '@texra-ai/harness/schemas';
-import { withLogChannel } from '@texra-ai/harness/host';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 
-const CHANNEL = 'ExecuteCommand';
-
 /**
- * The "wrapped" launch shape — `{ config, ... }` — as opposed to
- * a bare `AgentConfig` passed directly (see `runExecuteCommand`'s doc
- * comment). `config` is validated separately against `AgentConfigSchema`, so
- * it stays `Schema.Unknown` here.
+ * The "wrapped" launch shape, `{ config, ... }`, as opposed to a bare
+ * `AgentConfig` passed directly (see `runExecuteCommand`'s doc comment).
+ * `config` is decoded by `decodeLaunchConfig`, so it stays `Schema.Unknown`
+ * here.
  */
 const WrappedExecuteInputSchema = Schema.Struct({
   config: Schema.Unknown,
@@ -29,30 +26,15 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   input: unknown,
   launch: HostRunActions['runValidated'],
 ) {
-  // A configuration that does not parse fails the command, so its caller
-  // hears the refusal instead of a finished launch that never started.
-  const { wrapped, config } = yield* Effect.try({
-    try: () => {
-      const wrapped =
-        input !== null && typeof input === 'object' && 'config' in input
-          ? Schema.decodeUnknownSync(WrappedExecuteInputSchema)(input)
-          : null;
-      const config = Schema.decodeUnknownSync(AgentConfigSchema)(
-        wrapped ? wrapped.config : input,
-      );
-      return { wrapped, config };
-    },
-    catch: (error) =>
-      error instanceof Schema.SchemaError
-        ? new Error(`Invalid agent configuration. ${error.message}`, {
-            cause: error,
-          })
-        : ensureError(error),
-  }).pipe(
-    Effect.tapError((error) =>
-      Effect.logWarning(error.message).pipe(withLogChannel(CHANNEL)),
-    ),
-  );
+  // A configuration that does not decode fails the command with the
+  // launch's rejection, so its caller hears it instead of a finished launch
+  // that never started. A malformed wrapper (a non-boolean
+  // `preferHelperModel`) is a bad command argument, not a launch: it fails
+  // with its own schema error.
+  const wrapped = Predicate.hasProperty(input, 'config')
+    ? yield* Schema.decodeUnknownEffect(WrappedExecuteInputSchema)(input)
+    : null;
+  const config = yield* decodeLaunchConfig(wrapped ? wrapped.config : input);
 
   const run = yield* launch(
     config,

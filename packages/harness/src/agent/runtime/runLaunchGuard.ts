@@ -1,18 +1,22 @@
 /**
  * The ends a run's driver does not write: a failed process-child hand-off,
  * a held child's end, delivered by whoever next admits its parent
- * (`deliverHeld`), and the children a dead process or a clean close left
- * under a run, finished as it resumes (`closeLeftoverChildren`). A run's
- * claim is its generation's (`RunRegistry.admit`).
+ * (`deliverHeld`), and what a dead process or a clean close left under a
+ * run or detached from one (`closeLeftoverRun`). A run's claim is its
+ * generation's (`RunRegistry.admit`).
  */
-import { Cause, Effect, Exit, type Scope } from 'effect';
+import { Cause, Context, Effect, Exit, type Scope } from 'effect';
 
 import { openResume } from '@agent/followUp/ToolUseFollowUp';
 import { runRejection } from '@agent/storage/resumability';
-import { endIn, finalizeRun } from '@agent/storage/runLifecycle';
+import {
+  endIn,
+  endServices,
+  finalizeRun,
+  type EndServices,
+} from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   qualifyAggregateId,
@@ -30,6 +34,8 @@ import { heldElsewhereBy } from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { RunView } from '@shared/session/sessionView';
+import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
+import type { SessionTransaction } from '@shared/session/sessionLog';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -41,8 +47,9 @@ import {
   warn,
 } from './childTurnResult';
 import { formatDelivery } from './deliveryEnvelope';
-import { presentRunFailure } from './HostInteractions';
-import type { SessionHandle, SessionTransaction } from './SessionHandle';
+import { Interactions, presentRunFailure } from './HostInteractions';
+import { Runs } from './runRegistry';
+import type { SessionServices } from './rootLaunch';
 
 /**
  * Hand a registered process child to its loop, which owns its end from
@@ -52,10 +59,9 @@ import type { SessionHandle, SessionTransaction } from './SessionHandle';
  * aggregate; an interruption unwinds as itself.
  */
 export function runWithLaunchGuard<A, E, R>(
-  session: SessionHandle,
   runId: RunId,
   operation: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | Error, R> {
+): Effect.Effect<A, E | Error, R | SessionServices> {
   return Effect.suspend(() => {
     const failures: unknown[] = [];
     const handedOff = operation.pipe(
@@ -66,16 +72,12 @@ export function runWithLaunchGuard<A, E, R>(
               const outcome = outcomeFromCause(exit.cause);
               const error = Cause.squash(exit.cause);
               const end = yield* Effect.exit(
-                finalizeRun(session, {
+                finalizeRun({
                   runId,
                   outcome,
                   ownerless: true,
-                  stopped: outcome === RUN_OUTCOME.CANCELLED,
                   ...(outcome === RUN_OUTCOME.FAILED && {
-                    error: {
-                      kind: classifyAgentError(error),
-                      message: getSdkErrorMessage(error),
-                    },
+                    error: classifyAgentError(error),
                   }),
                 }),
               );
@@ -115,36 +117,39 @@ export function runWithLaunchGuard<A, E, R>(
  * triggers deliver once.
  */
 export const deliverHeld = Effect.fn('runLaunchGuard.deliverHeld')(function* (
-  session: SessionHandle,
   parent: RunId,
-): Effect.fn.Return<void, Error> {
+): Effect.fn.Return<void, Error, SessionServices> {
+  const services = yield* endServices;
   // The listing as the log holds it: a session just opened has not folded it.
-  const { runs } = yield* session.view.read([]);
+  const { runs } = yield* (yield* SessionViewAccess).read([]);
   for (const child of runs.values())
     if (child.parentId === parent && !isTerminalOutcomePhase(child.status))
-      yield* session.log.transact((tx) =>
-        deliverOne(session, tx, child.id, parent).pipe(Effect.scoped),
+      yield* Context.get(services, SessionLog).transact((tx) =>
+        deliverOne(tx, child.id, parent).pipe(
+          Effect.scoped,
+          Effect.provide(services),
+        ),
       );
 });
 
 /** The child's parks in its current lifecycle (`RunRows.heldParks`), each
  *  with the report its turn settled with before it; none once it ended. */
-const heldParks = (session: SessionHandle, child: RunId) =>
+const heldParks = (log: SessionLog['Service'], child: RunId) =>
   Effect.map(
-    session.log.runRows(qualifyAggregateId('run', child), 'parks'),
+    log.runRows(qualifyAggregateId('run', child), 'parks'),
     (rows) => rows.heldParks,
   );
 
 /** Every result a child holds for `parent` since its lifecycle began, and
  *  its end when the newest park held its last turn. */
 const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
-  session: SessionHandle,
   tx: SessionTransaction,
   child: RunId,
   parent: RunId,
-): Effect.fn.Return<void, Error, Scope.Scope> {
+): Effect.fn.Return<void, Error, Scope.Scope | EndServices> {
   const { append } = tx;
-  const parks = yield* heldParks(session, child);
+  const log = yield* SessionLog;
+  const parks = yield* heldParks(log, child);
   const held = parks.filter(({ park }) => park.heldFor !== undefined);
   if (held.length === 0) return;
   const ends = parks.at(-1)?.park.ends;
@@ -152,7 +157,7 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   // this append also end the child or clear its waiting park. A live
   // owner elsewhere keeps the claim and clears the park itself when it
   // sees the delivery (`clearHeld`).
-  const holdsChild = yield* session.log.hold(child).pipe(
+  const holdsChild = yield* log.hold(child).pipe(
     Effect.as(true),
     Effect.catch((error) =>
       ends === undefined && heldElsewhereBy(error) !== null
@@ -165,13 +170,12 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   let refused = false;
   for (const { park, text } of held) {
     const one = yield* parentAdmission(
-      session,
       parent,
       { text, from, deliveryId: park.heldFor },
       {},
       undefined,
     );
-    if (one.sent.kind === 'refused' && one.sent.reason === 'owned_elsewhere')
+    if (one.sent.kind === 'refused' && one.sent.reason === 'ownedElsewhere')
       return;
     // A parent that refused it (its input closed) leaves the park held.
     if (one.sent.kind === 'refused') refused = true;
@@ -196,7 +200,6 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
   // The held last turn ends the child, through its cell, in this append:
   // its unread input consumed, its halt, what it left open, its `run.end`.
   yield* endIn(
-    session,
     tx,
     { runId: child, outcome: ends },
     Effect.succeed({ rows: delivered }),
@@ -210,52 +213,53 @@ const deliverOne = Effect.fn('runLaunchGuard.deliverOne')(function* (
  * one is told to the person here, once: the parent's next resume delivers
  * the result again (`deliverHeld`).
  */
-export const onHeldResult = (
-  session: SessionHandle,
+export const onHeldResult = Effect.fn('onHeldResult')(function* (
   event: SessionEvent,
   scope: Scope.Scope,
-): Effect.Effect<unknown> => {
+): Effect.fn.Return<unknown, never, SessionServices> {
   const target = aggregateTarget(event.aggregateId);
-  if (target.kind !== 'run') return Effect.void;
+  if (target.kind !== 'run') return;
+  const view = yield* SessionViewAccess;
+  const log = yield* SessionLog;
   const record = recordOf(event);
   const sent = record.followUps[0];
-  let work: Effect.Effect<void, Error> | undefined;
+  let work: Effect.Effect<void, Error, SessionServices> | undefined;
   if (sent?.content.from.kind === 'run') {
     const child = sent.content.from.runId;
-    if (session.view.run(child)?.substate === RUN_SUBSTATE.RESULT_WAITING)
-      work = clearHeld(session, child, sent.followUpId);
+    if (view.run(child)?.substate === RUN_SUBSTATE.RESULT_WAITING)
+      work = clearHeld(log, child, sent.followUpId);
   } else if (record.heldParks[0]?.park.heldFor !== undefined) {
-    const parent = session.view.run(target.id)?.parentId;
+    const parent = view.run(target.id)?.parentId;
     if (parent != null)
       work = Effect.gen(function* () {
-        if (yield* session.log.owns(parent))
-          yield* deliverHeld(session, parent);
+        if (yield* log.owns(parent)) yield* deliverHeld(parent);
       });
   }
-  if (work === undefined) return Effect.void;
-  return work.pipe(
+  if (work === undefined) return;
+  const interactions = yield* Interactions;
+  yield* work.pipe(
     Effect.catch((error) =>
       presentRunFailure(
-        session.interactions,
+        interactions,
         error,
         "A subagent's result could not be delivered: ",
       ),
     ),
     Effect.forkIn(scope),
   );
-};
+});
 
 /** A child this process runs, whose held result `followUpId` was just
  *  delivered, parks plainly again: the card stops reading it as waiting. */
 const clearHeld = (
-  session: SessionHandle,
+  log: SessionLog['Service'],
   child: RunId,
   followUpId: string,
 ): Effect.Effect<void, Error> =>
-  session.log.transact((tx) =>
+  log.transact((tx) =>
     Effect.gen(function* () {
-      if (!(yield* session.log.owns(child))) return;
-      const park = (yield* heldParks(session, child)).at(-1)?.park;
+      if (!(yield* log.owns(child))) return;
+      const park = (yield* heldParks(log, child)).at(-1)?.park;
       if (park === undefined || park.heldFor !== followUpId) return;
       yield* tx.append([
         {
@@ -275,15 +279,15 @@ const TAG_OF = {
 } as const;
 
 /**
- * Tell the run, once per child, that `child`'s work was interrupted and its
+ * Tell `parent`, once per child, that `child`'s work was interrupted and its
  * outcome is unknown (`why`: what refused its resume; `finished`, it cannot
  * continue by its kind). A child not ended ends failed with the notice as
- * its last turn's result, under its own claim; one that ended (a clean
- * close stopped a task) only sends it.
+ * its last turn's result (its own report alone with no parent), under its
+ * own claim for that end alone; one that ended (a clean close stopped a
+ * task) only sends it.
  */
 const reportInterrupted = Effect.fn('reportInterrupted')(function* (
-  session: SessionHandle,
-  runId: RunId,
+  parent: RunId | null,
   child: RunView,
   facts: RunRows,
   why: string,
@@ -303,7 +307,7 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
     deliveryId: `${child.id}:interrupted`,
   };
   if (facts.end !== null) {
-    yield* sendToParent(session, item, runId, {}, undefined);
+    if (parent !== null) yield* sendToParent(item, parent, {}, undefined);
     return;
   }
   const result = childTurnResult({
@@ -314,15 +318,17 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
     resultMeta: undefined,
     consumed: [],
     deliveryId: item.deliveryId,
-    to: runId,
+    to: parent,
     end: 'failed',
   });
-  yield* finalizeRun(session, {
-    runId: child.id,
-    outcome: RUN_OUTCOME.FAILED,
-    ownerless: true,
-    lastTurn: () => Effect.succeed(turnResultPart(session, result, undefined)),
-  });
+  yield* Effect.scoped(
+    finalizeRun({
+      runId: child.id,
+      outcome: RUN_OUTCOME.FAILED,
+      ownerless: true,
+      lastTurn: () => Effect.succeed(turnResultPart(result, undefined)),
+    }),
+  );
 });
 
 /** A turn accepted and never settled, or none begun: work the cut left
@@ -331,59 +337,57 @@ const cutShort = ({ childTurn }: RunRows): boolean =>
   childTurn.active !== null || childTurn.lastCompleted === null;
 
 /**
- * The one closer of what a run's children were left as by a process that
- * died or a session that closed, run as the run resumes, before its loop
- * goes on. A child cut short whose process is gone, or that a clean close
- * stopped (`run.position halted`, reason `closed`), is resumed under its
- * own id when its rows can continue, so its result reaches the run as it
- * would have; one that cannot continue (a background command, a task that
- * ended, a resume refused once it decides) is reported
- * ({@link reportInterrupted}). Left alone: a child an open call of the run
- * owns (the call reattaches it), one a live process holds, one resting
- * after its last turn, and one that ended on its own or under a user's
- * stop.
+ * The one closer of what a dead process or a clean close left of `run`: a
+ * child of `parent` as it resumes, or a process run a detach left with no
+ * parent as a session opens (`sweepLeftoverRuns`). One cut short whose
+ * process is gone, or that a clean close stopped (its `run.end` reason
+ * `shutdown`), is resumed under its own id when its rows can continue,
+ * so its result reaches its parent as it would have; one that cannot
+ * continue (a background command, a task that ended, a resume refused once
+ * it decides) is reported ({@link reportInterrupted}). Left alone: a run
+ * live here, one an open call owns (the call reattaches it), one a live
+ * process holds, one resting after its last turn, and one that ended on its
+ * own or under a user's stop.
  */
+export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
+  parent: RunId | null,
+  run: RunView,
+) {
+  if ((yield* Runs).get(run.id) !== undefined) return;
+  const facts = yield* (yield* SessionLog).facts(run.id);
+  if (facts === null || !cutShort(facts)) return;
+  if (facts.end !== null && facts.end.reason !== 'shutdown') return;
+  if ((yield* owningCall(run.id)) !== null) return;
+  const report = (why: string) => reportInterrupted(parent, run, facts, why);
+  const rejection = yield* runRejection(run.id);
+  if (rejection?.kind === 'ownedElsewhere') return;
+  if (rejection !== null) return yield* report(rejection.kind);
+  const attempt = yield* openResume(run.id, {}, true);
+  if (attempt === undefined) return;
+  // A resume refused once it decides is reported; one blocked on a missing
+  // agent or plugin is the catalog follower's to retry, and one that failed
+  // is left for the next resume, said once.
+  const told = (what: string) => (error: unknown) =>
+    warn(undefined, `Child run ${run.id} ${what}`, { parent, error });
+  yield* Effect.forkScoped(
+    Effect.matchEffect(attempt.answer, {
+      onSuccess: (answer) =>
+        'failed' in answer && answer.failed.kind !== 'blocked'
+          ? report(answer.failed.kind)
+          : Effect.void,
+      onFailure: told('was not resumed'),
+    }).pipe(Effect.catch(told('was not reported interrupted'))),
+  );
+});
+
+/** {@link closeLeftoverRun} of `runId`'s children, as `runId` resumes. */
 export const closeLeftoverChildren = Effect.fn('closeLeftoverChildren')(
-  function* (session: SessionHandle, runId: RunId) {
+  function* (runId: RunId) {
     // The listing with this run's activation folded: a child is admitted
     // under a run the view reads as running, not as stopped.
-    yield* session.log.settled;
-    const { runs } = yield* session.view.read([]);
-    for (const child of runs.values()) {
-      if (child.parentId !== runId || session.runs.get(child.id) !== undefined)
-        continue;
-      const facts = yield* session.log.facts(child.id);
-      if (facts === null || !cutShort(facts)) continue;
-      if (facts.end !== null && facts.position?.payload.reason !== 'closed')
-        continue;
-      if ((yield* owningCall(session, child.id)) !== null) continue;
-      const report = (why: string) =>
-        reportInterrupted(session, runId, child, facts, why);
-      const rejection = yield* runRejection(child.id, session);
-      if (rejection?.kind === 'owned_elsewhere') continue;
-      if (rejection !== null) {
-        yield* report(rejection.kind);
-        continue;
-      }
-      const attempt = yield* openResume(child.id, { session }, true);
-      if (attempt === undefined) continue;
-      // A resume refused once it decides is reported; one blocked on a
-      // missing agent or plugin is the catalog follower's to retry, and one
-      // that failed is left for the next resume, said once.
-      yield* Effect.forkScoped(
-        Effect.matchEffect(attempt.answer, {
-          onSuccess: (answer) =>
-            'failed' in answer && answer.failed !== 'blocked'
-              ? report(answer.failed)
-              : Effect.void,
-          onFailure: (error) =>
-            warn(undefined, `${runId}: child ${child.id} not resumed`, error),
-        }).pipe(
-          Effect.catch((error) =>
-            warn(undefined, `${runId} not told of child ${child.id}`, error),
-          ),
-        ),
-      );
-    }
+    yield* (yield* SessionLog).settled;
+    const { runs } = yield* (yield* SessionViewAccess).read([]);
+    for (const child of runs.values())
+      if (child.parentId === runId) yield* closeLeftoverRun(runId, child);
   },
 );

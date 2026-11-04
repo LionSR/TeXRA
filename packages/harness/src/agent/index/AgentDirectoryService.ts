@@ -12,11 +12,13 @@ import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
   type AppState,
-  type StateReadFailed,
-  type StateStore,
 } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
-import { Settings } from '@shared/config/settings';
+import {
+  Settings,
+  type StateReadFailed,
+  type StateStore,
+} from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { AgentSource } from '@shared/schemas';
 import type { ToolRegistry } from '@tools/toolTable';
@@ -91,19 +93,20 @@ export class AgentDirectoryService {
     });
   }
 
-  custom(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  > {
-    return Effect.gen({ self: this }, function* () {
+  readonly custom = Effect.fn('AgentDirectoryService.custom')(
+    { self: this },
+    function* (): Effect.fn.Return<
+      string,
+      AgentDirectoriesFailed,
+      GlobalStorageFs | FileSystem.FileSystem
+    > {
       const configuredPath = yield* this.configuredCustomPath();
       const resolvedPath =
         yield* this.resolveConfiguredCustomDir(configuredPath);
       if (resolvedPath != null) return resolvedPath;
       return yield* this.ensureDefaultCustomDir();
-    });
-  }
+    },
+  );
 
   /** Whether `custom` resolves to the configured directory: the same
    *  validation, so a configured path it would reject (relative, or with a
@@ -138,44 +141,44 @@ export class AgentDirectoryService {
     );
   }
 
-  private ensureDefaultCustomDir(): Effect.Effect<
+  private readonly ensureDefaultCustomDir = Effect.fn(
+    'AgentDirectoryService.ensureDefaultCustomDir',
+  )({ self: this }, function* (): Effect.fn.Return<
     string,
     AgentDirectoriesFailed,
     GlobalStorageFs
   > {
-    return Effect.gen({ self: this }, function* () {
-      const globalStorageFs = yield* GlobalStorageFs;
-      const defaultPath = yield* globalStorageFs
-        .makeDirectory(CUSTOM_AGENTS_STORAGE_DIR, { recursive: true })
-        .pipe(
-          Effect.andThen(() =>
-            globalStorageFs.resolve(CUSTOM_AGENTS_STORAGE_DIR),
-          ),
-          Effect.catch((cause) =>
-            Effect.logError(
-              'Failed to create default custom agents directory',
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
-              withLogChannel(this.options.channel),
-              Effect.andThen(
-                Effect.fail(
-                  new AgentDirectoriesFailed({
-                    source: 'custom',
-                    message:
-                      'Unable to create custom agents directory. Please check permissions.',
-                    cause,
-                  }),
-                ),
+    const globalStorageFs = yield* GlobalStorageFs;
+    const defaultPath = yield* globalStorageFs
+      .makeDirectory(CUSTOM_AGENTS_STORAGE_DIR, { recursive: true })
+      .pipe(
+        Effect.andThen(() =>
+          globalStorageFs.resolve(CUSTOM_AGENTS_STORAGE_DIR),
+        ),
+        Effect.catch((cause) =>
+          Effect.logError(
+            'Failed to create default custom agents directory',
+          ).pipe(
+            Effect.annotateLogs({ data: cause }),
+            withLogChannel(this.options.channel),
+            Effect.andThen(
+              Effect.fail(
+                new AgentDirectoriesFailed({
+                  source: 'custom',
+                  message:
+                    'Unable to create custom agents directory. Please check permissions.',
+                  cause,
+                }),
               ),
             ),
           ),
-        );
-      yield* Effect.logDebug(
-        `Using default custom agents directory: ${defaultPath}`,
-      ).pipe(withLogChannel(this.options.channel));
-      return defaultPath;
-    });
-  }
+        ),
+      );
+    yield* Effect.logDebug(
+      `Using default custom agents directory: ${defaultPath}`,
+    ).pipe(withLogChannel(this.options.channel));
+    return defaultPath;
+  });
 
   private resolveConfiguredCustomDir(
     configuredPath: string,

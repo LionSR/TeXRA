@@ -316,12 +316,14 @@ export class Database extends Context.Service<
     };
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
-    /** One aggregate's rows from `fromSeq`, or only those of `types`
-     *  through the `(aggregate, type, seq)` index, in seq order. */
+    /** One aggregate's rows from `fromSeq` (through `toSeq`, a fork's
+     *  cut), or only those of `types` through the `(aggregate, type, seq)`
+     *  index, in seq order. A row past `toSeq` is never read. */
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
       types?: readonly SessionEvent['type'][],
+      toSeq?: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** One aggregate's display rows in seq order, with the `usage` rows its
      *  priced responses project: what a renderer replays. */
@@ -366,18 +368,27 @@ export class Database extends Context.Service<
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };
-    /** Clear only this process's claims, in one transaction. */
+    /** Clear only this process's claims, in one transaction, unless
+     *  `heldAgain`, read under that transaction's write lock, says a holder
+     *  here took them back meanwhile. */
     readonly releaseClaims: (
       ids: readonly AggregateId[],
+      heldAgain?: () => boolean,
     ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** The event prefix, current claims and damaged runs from one read. */
+    /** The event prefix, current claims and damaged runs from one read: the
+     *  claims of `checkedIds` and of every aggregate whose existence or
+     *  claim changed after `changedSince` (a row that changes one is such a
+     *  change too); `change` is the last such change the read saw, or
+     *  `changedSince` when there was none. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
-      checkedIds?: readonly AggregateId[],
+      checkedIds: readonly AggregateId[],
+      changedSince?: number,
     ) => Effect.Effect<
       {
         readonly cursor: CommitOrdinal;
+        readonly change: number;
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];

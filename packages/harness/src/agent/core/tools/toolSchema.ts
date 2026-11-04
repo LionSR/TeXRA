@@ -1,12 +1,12 @@
 /**
  * Provider-neutral tool parameter schemas: a tool definition's Effect Schema
  * or pre-built JSON Schema, normalized to the object shape every
- * function-calling API accepts (top-level unions flattened, the dialect URI
- * stripped, every array given an `items`). The tool catalog builds the
- * package's uniform tool definitions from it; the structured-output tool
- * builder shares it.
+ * function-calling API accepts (top-level unions flattened, a fieldless
+ * struct given an object root, the dialect URI stripped, every array given an
+ * `items`). The tool catalog builds the package's uniform tool definitions
+ * from it; the structured-output tool builder shares it.
  */
-import { Predicate, Schema } from 'effect';
+import { type JsonSchema, Predicate, Schema, SchemaAST } from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
 
@@ -55,14 +55,14 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
  * enum is what the model actually selects between.
  */
 function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
-  const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
-    (k) => Array.isArray(schema[k]) && schema.type !== 'object',
+  if (schema.type === 'object') return schema;
+  const rawVariants = [schema.oneOf, schema.anyOf, schema.allOf].find((v) =>
+    Array.isArray(v),
   );
-  if (!variantKey) return schema;
+  if (!rawVariants) return schema;
 
-  const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject => Predicate.isObject(v) && v.type === 'object',
+    (v) => Predicate.isObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;
@@ -80,7 +80,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   for (const name of allPropNames) {
     const branchSchemas = variantProperties
       .map((props) => props[name])
-      .filter((s): s is JSONSchemaObject => s !== undefined);
+      .filter(Predicate.isNotUndefined);
     if (branchSchemas.length === 1) {
       mergedProperties[name] = branchSchemas[0];
       continue;
@@ -88,17 +88,17 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     // Discriminator: every branch pins this prop to a literal value.
     const constValues = branchSchemas
       .map(schemaLiteralValue)
-      .filter((value) => value !== undefined);
+      .filter(Predicate.isNotUndefined);
     if (constValues.length === branchSchemas.length) {
       const descriptions = branchSchemas
         .map((s) => s.description)
-        .filter((d): d is string => typeof d === 'string');
+        .filter(Predicate.isString);
       // Infer the discriminator type from the branch shapes rather than
       // hardcoding 'string': a literal discriminator may also be a number
       // or a boolean.
       const branchType = branchSchemas
         .map((s) => (typeof s.type === 'string' ? s.type : undefined))
-        .find((t): t is string => t !== undefined);
+        .find(Predicate.isNotUndefined);
       const inferredType = branchType ?? typeof constValues[0];
       const merged: JSONSchemaObject = {
         type: inferredType,
@@ -213,7 +213,9 @@ const distinct = (nodes: readonly unknown[]): unknown[] => [
 /** A tool's input as JSON Schema, unflattened: its Effect Schema converted
  *  (its definitions, if any, attached as `$defs`, where the emitted `$ref`s
  *  point), else its pre-converted parameters. */
-export const inputSchema = (definition: ToolDefinition): unknown => {
+export const inputSchema = (
+  definition: ToolDefinition,
+): JsonSchema.JsonSchema | undefined => {
   if (definition.schema === undefined) return definition.parameters;
   const { schema, definitions } = Schema.toJsonSchemaDocument(
     definition.schema,
@@ -225,14 +227,37 @@ export const inputSchema = (definition: ToolDefinition): unknown => {
 
 /**
  * Converts an Effect Schema to JSON Schema, or returns the pre-converted
- * parameters: top-level unions are flattened, every array
- * names its `items`, and `$schema` is stripped so the output passes every
- * provider's schema validator.
+ * parameters: top-level unions are flattened, a fieldless struct is an
+ * empty object, every array names its `items`, and `$schema` is stripped so
+ * the output passes every provider's schema validator.
  */
 export function convertToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
-  const schema = inputSchema(def) as JSONSchemaObject | null | undefined;
+  const schema: JSONSchemaObject | undefined = inputSchema(def);
   if (!schema) return null;
-  return withArrayItems(stripDollarSchema(flattenTopLevelUnion(schema)));
+  return withArrayItems(
+    stripDollarSchema(withObjectRoot(def, flattenTopLevelUnion(schema))),
+  );
+}
+
+/**
+ * Every function-calling API takes only an object as a tool's parameters,
+ * and Effect Schema emits a struct with no fields as `{ not: { type: 'null' } }`
+ * (it decodes any value but null). A tool whose schema is a struct declared
+ * an object, so its parameters are one; any other root stays as it is, for
+ * the provider to reject by the tool's name.
+ */
+function withObjectRoot(
+  def: ToolDefinition,
+  schema: JSONSchemaObject,
+): JSONSchemaObject {
+  if (
+    schema.type === 'object' ||
+    def.schema === undefined ||
+    !SchemaAST.isObjects(SchemaAST.toEncoded(def.schema.ast))
+  )
+    return schema;
+  const { not: _not, ...rest } = schema;
+  return { ...rest, type: 'object', properties: {} };
 }

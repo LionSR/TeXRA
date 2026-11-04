@@ -9,8 +9,8 @@
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
- * (`bib.*`), LaTeX (`latex.*`, `latexdiff.tempFileLocation`, the
- * formatter), inline criticism and telemetry.
+ * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism and
+ * telemetry.
  */
 
 // Third-party imports
@@ -19,6 +19,7 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import {
   configTreeRows,
+  GlobalStateKey,
   settingsCatalog,
   type SettingsCatalog,
   type StateSettingEntry,
@@ -62,10 +63,8 @@ export type TexraStateKey = (typeof TexraStateKey)[keyof typeof TexraStateKey];
 /** Config key for the usage-telemetry opt-in. */
 export const TELEMETRY_ENABLED_KEY = 'telemetry.enabled';
 
-export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
-  'sameDirectory',
-  'workspaceTemp',
-] as const;
+/** Config key for what a window does with interrupted tasks at open. */
+export const RESUME_ON_OPEN_KEY = 'resumeOnOpen';
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
@@ -136,6 +135,19 @@ const TEXRA_CONFIG_ROWS: Record<
     description:
       'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
   },
+  // Global: how one person wants their windows to open.
+  [RESUME_ON_OPEN_KEY]: {
+    schema: Schema.Literals(['ask', 'auto']).pipe(
+      Schema.withDecodingDefault(Effect.succeed('ask' as const)),
+    ),
+    configTarget: 'global',
+    title: 'Interrupted tasks',
+    description:
+      'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
+    category: 'agents',
+    enumLabels: ['Ask', 'Resume automatically'],
+    surfaces: { settingsView: 'approval', cliConfig: true },
+  },
   'agentOutputs.autoOpenFinal': {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
@@ -182,13 +194,6 @@ const TEXRA_CONFIG_ROWS: Record<
     description:
       'Template used for generating standalone documents when extracting and compiling TikZ figures',
   },
-  'latex.wrapCritiqueInAlign': {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    description:
-      'Wrap bare criticism and comment commands inside align environments with intertext.',
-  },
   'latex.enabledReplacements': {
     schema: Schema.Array(
       Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES),
@@ -216,13 +221,6 @@ const TEXRA_CONFIG_ROWS: Record<
       Schema.withDecodingDefault(Effect.succeed({})),
     ),
     description: 'Custom direct text replacements.',
-  },
-  'latexdiff.tempFileLocation': {
-    schema: Schema.Literals(LATEXDIFF_TEMP_FILE_LOCATIONS).pipe(
-      Schema.withDecodingDefault(Effect.succeed('sameDirectory')),
-    ),
-    description:
-      'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
   },
   [TELEMETRY_ENABLED_KEY]: {
     schema: Schema.Boolean.pipe(
@@ -284,10 +282,19 @@ const TEXRA_SETTING_ROWS: readonly (StateSettingEntry | TexraSettingRow)[] = [
   ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 
+/**
+ * TeXRA's helper model while the person has chosen none (polishing, agent
+ * creation, merge, session descriptions). DeepSeek V4.1 Flash is the cheapest
+ * capable option (~$0.15/$0.60 per MTok) and keeps these one-shot,
+ * non-streaming helper calls fast.
+ */
+const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
+
 /** The catalog every host's config carries: the harness's rows and TeXRA's. */
 const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: TEXRA_SETTING_ROWS,
+  defaults: { [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL },
 });
 
 function hasOwnSurfaces(row: StateSettingEntry): row is TexraSettingRow {

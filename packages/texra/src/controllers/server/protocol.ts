@@ -35,6 +35,7 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 import {
   AgentConfigSchema,
   JsonValueSchema,
+  LaunchNoticeSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
@@ -47,6 +48,7 @@ import {
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
+  ResumeBlockedSchema,
 } from '@texra-ai/harness/transcript';
 import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
@@ -73,9 +75,38 @@ import type { ValueFamily } from '@texra-ai/harness/host';
 export const BUILD_VERSION: string =
   process.env.TEXRA_BUILD_VERSION || 'unknown';
 
-/** Bumped whenever a procedure or a payload changes shape. A client newer
- *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 40;
+/** The protocol's version and the shapes it versions. `version` is bumped
+ *  whenever a procedure or a payload changes shape: a client newer than the
+ *  running service retires it, an older one stays in process. `shapes` holds
+ *  each procedure's hash of its payload, success and error JSON Schemas at
+ *  that version. `protocolVersion.vitest.ts` fails when one moves, and
+ *  `npm run protocol:bump` advances the version and rewrites the hashes
+ *  together. A hash sees what JSON Schema shows: an opaque `Schema.declare`
+ *  or a `Schema.Json` field moves none. */
+export const PROTOCOL: {
+  readonly version: number;
+  readonly shapes: Readonly<Record<string, string>>;
+} = Object.freeze({
+  version: 53,
+  shapes: Object.freeze({
+    'service.hello': 'b883cf64d52c',
+    'service.stop': '8d19317aa364',
+    'tasks.list': 'f53aa5564aa8',
+    'task.watch': 'f3cdd07e24f8',
+    'task.request': 'f055ca5a4858',
+    'task.start': 'bd10b36a735a',
+    'task.resume': 'df1eb0f607ad',
+    'task.ended': 'b8a10423576c',
+    'task.config': 'ee42ee67ab23',
+    'task.exportTrace': 'f005493cb0c1',
+    'task.exportInput': 'fefc9f82f1e2',
+    'host.attach': '153808303ff7',
+    'state.get': '221cc7263384',
+    'state.set': 'e377b902a4e3',
+    'host.focus': 'fd20627c2222',
+    'host.answer': 'cc171cdead15',
+  }),
+});
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
@@ -134,12 +165,13 @@ const TaskAdmitted = Schema.Struct({
   activation: CommitOrdinalSchema,
 });
 
-/** Why `task.start` or `task.resume` did not reach its run. */
+/** Why `task.start` or `task.resume` did not reach its run. The service
+ *  shows it nowhere: the window that asked presents it. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   message: Schema.String,
-  /** The service already presented it, through the window attached to the
-   *  project: the caller does not present it again. */
-  presented: Schema.optional(Schema.Boolean),
+  /** A refused launch's notice (an unknown model, an unknown agent), which
+   *  the window shows in place of the message. */
+  notice: Schema.optional(LaunchNoticeSchema),
 }) {}
 
 /** Why a task's records have no answer: the service holds no such run in
@@ -204,9 +236,9 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.resume', {
     payload: { workspace, runId: RunIdSchema },
     /** The run that resumed: the asked one, or the parent that owns it;
-     *  null when something it needs (its agent, a plugin) is missing, so it
-     *  stays interrupted. */
-    success: Schema.NullOr(TaskAdmitted),
+     *  or what it needs (its agent, a plugin) and is missing, so it stays
+     *  interrupted. */
+    success: Schema.Union([TaskAdmitted, ResumeBlockedSchema]),
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its

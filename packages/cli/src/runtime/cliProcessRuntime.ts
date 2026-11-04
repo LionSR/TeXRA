@@ -17,7 +17,7 @@
  * creates nothing under the storage root and a read or write of either there
  * is loud.
  *
- * This module is the CLI's composition root for that runtime, and every
+ * This module installs that runtime over `texraProcessLayer`, and every
  * entry that calls the install holds the result in a local and threads it
  * on: nothing below an entry reads it back (rulings ledger, #12720). The
  * one slot is this module's own: set with the runtime it built and cleared
@@ -36,29 +36,17 @@ import { Effect, Layer, type LogLevel, ManagedRuntime, Stream } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import {
-  AgentDirectories,
-  AppState,
-  AgentDirectoryService,
-  processLayer,
-  Secrets,
   StateWriteFailed,
   type ProcessServices,
-  type SkillSourceOptions,
   type StateStore,
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
-import {
-  FileSecrets,
-  GlobalDatabase,
-  secretsDirectory,
-} from '@texra-ai/harness/node';
-import { usageLogLayer } from '@telemetry/UsageLogService';
-import { makeEditorHost } from '@texra/tools/editorHost';
+import { GlobalDatabase } from '@texra-ai/harness/node';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
-import { texraPlugins } from '@texra/tools/registry';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { commandDirs } from '@texra/platform/defaults/commandDirs';
-import { teamMembers } from '@texra/shared/agentTeams';
+import {
+  texraProcessLayer,
+  type TexraProcessHost,
+} from '@texra/controllers/texraProcessLayer';
 
 import { readCliVersion } from './cliContext';
 import { setCliLogRuntime } from './logSinks';
@@ -126,26 +114,16 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 });
 
 /**
- * What an entry hands {@link installCliProcessRuntime} in place of the global
- * state store and the global root's database handle that install would
- * otherwise open for it.
+ * What an entry hands {@link installCliProcessRuntime}: its resources root
+ * (absent only for the platform-less entries, which load no agents and
+ * discover no skills), its `--source` flags, its project, its global stores
+ * in place of the ones the install would otherwise open, and the
+ * argv-selected diagnostics floor.
  */
-interface CliProcessRuntimeInstall {
-  readonly appState?: StateStore;
-  readonly globalDatabase?: Layer.Layer<GlobalDatabase>;
-  /** The argv-selected diagnostics floor for this process runtime. */
-  readonly minimumLogLevel?: LogLevel.LogLevel;
-  /**
-   * The packaged resources root the CLI's built-in agent directories and
-   * bundled skills resolve against. Absent only for the platform-less
-   * entries, which load no agents and discover no skills.
-   */
-  readonly resourcesPath?: string;
-  /** The `--source` / `--include-interop` flags every skill read uses. */
-  readonly skillSourceOptions?: SkillSourceOptions;
-  /** The project the process serves, whose `.env` its own reads see. */
-  readonly workspace?: string;
-}
+type CliProcessRuntimeInstall = Pick<
+  TexraProcessHost,
+  'globalStores' | 'resourcesPath' | 'skillSourceOptions' | 'workspace'
+> & { readonly minimumLogLevel?: LogLevel.LogLevel };
 
 /**
  * The install of the two CLI entries that bring no platform up: `clone`, the
@@ -164,8 +142,10 @@ interface CliProcessRuntimeInstall {
  * left as Effect built it rather than frozen from here.
  */
 export const NO_PLATFORM_INSTALL: CliProcessRuntimeInstall = Object.freeze({
-  appState: refusingStateStore,
-  globalDatabase: refusingGlobalDatabase,
+  globalStores: Object.freeze({
+    appState: refusingStateStore,
+    globalDatabase: refusingGlobalDatabase,
+  }),
 });
 
 /** What a CLI command's program runs over: the process services, its
@@ -207,69 +187,20 @@ export function installCliProcessRuntime(
   options?: CliProcessRuntimeInstall,
 ): CliProcessRuntime {
   if (installed) return installed;
-  // The editor registry this install's plugins read, which the windows
-  // served beside the process services answer for.
-  const editors = makeEditorHost();
-  const version = readCliVersion();
-  // The agent directories are a process service the runtime serves, so
-  // they are built here, before the install, rather than in the platform
-  // init that may join an already-installed runtime. The built-in agent
-  // directories read straight out of the CLI package's `dist/resources`;
-  // the platform-less entries pass no resources root and load no agents.
-  // The custom directory is the one the other hosts read, from the shared
-  // application state this runtime serves.
-  const agentDirectoriesLayer = Layer.effect(
-    AgentDirectories,
-    Effect.map(
-      AppState,
-      (state) =>
-        new AgentDirectoryService({
-          channel: 'cli',
-          resourcesPath: options?.resourcesPath ?? '',
-          teamMembers,
-          state,
-        }),
-    ),
-  );
   const runtime = withForkFailureReporting(
     ManagedRuntime.make(
-      Layer.merge(
-        HostWindows.layer(editors),
-        processLayer({
-          storageRoot,
-          settings: TEXRA_SETTINGS.catalog,
-          commandDirs,
-          plugins: texraPlugins({ name: 'cli', editors }),
-          ...(options?.resourcesPath !== undefined && {
-            skills: {
-              resourcesPath: options.resourcesPath,
-              skillSourceOptions: options.skillSourceOptions,
-            },
-          }),
-          // The one credential store under `storageRoot`, telling this
-          // process's surfaces about every key it writes.
-          secrets: Secrets.announcing(
-            (announce) =>
-              new FileSecrets(secretsDirectory(storageRoot), announce),
-          ),
-          ...(options?.appState && {
-            appState: AppState.layer(options.appState),
-          }),
-          agentDirectories: agentDirectoriesLayer,
-          // CLI model traffic goes to the same anonymous usage log the other hosts
-          // write to, tagged with editorType 'cli' and the CLI version. The
-          // runtime's disposal drains the queue, and that disposal is the last
-          // shutdown step of every exit path this process has.
-          usageLog: usageLogLayer({ version, editorType: 'cli' }),
-          // Absent, the one handle on the global root, held for this runtime's
-          // life and closed with it; clone's refusal opens nothing.
-          ...(options?.globalDatabase && {
-            globalDatabase: options.globalDatabase,
-          }),
-          minimumLogLevel: options?.minimumLogLevel ?? 'Info',
-          workspace: options?.workspace,
-        }).pipe(Layer.provide(validationModelLayer)),
-      ),
+      texraProcessLayer({
+        name: 'cli',
+        storageRoot,
+        ...options,
+        // The runtime's disposal is the last shutdown step of every exit
+        // path this process has.
+        usageLog: {
+          version: readCliVersion(),
+          editorType: 'cli',
+        },
+        minimumLogLevel: options?.minimumLogLevel ?? 'Info',
+      }).pipe(Layer.provide(validationModelLayer)),
     ),
   );
   installed = runtime;

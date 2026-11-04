@@ -17,20 +17,11 @@ import {
 import { bindModel as bindWireModel } from '@texra-ai/llm/node';
 
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  decideReasoning,
-  PROTOCOL_BY_BACKEND,
-  reasoningRouteOf,
-} from '@model/reasoningLevel';
-import {
-  readBackgroundToggles,
-  type BackgroundToggles,
-  type ModelSettings,
-} from '@model/modelSettings';
-import { modelFetch } from '@platform/defaults/longRunningModelTransport';
+import { decideReasoning, PROTOCOL_BY_BACKEND } from '@model/reasoningLevel';
+import { readGoogleBackground, type ModelSettings } from '@model/modelSettings';
+import { runModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
-import type { ModelBackend } from '@shared/schemas';
 
 import { routeCredential } from './credentials';
 import { routePolicies, type CallFailure } from './failureInfo';
@@ -50,26 +41,22 @@ export interface BindPlan {
   readonly ask: ReasoningRequest;
   readonly settings: ModelSettings;
   readonly decision: RouteDecision;
-  /** The run's backend: a resumed run's, else the decided one. */
-  readonly backend: ModelBackend;
 }
 
 /**
  * How a turn on a binding is delivered: as background work when the binding
- * can, the turn is text-only and its provider's toggle is on. The toggles are
+ * can and the turn is text-only; on Google only while its toggle is on,
  * read live each turn, so a flip mid-run applies to the next one.
  */
 function backgroundOn(
-  toggles: BackgroundToggles,
+  googleBackground: boolean,
   turn: {
     readonly protocol: ModelOrigin['protocol'];
     readonly textOnly: boolean;
   },
 ): boolean {
   if (!turn.textOnly) return false;
-  return turn.protocol === 'google-interactions'
-    ? toggles.googleInteractions
-    : toggles.responses;
+  return turn.protocol !== 'google-interactions' || googleBackground;
 }
 
 /** A binding that never runs background work. */
@@ -88,16 +75,17 @@ const reasoningOf = Effect.fn('binding.reasoning')(function* (
     config,
     plan.ask,
     plan.settings.reasoningLevels[config.ref],
-    reasoningRouteOf(plan.decision.route, plan.backend),
+    plan.decision.route,
   ).pipe(Effect.mapError(RouteUnavailable.of));
   if (choice.note !== undefined) yield* Effect.logInfo(choice.note);
   return choice;
 });
 
 /** What every binding of `plan` shares. */
-const commonOf = ({ request, backend, settings }: BindPlan) => ({
+const commonOf = ({ request, decision, settings }: BindPlan) => ({
   modelId: request.modelId,
-  backend,
+  backend: decision.backend,
+  declinedRoutes: request.declinedRoutes,
   automaticRetries: settings.automaticRetries,
   textOnly: request.textOnly,
 });
@@ -111,8 +99,8 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   CallFailure,
   Scope.Scope | HttpClient.HttpClient | Secrets
 > {
-  const { request, requested, settings, backend } = plan;
-  const { route, facts } = plan.decision;
+  const { request, requested, settings } = plan;
+  const { route, facts, backend } = plan.decision;
   const protocol = PROTOCOL_BY_BACKEND[backend];
   if (protocol === 'validation') {
     const canned = yield* Effect.serviceOption(ValidationModel);
@@ -139,7 +127,6 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       billing: 'api-key',
       maxOutputTokens: requested.maxOutputTokens,
       background: false,
-      persistentConnection: false,
       serviceTier: null,
       forcedToolChoice: true,
       route: { kind: 'validation' },
@@ -165,7 +152,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     facts,
     request.rejected,
   );
-  const codex = credential.route === 'chatgpt-subscription';
+  const chatgpt = credential.route === 'chatgpt-subscription';
   const reasoning = yield* reasoningOf(plan, requested);
   const turn = { protocol, textOnly: request.textOnly };
   const bound = yield* bindWireModel({
@@ -173,13 +160,9 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     route,
     endpoint: credential.endpoint,
     // A subscription token is the bearer where an API key would be; the
-    // Codex session also names its account.
-    credential: codex
-      ? {
-          kind: 'codex',
-          accessToken: credential.bearer,
-          accountId: credential.accountId,
-        }
+    // ChatGPT plan's also selects that plan's request rules.
+    credential: chatgpt
+      ? { kind: 'chatgpt', accessToken: credential.bearer }
       : { kind: 'api-key', apiKey: credential.bearer },
     options: {
       maxOutputTokens: request.textOnly
@@ -193,8 +176,8 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       ...settings.wire,
       // Background delivery, where the binding can carry it, wins over the
       // persistent WebSocket.
-      background: backgroundOn(settings.background, turn),
-      fetch: yield* modelFetch,
+      background: backgroundOn(settings.googleBackground, turn),
+      fetch: yield* runModelFetch,
     },
   });
   return {
@@ -204,7 +187,7 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     ...(credential.route === 'api-key'
       ? {}
       : { subscriptionToken: credential.bearer }),
-    ...(codex && credential.plan ? { plan: credential.plan } : {}),
+    ...(chatgpt && credential.plan ? { plan: credential.plan } : {}),
     routes: routePolicies(
       [
         bound.config.provider,
@@ -219,8 +202,8 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
       bound.config.id,
     ),
     delivery: bound.background
-      ? Effect.map(readBackgroundToggles(stores), (toggles) =>
-          backgroundOn(toggles, turn) ? 'background' : 'foreground',
+      ? Effect.map(readGoogleBackground(stores), (googleBackground) =>
+          backgroundOn(googleBackground, turn) ? 'background' : 'foreground',
         )
       : FOREGROUND,
   };

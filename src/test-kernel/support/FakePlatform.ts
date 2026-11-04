@@ -84,13 +84,9 @@ export function fakePath(...segments: string[]): string {
   return path.join(fakeRoot(), ...segments);
 }
 
-/**
- * A real directory: instance-presence sockets are genuine OS objects that live
- * under the global storage root even when everything else is faked.
- * Worker-shared so the hosts that never touch presence share the one directory.
- */
-/** The worker's storage root: the fake host's global storage, and the MCP
- *  config a process reads, lie under it as a host's do under `~/.texra`. */
+/** The worker's storage root, which every fake host shares: the fake host's
+ *  global storage, and the MCP config a test process reads, lie under it as
+ *  a host's do under `~/.texra`. */
 function fakeStorageRoot(): string {
   return workerDir('storage-root');
 }
@@ -219,11 +215,6 @@ export interface FakePlatformOptions {
    */
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
-  /**
-   * The process environment the harness ConfigProvider serves; `{}` when
-   * absent, so no suite reads the developer's shell.
-   */
-  env?: Record<string, string>;
   /**
    * The workspace root, as a real path: `fakePath('workspace')` by default.
    * A suite pointing the workspace elsewhere passes a real directory it owns

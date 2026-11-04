@@ -1,6 +1,6 @@
 /**
- * Device-authorization polling as one Effect program, shared by the Codex
- * custom JSON flow and the xAI RFC 8628 flow.
+ * Device-authorization polling as one Effect program, run by the xAI
+ * RFC 8628 flow.
  *
  * The poll is `Effect.retry` while the endpoint reports "pending", spaced by
  * the server's interval with RFC 8628 `slow_down` growth applied to the
@@ -33,10 +33,7 @@ export interface SubscriptionDeviceCodePrompt {
 /** What a provider's device-code sign-in takes from its host. */
 export interface DeviceLoginOptions<S extends SubscriptionSession> {
   /** The coordinator that stores the session the sign-in grants. */
-  readonly coordinator: Pick<
-    SubscriptionCoordinator<S>,
-    'loginWithCode' | 'storeTokens'
-  >;
+  readonly coordinator: Pick<SubscriptionCoordinator<S>, 'storeTokens'>;
   /** Show the user the verification URL + one-time code. */
   readonly onPrompt: (
     prompt: SubscriptionDeviceCodePrompt,
@@ -69,13 +66,6 @@ class DeviceCodeTimedOut extends Schema.TaggedError<DeviceCodeTimedOut>()(
 
 const DEVICE_CODE_TIMED_OUT_MESSAGE =
   'Device-code sign-in timed out. Run sign-in again.';
-
-/** What the poll fails with: the poll's own terminal errors, a transient's
- *  carried error, or the code's expiry. */
-type DeviceAuthorizationFailure<E> =
-  | Exclude<E, DeviceAuthorizationPending | DeviceAuthorizationTransient>
-  | (E extends DeviceAuthorizationTransient ? Error : never)
-  | DeviceCodeTimedOut;
 
 const isPending = (error: unknown): error is DeviceAuthorizationPending =>
   error instanceof DeviceAuthorizationPending;
@@ -132,7 +122,7 @@ export const pollDeviceAuthorization = Effect.fn(
   // The server asks the client to wait the interval before its first poll,
   // and the schedule spaces every later one.
   yield* Effect.sleep(Duration.millis(options.intervalMs));
-  return yield* guardedPoll.pipe(
+  const polled = guardedPoll.pipe(
     Effect.tapError((error) => {
       if (isPending(error)) {
         return Ref.set(transients, { count: 0, last: undefined }).pipe(
@@ -174,14 +164,15 @@ export const pollDeviceAuthorization = Effect.fn(
         Schedule.addDelay(() => Ref.get(extraDelayMs)),
       ),
     }),
-    // A pending at the deadline is a timeout; a transient, whether its budget
-    // ran out or the deadline passed, is its own carried failure.
-    Effect.mapError((error) => {
-      if (isPending(error)) return timedOut;
-      return (
-        isTransient(error) ? error.error : error
-      ) as DeviceAuthorizationFailure<E>;
-    }),
+  );
+  // What the poll fails with: the poll's own terminal errors, a transient's
+  // carried error, or the code's expiry. A pending at the deadline is a
+  // timeout; a transient, whether its budget ran out or the deadline passed,
+  // is its own carried failure.
+  return yield* Effect.catchIf(
+    Effect.catchIf(polled, isPending, () => Effect.fail(timedOut)),
+    isTransient,
+    (transient) => Effect.fail(transient.error),
   );
 });
 

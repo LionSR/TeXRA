@@ -38,7 +38,8 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   envDigest,
   jsonSyntaxError,
@@ -50,6 +51,7 @@ import type { LoadablePlugin } from '@common/plugins/pluginTrust';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { acquireMcpServer } from './mcpServer';
 
@@ -64,10 +66,7 @@ const readConfigText = (
 ): Effect.Effect<string | null, Error> =>
   fs.readFileString(file).pipe(
     Effect.map((text): string | null => text),
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(null),
-    ),
+    Effect.catchIf(absentReason, () => Effect.succeed(null)),
     Effect.mapError(
       (error) =>
         new Error(`Could not read ${file}: ${error.message}`, { cause: error }),
@@ -80,11 +79,13 @@ const readConfigText = (
  * wrong shape is one warning and no servers. The Plugins page lists them
  * read-only from here, and the CLI warns of a broken file at startup.
  */
-export const readMcpConfig = (
+export const readMcpConfig: (
   fs: FileSystem.FileSystem,
   file: string,
-): Effect.Effect<ReturnType<typeof parseMcpServers> | null> =>
-  Effect.gen(function* () {
+) => Effect.Effect<ReturnType<typeof parseMcpServers> | null> = Effect.fn(
+  'readMcpConfig',
+)(
+  function* (fs: FileSystem.FileSystem, file: string) {
     const text = yield* readConfigText(fs, file);
     if (text === null) return null;
     const json = yield* Effect.try({
@@ -103,15 +104,15 @@ export const readMcpConfig = (
       ),
     );
     return parseMcpServers(file, config.mcpServers);
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({ servers: [], warnings: [error.message] }),
-    ),
-  );
+  },
+  Effect.catch((error) =>
+    Effect.succeed({ servers: [], warnings: [error.message] }),
+  ),
+);
 
 /** What a server answers once up: its tools, or why none. */
 export interface LoadedPluginTools {
-  readonly tools: ReadonlyMap<string, RuntimeTool>;
+  readonly tools: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Why the server offers no tools (it failed to start). */
   readonly failure?: string;
 }

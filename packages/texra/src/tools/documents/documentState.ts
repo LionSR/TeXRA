@@ -42,7 +42,7 @@ import {
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import {
-  DOCUMENTS_OUTPUT_ARM,
+  DOCUMENTS_OUTPUT_KIND,
   documentsOutputFact,
   documentTaskOptions,
   type DocumentTask,
@@ -162,7 +162,7 @@ export const openDocuments = Effect.fn('documents.open')(function* ({
         `Run ${runId} is not a document task: its agent '${config.agent}' has no task.`,
       ),
     );
-  const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_ARM);
+  const output = yield* (yield* ChildRuns).fact(runId, DOCUMENTS_OUTPUT_KIND);
   const state: OutputState = {
     rounds: roundsFromPersisted(output?.rounds ?? []),
   };

@@ -35,7 +35,9 @@ export const RUN_GROUP_LABELS: Readonly<Record<RunGroup, string>> =
 
 /** Section order, in the group union's own order. */
 export const RUN_GROUP_ORDER: readonly RunGroup[] = Object.freeze(
-  Object.keys(RUN_GROUP_LABELS) as RunGroup[],
+  Object.keys(RUN_GROUP_LABELS).filter((key): key is RunGroup =>
+    Object.hasOwn(RUN_GROUP_LABELS, key),
+  ),
 );
 
 /**
@@ -71,7 +73,7 @@ type RunNotice = NonNullable<RunView['statusNotice']>;
 function resumeBlockedText({
   reason,
 }: Extract<RunNotice, { kind: 'resumeBlocked' }>): string {
-  switch (reason.kind) {
+  switch (reason.blocker) {
     case 'agentMissing':
       return `This task's agent, ${reason.name}, is no longer installed. It can continue once the agent is back.`;
     case 'pluginOff':

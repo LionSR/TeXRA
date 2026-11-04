@@ -14,8 +14,9 @@
  */
 import { Cause, Effect, Exit, FileSystem } from 'effect';
 
-import type { ConfigProvider } from '@platform/interfaces';
+import { pathToLocationIn } from '@common/storage/fileLocation';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { ConfigProvider } from '@shared/config/settings';
 import {
   fileLocationDisplayPath,
   type FileLocation,
@@ -29,11 +30,10 @@ import type { DraftBlob } from '@shared/session/historyTurns';
 import { Rejected } from '@shared/session/runtimeRequest';
 import { blobAddress } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { getBasename } from '@utils/core';
 import { getExtensionLowercase } from '@utils/core/pathCore';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
-import { getBase64EncodedMedia, processPdf2Png } from '@utils/media/img';
+import { getBase64EncodedMedia, processPdf2Png } from './img';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { MessageSchema } from '@texra-ai/llm';
 

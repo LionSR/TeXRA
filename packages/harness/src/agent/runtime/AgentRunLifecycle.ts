@@ -6,33 +6,25 @@
  */
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
+import { logSdkError, type StageHandle } from '@agent/trace';
 import {
   finalizeRun,
   type FinalizeRunInput,
 } from '@agent/storage/runLifecycle';
-import {
-  AGENT_ERROR_OUTCOME,
-  agentErrorPresentation,
-  classifyAgentError,
-} from '@common/errors/agentErrorClassification';
+import { Runs } from '@agent/runtime/runRegistry';
+import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import {
-  attachErrorPresentationClaimed,
-  attachProviderError,
-} from '@common/errors/sdkError/errorMetadata';
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import type { RunOutcome } from '@shared/schemas';
+import type { ResultEvent } from '@shared/session/agentEvent';
 import {
+  type RunOutcome,
   emptyRunEndOutput,
   RUN_OUTCOME,
-  toRetryErrorInfo,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunReport } from './runReport';
 import type { ChildRunTurns } from './childRunLoop';
-import type { SessionHandle } from './SessionHandle';
+import type { SessionServices } from './rootLaunch';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
@@ -44,10 +36,9 @@ const logLifecycleWarning = (message: string, data: unknown) =>
     withLogChannel(CHANNEL),
   );
 
-/** What ends an activation: the run's end, on the session that owns the
+/** What ends an activation: the run's end, on the caller's session, whose
  *  publisher every row of the run goes through in order. */
-interface EndActivationParams extends FinalizeRunInput {
-  readonly session: SessionHandle;
+interface EndActivationParams<R = never> extends FinalizeRunInput<R> {
   /** Transcript stage closed with the resolved outcome (guarded). */
   readonly stage?: Pick<StageHandle, 'end'>;
 }
@@ -67,21 +58,17 @@ interface EndActivationResult {
  * The one end of a run's activation, in this order: the transcript stage
  * end, then the `run.end` row (through `finalizeRun`, its one writer). The
  * publisher commits in order, so every row the run published lands before
- * its end, and a refusal of one of them is the end's own write failure. A
- * stop that reached the run before its end (`stopped`) outranks the run's
- * own report, on the stage and on the row. Its callers: the run program's
+ * its end, and a refusal of one of them is the end's own write failure. The
+ * outcome is the run's verdict, a stop's CANCELLED included, on the stage
+ * and on the row. Its callers: the run program's
  * terminal ({@link endRun}), a child loop's exit, and an end no driver
  * writes (a failed hand-off).
  */
 export const endActivation = Effect.fn('endActivation')(
-  function* (
-    params: EndActivationParams,
-  ): Effect.fn.Return<EndActivationResult, Error> {
-    const { session, runId } = params;
-    // Stop precedence, read once: a stop that reached the run before its exit
-    // outranks the flow's report, on the stage here as on the row below.
-    const outcome =
-      params.stopped === true ? RUN_OUTCOME.CANCELLED : params.outcome;
+  function* <R = never>(
+    params: EndActivationParams<R>,
+  ): Effect.fn.Return<EndActivationResult, Error, SessionServices | R> {
+    const { runId, outcome } = params;
     // Close the transcript stage first: its `stage.end` is published ahead of
     // the `run.end` row, and a refusal of it is that row's write failure.
     if (params.stage) {
@@ -110,14 +97,17 @@ export const endActivation = Effect.fn('endActivation')(
       ...(error ? { error } : {}),
       output,
     };
-    const finalization = yield* finalizeRun(session, {
+    // Why the run stopped, as the registry marked its activation; a holder's
+    // release names no reason.
+    const cause = (yield* Runs).stopCause(runId);
+    const finalization = yield* finalizeRun({
       runId,
       outcome,
+      reason: cause === 'released' ? undefined : cause,
       error,
       output,
       lastTurn: params.lastTurn,
       ownerless: params.ownerless,
-      stopped: params.stopped,
     }).pipe(Effect.result);
     if (Result.isSuccess(finalization)) {
       const { end, wrote } = finalization.success;
@@ -132,7 +122,7 @@ export const endActivation = Effect.fn('endActivation')(
       error: unsaved,
     });
     const message = `The run's end could not be saved: ${unsaved.message}`;
-    const failed = { kind: classifyAgentError(unsaved), message };
+    const failed = { ...classifyAgentError(unsaved), message };
     return {
       event: { ...event, outcome: RUN_OUTCOME.FAILED, error: failed },
       persistFailure: unsaved,
@@ -145,8 +135,9 @@ export const endActivation = Effect.fn('endActivation')(
   Effect.uninterruptible,
 );
 
-/** A child's last turn, finished under the outcome its end resolves. */
-type FinishLastTurn = ChildRunTurns<RunReport>['finishLastTurn'];
+/** A child's last turn, finished under the outcome its end resolves; `R`,
+ *  what finishing it reads of the run. */
+type FinishLastTurn<R> = ChildRunTurns<RunReport, R>['finishLastTurn'];
 
 /** The report of a run that ended before its loop produced an output. */
 function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
@@ -173,16 +164,15 @@ function withResolvedOutcome(
 
 /** End the run's activation with `end`'s facts; a child's last turn
  *  (`lastResult`) is finished under the resolved outcome. */
-const endWith = (
+const endWith = <R>(
   ctx: RunLaunch,
-  finish: FinishLastTurn | undefined,
-  end: Pick<FinalizeRunInput, 'outcome' | 'error' | 'output' | 'stopped'> & {
+  finish: FinishLastTurn<R> | undefined,
+  end: Pick<FinalizeRunInput, 'outcome' | 'error' | 'output'> & {
     readonly lastResult?: RunReport;
   },
 ) => {
   const { lastResult, ...facts } = end;
   return endActivation({
-    session: ctx.session,
     runId: ctx.runId,
     stage: ctx.parentStage,
     ...facts,
@@ -193,14 +183,14 @@ const endWith = (
 };
 
 /**
- * The single owner of provider/runtime failure exits: a flow carrying
- * structured error metadata (`carried`), or an exception that escaped it.
- * A stop that met the failure (`stopped`) outranks it: the failure rides
- * the cancelled row as its error.
+ * The single owner of provider/runtime failure exits: a flow's reported
+ * failure (an `AgentError` carrying it as recorded) or an exception that
+ * escaped the flow. A stop that met the failure (`stopped`) outranks it:
+ * the failure rides the cancelled row as its error.
  */
-const failedEnd = Effect.fn('failedEnd')(function* (
+const failedEnd = Effect.fn('failedEnd')(function* <R>(
   ctx: RunLaunch,
-  finish: FinishLastTurn | undefined,
+  finish: FinishLastTurn<R> | undefined,
   err: unknown,
   carried: RunReport | undefined,
   stopped = false,
@@ -213,36 +203,28 @@ const failedEnd = Effect.fn('failedEnd')(function* (
   // terminal: it falls back to an unexpected failure.
   const prologue = yield* Effect.exit(
     Effect.gen(function* () {
-      const kind = classifyAgentError(err);
-      // toRetryErrorInfo strips rawErrorBody, which the `run.end` error
-      // type omits and a bare object spread would smuggle past the check.
-      const info = toRetryErrorInfo(normalizeProviderError(err));
-      const { message: sdkMsg, ...providerErrorInfo } = info;
-      const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
+      const classified = classifyAgentError(err);
+      // An unexpected failure is named by the agent it stopped; a model
+      // failure names its own cause, as the other kinds do, and a host may
+      // word it from its classification in place of this message.
+      const error: NonNullable<ResultEvent['error']> =
+        classified.kind === 'unexpected'
+          ? {
+              kind: 'unexpected',
+              message: `Error executing agent ${agentIdentifier}: ${classified.message}`,
+            }
+          : classified;
       // Root failures are logged here; a subagent's is delivered to its
       // orchestrator, so a second wrapper error would blame the parent.
-      if (kind !== 'abort' && parentRunId === null) {
-        yield* logSdkError(ctx.logger, errorMsg, err, {
+      if (parentRunId === null) {
+        yield* logSdkError(ctx.logger, error.message, err, {
           operation: `execute ${agentIdentifier}`,
         });
       }
-      const message = kind === 'unexpected' ? errorMsg : sdkMsg;
-      // `abort`/`disk-full` never carry provider or credential fields:
-      // narrow them so runRecords' union stays honest.
-      const error: NonNullable<ResultEvent['error']> =
-        kind === 'abort' || kind === 'disk-full'
-          ? {
-              kind,
-              message,
-              userRetryable: providerErrorInfo.userRetryable,
-              partialText: providerErrorInfo.partialText,
-            }
-          : { kind, message, ...providerErrorInfo };
-      return { kind, errorMsg, error, info };
+      return error;
     }),
   );
-  const fallbackMsg = `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`;
-  const { kind, errorMsg, error, info } = Exit.isSuccess(prologue)
+  const error: NonNullable<ResultEvent['error']> = Exit.isSuccess(prologue)
     ? prologue.value
     : yield* logLifecycleWarning('Run failure prologue failed', {
         runId,
@@ -250,23 +232,23 @@ const failedEnd = Effect.fn('failedEnd')(function* (
       }).pipe(
         Effect.as({
           kind: 'unexpected' as const,
-          errorMsg: fallbackMsg,
-          error: { kind: 'unexpected' as const, message: fallbackMsg },
-          info: { message: fallbackMsg, userRetryable: false },
+          message: `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`,
         }),
       );
-  const outcome = AGENT_ERROR_OUTCOME[kind];
+  // The failure a child's report and a root's `AgentError` carry: the error
+  // without its kind, a model failure as recorded or the words alone.
+  const { kind: _kind, ...failure } = error;
+  const outcome = stopped ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
   // A child's failure rides its result, the error its delivery reports.
   const subagentResult: RunReport | undefined =
     parentRunId !== null
-      ? { ...(carried ?? emptyReport(ctx, outcome)), failure: info }
+      ? { ...(carried ?? emptyReport(ctx, outcome)), failure }
       : undefined;
   // One finalize covers the three exits below.
   const finalized = yield* endWith(ctx, finish, {
     outcome,
     error,
     output: carried?.output,
-    stopped,
     lastResult: subagentResult,
   });
   // The exits below report the terminal fact the finalizer published.
@@ -274,17 +256,16 @@ const failedEnd = Effect.fn('failedEnd')(function* (
   if (subagentResult) {
     return withResolvedOutcome(subagentResult, resolvedOutcome);
   }
-  if (kind === 'abort') return emptyReport(ctx, resolvedOutcome);
 
-  const failure = new AgentError({ message: errorMsg, cause: err });
-  // Receipt for a root run's failure once its `run.end` row committed: the
-  // session's presenter shows that row's guidance, so the failure thrown
-  // past it is marked presented. A run that never opened has no row: its
-  // launch presents it (`Runs.launch`).
-  const recorded = finalized.event.error;
-  if (finalized.recorded && recorded && agentErrorPresentation(recorded))
-    attachErrorPresentationClaimed(failure);
-  return yield* failure;
+  // A root run's failure. Once its `run.end` row committed, the session's
+  // presenter shows that row (`presentTerminalResult`), and a launch that
+  // waits for the run's opening answers with the opening, not this; a run
+  // that never opened has no row, so its launch's caller presents this.
+  return yield* new AgentError({
+    message: error.message,
+    cause: err,
+    ...(error.kind === 'model' ? { failure } : {}),
+  });
 });
 
 /**
@@ -297,26 +278,25 @@ const failedEnd = Effect.fn('failedEnd')(function* (
  * result. Uninterruptible: the run's stop is its fiber's interruption, and
  * one landing mid-way must not strand the run with no `run.end` row.
  */
-export const endRun = Effect.fn('endRun')(function* (
+export const endRun = Effect.fn('endRun')(function* <R = never>(
   ctx: RunLaunch,
   exit: Exit.Exit<RunReport, Error>,
   /** A child's last turn result, from the result its run ends with. */
-  finish?: FinishLastTurn,
-): Effect.fn.Return<RunReport, Error> {
+  finish?: FinishLastTurn<R>,
+): Effect.fn.Return<RunReport, Error, SessionServices | R> {
   if (Exit.isSuccess(exit)) {
     const result = exit.value;
     if (result.failure) {
-      // The carried failure as an `Error`, so the one failure path
-      // classifies and logs it exactly as an exception that escaped the
-      // flow. `RetryErrorInfo` is a `ProviderError` minus the bulky
-      // `rawErrorBody`, so it attaches as-is: its classification is what
-      // the classifier reads.
-      const failure = new Error(result.failure.message);
-      attachProviderError(failure, result.failure);
+      // The reported failure takes the one failure path on an `AgentError`,
+      // which that path's log row and the root's error read it from.
+      const failure = new AgentError({
+        message: result.failure.message,
+        failure: result.failure,
+      });
       return yield* failedEnd(ctx, finish, failure, result);
     }
-    // The phase decides the verdict here exactly as on a failure: a stop
-    // that won on the phase must not let the caller observe COMPLETED.
+    // A completed flow supplies its outcome; an interrupted flow arrives
+    // as a failed Exit and is classified below.
     const { event, persistFailure: cause } = yield* endWith(ctx, finish, {
       outcome: result.outcome,
       output: result.output,
@@ -337,10 +317,9 @@ export const endRun = Effect.fn('endRun')(function* (
   // prompt closed under it) is a stop too, not a failure: squashed, it
   // would record "All fibers interrupted without error" as FAILED.
   if (Cause.hasInterruptsOnly(cause)) {
-    yield* endWith(ctx, finish, {
-      outcome: RUN_OUTCOME.CANCELLED,
-      stopped: true,
-    }).pipe(Effect.orDie);
+    yield* endWith(ctx, finish, { outcome: RUN_OUTCOME.CANCELLED }).pipe(
+      Effect.orDie,
+    );
     return yield* Effect.failCause(cause);
   }
   const err = ensureError(Cause.squash(cause));

@@ -1,59 +1,56 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { layer } from '@effect/vitest';
+import { expect } from 'vitest';
 
-import { Schema } from 'effect';
+import { Effect, Layer, Schema } from 'effect';
 import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { FakeHost } from '@test/support/testKernel';
 
-/** The harness runtime supplies the standard-library filesystem prompt
- *  assembly reads through. */
-const buildOpening = (...args: Parameters<typeof buildTemplateInputs>) =>
-  testRuntime().runPromise(buildTemplateInputs(...args));
-
-setupPlatform();
-
-// The describes below replace the whole global platform in their own
-// beforeEach and never restore it — they MUST stay the last describes in
-// this file.
-function buildVars(
-  agentConfig: typeof AgentConfigSchema.Type,
-): ReturnType<typeof buildOpening> {
-  return buildOpening(agentConfig, false, noopTrace, {
+function buildVars(agentConfig: typeof AgentConfigSchema.Type) {
+  return buildTemplateInputs(agentConfig, false, noopTrace, {
     workspacePath: fakePath('workspace'),
     storageRoot: testWorkspaceRoots().storage,
   });
 }
 
-describe('buildTemplateInputs with a missing attached memory', () => {
-  beforeEach(async () => {
-    await installPlatform({
+// A host whose storage holds one of the two memories the run attaches; the
+// standard-library filesystem is what prompt assembly reads through.
+layer(
+  Layer.merge(
+    FakeHost.layer({
       workspacePath: fakePath('workspace'),
       files: {
         '/workspace/.texra/storage/memories/present.md':
           '---\nmodifiedBy: user\nmodifiedAt: 2026-06-20T14:30:45.123Z\n---\nRemember this convention.',
       },
-    });
-  });
-
+    }),
+    nodePlatformLayer,
+  ),
+  { excludeTestServices: true },
+)('buildTemplateInputs with a missing attached memory', (it) => {
   // A configured memory that cannot be read is reported, not dropped.
-  it('records attached memory read misses from the prompt-load pass', async () => {
-    const { attachedMemories, attachedMemoryMisses } = await buildVars(
-      Schema.decodeUnknownSync(AgentConfigSchema)({
-        agent: 'generic',
-        model: 'test-model',
-        memories: ['/memories/present.md', '/memories/missing.md'],
-      }),
-    );
+  it.effect(
+    'records attached memory read misses from the prompt-load pass',
+    () =>
+      Effect.gen(function* () {
+        const { attachedMemories, attachedMemoryMisses } = yield* buildVars(
+          Schema.decodeUnknownSync(AgentConfigSchema)({
+            agent: 'generic',
+            model: 'test-model',
+            memories: ['/memories/present.md', '/memories/missing.md'],
+          }),
+        );
 
-    expect(attachedMemories).toBe(
-      '<attached_memories>\n<memory name="/memories/present.md">\nRemember this convention.\n</memory>\n</attached_memories>',
-    );
-    expect(attachedMemoryMisses).toEqual([
-      expect.objectContaining({ path: '/memories/missing.md' }),
-    ]);
-  });
+        expect(attachedMemories).toBe(
+          '<attached_memories>\n<memory name="/memories/present.md">\nRemember this convention.\n</memory>\n</attached_memories>',
+        );
+        expect(attachedMemoryMisses).toEqual([
+          expect.objectContaining({ path: '/memories/missing.md' }),
+        ]);
+      }),
+  );
 });

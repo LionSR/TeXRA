@@ -28,7 +28,10 @@ const COPY_SIGN_IN_LINK = 'Copy Sign-in Link';
 
 /** Dismissing the browser-choice dialog cancels sign-in, matching this
  * repo's modal convention (e.g. authCommands.ts, compareCommands.ts). */
-class SubscriptionSignInCancelled extends Error {}
+class SubscriptionSignInCancelled extends Schema.TaggedError<SubscriptionSignInCancelled>()(
+  'SubscriptionSignInCancelled',
+  {},
+) {}
 
 /**
  * The OAuth leg's failure, carrying whatever the transport threw so the same
@@ -59,8 +62,8 @@ function vscodePresenter(
 ): SubscriptionSignInPresenter {
   const { displayName, sessionName, copyTarget } = provider;
   return {
-    presentDeviceCode: (prompt) =>
-      Effect.gen(function* () {
+    presentDeviceCode: Effect.fn('presentDeviceCode')(
+      function* (prompt) {
         const copied = yield* Effect.tryPromise({
           try: () => vscode.env.clipboard.writeText(prompt.userCode),
           catch: ensureError,
@@ -82,18 +85,16 @@ function vscodePresenter(
             prompt.verificationUrlComplete ?? prompt.verificationUrl,
           );
         }
-      }).pipe(
-        // The flow does not wait for this prompt, so its failure has no
-        // caller to reach: it is reported here, once.
-        Effect.catch((error) =>
-          showLoggedErrorMessage(
-            channel,
-            `${displayName} sign-in code could not be shown`,
-            error,
-          ),
+      },
+      Effect.catch((error) =>
+        showLoggedErrorMessage(
+          channel,
+          `${displayName} sign-in code could not be shown`,
+          error,
         ),
-        Effect.asVoid,
       ),
+      Effect.asVoid,
+    ),
     presentSignInUrl: Effect.fn('subscriptionSignIn.presentSignInUrl')(
       function* (url) {
         // `openExternal` always targets the system default browser. The
@@ -120,7 +121,7 @@ function vscodePresenter(
           return;
         }
         if (choice !== OPEN_DEFAULT_BROWSER) {
-          return yield* Effect.fail(new SubscriptionSignInCancelled());
+          return yield* new SubscriptionSignInCancelled();
         }
         yield* externalOpener.openExternal(url);
       },

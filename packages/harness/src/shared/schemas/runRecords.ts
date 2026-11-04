@@ -38,26 +38,27 @@ export const recipeBlockOf = (
     ? config.script.block
     : null;
 
-/** Terminal errors keep the classified kind beside the provider detail. */
-const RunEndErrorSchema = Schema.Union([
-  RetryErrorInfoSchema.mapFields(
-    Struct.pick(['message', 'userRetryable', 'partialText']),
-  )
-    .mapFields(Struct.map(Schema.optional))
-    .mapFields(
-      Struct.assign({
-        kind: Schema.Literals(['abort', 'disk-full', 'result-lost']),
-      }),
-    ),
+/**
+ * Why a run stops. `user` is an explicit stop of the work (a stop button,
+ * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
+ * background operation it is observing. `shutdown` only ends this process's
+ * hold on the run (an exit, a signal, a session close), leaving that
+ * operation for a resume to observe.
+ */
+export const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
+/** Why a run stops: a `user` stop or this process's `shutdown`. */
+export type RunStopReason = typeof RunStopReasonSchema.Type;
 
-  RetryErrorInfoSchema.mapFields(Struct.map(Schema.optional)).mapFields(
-    Struct.assign({
-      kind: Schema.Literals([
-        'context-window',
-        'missing-api-key',
-        'unexpected',
-      ]),
-    }),
+/** Why a run ended failed, always saying what went wrong (`message`): a
+ *  local failure, or a model failure as the run's rows record it, with its
+ *  classification (a used-up plan, a missing key, an overflowed window). */
+const RunEndErrorSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literals(['disk-full', 'result-lost', 'unexpected']),
+    message: Schema.String,
+  }),
+  RetryErrorInfoSchema.mapFields(
+    Struct.assign({ kind: Schema.Literal('model') }),
   ),
 ]);
 
@@ -91,6 +92,10 @@ export function emptyRunEndOutput(): RunEndOutput {
  */
 export const RunEndSchema = Schema.Struct({
   outcome: RunOutcomeSchema,
+  /** Why a cancelled end stopped the run: a person's stop or this process's
+   *  shutdown. Absent on any other end, and on a cancel neither gave (a
+   *  holder's release). */
+  reason: Schema.optional(RunStopReasonSchema),
   error: Schema.optional(RunEndErrorSchema),
   usage: Schema.optional(RunUsageTotalsSchema),
   output: RunEndOutputSchema,

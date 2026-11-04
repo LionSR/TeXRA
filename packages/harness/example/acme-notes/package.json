@@ -1,0 +1,22 @@
+{
+  "name": "acme-notes",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A native plugin package for @texra-ai/harness, built outside the harness: a tool, a script module, a versioned fact kind and an agent file",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "agents"
+  ],
+  "peerDependencies": {
+    "@texra-ai/harness": "*",
+    "effect": "^4.1.0"
+  }
+}

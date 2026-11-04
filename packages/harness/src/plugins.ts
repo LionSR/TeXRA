@@ -13,7 +13,8 @@
  *   [`memoryWorkflow`](#memoryworkflow), [`multiAgent`](#multiagent)
  *   ([`AGENT_TOOL_NAME`](#agent_tool_name)), and [`web`](#web) for
  *   `Sessions.layer({ platform, plugins })`.
- * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin),
+ * - **Plugin & tool authoring**: [`definePlugin`](#defineplugin) and the
+ *   [`Plugin`](#plugin) it returns (what a plugin package declares it exports),
  *   [`executed`](#executed), [`errorResult`](#errorresult),
  *   [`ToolError`](#toolerror), [`nullishWithDefault`](#nullishwithdefault),
  *   [`resolveToolPath`](#resolvetoolpath), and file-edit approval helpers
@@ -27,7 +28,7 @@
  *   [`ALWAYS_AVAILABLE`](#always_available), [`PromptSection`](#promptsection),
  *   [`ProcessPluginLayer`](#processpluginlayer),
  *   [`SessionPluginLayer`](#sessionpluginlayer), [`PluginHold`](#pluginhold),
- *   [`RequestDecisionHook`](#requestdecisionhook), [`PluginArm`](#pluginarm),
+ *   [`RequestDecisionHook`](#requestdecisionhook), [`FactKind`](#factkind),
  *   and [`AgentBlock`](#agentblock) ([`agentBlockOf`](#agentblockof)).
  */
 export {
@@ -44,7 +45,8 @@ export {
 export { AGENT_TOOL_NAME } from '@shared/schemas';
 export {
   definePlugin,
-  type PluginArm,
+  type FactKind,
+  type Plugin,
   type PluginDefinition,
   type PluginRow,
 } from '@tools/plugins';
@@ -140,7 +142,6 @@ export {
 export { callerRun, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
-  type CallServices,
   type ChildRunsShape,
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';
@@ -177,7 +178,7 @@ export {
   type FollowUpSenderInput,
 } from '@agent/followUp/followUpMessages';
 // What a call's requests and a decision hook's commits fail with.
-export type { LogWriteError } from '@agent/runtime/SessionHandle';
+export type { LogWriteError } from '@shared/session/sessionLog';
 export type { CellError, RunHistoryRefused } from '@shared/session/runHistory';
 export type { RunHistoryInconsistent } from '@shared/session/runState';
 export type { StepRoot } from '@utils/files/externalRoots';
@@ -211,7 +212,10 @@ export type {
 } from '@agent/runtime/ModelRetryGate';
 // A run's files under its session storage: its directory, the pre-run
 // snapshots and workspace mirrors it prepares, and output locations.
-export { RunFileService, type RunStorageEntry } from '@utils/files/runStorage';
+export {
+  RunFileService,
+  type RunStorageEntry,
+} from '@common/storage/runStorage';
 export { HostCapabilities } from '@agent/runtime/agentToolResolution';
 // The harness's retry policy: which HTTP statuses are worth retrying, the
 // randomized exponential backoff `Schedule` its fetches retry on, and the

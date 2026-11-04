@@ -4,7 +4,7 @@
  * with code highlighting.
  */
 
-import { highlightCode } from '@texra/shared/highlighting/highlightCode';
+import { highlightCode } from '@ui/highlighting/highlightCode';
 import {
   createMarkdownRenderer,
   type MarkdownItInstance,

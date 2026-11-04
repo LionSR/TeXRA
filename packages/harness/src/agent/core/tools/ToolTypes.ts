@@ -30,7 +30,7 @@ import type { StepRoot } from '@utils/files/externalRoots';
  * either is asked for, so no tool body opens its own approval prompt or
  * re-checks its own roots.
  */
-export interface ToolGuard<T, R = never> {
+export interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -42,12 +42,8 @@ export interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the
@@ -108,7 +104,7 @@ export interface ITool<E = Error, R = never> {
    * field as the first argument and the rest as the second:
    * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
    * `withScript`: a function of scripts alone (`self()`), offered whenever
-   * the script tool is.
+   * the script tool is and never sent to the model as a tool of its own.
    */
   readonly scriptGlobal?: {
     readonly positional: string;
@@ -128,7 +124,7 @@ export interface ITool<E = Error, R = never> {
    * Whether a call needs a person's approval, and who asks. `true` (implied
    * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
    * body's own request (an edit's review, a plan, a delegation proposal, a
-   * question, an external inquiry), which answers what the call's hooks
+   * question, a plugin's request), which answers what the call's hooks
    * said. A run that cannot present a prompt is not offered such a tool
    * (`asksApproval`).
    */
@@ -137,7 +133,7 @@ export interface ITool<E = Error, R = never> {
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
    * A description rendered from the other tools the run declares, in place
    * of `definition.description`: rendered at the step that freezes the
