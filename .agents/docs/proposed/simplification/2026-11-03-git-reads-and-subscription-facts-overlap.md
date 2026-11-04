@@ -12,12 +12,12 @@ below are the significant ones found.
 
 ## 1. The same git reads are written in several places (most significant)
 
-| Read | Where it is written |
-| --- | --- |
+| Read                                                      | Where it is written                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "is this a work tree" (`rev-parse --is-inside-work-tree`) | `packages/texra/src/utils/git/isGitRepository.ts` (success and stdout `true`); `packages/cli/src/runtime/gitOps.ts` `isGitRepo` (success only); `packages/harness/src/agent/prompt/workspaceInfo.ts` `getGitInfo` (success only, deliberately, with a comment explaining why) |
-| origin URL, current branch, origin default branch | `packages/cli/src/runtime/gitOps.ts` (`remoteUrl`, `currentBranch`, `defaultBranch`); `packages/texra/src/tools/github/githubSubscriptionTool.ts` (`gitInDir` with `remote get-url origin`, `rev-parse --abbrev-ref HEAD`, `symbolic-ref --short refs/remotes/origin/HEAD`) |
-| repository root | `packages/cli/src/runtime/gitOps.ts` `repoRoot`; `packages/texra/src/latex/latexdiff.ts` (`rev-parse --show-toplevel`) |
-| a local `git` runner wrapper | `gitOps.git`, `githubSubscriptionTool.gitInDir`, `repositoryOverview.readGit`, `pluginGit.git`, `workspaceInfo.runGit` |
+| origin URL, current branch, origin default branch         | `packages/cli/src/runtime/gitOps.ts` (`remoteUrl`, `currentBranch`, `defaultBranch`); `packages/texra/src/tools/github/githubSubscriptionTool.ts` (`gitInDir` with `remote get-url origin`, `rev-parse --abbrev-ref HEAD`, `symbolic-ref --short refs/remotes/origin/HEAD`)   |
+| repository root                                           | `packages/cli/src/runtime/gitOps.ts` `repoRoot`; `packages/texra/src/latex/latexdiff.ts` (`rev-parse --show-toplevel`)                                                                                                                                                        |
+| a local `git` runner wrapper                              | `gitOps.git`, `githubSubscriptionTool.gitInDir`, `repositoryOverview.readGit`, `pluginGit.git`, `workspaceInfo.runGit`                                                                                                                                                        |
 
 Why it matters: the copies already disagree. In a bare repository or inside
 `.git`, the texra probe answers false while the CLI probe answers true, so
