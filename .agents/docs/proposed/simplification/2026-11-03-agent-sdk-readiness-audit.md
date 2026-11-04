@@ -145,7 +145,7 @@ state is legible:
 5. **Four CLAUDE.md rules with no check:** the barrel ban, the single-caller-
    extraction ban, renderer `Date.now()`, and silent degradation outside the
    harness/llm cores. Turning these into ratchets is the highest-leverage
-   *small* cleanup, since the structural work is already enforced by ratchets
+   _small_ cleanup, since the structural work is already enforced by ratchets
    and the gaps are the unchecked rules.
 
 ## Why no code changed in this pass
