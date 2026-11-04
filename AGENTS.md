@@ -25,7 +25,7 @@ Read the nested guide before working in its subtree:
 corepack pnpm install
 npm run compile:fast      # build (esbuild + Vite); watch:fast, package:fast, build:fast
 npm run typecheck         # builds do NOT type check, see below
-npm run gate              # the static CI jobs: invariants, typecheck + format, lint
+npm run gate              # the static CI jobs: lint + invariants, typecheck + format
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
 npm run test:pure         # before a push (~30s): the host-free tier
@@ -116,22 +116,25 @@ aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
 **The harness boundary is frozen, not open.** The app and hosts reach the
 harness only through `@texra-ai/harness` and its subpaths (`/node`, `/plugins`,
 `/schemas`, `/transcript`); a host holds the `LocalSession` that
-`Sessions.open` returns. The harness imports nothing from the app
-(`HARNESS_NO_APP_IMPORT_PATTERNS` in `eslint.config.mjs`), and harness, app and
-llm import no host layer. ESLint also fails:
+`Sessions.open` returns. The harness imports nothing from the app,
+and harness, app and llm import no host layer. oxlint (`.oxlintrc.json`,
+`npm run lint`) also fails:
 
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
-  the named runtime entries (`EFFECT_RUN_ENTRIES`); the SDK's entry files run
+  the runtime entries named in its overrides; the SDK's entry files run
   nothing;
 - `new AbortController()` outside its one permanent resident;
-- in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(` and `any`, with
-  no disable comment honored;
-- any `@adapter-until` marker: there are no temporary adapters.
+- in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(`, `!` and an
+  asserted object literal. A lint disable comment in the core fails
+  `check:core-quality`.
+
+A later override in `.oxlintrc.json` replaces an earlier one's options for a
+rule, so each import block restates every pattern that holds for its files.
 
 The core-quality counts are held against the merge base by
 `npm run check:core-quality` (`packages/harness/AGENTS.md` "Core quality").
-ESLint holds the VS Code-free zones, the host-layer and harness-no-app import
-rules, and the core-quality syntax bans. The other boundaries (no deep import
+oxlint holds the VS Code-free zones, the host-layer, harness-no-app,
+browser-bundle and llm import rules, and the core syntax bans. The other boundaries (no deep import
 of harness internals from the app or a host, no `@shared/schemas/<leaf>`
 import, one owner per fact) are conventions with no mechanical check; there
 are no baseline files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
@@ -177,9 +180,8 @@ Core logic must not import `vscode`. Check this first on any diff.
 **VS Code-free zones:** `packages/harness/src/`, `packages/texra/src/`,
 `packages/llm/src/`, `packages/desktop/src/`, and the settings webview
 frontend `packages/extension/src/settingsView/frontend/` (the progress view's
-frontend is app code, `packages/texra/src/ui/progress/`). Enforced by
-`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`; keep it in sync with this
-list.
+frontend is app code, `packages/texra/src/ui/progress/`). Enforced by the
+import overrides in `.oxlintrc.json`; keep them in sync with this list.
 
 **VS Code-allowed:** `packages/extension/src/extension.ts` (builds its runtime
 over `processLayer()` once), `packages/extension/src/commands/`,
@@ -426,7 +428,7 @@ in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
 
 ## Code style
 
-ESLint (`eslint.config.mjs`) and Prettier enforce most style. Beyond them:
+oxlint (`.oxlintrc.json`) and Prettier check what they can. Beyond them:
 
 - Erasable TypeScript only: `erasableSyntaxOnly` (root and llm `tsconfig.json`)
   refuses syntax type stripping cannot run. No `enum` (an `as const` table with

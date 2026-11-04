@@ -340,7 +340,7 @@ function validateTeamListAvailability() {
     // The Lean agents ship bundled (#13080), so the preset is whole without
     // any sign-in: a full count and no degraded/unavailable marker.
     assert(
-      /\tagents:7$/.test(leanProjectLine),
+      leanProjectLine.endsWith('\tagents:7'),
       `lean-project should show its bundled agents as available without auth\nline:\n${leanProjectLine}`,
     );
 

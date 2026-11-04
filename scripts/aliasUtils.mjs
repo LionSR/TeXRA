@@ -1,7 +1,7 @@
 /**
  * Derives build-tool aliases from the root `tsconfig.json`, the single source
  * of truth for path aliases. Every package tsconfig extends the root and
- * inherits its `paths`; Vite, Vitest and ESLint read the map through here.
+ * inherits its `paths`; Vite and Vitest read the map through here.
  */
 
 import { readFileSync } from 'node:fs';
