@@ -1,17 +1,16 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
-import {
-  canonicalConfigKey,
-  type SettingsCatalog,
+import type {
+  SettingsCatalog,
+  StateSettingEntry,
 } from '@shared/state/stateSettings';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
 import {
   ConfigWriteFailed,
   type ConfigInspection,
   type ConfigProvider,
   type ConfigTarget,
-} from '../interfaces';
+} from '@shared/config/settings';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /**
  * The store surface one config target needs. `JsonStore` satisfies it; so does
@@ -24,7 +23,7 @@ import {
  * the effect itself, so this port's members compose into any caller's program.
  */
 export interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 
@@ -38,26 +37,25 @@ export interface JsonConfigProviderOptions {
 }
 
 /**
- * Whether a project file's `value` for `key` is ignored: the one scope rule
- * every read and the open-time warning share. A row the catalog leaves at the
- * workspace scope reads its project value; a `global` or `local` row (the
- * approval settings) does not, so a cloned repository cannot set it, except
- * that a `projectMayOptOut` row (telemetry) still takes anything but `true`.
+ * Whether a project file's `value` for a key of catalog row `row` is ignored:
+ * the one scope rule every read and the open-time warning share. A row the
+ * catalog leaves at the workspace scope reads its project value; a `global` or
+ * `local` row (the approval settings) does not, so a cloned repository cannot
+ * set it, except that a `projectMayOptOut` row (telemetry) still takes
+ * anything but `true`.
  */
 export function projectValueIgnored(
-  catalog: SettingsCatalog,
-  key: string,
+  row: StateSettingEntry | undefined,
   value: unknown,
 ): boolean {
-  const row = catalog.byKey(key);
   if ((row?.configTarget ?? 'workspace') === 'workspace') return false;
   return row?.projectMayOptOut !== true || value === true;
 }
 
 /**
- * Store-backed {@link ConfigProvider}. Keys are stored flat with the canonical
- * `texra.*` prefix. Workspace values shadow global values on read and
- * `update()` routes writes by {@link ConfigTarget}. The project file answers
+ * Store-backed {@link ConfigProvider}. Keys are relative to the catalog's
+ * namespace and stored flat under it (`<namespace>.<key>`). Workspace values
+ * shadow global values on read and `update()` routes writes by {@link ConfigTarget}. The project file answers
  * only where {@link projectValueIgnored} lets it; past it, `local` shadows
  * `global` for `local` rows, and `global` alone answers for the others.
  */
@@ -79,26 +77,26 @@ export class JsonConfigProvider implements ConfigProvider {
     this.catalog = catalog;
   }
 
-  get<T>(key: string, defaultValue?: T): T {
-    const storedKey = canonicalConfigKey(key);
-    const projectValue = this.workspaceStore.get<T>(storedKey);
-    if (
-      projectValue !== undefined &&
-      !projectValueIgnored(this.catalog, storedKey, projectValue)
-    ) {
-      return projectValue;
-    }
+  private storedKey(key: string): string {
+    return `${this.catalog.namespace}.${key}`;
+  }
+
+  get<T>(key: string): T {
+    const storedKey = this.storedKey(key);
+    const row = this.catalog.byKey(key);
+    const projectValue = this.workspaceStore.get(storedKey);
     const layers =
-      this.catalog.byKey(storedKey)?.configTarget === 'local'
+      row?.configTarget === 'local'
         ? [this.localStore, this.globalStore]
         : [this.globalStore];
-    for (const store of layers) {
-      const value = store.get<T>(storedKey);
-      if (value !== undefined) return value;
-    }
-    const schemaDefault = this.catalog.configDefault(storedKey) as
-      T | undefined;
-    return schemaDefault === undefined ? (defaultValue as T) : schemaDefault;
+    const stored = [
+      ...(projectValueIgnored(row, projectValue) ? [] : [projectValue]),
+      ...layers.map((store) => store.get(storedKey)),
+    ].find(Predicate.isNotUndefined);
+    // cast: the caller names the value type of the key it reads.
+    return (
+      stored === undefined ? this.catalog.configDefault(key) : stored
+    ) as T;
   }
 
   update<T>(
@@ -111,7 +109,7 @@ export class JsonConfigProvider implements ConfigProvider {
       local: this.localStore,
       workspace: this.workspaceStore,
     }[target];
-    const storedKey = canonicalConfigKey(key);
+    const storedKey = this.storedKey(key);
     // A store treats `undefined` as a delete.
     return store.set(storedKey, value).pipe(
       Effect.mapError(
@@ -127,10 +125,12 @@ export class JsonConfigProvider implements ConfigProvider {
   }
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {
-    const storedKey = canonicalConfigKey(key);
-    return {
-      globalValue: this.globalStore.get<T>(storedKey),
-      workspaceValue: this.workspaceStore.get<T>(storedKey),
+    const storedKey = this.storedKey(key);
+    const inspection: ConfigInspection = {
+      globalValue: this.globalStore.get(storedKey),
+      workspaceValue: this.workspaceStore.get(storedKey),
     };
+    // cast: the caller names the value type of the key it inspects.
+    return inspection as ConfigInspection<T>;
   }
 }

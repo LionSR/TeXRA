@@ -5,10 +5,10 @@ import { Effect, FileSystem, Schema } from 'effect';
 import type { AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
+import { parseFrontmatter } from '@agent/memory/memoryMeta';
+import { displayToStoragePath } from '@agent/memory/memoryUtils';
 import type { AttachedMemoryMiss } from '@shared/schemas';
 import { activatedSkillNames } from '@skills/runtimeSkills';
-import { parseFrontmatter } from '@tools/memory/memoryMeta';
-import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { getListOfFiles, getPromptFileName } from '@utils/prompt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -36,7 +36,7 @@ const TemplateInputsSchema = Schema.Struct({
   INSTRUCTION: Schema.String,
   /** Provider gate for Anthropic-specific agent prompt blocks. */
   IS_ANTHROPIC_MODEL: Schema.Boolean,
-  /** Workspace root the run operates in. */
+  /** Working directory the run's tools operate in. */
   CWD: Schema.String,
   /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
   BUILTIN_AGENTS_DIR: Schema.String,
@@ -80,9 +80,7 @@ export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
 
 /** The fixed vocabulary as a runtime list; its reader builds a map from it,
  *  so its order is irrelevant. */
-const TEMPLATE_INPUT_TOKENS = Object.keys(
-  TemplateInputsSchema.fields,
-) as (keyof TemplateInputs)[];
+const TEMPLATE_INPUT_TOKENS = Object.keys(TemplateInputsSchema.fields);
 
 /**
  * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
@@ -103,12 +101,13 @@ export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
 
 /**
  * The roots of the session this run belongs to, held as data, so a run never
- * reads whichever roots the calling fiber carries: the workspace that prompt
- * file names, file reads and `CWD` resolve against (`undefined` with no
- * folder open), and the storage its attached memories live in.
+ * reads whichever roots the calling fiber carries. Prompt files resolve in
+ * the workspace, tools use the working directory, and attached memories
+ * live in storage.
  */
 interface BuildTemplateInputsOptions {
   workspacePath: string | undefined;
+  workingDirectory?: string;
   storageRoot: string;
 }
 
@@ -187,7 +186,7 @@ function getBasicVars(
   return {
     INSTRUCTION: agentConfig.instruction,
     IS_ANTHROPIC_MODEL: isAnthropicModel,
-    CWD: options.workspacePath ?? '.',
+    CWD: options.workingDirectory ?? options.workspacePath ?? '.',
     ...getAgentDirectoryVars(),
   };
 }

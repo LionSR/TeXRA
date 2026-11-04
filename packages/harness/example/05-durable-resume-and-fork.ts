@@ -8,14 +8,17 @@
  * 4. Forks the conversation (`session.request({ kind: 'run.fork' })`) into a
  *    new run id, resumes the fork (`session.resume`), sends a follow-up on the
  *    fork, and verifies that both branches are persisted independently.
+ * 5. Resumes `run1` and, while that resumed run is live, reads the events of
+ *    the first `run1` handle again: they are its own activation's, and the
+ *    read ends without waiting for the resumed one.
  */
-import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { Effect, Layer, Option, Stream } from 'effect';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 
 import { makeExampleWorkspace } from './_support.ts';
 
-const { platform, requests } = await makeExampleWorkspace([
+const { platform, route } = await makeExampleWorkspace([
   { text: 'Drafted section 1 with an informal proof sketch.' },
   { text: 'Rewrote section 1 with Lemma 1 and a formal proof.' },
 ]);
@@ -32,7 +35,7 @@ const program = Effect.gen(function* () {
       tools: ['read_file'],
     },
     instruction: 'Draft section 1.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
     interactive: true,
   });
 
@@ -44,15 +47,16 @@ const program = Effect.gen(function* () {
     ),
   );
 
+  // A read of a run's events reads them back from the session: this one
+  // while run1 waits for its next message.
+  const drafted = yield* Stream.runHead(run1.events.pipe(responseText));
+  console.log('[05] run1 drafted:', Option.getOrThrow(drafted));
+
   // Fork the conversation at its settled point
-  const forkOutcome = yield* session.request({
+  const { runId: forkedRunId } = yield* session.request({
     kind: 'run.fork',
     runId: run1.runId,
   });
-  if (forkOutcome.kind !== 'forked') {
-    throw new Error(`Expected forked outcome, got ${forkOutcome.kind}`);
-  }
-  const forkedRunId = forkOutcome.runId;
   console.log(`[05] forked ${run1.runId} -> ${forkedRunId}`);
 
   // Stop the original run (`run.stop` awaits settlement)
@@ -63,32 +67,45 @@ const program = Effect.gen(function* () {
   });
 
   // Send a follow-up to the forked run; sending to a stopped interactive run
-  // resumes it from its committed history in SQLite
+  // resumes it from its committed history in SQLite. Its receipt says when
+  // the turn it starts has answered it.
   const sendOutcome = yield* session.request({
     kind: 'followUp.send',
     runId: forkedRunId,
     text: 'Replace the sketch with Lemma 1 and a formal proof.',
   });
-  console.log('[05] fork followUp:', sendOutcome.kind);
-
-  yield* Stream.runHead(
-    Stream.filter(session.view.changes, (view) => {
-      const forked = view.runs.get(forkedRunId);
-      const pendingFollowUps =
-        view.queuedFollowUps.get(forkedRunId)?.length ?? 0;
-      return (
-        forked?.status === 'waiting' &&
-        pendingFollowUps === 0 &&
-        requests.length === 2
-      );
-    }),
-  );
+  console.log('[05] fork followUp:', sendOutcome.status);
+  const { receipt } = yield* session.request({
+    kind: 'followUp.receipt',
+    runId: forkedRunId,
+    id: sendOutcome.id,
+    wait: true,
+  });
+  if (receipt.state !== 'answered')
+    throw new Error(`The fork's follow-up was not answered: ${receipt.state}`);
 
   yield* session.request({
     kind: 'run.stop',
     runId: forkedRunId,
     reason: 'user',
   });
+  // Resume the stopped `run1`: a new activation of the same run id, live
+  // and waiting for its next message.
+  const resumed = yield* session.resume(run1.runId);
+  yield* Stream.runHead(
+    Stream.filter(
+      resumed.view,
+      (view) => view.runs.get(run1.runId)?.status === 'waiting',
+    ),
+  );
+  // The first handle still reads its own activation, and its read ends
+  // while the resumed one is running, with that activation's stored end.
+  const reread = yield* Stream.runCollect(run1.events.pipe(responseText));
+  const firstText = [...reread].join('');
+  if (firstText !== 'Drafted section 1 with an informal proof sketch.')
+    throw new Error(`run1's first activation replayed: ${firstText}`);
+  console.log(`[05] first activation reread: ${firstText}`);
+  yield* resumed.interrupt;
   yield* session.settled;
 
   const listed = yield* session.listRuns();
@@ -103,7 +120,11 @@ const program = Effect.gen(function* () {
   );
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(route.transport),
+    ),
+  ),
 );
 
 await Effect.runPromise(program);

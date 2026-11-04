@@ -64,8 +64,6 @@ prompt: |
 # A `task` block lets this agent also run as a document task. Without it,
 # the agent only chats (see below). A file with `task` cannot also list `tools`.
 task:
-  rewrite: true # Edit the input documents (true, the default) or write new documents (false).
-
   # File Handling (Optional - Advanced)
   # files:
   #   STYLE_GUIDE: styles/internal_style.sty # Map variable names to files the agent bundles, relative to its YAML file location. Workspace files are attached per run as context files instead.
@@ -187,7 +185,6 @@ for a document task that writes two generated output files:
 name: intro_and_conclusion
 description: Writes an introduction and a conclusion.
 task:
-  rewrite: false
   outputs:
     - introduction.tex
     - conclusion.tex

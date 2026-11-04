@@ -1,12 +1,9 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import {
-  isLiveRun,
-  runBypasses,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import { type Session } from '@texra-ai/harness';
+import { isLiveRun, planOf, runBypasses } from '@texra-ai/harness/schemas';
+import { isRequestRefusal, type Session } from '@texra-ai/harness';
+import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -33,6 +30,8 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
+import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
@@ -46,8 +45,6 @@ import {
   type SlashCommandContext,
   type SlashCommandEffect,
 } from './slashContext';
-import type { LocalSession } from '@texra-ai/harness';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 export function showCliSlashCommandHelp(): void {
   openInfoPane(
@@ -68,21 +65,13 @@ export function showCliWorkPlan(): void {
   }
   clearTransientNotice();
   const run = runViewOf(currentView(), runId);
-  if (run && run.plan !== null) {
+  if (run && planOf(run) !== null) {
     openWorkPlanReader(runId);
   } else {
     closeForegroundReader();
     setTransientNotice('The focused agent has no work plan.');
   }
 }
-
-/** The skills the run's latest step lists, read from its rows. */
-const activeSkillNamesFor = Effect.fn('activeSkillNamesFor')(function* (
-  session: LocalSession,
-  runId: RunId | undefined,
-) {
-  return runId === undefined ? [] : yield* session.records(runId).readSkills();
-});
 
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
   function* (context: SlashCommandContext) {
@@ -98,14 +87,12 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
     const model = run?.model ?? meta.model;
-    const activeSkills = yield* activeSkillNamesFor(
-      context.runtimeSession,
-      activeRunId,
-    );
-    const [option] = yield* readModelOptions(
-      { ...context.stores, secrets: context.secrets },
-      [model],
-    );
+    // The skills the run's latest step lists, read from its rows.
+    const activeSkills =
+      activeRunId === undefined
+        ? []
+        : yield* context.runtimeSession.records(activeRunId).readSkills();
+    const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
         agent: meta.agent,
@@ -163,7 +150,7 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
  * `/resume all`: the open-time notice's bulk answer. Each interrupted task
  * resumes on the session beside this chat, as `texra.resumeOnOpen: auto`
  * resumes them, and joins the agent list (Tab); one a resume finds blocked
- * continues once what it needs is back.
+ * is listed again once what it needs is back.
  */
 export function resumeInterruptedTasks(
   runSession: Session,
@@ -183,19 +170,29 @@ export function resumeInterruptedTasks(
       tasks,
       // A refusal is the task's own transcript line, as the single-task
       // `/resume` reports one; the rest still resume.
-      (task) =>
-        runSession
-          .resume(task.runId, { interactive: true })
-          .pipe(
-            Effect.catch((refused) =>
-              Effect.sync(() =>
-                appendLocalErrorTranscript(
-                  `Could not resume ${task.title}: ${toErrorMessage(refused)}`,
-                  task.runId,
-                ),
-              ),
+      (task) => {
+        const notResumed = (reason: string) =>
+          Effect.sync(() =>
+            appendLocalErrorTranscript(
+              `Could not resume ${task.title}: ${reason}`,
+              task.runId,
+            ),
+          );
+        return resumeRun(runSession, task.runId).pipe(
+          Effect.flatMap((resumed) =>
+            resumed === 'waiting'
+              ? notResumed(describeFollowUpFailure('blocked'))
+              : Effect.void,
+          ),
+          Effect.catch((refused) =>
+            notResumed(
+              isRequestRefusal(refused)
+                ? requestErrorText(refused)
+                : refused.message,
             ),
           ),
+        );
+      },
       { concurrency: 'unbounded', discard: true },
     ).pipe(Effect.forkDetach, Effect.asVoid);
   });
@@ -213,16 +210,17 @@ function renameCliTask(
       setTransientNotice('No task to rename.');
       return Effect.void;
     }
-    if (title.trim() === '') {
+    const trimmed = title.trim();
+    if (trimmed === '') {
       setTransientNotice('Usage: /rename <title>');
       return Effect.void;
     }
     return runSession
-      .request({ kind: 'run.rename', runId, title: title.trim() })
+      .request({ kind: 'run.rename', runId, title: trimmed })
       .pipe(
         Effect.match({
           onFailure: (error) => appendLocalRequestRefusal(error, runId),
-          onSuccess: () => setTransientNotice(`Renamed to ${title.trim()}.`),
+          onSuccess: () => setTransientNotice(`Renamed to ${trimmed}.`),
         }),
       );
   });
@@ -230,12 +228,12 @@ function renameCliTask(
 
 /**
  * `/fork`: a new task holding the focused conversation up to its latest
- * settled point, which this chat then continues; the original keeps its
+ * completed point, which this chat then continues; the original keeps its
  * history and stays in `/resume`. Its transcript starts empty, so a line
  * says where it came from.
  */
-function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
-  return Effect.gen(function* () {
+const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
+  Effect.fn('forkCliTask')(function* (context: SlashCommandContext) {
     const runId = selectedRunIdSignal.get() ?? context.session.runId;
     if (runId === undefined) {
       setTransientNotice('No conversation to fork yet.');
@@ -245,17 +243,13 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
     // Cut before this chat lets go of the source, so the fork reads it as
     // it stands now.
     const forked = yield* Effect.result(
-      context.runSession.request({ kind: 'run.fork', runId }),
+      forkRun(context.runSession, runId, null),
     );
     if (Result.isFailure(forked)) {
       appendLocalRequestRefusal(forked.failure, runId);
       return;
     }
-    if (forked.success.kind !== 'forked')
-      return yield* Effect.die(
-        new Error(`run.fork answered ${forked.success.kind}`),
-      );
-    const fork = forked.success.runId;
+    const fork = forked.success;
     // The chat holds one task: the conversation it shows gives way to the
     // fork, as `/clear` gives way to a new task (refused mid-response). The
     // fork is taken up once the source has ended, so the source's end cannot
@@ -289,7 +283,6 @@ function forkCliTask(context: SlashCommandContext): SlashCommandEffect {
       fork,
     );
   });
-}
 
 /** The task commands: compacting the focused agent's context, and leaving.
  *  The agent list (Tab) lists and focuses the task's agents; typing to a
@@ -335,13 +328,6 @@ export function sessionContributions(
               // that policy and skips the interrupt for a resumable-idle root,
               // so `/exit` agrees with Ctrl-C by construction instead of
               // pre-empting it.
-              //
-              // `stopRequested` stays and is the sole writer on this path. The
-              // teardown awaits the follow-up queue's `idle` BEFORE setting the
-              // flag itself, and the queued task polls this flag — dropping it
-              // would hang `/exit` forever with a follow-up queued and no
-              // stream id yet.
-              context.session.askStop('shutdown');
               context.requestInputExit();
             }),
         },

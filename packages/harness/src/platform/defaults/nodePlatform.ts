@@ -8,7 +8,7 @@
  * barrel, so loading this pulls in only these three services.
  *
  * The spawner is the pinned `@effect/platform-node` one under a supervisor
- * that adds two things it lacks (#13182):
+ * that adds two things it lacks:
  *
  * - A bounded teardown. The upstream release signals the child, waits its
  *   grace (or `forceKillAfter` plus a SIGKILL grace), then awaits the exit
@@ -68,7 +68,6 @@
 import { readFileSync, writeSync } from 'node:fs';
 import { parseEnv } from 'node:util';
 import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcessSpawner';
-import * as NodePath from '@effect/platform-node/NodePath';
 import {
   Cause,
   ConfigProvider,
@@ -92,7 +91,8 @@ import {
 } from 'effect/process/ChildProcessSpawner';
 import { withLogChannel } from '@logger/effectLog';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { nodeFileSystemLayer } from '@utils/files/fsDurability';
+import { nodeFileServices } from '@utils/files/fsDurability';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { ensureError } from '@utils/errors/errorMessage';
 import type * as ChildProcess from 'effect/process/ChildProcess';
 import type { PlatformError } from 'effect/PlatformError';
@@ -148,52 +148,56 @@ const leadsGroup = (command: ChildProcess.StandardCommand): boolean =>
  *  a reap by milliseconds (see `killLive`). Without a handle (a spawn that failed
  *  or was interrupted after upstream acquired a stage) there is no pid to
  *  signal, only the warning. */
-const stopWaiting = (
+const stopWaiting: (
   handle: ChildProcessHandle | undefined,
   command: ChildProcess.Command,
   budgetMs: number,
   via: 'scope close' | 'kill',
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const stage = lastStage(command);
-    if (handle === undefined) {
-      return yield* Effect.logWarning(
-        'Teardown of a failed child process spawn outlived its budget; stopped waiting',
-      ).pipe(Effect.annotateLogs({ command: stage.command, budgetMs, via }));
-    }
-    const running = yield* handle.isRunning.pipe(
-      Effect.catch((error: PlatformError) =>
+) => Effect.Effect<void> = Effect.fn('stopWaiting')(function* (
+  handle: ChildProcessHandle | undefined,
+  command: ChildProcess.Command,
+  budgetMs: number,
+  via: 'scope close' | 'kill',
+) {
+  const stage = lastStage(command);
+  if (handle === undefined) {
+    return yield* Effect.logWarning(
+      'Teardown of a failed child process spawn outlived its budget; stopped waiting',
+    ).pipe(Effect.annotateLogs({ command: stage.command, budgetMs, via }));
+  }
+  const running = yield* handle.isRunning.pipe(
+    Effect.catch((error: PlatformError) =>
+      Effect.logWarning(
+        `Could not tell whether child process ${handle.pid} is running: ${error.message}`,
+      ).pipe(Effect.as(false)),
+    ),
+  );
+  if (running) {
+    yield* Effect.try({
+      try: () =>
+        process.kill(leadsGroup(stage) ? -handle.pid : handle.pid, 'SIGKILL'),
+      catch: ensureError,
+    }).pipe(
+      Effect.catch((error: Error) =>
         Effect.logWarning(
-          `Could not tell whether child process ${handle.pid} is running: ${error.message}`,
-        ).pipe(Effect.as(false)),
+          `Could not SIGKILL child process ${handle.pid}: ${error.message}`,
+        ),
       ),
     );
-    if (running) {
-      yield* Effect.try({
-        try: () =>
-          process.kill(leadsGroup(stage) ? -handle.pid : handle.pid, 'SIGKILL'),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error: Error) =>
-          Effect.logWarning(
-            `Could not SIGKILL child process ${handle.pid}: ${error.message}`,
-          ),
-        ),
-      );
-    }
-    yield* Effect.logWarning(
-      running
-        ? 'Child process outlived its teardown budget; sent SIGKILL and stopped waiting'
-        : 'Child process teardown outlived its budget; stopped waiting',
-    ).pipe(
-      Effect.annotateLogs({
-        pid: handle.pid,
-        command: stage.command,
-        budgetMs,
-        via,
-      }),
-    );
-  }).pipe(withLogChannel(CHANNEL));
+  }
+  yield* Effect.logWarning(
+    running
+      ? 'Child process outlived its teardown budget; sent SIGKILL and stopped waiting'
+      : 'Child process teardown outlived its budget; stopped waiting',
+  ).pipe(
+    Effect.annotateLogs({
+      pid: handle.pid,
+      command: stage.command,
+      budgetMs,
+      via,
+    }),
+  );
+}, withLogChannel(CHANNEL));
 
 /** The supervisor over the upstream spawner, built once per layer build. */
 const supervisedSpawner = Layer.effect(
@@ -213,11 +217,13 @@ const supervisedSpawner = Layer.effect(
         } catch (error) {
           // ESRCH: already gone. Anything else means this child survives the
           // parent, and an exit listener can only write synchronously.
-          const code = (error as NodeJS.ErrnoException).code;
+          const code = Predicate.hasProperty(error, 'code')
+            ? error.code
+            : undefined;
           if (code !== 'ESRCH') {
             writeSync(
               2,
-              `Could not stop child process ${pid} at exit: ${code ?? ensureError(error).message}\n`,
+              `Could not stop child process ${pid} at exit: ${typeof code === 'string' ? code : ensureError(error).message}\n`,
             );
           }
         }
@@ -229,8 +235,8 @@ const supervisedSpawner = Layer.effect(
     );
 
     const spawn = (command: ChildProcess.Command) =>
-      Effect.uninterruptibleMask((restore) =>
-        Effect.gen(function* () {
+      Effect.uninterruptibleMask(
+        Effect.fnUntraced(function* (restore) {
           const child = yield* Scope.make();
           const entry = { group: leadsGroup(lastStage(command)) };
           const forget = (pid: number) => {
@@ -239,45 +245,44 @@ const supervisedSpawner = Layer.effect(
           // Close the child scope under the budget, on a detached fiber: a
           // close failure inside the budget is the caller's, a late one is
           // logged, and past the budget a running child is SIGKILLed.
-          const closeChild = (
+          const closeChild = Effect.fn('closeChild')(function* (
             handle: ChildProcessHandle | undefined,
             exit: Exit.Exit<unknown, unknown>,
-          ) =>
-            Effect.gen(function* () {
-              const budgetMs = teardownBudgetMillis(
-                command,
-                (stage) => stage.options,
-              );
-              const closing = yield* Scope.close(child, exit).pipe(
-                Effect.ensuring(
-                  Effect.sync(() => {
-                    if (handle !== undefined) forget(handle.pid);
-                  }),
-                ),
-                Effect.forkDetach,
-              );
-              const closed = yield* Fiber.await(closing).pipe(
-                Effect.timeoutOption(budgetMs),
-              );
-              if (Option.isSome(closed)) {
-                if (Exit.isFailure(closed.value)) {
-                  return yield* Effect.failCause(closed.value.cause);
-                }
-                return;
+          ) {
+            const budgetMs = teardownBudgetMillis(
+              command,
+              (stage) => stage.options,
+            );
+            const closing = yield* Scope.close(child, exit).pipe(
+              Effect.ensuring(
+                Effect.sync(() => {
+                  if (handle !== undefined) forget(handle.pid);
+                }),
+              ),
+              Effect.forkDetach,
+            );
+            const closed = yield* Fiber.await(closing).pipe(
+              Effect.timeoutOption(budgetMs),
+            );
+            if (Option.isSome(closed)) {
+              if (Exit.isFailure(closed.value)) {
+                return yield* Effect.failCause(closed.value.cause);
               }
-              yield* stopWaiting(handle, command, budgetMs, 'scope close');
-              yield* Fiber.await(closing).pipe(
-                Effect.flatMap((late) =>
-                  Exit.isFailure(late) && !Cause.hasInterruptsOnly(late.cause)
-                    ? Effect.logWarning(
-                        `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
-                      )
-                    : Effect.void,
-                ),
-                withLogChannel(CHANNEL),
-                Effect.forkDetach,
-              );
-            });
+              return;
+            }
+            yield* stopWaiting(handle, command, budgetMs, 'scope close');
+            yield* Fiber.await(closing).pipe(
+              Effect.flatMap((late) =>
+                Exit.isFailure(late) && !Cause.hasInterruptsOnly(late.cause)
+                  ? Effect.logWarning(
+                      `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
+                    )
+                  : Effect.void,
+              ),
+              withLogChannel(CHANNEL),
+              Effect.forkDetach,
+            );
+          });
           // A failed or interrupted spawn closes its child scope at once, so
           // nothing is left on the caller's scope; a live child's close is
           // registered only once it exists.
@@ -320,7 +325,7 @@ export const nodePlatformServices: Layer.Layer<
   FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > = supervisedSpawner.pipe(
   Layer.provide(NodeChildProcessSpawner.layer),
-  Layer.provideMerge(Layer.mergeAll(nodeFileSystemLayer, NodePath.layer)),
+  Layer.provideMerge(nodeFileServices),
 );
 
 /** A project's `.env` exists but could not be read or parsed. */
@@ -354,12 +359,12 @@ export const workspaceEnvironmentLayer = (
     try: () => (workspace === undefined ? '' : readFileSync(file, 'utf8')),
     catch: (cause) => new ProjectEnvUnreadable({ file, cause }),
   }).pipe(
-    // No file is none, and so is a directory of that name (a virtualenv
-    // made with `python -m venv .env`): neither holds variables.
+    // No file is none, and so, beyond absence, is a directory of that name
+    // (a virtualenv made with `python -m venv .env`): neither holds variables.
     Effect.catchIf(
       ({ cause }) =>
-        Predicate.hasProperty(cause, 'code') &&
-        (cause.code === 'ENOENT' || cause.code === 'EISDIR'),
+        absentReason(cause) ||
+        (Predicate.hasProperty(cause, 'code') && cause.code === 'EISDIR'),
       () => Effect.succeed(''),
     ),
     Effect.map((text): Record<string, string> =>

@@ -1,27 +1,33 @@
 /**
- * A `script` call sent to the background: the call returns at once with the
- * id of a child run that makes the same call, `{ kind: 'script', title }`.
+ * A `script` call sent to the background: the call returns, once that run's
+ * opening has committed, with the id of a child run that makes the same
+ * call, `{ kind: 'script', title }`. A launch that fails before the run
+ * exists fails the call, so the model reads the failure in the call's own
+ * result instead of waiting for a follow-up that never comes.
  * That run is the parent's agent with the parent's tools, model and working
  * directory, opened on the call (`AgentConfig.script`); its result reaches
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Clock, Effect, Schema, SynchronizedRef } from 'effect';
+import { Clock, Deferred, Effect, Schema, SynchronizedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
 import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
+import {
+  agentChildRunId,
+  earlierChild,
+} from '@agent/runtime/delegation/agentChild';
+import { childRunDescription } from '@agent/runtime/delegation/childRun';
+import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
-  USER_FOLLOW_UP_SUPPORT,
+  type CommitOrdinal,
   type RunId,
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
-import { agentChildRunId, earlierChild } from '@tools/delegation/agentChild';
-import { childRunDescription } from '@tools/delegation/childRun';
-import { startDetachedChildRunLoop } from '@tools/delegation/detachedChildRun';
 
 /** What the model reads for a script sent to the background. */
 const receipt = (title: string, runId: RunId, again: boolean) => ({
@@ -52,7 +58,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   grants?: ApprovalGrants,
 ) {
   const { run } = call;
-  const { session, runId: parentRunId } = run;
+  const { runId: parentRunId } = run;
   const earlier = yield* earlierChild(call);
   if (earlier !== null) return receipt(title, earlier, true);
   const bound = yield* SynchronizedRef.get(run.model);
@@ -76,7 +82,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       outputSchema: null,
       cli: null,
       workingDirectory: workingDirectory ?? null,
-      delegationAgentScope: run.delegationAgentScope ?? null,
+      delegationAgentScope: run.config.delegationAgentScope ?? null,
       script: {
         code: input.code,
         title,
@@ -89,39 +95,32 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
         kind: 'background',
       },
     }),
-    session,
-    suppressErrorNotification: true,
   });
-  yield* Effect.uninterruptibleMask((restore) =>
-    startDetachedChildRunLoop({
-      session,
+  const opened = yield* Deferred.make<CommitOrdinal>();
+  // The script launches under the session's runs the engine door holds.
+  yield* startDetachedChildRunLoop({
+    runId,
+    parentRunId,
+    agentName: title,
+    strategy: createScriptRunStrategy({
+      definition,
+      // Registered with its opening, which its run commits.
+      registration: {
+        identity: { kind: 'script', title },
+        parentRunId,
+        parentCall: { callId: call.callId, card: call.logId },
+        description: childRunDescription(title),
+        ...(grants !== undefined && { grants }),
+      },
       runId,
-      parentRunId,
-      agentName: title,
-      buildLaunch: () =>
-        restore(Clock.currentTimeMillis).pipe(
-          Effect.map((startedAt) =>
-            createScriptRunStrategy({
-              definition,
-              // Registered with its opening, which its run commits.
-              registration: {
-                identity: { kind: 'script', title },
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                parentRunId,
-                parentCall: { callId: call.callId, card: call.logId },
-                description: childRunDescription(title),
-                ...(grants !== undefined && { grants }),
-              },
-              runId,
-              parentRunId,
-              session,
-              startedAt,
-              ...(workingDirectory != null && { workingDirectory }),
-              title,
-            }),
-          ),
-        ),
+      startedAt: yield* Clock.currentTimeMillis,
+      ...(workingDirectory != null && { workingDirectory }),
+      title,
+      onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
     }),
-  );
+    // The receipt names a run that exists: the start waits for its
+    // opening, and a launch that fails before it fails this call.
+    opened,
+  });
   return receipt(title, runId, false);
 });

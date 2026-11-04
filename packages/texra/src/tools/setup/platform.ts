@@ -12,7 +12,7 @@
 import { Context, Effect, Schema } from 'effect';
 
 // Local imports
-import { getCodexStatus } from '@texra-ai/llm/node';
+import { getChatgptStatus } from '@texra-ai/llm/node';
 import { readModelOptions, Secrets } from '@texra-ai/harness/host';
 import { ToolError } from '@texra-ai/harness/plugins';
 import type {
@@ -112,6 +112,13 @@ export class SetupPlatform extends Context.Service<
   SetupPlatformShape
 >()('@texra/setup/SetupPlatform') {}
 
+/** Which host the setup agent runs in, as the host names itself to
+ *  `texraPlugins`; the environment probe reports it. */
+export class SetupHost extends Context.Service<
+  SetupHost,
+  'vscode' | 'desktop' | 'cli'
+>()('@texra/setup/SetupHost') {}
+
 /**
  * Fail with a uniform, sorted-allowlist error when `id` is not a member of
  * `allowed`. Shared by the setup tools so a disallowed extension ID and a
@@ -140,7 +147,7 @@ export function assertInSetupAllowlist(
 class SubscriptionProbeFailed extends Schema.TaggedError<SubscriptionProbeFailed>()(
   'SubscriptionProbeFailed',
   {
-    member: Schema.Literals(['getCodexStatus', 'readModelOptions']),
+    member: Schema.Literals(['getChatgptStatus', 'readModelOptions']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -157,11 +164,11 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   Secrets
 > {
   const secrets = yield* Secrets;
-  const status = yield* getCodexStatus(secrets).pipe(
+  const status = yield* getChatgptStatus(secrets).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({
-          member: 'getCodexStatus',
+          member: 'getChatgptStatus',
           message: 'The ChatGPT subscription session could not be read.',
           cause,
         }),
@@ -169,9 +176,7 @@ export const getChatGptSubscriptionStatus = Effect.fn(
   );
   // Routing is only consulted for a signed-in account, as the `&&` did.
   if (!status.signedIn) return { signedIn: false, enabled: false };
-  const [option] = yield* readModelOptions({ ...stores, secrets }, [
-    CHATGPT_SETUP_MODEL,
-  ]).pipe(
+  const [option] = yield* readModelOptions(stores, [CHATGPT_SETUP_MODEL]).pipe(
     Effect.mapError(
       (cause) =>
         new SubscriptionProbeFailed({

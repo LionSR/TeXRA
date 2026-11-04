@@ -28,17 +28,15 @@ npm run typecheck         # builds do NOT type check, see below
 npm run gate              # the static CI jobs: invariants, typecheck + format, lint
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
-npm run test:pure         # before a push (~30s): the shared-registry tier and the architecture ratchets
+npm run test:pure         # before a push (~30s): the host-free tier
 npm test                  # before opening a PR: the full suite, minutes long
 npm run format
 npm run lint
-npm run check:dead-code-ratchet
 npm run hooks:install     # optional pre-commit hooks (needs `pip install pre-commit`)
 ```
 
 **Builds don't type check.** esbuild and Vite only strip types. Run
-`npm run typecheck` (or a `:safe` variant: `compile:safe`, `package:safe`,
-`build:safe`) before committing; this is the most common way a change lands
+`npm run typecheck` (or `compile:safe`) before committing; this is the most common way a change lands
 broken. `typecheck` composes `typecheck:{workspace,test-kernel,harness,llm,cli,trace-viewer,desktop}`;
 run the affected ones while developing. `typecheck:harness` is the full harness
 build and regenerates `packages/harness/dist/`. `build:initial` validates a
@@ -105,8 +103,9 @@ A pnpm workspace in three layers (design:
 - `packages/llm`: model access.
 - `packages/extension`, `packages/desktop`, `packages/cli`,
   `packages/trace-viewer`: hosts and apps over them.
-- Repo-root `src/` holds only the test suite (`src/test-kernel/`);
-  `src/README.md` maps the tree.
+- A suite that tests one package lives in that package's `test/`; repo-root
+  `src/` holds the suites that compose several packages and the shared
+  support (`src/test-kernel/`); `src/README.md` maps the tree.
 
 Use the path aliases in `tsconfig.json` instead of relative chains. Harness
 aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
@@ -124,28 +123,23 @@ llm import no host layer. ESLint also fails:
 - an `Effect.run*` call outside `packages/{extension,desktop,cli}/src/` and
   the named runtime entries (`EFFECT_RUN_ENTRIES`); the SDK's entry files run
   nothing;
-- `new AbortController()` outside its two permanent residents;
+- `new AbortController()` outside its one permanent resident;
 - in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(` and `any`, with
   no disable comment honored;
 - any `@adapter-until` marker: there are no temporary adapters.
 
-The ratchets in `config/ratchets/` freeze the remaining edges. **Never widen a
-baseline**; a decrease is always welcome. `harness-deep-import-baseline` admits
-no new harness-internal specifier (`@agent/*`, `@shared/*`, `@platform/*`, …)
-from the app or a host, type-only included. `row-readers-baseline.json` lists,
-per session row type, the files that read it outside its reducers;
-`factOwnerRatchet.vitest.ts` fails a new reader and a second writer of a fact
-in its `OWNERS` table (shrink the list with
-`npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`).
-`refuted-candidates.json` records refactors investigated and refused; landing
-one on new evidence rewrites its entry in the same PR. Other invariants are
-hardcoded tests under `src/test-kernel/architecture/`, e.g.
-`sharedSchemasDeepImportRatchet.vitest.ts` (no `@shared/schemas/<leaf>`
-import) and `unknownErrorChannelRatchet.vitest.ts` (below). The open work is
-the public surface in
-`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`
-and shrinking the frozen lists, not another lint rule. Publishing the harness
-and llm packages is the owner's manual step (`releasing` skill).
+The core-quality counts are held against the merge base by
+`npm run check:core-quality` (`packages/harness/AGENTS.md` "Core quality").
+ESLint holds the VS Code-free zones, the host-layer and harness-no-app import
+rules, and the core-quality syntax bans. The other boundaries (no deep import
+of harness internals from the app or a host, no `@shared/schemas/<leaf>`
+import, one owner per fact) are conventions with no mechanical check; there
+are no baseline files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
+investigated and refused; landing one on new evidence rewrites its entry in
+the same PR. The open work is the public surface in
+`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`,
+not another lint rule. Publishing the harness and llm packages is the owner's
+manual step (`releasing` skill).
 
 Where things go:
 
@@ -160,8 +154,9 @@ Where things go:
   webview frontends import no `@utils/*` module at runtime; they get path,
   error, text and escaping helpers from `@texra-ai/harness/schemas` and the
   transcript helpers from `@texra-ai/harness/transcript`.
-- `packages/harness/src/eventBus/` is `AppSignals` only (auth, subscriptions,
-  credentials, workspace-file writes), not run or session progress.
+- `AppSignals` (`packages/harness/src/platform/appSignals.ts`) carries only
+  app-lifecycle signals (auth, subscriptions, credentials, workspace-file
+  writes), not run or session progress.
 - Webview base classes are in `packages/extension/src/common/webview/`, not in
   the harness.
 - The transcript row model is `packages/harness/src/shared/transcript/`
@@ -180,19 +175,18 @@ storage, and workspace files") and shown in the native TeXRA settings view.
 Core logic must not import `vscode`. Check this first on any diff.
 
 **VS Code-free zones:** `packages/harness/src/`, `packages/texra/src/`,
-`packages/llm/src/`, `packages/desktop/src/`, and the webview frontends
-`packages/extension/src/progressView/frontend/` and
-`packages/extension/src/settingsView/frontend/`. Enforced by
-`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`, mirrored in
-`src/test-kernel/architecture/dependencyDirection.vitest.ts`; keep both in sync
-with this list.
+`packages/llm/src/`, `packages/desktop/src/`, and the settings webview
+frontend `packages/extension/src/settingsView/frontend/` (the progress view's
+frontend is app code, `packages/texra/src/ui/progress/`). Enforced by
+`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`; keep it in sync with this
+list.
 
 **VS Code-allowed:** `packages/extension/src/extension.ts` (builds its runtime
 over `processLayer()` once), `packages/extension/src/commands/`,
 `packages/extension/src/frontend/` (the extension-host frontend, not a webview),
 `packages/extension/src/common/` (not the harness's `common/`), and the view
-providers in `packages/extension/src/{progressView,settingsView}/` outside
-their `frontend/`.
+providers in `packages/extension/src/progressView/` and in
+`packages/extension/src/settingsView/` outside its `frontend/`.
 
 - Reach process services (`AgentDirectories`, `AppState`, `Secrets`,
   `FileSystem`, `SetupPlatform`, …) from the Effect context the process
@@ -200,8 +194,8 @@ their `frontend/`.
   holds. When agnostic code needs a host-only capability, add a typed port
   served by that runtime, not an import or a field on a `Platform` object.
 - Use the Effect `FileSystem` (`stat(...).type`), not `vscode.FileType`, and
-  `isFileNotFoundError` (`@common/errors/errorPredicates`), not
-  `vscode.FileSystemError`.
+  `absentReason` (`packages/harness/src/utils/files/fsEntryExists.ts`, the one
+  reading of "nothing is there"), not `vscode.FileSystemError`.
 - Return errors to the caller; the command or frontend layer shows the message.
 - Carry the workspace root as data from its holder (a run's `session.roots`, a
   tool's `ToolContext.env.roots`, the `WorkspaceFs` service), never
@@ -219,8 +213,11 @@ bag, or a second writer of the run history. Every model call goes through
 `runtime/modelAccess/ModelAccess.ts`, and retries in the one loop in
 `runtime/run/invocation.ts`.
 
-Launch runs with `session.runs.launch({ request, options })` (requires the
-composition root's `SessionOwner`) and resume with `resumeRun`; call
+Hosts and the app start a run with `session.start(...)` and continue a
+stored one with `session.resume(runId, ...)` on the `LocalSession`
+(`packages/harness/src/effect/sessions.ts`); everything else goes through
+`session.request`. Inside the harness, `session.start` mints the `runId` and
+its `rootRun` requires the composition root's `SessionOwner`; call
 `executeAgent` only when you already own the `runId`. Run-loop rules, write
 points, and the event and card channels: `packages/harness/AGENTS.md`.
 
@@ -254,7 +251,7 @@ in `node_modules/effect` instead of guessing a pattern.
   `withPerKeyLane` in `packages/harness/src/utils/core/perKeyQueue.ts` for one
   at a time per key), never a hand-written promise chain. Release resources on
   success, failure and interruption.
-- **No `unknown` error channel** (`unknownErrorChannelRatchet.vitest.ts`). Type
+- **No `unknown` error channel.** Type
   it with the tagged error the path raises, or `Error` for a port whose hosts
   fail differently. Turn a foreign rejection into an `Error` at its boundary
   with `ensureError` (`@utils/errors/errorMessage`), never a `(e) => e`
@@ -335,11 +332,24 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
   projections rebuilt from history, one owner per fact. Then write the fewest
   lines that do the job; build nothing speculative. Trust data from code you
   control and validate only at real boundaries.
-- **Find the design problem.** Reduce change amplification and cognitive load
-  before adding features, deepen shallow modules, and aim for the structure you
-  would have designed with the change in mind. When a hotspot is too complex,
-  look for the data structure, duplicated fact or misplaced owner behind it;
-  never split a file mechanically.
+- **Find the design problem** (Ousterhout, _A Philosophy of Software Design_).
+  Reduce change amplification, cognitive load and unknown unknowns before
+  adding features, and aim for the structure you would have designed with the
+  change in mind. Deep modules: a small interface over much behavior, with
+  each entry exporting what its consumer writes against (`shallow-modules`,
+  `wide-records`, the API reports). Different layer, different abstraction:
+  no method or module that only forwards (`pass-through`). Those three rules
+  hold everywhere, the core's rows and the `-outside-core` rows apart. One
+  owner per fact and decision; a general core that takes
+  the app's vocabulary as data; complexity pulled down into the module that
+  owns it; errors defined out of existence by the shape of an operation, never
+  by hiding one; two designs compared before choosing. When a hotspot is too
+  complex, look for the data structure, duplicated fact or misplaced owner
+  behind it; never split a file mechanically. In review, name the red flag a
+  change removes or adds: shallow module, information leakage, temporal
+  decomposition, overexposure, pass-through, repetition, special and general
+  code mixed, conjoined methods, a comment that restates the code, a vague
+  name, non-obvious code.
 - **Flattening abstraction layers.** Entry points run the loop program
   directly. Inline a wrapper that only creates state, runs a program and
   interprets results. Import from the defining module; leave no re-export
@@ -352,8 +362,19 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
   banned (narrowing an export surface to one entry point is not one). New
   ports, facades and template methods delete what they replace in the same PR.
 - **Exports are contracts.** Default to file-local; a new export needs a
-  consumer in the same PR (`npm run check:dead-code-ratchet` against
-  `config/ratchets/knip-baseline.json`).
+  consumer in the same PR.
+- **No option for a special case.** An option is a decision the code refused
+  to make. When the right value follows from a fact the code holds (a model's
+  capabilities, a credential kind, what a launch names), compute it there and
+  add no knob, flag, mode or per-call override. When a special path is a
+  subset of the general one, run the general one. A declarative table is still
+  an option: a column that is constant or derivable across its rows is a
+  special case written as data, and is deleted the same way. Several keys for
+  one decision have one owner. The same holds for an error kind, a reason
+  literal or a stop cause nothing branches on: it is a message, not a kind.
+  Inventory and the standing cuts:
+  `.agents/docs/proposed/simplification/2026-11-03-fewer-processing-options.md`
+  and `.agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md`.
 - **Silent degradation is a defect.** A fallback that masks a failure logs the
   cause at `warn` and surfaces it, or does not exist. `catch {}`, `??` over a
   failed read, `catchDecoding` on persisted data and a `default: return` that
@@ -407,6 +428,11 @@ in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
 
 ESLint (`eslint.config.mjs`) and Prettier enforce most style. Beyond them:
 
+- Erasable TypeScript only: `erasableSyntaxOnly` (root and llm `tsconfig.json`)
+  refuses syntax type stripping cannot run. No `enum` (an `as const` table with
+  a same-named `(typeof X)[keyof typeof X]` type), no parameter properties
+  (declare the field, assign it in the constructor), no runtime `namespace`, no
+  `import =`. Type imports are top-level `import type`, never `import('pkg').T`.
 - Group imports by source, each block under a comment
   (`// Third-party imports`, `// Local imports - component`).
 - PascalCase for service singletons (`SessionEvents`, `ModelInvoker`),

@@ -1,6 +1,6 @@
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
@@ -13,6 +13,7 @@ import {
   type SkillDisplayItem,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postMessage } from '@texra/shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commonViewStyles, designTokens } from '@ui/styles';
@@ -20,9 +21,9 @@ import { renderIconActionButton } from '@ui/wa/actionButtons';
 import { renderSettingsToggleRow } from '@ui/wa/settingsSection';
 import { renderStateSettingToggleRow } from '../components/shared/stateSettingRows';
 import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
+import { settingSignal } from '../settingsState';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 import '../components/shared/SettingsCatalog';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 const SOURCE_LABELS: Record<ActiveSkillSourceScope, string> = {
   bundled: 'Bundled',
@@ -33,7 +34,7 @@ const SOURCE_LABELS: Record<ActiveSkillSourceScope, string> = {
 };
 
 @customElement('skills-tab')
-export class SkillsTab extends LitElement {
+export class SkillsTab extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -72,19 +73,26 @@ export class SkillsTab extends LitElement {
       }
     `,
   ];
-  @property({ type: Boolean }) masterEnabled = false;
-  @property({ attribute: false }) disabledSources: ActiveSkillSourceScope[] =
-    [];
   @property({ attribute: false }) skills: readonly SkillDisplayItem[] = [];
   @property({ attribute: false }) issues: readonly SkillDisplayIssue[] = [];
   @state() private selectedKey: string | null = null;
+
+  private get masterEnabled(): boolean {
+    return settingSignal<boolean>(AGENT_SKILLS_CONFIG_KEY).get();
+  }
+
+  private get disabledSources(): readonly string[] {
+    return settingSignal<readonly string[]>(
+      WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+    ).get();
+  }
 
   /** A delta, not the list: the host applies it to the list it holds, so a
    *  second switch before this one's snapshot returns cannot undo it. */
   private setEnabled(
     key:
-      | WorkspaceStateKey.DISABLED_SKILLS
-      | WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+      | typeof WorkspaceStateKey.DISABLED_SKILLS
+      | typeof WorkspaceStateKey.DISABLED_SKILL_SOURCES,
     item: string,
     enabled: boolean,
   ): void {
@@ -100,7 +108,14 @@ export class SkillsTab extends LitElement {
       id=${`skill-source-${scope}`}
       .checked=${live(!this.disabledSources.includes(scope))}
       ?disabled=${!this.masterEnabled}
-      @change=${(event: Event) => this.setEnabled(WorkspaceStateKey.DISABLED_SKILL_SOURCES, scope, (event.target as WaSwitch).checked)}
+      @change=${(event: Event) => {
+        if (event.target instanceof WaSwitch)
+          this.setEnabled(
+            WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+            scope,
+            event.target.checked,
+          );
+      }}
       >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</wa-switch
     >`;
   }
@@ -145,12 +160,14 @@ export class SkillsTab extends LitElement {
         checked: item.enabled,
         disabled:
           !this.masterEnabled || this.disabledSources.includes(item.scope),
-        onChange: (event: Event) =>
-          this.setEnabled(
-            WorkspaceStateKey.DISABLED_SKILLS,
-            item.name,
-            (event.target as WaSwitch).checked,
-          ),
+        onChange: (event: Event) => {
+          if (event.target instanceof WaSwitch)
+            this.setEnabled(
+              WorkspaceStateKey.DISABLED_SKILLS,
+              item.name,
+              event.target.checked,
+            );
+        },
       })}
       <dl class="catalog-detail-meta">
         <dt class="catalog-detail-meta-label">Instructions</dt>
@@ -167,7 +184,7 @@ export class SkillsTab extends LitElement {
       this.skills[0];
     return html`
       <div class="settings-section">
-        ${renderStateSettingToggleRow({ key: AGENT_SKILLS_CONFIG_KEY, checked: this.masterEnabled })}
+        ${renderStateSettingToggleRow(AGENT_SKILLS_CONFIG_KEY)}
       </div>
       <settings-catalog
         label="Skills"

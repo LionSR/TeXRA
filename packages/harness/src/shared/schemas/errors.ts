@@ -1,46 +1,47 @@
-import { Result, Schema, Struct } from 'effect';
+import { Schema, Struct } from 'effect';
 
-/** Reason a credential/quota is exhausted, requiring user action before an
- *  identical retry can succeed. The reasons are mutually exclusive — a single
- *  error is classified as exactly one — which is why this is a discriminant
- *  rather than independent booleans. `getExhaustionReason` below answers the
- *  combined "exhausted for any reason" question. */
-const ExhaustionReasonSchema = Schema.Literals([
-  /** The upstream provider account itself is out of credit/quota — the key
-   *  the user has IS the broken one, so a new key is required. */
-  'upstream-credit',
-  /** A ChatGPT-subscription (Codex) request was rejected because the plan's
-   *  usage quota is exhausted; accepting the switch turns off "ChatGPT
-   *  subscription" so the retry uses the OpenAI API key.
-   *  Remark: permanently flipping it off is not always ideal — when the
-   *  quota later resets, the user may forget to turn it back on. */
+import { DeclinableUsageRouteSchema } from './usage';
+
+/** A route that bills a signed-in subscription session (ChatGPT, Grok). */
+export const SubscriptionSessionRouteSchema = DeclinableUsageRouteSchema.pick([
   'chatgpt-subscription',
-  /** A Kimi Code (Moonshot coding-subscription) request was rejected because
-   *  the membership's usage quota is exhausted; accepting the switch turns off
-   *  "Kimi Code subscription" so dual-backend Kimi models re-route through the
-   *  Moonshot open-platform API key. */
-  'kimi-code-subscription',
-  /** A GLM Coding Plan request was rejected because the plan's usage quota is
-   *  exhausted; accepting the switch turns off the Coding Plan toggle so GLM
-   *  requests route through the regular pay-as-you-go endpoint. */
-  'glm-coding-plan',
-  /** A Grok (xAI SuperGrok) subscription request was rejected because the
-   *  plan's usage quota is exhausted; accepting the switch turns off "Grok
-   *  subscription" so xAI models re-route through the stored xAI API key. */
   'xai-subscription',
 ]);
-export type ExhaustionReason = typeof ExhaustionReasonSchema.Type;
 
-/** Mutually exclusive provider-error classifications. The two runtime kinds
- * share AgentErrorKind's spelling; exhaustion members retain the actionable
- * route reason as the discriminant itself. */
-const ProviderErrorClassificationSchema = Schema.Struct({
-  kind: Schema.Union([
-    Schema.Literal('missing-api-key'),
-    Schema.Literal('context-window'),
-    ExhaustionReasonSchema,
-  ]),
-});
+/** A provider failure's one classification: a missing key, an overflowed
+ *  window, the account's own credit run out (the key in use is the broken
+ *  one, so only a new key helps), a used-up plan, or a subscription session
+ *  that could not bill. */
+export const ProviderErrorClassificationSchema = Schema.Union([
+  Schema.Struct({
+    kind: Schema.Literals([
+      'missing-api-key',
+      'context-window',
+      'upstream-credit',
+    ]),
+  }),
+  /** A used-up plan, named by the route that bills through it (a retry can
+   *  decline that route for the run, so the model goes on with the user's
+   *  own key), with what the provider said of it: its tier in the provider's
+   *  own word (ChatGPT's `plus`), and how long until the quota resets, from
+   *  the moment it refused. */
+  Schema.Struct({
+    kind: DeclinableUsageRouteSchema,
+    planType: Schema.optional(Schema.String),
+    resetsInMs: Schema.optional(
+      Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    ),
+  }),
+  /** A signed-in subscription that could not bill the call: its route,
+   *  whether only a fresh sign-in can help (else it may recover), and the
+   *  session's own failure. */
+  Schema.Struct({
+    kind: Schema.Literal('subscription-session'),
+    route: SubscriptionSessionRouteSchema,
+    needsReauth: Schema.Boolean,
+    sessionError: Schema.String,
+  }),
+]);
 export type ProviderErrorClassification =
   (typeof ProviderErrorClassificationSchema)['Type'];
 
@@ -50,14 +51,6 @@ const ProviderErrorObjectSchema = Schema.Struct({
   statusCode: Schema.optional(Schema.Int),
   statusText: Schema.optional(Schema.String),
   provider: Schema.optional(Schema.String),
-  /** True when the user should be offered a retry button. This gates the
-   *  manual retry UI — it does NOT mean the retry loop will auto-retry. The
-   *  automatic resend is decided separately, from the model error's own
-   *  `retryable` (`failedNext` in `agent/runtime/run/invocation.ts`), which is
-   *  false for authentication and quota errors even when `userRetryable` is
-   *  true (they need user action — a key swap or new API key — before any
-   *  retry makes sense). */
-  userRetryable: Schema.Boolean,
   /** The provider failure's one canonical classification. Absent for ordinary
    *  provider, transport, abort, and local-I/O failures. */
   classification: Schema.optional(ProviderErrorClassificationSchema),
@@ -70,11 +63,8 @@ const ProviderErrorObjectSchema = Schema.Struct({
    *  parsed at runtime, so size enforcement stays the producer's. */
   partialText: Schema.optional(Schema.String),
 });
-/** Canonical current ProviderError metadata. The metadata cache decodes it
- *  with `onExcessProperty: 'error'`, so a legacy or mixed record never
- *  enters it. */
-export const ProviderErrorSchema = ProviderErrorObjectSchema;
-export type ProviderError = typeof ProviderErrorSchema.Type;
+/** A provider failure as a host reads it: the retry record with its raw body. */
+export type ProviderError = typeof ProviderErrorObjectSchema.Type;
 
 /**
  * Minimal error info for retry state tracking.
@@ -115,29 +105,6 @@ export const ErrorLogDataSchema = RetryErrorInfoSchema.mapFields(
   }),
 );
 export type ErrorLogData = typeof ErrorLogDataSchema.Type;
-
-/** Recover the actionable exhaustion reason from the canonical classification. */
-export function getExhaustionReason(
-  errorDetails: Pick<ProviderError, 'classification'> | undefined | null,
-): ExhaustionReason | undefined {
-  const parsed = Schema.decodeUnknownResult(ExhaustionReasonSchema)(
-    errorDetails?.classification?.kind,
-  );
-  return Result.isSuccess(parsed) ? parsed.success : undefined;
-}
-
-/** Whether retrying past the automatic attempts needs a credential or route
- *  change first: an exhausted credential, or a 401 or 403. */
-export function isCredentialRetryFailure(
-  errorDetails:
-    Pick<ProviderError, 'classification' | 'statusCode'> | undefined,
-): boolean {
-  return (
-    getExhaustionReason(errorDetails) !== undefined ||
-    errorDetails?.statusCode === 401 ||
-    errorDetails?.statusCode === 403
-  );
-}
 
 /** Project a full ProviderError onto the retry-state record by dropping the
  *  bulky `rawErrorBody`; every other field carries over unchanged. */

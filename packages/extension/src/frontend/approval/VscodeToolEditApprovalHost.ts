@@ -3,20 +3,23 @@
  *
  * Owns everything the approval flow needs from the editor: the temp files the
  * diff editor reads, the diff tabs themselves, and reading back what the
- * user typed into the proposed side. The diff tab is evidence only: closing
- * it leaves the request pending on its card, where Open diff reopens it.
+ * user typed into the proposed side, which an approval sends with its
+ * decision. The diff tab is evidence only: closing it leaves the request
+ * pending on its card, where Open diff reopens it.
  */
 
 import { Effect, FileSystem, Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import { pluralize } from '@texra-ai/harness/transcript';
+import { withLogChannel, type ProcessRuntime } from '@texra-ai/harness/host';
 import {
   VscodeDiffViewHost,
   type DiffSession,
 } from '@frontend/approval/VscodeDiffViewHost';
+import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { openBuildDisplayIfTex } from '@frontend/latex/openBuild';
-import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { announce, showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   fromHost,
   hostFailure,
@@ -24,16 +27,13 @@ import {
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
-  ToolEditPreviewContext,
+  ToolEditPreviewRequest,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import type { ApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 import type { HostRequestFailure, WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  ProcessRuntime,
-  ToolEditApprovalRequest,
-} from '@texra-ai/harness/host';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -45,17 +45,29 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
       Effect.provideService(Scope.Scope, this.scope),
     );
 
+  private readonly storageDirectory: string;
+  private readonly runtime: ProcessRuntime;
+  private readonly roots: WorkspaceRoots;
+  private readonly scope: Scope.Scope;
   constructor(
-    private readonly storageDirectory: string,
-    private readonly runtime: ProcessRuntime,
-    private readonly roots: WorkspaceRoots,
+    storageDirectory: string,
+    runtime: ProcessRuntime,
+    roots: WorkspaceRoots,
     /** The view's scope, which a scheduled PDF viewer open runs in. */
-    private readonly scope: Scope.Scope,
-  ) {}
+    scope: Scope.Scope,
+  ) {
+    this.storageDirectory = storageDirectory;
+    this.runtime = runtime;
+    this.roots = roots;
+    this.scope = scope;
+  }
+
+  focused(): boolean {
+    return vscode.window.state.focused;
+  }
 
   stagePreview(
-    request: ToolEditApprovalRequest,
-    context: ToolEditPreviewContext,
+    request: ToolEditPreviewRequest,
   ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     return FileSystem.FileSystem.use((fs) =>
       fs.makeDirectory(this.storageDirectory, { recursive: true }),
@@ -74,8 +86,8 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
           new VscodeToolEditPreview(
             this.diffViewHost,
             request,
-            context,
             staged,
+            this.warn,
           ),
       ),
     );
@@ -86,17 +98,38 @@ export class VscodeToolEditApprovalHost implements ToolEditApprovalHost {
     // shown on its own fiber, and the caller does not wait for the toast.
     this.runtime.runFork(showLoggedMessage(CHANNEL, message));
   }
+
+  /** A warning, logged and shown on its own fiber, as a report is. */
+  private readonly warn = (message: string): void => {
+    this.runtime.runFork(
+      Effect.logWarning(message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          announce(CHANNEL, vscodeUi.showWarningMessage(message), undefined),
+        ),
+      ),
+    );
+  };
 }
 
 class VscodeToolEditPreview implements ToolEditPreview {
   private readonly diffSession: DiffSession;
 
+  private readonly diffViewHost: VscodeDiffViewHost;
+  private readonly request: ToolEditPreviewRequest;
+  private readonly staged: ApprovalTempFiles;
+  /** Tell the user something without waiting for them to read it. */
+  private readonly warn: (message: string) => void;
   constructor(
-    private readonly diffViewHost: VscodeDiffViewHost,
-    private readonly request: ToolEditApprovalRequest,
-    private readonly context: ToolEditPreviewContext,
-    private readonly staged: ApprovalTempFiles,
+    diffViewHost: VscodeDiffViewHost,
+    request: ToolEditPreviewRequest,
+    staged: ApprovalTempFiles,
+    warn: (message: string) => void,
   ) {
+    this.diffViewHost = diffViewHost;
+    this.request = request;
+    this.staged = staged;
+    this.warn = warn;
     this.diffSession = {
       original: { filePath: staged.originalPath },
       proposed: { filePath: staged.proposedPath },
@@ -112,20 +145,8 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.staged.proposedPath;
   }
 
-  present(): Effect.Effect<void, HostRequestFailure> {
-    return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
-  }
-
   showDiff(): Effect.Effect<void, HostRequestFailure> {
-    return this.openDiff().pipe(
-      Effect.andThen(
-        Effect.suspend(() =>
-          this.context.isSettled()
-            ? this.diffViewHost.closeDiff(this.diffSession)
-            : this.revealFirstChange(),
-        ),
-      ),
-    );
+    return this.openDiff().pipe(Effect.andThen(this.revealFirstChange()));
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
@@ -145,12 +166,34 @@ class VscodeToolEditPreview implements ToolEditPreview {
     return this.diffViewHost.readProposedContent(this.diffSession);
   }
 
-  dispose(): Effect.Effect<void, HostRequestFailure> {
-    return this.diffViewHost.closeDiff(this.diffSession).pipe(
-      // The files go whether the tab close succeeds, fails, or is cut off:
-      // at window teardown that RPC can reject or outlive the shutdown
-      // phase's deadline, and the files would otherwise stay on disk.
-      Effect.ensuring(this.staged.cleanup),
+  /** `unapplied` moves to an untitled editor before the diff closes, where
+   *  it outlives the files removed under the diff. If it cannot move, the
+   *  diff and its files stay, so the user's text is not lost, and the
+   *  failure goes to the caller's report. */
+  dispose(unapplied?: string): Effect.Effect<void, HostRequestFailure> {
+    const keep =
+      unapplied === undefined
+        ? Effect.void
+        : this.diffViewHost
+            .keepProposedText(this.diffSession, unapplied)
+            .pipe(
+              Effect.andThen(
+                Effect.sync(() =>
+                  this.warn(
+                    UNAPPLIED_TOOL_EDIT.inEditor(this.request.relativePath),
+                  ),
+                ),
+              ),
+            );
+    return keep.pipe(
+      Effect.andThen(
+        this.diffViewHost.closeDiff(this.diffSession).pipe(
+          // The files go whether the tab close succeeds, fails, or is cut
+          // off: at window teardown that RPC can reject or outlive the
+          // shutdown phase's deadline, and the files would otherwise stay.
+          Effect.ensuring(this.staged.cleanup),
+        ),
+      ),
     );
   }
 
@@ -170,14 +213,13 @@ class VscodeToolEditPreview implements ToolEditPreview {
   }
 
   private title(): string {
-    const { addedLines: added, removedLines: removed } =
-      this.request.permission;
+    const { addedLines: added, removedLines: removed } = this.request;
     const changeParts: string[] = [];
     if (added > 0) changeParts.push(`+${added}`);
     if (removed > 0) changeParts.push(`-${removed}`);
     const changeSuffix = changeParts.length
       ? ` · ${changeParts.join(' / ')} ${pluralize(added + removed, 'line')}`
       : '';
-    return `Tool edit (${this.request.sourceTool}): ${this.context.relativePath}${changeSuffix}`;
+    return `Tool edit (${this.request.sourceTool}): ${this.request.relativePath}${changeSuffix}`;
   }
 }

@@ -7,7 +7,8 @@ import ignore from 'ignore';
 
 // Local imports - utils
 import { toPosixPath } from '@utils/core/pathCore';
-import { safeHomedir } from '@utils/system/platformPaths';
+import { absentReason } from '@utils/files/fsEntryExists';
+import { homeDirectory } from '@utils/system/platformPaths';
 
 type GitignoreSource = {
   absolutePath: string;
@@ -42,10 +43,7 @@ const readGitignoreFile = Effect.fn('readGitignoreFile')(function* (
     })),
     // An absent policy file is the normal case; any other read failure is the
     // caller's to see.
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(null),
-    ),
+    Effect.catchIf(absentReason, () => Effect.succeed(null)),
   );
 });
 
@@ -64,11 +62,11 @@ export const getGitignoreMatcher = Effect.fn('getGitignoreMatcher')(function* (
     return EMPTY_GITIGNORE_MATCHER;
   }
 
-  const homeDirectory = safeHomedir();
+  const home = yield* homeDirectory;
   const sources = (yield* Effect.all(
     [
-      homeDirectory
-        ? readGitignoreFile(path.join(homeDirectory, '.gitignore_global'))
+      home
+        ? readGitignoreFile(path.join(home, '.gitignore_global'))
         : Effect.succeed(null),
       readGitignoreFile(path.join(workspacePath, '.gitignore_global')),
       readGitignoreFile(path.join(workspacePath, '.gitignore')),

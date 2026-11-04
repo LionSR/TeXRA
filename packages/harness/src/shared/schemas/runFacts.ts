@@ -7,55 +7,29 @@
 import { Schema, Struct } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 import { QualifiedSkillNameSchema } from './skillName';
 import { StoredProtocolSchema } from './storedTurn';
 import {
   DeclinableUsageRouteSchema,
   type RunUsageTotals,
-  TokenCountSchema,
   TokenUsageStatsSchema,
-  UsageRouteSchema,
 } from './usage';
 
 // ---------------------------------------------------------------- usage
 
 /**
- * Normalized usage statistics from any model provider: the ONLY usage type
- * after API response extraction. The package's `TurnResult.usage` is priced
- * into this shape by `run/pricing.ts`.
- *
- * Reuses only the required base fields via `.pick()` — the optional cache
- * fields on `TokenUsageStatsSchema` (`cacheReadInputTokens` /
- * `cacheCreationInputTokens`) are never populated for a NormalizedUsage; the
- * live cache metrics below (`cachedInputTokens` / `cacheCreationTokens`) are
- * the authoritative names. Extending the full base instead would inherit
- * those dead fields and duplicate `cacheMissInputTokens`.
+ * The priced usage of one model call: the counts under `TurnUsage`'s names,
+ * its cost, route and plan ({@link TokenUsageStatsSchema}), and the wire
+ * surface and response time of the call. `run/pricing.ts` prices the
+ * package's `TurnResult.usage` into this shape.
  */
 export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
-  Struct.pick(['inputTokens', 'outputTokens', 'cost']),
-).mapFields(
   Struct.assign({
     /** Response time in milliseconds */
     responseTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
     /** Wire surface that produced this usage; usage is billed per surface. */
     provider: StoredProtocolSchema,
-
-    // Optional metrics (when supported by provider)
-    /** Tokens served from cache (reduces cost) */
-    cachedInputTokens: Schema.optional(TokenCountSchema),
-    /** Tokens that missed provider prompt cache and were billed at full input rate */
-    cacheMissInputTokens: Schema.optional(TokenCountSchema),
-    /** Tokens written to cache - Anthropic only (increases cost by 1.25x) */
-    cacheCreationTokens: Schema.optional(TokenCountSchema),
-    /** Tokens used for reasoning (OpenAI reasoning models, Claude and Gemini thinking) */
-    reasoningTokens: Schema.optional(TokenCountSchema),
-    /** Tokens consumed by tool use prompts (Google) */
-    toolUsePromptTokens: Schema.optional(TokenCountSchema),
-    /** Canonical route used for usage display and telemetry. */
-    usageRoute: Schema.optional(UsageRouteSchema),
-    /** The route's subscription plan, when it names one; display-only. */
-    usagePlan: Schema.optional(Schema.String),
   }),
 );
 /** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
@@ -81,12 +55,12 @@ export function addTurnUsage(
     totalInputTokens: totals.totalInputTokens + usage.inputTokens,
     totalOutputTokens: totals.totalOutputTokens + usage.outputTokens,
     totalCost: totals.totalCost + usage.cost,
-    totalCacheReadInputTokens:
-      totals.totalCacheReadInputTokens + (usage.cachedInputTokens ?? 0),
+    totalCachedInputTokens:
+      totals.totalCachedInputTokens + (usage.cachedInputTokens ?? 0),
     totalCacheMissInputTokens:
       totals.totalCacheMissInputTokens + (usage.cacheMissInputTokens ?? 0),
-    totalCacheCreationInputTokens:
-      totals.totalCacheCreationInputTokens + (usage.cacheCreationTokens ?? 0),
+    totalCacheWriteTokens:
+      totals.totalCacheWriteTokens + (usage.cacheWriteTokens ?? 0),
     totalReasoningTokens:
       totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
     totalToolUsePromptTokens:
@@ -97,7 +71,7 @@ export function addTurnUsage(
 // ------------------------------------------------------------ launch facts
 
 /** An attached memory the opening could not read, and why. */
-export const AttachedMemoryMissSchema = Schema.Struct({
+const AttachedMemoryMissSchema = Schema.Struct({
   path: Schema.String,
   reason: Schema.String,
 });

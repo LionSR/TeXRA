@@ -2,7 +2,6 @@ import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
 
 import { codeSandboxWorker } from '../../../scripts/code-sandbox-worker.mjs';
-import { stubInternalValidationModel } from '../../../scripts/stub-internal-validation-model.mjs';
 
 const packageRoot = new URL('..', import.meta.url);
 const quickJsWasmSpecifier = '@jitl/quickjs-wasmfile-release-sync/wasm';
@@ -35,7 +34,6 @@ await build({
         );
       },
     },
-    stubInternalValidationModel,
     codeSandboxWorker,
   ],
   loader: {

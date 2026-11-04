@@ -9,6 +9,7 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 // Local imports - shared schemas
 import { requireFileReadForEdit } from '@agent/runtime/RunCall';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
+import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { resolveToolPath } from '@tools/pathResolution';
@@ -87,15 +88,12 @@ export const resolveWritableTarget = Effect.fn('resolveWritableTarget')(
       display: displayPath,
     } = yield* resolveToolPath(call.env, inputPath);
 
-    // Shared read-before-edit gate (lstat semantics), then the current content.
+    // Shared read-before-edit gate (lstat semantics), then the current
+    // content. The gate keys on the display path, the spelling the result's
+    // `edits` and a read's `reads` give a file.
     const fs = yield* FileSystem.FileSystem;
     const exists = yield* entryExists(fs, absolutePath);
-    const blocked = yield* requireFileReadForEdit(
-      path,
-      exists,
-      undefined,
-      displayPath,
-    );
+    const blocked = yield* requireFileReadForEdit(displayPath, exists);
     if (blocked) {
       return { blocked };
     }
@@ -213,11 +211,15 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   }: ApprovedFileEditRequest): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
+    | ToolContext
+    | FileSystem.FileSystem
+    | WorkspaceFs
+    | AgentCatalog
+    | AppSignals
   > {
     const approval = yield* requestToolEditApproval({
       path,
-      originalContent,
+      originalContent: exists ? originalContent : null,
       proposedContent,
       sourceTool,
     });
@@ -227,7 +229,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
 
     const written = yield* writeApprovedContent(
       path,
-      exists ? originalContent : null,
+      approval.originalContent,
       approval.appliedContent,
     );
     // An agent written into the custom agents directory (the `creator`
@@ -251,7 +253,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     const output = yield* appendApprovalDiffNote(
       presentation.output,
       displayPath,
-      proposedContent,
+      approval.proposedContent,
       written.appliedContent,
     );
 

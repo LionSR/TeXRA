@@ -1,12 +1,7 @@
-import { Schema, Struct } from 'effect';
+import { Effect, Schema, Struct } from 'effect';
 
 import { RetryErrorInfoSchema } from './errors';
-import { RunSelectionSchema, RunIdSchema } from './identifiers';
-import {
-  ExternalInquiryTurnRecordSchema,
-  InquirySessionLinksSchema,
-  InquiryThreadIdSchema,
-} from './inquiry';
+import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
 import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
 import {
@@ -29,9 +24,78 @@ export const ToolEditPermissionSchema = PermissionBaseSchema.mapFields(
     sourceTool: Schema.String,
     addedLines: LineCountSchema,
     removedLines: LineCountSchema,
+    /** The address of the proposal's content (`ToolEditContent`: the
+     *  original and proposed text with their diff) in the session's blob
+     *  store, stored with the request's row; `request.preview` reads it. */
+    content: Sha256Schema,
   }),
 );
 export type ToolEditPermission = typeof ToolEditPermissionSchema.Type;
+
+/** One unified-diff hunk: the line ranges it spans on each side, and its
+ *  lines, each marked ` `, `-` or `+` (`\` notes a missing final newline). */
+const DiffHunkSchema = Schema.Struct({
+  oldStart: Schema.Int,
+  oldLines: Schema.Int,
+  newStart: Schema.Int,
+  newLines: Schema.Int,
+  lines: Schema.Array(Schema.String),
+});
+
+/** What a pending tool edit would change: the original and proposed
+ *  content a host shows beside the request's path and line counts, and
+ *  the diff between them, computed once where the request is built: its
+ *  hunks and the 0-based line of the proposed text a diff view reveals
+ *  first (null when nothing changed). `request.preview` reads the stored
+ *  proposal named by `ToolEditPermission.content` and renders a missing
+ *  original file as empty text. The stored proposal distinguishes absence
+ *  from an empty file so applying it detects concurrent creation. */
+export const ToolEditContentSchema = Schema.Struct({
+  originalContent: Schema.String,
+  proposedContent: Schema.String,
+  hunks: Schema.Array(DiffHunkSchema),
+  firstChangedLine: Schema.NullOr(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  ),
+});
+/** A pending tool edit's content. */
+export type ToolEditContent = typeof ToolEditContentSchema.Type;
+
+/**
+ * Hunks as unified-diff text lines, each preceded by its header. One header
+ * policy: a `,1` range is omitted, the form `diff -u` and `git diff` emit.
+ */
+export function formatHunkLines(hunks: ToolEditContent['hunks']): string[] {
+  const range = (start: number, lines: number) =>
+    lines === 1 ? String(start) : `${start},${lines}`;
+  return hunks.flatMap((hunk) => [
+    `@@ -${range(hunk.oldStart, hunk.oldLines)} +${range(hunk.newStart, hunk.newLines)} @@`,
+    ...hunk.lines,
+  ]);
+}
+
+// Null records a missing file; an empty string records an existing empty one.
+// The preview wire contract renders either as empty text.
+const StoredToolEditContentSchema = ToolEditContentSchema.mapFields(
+  Struct.assign({ originalContent: Schema.NullOr(Schema.String) }),
+);
+
+/** Read the proposal named by a durable edit request. A missing or malformed
+ *  blob is a corrupt store, never permission to use a recomputed proposal. */
+export const readToolEditContent = (
+  readBlobs: (
+    digests: readonly string[],
+  ) => Effect.Effect<ReadonlyMap<string, string>, Error>,
+  address: ToolEditPermission['content'],
+): Effect.Effect<typeof StoredToolEditContentSchema.Type> =>
+  Effect.map(Effect.orDie(readBlobs([address])), (held) => {
+    const text = held.get(address);
+    if (text === undefined)
+      throw new Error(`The store holds no tool edit proposal at ${address}`);
+    return Schema.decodeUnknownSync(
+      Schema.fromJsonString(StoredToolEditContentSchema),
+    )(text);
+  });
 
 export const BashPermissionSchema = PermissionBaseSchema.mapFields(
   Struct.assign({
@@ -92,10 +156,9 @@ export const RetryPermissionSchema = Schema.Struct({
   runId: RunIdSchema,
   operation: Schema.String,
   model: Schema.optional(Schema.String),
-  errorMessage: Schema.optional(Schema.String),
-  errorDetails: Schema.optional(
-    RetryErrorInfoSchema.mapFields(Struct.map(Schema.optional)),
-  ),
+  /** The failure as the run recorded it: the harness's plain message and
+   *  the facts a host words it from (its classification). */
+  errorDetails: RetryErrorInfoSchema,
   /** Null or absent when the failure offers no credential move. */
   credentialSwitch: Schema.optional(Schema.NullOr(CredentialSwitchSchema)),
 });
@@ -120,43 +183,14 @@ export type AgentProposal = typeof AgentProposalSchema.Type;
 export const AgentProposalPermissionSchema = AgentProposalSchema.mapFields(
   Struct.assign({
     requestId: Schema.String,
+    /** Whether a grant turned on while it waits answers it: false when a
+     *  hook asked for this review. */
+    allowBypass: Schema.Boolean,
     runId: RunIdSchema,
   }),
 );
 export type AgentProposalPermission =
   (typeof AgentProposalPermissionSchema)['Type'];
-
-// ============================================================================
-// External Inquiry — see also `./inquiry.ts` for thread / session-link / action schemas
-// ============================================================================
-
-// Inquiry fields carried by every inquiry permission.
-const CommonExternalInquiryFieldsSchema = Schema.Struct({
-  question: Schema.String,
-  threadId: InquiryThreadIdSchema,
-  context: Schema.optional(Schema.NullOr(Schema.String)),
-  suggestSearch: Schema.optional(Schema.NullOr(Schema.Boolean)),
-  attachFiles: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-});
-
-const ExternalInquiryHydrationFieldsSchema = Schema.Struct({
-  sessionLinks: Schema.optional(Schema.NullOr(InquirySessionLinksSchema)),
-  transcript: Schema.optional(
-    Schema.NullOr(Schema.Array(ExternalInquiryTurnRecordSchema)),
-  ),
-});
-
-/**
- * One shape for every inquiry turn. First and follow-up dispatches carry the
- * identical field set — the panel tells them apart from `transcript` — so
- * there is no discriminator to narrow on. Hydration fields are always
- * present (nullish on a fresh thread that has nothing to hydrate).
- */
-export const ExternalInquiryPermissionSchema = PermissionBaseSchema.mapFields(
-  Struct.assign(CommonExternalInquiryFieldsSchema.fields),
-).mapFields(Struct.assign(ExternalInquiryHydrationFieldsSchema.fields));
-export type ExternalInquiryPermission =
-  (typeof ExternalInquiryPermissionSchema)['Type'];
 
 // ============================================================================
 // User Question

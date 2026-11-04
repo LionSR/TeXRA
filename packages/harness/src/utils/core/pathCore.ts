@@ -11,6 +11,10 @@ import { normalize } from 'pathe';
  * Get path segments as an array.
  * Only converts backslashes — does NOT resolve '..' so callers can detect
  * traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
+ * It also trims its input, so a caller that must keep a leading or trailing
+ * space in a name (hidden-file and excluded-directory checks, published
+ * artifact paths) cannot route through it; those call sites split on their
+ * own, and each handles `..` its own way on purpose.
  */
 export function getPathSegments(input: string): string[] {
   if (!input || input === '.') {

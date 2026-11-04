@@ -29,10 +29,11 @@ import {
   RUN_PHASE,
   isLiveRun,
   type ApprovalPolicy,
-  isActivePhase,
   isTranscriptSettlementPhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { FileSecrets, secretsDirectory } from '@texra-ai/harness/node';
+import { emitAppSignal } from '@texra-ai/harness/host';
 import {
   CliUsageError,
   effectiveApprovalPolicy,
@@ -63,7 +64,6 @@ import {
   acquireTuiTerminal,
   clearTerminalScrollback,
 } from '@cli/tui/terminalCleanup';
-import { cliSecrets } from '@cli/runtime/cliSecrets';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
 import { serviceSession } from '@texra/controllers/server/serviceSession';
@@ -169,7 +169,7 @@ export async function runChat(
   const initialResume = init.initialResume;
   // The chat's hold on the background service, for its whole life.
   const chatScope = Scope.makeUnsafe();
-  // One startup program; an early exit is its `exitCode` arm.
+  // One startup program; an early exit is its `exitCode` case.
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
       // Every chat is a client of the one service, so other terminals and
@@ -185,9 +185,9 @@ export async function runChat(
         // The service follows interrupted tasks for a chat that is its
         // client. In this process, `texra resume <id>` resumes the task it
         // names; a second resume of the interrupted ones beside it would
-        // race that one, so it only retries a blocked resume.
+        // race that one, so it only lists them.
         ...(Result.isFailure(service) && {
-          interruptedTasks: initialResume === undefined ? 'offer' : 'retry',
+          interruptedTasks: initialResume === undefined ? 'setting' : 'list',
         }),
       });
       const runtimeSession = yield* services.session;
@@ -252,10 +252,6 @@ export async function runChat(
         writeTextStderr(agentEntry.message);
         return { exitCode: CliExitCode.Usage };
       }
-      // One API mode for the whole session: an explicit --api-mode/env
-      // override wins, otherwise the persisted account default. Model
-      // resolution, the no-models hints, and the header/status all read this
-      // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
         credential.ready
           ? selectCliRunnableModel(
@@ -339,9 +335,17 @@ export async function runChat(
     ),
   );
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
-  const { services, runtimeSession, runSession, runsElsewhere, link } = startup;
-  const { defaults } = startup;
-  const { inputHistory, startupNotices, terminalCaps } = startup;
+  const {
+    services,
+    runtimeSession,
+    runSession,
+    runsElsewhere,
+    link,
+    defaults,
+    inputHistory,
+    startupNotices,
+    terminalCaps,
+  } = startup;
 
   // The policy this chat's launches ask for (`launchApproval`): its flag,
   // then each `/approval`.
@@ -382,7 +386,7 @@ export async function runChat(
         ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
         : []),
     ];
-    // Durable before the selection settles, so nothing the chat sends next
+    // Durable before the selection finishes, so nothing the chat sends next
     // runs under, or inherits, the grant just left.
     return Effect.forEach(
       changes,
@@ -405,7 +409,6 @@ export async function runChat(
     session,
     runtimeSession,
     runSession,
-    secrets: services.secrets,
     stores: services,
     runtime: services.runtime,
     processCwd: process.cwd(),
@@ -421,20 +424,19 @@ export async function runChat(
   // and the exit drain awaits that close.
   const onChatClose = (release: () => void): void =>
     runtime.runSync(Scope.addFinalizer(chatScope, Effect.sync(release)));
-  // The one session state the TUI renders (PRD 10.1): the session's fold
+  // The one session state the TUI renders: the session view
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
   const session = new TuiSession(runsElsewhere);
-  // A dead fold (`view.changes` failing) is the end of this session: the
+  // A dead session view (`view.changes` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
-  // failure on every exit path, since they all read `session.runExitCode`.
+  // failure on every exit path (`TuiSession.exitCode` reads the failure).
   const unbindSessionView = bindSessionView(runtime, runSession.view, {
     onFailure: (error) => {
       sessionViewFailureSignal.set(
         `The session view stopped updating: ${toErrorMessage(error)} Press Ctrl-C to exit and restart texra. If it repeats, run the same texra version that last opened this project; an older build cannot read a newer session store.`,
       );
-      session.runExitCode = CliExitCode.AgentError;
     },
   });
   for (const notice of startupNotices) appendLocalNotice(notice);
@@ -477,7 +479,12 @@ export async function runChat(
     Effect.gen(function* () {
       yield* Effect.forkIn(followCliCredentialChanges, chatScope);
       // Keys another TeXRA window or the service saves reach this chat too.
-      yield* Effect.forkIn(cliSecrets(context.storageRoot).watch(), chatScope);
+      yield* Effect.forkIn(
+        FileSecrets.watch(secretsDirectory(context.storageRoot), (key) =>
+          emitAppSignal('credentialChanged', { key }),
+        ),
+        chatScope,
+      );
     }),
   );
   // The runs this terminal paints, watched on the session for as long as
@@ -544,7 +551,6 @@ export async function runChat(
     shutdownScope: services.shutdownScope,
     cwd: context.cwd,
     getSlashCommandContext: slashCommandContext,
-    secrets: services.secrets,
     stores: services,
     runtime,
     approvalPolicy: () => chatPolicy,
@@ -552,12 +558,12 @@ export async function runChat(
 
   const resetSessionForClear = (): boolean => {
     const currentRunId = session.runId ?? selectedRunIdSignal.get();
-    const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
+    const activeRun = runViewOf(currentView(), currentRunId);
     const isRunPending = chatTuiRunPending(session);
 
     if (
-      (isRunPending && activeStatus !== RUN_PHASE.WAITING) ||
-      isActivePhase(activeStatus)
+      (isRunPending && runPhaseOf(activeRun) !== RUN_PHASE.WAITING) ||
+      activeRun?.working === true
     ) {
       setTransientNotice(
         'Wait for the active response to finish, or press Ctrl-C first.',
@@ -595,7 +601,6 @@ export async function runChat(
         },
         (held) => chatController.submit(held.line, held),
       ),
-    secrets: services.secrets,
     stores: services,
     runtime,
     runtimeSession,
@@ -647,12 +652,10 @@ export async function runChat(
     },
   });
 
-  const stdoutColorEnabled = context.stdoutColorEnabled;
   const inkRef: { current?: InkInstance } = {};
   const viewportController = createTuiViewportController(inkRef);
   const ink = render(
     <App
-      secrets={services.secrets}
       stores={services}
       runtime={runtime}
       session={runSession}
@@ -669,7 +672,10 @@ export async function runChat(
       history={inputHistory}
     />,
     {
-      stdout: tuiOutputStreamForColor(process.stdout, stdoutColorEnabled),
+      stdout: tuiOutputStreamForColor(
+        process.stdout,
+        context.stdoutColorEnabled,
+      ),
       stderr: process.stderr,
       stdin: process.stdin,
       // Own Ctrl+C ourselves (App's unified useInput → exit()) instead of via
@@ -720,7 +726,6 @@ export async function runChat(
     ),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
     interruptActive: (reason) => chatController.stop(reason),
-    quiet: context.quietLogs,
   });
   // Transfer signal ownership from the platform handler and arm this session's
   // handlers, not any earlier: everything above (the platform init,
@@ -737,10 +742,11 @@ export async function runChat(
     runtime.runFork(chatController.resume(initialResume.id));
   }
 
-  // The one "agent finished" notification: the claimed run's turn settles,
+  // The one "agent finished" notification: the claimed run's turn finishes,
   // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
   // A run that ends after waiting was already announced, and a stop the user
-  // asked for is not news.
+  // asked for is not news. A turn end, not `attentionOf`'s `finished`: a
+  // conversation's turn ends at WAITING with no outcome.
   let rootPhase = session.status();
   onChatClose(
     subscribeToSignalChanges([sessionView()], () => {
@@ -750,23 +756,27 @@ export async function runChat(
         rootPhase !== previous &&
         previous !== RUN_PHASE.WAITING &&
         isTranscriptSettlementPhase(rootPhase) &&
-        !session.stopRequested
+        // A stop ends the run cancelled: no "finished" bell for it.
+        rootPhase !== RUN_PHASE.CANCELLED
       ) {
         notify('agentFinished');
       }
     }),
   );
 
+  // The code the exit's drain answers, read before the exit clears the
+  // chat's state.
+  let exitCode: CliExitCode;
   try {
     await ink.waitUntilExit();
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
     // released the store, so the bridge outlives the chat's scope. The
-    // teardown settles only on the graceful path, whose drain closes that
+    // teardown finishes only on the graceful path, whose drain closes that
     // scope first (a signal exit ends in process.exit and never returns
     // here), so nothing subscribed to the view outlives the bridge.
-    await exitController.gracefulTeardown();
+    exitCode = await exitController.gracefulTeardown();
     unbindSessionView();
   }
-  return { exitCode: session.runExitCode };
+  return { exitCode };
 }

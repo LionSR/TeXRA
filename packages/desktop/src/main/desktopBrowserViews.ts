@@ -68,8 +68,6 @@ export function createDesktopBrowserViews(
   const views = new Map<string, WebContentsView>();
   let attachedTabId: string | undefined;
 
-  const reportError = (error: unknown) => options.onError(error);
-
   function openAllowedExternalUrl(url: string): void {
     if (!isHandOffableUrl(url)) {
       options.onBlockedExternalUrl(
@@ -91,7 +89,7 @@ export function createDesktopBrowserViews(
     // here they load in place so a click can't spawn unmanaged chrome.
     webContents.setWindowOpenHandler(({ url }) => {
       if (isEmbeddableUrl(url)) {
-        webContents.loadURL(url).catch(reportError);
+        webContents.loadURL(url).catch(options.onError);
       } else {
         openAllowedExternalUrl(url);
       }
@@ -175,7 +173,7 @@ export function createDesktopBrowserViews(
         return;
       }
       const view = ensureView(tabId);
-      view.webContents.loadURL(url).catch(reportError);
+      view.webContents.loadURL(url).catch(options.onError);
     },
 
     show(tabId, bounds) {

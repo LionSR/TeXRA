@@ -1,28 +1,38 @@
 /**
  * The filesystem primitives the repo must keep that the standard library's
- * `FileSystem` does not provide: crash-safe replace, a directory listing
- * carrying each entry's own (unfollowed) type, and symlink-dereferencing
- * copies.
+ * `FileSystem` does not provide: crash-safe replace, directory listings that
+ * give every entry its own (unfollowed) type, probing the ones the listing
+ * leaves `Unknown`, symlink-dereferencing copies, and links that fall back
+ * to a copy where the host cannot make one.
  *
  * Nothing here re-implements an operation `FileSystem` already has — an
  * append, for instance, is `fs.writeFile(path, data, { flag: 'a' })` and gets
- * no wrapper. The Node calls `FileSystem` cannot express (`readdir` with
- * types, `cp` with `dereference`, a native `realPath`, and the
- * `write-file-atomic` package) classify their errno exactly as
- * `@effect/platform-node` does, so a consumer matches `SystemError` by
- * `reason._tag` either way.
+ * no wrapper. The Node calls made here (`cp` with `dereference`, a native
+ * `realPath`, the `write-file-atomic` package, and the `Path`-only listing
+ * and probes) classify their errno exactly as `@effect/platform-node` does,
+ * so a consumer matches `SystemError` by `reason._tag` either way.
  */
 
 // Node imports
 import * as nodeFs from 'node:fs/promises';
+import * as path from 'node:path';
 
 // Third-party imports
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import { Effect, FileSystem, Layer, Path, PlatformError } from 'effect';
+import * as NodePath from '@effect/platform-node/NodePath';
+import {
+  Effect,
+  FileSystem,
+  Layer,
+  Path,
+  PlatformError,
+  Predicate,
+} from 'effect';
 
 import writeFileAtomicLib from 'write-file-atomic';
 
 import { withLogChannel } from '@logger/effectLog';
+import { absentReason, entryTypeIn } from './fsEntryExists';
 
 const CHANNEL = 'fsDurability';
 
@@ -51,13 +61,20 @@ function systemErrorFrom(
   target: string,
   cause: unknown,
 ): PlatformError.PlatformError {
-  const error = cause as NodeJS.ErrnoException;
+  const code =
+    Predicate.hasProperty(cause, 'code') && typeof cause.code === 'string'
+      ? cause.code
+      : undefined;
   return PlatformError.systemError({
-    _tag: (error.code && SYSTEM_ERROR_TAGS[error.code]) || 'Unknown',
+    _tag: (code && SYSTEM_ERROR_TAGS[code]) || 'Unknown',
     module: MODULE,
     method,
     pathOrDescriptor: target,
-    syscall: error.syscall,
+    syscall:
+      Predicate.hasProperty(cause, 'syscall') &&
+      typeof cause.syscall === 'string'
+        ? cause.syscall
+        : undefined,
     cause,
   });
 }
@@ -69,20 +86,27 @@ function systemErrorFrom(
  * gets the native call); the native call answers the same in one syscall.
  * Its errors classify as the library's do.
  */
-export const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> =
-  Layer.effect(
-    FileSystem.FileSystem,
-    Effect.map(FileSystem.FileSystem, (fs) =>
-      FileSystem.make({
-        ...fs,
-        realPath: (target) =>
-          Effect.tryPromise({
-            try: () => nodeFs.realpath(target),
-            catch: (cause) => systemErrorFrom('realPath', target, cause),
-          }),
-      }),
-    ),
-  ).pipe(Layer.provide(NodeFileSystem.layer));
+const nodeFileSystemLayer: Layer.Layer<FileSystem.FileSystem> = Layer.effect(
+  FileSystem.FileSystem,
+  Effect.map(FileSystem.FileSystem, (fs) =>
+    FileSystem.make({
+      ...fs,
+      realPath: (target) =>
+        Effect.tryPromise({
+          try: () => nodeFs.realpath(target),
+          catch: (cause) => systemErrorFrom('realPath', target, cause),
+        }),
+    }),
+  ),
+).pipe(Layer.provide(NodeFileSystem.layer));
+
+/**
+ * Node's file services: `FileSystem` (with the one-call native `realPath`)
+ * and `Path`. The process platform, the JSON and credential stores and the
+ * hosts' own reads all provide this one layer.
+ */
+export const nodeFileServices: Layer.Layer<FileSystem.FileSystem | Path.Path> =
+  Layer.mergeAll(nodeFileSystemLayer, NodePath.layer);
 
 /**
  * Crash-safe replace, delegated to `write-file-atomic` rather than
@@ -141,40 +165,44 @@ export const entryMetadataAt = Effect.fn('fsDurability.entryMetadataAt')(
       catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
     });
     const stats = link.isSymbolicLink()
-      ? // A dangling or circular link has no target to describe, so the link's
-        // own metadata stands in — the reading the facade's provider gave.
+      ? // A dangling link (its target absent) or a circular one (ELOOP) has no
+        // target to describe, so the link's own metadata stands in, the
+        // reading the facade's provider gave. Any other failure propagates.
         yield* Effect.tryPromise({
           try: () => nodeFs.stat(target),
           catch: (cause) => systemErrorFrom('entryMetadataAt', target, cause),
-        }).pipe(Effect.orElseSucceed(() => link))
+        }).pipe(
+          Effect.catchIf(
+            (error) =>
+              absentReason(error) ||
+              (Predicate.hasProperty(error.reason.cause, 'code') &&
+                error.reason.cause.code === 'ELOOP'),
+            () => Effect.succeed(link),
+          ),
+        )
       : link;
     return { type: entryTypeOf(stats), size: stats.size };
   },
 );
 
 /**
- * The entries of `target` with the type of each, one `lstat` per entry: a
- * symlink reports as `SymbolicLink`, never as what it points at, so the
- * deletion and containment walkers that replace the old lstat-backed listing
- * can refuse to follow it. `FileSystem.stat` follows links and
- * `FileSystem.readDirectory` returns names alone, so neither carries this.
+ * The entries of `target` with the type of each, as the listing reports it:
+ * a symlink is `SymbolicLink`, never what it points at, so the deletion and
+ * containment walkers can refuse to follow it. Only an entry the listing
+ * leaves `Unknown` is `lstat`ed, and a probe that fails fails the listing.
  */
 export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
   function* (target: string) {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-    const names = yield* fs.readDirectory(target);
-    return yield* Effect.forEach(
-      names,
-      (name) => {
-        const entry = path.join(target, name);
-        return Effect.tryPromise({
-          try: async () =>
-            [name, entryTypeOf(await nodeFs.lstat(entry))] as const,
-          catch: (cause) => systemErrorFrom('readDirectoryTyped', entry, cause),
-        });
-      },
-      { concurrency: 'unbounded' },
+    const entries = yield* fs.readDirectoryEntries(target);
+    return yield* Effect.forEach(entries, ({ name, type }) =>
+      type === 'Unknown'
+        ? Effect.map(
+            fs.lstat(path.join(target, name)),
+            (info) => [name, info.type] as const,
+          )
+        : Effect.succeed([name, type] as const),
     );
   },
 );
@@ -193,8 +221,9 @@ export const readDirectoryTyped = Effect.fn('fsDurability.readDirectoryTyped')(
  * failure costs a row. The strict form stays with the containment and
  * deletion walkers, where a refused answer is the safe one.
  *
- * The Node call is the one `FileSystem` cannot make: `readDirectory` returns
- * names alone, and the pre-`readdir` answer is what carries the types.
+ * It reads the dirents through Node's `readdir` directly, so its callers need
+ * only `Path`; the strict form gets the same typed listing from
+ * `FileSystem.readDirectoryEntries`.
  */
 export const readDirectoryTypedTolerant = Effect.fn(
   'fsDurability.readDirectoryTypedTolerant',
@@ -254,6 +283,62 @@ export const copyDereferenced = Effect.fn('fsDurability.copyDereferenced')(
     });
   },
 );
+
+/** Errno codes for which symlink creation is unavailable and a copy is used instead. */
+const SYMLINK_UNSUPPORTED_CODES = new Set([
+  'EPERM',
+  'EACCES',
+  'EINVAL',
+  'ENOTSUP',
+]);
+
+/**
+ * Link `destination` to `sourceAbsolute`, parent directories included. An
+ * existing link there is replaced; any other entry fails `AlreadyExists` and
+ * stays. A host that cannot make links (`EPERM`, `EACCES`, `EINVAL`,
+ * `ENOTSUP`) gets a copy of the source instead.
+ */
+export const createSymlink = Effect.fn('fsDurability.createSymlink')(function* (
+  sourceAbsolute: string,
+  destination: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
+  yield* fs.symlink(sourceAbsolute, destination).pipe(
+    // One recovery: an existing link is replaced, while any other entry (a
+    // file the run wrote) fails `AlreadyExists` and stays; a host that cannot
+    // make links copies instead, and a second failure of either propagates
+    // rather than re-entering this branch.
+    Effect.catch((error) => {
+      if (error.reason._tag === 'AlreadyExists') {
+        return entryTypeIn(fs, destination).pipe(
+          Effect.flatMap((type) =>
+            type === 'SymbolicLink'
+              ? fs
+                  .remove(destination)
+                  .pipe(Effect.andThen(fs.symlink(sourceAbsolute, destination)))
+              : Effect.fail(error),
+          ),
+        );
+      }
+      // cast: a failed Node `symlink` carries its errno error as the cause.
+      const code = (error.reason.cause as NodeJS.ErrnoException | undefined)
+        ?.code;
+      if (!code || !SYMLINK_UNSUPPORTED_CODES.has(code)) {
+        return Effect.fail(error);
+      }
+      return Effect.gen(function* () {
+        yield* Effect.logWarning(
+          `Falling back to copy ${sourceAbsolute} -> ${destination} due to ${code}`,
+        ).pipe(withLogChannel(CHANNEL));
+        const sourceType = yield* entryTypeIn(fs, sourceAbsolute);
+        yield* sourceType === 'Directory'
+          ? fs.copy(sourceAbsolute, destination, { overwrite: true })
+          : fs.copyFile(sourceAbsolute, destination);
+      });
+    }),
+  );
+});
 
 /**
  * The file's bytes decoded as UTF-8, with line endings normalized and a

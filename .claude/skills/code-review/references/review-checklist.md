@@ -11,7 +11,7 @@ The full zone list lives in `AGENTS.md` → "Separation of concerns: VS Code cou
 - **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `packages/harness/src/shared/`** → finding. `packages/harness/src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `packages/harness/src/controllers/`.
 - **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → finding. There is no ambient platform object: configuration is the `ConfigProvider` on the `WorkspaceRoots` the caller holds, files are Effect's own `FileSystem` through the rooted `WorkspaceFs`/`StorageFs`/`GlobalStorageFs` views (`@platform/rootedFs`), and secrets are the `Secrets` service. There is no `platform()` locator to reach for. Note: `Settings` (`packages/harness/src/shared/config/settings.ts`) is host-neutral (VS Code-free) and is called directly from agnostic code too, not only VS Code-allowed code.
-- **`instanceof vscode.FileSystemError`** → `isFileNotFoundError(err)` from `@common/errors/errorPredicates`.
+- **`instanceof vscode.FileSystemError`** → `absentReason(err)` from `@utils/files/fsEntryExists` (`@texra-ai/harness/node` outside the harness).
 - **`vscode.FileType.File` / `.Directory`** → the Effect `FileSystem`'s `stat(...).type === 'File'` / `'Directory'`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
 - **`process.env`, `os.homedir()`, raw `fs/promises`, `child_process.exec`** in agnostic zones → platform interfaces or `executeCommand` from `@utils/system/execUtils`.
@@ -37,7 +37,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (compat rules in "Compa
 - **A retry outside the one retry loop** (a `p-retry` around a model call, a provider SDK retry re-enabled, a hand-rolled prompt loop) → every model call retries in `runInvocation` (`packages/harness/src/agent/runtime/run/invocation.ts`).
 - **Plain `console.log` or untagged `logger.info` in agent flows** → use `AgentTrace` (`@agent/trace`) for grouped, tool-use-aware channels; log elsewhere with `Effect.log*` on a channel named by `withLogChannel` (`@logger/effectLog`).
 - **Log payloads built by string interpolation** (file lists, missing outputs, latexdiff results, usage stats) → pass via the structured `data` argument so the progress view can render them.
-- **Commands invoking flow factories directly** → must launch via `session.runs.launch({ request, options })` (`packages/harness/src/agent/runtime/runRegistry.ts`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeToolUseFromResumeData`.
+- **Commands invoking flow factories directly** → must launch via `session.start` (`packages/harness/src/effect/sessionPrograms.ts`, which runs `rootRun`) so the run gets a `runId`, is registered in storage, and session filters and resume actions stay coherent. `executeAgent` is correct only when the caller already owns the `runId` (subagent dispatch, resume paths); a resume goes through `resumeRun`, which runs `executeAgent` without a registration.
 
 ## 4. Configuration, storage, files
 
@@ -74,7 +74,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (compat rules in "Compa
 - **Type-sensitive changes without mention of `npm run typecheck` / `compile:safe`** → `compile:fast`/`package:fast`/`build:fast` skip type checks entirely (esbuild/Vite only strip types).
 - **Long relative imports** (`../../../../`) where a path alias exists.
 - **Re-export shims** for renamed/removed code, "// removed" comments, `_unused` placeholder vars — delete cleanly per `AGENTS.md` "Flattening abstraction layers".
-- **Dead exports** (declared, no consumer): `npm run check:dead-code-ratchet` fails on any new one; for a single symbol, `rg "exportedSymbol" src packages`.
+- **Dead exports** (declared, no consumer): `rg "exportedSymbol" src packages`.
 
 ## 9. Comments
 
@@ -139,8 +139,8 @@ Standing rules from the 2026-07 error-handling audit: 880 catch sites read acros
 
 - **`catch {}` / `.catch(() => {})` without a best-effort comment is a blocker.** Grep the diff for `catch {`, `catch (_`, `.catch(() =>`. The comment must say why failure is safe to ignore and why it cannot hide a programming error. Precedent: `runToolUseFlow.ts`'s bare `catch { logger.debug('Resume parse failed, starting fresh') }` silently converted a resume into an empty-history run.
 - **New `catchDecoding` default on persisted or user-authored data is a blocker** (loud-reads rule, #6966 bullet 5). A malformed present value must fail: propagate the parse failure and surface it with its cause. Defaults are only for genuinely absent data or explicitly non-authoritative view state.
-- **A defaulted read feeding a later whole-file write must prove round-trip.** If a catch or decoding default flows into a save of the same file, corrupt-parse becomes permanent data loss. Precedent: `packages/cli/src/runtime/cliSecrets.ts` (read failure returned `{}`, the next `set()` rewrote `secrets.json` with only the mutated key).
-- **A catch defaulting a persisted read must distinguish `isFileNotFoundError` from everything else.** ENOENT→default is fine; EACCES/corrupt-JSON→default is masking. Grep new catch blocks returning `{}`/`[]`/`null`/`''` for the missing FNF predicate.
+- **A defaulted read feeding a later whole-file write must prove round-trip.** If a catch or decoding default flows into a save of the same file, corrupt-parse becomes permanent data loss. Precedent: the CLI's former single-file credential store (read failure returned `{}`, the next `set()` rewrote `secrets.json` with only the mutated key).
+- **A catch defaulting a persisted read must distinguish `absentReason` from everything else.** ENOENT/ENOTDIR→default is fine; EACCES/corrupt-JSON→default is masking. Grep new catch blocks returning `{}`/`[]`/`null`/`''` for the missing absence predicate, and for an inline `reason._tag === 'NotFound'` that should be `absentReason`.
 - **New `resolve*`/`derive*`/`infer*`/`fallback*` over an already-decided fact needs the #6951 "Single source of truth" justification** in the PR body; if the fact exists upstream or can be carried as data, carry it.
 - **A `??`/`||`/try-else chain over >2 sources needs a named single owner** (one function/table owns the precedence; consumers take its output). Display defaults (`?? 'unknown'`) exempt.
 - **No downgrade below `warn` on a resume/persisted-state read failure.** `logger.debug` in a catch that changes run behavior (fresh start, dropped history, zeroed usage) is a blocker.

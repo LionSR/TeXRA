@@ -9,23 +9,28 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { describe, expect, vi } from 'vitest';
 
-import type {
-  PluginToolServices,
-  RuntimeTool,
-} from '@agent/runtime/ToolServices';
-import type { ConfigProvider } from '@platform/interfaces';
-import { Secrets, type PlatformSecrets } from '@platform/secrets';
+import {
+  type PluginToolServices,
+  type ToolProbeInputs,
+  ToolRegistry,
+} from '@texra-ai/harness/plugins';
+import {
+  AppSignals,
+  type ConfigProvider,
+  emitAppSignal,
+  type PlatformSecrets,
+  Secrets,
+  ToolAvailability,
+  ToolCatalog,
+} from '@texra-ai/harness/host';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import type { Plugin } from '@tools/plugins';
-import type { ToolProbeInputs } from '@tools/toolProbes';
-import { ToolCatalog } from '@tools/liveTools';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
-import { ToolAvailability } from '@tools/toolAvailabilityService';
+import { toolTable } from '@tools/toolTable';
+import type { ITool, Plugin } from '@texra-ai/harness';
 
 /** The mocked tool defs read no secrets, so any call here is a test error. */
 const unreadSecret = (): never => {
@@ -45,9 +50,8 @@ const probeInputs: ToolProbeInputs = {
     get: unreadConfig,
     update: unreadConfig,
     inspect: unreadConfig,
-    catalog: TEXRA_SETTINGS,
+    catalog: TEXRA_SETTINGS.catalog,
   } satisfies ConfigProvider,
-  host: 'cli',
 };
 
 const secretsLayer = Secrets.layer({
@@ -57,9 +61,11 @@ const secretsLayer = Secrets.layer({
   listStoredKeys: unreadSecret,
 } satisfies PlatformSecrets);
 
-/** The services a plugin's availability callbacks may read. */
+/** The services a plugin's availability callbacks may read, and the
+ *  process's signal hub the service follows key changes on. */
 const probeServices = Layer.mergeAll(
   secretsLayer,
+  AppSignals.layer,
   // The mocked plugins declare no Lean plugin, so nothing here reads the port.
   Layer.mock(LeanLanguageServices, { listServers: () => [] }),
   testHttpClientLayer,
@@ -70,16 +76,11 @@ const probeServices = Layer.mergeAll(
 /** Tools under `names`, which the availability service only lists. */
 const named = (
   ...names: string[]
-): Record<string, RuntimeTool<Error, PluginToolServices>> =>
-  Object.fromEntries(
-    names.map((name) => [
-      name,
-      {
-        definition: { name, description: name, parameters: {} },
-        call: vi.fn(),
-      },
-    ]),
-  );
+): readonly ITool<Error, PluginToolServices>[] =>
+  names.map((name) => ({
+    definition: { name, description: name, parameters: {} },
+    call: vi.fn(),
+  }));
 
 /** The process's availability service over `plugins`, as a composition root
  *  builds it. */
@@ -104,10 +105,6 @@ const availabilityService = (plugins: readonly Plugin[]) =>
     return Context.get(context, ToolAvailability);
   });
 
-afterEach(() => {
-  vi.resetModules();
-});
-
 describe('tool availability service', () => {
   it.effect(
     're-probes every open workspace when a key a plugin declares changes',
@@ -120,15 +117,14 @@ describe('tool availability service', () => {
             tools: named('token'),
             availability: {
               reprobeOnSecrets: ['token.key'],
-              probe: ({ workspace }: ToolProbeInputs) =>
-                Effect.sync(() => probedRoots.push(workspace)),
-              check: () => Effect.succeed(true),
+              check: ({ workspace }: ToolProbeInputs) =>
+                Effect.sync(() => {
+                  probedRoots.push(workspace);
+                  return { available: true };
+                }),
             },
           },
         ];
-        const { emitAppSignal } = yield* Effect.promise(
-          () => import('@eventBus/AppSignals'),
-        );
         const availability = yield* availabilityService(plugins);
         const roots = (workspace: string | undefined) => ({
           ...probeInputs,
@@ -151,8 +147,8 @@ describe('tool availability service', () => {
         yield* probedAll;
         probedRoots.length = 0;
 
-        emitAppSignal('credentialChanged', { key: 'unrelated.key' });
-        emitAppSignal('credentialChanged', { key: 'token.key' });
+        yield* emitAppSignal('credentialChanged', { key: 'unrelated.key' });
+        yield* emitAppSignal('credentialChanged', { key: 'token.key' });
 
         yield* probedAll;
         expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);

@@ -73,16 +73,22 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
 export class BundledViewContentProvider {
   private readonly channel: string;
 
+  private readonly context: vscode.ExtensionContext;
+  private readonly viewName: string;
+  /**
+   * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
+   * template and `dist/<viewFolder>/` its Vite output (see `vite.config.mts`,
+   * which builds both paths from the same list).
+   */
+  private readonly viewFolder: string;
   constructor(
-    private readonly context: vscode.ExtensionContext,
-    private readonly viewName: string,
-    /**
-     * The one folder name a view owns: `src/<viewFolder>/index.html` holds its
-     * template and `dist/<viewFolder>/` its Vite output (see `vite.config.mts`,
-     * which builds both paths from the same list).
-     */
-    private readonly viewFolder: string,
+    context: vscode.ExtensionContext,
+    viewName: string,
+    viewFolder: string,
   ) {
+    this.context = context;
+    this.viewName = viewName;
+    this.viewFolder = viewFolder;
     this.channel = `${viewName}ContentProvider`;
   }
 

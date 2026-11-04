@@ -1,0 +1,299 @@
+// Third-party imports
+import { css } from 'lit';
+
+// Shared styles
+import { visuallyHiddenStyles } from '@ui/styles';
+import { buttonStyles } from '@ui/styles/controlStyles';
+import { noticeStyles, readingColumnStyles } from '@ui/styles/surfaceStyles';
+
+import { heroStyles } from './components/NewTaskHero';
+
+/**
+ * Layout for the `<progress-app>` shell: the 38px header, the body, the
+ * docked list of the wide editor tab, and the empty state. The docking is
+ * a container query on the host at 720px, active only in the editor
+ * placement; below it the tab behaves like the sidebar (the drawer).
+ */
+export const progressAppStyles = css`
+  ${noticeStyles}
+
+  .request-notice {
+    ${readingColumnStyles}
+    margin-block: var(--message-gap);
+  }
+
+  .request-notice-content {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: var(--wa-space-s);
+    overflow-wrap: anywhere;
+  }
+
+  :host {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    container-type: inline-size;
+  }
+
+  ${buttonStyles}
+
+  ${visuallyHiddenStyles}
+
+  .shell {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--wa-color-surface-default);
+    color: var(--wa-color-text-normal);
+  }
+
+  .shell-header {
+    display: flex;
+    flex: 0 0 auto;
+    min-height: var(--height-header, 38px);
+    border-bottom: var(--border-thin) solid var(--color-border);
+  }
+
+  /* Workspace controls live in the desktop's separate title bar. This
+     header belongs to the task and aligns with the file-tab strip. */
+  :host([placement='desktop']) .shell-header {
+    --wa-height-header: 44px;
+    min-height: 44px;
+    border-bottom: 0;
+  }
+  /* The desktop rail lists each project's tasks, so the sessions button
+     and drawer would be a second list there. */
+  :host([placement='desktop']) .sessions-button,
+  :host([placement='desktop']) session-drawer {
+    display: none;
+  }
+  /* One readable column, as the wide editor tab has: the desktop window
+     is wide and a launcher stretched edge to edge reads as packed. */
+  :host([placement='desktop']) .reading > .empty {
+    width: min(740px, 100%);
+    margin: 0 auto;
+  }
+  /* The desktop's new task is one centred group: hero, attachments and
+     composer together, not the hero at the top and the composer across an
+     empty page at the bottom. Its rail already lists the running tasks, so
+     the Active now strip would be a second copy there. */
+  :host([placement='desktop']) .empty {
+    /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
+    justify-content: safe center;
+    --hero-align: start;
+    --hero-text-align: start;
+    --hero-heading-size: 28px;
+    --hero-padding-inline: 0;
+    box-sizing: border-box;
+    padding: 32px 28px 80px;
+  }
+  :host([placement='desktop']) .hero-wrap {
+    padding-block: 0 24px;
+  }
+  :host([placement='desktop']) .header-main {
+    padding-inline: 24px;
+  }
+  :host([placement='desktop']) .launch-banners {
+    margin-top: 0;
+  }
+  :host([placement='desktop']) .active-now {
+    display: none;
+  }
+
+  /* The dock cell of the header exists only docked wide (see the container
+     query); until then the header is one cell. */
+  .header-dock {
+    display: none;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-width: 0;
+    height: 100%;
+    padding: 0 var(--wa-space-2xs) 0 var(--wa-space-xs);
+    border-inline-end: var(--border-thin) solid var(--color-border);
+    background: var(--wa-color-surface-lowered);
+  }
+
+  .header-main {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--wa-space-3xs);
+    min-width: 0;
+    padding: 0 var(--wa-space-2xs);
+  }
+
+  .shell-title {
+    min-width: 0;
+    padding-inline-start: var(--wa-space-3xs);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: var(--font-weight-semibold);
+  }
+
+  .spacer {
+    flex: 1 1 auto;
+  }
+
+  .header-run {
+    flex: 1 1 auto;
+  }
+
+  .shell-body {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  .reading {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+  }
+
+  /* The docked list exists only in the wide editor tab (see the container
+     query); the sidebar and the narrow tab use the drawer. */
+  .dock {
+    display: none;
+    flex-direction: column;
+    flex: 0 0 300px;
+    min-height: 0;
+    border-inline-end: var(--border-thin) solid var(--color-border);
+    background: var(--wa-color-surface-lowered);
+  }
+
+  .dock-search {
+    flex: 0 0 auto;
+    padding: var(--wa-space-2xs) var(--wa-space-xs);
+    border-bottom: var(--border-thin) solid var(--color-border);
+  }
+
+  .dock run-tabs {
+    flex: 1;
+    min-height: 0;
+    padding: var(--wa-space-3xs) var(--wa-space-2xs);
+  }
+
+  @container (min-width: 720px) {
+    .shell.is-editor .shell-header {
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+    }
+    .shell.is-editor .header-dock {
+      display: flex;
+    }
+    .shell.is-editor .dock {
+      display: flex;
+    }
+    /* The dock cell names the paper and the docked list replaces the
+       drawer; New task and Settings stay at the main cell's end. */
+    .shell.is-editor .sessions-button,
+    .shell.is-editor .header-main-title,
+    .shell.is-editor session-drawer {
+      display: none;
+    }
+    .shell.is-editor .reading {
+      align-items: stretch;
+    }
+    .shell.is-editor .reading > .empty {
+      width: min(760px, 100%);
+      margin: 0 auto;
+    }
+  }
+
+  /* Empty state: hero, context disclosure, Active now, the expanded composer. */
+  .empty {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  /* Hero, context, and Active now stack at the top; the free space sits
+     below them and the composer alone is at the bottom. */
+  .hero-wrap {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+    gap: var(--wa-space-m);
+    padding: var(--wa-space-l) var(--wa-space-xs);
+  }
+
+  ${heroStyles}
+
+  .context::part(base) {
+    border-radius: var(--wa-border-radius-m);
+  }
+
+  .context-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--wa-space-2xs);
+    min-width: 0;
+    font-size: var(--font-size-sm);
+  }
+
+  .context-files {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-secondary);
+  }
+
+  .context-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--wa-space-xs);
+  }
+
+  .active-now {
+    flex: 0 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 var(--wa-space-2xs) var(--wa-space-3xs);
+  }
+
+  .active-label {
+    padding: 0 var(--wa-space-2xs) var(--wa-space-3xs);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--color-text-secondary);
+  }
+
+  .active-now run-tabs {
+    flex: 0 1 auto;
+    min-height: 0;
+  }
+
+  /* The five banners sit directly above the composer; the free
+     space is above them. */
+  .launch-banners {
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding: 0 var(--wa-space-xs);
+  }
+
+  .launch-composer {
+    flex: 0 0 auto;
+    padding: var(--wa-space-3xs) var(--wa-space-xs) var(--wa-space-xs);
+  }
+
+  wa-icon {
+    font-size: 1em;
+  }
+`;

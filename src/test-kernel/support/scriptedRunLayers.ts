@@ -6,23 +6,31 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { Effect, Layer, Schema, type Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  Schema,
+  type Scope,
+  SynchronizedRef,
+} from 'effect';
 
+import { RunFileService } from '@texra-ai/harness/plugins';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import { turnText } from '@agent/runtime/run/turnText';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { TraceEmitter } from '@agent/trace';
 import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
-import { registryOf } from '@agent/runtime/runRegistry';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionRoots } from '@platform/rootedFs';
+import { turnText } from '@shared/session/runFacts';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunCell } from '@shared/session/runHistory';
 import {
@@ -33,14 +41,10 @@ import {
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import { generateRunId } from '@shared/schemas';
 import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { testRunHandle } from '@test/support/runHandleFixtures';
-import { untrackRun } from '@test/support/sessionEnd';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { hostStores } from '@test/support/setupPlatform';
-import { generateRunId } from '@utils/core';
-import { RunFileService } from '@utils/files/runStorage';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 
@@ -75,12 +79,15 @@ function testBoundModel({
       capabilities: { supportsVision },
     }),
     backend: 'deepseek',
+    declinedRoutes: [],
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     forcedToolChoice: true,
-    persistentConnection: false,
-    billing: {},
+    billing: 'api-key',
+    maxOutputTokens: null,
+    background: false,
+    serviceTier: null,
     routes: routePolicies(['test-route'], 'test-model'),
     delivery: Effect.succeed('foreground'),
     automaticRetries: MODEL_RETRY_MAX_ATTEMPTS_SETTING.defaultValue,
@@ -93,7 +100,7 @@ type HttpContent = Extract<TurnResult, { kind: 'http' }>['content'];
 
 const httpTurn = (
   content: HttpContent,
-  finishReason: 'stop' | 'length' | 'context-window-exceeded' | 'tool-calls',
+  finishReason: 'stop' | 'length' | 'tool-calls',
   providerResponseId: string = randomUUID(),
 ): TurnResult => ({
   kind: 'http',
@@ -113,7 +120,7 @@ const textContent = (text: string): HttpContent =>
 /** A turn that ends with `text`. */
 export const textTurn = (
   text: string,
-  finishReason: 'stop' | 'length' | 'context-window-exceeded' = 'stop',
+  finishReason: 'stop' | 'length' = 'stop',
 ): TurnResult => httpTurn(textContent(text), finishReason);
 
 /** A turn that calls tools, after the text the model wrote alongside them. */
@@ -143,6 +150,8 @@ export const toolCallTurn = (
 export type ScriptedTurn =
   | TurnResult
   | { readonly compactTo: readonly HistoryMessage[]; readonly turn: TurnResult }
+  /** A compaction's own summary call answered with this text. */
+  | { readonly summary: string }
   | { readonly failWith: RetryErrorInfo }
   | { readonly cancelled: true };
 
@@ -171,16 +180,34 @@ function scriptedInvoker(
     Effect.gen(function* () {
       const run = yield* AgentRun;
       const aggregateId = qualifyAggregateId('run', run.runId);
+      // The next scripted item, whichever call takes it.
+      let cursor = 0;
       return {
-        call: () => Effect.die(new Error('No compaction in this scenario.')),
+        call: () =>
+          Effect.suspend(() => {
+            const scripted = script[cursor];
+            if (scripted === undefined || !('summary' in scripted))
+              return Effect.die(new Error('No compaction in this scenario.'));
+            cursor += 1;
+            return Effect.succeed({
+              turn: textTurn(scripted.summary),
+              usage: null,
+            });
+          }),
         invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
-            const scripted = script[seen.length];
+            const scripted = script[cursor];
+            cursor += 1;
             seen.push(request);
             if (scripted === undefined) {
               return yield* Effect.die(
                 new Error('The scenario ran out of model turns.'),
+              );
+            }
+            if ('summary' in scripted) {
+              return yield* Effect.die(
+                new Error('A summary was scripted where a turn was asked.'),
               );
             }
             if ('cancelled' in scripted) {
@@ -269,14 +296,17 @@ function scriptedInvoker(
 }
 
 /**
- * The run service a fixture stands on: the launch stores a real run carries,
+ * The run service a fixture stands on: the session a real run carries,
  * no step opened, no callbacks. `over` names what the case under test reads.
  */
 export function testAgentRun(
-  base: Pick<AgentRunShape, 'runId' | 'session' | 'logger' | 'model' | 'scope'>,
+  base: Pick<AgentRunShape, 'runId' | 'logger' | 'model' | 'scope'> & {
+    readonly session: Context.Context<SessionServices>;
+  },
   over: Partial<AgentRunShape> = {},
 ): AgentRunShape {
-  const { runId, session, logger, model } = base;
+  const { session, ...run } = base;
+  const { runId, logger, model } = run;
   return {
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'chat',
@@ -285,7 +315,6 @@ export function testAgentRun(
     }),
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
     parentStage: logger.openStage('Run: chat'),
-    stores: hostStores(),
     toolPolicy: {},
     opening: {
       inputs: {},
@@ -294,21 +323,21 @@ export function testAgentRun(
       attachedMemoryMisses: [],
     },
     entry: {
+      parent: null,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,
       initialUserMessage: 'Do the thing.',
     },
-    fileService: new RunFileService(runId, session.roots),
-    ...testRunTools(hostStores()),
+    fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
+    ...testRunTools(),
     finalToolName: null,
     swapModel: (next) =>
       SynchronizedRef.updateAndGetEffect(model, (current) =>
         Effect.scoped(next(current)),
       ),
-    declinedRoutes: [],
     callbacks: {},
-    ...base,
+    ...run,
     ...over,
   };
 }
@@ -316,7 +345,7 @@ export function testAgentRun(
 /** A scripted conversation run. */
 export interface ScriptedRunInit {
   readonly runId: RunId;
-  readonly session: SessionHandle;
+  readonly session: Context.Context<SessionServices>;
   readonly tools?: Record<string, ITool>;
   readonly logger?: TraceEmitter;
   readonly bound?: TestBinding;
@@ -329,10 +358,10 @@ export interface ScriptedRunInit {
   readonly mediaFiles?: readonly string[];
   /** Absent means the launch had no transcript row to write. */
   readonly initialUserMessage?: string | undefined;
-  readonly onIdle?: () => void;
 }
 
 export function agentRunTestLayer(init: ScriptedRunInit) {
+  // The run's session services, which the loop reads from its fiber.
   return Layer.effect(
     AgentRun,
     Effect.gen(function* () {
@@ -340,15 +369,6 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
       const logger = init.logger ?? new TraceEmitter();
       const scope: Scope.Scope = yield* Effect.scope;
       const tools = init.tools ?? {};
-      const handle = testRunHandle({
-        runId: init.runId,
-        agent: 'chat',
-        parent: init.parentRunId ?? null,
-      });
-      registryOf(init.session.runs).track(handle);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
-      );
       return testAgentRun(
         { runId: init.runId, session: init.session, logger, model, scope },
         {
@@ -362,28 +382,31 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             tools: Object.keys(tools).map((name) => ({ name })),
           }),
           toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-          ...testRunTools(hostStores(), tools),
+          ...testRunTools(tools),
           finalToolName: init.finalToolName ?? null,
-          callbacks: init.onIdle ? { onIdle: init.onIdle } : {},
-          ...('initialUserMessage' in init
-            ? {
-                entry: {
-                  registration: null,
-                  opening: Effect.succeed([]),
-                  entered: () => Effect.void,
-                  initialUserMessage: init.initialUserMessage,
-                },
-              }
-            : {}),
+          callbacks: {},
+          entry: {
+            parent: init.parentRunId ?? null,
+            registration: null,
+            opening: Effect.succeed([]),
+            entered: () => Effect.void,
+            initialUserMessage:
+              'initialUserMessage' in init
+                ? init.initialUserMessage
+                : 'Do the thing.',
+          },
         },
       );
     }),
-  );
+  ).pipe(Layer.provideMerge(Layer.succeedContext(init.session)));
 }
 
 /** A run id whose start is already on the session's log; with
  *  `parentRunId`, a child of that run, whose start goes first. */
-export function startedRun(session: SessionHandle, parentRunId?: RunId): RunId {
+export function startedRun(
+  session: Context.Context<SessionServices>,
+  parentRunId?: RunId,
+): RunId {
   const runId = generateRunId();
   if (parentRunId !== undefined) publishTestRunStart(session, parentRunId);
   publishTestRunStart(session, runId, { parent: parentRunId ?? null });

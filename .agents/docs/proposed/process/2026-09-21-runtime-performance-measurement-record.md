@@ -1,6 +1,6 @@
 ---
 created: 2026-09-21
-status: proposed
+status: parked (2026-10-30: no reading taken; #12076 carries the three readings, and #13736 requires them for release only if the accepted contract does)
 ---
 
 # Runtime performance measurement record
@@ -16,8 +16,9 @@ Every other runtime criterion once proposed is struck and not re-listed
 here: live idle memory, replay memory, two-project operation, bytes written
 versus retained file size, and missed event-loop deadlines.
 
-Still open as of 2026-10-22: no reading has been taken, no measurement
-harness exists on `main`, and nothing schedules one. The procedures below
+Still open as of 2026-10-30: no reading has been taken, no measurement
+harness exists on `main`, production code has no `Metric` use, and nothing
+schedules a reading. #12076 (open) owns taking them. The procedures below
 were written against the 2026-09-21 tree; the code paths they cite are
 updated to today's.
 
@@ -38,7 +39,7 @@ record entry.
 | Node     | v26.9.0                                                               | `node --version`                                                                             |
 | Revision | `origin/main` `6eb322f83e75b81602a7f4fdcfede2d329af29f9` (2026-09-21) | `git rev-parse origin/main`                                                                  |
 
-The revision is the baseline every procedure below pins. There is no
+The procedures below were first written against this revision; each reading records the revision and build it is actually taken on. There is no
 measurement harness on it: `scripts/measure-runtime-baseline.mjs` is absent
 (`ls scripts/`), matching the issue's note that the #12068/#12502 harness was
 never merged.
@@ -84,7 +85,7 @@ never merged.
   stopped while that work is in flight. The controlled work must be
   abort-aware: the shipped stop contract interrupts the run and propagates
   cancellation into the in-flight model and tool work
-  (`packages/harness/src/agent/runtime/AgentLaunchContext.ts`), and the
+  (`packages/harness/src/agent/runtime/runRegistry.ts`), and the
   fixture must let that happen. The 100 ms figures size the work; they are not a floor the
   stop waits out. A fixture that runs to its full configured duration after
   the stop would measure an artificial mandatory wait and would not detect
@@ -131,7 +132,7 @@ never merged.
   contention, and no commit exceeds a **1,000 ms** deadline. A p95 above
   50 ms fails.
 - **Reading.** NOT TAKEN — needs two real processes over a shared store,
-  which is a headless harness that is not on `main`.
+  which exists on `main` only as a correctness test (`shares one store with another OS process` in `src/test-kernel/controllers/session/sessionEvents.vitest.ts`); the timing harness built from it is not on `main`.
 
 ## Status of the record
 

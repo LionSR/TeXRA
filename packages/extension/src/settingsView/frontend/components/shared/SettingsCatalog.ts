@@ -1,13 +1,14 @@
 /** Shared browsing and selection for agents, skills, and plugins. Domain
  * actions and details remain with each page; search, rows, and keyboard
  * navigation have one implementation. */
-import '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
 import { LitElement, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { commonViewStyles, designTokens } from '@ui/styles';
+import { readSelectValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { settingsCatalogStyles } from './SettingsCatalog.styles';
 
@@ -79,7 +80,11 @@ export class SettingsCatalog extends LitElement {
   }
 
   private navigate(event: KeyboardEvent): void {
-    if (!(event.target as HTMLElement).closest('.catalog-row-select')) return;
+    if (
+      !(event.target instanceof Element) ||
+      !event.target.closest('.catalog-row-select')
+    )
+      return;
     const items = this.visibleItems;
     const index = items.findIndex((item) => item.key === this.activeKey);
     let next: number;
@@ -123,7 +128,8 @@ export class SettingsCatalog extends LitElement {
           with-clear
           .value=${this.query}
           @input=${(event: Event) => {
-            this.query = (event.target as HTMLInputElement).value;
+            if (event.currentTarget instanceof WaInput)
+              this.query = event.currentTarget.value ?? '';
           }}
           >${waIcon('magnifying-glass', { slot: 'start' })}</wa-input
         >
@@ -132,7 +138,7 @@ export class SettingsCatalog extends LitElement {
           size="s"
           .value=${this.group}
           @change=${(event: Event) => {
-            this.group = (event.target as HTMLSelectElement).value;
+            this.group = readSelectValue(event);
           }}
         >
           <wa-option value="all">All sources</wa-option>

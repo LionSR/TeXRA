@@ -22,7 +22,8 @@
 import { Duration, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
 import { ChildProcess, type ChildProcessSpawner } from 'effect/process';
 
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
@@ -30,10 +31,11 @@ import {
 import type { McpServerConfig } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import type { ToolResult } from '@shared/schemas';
+import { MCP_TOOL_PREFIX } from '@shared/tools/toolDisplayName';
 import { makeJsonRpcConnection, type JsonRpcConnection } from '@tools/jsonRpc';
 import { errorResult, executed } from '@tools/core/result';
 import { environment, ProjectEnvironment } from '@utils/system/nodeWorkspace';
-import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -42,9 +44,10 @@ import type { LoadedPluginTools } from './mcpConfig';
 
 const CHANNEL = 'mcp';
 
-/** Every MCP tool's name starts with this, then `<server>__<tool>`. */
-const MCP_TOOL_PREFIX = 'mcp__';
-/** The protocol revision the harness speaks; a server answers its own. */
+/** The protocol revision the harness asks for. A server that does not speak
+ *  it answers with its own, which is accepted: effect/ai's McpClient fails
+ *  any answer but the revision it asked for, so a server on an older one
+ *  would start with no tools. */
 const PROTOCOL_VERSION = '2025-06-18';
 const START_TIMEOUT = Duration.seconds(30);
 const CALL_TIMEOUT = Duration.seconds(60);
@@ -106,19 +109,6 @@ const CallToolResultSchema = Schema.Struct({
 /** A call's arguments: the JSON object the server's schema describes. */
 const McpArgumentsSchema = Schema.Record(Schema.String, Schema.Unknown);
 
-/** The plugin id of the server named `server`. */
-export const mcpPluginId = (server: string): string => `mcp:${server}`;
-
-/** The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
- *  `undefined` for any other tool name. */
-export function mcpServerOfToolName(name: string): string | undefined {
-  if (!name.startsWith(MCP_TOOL_PREFIX)) return undefined;
-  const separator = name.indexOf('__', MCP_TOOL_PREFIX.length);
-  return separator > MCP_TOOL_PREFIX.length
-    ? name.slice(MCP_TOOL_PREFIX.length, separator)
-    : undefined;
-}
-
 /**
  * The model-facing name of one server tool: `mcp__<server>__<tool>` when
  * that is already a valid function name, else the name with invalid
@@ -138,21 +128,20 @@ const isPathName = (n: string) => (IS_WINDOWS ? n.toUpperCase() : n) === 'PATH';
 /** The process's environment with the project's `.env` over it, minus
  *  credential-shaped names, plus the entry's, on the extended process PATH
  *  its command is pinned on (`externalFiles`), so the pinned binary runs. */
-const serverEnv = (config: McpServerConfig) =>
-  Effect.gen(function* () {
-    const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
-    for (const [name, value] of Object.entries(yield* environment)) {
-      if (value === undefined || SENSITIVE_ENV_NAME.test(name)) continue;
-      if (!isPathName(name)) env[name] = value;
-      else if (Object.hasOwn(yield* ProjectEnvironment, name))
-        yield* Effect.logWarning(
-          `MCP server "${config.name}" ignores the project's .env ${name}: its command is pinned on the extended process PATH.`,
-        ).pipe(withLogChannel(CHANNEL));
-    }
-    for (const [name, value] of Object.entries(config.env))
-      env[isPathName(name) ? 'PATH' : name] = value;
-    return { ...env, PATH: withExtendedPath({ PATH: env.PATH }).PATH };
-  });
+const serverEnv = Effect.fn('serverEnv')(function* (config: McpServerConfig) {
+  const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
+  for (const [name, value] of Object.entries(yield* environment)) {
+    if (value === undefined || SENSITIVE_ENV_NAME.test(name)) continue;
+    if (!isPathName(name)) env[name] = value;
+    else if (Object.hasOwn(yield* ProjectEnvironment, name))
+      yield* Effect.logWarning(
+        `MCP server "${config.name}" ignores the project's .env ${name}: its command is pinned on the extended process PATH.`,
+      ).pipe(withLogChannel(CHANNEL));
+  }
+  for (const [name, value] of Object.entries(config.env))
+    env[isPathName(name) ? 'PATH' : name] = value;
+  return yield* withCommandDirs(env);
+});
 
 const decode = <T>(
   schema: Schema.Codec<T>,
@@ -193,7 +182,7 @@ function mcpTool(
   server: string,
   rpc: JsonRpcConnection,
   listed: (typeof ListToolsResultSchema.Type)['tools'][number],
-): RuntimeTool {
+): ITool<Error, PluginToolServices> {
   const name = mcpToolName(server, listed.name);
   const describe = (input: unknown) =>
     `mcp ${server} ${listed.name} ${JSON.stringify(input)}`;
@@ -207,7 +196,6 @@ function mcpTool(
       // `type`, and a tool's arguments are always an object.
       parameters: { ...listed.inputSchema, type: 'object' },
     },
-    requiresApproval: true,
     slow: true,
     // A server tool re-runs after an interruption only when its server calls
     // it read-only or idempotent: a repeat changes nothing either way.
@@ -219,8 +207,10 @@ function mcpTool(
     // The call as the approval prompt shows it; the loop asks the session's
     // one approval authority before the body runs.
     guard: {
-      bash: (input: unknown) => Effect.succeed(describe(input)),
-      cwd: 'unknown',
+      command: {
+        text: describe,
+        cwd: 'unknown',
+      },
     },
     call: (rawInput) => {
       if (!Schema.is(McpArgumentsSchema)(rawInput))
@@ -274,127 +264,130 @@ const stopProcess = (handle: ChildProcessSpawner.ChildProcessHandle) =>
   );
 
 /** Spawn, initialize and list, in the caller's scope. */
-const connect = (config: McpServerConfig) =>
-  Effect.gen(function* () {
-    const handle = yield* ChildProcess.make(config.command, [...config.args], {
-      env: yield* serverEnv(config),
-      extendEnv: false,
-      ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
-    }).pipe(
-      Effect.mapError(
-        (error) =>
-          new McpStartError({
-            message: `Failed to spawn ${config.command}: ${toErrorMessage(error.reason.cause ?? error)}`,
-          }),
+const connect = Effect.fn('connect')(function* (config: McpServerConfig) {
+  const handle = yield* ChildProcess.make(config.command, [...config.args], {
+    env: yield* serverEnv(config),
+    extendEnv: false,
+    ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
+  }).pipe(
+    Effect.mapError(
+      (error) =>
+        new McpStartError({
+          message: `Failed to spawn ${config.command}: ${toErrorMessage(error.reason.cause ?? error)}`,
+        }),
+    ),
+  );
+  yield* Effect.addFinalizer(() => stopProcess(handle));
+
+  let stderrTail = '';
+  const stderrDrained = yield* Effect.forkScoped(
+    handle.stderr.pipe(
+      Stream.decodeText(),
+      Stream.runForEach((chunk) =>
+        Effect.sync(() => {
+          stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
+        }),
       ),
-    );
-    yield* Effect.addFinalizer(() => stopProcess(handle));
+      Effect.ignore,
+    ),
+  );
 
-    let stderrTail = '';
-    const stderrDrained = yield* Effect.forkScoped(
-      handle.stderr.pipe(
-        Stream.decodeText(),
-        Stream.runForEach((chunk) =>
-          Effect.sync(() => {
-            stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_LIMIT);
-          }),
-        ),
-        Effect.ignore,
+  const rpc = yield* makeJsonRpcConnection({
+    input: handle.stdout,
+    output: handle.stdin,
+    framing: 'newline',
+    onNotification: (method) =>
+      Effect.logDebug(`[${config.name}] ${method}`).pipe(
+        withLogChannel(CHANNEL),
       ),
-    );
-
-    const rpc = yield* makeJsonRpcConnection({
-      input: handle.stdout,
-      output: handle.stdin,
-      framing: 'newline',
-      onNotification: (method) =>
-        Effect.logDebug(`[${config.name}] ${method}`).pipe(
-          withLogChannel(CHANNEL),
-        ),
-      onRequest: (method) =>
-        method === 'ping' ? Effect.succeed({}) : undefined,
-    });
-    // Once its output is read ('exit' can precede it), fail what waits on
-    // the process with its exit code. Its stderr (which may hold credentials)
-    // goes to the process log only, never into tool results.
-    yield* Effect.forkScoped(
-      Effect.gen(function* () {
-        const exit = yield* Effect.result(handle.exitCode);
-        yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
-          concurrency: 'unbounded',
-        }).pipe(Effect.timeoutOption(STOP_TIMEOUT));
-        const tail = stderrTail.trim();
-        const code = exit._tag === 'Success' ? exit.success : 'unknown';
-        if (tail)
-          yield* Effect.logWarning(
-            `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,
-          ).pipe(withLogChannel(CHANNEL));
-        yield* rpc.close(
-          `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the log (${CHANNEL})` : ''}`,
-        );
-      }),
-    );
-
-    const failed = (error: { readonly message: string }) =>
-      new McpStartError({ message: error.message });
-    const initialized = yield* rpc
-      .request('initialize', {
-        protocolVersion: PROTOCOL_VERSION,
-        capabilities: {},
-        clientInfo: { name: 'texra', version: '1' },
-      })
-      .pipe(Effect.mapError(failed));
-    yield* decode(InitializeResultSchema, initialized, 'initialize');
-    yield* rpc.notify('notifications/initialized');
-
-    const tools = new Map<string, RuntimeTool>();
-    let cursor: string | undefined;
-    do {
-      const page = yield* decode(
-        ListToolsResultSchema,
-        yield* rpc
-          .request('tools/list', cursor === undefined ? {} : { cursor })
-          .pipe(Effect.mapError(failed)),
-        'tools/list',
-      );
-      for (const listed of page.tools) {
-        const tool = mcpTool(config.name, rpc, listed);
-        tools.set(tool.definition.name, tool);
-      }
-      cursor = page.nextCursor ?? undefined;
-    } while (cursor !== undefined);
-    return tools;
+    onRequest: (method) => (method === 'ping' ? Effect.succeed({}) : undefined),
+    // A stopped run or a timed-out call stops the server's work too. The
+    // protocol forbids cancelling `initialize`.
+    cancel: (id, method) =>
+      method === 'initialize'
+        ? undefined
+        : ['notifications/cancelled', { requestId: id }],
   });
+  // Once its output is read ('exit' can precede it), fail what waits on
+  // the process with its exit code. Its stderr (which may hold credentials)
+  // goes to the process log only, never into tool results.
+  yield* Effect.forkScoped(
+    Effect.gen(function* () {
+      const exit = yield* Effect.result(handle.exitCode);
+      yield* Effect.all([rpc.inputEnded, Fiber.await(stderrDrained)], {
+        concurrency: 'unbounded',
+      }).pipe(Effect.timeoutOption(STOP_TIMEOUT));
+      const tail = stderrTail.trim();
+      const code = exit._tag === 'Success' ? exit.success : 'unknown';
+      if (tail)
+        yield* Effect.logWarning(
+          `MCP server "${config.name}" exited (code ${code}); its stderr:\n${tail}`,
+        ).pipe(withLogChannel(CHANNEL));
+      yield* rpc.close(
+        `MCP server "${config.name}" exited (code ${code})${tail ? `; its stderr is in the log (${CHANNEL})` : ''}`,
+      );
+    }),
+  );
+
+  const failed = (error: { readonly message: string }) =>
+    new McpStartError({ message: error.message });
+  const initialized = yield* rpc
+    .request('initialize', {
+      protocolVersion: PROTOCOL_VERSION,
+      capabilities: {},
+      clientInfo: { name: 'texra', version: '1' },
+    })
+    .pipe(Effect.mapError(failed));
+  yield* decode(InitializeResultSchema, initialized, 'initialize');
+  yield* rpc.notify('notifications/initialized');
+
+  const tools = new Map<string, ITool<Error, PluginToolServices>>();
+  let cursor: string | undefined;
+  do {
+    const page = yield* decode(
+      ListToolsResultSchema,
+      yield* rpc
+        .request('tools/list', cursor === undefined ? {} : { cursor })
+        .pipe(Effect.mapError(failed)),
+      'tools/list',
+    );
+    for (const listed of page.tools) {
+      const tool = mcpTool(config.name, rpc, listed);
+      tools.set(tool.definition.name, tool);
+    }
+    cursor = page.nextCursor ?? undefined;
+  } while (cursor !== undefined);
+  return tools;
+});
 
 /**
  * Bring `config`'s server up in the caller's scope, answering its tools, or
  * its failure (with the process already stopped) and none.
  */
-export const acquireMcpServer = (
+export const acquireMcpServer = Effect.fn('acquireMcpServer')(function* (
   config: McpServerConfig,
-): Effect.Effect<
+): Effect.fn.Return<
   LoadedPluginTools,
   never,
   Scope.Scope | ChildProcessSpawner.ChildProcessSpawner
-> =>
-  Effect.gen(function* () {
-    const scope = yield* Scope.fork(yield* Effect.scope, 'sequential');
-    const result = yield* connect(config).pipe(
-      Effect.timeoutOrElse({
-        duration: START_TIMEOUT,
-        orElse: () =>
-          Effect.fail(
-            new McpStartError({
-              message: `No answer within ${Duration.toSeconds(START_TIMEOUT)}s`,
-            }),
-          ),
-      }),
-      Scope.provide(scope),
-      Effect.result,
-    );
-    if (result._tag === 'Success') return { tools: result.success };
-    yield* Scope.close(scope, Exit.void);
-    const failure = `MCP server "${config.name}" did not start: ${result.failure.message}`;
-    yield* Effect.logWarning(failure).pipe(withLogChannel(CHANNEL));
-    return { tools: new Map(), failure };
-  });
+> {
+  const scope = yield* Scope.fork(yield* Effect.scope, 'sequential');
+  const result = yield* connect(config).pipe(
+    Effect.timeoutOrElse({
+      duration: START_TIMEOUT,
+      orElse: () =>
+        Effect.fail(
+          new McpStartError({
+            message: `No answer within ${Duration.toSeconds(START_TIMEOUT)}s`,
+          }),
+        ),
+    }),
+    Scope.provide(scope),
+    Effect.result,
+  );
+  if (result._tag === 'Success') return { tools: result.success };
+  yield* Scope.close(scope, Exit.void);
+  const failure = `MCP server "${config.name}" did not start: ${result.failure.message}`;
+  yield* Effect.logWarning(failure).pipe(withLogChannel(CHANNEL));
+  return { tools: new Map(), failure };
+});

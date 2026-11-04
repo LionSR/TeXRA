@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 
 // Local imports
 import { ExternalOpenFailed, type ExternalOpener } from '@texra/hosts/uiHosts';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 /**
  * VS Code's browser hand-off behind the host-neutral {@link ExternalOpener}.
@@ -47,7 +48,5 @@ export class VscodeExternalOpener implements ExternalOpener {
 export function openGuidePage(
   page: string,
 ): Effect.Effect<void, ExternalOpenFailed> {
-  return new VscodeExternalOpener().openExternal(
-    `https://texra.ai/guide/${page}.html`,
-  );
+  return new VscodeExternalOpener().openExternal(texraGuideUrl(page));
 }

@@ -84,13 +84,14 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   documents: DocumentAccess,
   callIds: string[],
 ) {
+  const namespace = toolNamespaceOf(config);
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
   for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
       for (const result of message.results) {
-        // A settlement that carries only text keeps the plain string output
+        // A result that carries only text keeps the plain string output
         // the API has always taken. Attachments keep `result.content` order
         // so a label still sits next to the file it names.
         let output: string | OpenAI.Responses.ResponseInputContent[];
@@ -223,6 +224,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             type: 'function_call',
             call_id: part.providerCallId,
             name: part.name,
+            ...(namespace === null ? {} : { namespace }),
             arguments: part.argumentsText,
             ...(part.evidence?.itemId !== undefined
               ? { id: part.evidence.itemId }
@@ -255,6 +257,11 @@ const checkToolChoice = (
         }),
       );
 };
+
+/** The namespace function tools must sit in, or null: a ChatGPT plan's alone. */
+export const toolNamespaceOf = (
+  config: OpenAIResponsesConfiguration,
+): string | null => (config.requestDialect === 'chatgpt' ? 'texra' : null);
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
@@ -296,7 +303,6 @@ export const withResponsesContinuation = Effect.fn(
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
-    !config.supportsStorage ||
     !turn.controls.store ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
   )

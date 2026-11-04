@@ -14,6 +14,7 @@ import {
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
+import type { Shell } from '@desktop/renderer/shell';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import {
   emptySessionView,
@@ -31,7 +32,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
-import type { Shell } from '@texra/shared/session/shell';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { RunView } from '@texra-ai/harness/schemas';
 
@@ -135,6 +135,7 @@ const sidebarCallbacks = {
   onNewTask: noop,
   onOpenCommands: noop,
   onOpenFolder: noop,
+  onOpenRecent: noop,
   onSelectProject: noop,
   onProjectAction: noop,
   onOpenSettings: noop,
@@ -145,6 +146,7 @@ const rail = (projects: readonly RailProject[], shell: Shell) =>
   shellSidebarTemplate(
     {
       projects,
+      recent: [],
       shell,
       commandsLabel: 'Commands',
       commandsTitle: 'Commands - ⌘K',
@@ -201,7 +203,11 @@ const conversationPane = (
  *  (label, ancestors path, status) over its transcript. */
 const transcriptBody = (project: RailProject, run: RunView) =>
   html`<run-header .run=${run} .view=${project.view}></run-header>
-    <log-list .run=${run} .surface=${project.surface}></log-list>`;
+    <log-list
+      .run=${run}
+      .surface=${project.surface}
+      .tools=${{ icons: {}, terminalOutput: [] }}
+    ></log-list>`;
 
 const pdfPane = createPdfPane();
 const tab = (

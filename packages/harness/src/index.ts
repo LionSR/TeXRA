@@ -17,6 +17,10 @@
  * 4. `session.resume(runId)` continues a run a persistent session stored.
  * 5. `session.attach({ approve })` answers the approvals a run asks for.
  *
+ * Model requests go through the harness's own HTTP transport. To answer them
+ * yourself (a scripted model in a test), merge {@link ModelFetch} beneath
+ * `Sessions.layer` with `Layer.provideMerge`.
+ *
  * The surface is Effect: nothing here calls `Effect.runPromise`; your
  * program runs it at its own entry point. Every failure is a tagged error
  * listed below.
@@ -38,9 +42,13 @@
 
 // Building the process and opening sessions.
 export { Sessions } from './effect/processLayer.js';
-export type { AgentPlatform, Composition } from './effect/sessions.js';
+export type { AgentPlatform } from '@platform/agentPlatform';
+export type { Composition } from './effect/sessions.js';
 export type { Plugin } from '@tools/plugins';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
+// The fetch model requests go through, merged beneath `Sessions.layer`:
+// a fake model for a test, or the harness's own transport when absent.
+export { ModelFetch } from '@platform/defaults/longRunningModelTransport';
 export type {
   ApprovalHandler,
   LocalSession,
@@ -51,11 +59,25 @@ export type {
   SessionHost,
   StartInput,
 } from './effect/sessions.js';
+// What a session's methods take and hand out: a run's id
+// (`session.resume`), a commit position and a display event (`view`), a
+// stored conversation's nodes (`records(runId).readConversation()`), a
+// request (`session.request`), and the request an `ApprovalHandler` is
+// asked with and the decision it answers.
+export type { ExportNode } from '@agent/export/schemas';
+export type {
+  CommitOrdinal,
+  DisplaySessionEvent,
+  RequestDecision,
+  RunId,
+} from '@shared/schemas';
+export type { RuntimeRequest } from '@shared/session/runtimeRequest';
+export type { PendingRequest } from '@shared/session/readonlyViews';
 
 // What a run reports while it runs, and how it ended.
-export type { AgentEvent, StreamChunkEvent } from '@agent/trace';
+export type { AgentEvent, StreamChunkEvent } from '@shared/session/agentEvent';
 export { responseText } from '@agent/trace/TraceEmitter';
-export type { RunEnd } from '@shared/schemas';
+export type { RunEnd, RunStopReason } from '@shared/schemas';
 
 // A session's stored runs: their listing, records, and deletion.
 export type {
@@ -70,6 +92,9 @@ export type { AgentRunListingEntry } from '@agent/storage/runListing';
 export { defineTool, type DefinedTool } from '@tools/core/definition';
 export type { ITool } from '@agent/core/tools/ToolTypes';
 export type { ToolResult } from '@shared/schemas';
+// The tables `executions` `query` reads (a script's SQL over its session's
+// runs and calls) and their columns.
+export { HISTORY_TABLES } from '@agent/runtime/historyQuery/views';
 
 // Why starting, resuming or opening fails.
 export {
@@ -77,7 +102,6 @@ export {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
 export { AgentNotFound } from '@agent/index/agentCatalog';
@@ -91,6 +115,7 @@ export type { SessionOpenError } from '@shared/session/database';
 // What `session.request` answers, and why it refuses.
 export {
   Cancelled,
+  Conflict,
   HostRequestFailure,
   Internal,
   isRequestRefusal,
@@ -100,4 +125,8 @@ export {
   type RequestError,
   type RequestRefusal,
 } from '@shared/session/runtimeRequest';
-export type { Outcome, RunStopReason } from '@shared/session/runtimeRequest';
+export {
+  isOutcomeOf,
+  type Outcome,
+  type OutcomeOf,
+} from '@shared/session/runtimeRequest';

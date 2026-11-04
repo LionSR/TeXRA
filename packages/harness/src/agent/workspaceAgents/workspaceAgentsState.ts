@@ -12,23 +12,21 @@
 import { Effect, Result, Schema } from 'effect';
 
 import {
+  Settings,
   StateReadFailed,
   type StateStore,
   type StateWriteFailed,
-} from '@platform/interfaces';
+} from '@shared/config/settings';
 import {
   AGENT_SOURCE,
-  type AgentModePreset,
   agentKeyOf,
   agentMatchesIdentifier,
-  type WorkspaceAgentsSelection,
   WorkspaceAgentsSelectionSchema,
   type AgentSource,
   HiddenCustomAgentKeysSchema,
   INHERITED_WORKSPACE_AGENTS,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { Settings } from '@shared/config/settings';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
 /**
@@ -184,17 +182,6 @@ export function forgetHiddenAgent(
       }),
     ),
   );
-}
-
-/** The identifiers a selection lists; `undefined` means every agent. */
-export function selectedIdentifiers(
-  selection: Exclude<WorkspaceAgentsSelection, { readonly kind: 'inherit' }>,
-  presets: readonly AgentModePreset[],
-): readonly string[] | undefined {
-  if (selection.kind === 'all') return undefined;
-  if (selection.kind === 'custom') return selection.agentKeys;
-  const preset = presets.find((candidate) => candidate.id === selection.teamId);
-  return preset?.agents;
 }
 
 /** `entries` less the custom agents the user hid. */

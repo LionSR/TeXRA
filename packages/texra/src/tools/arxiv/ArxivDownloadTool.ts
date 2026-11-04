@@ -15,7 +15,11 @@ import {
   getGitignoreMatcher,
   formatToolOutput,
 } from '@texra-ai/harness/plugins';
-import { ArxivProcessor, type ArxivSourceError } from '@latex/arxivProcessor';
+import {
+  downloadArxivSource,
+  validateArxivId,
+  type ArxivSourceError,
+} from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
 
 const NO_ENTRIES_MESSAGE = '(no entries)';
@@ -80,12 +84,12 @@ const download = Effect.fn('ArxivDownloadTool.execute')(function* (
   const call = yield* ToolContext;
   const workspaceRoot = (yield* WorkspaceFs).root ?? '';
   const arxivId = input.id.trim();
-  const validationError = ArxivProcessor.validateId(arxivId);
+  const validationError = validateArxivId(arxivId);
   if (validationError) {
     return yield* Effect.fail(new ToolError(validationError));
   }
 
-  const downloadResult = yield* ArxivProcessor.downloadSource(arxivId, {
+  const downloadResult = yield* downloadArxivSource(arxivId, {
     workspaceRoot,
     formatter: input.autoIndent
       ? yield* resolveLatexFormatter(call.env.roots)

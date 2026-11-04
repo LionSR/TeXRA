@@ -25,8 +25,11 @@ export interface OAuthFormEndpoint<
   TTokens extends SubscriptionTokenResponse = SubscriptionTokenResponse,
 > {
   readonly tokenUrl: string;
+  /** The client a grant names when the session carries none of its own. */
   readonly clientId: string;
   readonly tokenResponseSchema: Schema.Codec<TTokens, unknown>;
+  /** Form fields every grant sends, such as an RFC 8707 `resource`. */
+  readonly params?: Readonly<Record<string, string>>;
 }
 
 /** One token grant: form POST, ok-status check, schema parse. */
@@ -51,13 +54,15 @@ export const exchangeAuthorizationCode = Effect.fn(
     code: string;
     verifier: string;
     redirectUri: string;
+    clientId: string;
   },
 ) {
   return yield* tokenGrant(
     endpoint,
     new URLSearchParams({
+      ...endpoint.params,
       grant_type: 'authorization_code',
-      client_id: endpoint.clientId,
+      client_id: params.clientId,
       code: params.code,
       code_verifier: params.verifier,
       redirect_uri: params.redirectUri,
@@ -72,12 +77,14 @@ export const refreshOAuthTokens = Effect.fn(
 )(function* <TTokens extends SubscriptionTokenResponse>(
   endpoint: OAuthFormEndpoint<TTokens>,
   refreshToken: string,
+  clientId: string,
 ) {
   return yield* tokenGrant(
     endpoint,
     new URLSearchParams({
+      ...endpoint.params,
       grant_type: 'refresh_token',
-      client_id: endpoint.clientId,
+      client_id: clientId,
       refresh_token: refreshToken,
     }),
     'Token refresh',

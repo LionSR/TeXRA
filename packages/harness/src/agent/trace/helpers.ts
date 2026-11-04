@@ -30,8 +30,8 @@ import {
   type MediaAttachmentKind,
   type ProviderError,
   type ScriptDeliverySummary,
+  type StoredMedia,
 } from '@shared/schemas';
-import { generateShortId } from '@utils/core';
 
 import type { AgentTrace } from './AgentTrace';
 
@@ -87,9 +87,8 @@ function logErrorData(
 
 /**
  * Emit a user-visible progress/status note. A status note is its message
- * alone and takes no payload: the transcript stringifies a `progressStatus`
- * row's `data` verbatim into its detail, and an arbitrary payload (a request,
- * headers, config) could write a secret there.
+ * alone and takes no payload: its row's schema refuses one, so an arbitrary
+ * payload (a request, headers, config) cannot reach the transcript there.
  */
 export function logProgressStatus(trace: AgentTrace, message: string): void {
   trace.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
@@ -115,7 +114,7 @@ export interface CompactionActivityOperation {
 export function startCompactionActivity(
   trace: AgentTrace,
 ): CompactionActivityOperation {
-  const operationId = `compaction-${generateShortId()}`;
+  const operationId = `compaction-${crypto.randomUUID()}`;
   let finished = false;
   const emit = (state: CompactionActivityData['state']): void => {
     trace.info(COMPACTION_ACTIVITY_LOG_TEXT[state], {
@@ -143,7 +142,7 @@ export function startCompactionActivity(
  * `attachments` records each attached media file's kind (not bytes) so the
  * archived conversation can render `[image attachment]` / `[document
  * attachment]` markers for media that only ever reached the provider
- * message, and `mediaFiles` the files a follow-up attached, which
+ * message, and `media` what a follow-up attached, by address, which
  * "Fork from here" carries into the fork's composer. `scriptSummary` carries
  * a workflow delivery's typed presentation facts beside the row text
  * (`UserMessagePayloadSchema`), so renderers never re-parse them out of the
@@ -154,17 +153,17 @@ export function logUserMessage(
   message: string,
   {
     attachments,
-    mediaFiles,
+    media,
     scriptSummary,
   }: {
     readonly attachments?: readonly MediaAttachmentKind[];
-    readonly mediaFiles?: readonly string[] | null;
+    readonly media?: readonly StoredMedia[];
     readonly scriptSummary?: ScriptDeliverySummary;
   } = {},
 ): void {
   const data = {
     ...(attachments?.length ? { attachments } : {}),
-    ...(mediaFiles?.length ? { mediaFiles } : {}),
+    ...(media?.length ? { media } : {}),
     ...(scriptSummary ? { scriptSummary } : {}),
   };
   trace.info(message, {

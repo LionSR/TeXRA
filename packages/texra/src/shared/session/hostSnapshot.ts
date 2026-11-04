@@ -9,11 +9,13 @@
 import { Schema, Struct } from 'effect';
 import {
   getBasename,
-  ModelOptionDataSchema,
-  TeamOptionDataSchema,
   ApprovalPolicySchema,
   APPROVAL_POLICY_DEFAULT,
 } from '@texra-ai/harness/schemas';
+import {
+  ModelOptionDataSchema,
+  TeamOptionDataSchema,
+} from '@texra/shared/pickerOptions';
 
 import { DocumentAgentOptionSchema } from '@texra/shared/plugins/documents';
 
@@ -37,7 +39,6 @@ const AgentConfigBannerDataSchema = Schema.Struct({
  * choose-one fact so no renderer has to decode it from an id.
  */
 const MissingToolSchema = Schema.Struct({
-  id: Schema.String,
   label: Schema.String,
   interchangeable: Schema.Boolean,
   /** What TeXRA can't do without it, completing "TeXRA can't …". */
@@ -91,6 +92,13 @@ export const HostSnapshotSchema = Schema.Struct({
   agentOptions: Schema.Array(DocumentAgentOptionSchema),
   modelOptions: Schema.Array(ModelOptionDataSchema),
   teamOptions: Schema.Array(TeamOptionDataSchema),
+  /** How a tool call is painted, from what the process's plugins declare
+   *  (`TexraPlugin`): its icon by normalized tool name, and the tools whose
+   *  output reads as a terminal session. */
+  tools: Schema.Struct({
+    icons: Schema.Record(Schema.String, Schema.String),
+    terminalOutput: Schema.Array(Schema.String),
+  }),
   workspaceRoots: Schema.Array(WorkspaceRootOptionDataSchema),
   /** The project's configured policy, shown before a task is launched. */
   approvalPolicy: ApprovalPolicySchema,
@@ -123,6 +131,7 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
     agentOptions: [],
     modelOptions: [],
     teamOptions: [],
+    tools: { icons: {}, terminalOutput: [] },
     workspaceRoots: [],
     approvalPolicy: APPROVAL_POLICY_DEFAULT,
     fileOptions: { baseFile: [], editedFile: [], commit: ['HEAD'] },

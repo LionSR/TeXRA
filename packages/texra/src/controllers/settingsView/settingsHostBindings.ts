@@ -51,8 +51,6 @@ export interface SettingsHostBindings {
   /** Select a run in the host's run view. */
   revealRun(runId: RunId): HostEffect<'revealed' | 'missing' | 'unavailable'>;
   runLabel(runId: RunId): string | undefined;
-  /** A catalog-backed setting was written; the host's own side effects. */
-  stateSettingApplied(key: string): HostEffect;
   /** Run a command in a terminal the user sees and can type into. */
   runInTerminal(name: string, command: string): HostEffect;
   /** The editor's side of the LaTeX page: its recommended settings applied,

@@ -2,11 +2,11 @@
  * What one completed turn cost, in USD, from the usage evidence its protocol
  * reported and the catalog's rates. The billing rules are wire facts: which
  * token classes a provider bills apart, and which receipt carries its own
- * settled cost.
+ * final cost.
  */
-import { requestRates, type ModelConfig } from 'llm-zoo';
+import { ModelProvider, requestRates, type ModelConfig } from 'llm-zoo';
 
-import type { TurnUsage } from '../turn.js';
+import type { TurnUsage } from '../protocol.js';
 
 /** The per-million rates one turn bills at, and its cache-read rebate. */
 interface TurnRates {
@@ -35,18 +35,14 @@ function anthropicCost(
   // never a stand-in for the uncached count: that would bill them twice.
   const uncached = provider.uncachedInputTokens ?? 0;
   const cached = usage.cachedInputTokens ?? 0;
+  const written = usage.cacheWriteTokens ?? 0;
   const write5m =
     provider.cacheCreation5mTokens ??
-    (provider.cacheCreation1hTokens === null
-      ? (provider.cacheCreationTokens ?? 0)
-      : 0);
+    (provider.cacheCreation1hTokens === null ? written : 0);
   const write1h = provider.cacheCreation1hTokens ?? 0;
   // Tokens the API left unattributed to a TTL bucket still bill; charge them
   // at the five-minute rate rather than dropping them from the turn.
-  const unclassified = Math.max(
-    0,
-    (provider.cacheCreationTokens ?? 0) - write5m - write1h,
-  );
+  const unclassified = Math.max(0, written - write5m - write1h);
   return (
     perMillion(uncached, inputPrice) +
     perMillion(cached, inputPrice * cacheDiscountFactor) +
@@ -83,11 +79,11 @@ function standardCost(
 /**
  * The cost of one turn, never negative. A plan route (ChatGPT/Codex, Grok,
  * the GLM coding plan, Kimi Code) is covered by the subscription, so every
- * rate is zero and a receipt the provider settled bills an API key this turn
+ * rate is zero and a receipt the provider finalized bills an API key this turn
  * did not use. An API-key route bills the catalog's rates on its service
  * tier; a model with a long-context tier bills the whole request at it once
  * the prompt, cached tokens included, is above it (llm-zoo's
- * `requestRates`). An xAI receipt carries its own settled cost, which wins
+ * `requestRates`). An xAI receipt carries its own final cost, which wins
  * over the computed one.
  */
 export function turnCost(
@@ -106,9 +102,6 @@ export function turnCost(
     case 'anthropic':
       cost = anthropicCost(usage, provider, rates);
       break;
-    case 'google':
-      cost = standardCost(usage, rates, false);
-      break;
     case 'xai':
       cost =
         !plan && provider.costInUsdTicks !== null
@@ -118,11 +111,13 @@ export function turnCost(
     case undefined:
       // Reasoning is part of the reported output everywhere but where a
       // receipt's total counts it beside the output (xAI Responses without
-      // its cost field); there it bills on top.
+      // its cost field); there it bills on top. A Google turn never bills
+      // it on top.
       cost = standardCost(
         usage,
         rates,
-        usage.reasoningTokens !== null &&
+        model.provider !== ModelProvider.GOOGLE &&
+          usage.reasoningTokens !== null &&
           usage.reasoningTokens > 0 &&
           usage.totalTokens ===
             inputTokens + (usage.outputTokens ?? 0) + usage.reasoningTokens,

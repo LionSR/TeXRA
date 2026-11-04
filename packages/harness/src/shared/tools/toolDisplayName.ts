@@ -16,7 +16,18 @@
 const TOOL_LABEL = new Map<string, string>([['agent', 'Agent']]);
 
 const MCP_PREFIX = 'mcp:';
-const MCP_TOOL_PREFIX = 'mcp__';
+/** Every harness MCP tool's name starts with this, then `<server>__<tool>`. */
+export const MCP_TOOL_PREFIX = 'mcp__';
+
+/** The server an MCP tool name (or `mcp__<server>__*` wildcard) names, or
+ *  `undefined` for any other tool name. */
+export function mcpServerOfToolName(name: string): string | undefined {
+  if (!name.startsWith(MCP_TOOL_PREFIX)) return undefined;
+  const separator = name.indexOf('__', MCP_TOOL_PREFIX.length);
+  return separator > MCP_TOOL_PREFIX.length
+    ? name.slice(MCP_TOOL_PREFIX.length, separator)
+    : undefined;
+}
 
 /** The `<server>/<tool>` an MCP tool's name carries, in either shape (the
  *  harness's under a sub-agent's `claude:` prefix too), or null for any
@@ -24,10 +35,9 @@ const MCP_TOOL_PREFIX = 'mcp__';
 function mcpServerTool(toolName: string): string | null {
   if (toolName.startsWith(MCP_PREFIX)) return toolName.slice(MCP_PREFIX.length);
   const name = toolName.slice(toolName.lastIndexOf(':') + 1);
-  if (!name.startsWith(MCP_TOOL_PREFIX)) return null;
-  const rest = name.slice(MCP_TOOL_PREFIX.length);
-  const cut = rest.indexOf('__');
-  return cut > 0 ? `${rest.slice(0, cut)}/${rest.slice(cut + 2)}` : null;
+  const server = mcpServerOfToolName(name);
+  if (server === undefined) return null;
+  return `${server}/${name.slice(MCP_TOOL_PREFIX.length + server.length + 2)}`;
 }
 
 /** True for an MCP tool call: the harness's `mcp__<server>__<tool>` or an

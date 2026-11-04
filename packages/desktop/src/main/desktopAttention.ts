@@ -12,7 +12,7 @@ import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
-import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
+import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 
 /** The host's attention surfaces, served by the Electron composition root. */
 interface DesktopAttentionPortShape {
@@ -82,8 +82,8 @@ export function electronAttentionPort(options: {
       liveNotifications.delete(key);
       shown?.close();
     },
-    focused: Stream.callback<void>((queue) =>
-      Effect.gen(function* () {
+    focused: Stream.callback<void>(
+      Effect.fnUntraced(function* (queue) {
         const onFocus = () => {
           Queue.offerUnsafe(queue, undefined);
         };
@@ -96,19 +96,6 @@ export function electronAttentionPort(options: {
       }),
     ),
   };
-}
-
-/** A top-level run that reached its outcome since `previous`: the one
- *  change besides a new request the user is told about. A run first seen in
- *  its current state is history, not news. */
-function finishedLine(
-  run: RunView,
-  previous: RunView | undefined,
-): string | undefined {
-  if (previous === undefined || run.parentId !== null) return undefined;
-  if (run.durableOutcome === null || previous.durableOutcome !== null)
-    return undefined;
-  return `${run.title}: ${runStatusLabel(run.statusKey)}.`;
 }
 
 /**
@@ -143,16 +130,19 @@ export const followDesktopAttention = Effect.gen(function* () {
         // One notification per update, replacing the project's last: its
         // lines are every run this update asks about, its click the first.
         const notices: { readonly runId: RunId; readonly line: string }[] = [];
-        for (const { runId } of attentionOf(view, previous).arrived) {
+        const { arrived, finished } = attentionOf(view, previous);
+        for (const { runId } of arrived) {
           const run = view.runs.get(runId);
           if (run === undefined || notices.some((n) => n.runId === runId))
             continue;
           const line = `${run.title} is waiting for you.`;
           notices.push({ runId, line });
         }
-        for (const run of view.runs.values()) {
-          const line = finishedLine(run, previous.runs.get(run.id));
-          if (line !== undefined) notices.push({ runId: run.id, line });
+        // A child's ending is its parent's news.
+        for (const run of finished) {
+          if (run.parentId !== null) continue;
+          const line = `${run.title}: ${runStatusLabel(run.statusKey)}.`;
+          notices.push({ runId: run.id, line });
         }
         const first = notices[0];
         if (first !== undefined) {

@@ -13,13 +13,17 @@ import * as path from 'node:path';
 // Third-party imports
 import { Clock, Effect, Fiber, FileSystem, Option, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
-import which from 'which';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { sha256Hex } from '@utils/core/idHash';
 import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
+import {
+  CommandDirs,
+  whichOnExtendedPath,
+  withExtendedPath,
+} from '@utils/system/platformPaths';
 
 // Local imports - this module's neighbours
 import { PluginError } from './pluginManifest';
@@ -58,12 +62,13 @@ export const pluginDataDir = (globalStorage: string, name: string) =>
 
 /**
  * The shell a shell-form hook (no `args`) runs under: `/bin/sh` on macOS and
- * Linux; on Windows `bash` from PATH (Git Bash), or null when there is none,
- * and then a shell-form hook cannot run.
+ * Linux; on Windows `bash` (Git Bash) from the PATH extended with `appDirs`
+ * (`CommandDirs`), or null when there is none, and then a shell-form hook
+ * cannot run.
  */
-export const hookShell = (): string | null =>
+export const hookShell = (appDirs: readonly string[]): string | null =>
   process.platform === 'win32'
-    ? which.sync('bash', { nothrow: true, path: process.env.PATH ?? '' })
+    ? whichOnExtendedPath('bash', appDirs)
     : '/bin/sh';
 
 export const NO_SHELL =
@@ -188,10 +193,12 @@ export const pinHook = Effect.fn('pluginHooks.pin')(
     const realRoot = yield* fs.realPath(root);
     const files: PinnedFile[] = [];
     if (!program.includes('/') && !program.includes(path.sep)) {
-      const found = which.sync(program, {
-        nothrow: true,
-        path: process.env.PATH ?? '',
-      });
+      // `runHook` spawns on the process PATH, or `/usr/bin:/bin` when it is
+      // unset, extended as an MCP server's is. Pin only when that is the PATH
+      // searched here, so the hook runs the binary it pinned.
+      if (process.env.PATH === undefined)
+        return yield* dynamic(`${program}: PATH is not set`);
+      const found = whichOnExtendedPath(program, (yield* CommandDirs)());
       if (found === null)
         return yield* dynamic(`${program} is not a program on PATH`);
       const info = yield* fs.stat(found);
@@ -245,8 +252,9 @@ const STDIO_GRACE = '250 millis';
 /**
  * Run one command hook with `input` on stdin, as a child process of the
  * caller's fiber: shell form (`hookShell() -c`) or exec form, in
- * `places.projectDir`, with only `PATH`, `HOME` and the `CLAUDE_*`
- * placeholders in its environment — never the process's API keys. It is
+ * `places.projectDir`, with only `PATH` (extended with `CommandDirs`, the
+ * PATH `pinHook` resolved on), `HOME` and the `CLAUDE_*` placeholders in its
+ * environment — never the process's API keys. It is
  * spawned in its own process group. Its output is read until it exits (and
  * briefly after); the scope then closes, which kills the whole group
  * (SIGTERM, then SIGKILL), as does a timeout or an interrupt, whether or not
@@ -264,19 +272,23 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
 > {
   const fs = yield* FileSystem.FileSystem;
   const started = yield* Clock.currentTimeMillis;
-  const shell = hookShell();
+  const appDirs = (yield* CommandDirs)();
+  const shell = hookShell(appDirs);
   if (hook.args === undefined && shell === null)
     return {
       run: { kind: 'unstartable', message: `${hook.command}: ${NO_SHELL}` },
       durationMs: 0,
     };
-  const env = {
-    PATH: process.env.PATH ?? '/usr/bin:/bin',
-    HOME: os.homedir(),
-    CLAUDE_PROJECT_DIR: places.projectDir,
-    CLAUDE_PLUGIN_ROOT: places.pluginRoot,
-    CLAUDE_PLUGIN_DATA: places.pluginData,
-  };
+  const env = withExtendedPath(
+    {
+      PATH: process.env.PATH ?? '/usr/bin:/bin',
+      HOME: os.homedir(),
+      CLAUDE_PROJECT_DIR: places.projectDir,
+      CLAUDE_PLUGIN_ROOT: places.pluginRoot,
+      CLAUDE_PLUGIN_DATA: places.pluginData,
+    },
+    appDirs,
+  );
   const [command, args] =
     hook.args === undefined
       ? [shell ?? '/bin/sh', ['-c', hook.command]]
@@ -313,12 +325,21 @@ export const runHook = Effect.fn('pluginHooks.run')(function* (
       ),
     );
     const exitCode = yield* handle.exitCode.pipe(
-      // Killed by a signal it was not sent by us: no exit code.
-      Effect.orElseSucceed(() => null),
+      // Killed by a signal it was not sent by us: the spawner fails its own
+      // `exitCode` method, having no code to report. Any other failure
+      // propagates.
+      Effect.catchIf(
+        (error) => error.reason.method === 'exitCode',
+        () => Effect.succeed(null),
+      ),
     );
     yield* Fiber.join(readers).pipe(
       Effect.timeoutOption(STDIO_GRACE),
-      Effect.ignore,
+      Effect.ignore({
+        log: 'Warn',
+        message:
+          "A hook's output could not be read to its end; the result keeps what was read",
+      }),
     );
     return { kind: 'exited' as const, exitCode, ...out };
   }).pipe(

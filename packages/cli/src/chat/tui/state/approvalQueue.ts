@@ -1,13 +1,13 @@
-// The TUI's request Surface (PRD one-fold-three-renderers, 9 and 10.1).
+// The TUI's request surface.
 //
-// Which requests are pending is a fold fact: `view.requests` holds every
+// Which requests are pending is a session view fact: `view.requests` holds every
 // `request.opened` no `request.decided` has answered. This module owns only
-// what the fold cannot: the presentation a host stages beside the fact (a
+// what the session view cannot: the presentation a host stages beside the fact (a
 // tool edit's before and after text, a retry's personal-key lookup), the
-// "decided here, not yet folded there" gap, and the jump-to-waiting order.
-// A decision leaves as the arms `approvalDecisionArms` names: the run's
-// `request.decide`, the `policy.set` a session bypass names, and the host
-// capability a retry on the user's own key needs.
+// "decided here, not yet applied there" gap, and the jump-to-waiting order.
+// A decision leaves as the case `approvalDecisionArm` names: the run's
+// `request.decide` (with the bypass a session-wide approval grants), or the
+// host capability a retry on the user's own key needs.
 
 import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect, absurd } from 'effect';
@@ -21,7 +21,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
-  approvalDecisionArms,
+  approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
@@ -51,16 +51,13 @@ interface TuiApprovalAdornments {
 }
 
 /**
- * The kinds this surface presents: the wire vocabulary without the external
- * inquiry. The CLI does not offer the async inquiry flow (the inquiry tool
- * declares `unavailableHosts: ['cli']`), and an inquiry another host opened
+ * The kinds this surface presents: the harness's own, without a plugin's
+ * request. The CLI does not offer the async inquiry flow (it shows no
+ * inquiry panel, `texraPlugins`), and an inquiry another host opened
  * in a shared session is answered from its thread rather than from a modal
- * here, so {@link attentionRequests} leaves that kind out of this queue.
+ * here, so {@link attentionRequests} leaves plugin requests out of this queue.
  */
-export type PendingApprovalKind = Exclude<
-  ProgressPermissionKind,
-  'externalInquiry'
->;
+export type PendingApprovalKind = Exclude<ProgressPermissionKind, 'plugin'>;
 
 /**
  * The presented payload IS the wire {@link PermissionPayload}, with the
@@ -115,7 +112,7 @@ export const pendingApprovalKindsByRun = computed(
     ),
 );
 
-/** One request the user's attention is on: a fold fact, read once. */
+/** One request the user's attention is on: a session view fact, read once. */
 interface AttentionRequest {
   readonly requestId: string;
   readonly runId: RunId;
@@ -134,14 +131,14 @@ const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
   new Map(),
 );
 
-/** Decided on this surface; hidden until the fold drops the fact. */
+/** Decided on this surface; hidden until the session view drops the fact. */
 const decided = signal<ReadonlySet<string>>(new Set());
 
 /** Jump-to-waiting: the focused stream's requests lead the order. */
 const promoted = signal<RunId | undefined>(undefined);
 
 /**
- * The host capabilities a decision can name (`approvalDecisionArms`'s host
+ * The host capabilities a decision can name (`approvalDecisionArm`'s host
  * arms): the attached TUI host installs its executor for as long as it is
  * attached. A capability named while nothing is attached cannot be dropped
  * quietly — the request would stay pending with nobody working on it.
@@ -173,7 +170,7 @@ export function pruneToLive(
 }
 
 /**
- * Every request awaiting the user, from the fold: the outstanding requests
+ * Every request awaiting the user, from the session view: the outstanding requests
  * in commit order, from the runs this chat owns. The promoted stream's requests lead; nothing is decided
  * or re-notified by a promotion. The status bar, the title, and the modal
  * all read this one list.
@@ -181,17 +178,17 @@ export function pruneToLive(
 export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const included = sessionRunIds.get();
   const view = sessionView().get();
-  // The fold lists every kind, including an `externalInquiry` a persisted
-  // session carries from another host; this surface renders none of those,
-  // so the narrowing is a filter rather than an assertion. It renders only
+  // The session view lists every kind, including a plugin's request (an
+  // inquiry) a persisted session carries from another host; this surface
+  // renders none of those, so the narrowing is a filter rather than an
+  // assertion. It renders only
   // what this window can answer (`attentionOf`, the rule every host reads):
   // not a stopped run's leftover (its modal would trap the keys `/resume`
   // needs), nor a request on a run another process holds.
   const requests = attentionOf(view)
     .requests.filter(
       (request): request is PendingApprovalFact =>
-        included.has(request.runId) &&
-        request.payload.kind !== 'externalInquiry',
+        included.has(request.runId) && request.payload.kind !== 'plugin',
     )
     .map((pending): AttentionRequest => ({
       requestId: pending.requestId,
@@ -220,7 +217,7 @@ function presentedPayload(
     case 'toolEdit':
     case 'retry':
       // Presentable only once the host stages it: a tool edit with its
-      // preview, a retry once the CLI policy has not settled it.
+      // preview, a retry once the CLI policy has not finished it.
       return undefined;
   }
   absurd(payload);
@@ -229,7 +226,7 @@ function presentedPayload(
 /** The order requests became presentable: a request that only became
  *  showable now (a staged tool edit or retry) joins behind the modal the
  *  user is already answering rather than displacing it. The stamp is a
- *  monotonic counter, not the map's size: settled entries are pruned, and a
+ *  monotonic counter, not the map's size: finished entries are pruned, and a
  *  size-based stamp would hand a later request the index of one on screen. */
 const presentedOrder = new Map<string, number>();
 let nextPresentedOrder = 0;
@@ -278,30 +275,6 @@ export function promoteApprovalsForRun(runId: RunId): void {
   promoted.set(runId);
 }
 
-/** Staged presentations whose request the fold has listed at least once. A
- *  host stages a tool edit's preview before its `request.opened` commits, so
- *  "not listed" alone cannot mean "settled". */
-const stagedSeenListed = new Set<string>();
-
-/**
- * Forget what this surface holds for requests the fold no longer lists: a
- * settled request leaves with its staged presentation. Called for every
- * level of pending requests, not only for the decisions taken here: a
- * request settled by a run interruption or by another surface takes its
- * staged edit contents with it too.
- */
-export function forgetSettledRequests(live: ReadonlySet<string>): void {
-  const staged = stagedPresentations.get();
-  for (const id of staged.keys()) if (live.has(id)) stagedSeenListed.add(id);
-  const remaining = [...staged].filter(
-    ([id]) => live.has(id) || !stagedSeenListed.has(id),
-  );
-  if (remaining.length !== staged.size) {
-    stagedPresentations.set(new Map(remaining));
-  }
-  pruneToLive(live, stagedSeenListed, presentedOrder);
-}
-
 function markDecided(requestId: string): void {
   const live = new Set(
     attentionRequests.get().map((request) => request.requestId),
@@ -309,14 +282,12 @@ function markDecided(requestId: string): void {
   const next = new Set([...decided.get()].filter((id) => live.has(id)));
   next.add(requestId);
   decided.set(next);
-  forgetSettledRequests(live);
+  pruneToLive(live, presentedOrder);
 }
 
 /**
- * Publish the presentation a host prepared for one request: the payload the
- * modal renders from here on. A tool edit stages before its request opens
- * and a retry's key lookup lands after, so this takes either order; the
- * entry leaves when the fold drops the request it names.
+ * Publish the presentation a host prepared for one listed request: the
+ * payload the modal renders from here on, until the host drops it.
  */
 export function stagePresentation(payload: ApprovalPayload): void {
   stagedPresentations.set(
@@ -324,13 +295,7 @@ export function stagePresentation(payload: ApprovalPayload): void {
   );
 }
 
-/**
- * Drop what one request staged, by id. {@link forgetSettledRequests} reads
- * the fold, so it never drops a presentation whose request the fold never
- * listed; a request whose `request.opened` did not commit is released
- * through here instead. An `Effect`, because that release is the TUI half of
- * the `releaseToolEdit` port: the session composes it and runs it itself.
- */
+/** Drop what one request staged, once the view no longer lists it. */
 export function dropPresentation(requestId: string): Effect.Effect<void> {
   return Effect.sync(() => {
     const staged = stagedPresentations.get();
@@ -338,7 +303,7 @@ export function dropPresentation(requestId: string): Effect.Effect<void> {
     const remaining = new Map(staged);
     remaining.delete(requestId);
     stagedPresentations.set(remaining);
-    stagedSeenListed.delete(requestId);
+    presentedOrder.delete(requestId);
   });
 }
 
@@ -351,12 +316,12 @@ export function reopenRequest(requestId: string): void {
 }
 
 /**
- * Issue the runtime requests one decision names, in order; a refusal reads
- * in the conversation and puts `requestId` back on this surface, since the
+ * Issue the runtime request one decision names; a refusal reads in the
+ * conversation and puts `requestId` back on this surface, since the
  * durable request it answered is still pending and nobody else will re-ask.
  * `onRefused` is the same undo for a caller keeping its own "already acted"
  * guard beside this one (the TUI host's automatic answers): a guard left set
- * over a refused decision parks the run on a request nobody answers again.
+ * over a refused decision leaves the run waiting on a request nobody answers again.
  */
 function issue(
   requests: SessionRequests,
@@ -364,16 +329,14 @@ function issue(
   runId: RunId,
   requestId: string,
   onRefused: (() => void) | undefined,
-  ...arms: RuntimeRequest[]
+  request: RuntimeRequest,
 ): void {
   const reopen = (): void => {
     reopenRequest(requestId);
     onRefused?.();
   };
   runtime.runFork(
-    Effect.forEach(arms, (request) => requests.request(request), {
-      discard: true,
-    }).pipe(
+    requests.request(request).pipe(
       Effect.match({
         onFailure: (error) => {
           reopen();
@@ -399,11 +362,10 @@ function issue(
 }
 
 /**
- * Apply one decision: the arms the shared vocabulary names (PRD 8.2), in the
- * order it names them — the `policy.set` a session bypass implies before the
- * `request.decide` it precedes, and the host capability a retry on the
- * user's own key needs instead of a decision, since that host lands the
- * decision itself once the credential is in place.
+ * Apply one decision: the case the shared vocabulary names, the
+ * `request.decide`, or the host capability a retry on the user's own key
+ * needs instead of a decision, since that host lands the decision itself
+ * once the credential is in place.
  */
 function decideRequest(
   requests: SessionRequests,
@@ -414,37 +376,23 @@ function decideRequest(
 ): void {
   markDecided(request.requestId);
   const { runId } = request;
-  const arms = approvalDecisionArms(payload, decision);
-  const runtimeArms = arms.flatMap((arm) =>
-    'runtime' in arm ? [arm.runtime] : [],
-  );
-  if (runtimeArms.length > 0) {
-    issue(
-      requests,
-      runtime,
-      runId,
-      request.requestId,
-      undefined,
-      ...runtimeArms,
+  const arm = approvalDecisionArm(payload, decision);
+  if ('runtime' in arm)
+    issue(requests, runtime, runId, request.requestId, undefined, arm.runtime);
+  else if (hostCapability) hostCapability(arm.host);
+  else
+    runtime.runFork(
+      Effect.logWarning(
+        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+      ).pipe(withLogChannel('cli.tui')),
     );
-  }
-  for (const arm of arms) {
-    if (!('host' in arm)) continue;
-    if (hostCapability) hostCapability(arm.host);
-    else
-      runtime.runFork(
-        Effect.logWarning(
-          `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
-        ).pipe(withLogChannel('cli.tui')),
-      );
-  }
 }
 
 /**
  * Land one durable decision a host capability took itself — the retry a
  * stored credential let this host switch onto the user's own key. The
- * `request.decide` alone, with no arm decomposition: the decomposition is
- * what named the capability, so re-entering it here would hand the
+ * `request.decide` alone, without going back through `approvalDecisionArm`:
+ * that is what named the capability, so re-entering it here would hand the
  * capability back to itself and the request would never be answered.
  */
 export function landRequestDecision(
@@ -465,11 +413,10 @@ export function landRequestDecision(
 }
 
 /** Forget every staged presentation and local decision: the Surface reset
- *  (`/clear`). The pending requests themselves are the fold's, closed by the
+ *  (`/clear`). The pending requests themselves are the session view's, closed by the
  *  runs they belong to. */
 function resetApprovalSurface(): void {
   stagedPresentations.set(new Map());
-  stagedSeenListed.clear();
   decided.set(new Set());
   promoted.set(undefined);
   presentedOrder.clear();

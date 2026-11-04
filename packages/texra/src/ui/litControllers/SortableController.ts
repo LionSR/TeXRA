@@ -1,0 +1,91 @@
+// Third-party imports
+import Sortable from 'sortablejs';
+import type { ReactiveController, ReactiveControllerHost } from 'lit';
+
+interface SortableReorderResult {
+  /** Reordered items array */
+  items: string[];
+}
+
+/**
+ * Callback invoked when items are reordered via drag-and-drop.
+ * @param result - Contains the reordered items array
+ */
+type SortableReorderCallback = (result: SortableReorderResult) => void;
+
+/**
+ * Lit reactive controller for managing Sortable.js on a file list element.
+ *
+ * Usage:
+ * ```typescript
+ * // In host component
+ * private sortableController = new SortableController(
+ *   this,
+ *   () => this.fileListElement,
+ *   () => this.files,
+ *   (result) => this.dispatchEvent(
+ *     SessionUiEvents.surface({
+ *       kind: 'launch',
+ *       patch: { [this.listId]: result.items },
+ *     })
+ *   ),
+ * );
+ * ```
+ */
+export class SortableController implements ReactiveController {
+  private sortable: Sortable | null = null;
+
+  private readonly host: ReactiveControllerHost;
+  private readonly getElement: () => HTMLElement | undefined;
+  private readonly getItems: () => readonly string[];
+  private readonly onReorder: SortableReorderCallback;
+  constructor(
+    host: ReactiveControllerHost,
+    getElement: () => HTMLElement | undefined,
+    getItems: () => readonly string[],
+    onReorder: SortableReorderCallback,
+  ) {
+    this.host = host;
+    this.getElement = getElement;
+    this.getItems = getItems;
+    this.onReorder = onReorder;
+    this.host.addController(this);
+  }
+
+  hostUpdated(): void {
+    this.initialize();
+  }
+
+  hostDisconnected(): void {
+    this.destroy();
+  }
+
+  private initialize(): void {
+    if (this.sortable) return;
+
+    const element = this.getElement();
+    if (!element) return;
+
+    this.sortable = new Sortable(element, {
+      animation: 150,
+      onEnd: ({ oldIndex, newIndex }) => this.handleSortEnd(oldIndex, newIndex),
+    });
+  }
+
+  private destroy(): void {
+    this.sortable?.destroy();
+    this.sortable = null;
+  }
+
+  private handleSortEnd(oldIndex?: number, newIndex?: number): void {
+    if (oldIndex === undefined || newIndex === undefined) {
+      return;
+    }
+
+    const items = [...this.getItems()];
+    const [moved] = items.splice(oldIndex, 1);
+    items.splice(newIndex, 0, moved);
+
+    this.onReorder({ items });
+  }
+}

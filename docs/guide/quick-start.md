@@ -43,7 +43,7 @@ TeXRA panel offers the main access choices:
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
-2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Settings **Models**
+2. **Use ChatGPT subscription**: OpenAI models through your ChatGPT plan. Open the Settings **Models**
    page and use the **ChatGPT subscription** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
@@ -118,6 +118,7 @@ Two icon buttons sit in the file-group header rows of the file selector: one nex
 
 1. Select the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count**: include document word-count statistics so the agent knows the document's size and structure
+   - **Critic review**: have the bundled `critic` agent review each revision but the last; the next revision reads its critique
 2. Select the <wa-icon library="texra" name="wand"></wa-icon> **Auto-extract options** button to enable, for this run:
    - **Figures**: pull figures out of the document automatically
    - **TikZ Figures**: extract TikZ figures
@@ -197,6 +198,9 @@ texra chat
 :::: tip
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers) that an
 Anthropic API key can spend once you link a Console organization to the plan.
+A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
+that an OpenAI API key can spend once you claim them for an API organization
+you own.
 ::::
 
 <CliRunHero

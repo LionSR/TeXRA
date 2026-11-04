@@ -10,14 +10,15 @@ import {
   type ProcessRuntime,
   type WorkspaceAgentsStores,
 } from '@texra-ai/harness/host';
-import { type TeamOptionData, agentName } from '@texra-ai/harness/schemas';
-import { loadTeamOptions } from '@texra-ai/harness/host';
+import { agentName } from '@texra-ai/harness/schemas';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
 import type { SelectItem } from '@cli/tui/ui/Select';
+import type { TeamOptionData } from '@texra/shared/pickerOptions';
+import { loadTeamOptions } from '@texra/shared/teamLaunch';
 import type { DocumentAgentOption } from '@texra/shared/plugins/documents';
 import { agentOptionsData } from '@texra/tools/documents/documentTask';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
@@ -128,18 +129,17 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<AgentGroups, AgentPickerValue>({
     title: '/agent',
     loadingLabel: 'Loading agents...',
-    load: () =>
-      Effect.gen(function* () {
-        const catalog = yield* AgentCatalog;
-        const agents = (yield* agentOptionsData(props.stores)).map((agent) => ({
-          ...agent,
-          description: catalog.get(agent.value)?.description,
-        }));
-        const teams = loadTeamOptions(
-          yield* createTeamCatalogPorts(props.stores.repoState),
-        );
-        return { agents, teams };
-      }),
+    load: Effect.fn('load')(function* () {
+      const catalog = yield* AgentCatalog;
+      const agents = (yield* agentOptionsData(props.stores)).map((agent) => ({
+        ...agent,
+        description: catalog.get(agent.value)?.description,
+      }));
+      const teams = loadTeamOptions(
+        yield* createTeamCatalogPorts(props.stores.repoState),
+      );
+      return { agents, teams };
+    }),
     runtime: props.runtime,
     isEmpty: (groups) => groups.agents.length === 0,
     closeEmptyOnEnter: true,

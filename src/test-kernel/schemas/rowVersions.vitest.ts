@@ -12,6 +12,7 @@ import { Schema } from 'effect';
 // Third-party imports
 import { describe, expect, it } from 'vitest';
 
+import { WORKSPACE_STORES } from '@texra-ai/harness/node';
 import { DESKTOP_PROJECTS } from '@desktop/main/desktopProjectRecords';
 import {
   CURRENT_VALUE_VERSION,
@@ -19,16 +20,12 @@ import {
   ROW_KINDS,
   SessionEventDraftSchema,
 } from '@shared/schemas';
-import {
-  APP_STATE,
-  REPO_STATE,
-  WORKSPACE_STORES,
-} from '@shared/session/valueFamily';
+import { APP_STATE, REPO_STATE } from '@shared/session/valueFamily';
 import { TEXRA_SERVICE } from '@texra/controllers/server/protocol';
 import { INQUIRY_THREADS } from '@texra/shared/plugins/externalInquiry';
 import { UPDATE_CHECKS } from '@texra/utils/system/updateCheck';
 import { texraPlugins } from '@texra/tools/registry';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
 import {
   productionFilesUnder,
   productionRoots,
@@ -38,8 +35,8 @@ import {
 /**
  * The release watermark of the session store:
  * `config/storage/frozen/<name>.v<N>.json` is the JSON Schema of version N of
- * a row kind, plugin arm or current-value family as a release shipped it, and
- * the highest N frozen is that name's released version. A later build reads
+ * a row kind, fact kind or current-value family as a release shipped it, and
+ * the frozen versions bound that name's released history. A later build reads
  * a released version forever, so its schema never changes in place: a change
  * is a new version with an upcaster from the released one.
  *
@@ -52,7 +49,7 @@ const FREEZING = process.env.MODE === 'freeze';
 interface Versioned {
   readonly name: string;
   readonly version: number;
-  /** The upcasters from version 1, `upcast[i]` taking `i + 1` to `i + 2`. */
+  /** Adjacent conversions ending at the current version, oldest first. */
   readonly upcasts: number;
   readonly schema: Schema.Top;
 }
@@ -79,12 +76,14 @@ const VERSIONED: readonly Versioned[] = [
       schema: arm,
     };
   }),
-  ...Object.entries(armsOf(texraPlugins())).map(([name, arm]) => ({
-    name: `plugin.fact.${name.replace('/', '.')}`,
-    version: arm.version,
-    upcasts: arm.upcasters.length,
-    schema: arm.schema,
-  })),
+  ...Object.entries(factKindsOf(texraPlugins({ name: 'vscode' }))).map(
+    ([name, factKind]) => ({
+      name: `plugin.fact.${name.replace('/', '.')}`,
+      version: factKind.version,
+      upcasts: factKind.upcasters.length,
+      schema: factKind.schema,
+    }),
+  ),
   ...VALUE_FAMILIES.map(({ name, schema }) => ({
     name: `current-value.${name.replace('/', '.')}`,
     version: CURRENT_VALUE_VERSION,
@@ -97,13 +96,15 @@ const VERSIONED: readonly Versioned[] = [
 const fingerprint = (schema: Schema.Top): string =>
   `${JSON.stringify(Schema.toJsonSchemaDocument(schema), null, 2)}\n`;
 
-const released = (name: string): number | null => {
+const released = (name: string): { first: number; latest: number } | null => {
   if (!existsSync(FROZEN)) return null;
   const versions = readdirSync(FROZEN).flatMap((file) => {
     const match = /^(.+)\.v(\d+)\.json$/.exec(file);
     return match?.[1] === name ? [Number(match[2])] : [];
   });
-  return versions.length === 0 ? null : Math.max(...versions);
+  return versions.length === 0
+    ? null
+    : { first: Math.min(...versions), latest: Math.max(...versions) };
 };
 
 describe('row versions', () => {
@@ -127,7 +128,7 @@ describe('row versions', () => {
 
   it('reads or retires every row kind ever stored', () => {
     // A kind deleted without a retirement would make every store that holds
-    // it refuse to open. The list only grows: check-ratchet-baselines fails a
+    // it refuse to open. The list only grows: check-row-kinds-ever fails a
     // name the base branch lists and the tree does not.
     const { kinds } = Schema.decodeUnknownSync(
       Schema.Struct({ kinds: Schema.Array(Schema.String) }),
@@ -154,7 +155,7 @@ describe('row versions', () => {
       'a deleted row kind moves to RETIRED_ROW_KINDS',
     ).toEqual([]);
     expect(
-      [...RETIRED_ROW_KINDS].filter((kind) => !kinds.includes(kind)),
+      [...RETIRED_ROW_KINDS.keys()].filter((kind) => !kinds.includes(kind)),
       'a retired row kind stays in config/storage/row-kinds-ever.json',
     ).toEqual([]);
   });
@@ -162,18 +163,16 @@ describe('row versions', () => {
   it.each(VERSIONED)(
     '$name reads its released version',
     ({ name, version, upcasts, schema }) => {
-      const floor = released(name);
-      if (floor === null) return;
+      const history = released(name);
+      if (history === null) return;
       expect(version, `${name} is below its released version`).toBe(
-        Math.max(version, floor),
+        Math.max(version, history.latest),
       );
-      if (version > floor) {
-        expect(
-          upcasts,
-          `${name} v${floor} has no upcaster chain to v${version}`,
-        ).toBeGreaterThanOrEqual(version - 1);
-        return;
-      }
+      expect(
+        upcasts,
+        `${name} v${history.first} has no upcaster chain to v${version}`,
+      ).toBeGreaterThanOrEqual(version - history.first);
+      if (version > history.latest) return;
       expect(
         fingerprint(schema),
         `${name} v${version} was released: change it as a new version with an upcaster`,

@@ -5,22 +5,23 @@
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. The 1.0 baseline is 101. A file below it holding
- * tables was written before 1.0 (100 a pre-release that never shipped);
- * this build reads none and moves it aside whole.
- *
- * This module knows no row kind and no payload field.
+ * cannot write around. The 1.0 baseline is 101; a file below it holding
+ * tables is pre-1.0 (100 was a pre-release that never shipped), read by no
+ * build and moved aside whole. This module knows no row kind or payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
+  asideName,
   cannotOpen,
   freeName,
+  inImmediateTransaction,
   isDamaged,
   pragmaValue,
   retryBusy,
   run,
+  STORE_FILE_SUFFIXES,
   underCopy,
   type Sql,
 } from './storeAside';
@@ -46,7 +47,7 @@ const APPLICATION_ID = 0x54655852;
  * `AggregateId` to, the durable `uid`, its sequence counter, its claim, its
  * parent edge, and two lifecycle facts written by the transaction that
  * makes them: `start_commit` (the commit of seq 1) and `closed_by` (the
- * tombstone's commit, `NULL` while open). The foreign keys are the
+ * deletion marker's commit, `NULL` while open). The foreign keys are the
  * collection mechanism: deleting an aggregate cascades to its dependents,
  * its events, its projections and their projected rows.
  */
@@ -105,10 +106,25 @@ const TABLES = [
 /**
  * What any build adds without a bump (`CREATE … IF NOT EXISTS` at every
  * open): the projection tables, which carry their own versions in
- * `projection_state` (`projections.ts`), and the indexes, each serving one
- * lookup the reads make, named for the columns it keys.
+ * `projection_state` (`projections.ts`), the indexes, each serving one
+ * lookup the reads make, named for the columns it keys, and the change
+ * record: each aggregate's last insert, claim, release, close or collection
+ * (a claim and a collection leave no row of their own) under an ordinal
+ * AUTOINCREMENT never reuses, kept by triggers for every writer.
  */
 const ADDITIVE = [
+  `CREATE TABLE IF NOT EXISTS aggregate_change (change INTEGER PRIMARY KEY
+    AUTOINCREMENT, kind TEXT NOT NULL, logical_id TEXT NOT NULL,
+    UNIQUE (kind, logical_id)) STRICT`,
+  ...[
+    ['inserted', 'INSERT', 'NEW'],
+    ['claimed', 'UPDATE OF owner_id, closed_by', 'NEW'],
+    ['collected', 'DELETE', 'OLD'],
+  ].map(
+    ([name, on, row]) => `CREATE TRIGGER IF NOT EXISTS aggregate_${name}
+    AFTER ${on} ON event_sequence BEGIN INSERT OR REPLACE INTO aggregate_change
+    (kind, logical_id) VALUES (${row}.kind, ${row}.logical_id); END`,
+  ),
   `CREATE TABLE IF NOT EXISTS projection_state (
     name           TEXT PRIMARY KEY,
     version        INTEGER NOT NULL,
@@ -253,7 +269,6 @@ const prepareStore = Effect.fnUntraced(function* (
     if (stored === SCHEMA_VERSION) break;
     if (!pre1) {
       if (mode === 'persistent') yield* incrementalVacuum(sql);
-      yield* run(sql, 'BEGIN IMMEDIATE');
       yield* Effect.gen(function* () {
         // Another process stamped the file while this one waited: the
         // loop checks it again.
@@ -262,24 +277,23 @@ const prepareStore = Effect.fnUntraced(function* (
           yield* run(sql, statement);
         yield* run(sql, `PRAGMA application_id = ${APPLICATION_ID}`);
         yield* run(sql, `PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }).pipe(Effect.onError(() => run(sql, 'ROLLBACK').pipe(Effect.ignore)));
-      yield* run(sql, 'COMMIT');
+      }).pipe(inImmediateTransaction(sql));
       continue;
     }
     // Off outside the transaction (a no-op inside one): a drop then
-    // neither checks nor cascades a foreign key it removes anyway.
+    // neither checks nor cascades a foreign key it removes anyway. A failure
+    // to turn it back on fails the open, as a failed copy does.
     yield* run(sql, 'PRAGMA foreign_keys = OFF');
     const aside = yield* underCopy(
       sql,
-      `${filename}.pre1`,
+      asideName.pre1(filename),
       Effect.gen(function* () {
         for (const table of yield* userTables(sql))
           yield* run(sql, `DROP TABLE "${table}"`);
         yield* run(sql, 'PRAGMA user_version = 0');
       }),
-    ).pipe(
-      Effect.ensuring(run(sql, 'PRAGMA foreign_keys = ON').pipe(Effect.ignore)),
     );
+    yield* run(sql, 'PRAGMA foreign_keys = ON');
     if (aside === null) continue;
     yield* incrementalVacuum(sql);
     yield* Effect.logWarning(
@@ -392,9 +406,9 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     return { sql, movedAside: yield* prepareStore(sql, mode, path, filename) };
   }
   const aside = yield* freeName(
-    `${filename}.corrupt-${yield* Clock.currentTimeMillis}`,
+    asideName.corrupt(filename, yield* Clock.currentTimeMillis),
   );
-  for (const suffix of ['', '-wal', '-shm']) {
+  for (const suffix of STORE_FILE_SUFFIXES) {
     if (yield* fs.exists(`${filename}${suffix}`))
       yield* fs.rename(`${filename}${suffix}`, `${aside}${suffix}`);
   }

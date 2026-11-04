@@ -7,14 +7,11 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@texra-ai/harness/schemas';
-import {
-  hasExtension,
-  isFileNotFoundError,
-  createRunStorageLocation,
-} from '@texra-ai/harness/host';
+import { hasExtension, createRunStorageLocation } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
@@ -52,18 +49,6 @@ function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
 }
 
 /**
- * Whether a platform failure means "the path is not there". The standard
- * filesystem service normalizes the host error into a `SystemError` reason,
- * so match that tag first and fall back to the original error's `code` for a
- * backend that only carries the cause.
- */
-function isMissingPath(error: PlatformError.PlatformError): boolean {
-  return (
-    error.reason._tag === 'NotFound' || isFileNotFoundError(error.reason.cause)
-  );
-}
-
-/**
  * Copy `source` over `destination`, creating the destination's directory and
  * clearing whatever was there first. A destination that is already gone is
  * the one removal failure this step tolerates; everything else (a permission
@@ -75,7 +60,7 @@ const copyArtifactFile = Effect.fn('publishCompiledPdfArtifact.copy')(
     yield* fs.makeDirectory(path.dirname(destination), { recursive: true });
     yield* fs
       .remove(destination, { recursive: true })
-      .pipe(Effect.catchIf(isMissingPath, () => Effect.void));
+      .pipe(Effect.catchIf(absentReason, () => Effect.void));
     yield* fs.copy(source, destination, { overwrite: true });
   },
 );
@@ -92,9 +77,9 @@ export const publishCompiledPdfArtifact = Effect.fn(
   const fs = yield* FileSystem.FileSystem;
   const stats = yield* fs
     .stat(options.compiledPdfPath)
-    .pipe(Effect.catchIf(isMissingPath, () => Effect.succeed(undefined)));
+    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
   if (stats === undefined || stats.type !== 'File') {
-    return null as RunStorageFileLocation | null;
+    return null;
   }
 
   const pdfRelativePath = toPdfRelativePath(options);

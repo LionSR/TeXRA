@@ -21,7 +21,7 @@ function git(
   const commandLine = `git ${args.join(' ')}`;
   return Effect.gen(function* () {
     const handle = yield* ChildProcess.make('git', args, {
-      env: makeMachineGitEnv(),
+      env: yield* makeMachineGitEnv,
       extendEnv: false,
       stdin: 'ignore',
       detached: false,
@@ -78,15 +78,17 @@ export function checkoutDetached(dir: string, rev: string) {
  * it out, returning the commit. Install and update take the same steps: a
  * shallow fetch of exactly one commit, then {@link checkoutDetached}.
  */
-export function fetchPinned(dir: string, url: string, ref: string | undefined) {
-  return Effect.gen(function* () {
-    yield* git(['init', '--quiet', dir]);
-    yield* git([
-      ...['-C', dir, '-c', 'protocol.file.allow=never', 'fetch', '--quiet'],
-      ...['--depth', '1', '--no-tags'],
-      ...['--', url, ref ?? 'HEAD'],
-    ]);
-    yield* checkoutDetached(dir, 'FETCH_HEAD');
-    return yield* git(['-C', dir, 'rev-parse', 'HEAD']);
-  });
-}
+export const fetchPinned = Effect.fn('fetchPinned')(function* (
+  dir: string,
+  url: string,
+  ref: string | undefined,
+) {
+  yield* git(['init', '--quiet', dir]);
+  yield* git([
+    ...['-C', dir, '-c', 'protocol.file.allow=never', 'fetch', '--quiet'],
+    ...['--depth', '1', '--no-tags'],
+    ...['--', url, ref ?? 'HEAD'],
+  ]);
+  yield* checkoutDetached(dir, 'FETCH_HEAD');
+  return yield* git(['-C', dir, 'rev-parse', 'HEAD']);
+});

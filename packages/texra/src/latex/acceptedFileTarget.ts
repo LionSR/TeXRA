@@ -1,4 +1,5 @@
 // Node imports
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import {
   normalizeFilePath,
@@ -17,6 +18,7 @@ import {
   createRunStorageLocation,
   createWorkspaceLocation,
 } from '@texra-ai/harness/host';
+import { emitAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';
@@ -99,21 +101,20 @@ function buildAcceptSuccessMessage(
 
 /**
  * Host capabilities the accept-edited commit step reaches through that the
- * filesystem cannot answer: notifying the host of a workspace write and
- * reporting success. The reads, writes and deletions themselves go through
- * the `FileSystem` the returned program requires, so no host re-implements
- * them. `E` is the failure the host's own notification can report.
+ * filesystem cannot answer: reporting success. The reads, writes and
+ * deletions themselves go through the `FileSystem` the returned program
+ * requires, and a workspace write is announced on the process's signal hub
+ * (`workspaceFilesWritten`), so no host re-implements them. `E` is the
+ * failure the host's own notification can report.
  */
 export interface CommitAcceptedFilePorts<E = never> {
-  /** Notify the host that a workspace file was written at this absolute path. */
-  emitWritten: (absolutePath: string) => void;
   showInfo: (message: string) => Effect.Effect<void, E>;
 }
 
 /**
  * Host capabilities the accept-edited replace flow reaches through, so the
  * host-neutral orchestration can run on both the VS Code command (warning
- * dialog, app signals) and the desktop bridge (dialog IPC) without each side
+ * dialog) and the desktop bridge (dialog IPC) without each side
  * re-implementing the confirm / commit sequence.
  */
 export interface AcceptEditedFileReplacePorts<
@@ -137,52 +138,69 @@ export interface AcceptEditedFileReplacePorts<
  * not, so every read and write goes through the `FileSystem` the caller's
  * runtime carries, at that path.
  */
-export function commitAcceptedFile<E>(
+export const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
   target: { targetLocation: FileLocation; targetFileName: string },
   targetExisted: boolean,
   ports: CommitAcceptedFilePorts<E>,
-): Effect.Effect<void, E | PlatformError.PlatformError, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const { targetLocation, targetFileName } = target;
-    const editedPath = editedLocation.absolutePath;
+): Effect.fn.Return<
+  void,
+  E | PlatformError.PlatformError,
+  FileSystem.FileSystem | AppSignals
+> {
+  const fs = yield* FileSystem.FileSystem;
+  const { targetLocation, targetFileName } = target;
+  const editedPath = editedLocation.absolutePath;
 
-    const editedContent = (yield* fs.readFileString(editedPath)).replaceAll(
-      '\r\n',
-      '\n',
-    );
-    yield* fs.writeFileString(targetLocation.absolutePath, editedContent);
-    if (targetLocation.kind === 'workspace') {
-      ports.emitWritten(targetLocation.absolutePath);
-    }
+  const editedContent = (yield* fs.readFileString(editedPath)).replaceAll(
+    '\r\n',
+    '\n',
+  );
+  // Staged beside the target and renamed over it, so a crash mid-write
+  // leaves the user's file whole: the old content or the new, never part.
+  const staged = path.join(
+    path.dirname(targetLocation.absolutePath),
+    `.${targetFileName}.${randomUUID()}.tmp`,
+  );
+  yield* fs.writeFileString(staged, editedContent).pipe(
+    Effect.andThen(fs.rename(staged, targetLocation.absolutePath)),
+    Effect.onError(() =>
+      fs.remove(staged, { force: true }).pipe(
+        Effect.ignore({
+          log: 'Warn',
+          message: `A staged accept file stays behind: ${staged}`,
+        }),
+      ),
+    ),
+    Effect.uninterruptible,
+  );
+  if (targetLocation.kind === 'workspace') {
+    yield* emitAppSignal('workspaceFilesWritten', {
+      absolutePaths: [targetLocation.absolutePath],
+    });
+  }
 
-    const stale = staleDiffFileLocation(
-      baseLocation,
-      editedPath,
-      targetLocation,
-    );
-    if (stale) {
-      // Diff-file cleanup is a best-effort side effect of accepting a file: a
-      // file already gone is the post-condition, and any other failure (a
-      // locked file) is reported without failing the accept.
-      yield* fs
-        .remove(stale.absolutePath, { force: true })
-        .pipe(
-          Effect.catchTag('PlatformError', (error) =>
-            Effect.logWarning(
-              `Could not remove the stale diff file ${stale.absolutePath}: ${error.message}`,
-            ).pipe(withLogChannel(CHANNEL)),
-          ),
-        );
-    }
+  const stale = staleDiffFileLocation(baseLocation, editedPath, targetLocation);
+  if (stale) {
+    // Diff-file cleanup is a best-effort side effect of accepting a file: a
+    // file already gone is the post-condition, and any other failure (a
+    // locked file) is reported without failing the accept.
+    yield* fs
+      .remove(stale.absolutePath, { force: true })
+      .pipe(
+        Effect.catchTag('PlatformError', (error) =>
+          Effect.logWarning(
+            `Could not remove the stale diff file ${stale.absolutePath}: ${error.message}`,
+          ).pipe(withLogChannel(CHANNEL)),
+        ),
+      );
+  }
 
-    yield* ports.showInfo(
-      buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
-    );
-  });
-}
+  yield* ports.showInfo(
+    buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
+  );
+});
 
 /** The file's content, or `undefined` for a file that is not there. */
 const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
@@ -203,16 +221,16 @@ const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
  * latter wraps this with its own replace-vs-copy quick pick when run
  * metadata is available.
  */
-export function acceptEditedFileReplace<E>(
-  baseLocation: FileLocation,
-  editedLocation: FileLocation,
-  ports: AcceptEditedFileReplacePorts<E>,
-): Effect.Effect<
-  boolean,
-  E | PlatformError.PlatformError,
-  FileSystem.FileSystem
-> {
-  return Effect.gen(function* () {
+export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
+  function* <E>(
+    baseLocation: FileLocation,
+    editedLocation: FileLocation,
+    ports: AcceptEditedFileReplacePorts<E>,
+  ): Effect.fn.Return<
+    boolean,
+    E | PlatformError.PlatformError,
+    FileSystem.FileSystem | AppSignals
+  > {
     const fs = yield* FileSystem.FileSystem;
     const editedPath = editedLocation.absolutePath;
     const target = getAcceptedFileTarget(baseLocation, editedPath);
@@ -248,8 +266,8 @@ export function acceptEditedFileReplace<E>(
       ports,
     );
     return true;
-  });
-}
+  },
+);
 
 /**
  * The stale `_diff` companion file a prior latexdiff run would have generated

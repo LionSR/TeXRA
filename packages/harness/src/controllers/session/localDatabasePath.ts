@@ -8,6 +8,7 @@ import { Effect } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { ensureError } from '@utils/errors/errorMessage';
+import { STORE_FILE_SUFFIXES } from './storeAside';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** Local Linux filesystem types from include/uapi/linux/magic.h. Network,
@@ -124,7 +125,7 @@ export const localDatabasePath = Effect.fn('localDatabasePath')(function* (
     );
   }
   const database = join(resolved, fileName);
-  for (const file of [database, `${database}-wal`, `${database}-shm`]) {
+  for (const file of STORE_FILE_SUFFIXES.map((s) => `${database}${s}`)) {
     const link = yield* Effect.try({
       try: () => lstatSync(file, { throwIfNoEntry: false })?.isSymbolicLink(),
       catch: ensureError,

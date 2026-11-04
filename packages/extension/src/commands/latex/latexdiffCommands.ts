@@ -22,7 +22,6 @@ import {
   showLoggedMessage,
   showLoggedMessageWithDocs,
 } from '@frontend/ui/errorHandlingUtils';
-import { quickPick } from '@frontend/ui/dialogs';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import {
@@ -39,37 +38,25 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { settingEnumChoices } from '@texra/shared/settingsView/settingRows';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import type { WorkflowDiffRequest } from '@texra/controllers/session/hostRunActions';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { runOutputFiles } from '@texra/tools/documents/runOutputs';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-type LatexdiffTool = 'latexdiff' | 'latexdiff-vc';
-
 /**
- * Run a latexdiff command body, skipping it when the tool is missing and
- * reporting any failure under `errorMessage`: every command in this file goes
- * through this one terminal boundary. `catchCause` answers a typed failure and
- * a defect alike through `Cause.squash`; an interrupt is re-raised (#12841).
+ * Run a latexdiff command body, reporting any failure under `errorMessage`:
+ * every command in this file goes through this one terminal boundary, so a
+ * missing latexdiff reaches the user here with its install steps.
+ * `catchCause` answers a typed failure and a defect alike through
+ * `Cause.squash`; an interrupt is re-raised (#12841).
  */
-const withLatexdiffTool = <E, R>(
-  tool: LatexdiffTool,
+const reportingFailure = <E, R>(
   errorMessage: string,
   action: Effect.Effect<void, E, R>,
-): Effect.Effect<void, never, R | ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    const installed = yield* checkToolInstalled(tool);
-    if (!installed) {
-      yield* Effect.logWarning(`${tool} is not installed; skipping.`);
-      return;
-    }
-    yield* action;
-  }).pipe(
+): Effect.Effect<void, never, R> =>
+  action.pipe(
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
@@ -83,42 +70,13 @@ const withLatexdiffTool = <E, R>(
     withLogChannel(CHANNEL),
   );
 
-type MarkupItem = vscode.QuickPickItem & { value: LatexdiffMathMarkupValue };
-
-// Returns undefined when the user cancels, logging it so callers just bail.
-const promptForLatexdiffMathMarkup = Effect.fnUntraced(function* (
-  roots: WorkspaceRoots,
-) {
-  const configuredMode = yield* Settings.get<LatexdiffMathMarkupValue>(
+/** The math markup every diff runs with: the `texra.latexdiff.mathMarkup`
+ *  setting, as on every host. */
+const configuredMathMarkup = (roots: WorkspaceRoots) =>
+  Settings.get<LatexdiffMathMarkupValue>(
     roots,
     DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
   );
-  // The row is a catalog enum row: a missing one is a defect, not an option.
-  const items: MarkupItem[] = settingEnumChoices<LatexdiffMathMarkupValue>(
-    TEXRA_SETTINGS.byKey(DocumentsStateKey.LATEXDIFF_MATH_MARKUP)!,
-  )!.map(({ value, label, description }) => ({
-    label,
-    description,
-    picked: value === configuredMode,
-    value,
-  }));
-  // Keep the configured mode first so Enter accepts it immediately.
-  const prioritizedItems = [
-    ...items.filter((item) => item.value === configuredMode),
-    ...items.filter((item) => item.value !== configuredMode),
-  ];
-
-  const pick = yield* quickPick(prioritizedItems, {
-    title: 'Latexdiff math markup',
-    placeHolder: 'Select math markup granularity for this diff run',
-    ignoreFocusOut: true,
-    prompt: `Saved default: ${configuredMode} — press Enter to accept, or pick another`,
-  });
-  if (!pick) {
-    yield* Effect.logDebug('Math markup selection cancelled by user');
-  }
-  return pick?.value;
-});
 
 /**
  * Open and build one generated diff, returning its resolved location and
@@ -183,7 +141,7 @@ const restorePreparedViewerTarget = (
  * viewer handoff, in the caller's scope, for the last viewer-ready diff.
  *
  * Each file-open/build phase stays settled and serialized, so setup failures
- * reach `withLatexdiffTool`. The viewer is restored to the last viewer-ready
+ * reach `reportingFailure`. The viewer is restored to the last viewer-ready
  * diff whenever a later processed diff is not viewer-ready, including on
  * normal completion (#10553) — the handoff is an `onExit` finalizer, so it
  * runs on the failing path exactly as the `finally` it replaces did.
@@ -215,8 +173,8 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
       }
     }
   }).pipe(
-    Effect.onExit((exit) =>
-      Effect.gen(function* () {
+    Effect.onExit(
+      Effect.fnUntraced(function* (exit) {
         if (!lastViewerLocation) return;
         let viewerTargetReady = true;
         if (
@@ -240,9 +198,9 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
 });
 
 /**
- * Prompt for math markup, run a diff, and open the generated diff file. Shared
- * by the `latexdiff` and `latexdiff-vc` entry points, which differ only in the
- * underlying diff call and the tool name used for logging.
+ * Run a diff with the configured math markup and open the generated diff
+ * file. Shared by the `latexdiff` and `latexdiff-vc` entry points, which
+ * differ only in the underlying diff call and the tool name used for logging.
  */
 const runDiffAndOpen = Effect.fnUntraced(function* (
   roots: WorkspaceRoots,
@@ -255,8 +213,7 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
     FileSystem.FileSystem | ChildProcessSpawner
   >,
 ) {
-  const mathMarkup = yield* promptForLatexdiffMathMarkup(roots);
-  if (!mathMarkup) return;
+  const mathMarkup = yield* configuredMathMarkup(roots);
   yield* Effect.logInfo(`Running ${toolLabel}, math markup: ${mathMarkup}`);
 
   const result = yield* runDiff(mathMarkup);
@@ -303,8 +260,7 @@ export const handleLatexdiff = Effect.fnUntraced(function* (
     return;
   }
 
-  yield* withLatexdiffTool(
-    'latexdiff',
+  yield* reportingFailure(
     'Error creating LaTeX diff',
     runDiffAndOpen(roots, 'latexdiff', (mathMarkup) =>
       new LaTeXdiffService(CHANNEL, roots).runDiff(
@@ -325,8 +281,7 @@ const handleLatexdiffvc = Effect.fnUntraced(function* (
 ) {
   const fileToUse = yield* resolveDiffBase(baseFile);
   if (!fileToUse) return;
-  yield* withLatexdiffTool(
-    'latexdiff-vc',
+  yield* reportingFailure(
     'Error creating LaTeX diff',
     runDiffAndOpen(roots, 'latexdiff-vc', (mathMarkup) =>
       new LaTeXdiffService(CHANNEL, roots).runDiffVc(
@@ -344,8 +299,7 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
   commitHash: string,
   clean: boolean,
 ) {
-  yield* withLatexdiffTool(
-    'latexdiff-vc',
+  yield* reportingFailure(
     clean ? 'Error cleaning LaTeX diff' : 'Error packing LaTeX diff',
     Effect.gen(function* () {
       yield* Effect.logDebug(
@@ -388,12 +342,10 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
   session: Session,
   request: WorkflowDiffRequest,
 ) {
-  yield* withLatexdiffTool(
-    'latexdiff',
+  yield* reportingFailure(
     'Error running LaTeX diffs',
     Effect.gen(function* () {
-      const mathMarkup = yield* promptForLatexdiffMathMarkup(roots);
-      if (!mathMarkup) return;
+      const mathMarkup = yield* configuredMathMarkup(roots);
 
       yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
 
@@ -411,7 +363,7 @@ export const handleRunLatexdiff = Effect.fnUntraced(function* (
           return runLatexdiffForRun({
             runId: request.runId,
             // The window's own view: where its runs run, here or in the
-            // service, it folds their documents.
+            // service, it reads their documents.
             rounds: runOutputFiles(session.view.current(), request.runId),
             roots,
             mathMarkup,

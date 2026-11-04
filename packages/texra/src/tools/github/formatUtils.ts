@@ -8,10 +8,11 @@
  */
 
 import { truncateWithEllipsis } from '@texra-ai/harness/schemas';
-import { DELIVERY_TAG } from '@texra-ai/harness/transcript';
 import type { GhIssueComment } from './prTypes';
 
-const WEBHOOK_TAG = DELIVERY_TAG.githubWebhookActivity;
+/** An activity report's tag (`<family>-activity`), which the harness's
+ *  render surfaces recognize by that shape. */
+const WEBHOOK_TAG = 'github-webhook-activity';
 
 /**
  * Matches `</tag>` and `<tag>` liberally — whitespace inside the tag,

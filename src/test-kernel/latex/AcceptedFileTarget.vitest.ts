@@ -4,8 +4,8 @@ import { it } from '@effect/vitest';
 import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { AppSignals, createWorkspaceLocation } from '@texra-ai/harness/host';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
 
 describe('acceptEditedFileReplace', () => {
   it.effect(
@@ -29,6 +29,7 @@ describe('acceptEditedFileReplace', () => {
         const fs = {
           readFileString: () => Effect.succeed('edited content'),
           writeFileString: () => Effect.void,
+          rename: () => Effect.void,
           exists: () => Effect.succeed(false),
           remove: (absolutePath: string) =>
             Effect.sync(() => {
@@ -38,9 +39,11 @@ describe('acceptEditedFileReplace', () => {
 
         const accepted = yield* acceptEditedFileReplace(base, edited, {
           confirm: () => Effect.succeed(true),
-          emitWritten: () => undefined,
           showInfo: () => Effect.void,
-        }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+        }).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
+          Effect.provide(AppSignals.layer),
+        );
 
         expect(accepted).toBe(true);
         expect(removed).toEqual([]);

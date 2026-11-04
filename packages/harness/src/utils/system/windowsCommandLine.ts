@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import * as ChildProcess from 'effect/process/ChildProcess';
 
-import { whichOnExtendedPath } from '@utils/system/platformPaths';
+import which from 'which';
 
 // cross-spawn's cmd.exe escaping: quote each argument (doubling the
 // backslashes that precede a quote or the closing quote), then caret-escape
@@ -20,14 +20,24 @@ function escapeCmdArgument(arg: string): string {
  * Node's spawn does no PATHEXT resolution and, since CVE-2024-27980, refuses
  * a `.cmd`/`.bat` without a shell. An `.exe`/`.com` hit is spawned by its
  * resolved path; a shim becomes one escaped `cmd.exe` line; a miss is spawned
- * as named and fails to start.
+ * as named and fails to start. The environment is plain text, since `which`
+ * reads the child's PATH from it.
  */
 export function toWindowsCommand(
   argv0: string,
   args: readonly string[],
-  options: ChildProcess.CommandOptions,
+  options: Omit<ChildProcess.CommandOptions, 'env'> & {
+    readonly env?: Record<string, string | undefined>;
+  },
 ): ChildProcess.StandardCommand {
-  const resolved = whichOnExtendedPath(argv0);
+  // On the PATH the child is handed (`Path` on Windows), extended already.
+  const resolved = which.sync(argv0, {
+    nothrow: true,
+    path: Object.entries(options.env ?? {}).find(
+      ([key]) => key.toLowerCase() === 'path',
+    )?.[1],
+    pathExt: process.env.PATHEXT,
+  });
   if (resolved === null) return ChildProcess.make(argv0, args, options);
   if (!/\.(cmd|bat)$/i.test(resolved)) {
     return ChildProcess.make(resolved, args, options);

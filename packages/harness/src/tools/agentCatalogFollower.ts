@@ -44,7 +44,7 @@ import {
 } from 'effect';
 
 import { AgentCatalog } from '@agent/index/agentCatalog';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal } from '@platform/appSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -93,11 +93,7 @@ export const registerCustomAgentRoot = Effect.flatMap(
 export const reloadAgentCatalog = Effect.flatMap(
   AgentCatalog,
   (catalog) => catalog.refresh,
-).pipe(
-  Effect.andThen(
-    Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
-  ),
-);
+).pipe(Effect.andThen(emitAppSignal('workspaceAgentsChanged', undefined)));
 
 /**
  * An edit under the custom directory, as a stream of "something changed".
@@ -106,9 +102,9 @@ export const reloadAgentCatalog = Effect.flatMap(
  * recursive watcher on Linux can, reported as `Unknown`) is retried on a
  * bounded backoff; a missing or unreadable directory fails fast. A watch that
  * ends cleanly (the directory was deleted or replaced) counts as a change and
- * is restarted, up to five times. Whatever ends the watching is logged, and
- * edits then apply when the directory setting changes or the process
- * restarts.
+ * is restarted, up to five times. Whatever else ends the watching, short of
+ * its scope closing, is logged, and edits then apply when the directory
+ * setting changes or the process restarts.
  */
 const watchCustomDirectory = Stream.unwrap(
   Effect.gen(function* () {
@@ -134,9 +130,13 @@ const watchCustomDirectory = Stream.unwrap(
       ),
       Stream.concat(stopped('the watch ended')),
       // fs.watch can also throw synchronously (ENOENT after a race, EMFILE,
-      // ENOSPC), which surfaces as a defect.
+      // ENOSPC), which surfaces as a defect. An interruption alone is the
+      // watch's scope closing (the setting changed, or the process is
+      // shutting down), not a failure.
       Stream.catchCause((cause) =>
-        stopped(toErrorMessage(Cause.squash(cause))),
+        Cause.hasInterruptsOnly(cause)
+          ? Stream.fromEffect(Effect.interrupt)
+          : stopped(toErrorMessage(Cause.squash(cause))),
       ),
     );
   }).pipe(
@@ -230,10 +230,10 @@ export const agentCatalogFollower = Layer.effectDiscard(
     // this process or another sharing the store, a background service task's
     // among them: every agent list here repaints. The first element is the
     // subscription itself, not a change.
-    yield* appState.changes([GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]).pipe(
+    yield* appState.changes([GlobalStateKey.ACTIVE_TEAM_ID]).pipe(
       Stream.drop(1),
       Stream.runForEach(() =>
-        Effect.sync(() => emitAppSignal('workspaceAgentsChanged', undefined)),
+        emitAppSignal('workspaceAgentsChanged', undefined),
       ),
       Effect.forkScoped,
     );

@@ -11,7 +11,7 @@
  * bundle `validate-run.mjs` builds), against a temporary HOME and project
  * from `mkdtemp`, set only in each child's environment: no live model, no API
  * key, and never the developer's `~/.texra`. The scripted conversation is
- * `goldenTurn` in `packages/harness/src/agent/runtime/run/validationModel.ts`, over the agents
+ * `goldenTurn` in `packages/cli/src/runtime/validationModel.ts`, over the agents
  * in `src/test-kernel/fixtures/storage/agents/`; this script orders the runs,
  * each in its own process and every one finishes cleanly: interrupted states
  * are the crash suite's (`crashConformance.ts`), which truncates a clean
@@ -25,15 +25,23 @@
  * - two `review` runs over the same notes: the context blobs they share.
  * - a `polish` document task with `--output`: the documents plugin's output
  *   fact, its diffs included, and the recipe's `run.end` with its documents
- *   as `output.structured`.
+ *   as `output.structured`. Its documents have no `\documentclass` and no
+ *   document environment, so its compile check and latexdiff run no TeX
+ *   tool. The TeX tools it could run by name are stand-ins first on PATH,
+ *   which fail the generation if run: what an installed TeX answers is the
+ *   machine's. Leaving TeX off the PATH would not hide it: the CLI adds the
+ *   usual TeX directories after the PATH it is given (`commandDirs`).
  * - `golden_chat`, the interactive `texra chat` driven under a PTY, with
  *   "Keep agents running" turned on in `/config`, Codex switched on in
- *   `/plugins`, and a plugin's `PostToolUse` hook on `codex` enabled: a
- *   plan the user runs as a goal
- *   (`r` on the approval), which runs the goal template as a background
+ *   `/plugins`, and a plugin's `PostToolUse` hooks on `plan` and `codex`
+ *   enabled: a plan the user runs as a goal
+ *   (`r` on the approval), which runs the default goal strategy as a background
  *   script of the chat whose one round, a fork of the chat (`self()`),
  *   runs a command under the goal's grant, unasked, and submits its
- *   verdict, and the chat's turn on the goal's result; then
+ *   verdict, and the chat's turn on the goal's result. The chat and its
+ *   goal run at once: the goal runs while the hook holds the chat's `plan`
+ *   call, up to its round's first model call, which waits; the chat then
+ *   finishes its turn, and only then does the round go on. Then
  *   `/model` and a message, so the switch is recorded at the run's
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved
@@ -227,7 +235,18 @@ process.stdin.on('end', function answer() {
 `,
     { mode: 0o755 },
   );
-  // A plugin whose \`PostToolUse\` hook sees each \`codex\` call.
+  // The TeX tools the document task runs by name, also first on PATH: each
+  // only notes in `tex.ran`, beside the flag, that it ran, and the
+  // generation fails once its runs end.
+  for (const tool of ['latexmk', 'pdflatex', 'latexdiff', 'texcount'])
+    writeFileSync(
+      path.join(bin, tool),
+      `#!/bin/sh\necho ${tool} >> "$(dirname "$0")/../tex.ran"\n`,
+      { mode: 0o755 },
+    );
+  // A plugin whose \`PostToolUse\` hooks see each \`codex\` call and hold each
+  // \`plan\` call until \`plan.release\` appears beside the project, the
+  // hooks' working directory.
   const hooks = path.join(root, 'golden-hooks');
   mkdirSync(path.join(hooks, '.claude-plugin'), { recursive: true });
   mkdirSync(path.join(hooks, 'hooks'));
@@ -247,6 +266,19 @@ process.stdin.on('end', function answer() {
                 type: 'command',
                 command: 'node',
                 args: ['-e', 'process.stdin.resume()'],
+              },
+            ],
+          },
+          {
+            matcher: 'plan',
+            hooks: [
+              {
+                type: 'command',
+                command: 'node',
+                args: [
+                  '-e',
+                  "process.stdin.resume(); setInterval(() => require('node:fs').existsSync('../plan.release') && process.exit(), 20)",
+                ],
               },
             ],
           },
@@ -560,9 +592,15 @@ async function generate(root) {
   };
   const chatRun = () =>
     query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[0]?.id;
+  const rowsOf = (runId, sql) =>
+    query(
+      cli.store(),
+      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
+       WHERE s.logical_id = ? AND ${sql}`,
+      [runId],
+    ).length;
   // The turn the chat is waiting after, once waiting is its latest position,
-  // and the wait for it to be waiting after `turn`: the goal's result wakes
-  // the chat, so which turn a step lands on is not fixed.
+  // and the wait for it to be waiting after `turn`.
   const waitingTurn = () => {
     const [last] = query(
       cli.store(),
@@ -640,10 +678,26 @@ async function generate(root) {
     tty,
   );
   tty.write('r');
+  // The goal runs while the hook holds the chat's plan call, until its
+  // round's first model call waits for `golden-round.release`; the chat then
+  // finishes its turn, and only then does the round go on.
+  await until(
+    "the goal round's held model call",
+    () =>
+      rowsOf(
+        query(cli.store(), RUN_OF_AGENT, ['golden_chat'])[1]?.id,
+        `e.type = 'model.message'
+         AND json_extract(e.data, '$.payload.kind') = 'attempt'`,
+      ) > 0,
+    tty,
+  );
+  writeFileSync(path.join(root, 'plan.release'), '');
+  let turn = await waitingAfter('the chat waiting on its goal', 0);
+  writeFileSync(path.join(root, 'golden-round.release'), '');
   // The goal's result, delivered once its round has verified it, opens the
   // chat's turn that reports it.
   await shows("the goal's result", 'Golden chat goal complete.');
-  let turn = await waitingAfter('the chat waiting on the goal result', 0);
+  turn = await waitingAfter('the chat waiting on the goal result', turn);
   await send('/model google/gemini-3.8-flash@medium');
   await shows(
     'the model switch notice',
@@ -662,13 +716,6 @@ async function generate(root) {
   await send('Hold this turn.');
   await shows('the Codex call approval', 'y approve');
   tty.write('y');
-  const rowsOf = (runId, sql) =>
-    query(
-      cli.store(),
-      `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-       WHERE s.logical_id = ? AND ${sql}`,
-      [runId],
-    ).length;
   const chatRows = (sql) => rowsOf(chatRun(), sql);
   const codexRows = (sql) =>
     rowsOf(query(cli.store(), RUN_OF_AGENT, ['codex'])[0]?.id, sql);
@@ -717,7 +764,9 @@ async function generate(root) {
   await shows('the idle prompt', 'Ctrl-C exit');
   tty.write('\x03');
   const exit = await tty.exited;
-  if (exit.exitCode !== 0)
+  // The chat's last run is the one the user stopped, which ended cancelled:
+  // an idle exit reports it as interrupted (130), as `texra run` does.
+  if (exit.exitCode !== 130)
     fail(`texra chat exited ${exit.exitCode}\n${tty.screen()}`);
   cli.run(['plugin', 'disable', 'golden-hooks', '--print']);
 
@@ -911,13 +960,6 @@ async function generate(root) {
         'json',
       ]),
     );
-    const rowsOf = (runId, sql) =>
-      query(
-        cli.store(),
-        `SELECT 1 FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = ? AND ${sql}`,
-        [runId],
-      ).length;
     const waited = (turn) =>
       until(
         `the service task waiting after turn ${turn}`,
@@ -933,13 +975,6 @@ async function generate(root) {
     await waited(1);
     writeFileSync(path.join(root, 'bash.release'), '');
     await waited(2);
-    // Each wait's progress row commits from the trace after the wait does:
-    // seen first, the second cannot race the resume's `followup.closed`.
-    await until(
-      'the service task progress after turn 2',
-      () => rowsOf(task, `e.type = 'conversation.progress'`) >= 2,
-      service,
-    );
     const [shell] = query(
       cli.store(),
       `SELECT s.logical_id AS id FROM event e
@@ -967,6 +1002,13 @@ async function generate(root) {
     );
   });
 
+  // A TeX stand-in that ran: the store would hold what this machine's TeX
+  // answers.
+  const tex = path.join(root, 'tex.ran');
+  if (existsSync(tex))
+    fail(
+      `the scenario ran ${readFileSync(tex, 'utf8').trim().split('\n').join(', ')}, which an installed TeX answers differently on each machine`,
+    );
   return cli.store();
 }
 
@@ -1031,17 +1073,6 @@ function tokens(make) {
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g;
 const ISO = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
-/** Keys whose value is a random 21-character id, alone or behind a prefix
- *  such as `plan-`. */
-const NANO_KEYS = new Set([
-  'id',
-  'logId',
-  'stageId',
-  'attemptId',
-  'requestId',
-  'operationId',
-]);
-const NANO = /^(?:[a-z]+-)?([A-Za-z0-9_-]{21})$/;
 /** Numbers that measure wall time. */
 const TIMING_KEYS = new Set([
   'wallTimeMs',
@@ -1080,7 +1111,6 @@ function normalize(file, root) {
   const uuids = tokens(
     (n) => `00000000-0000-4000-8000-${n.toString(16).padStart(12, '0')}`,
   );
-  const nanos = tokens((n) => `golden${n.toString().padStart(15, '0')}`);
   const times = tokens((n) => new Date(BASE_AT + n * 1000).toISOString());
   const ids = tokens(
     (n, id) => `a${n.toString(16).padStart(id.length - 1, '0')}`,
@@ -1090,20 +1120,31 @@ function normalize(file, root) {
     ...row,
     value: inflate(row.data, stored),
   }));
-  // The random ids a row names, so every occurrence maps alike.
-  const collect = (value, key) => {
+  // This machine's paths, each replaced before anything else: the temporary
+  // root, by its real path first, and the bundle's own resources, which the
+  // system prompt lists.
+  const paths = [
+    ...[...new Set([realpathSync.native(root), root])]
+      .sort((a, b) => b.length - a.length)
+      .map((prefix) => [prefix, '/golden']),
+    [realpathSync.native(validationRoot), '/texra'],
+  ];
+  // The random ids a row names, so every occurrence maps alike. An id or a
+  // time in one of this machine's paths takes no token.
+  const collect = (value) => {
     if (typeof value === 'string') {
-      for (const match of value.match(UUID) ?? []) uuids.get(match);
-      for (const match of value.match(ISO) ?? []) times.get(match);
-      if (NANO_KEYS.has(key) && NANO.test(value))
-        nanos.get(NANO.exec(value)[1]);
+      const text = paths.reduce(
+        (out, [from, to]) => out.split(from).join(to),
+        value,
+      );
+      for (const match of text.match(UUID) ?? []) uuids.get(match);
+      for (const match of text.match(ISO) ?? []) times.get(match);
       return;
     }
     if (value === null || typeof value !== 'object') return;
-    for (const [k, v] of Object.entries(value))
-      collect(v, Array.isArray(value) ? key : k);
+    for (const v of Object.values(value)) collect(v);
   };
-  for (const row of rows) collect(row.value, '');
+  for (const row of rows) collect(row.value);
 
   // An `agent` or `self` call's child run is named by the call
   // (`agentChildRunId`: its run, response, call and attempt), so a resume
@@ -1179,19 +1220,13 @@ function normalize(file, root) {
       );
   }
 
-  const roots = [...new Set([realpathSync.native(root), root])].sort(
-    (a, b) => b.length - a.length,
-  );
   const replacements = [
-    ...roots.map((prefix) => [prefix, '/golden']),
-    // The bundle's own resources, which the system prompt lists.
-    [realpathSync.native(validationRoot), '/texra'],
+    ...paths,
     ...[...ids.seen].map(([from, to]) => [
       new RegExp(`(?<![0-9a-f])${from}(?![0-9a-f])`, 'g'),
       to,
     ]),
     ...uuids.seen,
-    ...nanos.seen,
     ...times.seen,
     // The project's storage folder, named by a hash of its temporary path.
     [
@@ -1284,6 +1319,10 @@ function normalize(file, root) {
       insertRef.run(row.commit, digest);
     }
   }
+  // Each rename below is its aggregate's last change, which the store's
+  // triggers record under the new id (`aggregate_change`); the records under
+  // the random ids it replaces go first.
+  db.exec('DELETE FROM aggregate_change');
   const updateSequence = db.prepare(
     'UPDATE event_sequence SET logical_id = ?, uid = ?, owner_id = ? WHERE id = ?',
   );

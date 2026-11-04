@@ -6,12 +6,13 @@
  * popup and a headless run; a host only decides how a row looks.
  *
  * Nothing here is a fact of its own: a status is the card's, read with its
- * settlement (`reusedFrom`, a `Skipped` error) and whether a child exists;
+ * settlement (`reusedFrom`, a `Skipped` error, a cut by the run's end) and
+ * whether a child exists;
  * a row's agent, model, files and attempt are its input's and its card's;
  * its answer is its card's delivery (`deliveredResponse`); its duration and
  * cost are its child's rows.
  */
-import { Predicate, absurd } from 'effect';
+import { Predicate } from 'effect';
 import {
   agentName,
   TOOL_CALL_STATUS,
@@ -28,17 +29,9 @@ import type { ReadonlyDeep } from '@shared/session/readonlyDeep';
 import { deliveredResponse } from '@shared/subagentFollowup';
 import { formatWorkflowCallFiles } from '@shared/transcript/workflowCall';
 import { getBasename } from '@utils/core';
-import {
-  formatCompactDuration,
-  formatCostUsd,
-  formatResultCount,
-} from '@utils/text/stringUtils';
+import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 import type { ToolRow as FoldedToolRow, TranscriptRow } from './transcriptRow';
-
-/** What a card the run's end failed while it was open says: the call never
- *  settled, so nothing records how it ended. */
-export const TOOL_CUT_BY_RUN_END = 'The task ended before this tool completed.';
 
 /** An `agent` call's agent as the card shows it: a recipe names its
  *  agents by `source:name` key, and the card shows the name. */
@@ -61,9 +54,6 @@ export type ScriptCallStatus =
   | 'failed'
   | 'not run';
 
-const NOT_RUN_NOTE = 'The task ended before this call started.';
-const INTERRUPTED_NOTE = 'Stopped with its task. Resume the task to continue.';
-
 export interface ScriptCallView {
   /** The card's id (`logId`). */
   readonly id: string;
@@ -74,7 +64,14 @@ export interface ScriptCallView {
   readonly phase: string | null;
   /** `drafter · gpt-5 · retried · a.md · 1m 12s · $0.31` */
   readonly facts: readonly string[];
-  readonly detail?: { readonly kind: 'error' | 'note'; readonly text: string };
+  /** What the row says first: its error, a note, or a run's request. */
+  readonly detail?:
+    | { readonly kind: 'error'; readonly text: string }
+    | { readonly kind: 'notRun' | 'interrupted' }
+    | {
+        readonly kind: 'request';
+        readonly payload: ReadonlyDeep<PermissionPayload>;
+      };
   /** The child run an `agent` call launched: the row opens it. */
   readonly childRunId?: RunId;
   /** The run under the call waiting on the user: Review opens it. */
@@ -85,9 +82,8 @@ export interface ScriptCallView {
    *  the rule the composer it opens reads): opening it is talking to it
    *  (a host's talk-to-agent action). Any other agent opens read-only. */
   readonly talkable: boolean;
-  /** The row's one line: its `detail`, else a finished agent's answer, else
-   *  what its child last said, each cut to its first line. Never the
-   *  delivery envelope or the instruction's later paragraphs. */
+  /** A finished agent's answer, else what its child last said, cut to its
+   *  first line: never the delivery envelope or later paragraphs. */
   readonly summary?: string;
 }
 
@@ -105,33 +101,12 @@ export interface ScriptStageView {
   /** Every call, in issue order. */
   readonly calls: readonly ScriptCallView[];
   readonly phases: readonly ScriptPhaseView[];
-  /** `3 agents · 1 needs you · $0.840`: what the collapsed card says. */
-  readonly summary: string;
+  /** How many of `calls` run a child, and how many wait on this window. */
+  readonly agents: number;
+  readonly needsYou: number;
   /** What every child its calls launched has cost so far, their own
    *  agents included (`treeUsage`), discarded attempts included. */
   readonly costUsd: number;
-}
-
-/** What a waiting run asks for, in one line. */
-function pendingRequestLine(payload: ReadonlyDeep<PermissionPayload>): string {
-  switch (payload.kind) {
-    case 'bash':
-      return `Wants bash: ${payload.data.command}`;
-    case 'toolEdit':
-      return `Wants edit: ${payload.data.relativePath}`;
-    case 'retry':
-      return `Wants retry: ${payload.data.operation}`;
-    case 'proposal':
-      return 'Wants approval for a proposal';
-    case 'planApproval':
-      return 'Wants approval for a plan';
-    case 'externalInquiry':
-      return 'Wants an answer to an inquiry';
-    case 'userQuestion':
-      return 'Wants an answer to a question';
-    default:
-      return absurd(payload);
-  }
 }
 
 /** A tool row as a reader holds it (`Session.view`). */
@@ -174,7 +149,7 @@ function statusOf(
       return stringOf(output.reusedFrom) === undefined ? 'finished' : 'reused';
     case TOOL_CALL_STATUS.FAILED:
       if (output.name === 'Skipped') return 'skipped';
-      if (row.toolUse.errorText === TOOL_CUT_BY_RUN_END)
+      if (row.cutByRunEnd === true)
         return agent && child === undefined ? 'not run' : 'cancelled';
       return 'failed';
     default:
@@ -227,7 +202,7 @@ function callView(
     ended !== undefined && ended.treeUsage.cost > 0
       ? formatCostUsd(ended.treeUsage.cost)
       : undefined,
-  ].filter((part): part is string => part !== undefined);
+  ].filter(Predicate.isNotUndefined);
   const label = agent
     ? (stringOf(input.label) ?? nameOf(input.agentName) ?? row.toolUse.toolName)
     : [row.model.headerLabel, row.model.headerPreview]
@@ -235,18 +210,16 @@ function callView(
         .join(' ');
   let detail: ScriptCallView['detail'];
   if (request !== undefined)
-    detail = { kind: 'note', text: pendingRequestLine(request.payload) };
-  else if (status === 'failed')
+    detail = { kind: 'request', payload: request.payload };
+  else if (status === 'failed' && row.toolUse.errorText.length > 0)
     detail = { kind: 'error', text: row.toolUse.errorText };
-  else if (status === 'not run') detail = { kind: 'note', text: NOT_RUN_NOTE };
-  else if (status === 'interrupted')
-    detail = { kind: 'note', text: INTERRUPTED_NOTE };
+  else if (status === 'not run') detail = { kind: 'notRun' };
+  else if (status === 'interrupted') detail = { kind: 'interrupted' };
   const answer = deliveredResponse(row.toolUse.outputText);
   const said =
-    detail?.text ??
-    (agent && (status === 'finished' || status === 'reused')
+    agent && (status === 'finished' || status === 'reused')
       ? (answer ?? child?.latestLine)
-      : child?.latestLine);
+      : child?.latestLine;
   const summary = said == null ? undefined : firstLine(said);
   return {
     id: row.id,
@@ -255,7 +228,7 @@ function callView(
     status,
     phase: row.phase ?? null,
     facts,
-    ...(detail !== undefined && detail.text.length > 0 ? { detail } : {}),
+    ...(detail !== undefined ? { detail } : {}),
     ...(child !== undefined ? { childRunId: child.id } : {}),
     ...(asking !== undefined ? { askingRunId: asking.id } : {}),
     // Only a request this window can answer needs the user here: the rule
@@ -287,22 +260,6 @@ function firstLine(text: string): string {
       .map((line) => line.trim())
       .find((line) => line.length > 0) ?? ''
   );
-}
-
-/** `3 agents · 1 needs you · $0.840`; a count or cost of zero is left out. */
-function stageSummary(
-  calls: readonly ScriptCallView[],
-  costUsd: number,
-): string {
-  const agents = calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length;
-  const needsYou = calls.filter((call) => call.needsYou).length;
-  return [
-    agents > 0 ? formatResultCount(agents, 'agent') : undefined,
-    needsYou > 0 ? `${needsYou} needs you` : undefined,
-    costUsd > 0 ? formatCostUsd(costUsd) : undefined,
-  ]
-    .filter((part) => part !== undefined)
-    .join(' · ');
 }
 
 /**
@@ -353,10 +310,12 @@ export function scriptStages(
   if (stages.length === 0) return [];
   const byStage = Map.groupBy(
     rows.filter(
-      (row: ReadonlyDeep<TranscriptRow>): row is ToolRow =>
+      (
+        row: ReadonlyDeep<TranscriptRow>,
+      ): row is ToolRow & { readonly groupId: string } =>
         row.kind === 'tool' && row.groupId !== undefined,
     ),
-    (row) => row.groupId!,
+    (row) => row.groupId,
   );
   return stages.map((stage) => {
     const calls = (byStage.get(stage.id) ?? [])
@@ -374,7 +333,8 @@ export function scriptStages(
       status: stage.status,
       calls,
       phases: phasesOf(calls),
-      summary: stageSummary(calls, costUsd),
+      agents: calls.filter((call) => CHILD_TOOLS.has(call.toolName)).length,
+      needsYou: calls.filter((call) => call.needsYou).length,
       costUsd,
     };
   });

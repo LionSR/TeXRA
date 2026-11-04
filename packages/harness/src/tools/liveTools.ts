@@ -30,12 +30,13 @@ import {
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import { withLogChannel } from '@logger/effectLog';
-import {
-  AppState,
-  type StateReadFailed,
-  type StateWriteFailed,
-} from '@platform/interfaces';
+import { AppSignals } from '@platform/appSignals';
+import { AppState } from '@platform/interfaces';
 import type { PluginContext } from '@platform/processRuntime';
+import type {
+  StateReadFailed,
+  StateWriteFailed,
+} from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { entriesOf } from '@tools/catalogEntries';
 import {
@@ -53,11 +54,10 @@ import {
 } from '@tools/sessionTools';
 import {
   ToolRegistry,
-  type InstalledToolReader,
   type PluginLayerServices,
   type ToolTable,
 } from '@tools/toolTable';
-import type { PluginLoader } from '@tools/mcp/mcpConfig';
+import type { InstalledToolReader, PluginLoader } from '@tools/mcp/mcpConfig';
 
 /** The process's tool catalog's identifier: what a program that reads the
  *  catalog requires. */
@@ -155,6 +155,7 @@ export const toolCatalogLayer = (
         Path.Path,
         ChildProcessSpawner,
         AppState,
+        AppSignals,
       )(yield* Effect.context<Exclude<PluginLayerServices, ToolCatalog>>());
       const on = yield* SubscriptionRef.make(
         onOf(new Set(table.entries.keys())),
@@ -180,10 +181,7 @@ export const toolCatalogLayer = (
       const shared: ProcessCatalog = {
         builtIn: plugins.map((plugin) => ({
           plugin,
-          entries: entriesOf(
-            plugin.id,
-            new Map(Object.entries(plugin.tools ?? {})),
-          ),
+          entries: entriesOf(plugin.id, plugin.tools ?? []),
         })),
         onOf,
         on,

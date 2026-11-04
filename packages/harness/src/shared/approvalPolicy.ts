@@ -9,7 +9,7 @@ export type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
  * enum. Reached only through {@link parseApprovalPolicy}, which every
  * reader of typed-in text — `TEXRA_APPROVAL_POLICY`, `--approval-policy`,
  * `/approval`, the settings dropdown — calls. Persisted config values keep the
- * strict enum: the `texra.approvalPolicy` catalog row validates the stored
+ * strict enum: the `approvalPolicy` catalog row validates the stored
  * value for all three hosts and warns when it no longer parses, and the
  * dropdown's options are derived from that same literal list.
  */
@@ -30,8 +30,8 @@ export const APPROVAL_POLICY_DEFAULT: ApprovalPolicy = 'ask';
  * Changing that requires changing headless discipline, not just this constant.
  */
 export const APPROVAL_POLICY_NO_INPUT_DEFAULT: ApprovalPolicy = 'never';
-/** Canonical persisted spelling in `.texra/config.json` for every host. */
-export const APPROVAL_POLICY_CONFIG_KEY = 'texra.approvalPolicy';
+/** The approval policy's config key, the same on every host. */
+export const APPROVAL_POLICY_CONFIG_KEY = 'approvalPolicy';
 const APPROVAL_POLICY_DENIED_MESSAGE = 'Denied by the approval policy.';
 const APPROVAL_UNPRESENTABLE_MESSAGE =
   'Interactive approval requires a prompt; this run cannot present one.';
@@ -58,17 +58,14 @@ export function approvalPolicyDenialMessage(
     : APPROVAL_UNPRESENTABLE_MESSAGE;
 }
 
-/** Decide one Bash or tool-edit permission from request-time policy facts. */
+/** Decide one guarded operation under the policy from request-time facts. */
 export function decideApproval(input: {
   readonly policy: ApprovalPolicy;
-  readonly promptRequired: boolean;
   readonly scopedBypass: boolean;
   readonly canPresent: boolean;
 }): ApprovalPolicyDecision {
   if (input.policy === 'never') return 'deny-policy';
-  if (input.policy === 'yolo' || input.scopedBypass || !input.promptRequired) {
-    return 'allow';
-  }
+  if (input.policy === 'yolo' || input.scopedBypass) return 'allow';
   return input.canPresent ? 'present' : 'deny-unpresentable';
 }
 
@@ -95,26 +92,6 @@ export type ApprovalPolicyDenial = {
       readonly deny: Exclude<HumanInputDecision, 'present'>['deny'];
     }
 );
-
-/**
- * Decide one delegation proposal. `never` denies it as it denies every other
- * request kind. Otherwise a scoped proposal bypass approves it, and `yolo` or
- * a run that cannot present one proceeds `unattended`: such a run withholds
- * `requiresApproval` delegation tools up front, so one that still executes
- * was offered for unattended use, and the proposal is a review surface rather
- * than the security gate (the child's bash and edits still gate).
- */
-export function decideProposalApproval(input: {
-  readonly policy: ApprovalPolicy;
-  readonly scopedBypass: boolean;
-  readonly canPresent: boolean;
-}): 'bypass' | 'unattended' | 'present' | 'deny-policy' {
-  if (input.policy === 'never') return 'deny-policy';
-  if (input.scopedBypass) return 'bypass';
-  return input.policy === 'yolo' || !input.canPresent
-    ? 'unattended'
-    : 'present';
-}
 
 const APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';

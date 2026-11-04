@@ -3,19 +3,21 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, PlatformError } from 'effect';
+import { Effect, PlatformError, Predicate } from 'effect';
 
 // Local imports
 import {
-  entryChannel,
-  entryMessage,
-  type LogEntry,
-  type LogSink as HostLogSink,
   type ProcessRuntime,
   type PerKeyLane,
   withPerKeyLane,
 } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
+import {
+  entryChannel,
+  entryMessage,
+  type LogEntry,
+  type LogSink as HostLogSink,
+} from '@texra-ai/harness/node';
 import {
   CLI_NDJSON_CONTRACT,
   type CliNdjsonRecord,
@@ -26,8 +28,8 @@ const closed = { stdout: false, stderr: false };
 type StreamKey = 'stdout' | 'stderr';
 
 function isCliPipeClosureError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const code = (error as { code?: unknown }).code;
+  if (!Predicate.hasProperty(error, 'code')) return false;
+  const code = error.code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 
@@ -63,7 +65,7 @@ export function setCliLogRuntime(runtime: ProcessRuntime | null): void {
 }
 
 /** A synchronous throw from `write` (including `JSON.stringify` in the
- *  thunk) marks the stream closed and settles, never crashes the process. */
+ *  thunk) marks the stream closed and finishes, never crashes the process. */
 function bestEffortStreamWrite(write: () => void, onSyncThrow: () => void) {
   try {
     write();
@@ -164,7 +166,7 @@ export function cliErrorMessage(error: unknown): string {
 }
 
 /**
- * Write a caught error's human-readable message to stderr. Folds the
+ * Write a caught error's human-readable message to stderr. Replaces the
  * `writeTextStderr(cliErrorMessage(error))` pair every command's catch block
  * repeated so the error-formatting choice lives in one place.
  */
@@ -279,7 +281,10 @@ const sinkLanes = new WeakMap<NdjsonStdoutSink, PerKeyLane>();
 export class NdjsonStdoutSink {
   private stdoutClosed = false;
 
-  constructor(private readonly stdout: NdjsonWritable = processStdoutTarget) {}
+  private readonly stdout: NdjsonWritable;
+  constructor(stdout: NdjsonWritable = processStdoutTarget) {
+    this.stdout = stdout;
+  }
 
   writeRecord(unstamped: CliNdjsonRecord): void {
     if (this.isClosed()) return;
@@ -301,7 +306,7 @@ export class NdjsonStdoutSink {
     runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
   }
 
-  /** Settles once every record queued before this call has landed: the FIFO
+  /** Finishes once every record queued before this call has landed: the FIFO
    *  lane runs this no-op only after them. */
   flush(): Effect.Effect<void> {
     return Effect.suspend(() => {
@@ -323,8 +328,9 @@ export class NdjsonStdoutSink {
    * write that throws (including a stringify of a malformed record, which is
    * a producer bug) must not pass without a trace.
    */
-  private writeLine(record: CliNdjsonRecord): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly writeLine = Effect.fn('NdjsonStdoutSink.writeLine')(
+    { self: this },
+    function* (record: CliNdjsonRecord): Effect.fn.Return<void> {
       if (this.isClosed()) return;
       const writeResult = yield* Effect.try({
         try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
@@ -347,8 +353,8 @@ export class NdjsonStdoutSink {
       if (!writeResult && !(yield* this.waitForStdoutDrain())) {
         this.closeQueue();
       }
-    });
-  }
+    },
+  );
 
   private isClosed(): boolean {
     return this.stdoutClosed || !this.stdout.usable;

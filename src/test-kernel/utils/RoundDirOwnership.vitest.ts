@@ -4,19 +4,18 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { MemoryStateStore } from '@platform/defaults/memoryState';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import { RunIdSchema } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+} from '@texra-ai/harness/node';
+import { createWorkspaceLocation } from '@texra-ai/harness/host';
+import { runDirUnder } from '@common/storage/storageLayout';
+import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
-import { runDirUnder } from '@utils/files/runStorageFs';
-import { RunFileService } from '@utils/files/runStorage';
 
 const tempDirs = useTempDirs();
 
@@ -35,7 +34,8 @@ describe('round-dir ownership', () => {
     const workspaceDir = path.join(tempDir, 'workspace');
     const storageRoot = path.join(tempDir, 'storage');
     await mkdir(workspaceDir, { recursive: true });
-    await installFakePlatform(
+    // The file service takes the roots it works under as a value.
+    const { roots } = createFakeHost(
       {
         workspacePath: workspaceDir,
         storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
@@ -50,14 +50,11 @@ describe('round-dir ownership', () => {
     await writeFile(stylePath, 'workspace\n');
 
     const runId = Schema.decodeUnknownSync(RunIdSchema)('c3c3c3c3c3c3');
-    const runFile = path.join(
-      runDirUnder(testWorkspaceRoots().storage, runId),
-      'macros.sty',
-    );
+    const runFile = path.join(runDirUnder(roots.storage, runId), 'macros.sty');
     await mkdir(path.dirname(runFile), { recursive: true });
     await writeFile(runFile, 'the run wrote this\n');
 
-    const fileService = new RunFileService(runId, testWorkspaceRoots());
+    const fileService = new RunFileService(runId, roots);
     await onNodeFs(
       fileService.mirrorWorkspaceFile(
         createWorkspaceLocation(stylePath, 'macros.sty'),

@@ -92,7 +92,7 @@ export function createDesktopShellActions(
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
       });
     },
-    // New Task, the header's "+" (PRD 12.4): the New-task state with the
+    // New Task, the header's "+": the New-task state with the
     // launcher's selections as they are, a surface action as the extension
     // sends it.
     showLauncher: options.showLauncher,

@@ -1,3 +1,5 @@
+import { Struct } from 'effect';
+
 export type GitHubCheckAnnotationLevel = 'notice' | 'warning' | 'failure';
 
 export const DEFAULT_CHECK_ANNOTATION_LEVEL: GitHubCheckAnnotationLevel =
@@ -12,9 +14,10 @@ const ANNOTATION_LEVEL_RANK: Readonly<
 };
 
 /** Every level, most severe first: the one order RANK declares, read back. */
-const ANNOTATION_LEVELS_BY_SEVERITY: readonly GitHubCheckAnnotationLevel[] = (
-  Object.keys(ANNOTATION_LEVEL_RANK) as GitHubCheckAnnotationLevel[]
-).sort((a, b) => ANNOTATION_LEVEL_RANK[b] - ANNOTATION_LEVEL_RANK[a]);
+const ANNOTATION_LEVELS_BY_SEVERITY: readonly GitHubCheckAnnotationLevel[] =
+  Struct.keys(ANNOTATION_LEVEL_RANK).sort(
+    (a, b) => ANNOTATION_LEVEL_RANK[b] - ANNOTATION_LEVEL_RANK[a],
+  );
 
 /** Unknown or missing levels read as GitHub's own default, `notice`. */
 export function normalizeCheckAnnotationLevel(

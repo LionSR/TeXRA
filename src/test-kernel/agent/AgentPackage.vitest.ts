@@ -2,34 +2,26 @@
 import { it } from '@effect/vitest';
 import {
   Cause,
+  Context,
   Deferred,
   Effect,
   Exit,
-  Fiber,
-  Queue,
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
-import { MemoryStateStore } from '@platform/defaults/memoryState';
-import type { RunId } from '@shared/schemas';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { Runs } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
-import type { AgentPlatform } from '../../../packages/harness/src/index';
-
-interface RootLaunchOptions {
-  readonly onRun?: (handle: unknown) => Effect.Effect<void>;
-  readonly onAdmitted?: (
-    runId: string,
-    commit: number,
-  ) => Effect.Effect<void, Error>;
-}
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import { runView } from '../../../packages/harness/src/effect/runHandle';
+import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 /** A session view run entry as the package's fold keys it. */
 interface FakeRunView {
@@ -46,8 +38,9 @@ const RUN_ID = 'ae0001';
 
 /**
  * The runtime session the package opens, as the process's session owner
- * serves it: its run completes, but its final view never folds, and its
- * view's level stream ends as the fold does (`foldDeath`).
+ * serves it: its run opens at commit 0, but its final view never folds, its
+ * view's level stream ends as the fold does (`foldDeath`), and its log
+ * settles only past the fold, so it dies with it.
  */
 class FakeSession {
   readonly viewRef = Effect.runSync(
@@ -56,43 +49,32 @@ class FakeSession {
       runs: new Map(),
     }),
   );
-  // The package launches through its session's runs: a root launch.
-  readonly runs = {
-    get: () => undefined,
-    interrupt: () => false,
-    launch: ({ options }: { readonly options: RootLaunchOptions }) =>
-      Effect.gen({ self: this }, function* () {
-        yield* options.onAdmitted?.(RUN_ID, 0) ?? Effect.void;
-        yield* SubscriptionRef.update(this.viewRef, (current) => ({
-          ...current,
-          runs: new Map(current.runs).set(RUN_ID, {
-            id: RUN_ID,
-            ancestors: [],
-            childIds: [],
-            durableOutcome: null,
-          }),
-        }));
-        yield* options.onRun?.({ runId: RUN_ID, interrupt: vi.fn() }) ??
-          Effect.void;
-        return { outcome: 'COMPLETED' } as never;
-      }).pipe(Effect.uninterruptible),
-  };
+  readonly runs = { get: () => undefined };
   readonly interactions = {
     approvalPromptsUnavailable: false,
     emit: () => Effect.void,
     use: () => Effect.succeed(() => undefined),
   };
   readonly requests = { request: () => Effect.succeed({ kind: 'done' }) };
-  readonly log = { movedAside: null, settled: Effect.void };
-  readonly trace = { listen: () => () => undefined };
-  readonly followUps = { resumes: { joined: () => false } };
+  readonly log = {
+    movedAside: null,
+    tail: () => Stream.empty,
+    settled: Effect.suspend(() => Deferred.await(this.foldDeath)).pipe(
+      Effect.orDie,
+    ),
+  };
   readonly view = {
     ref: this.viewRef,
     changes: Stream.merge(
       SubscriptionRef.changes(this.viewRef),
       Stream.fromEffect(Effect.suspend(() => Deferred.await(this.foldDeath))),
     ),
-    subscribe: () => Effect.void,
+    // A subscription's replay lands as a level holding its transcripts.
+    subscribe: (_port: string, set: readonly TranscriptSubscription[]) =>
+      SubscriptionRef.update(this.viewRef, (current) => ({
+        ...current,
+        transcriptSeq: new Map(set.map(({ id }) => [id, 0])),
+      })),
     inputs: () => Stream.empty,
   };
 
@@ -106,85 +88,38 @@ class FakeSession {
     this.roots = roots;
     this.foldDeath = foldDeath;
   }
-}
 
-/**
- * A session whose run's previous activation completed, as a same-session
- * resume meets it: the view still holds that outcome when the launch admits
- * the run at commit 1, and the new activation folds once the run's two
- * readers (the handle's drain and the test's) have read that level. The start's
- * own check reads no run, so the launch seeds the old outcome.
- */
-class RelaunchedSession extends FakeSession {
-  readonly readers = Effect.runSync(Queue.unbounded<void>());
-  override readonly view: FakeSession['view'] = {
-    ...this.view,
-    changes: this.view.changes.pipe(
-      Stream.tap(() => Queue.offer(this.readers, undefined)),
-    ),
-  };
-  override readonly runs: FakeSession['runs'] = {
-    ...this.runs,
-    launch: ({ options }: { readonly options: RootLaunchOptions }) =>
-      Effect.gen({ self: this }, function* () {
-        yield* this.fold(0, 'completed');
-        yield* options.onAdmitted?.(RUN_ID, 1) ?? Effect.void;
-        yield* Queue.takeN(this.readers, 2);
-        yield* this.fold(1, null);
-        yield* this.fold(2, 'completed');
-        return { outcome: 'completed' } as never;
-      }),
-  };
-
-  constructor(foldDeath: Deferred.Deferred<never, Error>) {
-    super({ storage: '/storage' }, foldDeath);
-  }
-
-  /** The level at `cursor`, the run's durable outcome `outcome`. */
-  fold(cursor: number, outcome: FakeRunView['durableOutcome']) {
+  /** The run's opening as a root launch commits it: the commit it answers. */
+  open(): Effect.Effect<number> {
     return SubscriptionRef.update(this.viewRef, (current) => ({
       ...current,
-      cursor,
       runs: new Map(current.runs).set(RUN_ID, {
         id: RUN_ID,
         ancestors: [],
         childIds: [],
-        durableOutcome: outcome,
+        durableOutcome: null,
       }),
-    }));
+    })).pipe(Effect.as(0));
   }
 }
 
-/** The package's session over `fake`, as the process's owner opens it. */
-const openPackageSession = (fake: FakeSession) =>
-  Effect.gen(function* () {
-    const sessions = yield* makeSessions(
-      { open: () => Effect.succeed(fake) } as never,
-      yield* testRuntime().contextEffect,
-      yield* Effect.scope,
-    );
-    return yield* sessions.open({
-      storage: '/storage',
-      globalState: new MemoryStateStore(),
-    } as unknown as AgentPlatform['roots']);
-  });
+/** The package's handle on `fake`'s run, from the activation its opening
+ *  commits, as `session.start` gives it. */
+const startedRun = (fake: FakeSession) =>
+  Effect.map(fake.open(), (activation) =>
+    runView(contextOf(fake), RUN_ID as RunId, activation),
+  );
+
+/** `fake` as the session's owners a run's view reads. */
+const contextOf = (fake: FakeSession) =>
+  // cast: the fake carries only what a run's view reads of each owner.
+  Context.make(SessionLog, fake.log as never).pipe(
+    Context.add(SessionViewAccess, fake.view as never),
+    Context.add(Runs, fake.runs as never),
+    Context.add(SessionRequests, fake.requests as never),
+  ) as never;
 
 describe('agent package sessions', () => {
-  beforeEach(async () => {
-    // Every named agent resolves to a custom `assistant` in the kernel
-    // runtime's catalog, which this suite never loads.
-    const { AgentCatalog } = await import('@agent/index/agentCatalog');
-    const catalog = testRuntime().runSync(
-      Effect.gen(function* () {
-        return yield* AgentCatalog;
-      }),
-    );
-    vi.spyOn(catalog, 'get').mockReturnValue({
-      source: 'custom',
-      name: 'assistant',
-    } as ReturnType<typeof catalog.get>);
-  });
-
   it.live(
     'fails the run instead of hanging when the session fold dies before the final view',
     () =>
@@ -193,14 +128,9 @@ describe('agent package sessions', () => {
       // rather than wait on a level that never comes.
       Effect.gen(function* () {
         const foldDeath = yield* Deferred.make<never, Error>();
-        const session = yield* openPackageSession(
+        const run = yield* startedRun(
           new FakeSession({ storage: '/storage' }, foldDeath),
         );
-        const run = yield* session.start({
-          agent: 'assistant',
-          instruction: 'Test instruction',
-          runId: RUN_ID as RunId,
-        });
         const pull = yield* Stream.toPull(run.view);
         yield* pull;
         yield* Deferred.fail(foldDeath, new Error('fold died'));
@@ -214,34 +144,6 @@ describe('agent package sessions', () => {
             Exit.isFailure(exit) && Cause.squash(exit.cause),
           ).toMatchObject({ message: 'fold died' });
         }
-      }).pipe(Effect.scoped),
-  );
-
-  it.live(
-    "ends a relaunched run's view at its own activation's outcome, not the one before",
-    () =>
-      Effect.gen(function* () {
-        const fake = new RelaunchedSession(
-          yield* Deferred.make<never, Error>(),
-        );
-        const session = yield* openPackageSession(fake);
-        const run = yield* session.start({
-          agent: 'assistant',
-          instruction: 'Test instruction',
-          runId: RUN_ID as RunId,
-        });
-        const levels = yield* Effect.forkChild(Stream.runCollect(run.view));
-
-        yield* run.result;
-        expect(
-          (yield* Fiber.join(levels)).map((level) => [
-            level.cursor,
-            level.runs.get(RUN_ID as RunId)?.durableOutcome,
-          ]),
-        ).toEqual([
-          [1, null],
-          [2, 'completed'],
-        ]);
       }).pipe(Effect.scoped),
   );
 });

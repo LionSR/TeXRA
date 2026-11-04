@@ -1,8 +1,9 @@
 /**
  * The extension's reading of the one attention rule (`attentionOf`): the
- * sidebar view's badge counts the requests this window can answer, and a new
- * one brings its run on screen without taking focus. The card stays the one
- * place to answer; nothing here decides a request.
+ * sidebar view's badge counts the requests this window can answer, a new
+ * one brings its run on screen without taking focus, and a document task
+ * that completes, here or in the service, plays the chime. The card stays
+ * the one place to answer; nothing here decides a request.
  */
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Stream } from 'effect';
@@ -13,6 +14,7 @@ import {
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
+import { isDocumentTaskRun } from '@texra/shared/plugins/documents';
 import type { Session } from '@texra-ai/harness';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
 import type * as vscode from 'vscode';
@@ -25,12 +27,16 @@ interface AttentionSurface {
   /** The focus command: the only way to open a never-resolved sidebar. */
   showInSidebar(): Effect.Effect<void, Error>;
   showSessions(runId: RunId): void;
+  chime(): void;
 }
 
 export class RequestAttention {
   private badge: vscode.ViewBadge | undefined;
 
-  constructor(private readonly surface: AttentionSurface) {}
+  private readonly surface: AttentionSurface;
+  constructor(surface: AttentionSurface) {
+    this.surface = surface;
+  }
 
   /** A newly resolved sidebar view starts with the current count. */
   paint(view: vscode.WebviewView): void {
@@ -42,9 +48,16 @@ export class RequestAttention {
     // subscribed, which the badge shows and nothing reveals.
     let previous: SessionView | undefined;
     return Stream.runForEach(session.view.changes, (view) => {
-      const { requests, arrived } = attentionOf(view, previous);
+      const { requests, arrived, finished } = attentionOf(view, previous);
       previous = view;
       this.setCount(requests.length);
+      // A failed or stopped task is no chime.
+      if (
+        finished.some(
+          (run) => isDocumentTaskRun(run) && run.durableOutcome === 'completed',
+        )
+      )
+        this.surface.chime();
       const [first] = arrived;
       return first ? this.bringForward(first.runId) : Effect.void;
     });

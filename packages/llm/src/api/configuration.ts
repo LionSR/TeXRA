@@ -7,7 +7,10 @@
  */
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 
-import { acceptedEfforts } from '../models/reasoningChoice.js';
+import { ModelError, PLAN_ROUTES } from '../errors.js';
+import { routeConfig } from '../models/modelRoute.js';
+import { acceptedEfforts, chooseReasoning } from '../models/reasoningChoice.js';
+import { BACKEND_PROTOCOLS } from '../providers/providerPlugins.js';
 import { responsesConfiguration } from './responsesConfiguration.js';
 import { backgroundCapable } from '../protocol.js';
 import type { ModelConfiguration } from '../turn.js';
@@ -20,9 +23,16 @@ export type ConfigurationOf<P extends HttpProtocol> = Extract<
   { protocol: P }
 >;
 
-/** What every protocol arm reads, computed once per bind. */
+/** A bind's options with their defaults applied. */
+type Options = Required<
+  Omit<NonNullable<BindSpec['options']>, 'fetch' | 'temperature'>
+> &
+  Pick<NonNullable<BindSpec['options']>, 'fetch' | 'temperature'>;
+
+/** What every protocol case reads, computed once per bind. */
 export interface Facts {
-  readonly spec: BindSpec;
+  /** The bind, over its route's config and with every option defaulted. */
+  readonly spec: BindSpec & { readonly options: Options };
   readonly config: ModelConfig;
   /** Requested model and deployment; a route addressed under another name overrides the model. */
   readonly base: {
@@ -32,27 +42,21 @@ export interface Facts {
       readonly credentialScope: string;
     };
   };
-  /**
-   * The three request controls every OpenAI-descended route defaults from, in
-   * the package's own order. An arm that clamps or fixes one overrides it
-   * after the spread; an arm whose route takes only some of the three names
-   * those, because a spread is not excess-property-checked and the package
-   * parses its configuration strictly.
-   */
+  /** The request controls the protocol cases default from; a case that
+   *  clamps or fixes one sets its own value instead. */
   readonly controls: {
     readonly maxOutputTokens: number;
+    /** Null where the request takes no temperature: the route then sends none. */
     readonly temperature: number | null;
-    readonly parallelToolCalls: boolean;
   };
-  readonly supportsTemperature: boolean;
-  /** The effort values the model accepts on the wire (see {@link acceptedEfforts}). */
+  /** The effort values the route accepts on the wire (see {@link acceptedEfforts}). */
   readonly acceptedEfforts: readonly ReasoningEffort[];
 }
 
 /** Anthropic's thinking: off, adaptive, or a budget of half the output where the model takes one. */
 function anthropicThinking(
   config: ModelConfig,
-  choice: BindSpec['options']['reasoning'],
+  choice: Options['reasoning'],
   maxOutputTokens: number,
 ): ConfigurationOf<'anthropic-messages'>['defaults']['thinking'] {
   if (!choice.thinking) return { mode: 'disabled' };
@@ -81,7 +85,6 @@ const CONFIGURE: {
       supportsSystemMessages: config.capabilities.supportsIntermDevMsgs,
       defaults: {
         maxOutputTokens: controls.maxOutputTokens,
-        parallelToolCalls: true,
         thinking: anthropicThinking(config, choice, controls.maxOutputTokens),
         // Anthropic has no `none` or `minimal`: off is the thinking switch.
         effort:
@@ -122,36 +125,67 @@ const CONFIGURE: {
   },
 };
 
-/** The configuration `spec` binds on its protocol. */
-export function configurationFor(spec: BindSpec): ModelConfiguration {
-  const { model: config, options } = spec;
+/** The protocol each backend provider serves, by provider id. */
+const PROTOCOL_OF: Readonly<Partial<Record<string, HttpProtocol>>> =
+  BACKEND_PROTOCOLS;
+
+/**
+ * What `spec` binds: the config its route runs, its options with their
+ * defaults, and the configuration they make on the provider's protocol.
+ */
+export function configurationFor(spec: BindSpec): {
+  readonly config: ModelConfig;
+  readonly options: Options;
+  readonly configuration: ModelConfiguration;
+} {
+  const { route } = spec;
+  const config = routeConfig(spec.model, route);
+  const protocol = PROTOCOL_OF[config.provider];
+  if (protocol === undefined) {
+    throw new ModelError({
+      kind: 'unsupported',
+      message: `No protocol serves ${config.provider} models.`,
+    });
+  }
+  const options: Options = {
+    maxOutputTokens: config.maxOutputTokens,
+    reasoning: chooseReasoning(config, {}, { route }),
+    serverState: false,
+    fastTier: false,
+    webSocket: false,
+    background: false,
+    ...spec.options,
+  };
   // A request that does not think is sampled at the caller's temperature,
   // except on an OpenAI reasoning model, which refuses a temperature even at
   // effort `none`.
-  const supportsTemperature =
+  const sampled =
     !options.reasoning.thinking &&
     !(
       config.provider === ModelProvider.OPENAI && config.reasoning !== undefined
     );
-  return CONFIGURE[spec.protocol]({
-    spec,
+  const credentialProvider =
+    route.kind === 'api-key'
+      ? route.provider
+      : PLAN_ROUTES[route.kind].provider;
+  const configuration = CONFIGURE[protocol]({
+    spec: { ...spec, model: config, options },
     config,
     base: {
       requestedModel: config.id,
       deployment: {
         endpoint: spec.endpoint,
-        credentialScope: spec.credentialScope,
+        // A non-secret name of the credential route.
+        credentialScope: `${credentialProvider}:${route.kind}`,
       },
     },
     controls: {
       maxOutputTokens: options.maxOutputTokens,
-      temperature: supportsTemperature ? options.temperature : null,
-      // Every OpenAI-descended route honors this; Anthropic uses its default.
-      parallelToolCalls: options.parallelToolCalls,
+      temperature: sampled ? (options.temperature ?? null) : null,
     },
-    supportsTemperature,
-    acceptedEfforts: acceptedEfforts(config),
+    acceptedEfforts: acceptedEfforts(config, route),
   });
+  return { config, options, configuration };
 }
 
 /** Whether the configuration takes a tool choice naming one function. */
@@ -176,13 +210,13 @@ export function forcedToolChoice(
  * turns that go out as background work.
  */
 export function servesWebSocket(
-  spec: BindSpec,
+  options: Options,
   configuration: ModelConfiguration,
 ): boolean {
   return (
     configuration.protocol === 'openai-responses' &&
-    spec.options.webSocket &&
-    !(spec.options.background && backgroundCapable(configuration)) &&
+    options.webSocket &&
+    !(options.background && backgroundCapable(configuration)) &&
     configuration.openaiEndpoint
   );
 }

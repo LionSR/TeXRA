@@ -1,5 +1,5 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
-import { Cause, Effect, Schema, Scope } from 'effect';
+import { Cause, Effect, Result, Schema, Scope, Struct } from 'effect';
 
 import { defineTool, type ToolResult } from '@texra-ai/harness';
 import { ToolContext, type ToolContextShape } from '@texra-ai/harness/plugins';
@@ -26,6 +26,7 @@ import {
   type LeanCommandSpec,
   type LeanFileCommand,
   type LeanProjectCommand,
+  type LeanUnavailable,
   type LspResult,
 } from './leanTypes';
 import {
@@ -38,14 +39,14 @@ function commandLine([name, spec]: [string, LeanCommandSpec]): string {
   return `- "${name}": ${spec.description}${spec.hint ? ` (${spec.hint})` : ''}`;
 }
 
-const FILE_COMMAND_NAMES = Object.keys(LEAN_FILE_COMMANDS) as LeanFileCommand[];
+const FILE_COMMAND_NAMES: LeanFileCommand[] = Struct.keys(LEAN_FILE_COMMANDS);
 const FILE_COMMAND_PROSE = Object.entries(LEAN_FILE_COMMANDS)
   .map(commandLine)
   .join('\n');
 
-const PROJECT_COMMAND_NAMES = Object.keys(
+const PROJECT_COMMAND_NAMES: LeanProjectCommand[] = Struct.keys(
   LEAN_PROJECT_COMMANDS,
-) as LeanProjectCommand[];
+);
 
 /** Project commands bucketed by their declared group, in declaration order. */
 const PROJECT_COMMAND_GROUPS = Map.groupBy(
@@ -122,12 +123,23 @@ const LeanInspectInputSchema = Schema.Struct({
 type LeanInspectInput = typeof LeanInspectInputSchema.Type;
 
 /**
- * Setup guidance appended when Lean diagnostics fail for a reason that is
- * plausibly a missing/misconfigured toolchain rather than a bad file. Shared by
- * the `toolchain_unavailable` branch and the catch-all below so the two stay in
- * sync.
+ * The tool's answer when Lean cannot serve a call: the adapter's message,
+ * with setup guidance only when the toolchain is the cause. A missing project
+ * names its lakefile and a stopped or crashed server is not a setup problem.
  */
-const LEAN_TOOLCHAIN_HELP = `In VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that \`lake\` is on PATH, and make sure the file is inside a Lake project (lakefile.lean / lakefile.toml).`;
+const leanUnavailableResult = (
+  failed: string,
+  failure: LeanUnavailable,
+  summary: string,
+): ToolResult =>
+  errorResult(
+    `${failed}: ${failure.message}${
+      failure.reason === 'toolchain'
+        ? '\n\nIn VS Code: install the Lean 4 extension (leanprover.lean4). In CLI/desktop: install elan so that `lake` is on PATH.'
+        : ''
+    }`,
+    { summary },
+  );
 
 const NO_DIAGNOSTICS_HELP = `No errors, warnings, or hints for this file.
 
@@ -154,7 +166,7 @@ function executeLeanDiagnosticsTool(
   const { command, file } = input;
   return diagnose(file, command).pipe(
     catchLeanFailure(
-      (cause) => `Error: ${toErrorMessage(cause)}\n\n${LEAN_TOOLCHAIN_HELP}`,
+      (cause) => `Error: ${toErrorMessage(cause)}`,
       'Failed to get diagnostics',
     ),
   );
@@ -167,26 +179,24 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
   const call = yield* ToolContext;
   const services = yield* LeanLanguageServices;
   const absoluteFile = yield* leanFilePath(file, call);
-  const result = yield* services.fetchDiagnosticsForFile(
-    absoluteFile,
-    yield* leanRunId(services),
+  const fetched = yield* Effect.result(
+    services.fetchDiagnosticsForFile(absoluteFile, yield* leanRunId(services)),
   );
-  if (!result.ok) {
-    // The adapter distinguishes a genuinely missing file from a broken or
-    // absent Lean toolchain — only the former is a "could not open file";
-    // the latter gets the same actionable setup guidance as a general
-    // tool failure.
-    if (result.kind === 'toolchain_unavailable') {
-      return errorResult(
-        `Failed to get diagnostics for ${file}: ${result.message}\n\n${LEAN_TOOLCHAIN_HELP}`,
-        { summary: 'Failed to get diagnostics' },
-      );
-    }
-    return errorResult(
-      `Could not open file ${file}: ${result.message}\n\nMake sure the file exists and is accessible.`,
-      { summary: 'Failed to open file' },
-    );
+  if (Result.isFailure(fetched)) {
+    // Only a file that could not be opened is a "could not open file".
+    const failure = fetched.failure;
+    return failure._tag === 'LeanUnavailable'
+      ? leanUnavailableResult(
+          `Failed to get diagnostics for ${file}`,
+          failure,
+          'Failed to get diagnostics',
+        )
+      : errorResult(
+          `Could not open file ${file}: ${failure.message}\n\nMake sure the file exists and is accessible.`,
+          { summary: 'Failed to open file' },
+        );
   }
+  const result = fetched.success;
   const diagnostics = result.diagnostics;
 
   // Host capability: VS Code moves the editor cursor to the first error;
@@ -222,7 +232,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
       summary: countsStr,
       output: `${file}: ${countsStr}`,
       diagnostics: baseDiagnostics,
-    } as ToolResult;
+    } satisfies ToolResult;
   }
 
   return {
@@ -230,7 +240,7 @@ const diagnose = Effect.fn('LeanDiagnosticsTool.execute')(function* (
     summary: countsStr,
     output: formatGroupedSections(diagnostics),
     diagnostics: { ...baseDiagnostics, details: diagnostics },
-  } as ToolResult;
+  } satisfies ToolResult;
 });
 
 export const LeanDiagnosticsTool = defineTool({
@@ -282,18 +292,23 @@ In VS Code, these commands use the Lean 4 extension. CLI and desktop provide the
           Effect.as(executed(`Executed "${command}" on ${file}`, description)),
           // The adapter's cause is the answer; setup guidance only when the
           // cause is the setup.
-          Effect.catchTag('LeanFileCommandFailed', (failure) =>
-            Effect.succeed(
-              errorResult(
-                `Could not execute "${command}" on ${file}: ${failure.message}${
-                  failure.reason === 'toolchain_unavailable'
-                    ? `\n\n${LEAN_TOOLCHAIN_HELP}`
-                    : ''
-                }`,
-                { summary: 'Command failed' },
+          Effect.catchTags({
+            LeanFileCommandFailed: (failure) =>
+              Effect.succeed(
+                errorResult(
+                  `Could not execute "${command}" on ${file}: ${failure.message}`,
+                  { summary: 'Command failed' },
+                ),
               ),
-            ),
-          ),
+            LeanUnavailable: (failure) =>
+              Effect.succeed(
+                leanUnavailableResult(
+                  `Could not execute "${command}" on ${file}`,
+                  failure,
+                  'Command failed',
+                ),
+              ),
+          }),
         );
     }).pipe(
       catchLeanFailure(
@@ -354,7 +369,7 @@ function executeLeanInspectTool(
   // they render an answer that carries data. Resolving the model's file
   // against the run and ruling on an answer that carries none is the same
   // for all three, so it is stated here once.
-  const inspect = <T>(
+  const inspect = Effect.fn('inspect')(function* <T>(
     request: (
       services: LeanLanguageServicesShape,
       filePath: string,
@@ -362,22 +377,21 @@ function executeLeanInspectTool(
     ) => Effect.Effect<LspResult<T>>,
     empty: { readonly message: string; readonly summary: string },
     render: (data: T) => ToolResult,
-  ): Effect.Effect<ToolResult, Error, ToolContext | LeanLanguageServices> =>
-    Effect.gen(function* () {
-      const call = yield* ToolContext;
-      const services = yield* LeanLanguageServices;
-      const { data, error } = yield* request(
-        services,
-        yield* leanFilePath(file, call),
-        yield* leanRunId(services),
-      );
-      if (!data)
-        return noPositionData(empty.message, location, empty.summary, error);
-      return render(data);
-    });
+  ): Effect.fn.Return<ToolResult, Error, ToolContext | LeanLanguageServices> {
+    const call = yield* ToolContext;
+    const services = yield* LeanLanguageServices;
+    const { data, error } = yield* request(
+      services,
+      yield* leanFilePath(file, call),
+      yield* leanRunId(services),
+    );
+    if (!data)
+      return noPositionData(empty.message, location, empty.summary, error);
+    return render(data);
+  });
 
   // Each dispatch composes one program, run once below: a failed
-  // language-server request settles as this run's Exit and becomes the
+  // language-server request finishes as this run's Exit and becomes the
   // ToolError carrying the summary that names which inspection failed.
   let program: Effect.Effect<
     ToolResult,

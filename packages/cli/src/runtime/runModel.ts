@@ -44,9 +44,10 @@ function cliRunModelCandidates(
 }
 
 /**
- * `stores` is the secret store and the three setting slots availability and the
- * command's configured default are read from, handed over by the command's own
- * `initCliPlatform` result rather than looked up again here.
+ * `stores` is the three setting slots availability and the command's
+ * configured default are read from, with the runtime that serves `Secrets`,
+ * handed over by the command's own `initCliPlatform` result rather than looked
+ * up again here.
  */
 export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
   context: CliContext,
@@ -65,8 +66,8 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
     Effect.flatMap((candidates) =>
       selectCliRunnableModel(candidates, { stores }),
     ),
-    Effect.catch((error) =>
-      Effect.fail(new CliUsageError({ message: toErrorMessage(error) })),
+    Effect.mapError(
+      (error) => new CliUsageError({ message: toErrorMessage(error) }),
     ),
   );
   if (resolution.notice && context.quietLogs !== true) {

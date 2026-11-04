@@ -1,34 +1,37 @@
 import { it } from '@effect/vitest';
-import { afterEach, describe, expect } from 'vitest';
+import { describe, expect } from 'vitest';
+
+import { Effect, Layer } from 'effect';
 import {
+  codexBackendModelId,
   DEFAULT_MODEL_CAPABILITIES,
   MODEL_CONFIGS,
+  type ModelConfig,
   ModelProvider,
   ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
-
-import { Effect } from 'effect';
-import { codexBackendModelId, routeConfig } from '@texra-ai/llm';
+  routeConfig,
+} from '@texra-ai/llm';
+import { Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;
 
 /** The config a model runs with on the ChatGPT subscription. */
 const chatgptConfig = (config: ModelConfig) =>
-  readModelSettings(hostStores()).pipe(
+  readModelSettings(installedHost().roots).pipe(
+    Effect.provideService(Secrets, fakeHostSecrets),
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
-      routeConfig(
-        config,
-        {
-          kind: 'chatgpt-subscription',
-          contextWindow: config.codexSubscription?.contextWindow ?? Number.NaN,
-        },
-        facts,
-      ),
+      routeConfig(config, {
+        kind: 'chatgpt-subscription',
+        contextWindow:
+          facts.chatgptContextWindow ??
+          config.codexSubscription?.contextWindow ??
+          Number.NaN,
+      }),
     ),
   );
 
@@ -52,17 +55,15 @@ const gpt55Config: ModelConfig = {
 };
 
 describe('provider capabilities', () => {
-  afterEach(() => installPlatform());
-
   it.effect(
     'falls back when the configured context window is out of range',
     () =>
       Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installPlatform({
+        yield* Layer.build(
+          FakeHost.layer({
             config: {
-              'texra.chatgptCodex.preferSubscription': true,
-              'texra.chatgptCodex.contextWindowK': 900,
+              'chatgptCodex.preferSubscription': true,
+              'chatgptCodex.contextWindowK': 900,
             },
           }),
         );

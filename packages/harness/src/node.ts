@@ -19,10 +19,13 @@
  * - **SQLite stores & process identity**: [`GlobalDatabase`](#globaldatabase),
  *   [`ProjectDatabases`](#projectdatabases), and
  *   [`ProcessIdentity`](#processidentity).
- * - **Commands, binary probes & atomic file I/O**:
- *   [`executeCommand`](#executecommand), [`findCommand`](#findcommand),
- *   [`probeTool`](#probetool), [`writeFileAtomic`](#writefileatomic), and
+ * - **Commands & atomic file I/O**:
+ *   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
+ *   [`writeFileAtomic`](#writefileatomic), and
  *   [`readNormalizedFile`](#readnormalizedfile).
+ * - **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
+ *   name where the log entries go, and
+ *   [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
  */
 // The default platform of an SDK embedder.
 export {
@@ -31,15 +34,12 @@ export {
 } from '@platform/defaults/sdkPlatform';
 
 // The Node building blocks `nodePlatform` is made of, for a host that
-// composes its own platform: workspace roots over Node, the runtime skill
-// sources it registers once, the Node services a process serves (the file
-// system, paths and a supervised child-process spawner), the canonical
-// spelling of a workspace path, a path's workspace-relative form, and the
-// storage layout under a root.
+// composes its own platform: workspace roots over Node, the Node services a
+// process serves (the file system, paths and a supervised child-process
+// spawner), the canonical spelling of a workspace path, a path's
+// workspace-relative form, and the storage layout under a root.
 export {
   createNodeWorkspaceRoots,
-  initializeNodeRuntimeSkills,
-  type NodeRuntimeSkillOptions,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 export { nodePlatformServices } from '@platform/defaults/nodePlatform';
@@ -67,16 +67,18 @@ export {
 // The global root's record of each workspace store under a storage root,
 // keyed by its storage directory's name: the root it serves.
 export { WORKSPACE_STORES } from '@shared/session/valueFamily';
-// Running a program on this machine: find it, run it, tell whether it is
-// installed, and give any other child the PATH the harness resolves tools on.
+// Running a program on this machine: run it, the directories an app adds to
+// the PATH it runs on (`CommandDirs`), and that PATH for any other child.
+// The home directory, logged at warn where none resolves.
 export {
   executeCommand,
   type ExecuteCommandBaseOptions,
 } from '@utils/system/execUtils';
 export type { ExecResult } from '@shared/schemas';
-export { findCommand, type FoundCommand } from '@utils/system/binaryResolver';
-export { probeTool, type ToolProbe } from '@utils/system/toolUtils';
 export {
+  CommandDirs,
+  existsAtAbsolute,
+  homeDirectory,
   whichOnExtendedPath,
   withExtendedPath,
 } from '@utils/system/platformPaths';
@@ -86,7 +88,7 @@ export { runsInWsl } from '@utils/system/wslDetect';
 // agent CLI starts from (no provider key but the one it authenticates
 // with), and the one a non-interactive git child starts from (no
 // helper-invoking key, no terminal prompt).
-export { envFlag, inheritedEnv } from '@utils/system/envFlags';
+export { envFlag, envVar, inheritedEnv } from '@utils/system/envFlags';
 export { makeMachineGitEnv } from '@utils/system/gitEnv';
 // The file reads `FileSystem` has no form for: crash-safe replace, existence
 // with a path under a file read as absent, text with a leading BOM kept and
@@ -107,6 +109,17 @@ export {
 // sink, the minimum level, a bounded tracer), for a host program that runs
 // outside its process runtime: before it is built, or after it is gone.
 export { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+// The harness's log output: where its entries go (the console until a sink
+// is set), how an entry reads, and a line written straight to the sink.
+export {
+  entryChannel,
+  entryMessage,
+  LOG_CHANNEL,
+  setLogSink,
+  writeLogLine,
+  type LogEntry,
+  type LogSink,
+} from '@logger/logSink';
 // The config provider over a host's stores (workspace, local, global), and
 // whether it ignores a project file's value for a row.
 export {
@@ -119,8 +132,5 @@ export {
 // file-backed JSON store a host's configuration files open as, with the
 // Node file services both write through.
 export { FileSecrets, secretsDirectory } from '@platform/defaults/fileSecrets';
-export {
-  JsonStore,
-  nodeFileServices,
-  type JsonStoreOptions,
-} from '@platform/defaults/jsonStore';
+export { JsonStore, type JsonStoreOptions } from '@platform/defaults/jsonStore';
+export { nodeFileServices } from '@utils/files/fsDurability';

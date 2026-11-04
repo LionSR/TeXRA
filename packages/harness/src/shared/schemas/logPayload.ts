@@ -11,6 +11,7 @@ import {
   UserMessagePayloadSchema,
   WebSearchPayloadSchema,
 } from './progressView/data';
+import { DeclinableUsageRouteSchema } from './usage';
 
 const StreamingTextDataSchema = Schema.StructWithRest(
   Schema.Struct({
@@ -35,26 +36,36 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.WEB_SEARCH]: WebSearchPayloadSchema,
   [MESSAGE_TYPES.MODEL_RESPONSE]: Schema.optional(StreamingTextDataSchema),
   [MESSAGE_TYPES.USER_MESSAGE]: Schema.optional(UserMessagePayloadSchema),
-  [MESSAGE_TYPES.PROGRESS_STATUS]: Schema.optional(Schema.Unknown),
+  // A status note is its message alone (`logProgressStatus`).
+  [MESSAGE_TYPES.PROGRESS_STATUS]: Schema.Undefined,
+  // A used-up plan's automatic retry on the model's own key: the route the
+  // run declined. The row's message is the harness's plain wording; an app
+  // words the route itself.
+  [MESSAGE_TYPES.QUOTA_FALLBACK]: Schema.Struct({
+    route: DeclinableUsageRouteSchema,
+  }),
   [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
   [MESSAGE_TYPES.ERROR]: Schema.optional(ErrorLogDataSchema),
   [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
   [MESSAGE_TYPES.DEFAULT]: Schema.optional(Schema.Unknown),
 } satisfies Record<MessageType, Schema.Top>;
 
+/** The decoded `log` row payload for message type `K`. */
+type LogPayloadOf<K extends MessageType> = {
+  readonly messageType: K;
+  readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Type'];
+};
+
 /** A decoded `log` row payload, discriminated by its message type. */
-export type LogPayload = {
-  [K in MessageType]: {
-    readonly messageType: K;
-    readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Type'];
-  };
-}[MessageType];
+export type LogPayload = { [K in MessageType]: LogPayloadOf<K> }[MessageType];
 
 /** Decode one `log` row payload, or name the schema's objection. */
-export function decodeLogPayload(
-  messageType: MessageType,
+export function decodeLogPayload<K extends MessageType>(
+  messageType: K,
   data: unknown,
-): { readonly payload: LogPayload } | { readonly issue: string } {
+):
+  | { readonly payload: { [P in K]: LogPayloadOf<P> }[K] }
+  | { readonly issue: string } {
   // An error row is read strictly; see ErrorLogDataSchema.
   const parsed = Schema.decodeUnknownResult(LOG_PAYLOAD_SCHEMAS[messageType])(
     data,
@@ -62,9 +73,7 @@ export function decodeLogPayload(
       ? { onExcessProperty: 'error' }
       : undefined,
   );
-  return Result.isSuccess(parsed)
-    ? // cast: the indexed schema's decoded type is `LogPayload`'s arm for
-      // `messageType`, which TypeScript cannot correlate across the lookup.
-      { payload: { messageType, data: parsed.success } as LogPayload }
-    : { issue: parsed.failure.message };
+  if (Result.isFailure(parsed)) return { issue: parsed.failure.message };
+  const payload: LogPayloadOf<K> = { messageType, data: parsed.success };
+  return { payload };
 }

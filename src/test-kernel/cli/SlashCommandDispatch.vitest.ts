@@ -1,11 +1,8 @@
-// Test composition imports
-
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-
 // Slash command run dispatch.
 
-import { afterEach, describe, expect, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer } from 'effect';
+import { afterEach, expect, vi } from 'vitest';
 
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
 import { type SlashCommandContext } from '@cli/chat/tui/commands/handlers/slashContext';
@@ -15,33 +12,28 @@ import { notices } from '@cli/chat/tui/state/transcript';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { withProcessServices } from '@platform/processRuntime';
-import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import { type RunId } from '@shared/schemas';
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-
-afterEach(() => {
-  installSlashCommands([]);
-  resetCliState();
-});
+import { SessionGraph, TestSession } from '@test/support/testKernel';
+import type { ApprovalPolicy, RunId } from '@texra-ai/harness/schemas';
 
 /**
  * The process stores the built-in commands and the slash context read, the
  * pair the chat entry point threads in from its own platform services.
  */
-const services = {
-  secrets: new FakeSecrets(),
-  stores: makeFakeSettingsStores('cli').stores,
-  runtime: testRuntime(),
-  runtimeSession: testSessionOf(testDefaultSession()),
-  runSession: testSessionOf(testDefaultSession()),
-};
+const processServices = Effect.gen(function* () {
+  const session = yield* TestSession;
+  return {
+    stores: makeFakeSettingsStores().stores,
+    runtime: yield* SessionGraph.runtime,
+    runtimeSession: session,
+    runSession: session,
+  };
+});
 
-function createContext(): SlashCommandContext {
+function createContext(
+  services: Effect.Success<typeof processServices>,
+): SlashCommandContext {
   let approvalPolicy: ApprovalPolicy = 'ask';
   return {
     cliContext: createTestCliContext({
@@ -65,23 +57,34 @@ function createContext(): SlashCommandContext {
   };
 }
 
-describe('handleTuiSlashCommand', () => {
-  it.effect('discards inline key arguments without recording the secret', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const secret = 'sk-private-test-value';
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted))(
+  'handleTuiSlashCommand',
+  (it) => {
+    afterEach(() => {
+      installSlashCommands([]);
+      resetCliState();
+    });
 
-      // The dispatcher as the composer runs it: one program on the process
-      // services the composer threads in.
-      const handled = yield* withProcessServices(
-        services.runtime,
-        handleTuiSlashCommand(`/keys ${secret}`, createContext()),
-      );
+    it.effect(
+      'discards inline key arguments without recording the secret',
+      () =>
+        Effect.gen(function* () {
+          const services = yield* processServices;
+          registerBuiltinSlashCommands({ ...services });
+          const secret = 'sk-private-test-value';
 
-      expect(handled).toBe(true);
-      expect(activeForm.get()?.commandName).toBe('key');
-      expect(JSON.stringify(activeForm.get())).not.toContain(secret);
-      expect(JSON.stringify(notices.get())).not.toContain(secret);
-    }),
-  );
-});
+          // The dispatcher as the composer runs it: one program on the process
+          // services the composer threads in.
+          const handled = yield* handleTuiSlashCommand(
+            `/keys ${secret}`,
+            createContext(services),
+          );
+
+          expect(handled).toBe(true);
+          expect(activeForm.get()?.commandName).toBe('key');
+          expect(JSON.stringify(activeForm.get())).not.toContain(secret);
+          expect(JSON.stringify(notices.get())).not.toContain(secret);
+        }),
+    );
+  },
+);

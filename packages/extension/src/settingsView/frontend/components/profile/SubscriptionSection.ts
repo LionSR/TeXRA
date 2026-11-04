@@ -7,6 +7,7 @@
  * ({@link SubscriptionSectionProvider}) and the markup is written once.
  */
 
+import { SignalWatcher } from '@lit-labs/signals';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
@@ -14,35 +15,34 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@texra-ai/harness/schemas';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
   xaiAccountLabel,
 } from '@texra/shared/model/subscriptionAuth';
-import type { SubscriptionUsageSnapshot } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import {
-  renderSettingsNumberRow,
   renderSettingsSectionHeading,
   renderSettingsToggleRow,
 } from '@ui/wa/settingsSection';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view components
-import './SubscriptionUsageRow';
-import { postStateSetting } from '../shared/stateSettingRows';
+import {
+  postStateSetting,
+  renderStateSettingNumberRow,
+} from '../shared/stateSettingRows';
 
 // Side-effect imports - register WA components
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /** Everything one provider contributes to the shared section. */
 interface SubscriptionSectionProvider {
@@ -69,7 +69,7 @@ interface SubscriptionSectionProvider {
 }
 
 @customElement('subscription-section')
-export class SubscriptionSection extends LitElement {
+export class SubscriptionSection extends SignalWatcher(LitElement) {
   static override styles = [
     designTokens,
     commonViewStyles,
@@ -81,17 +81,11 @@ export class SubscriptionSection extends LitElement {
   ];
 
   @property({ attribute: false }) provider!: SubscriptionSectionProvider;
-  /** Parent-owned acknowledgement generation for restoring rejected edits. */
-  @property({ attribute: false }) ackGeneration = 0;
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
-  /** The override in thousands of tokens; `null` is each model's own window. */
-  @property({ attribute: false }) contextWindow: number | null = null;
-  @property({ attribute: false }) usage: SubscriptionUsageSnapshot | null =
-    null;
-  @property({ attribute: false }) now = 0;
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
-    const enabled = (event.target as WaSwitch).checked;
+    if (!(event.target instanceof WaSwitch)) return;
+    const enabled = event.target.checked;
     postMessage(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE, {
       provider: this.provider.providerId,
       enabled,
@@ -181,30 +175,26 @@ export class SubscriptionSection extends LitElement {
               }
             </div>
           </div>
-          <subscription-usage-row
-            .snapshot=${this.usage}
-            .now=${this.now}
-          ></subscription-usage-row>
           ${
             // The long explanation lives in the docs (models.md) and the
             // catalog row; the card keeps one line.
             contextWindowSetting
               ? html`<wa-details class="panel-collapsible" summary="Advanced">
-                  ${renderSettingsNumberRow({
-                    label: 'Input token budget',
-                    description:
-                      'How much context TeXRA sends per request on your ChatGPT plan. Leave it empty for the window Codex grants each model.',
-                    value: this.contextWindow ?? undefined,
-                    placeholder: 'Model default',
-                    min: contextWindowSetting.min,
-                    max: contextWindowSetting.max,
-                    unit: contextWindowSetting.unitLabel,
-                    ackGeneration: this.ackGeneration,
-                    onClear: () =>
-                      postStateSetting(contextWindowSetting.configKey, null),
-                    onChange: (value) =>
-                      postStateSetting(contextWindowSetting.configKey, value),
-                  })}
+                  ${renderStateSettingNumberRow(
+                    contextWindowSetting.configKey,
+                    {
+                      label: 'Input token budget',
+                      description:
+                        'How much context TeXRA sends per request on your ChatGPT plan. Leave it empty for the window Codex grants each model.',
+                      placeholder: 'Model default',
+                      min: contextWindowSetting.min,
+                      max: contextWindowSetting.max,
+                      unit: contextWindowSetting.unitLabel,
+                      // An empty field is each model's own window.
+                      onClear: () =>
+                        postStateSetting(contextWindowSetting.configKey, null),
+                    },
+                  )}
                 </wa-details>`
               : nothing
           }
@@ -227,7 +217,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.subscriptionLabel,
-    preferDescription: 'Use the subscription for eligible Codex models.',
+    preferDescription: 'Use the subscription for eligible OpenAI models.',
     accountTitle: 'ChatGPT account',
     connectDescription:
       'Connect the ChatGPT account that owns your subscription.',

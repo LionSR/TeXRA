@@ -1,31 +1,32 @@
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Schema,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 // Local imports
+import { defineTool } from '@texra-ai/harness';
 import {
-  SessionHostInteractions,
-  type HostInteractions,
-} from '@agent/runtime/HostInteractions';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  qualifyAggregateId,
-  aggregateTarget,
   type BashPermission,
   type DisplaySessionEvent,
+  qualifyAggregateId,
   type RequestDecision,
   type RunId,
-} from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
+} from '@texra-ai/harness/schemas';
 import {
-  createTestSession,
+  type HostInteractions,
+  SessionHostInteractions,
+} from '@texra-ai/harness/host';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { aggregateTarget } from '@shared/schemas';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
+import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-import {
-  prepareToolEditApprovalPrompt,
-  type ToolEditApprovalRequest,
-} from '@tools/approval/toolEditApproval';
-import { generateShortId } from '@utils/core';
-import { workspaceRelativePath } from '@utils/files/workspaceFS';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the
@@ -44,33 +45,36 @@ interface RecordingProgressSink {
 /** A request a run opened, as the fold and every surface read it. */
 type OpenedRequest = Extract<DisplaySessionEvent, { type: 'request.opened' }>;
 
-type SessionEventReader = Pick<SessionHandle, 'log'>;
+type SessionEventReader = Context.Context<SessionLog>;
 
 /**
  * Read the committed prefix using its drain coordinate, including private rows
- * that advance the cursor without appearing on the display plane.
+ * that advance the cursor without appearing on the display plane. The upper
+ * bound is the commit the log holds when the read runs; a store that fails
+ * the read fails the test.
  */
-async function readSessionEvents(
+const readSessionEvents = (
   session: SessionEventReader,
-  fromCommit = 0,
-): Promise<DisplaySessionEvent[]> {
-  const through = session.log.now();
-  if (through <= fromCommit) return [];
-  return testRuntime().runPromise(
-    Effect.gen(function* () {
+  fromCommit: number,
+): Effect.Effect<DisplaySessionEvent[]> =>
+  Effect.suspend(() => {
+    const through = Context.get(session, SessionLog).now();
+    if (through <= fromCommit) return Effect.succeed([]);
+    return Effect.gen(function* () {
       const drained = yield* SubscriptionRef.make(fromCommit);
-      return yield* session.log.tail(fromCommit, drained).pipe(
-        Stream.interruptWhen(
-          SubscriptionRef.changes(drained).pipe(
-            Stream.filter((cursor) => cursor >= through),
-            Stream.runHead,
+      return yield* Context.get(session, SessionLog)
+        .tail(fromCommit, drained)
+        .pipe(
+          Stream.interruptWhen(
+            SubscriptionRef.changes(drained).pipe(
+              Stream.filter((cursor) => cursor >= through),
+              Stream.runHead,
+            ),
           ),
-        ),
-        Stream.runCollect,
-      );
-    }),
-  );
-}
+          Stream.runCollect,
+        );
+    }).pipe(Effect.orDie);
+  });
 
 /**
  * Read public events committed since this call. Each read captures its own
@@ -79,26 +83,15 @@ async function readSessionEvents(
 export function recordSessionEvents(
   session: SessionEventReader,
   filter: { readonly aggregateId?: string } = {},
-): { readonly read: () => Promise<DisplaySessionEvent[]> } {
-  const start = session.log.now();
+): { readonly read: Effect.Effect<DisplaySessionEvent[]> } {
+  const start = Context.get(session, SessionLog).now();
   return {
-    async read() {
-      const events = await readSessionEvents(session, start);
-      return filter.aggregateId === undefined
+    read: Effect.map(readSessionEvents(session, start), (events) =>
+      filter.aggregateId === undefined
         ? events
-        : events.filter((event) => event.aggregateId === filter.aggregateId);
-    },
+        : events.filter((event) => event.aggregateId === filter.aggregateId),
+    ),
   };
-}
-
-/** The events (or drafts) of one arm. */
-export function eventsOfType<
-  E extends { readonly type: string },
-  T extends E['type'],
->(events: readonly E[], type: T): Array<Extract<E, { type: T }>> {
-  return events.filter(
-    (event): event is Extract<E, { type: T }> => event.type === type,
-  );
 }
 
 /**
@@ -117,8 +110,6 @@ export function createRecordingHost(): {
     emit: (event, payload) => {
       events.push({ event, payload });
     },
-    presentToolEdit: (request) =>
-      events.push({ event: 'presentToolEdit', payload: request.permission }),
   };
   const host = new SessionHostInteractions() as SessionHostInteractions &
     RecordingProgressSink;
@@ -132,7 +123,7 @@ export function createRecordingHost(): {
  * run and every surface read.
  */
 export function decideRequest(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   request: { readonly runId: RunId; readonly requestId: string },
   decision: RequestDecision,
 ): void {
@@ -147,20 +138,22 @@ export function decideRequest(
 }
 
 /**
- * Answer every request a session opens from this call on. `decide` sees the
- * `request.opened` row and returns the decision, or null to leave the request
- * pending — which is how a test exercises a run parked on an unanswered
- * request.
+ * Answer every request a session opens from this call on, until the calling
+ * scope closes. `decide` sees the `request.opened` row and returns the
+ * decision, or null to leave the request pending — which is how a test
+ * exercises a run parked on an unanswered request. `opened` lists every
+ * request the session opened meanwhile.
  */
-export function autoDecideRequests(
-  session: SessionHandle,
+export const autoDecideRequests = (
+  session: Context.Context<SessionServices>,
   decide: (request: OpenedRequest) => RequestDecision | null,
-): { readonly opened: OpenedRequest[]; readonly detach: () => void } {
-  const opened: OpenedRequest[] = [];
-  const fiber = testRuntime().runFork(
-    Stream.runForEach(
-      session.log
-        .tail(session.log.now())
+): Effect.Effect<{ readonly opened: OpenedRequest[] }, never, Scope.Scope> =>
+  Effect.suspend(() => {
+    const opened: OpenedRequest[] = [];
+    const log = Context.get(session, SessionLog);
+    return Stream.runForEach(
+      log
+        .tail(log.now())
         .pipe(
           Stream.filter(
             (event): event is OpenedRequest => event.type === 'request.opened',
@@ -179,69 +172,48 @@ export function autoDecideRequests(
             decision,
           );
         }),
-    ),
-  );
-  return {
-    opened,
-    detach: () => {
-      testRuntime().runFork(Fiber.interrupt(fiber));
-    },
-  };
-}
+    ).pipe(
+      Effect.forkScoped({ startImmediately: true }),
+      Effect.as({ opened }),
+    );
+  });
 
 /** Publish the run's existence fact when the view has yet to hold it. */
 async function ensureRunStart(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
 ): Promise<void> {
   // A start already queued has yet to reach the view, and a second one is
   // refused by the substrate.
-  await Effect.runPromise(session.log.settled);
-  if (session.view.run(runId) !== undefined) return;
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
+  if (Context.get(session, SessionViewAccess).run(runId) !== undefined) return;
   publishTestRunStart(session, runId);
-  await Effect.runPromise(session.log.settled);
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
 }
 
 /** Fold a run to its running phase from the activation row that carries it. */
 export async function seedActiveRun(
-  session: SessionHandle,
+  session: Context.Context<SessionServices>,
   runId: RunId,
 ): Promise<void> {
   await ensureRunStart(session, runId);
   publishTestRows(session, [
     { type: 'run.activate', aggregateId: qualifyAggregateId('run', runId) },
   ]);
-  await Effect.runPromise(session.log.settled);
+  await Effect.runPromise(Context.get(session, SessionLog).settled);
 }
 
-/**
- * An isolated session for node tests, with the given host interactions
- * attached: a test hands this session to run-scoped code, whose
- * `session.interactions` (presentation) and `session.approvals` (bypass
- * state, queues) reads reach the owners attached here. A session's facts are
- * read back with {@link recordSessionEvents}. Passing another session's
- * `SessionHostInteractions` makes it this session's owner too, so a
- * recording host can be shared across the sessions of one test.
- */
-export const sessionWithInteractions = Effect.fn('sessionWithInteractions')(
-  function* (
-    interactions:
-      | HostInteractions
-      | SessionHostInteractions
-      | Pick<SessionHostInteractions, 'emit'>
-      | undefined,
-  ) {
-    const session = yield* createTestSession();
-    if (interactions instanceof SessionHostInteractions) {
-      // The session's own approvals stay: they are already bound to its
-      // `publishApprovalPolicy`, the one channel bypass state travels.
-      Object.assign(session, { interactions });
-      return session;
-    }
-    if (interactions) yield* session.interactions.use(interactions);
-    return session;
+/** A tool whose calls the run's command grant answers, as the shell's do;
+ *  its body only reports that it ran. */
+export const commandTool = defineTool({
+  name: 'command',
+  description: 'Run a command.',
+  schema: Schema.Struct({ command: Schema.String }),
+  guard: {
+    command: { text: ({ command }) => command, grant: 'bash' },
   },
-);
+  execute: ({ command }) => Effect.succeed(`ran ${command}`),
+});
 
 /** The bash permission payload a `request.opened` carries. */
 export function bashApprovalRequest(request: {
@@ -250,35 +222,10 @@ export function bashApprovalRequest(request: {
   readonly runId?: RunId;
 }): BashPermission {
   return {
-    requestId: `bash-${generateShortId()}`,
+    requestId: `bash-${crypto.randomUUID()}`,
     command: request.command,
     ...(request.cwd ? { cwd: request.cwd } : {}),
     allowBypass: true,
     runId: request.runId ?? '',
   };
 }
-
-/** A tool-edit request carrying the prompt the tool boundary prepares. */
-export const toolEditApprovalRequest = Effect.fn('toolEditApprovalRequest')(
-  function* (
-    request: Parameters<typeof prepareToolEditApprovalPrompt>[1]['request'],
-  ) {
-    const session = yield* sessionWithInteractions(undefined);
-    const { permission, hunks, firstChangedLine } =
-      prepareToolEditApprovalPrompt(session, {
-        requestId: `approval-${generateShortId()}`,
-        request,
-        relativePath: workspaceRelativePath(
-          session.roots.workspace,
-          request.path,
-        ),
-      });
-    return {
-      ...request,
-      roots: session.roots,
-      permission,
-      hunks,
-      firstChangedLine,
-    } satisfies ToolEditApprovalRequest;
-  },
-);

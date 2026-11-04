@@ -1,9 +1,9 @@
 /**
  * The session event plane over its root's SQLite database. Publication commits
  * an ordered batch before waking readers. Listing and aggregate reads are
- * finite; each tail wake captures a committed upper bound and drains that
- * prefix. Wake counters and commit ordinals are separate coordinates, so a
- * claim change can wake a reader without inventing an event.
+ * finite; the tails share one drain of the log (`logTails`). Wake
+ * counters and commit ordinals are separate coordinates, so a claim change
+ * can wake a reader without inventing an event.
  */
 // Third-party imports
 import {
@@ -15,30 +15,22 @@ import {
   Layer,
   Option,
   Queue,
-  Ref,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
-import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
   isDisplaySessionEvent,
   type AggregateId,
-  type CommitOrdinal,
   type SessionEvent,
-  type DisplaySessionEvent,
 } from '@shared/schemas';
-import {
-  Database,
-  type DatabaseReadFailed,
-  type DatabaseWriteFailed,
-} from '@shared/session/database';
-import { closesRunWindow } from '@shared/session/runRows';
+import { Database, type DatabaseWriteFailed } from '@shared/session/database';
+import { closesRunWindow } from '@shared/session/runRowReads';
 import {
   afterCommit,
   committing,
+  logTails,
   PublisherJob,
   SessionEvents,
   type Append,
@@ -48,6 +40,13 @@ import {
 } from '@shared/session/sessionEvents';
 
 const CHANNEL = 'sessionEvents';
+
+/** The budget one session close spends waiting for its runs to end before it
+ *  reports the ones still live abandoned (`SessionOwner.close`). A hung run
+ *  must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+ *  stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+ *  together, so they finish under one deadline for the process, not one each. */
+export const SESSION_CLOSE_DEADLINE_MS = 5_000;
 
 /** What the publisher keeps per aggregate: its open work, so closing it at
  *  a park, an end or a host exit reads no rows. Streams close at a phase
@@ -135,59 +134,6 @@ function settling<A, E>(
     ),
     refuse: refuse(false),
   };
-}
-
-/** The tail drain: read forward from the caller's position on each
- * wake, never past the committed upper bound captured for that read. A level says "there is more", not "there is one more", so a
- * burst of commits during a read collapses into one further read. A read
- * delivers up to the level it started at whether or not every row in
- * between materialized, so a row the read could not deliver is not read
- * again on every later wake.
- *
- * `drained`, when given, receives the commit each forward read covered,
- * rows the read could not materialize included, and only once every row of
- * that read has reached the reader (it is set after the read's stream
- * completes). A row the store no longer holds emits nothing, so a reader
- * that must know the tail passed an ordinal (the NDJSON detach drain) waits
- * on this coordinate, never on the events alone.
- */
-export function tailFrom<A extends SessionEvent, E>(
-  read: (fromCommit: CommitOrdinal) => Stream.Stream<A, E>,
-  level: {
-    readonly get: Effect.Effect<CommitOrdinal, E>;
-    readonly changes: Stream.Stream<CommitOrdinal>;
-  },
-  fromCommit: CommitOrdinal,
-  drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-): Stream.Stream<A, E> {
-  return Stream.unwrap(
-    Effect.gen(function* () {
-      const at = yield* Ref.make(fromCommit);
-      const forward = Stream.unwrap(
-        Effect.gen(function* () {
-          const cursor = yield* Ref.get(at);
-          const upTo = yield* level.get;
-          return Stream.concat(
-            read(cursor).pipe(
-              Stream.takeWhile((event) => event.commit <= upTo),
-              Stream.tap((event) => Ref.set(at, event.commit)),
-            ),
-            Stream.fromEffect(
-              Effect.gen(function* () {
-                const covered = yield* Ref.updateAndGet(at, (delivered) =>
-                  Math.max(delivered, upTo),
-                );
-                if (drained) yield* SubscriptionRef.set(drained, covered);
-              }),
-            ).pipe(Stream.drain),
-          );
-        }),
-      );
-      return level.changes.pipe(
-        Stream.flatMap(() => forward, { concurrency: 1 }),
-      );
-    }),
-  );
 }
 
 /** An ordering job's `append`: it writes no row. */
@@ -291,23 +237,22 @@ export const sessionEventsLayer = Layer.effect(
     yield* Effect.addFinalizer(() => drain);
     const enqueue = (job: PublicationJob): boolean =>
       Queue.offerUnsafe(inbox, job);
-    const transact = <A, E>(
+    const transact = Effect.fn('transact')(function* <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
       options: JobOptions = {},
-    ): Effect.Effect<A, E | DatabaseWriteFailed> =>
-      Effect.gen(function* () {
-        if ((yield* PublisherJob) !== null) return yield* reentered;
-        const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
-        const admitted = enqueue(
-          settling(inTransaction(job, options.order), done),
+    ): Effect.fn.Return<A, E | DatabaseWriteFailed> {
+      if ((yield* PublisherJob) !== null) return yield* reentered;
+      const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
+      const admitted = enqueue(
+        settling(inTransaction(job, options.order), done),
+      );
+      if (!admitted) {
+        return yield* Effect.die(
+          new Error('Session publication after the plane closed'),
         );
-        if (!admitted) {
-          return yield* Effect.die(
-            new Error('Session publication after the plane closed'),
-          );
-        }
-        return yield* Deferred.await(done);
-      });
+      }
+      return yield* Deferred.await(done);
+    });
     const removeRun: SessionEventsShape['removeRun'] = (
       id,
       mode,
@@ -340,20 +285,6 @@ export const sessionEventsLayer = Layer.effect(
           'Session publication dropped: the plane has closed',
         );
     };
-    // The one tail: the drain woken by the log's level.
-    const all = (
-      fromCommit: CommitOrdinal,
-      drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ): Stream.Stream<DisplaySessionEvent, DatabaseReadFailed> =>
-      tailFrom(
-        log.readDisplay,
-        {
-          get: log.currentCommit,
-          changes: SubscriptionRef.changes(log.level),
-        },
-        fromCommit,
-        drained,
-      );
     return {
       transact,
       detach,
@@ -364,7 +295,7 @@ export const sessionEventsLayer = Layer.effect(
         Stream.fromIterableEffect(log.readListing()).pipe(
           Stream.filter(isDisplaySessionEvent),
         ),
-      all,
+      all: yield* logTails(log),
     };
   }),
 );

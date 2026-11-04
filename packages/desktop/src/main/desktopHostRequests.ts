@@ -1,101 +1,92 @@
-// The desktop's `host.request` handler (PRD one-fold-three-renderers, 8.3):
-// every capability a surface asks its host for, one schema-narrowed switch over
-// the arms, mapped onto the window's dialogs, the preview host, the file
-// pickers, and the paper's launch path. Each arm answers exactly once with
-// an outcome or a request error; an arm the desktop does not perform is
+// The desktop's half of a project's window (`openGuiWindow`): every
+// capability a surface asks its host for, mapped onto the window's dialogs,
+// the preview host, the file pickers, and the project's launch path, plus
+// the arms the desktop answers its own way. Each arm answers exactly once
+// with an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
 import path from 'node:path';
 
-import { Effect, Exit, Layer, type Scope } from 'effect';
-import {
-  Cancelled,
-  Rejected,
-  Unavailable,
-  type HostRequestFailure,
-} from '@texra-ai/harness';
+import { Effect, Schema } from 'effect';
+import { Cancelled, Rejected, type RunEnd } from '@texra-ai/harness';
 import {
   AgentDirectories,
-  Secrets,
+  AppSignals,
   withProcessServices,
-  workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
-  sessionFsLayer,
-  type StorageFs,
-  type WorkspaceFs,
+  type HostPresentation,
+  type PresentationEventHandlers,
+  type RuntimePresentationEvent,
+  type RuntimePresentationEventPayloads,
   pathToLocationIn,
+  Settings,
 } from '@texra-ai/harness/host';
-import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
-import { fileOpResultMessage } from '@housekeeping/runDirOps';
+import {
+  toErrorMessage,
+  type AgentConfig,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
+import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { LaTeXdiffService } from '@latex/latexdiff';
+import {
+  latexdiffAllFailedMessage,
+  NO_LATEXDIFF_OPERATIONS_MESSAGE,
+} from '@latex/latexdiff/latexdiffCopy';
+import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
-import type {
-  HostOutcome,
-  SurfaceActionMessage,
-} from '@texra/shared/session/sessionFrames';
-import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  type NotificationFailed,
+  type PromptFailed,
+} from '@texra/hosts/uiHosts';
+import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 
-import type { ChatExportController } from '@texra/controllers/progressView/ChatExportController';
-import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
-import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
-import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
-import {
-  createHostRunActions,
-  localRunActionPorts,
-  type HostRunActions,
-  type WorkflowDiffRequest,
-} from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
-import {
-  handleSharedHostRequest,
-  isSharedHostRequest,
-  type SharedHostRequestBindings,
-  type SharedHostRequestPorts,
-} from '@texra/controllers/session/sharedHostRequests';
-import { listWorkspaceFilesOfType } from '@texra/controllers/session/workspaceFileOptions';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
-import { loadModelOptions } from '@texra/model/setupCredentialAccess';
+import type {
+  OwnHostRequest,
+  SharedHostRequestBindings,
+} from '@texra/controllers/session/openGuiWindow';
+import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
+import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
+import { instructionActions } from '@ui/copy/instructionActions';
+import { modelFailureText } from '@ui/copy/modelAccess';
+import { texraGuideUrl } from '@ui/copy/guide';
 
 import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
-import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
+import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
-import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopProject } from './desktopProjects.js';
 import type { DesktopFileSelection } from './desktopFileSelection.js';
-import type { DesktopSpawn } from './desktopWindows.js';
 import type { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 
 interface DesktopHostRequestsOptions {
   /** The project this window serves: its runs run in its session, here or
-   *  in the service, whose records answer what the window reads of them. */
+   *  in the service. */
   project: DesktopProject;
-  host: DesktopAgentRunHost;
-  run: DesktopAgentRun;
-  files: DesktopFileSelection;
+  /** The window's host snapshot. */
   snapshot: HostSnapshotSource;
-  draftRequests: HostDraftRequests;
+  host: DesktopAgentRunHost;
+  files: DesktopFileSelection;
   workspaceFile: ReturnType<typeof createDesktopWorkspaceIpc>['file'];
   /** Packaged app resources root (`…/resources`), for export templates. */
   resourcesPath: string;
   postToRenderer(message: unknown): boolean | void;
-  /** A host-initiated change to the surface (PRD 8.5). */
-  postSurfaceAction(action: SurfaceActionMessage['action']): void;
   onboarding: Pick<
-    DesktopOnboardingIpc,
+    WindowOnboarding,
     'skipOnboarding' | 'skipSetup' | 'runSetup' | 'signInWithChatGpt'
   >;
   openExternalUrl(url: string): Effect.Effect<void, PreviewUnavailable>;
@@ -104,210 +95,333 @@ interface DesktopHostRequestsOptions {
   /** The process runtime this window was handed; every request arm below runs
    *  on it. */
   runtime: ProcessRuntime;
-  /** The binding's spawner, which the recorder's notifications fork on. */
-  spawn: DesktopSpawn;
-}
-
-export interface DesktopHostRequests {
-  /** The window's launcher, which the setup card starts its run on. */
-  readonly runValidated: HostRunActions['runValidated'];
-  handleHostRequest(
-    request: HostRequest,
-    port: string,
-  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices>;
-  closePort(port: string): void;
 }
 
 const CHANNEL = 'DesktopHostRequests';
 
-/** The window's request handler; closing the caller's scope stops a
- *  recording this window owns, and the take is discarded. */
-export const createDesktopHostRequests = Effect.fnUntraced(function* (
-  options: DesktopHostRequestsOptions,
-): Effect.fn.Return<DesktopHostRequests, never, Scope.Scope> {
-  const { project, host, run, runtime } = options;
-  const { roots } = project;
-  /** Where the window reads its runs' records: its own session, or the
-   *  service's, bound once. */
-  const records =
-    project.service === undefined
-      ? { local: project.session, remote: undefined }
-      : { remote: serviceRecords(project.service, project.root) };
-  /** The rooted filesystems of this window's paper, built once from the
-   *  roots its session holds for its lifetime, never from an ambient store. */
-  const sessionFiles = sessionFsLayer(roots);
-  /** The project's `.env` over the process's: what this window asks about
-   *  its project (model options, a polish's helper model) answers from it,
-   *  as the project's runs do. */
-  const projectEnv = workspaceEnvironmentLayer(project.root);
-  // A shared controller's notice IS the refusal the request answers with.
-  const rejectRequestEffect = (reason: string): Effect.Effect<void, Rejected> =>
-    Effect.fail(new Rejected({ reason }));
-  const draftRequests = yield* options.draftRequests.attach(
-    roots,
-    (recording) => {
-      // Recorder notifications can arrive outside a request fiber; the first
-      // steps run in the caller's, so the snapshot takes them in order.
-      options.spawn(options.snapshot.setRecording(recording), {
-        startImmediately: true,
-      });
-    },
-  );
-  const runActions = runtime.runSync(
-    createHostRunActions({
-      ...run, // this window's launch follow-up and output opener
-      ...(records.remote === undefined
-        ? localRunActionPorts(records.local)
-        : {
-            roots,
-            readConfig: records.remote.readConfig,
-            present: project.present,
-          }),
-      session: project.session,
-      loadModelOptions: () =>
-        withProcessServices(
-          runtime,
-          Effect.flatMap(Secrets, (secrets) =>
-            loadModelOptions({ ...roots, secrets }),
-          ).pipe(Effect.provide(projectEnv)),
-        ),
-      // Only the "ask the user for a key" step is host-specific: on the
-      // desktop that means opening the Models tab rather than a modal prompt.
-      // The controller re-reads the secret store after this returns.
-      promptForApiKey: (provider) =>
-        Effect.gen(function* () {
-          postDesktopSettingsView(options.postToRenderer, 'models/keys');
-          yield* host.showInfoMessage(
-            'Add a provider API key in Models, then use "Retry" on the request.',
-          );
-        }).pipe(
-          Effect.catchTag(
-            'NotificationFailed',
-            (failure): Effect.Effect<void, ApiKeyPromptFailed> =>
-              Effect.fail(
-                new ApiKeyPromptFailed({
-                  provider,
-                  message:
-                    'The desktop could not show the API key instruction.',
-                  cause: failure.cause,
-                }),
-              ),
-          ),
-        ),
-      showInfo: (message) => host.showInfoMessage(message),
-      showWarning: (message) => host.showWarningMessage(message),
-    }),
-  );
-  const { runOutputs } = runActions;
+/**
+ * The diff window would not open. The desktop's diff surface fails with what
+ * it hit (a side that would not read, a patch the OS editor refused), and the
+ * file-actions port takes tags, never a bare value, so the compare action
+ * words that failure as this one.
+ */
+class DiffViewUnavailable extends Schema.TaggedError<DiffViewUnavailable>()(
+  'DiffViewUnavailable',
+  {
+    message: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {}
 
-  /** The label scan's candidates, as the program that lists them: the
-   *  file-actions port takes the window's services from the runtime it holds,
-   *  so nothing settles here. */
-  const listWorkspaceCandidateFiles = () =>
-    Effect.suspend(() => {
-      const workspacePath = project.root;
-      if (!workspacePath) return Effect.succeed([]);
-      return listWorkspaceFilesOfType(['input', 'context'], workspacePath).pipe(
-        Effect.map((files) =>
-          files.flat().map((file) => path.resolve(workspacePath, file)),
+/** The desktop's half of a project's window, for the window's scope. */
+export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
+  function* (options: DesktopHostRequestsOptions) {
+    const { project, host, runtime, snapshot } = options;
+    const { roots } = project;
+    const signals = yield* AppSignals;
+    /**
+     * Each arm answers with the program that presents its notice; the
+     * session forks it, so nothing here settles a dialog on a fiber of its
+     * own. Where the failure is reported depends on the arm: the two dialog
+     * members report their own (a dialog rejects when its window is torn
+     * down beneath it, and the host binds them through `awaitOrReport`), so
+     * the programs they hand back cannot fail; `openPath` fails in its own
+     * channel and the session's fork warn-logs it.
+     */
+    const presentationEventHandlers: PresentationEventHandlers<
+      RuntimePresentationEventPayloads,
+      HostPresentation
+    > = {
+      requestShowError: (failure) =>
+        host.showErrorDialog(modelFailureText(failure), failure.docsPage),
+      // An instruction is actionable guidance, not a failure, so it uses
+      // the info-style dialog with each action token as a real button.
+      requestShowInstruction: (instruction) =>
+        host.showInstructionDialog(
+          instruction.message,
+          instructionActions(instruction.key),
         ),
+      agentNotFound: ({ agentName }) =>
+        withProcessServices(runtime, snapshot.showAgentConfigBanner(agentName)),
+      // Desktop has no editor integration to preview through, so the
+      // resolved path goes to the preview-with-fallback host directly.
+      openFile: (data) => host.openPath(data.location.absolutePath),
+    };
+
+    /** Open a generated diff file in the PDF tab through the build display. */
+    const openDiffOutput = (diffPath: string) =>
+      host.openBuildDisplay({ kind: 'external', absolutePath: diffPath });
+
+    /**
+     * The stream toolbar's "diff": the round-aware latexdiff for a whole run,
+     * opening every diff it produced. This host has no quick-pick to choose a
+     * markup mode with, so it runs with the configured
+     * `texra.latexdiff.mathMarkup`, and a run whose every diff failed is
+     * refused with the wording that names it.
+     */
+    const diffRun = Effect.fn('DesktopHostRequests.diffRun')(function* (
+      runId: RunId,
+    ) {
+      const outcome = yield* runLatexdiffForRun({
+        runId,
+        rounds: runOutputFiles(project.session.view.current(), runId),
+        roots,
+        channel: CHANNEL,
+        progress: { report: () => undefined },
+      });
+      if (!outcome.results.length) {
+        return yield* host.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
+      }
+      const successes = outcome.results.filter((entry) => entry.success);
+      for (const result of successes) yield* openDiffOutput(result.diffPath);
+      if (successes.length > 0) return;
+      const mathMarkup = yield* Settings.get<LatexdiffMathMarkupValue>(
+        roots,
+        DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
+      );
+      return yield* Effect.fail(
+        new Rejected({ reason: latexdiffAllFailedMessage(mathMarkup) }),
       );
     });
 
-  const fileActions = new DesktopProgressFileActions(
-    {
-      ...host,
-      // The refusal is the notice: the member fails with the `Rejected` the
-      // request answers with, exactly as the rejecting promise did.
-      showErrorMessage: rejectRequestEffect,
-    },
-    { session: project.session, runtime, listWorkspaceCandidateFiles },
-  );
+    /** latexdiff over two files of the workspace, opening the result. */
+    const latexdiffFile = Effect.fn('DesktopHostRequests.latexdiffFile')(
+      function* (baseFile: string, editedFile: string) {
+        const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiff(
+          pathToLocationIn(roots.workspace, baseFile),
+          pathToLocationIn(roots.workspace, editedFile),
+          '_diff',
+          undefined,
+          { cwd: roots.workspace },
+        );
+        if (!result.success) {
+          return yield* Effect.fail(new Rejected({ reason: result.message }));
+        }
+        yield* openDiffOutput(result.diffPath);
+      },
+    );
 
-  const workflowFileActions = new ProgressWorkflowFileActionsController({
-    state: runOutputs,
-    storageRoot: roots.storage,
-    host: {
-      compareFiles: (baseFile, editedFile) =>
-        fileActions.compareFiles(baseFile, editedFile),
-      acceptEditedFile: (baseFile, editedFile) =>
-        fileActions.acceptEditedFile(baseFile, editedFile),
-      latexdiffFile: (baseFile, editedFile) =>
-        fileActions
-          .runLatexdiffFile(baseFile, editedFile)
-          .pipe(
+    /**
+     * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
+     * them: latexdiff-vc over the base file against a commit, and the pack
+     * and clean housekeeping of what it produced. The diff opens in the PDF
+     * tab through the build display, as a run's outputs do. The math markup
+     * is left to `diffCommandExecutor`, which reads `LATEXDIFF_MATH_MARKUP`.
+     */
+    const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
+      function* (
+        action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
+        baseFile: string,
+        commit: string,
+      ) {
+        if (!baseFile) {
+          return yield* Effect.fail(
+            new Rejected({ reason: 'Choose a base file first.' }),
+          );
+        }
+        const base = pathToLocationIn(roots.workspace, baseFile);
+        if (action === 'latexdiffvc') {
+          const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiffVc(
+            base,
+            commit,
+          );
+          if (!result.success) {
+            return yield* Effect.fail(new Rejected({ reason: result.message }));
+          }
+          yield* openDiffOutput(result.diffPath).pipe(
             Effect.mapError((cause) =>
-              hostFailure('fileActions.runLatexdiffFile', cause),
+              hostFailure('host.openBuildDisplay', cause),
+            ),
+          );
+          return;
+        }
+        const packed = yield* runPackLatexdiffvc(
+          baseFile,
+          commit,
+          action === 'cleanLatexdiffvc',
+        );
+        const message = latexdiffPackMessage(packed);
+        if (message) yield* host.showInfoMessage(message);
+      },
+    );
+
+    /** This window's half of the shared body's binding table: every verb
+     *  mapped onto the window's dialogs, its preview host, its settings
+     *  view, and the project's launch path. */
+    const bindings: SharedHostRequestBindings = {
+      openPath: (file, line) => host.openPath(file, line),
+      openLabel: (label) =>
+        findLabelInWorkspace(roots.workspace, label, (absolutePath) =>
+          host.openPath(absolutePath),
+        ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
+      // The window's project is its one workspace: any launch runs as asked.
+      admitLaunch: () => Effect.void,
+      runWorkflowDiff: (request) =>
+        diffRun(request.runId).pipe(
+          Effect.mapError((cause) => hostFailure('diffRun', cause)),
+        ),
+      latexdiffAgainstCommit,
+      openSettings: (target) =>
+        Effect.sync(() =>
+          postDesktopSettingsView(options.postToRenderer, target),
+        ),
+      // Only the "ask the user for a key" step is host-specific: on the
+      // desktop that means opening the Models tab rather than a modal
+      // prompt.
+      setApiKey: Effect.sync(() =>
+        postDesktopSettingsView(options.postToRenderer, 'models/keys'),
+      ),
+      openGuide: (page, anchor) =>
+        options.openExternalUrl(texraGuideUrl(page, anchor)),
+      openCustomAgentDirectory: Effect.gen(function* () {
+        const directory = yield* AgentDirectories.use((directories) =>
+          directories.custom(),
+        );
+        yield* host.openPath(directory);
+      }),
+      recheckDependencies: Effect.suspend(() => options.recheckTools()),
+      openInstallGuide: Effect.sync(() =>
+        postDesktopSettingsView(options.postToRenderer, 'plugins'),
+      ),
+      onboarding: {
+        signInChatGpt: Effect.suspend(() =>
+          options.onboarding.signInWithChatGpt(),
+        ),
+        skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
+        runSetup: Effect.suspend(() => options.onboarding.runSetup()),
+        skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
+        // The desktop has no walkthrough of its own: the card's "Open
+        // walkthrough" opens the desktop docs.
+        openGettingStarted: Effect.suspend(() =>
+          options.openExternalUrl(DESKTOP_DOCS_URL),
+        ),
+      },
+    };
+
+    const notOnDesktop = (what: string) =>
+      new Rejected({ reason: `${what} is not available in the desktop app.` });
+
+    /** The arms this window performs its own way. A capability's failure is
+     *  named through `hostFailure`, so the failure channel is the value the
+     *  arm failed with. */
+    const own = Effect.fn('own')(function* (request: OwnHostRequest) {
+      switch (request.kind) {
+        case 'popOut':
+        case 'popBack':
+          return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
+        case 'pickFiles': {
+          const paths = yield* options.files
+            .pickFiles(request.fileType)
+            .pipe(
+              Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
+            );
+          if (paths === null) return yield* Effect.fail(new Cancelled());
+          return { kind: 'files' as const, paths };
+        }
+        case 'useCurrentFile':
+        case 'addOpenedFiles':
+          return yield* Effect.fail(notOnDesktop("The editor's current file"));
+        case 'gettingStarted':
+          return yield* Effect.fail(notOnDesktop('Starting a project'));
+        case 'workspaceFile':
+          return yield* options.workspaceFile(request.action);
+      }
+    });
+
+    return {
+      bindings,
+      own,
+      window: {
+        emit: <K extends RuntimePresentationEvent>(
+          event: K,
+          payload: RuntimePresentationEventPayloads[K],
+        ): HostPresentation => presentationEventHandlers[event](payload),
+        // What a service task wrote, told here as a task here tells it: the
+        // file tree follows it.
+        filesWritten: (absolutePaths: readonly string[]) =>
+          signals.emit('workspaceFilesWritten', {
+            absolutePaths: [...absolutePaths],
+          }),
+      },
+      showInfoMessage: host.showInfoMessage,
+      showWarningMessage: host.showWarningMessage,
+      runs: {
+        // Desktop has no editor integration to preview through, so the
+        // output goes to the preview-with-fallback host directly.
+        openFinalOutput: (config: AgentConfig, result: RunEnd) =>
+          withProcessServices(
+            runtime,
+            selectAutoOpenFinalOutput(roots, config, result),
+          ).pipe(
+            Effect.flatMap((output) =>
+              output ? host.openPath(output.absolutePath) : Effect.void,
             ),
           ),
-      openDirectory: (directory) => host.openPath(directory),
-      showInfo: (message) => host.showInfoMessage(message),
-      showError: rejectRequestEffect,
-    },
-    runs: runActions,
-  });
-
-  const runWorkflowDiff = (request: WorkflowDiffRequest) =>
-    fileActions
-      .diffStreamToolbarAction(request.runId)
-      .pipe(
-        Effect.mapError((cause) =>
-          hostFailure('fileActions.diffStreamToolbarAction', cause),
-        ),
-      );
-
-  /**
-   * The chat export controller, loaded on the first export so its module
-   * graph — the formatters, the trace assembler, the LaTeX compiler — stays
-   * out of app startup. The memo is the library's: a successful load is kept
-   * for the window's life, and a failed one expires at once so the next
-   * export retries. `runSync` only allocates the memo; the load runs inside
-   * the export's own program.
-   */
-  const getChatExportController: Effect.Effect<
-    ChatExportController,
-    TranscriptExportFailed
-  > = runtime.runSync(
-    Effect.cachedWithTTL(
-      Effect.tryPromise({
-        try: async () => {
-          const { ChatExportController: Controller, localExportRecords } =
-            await import('@texra/controllers/progressView/ChatExportController');
-          return new Controller({
-            roots,
-            records:
-              records.remote === undefined
-                ? localExportRecords(records.local)
-                : {
-                    input: records.remote.exportInput,
-                    trace: records.remote.exportTrace,
-                  },
-            latexPreamble,
-          });
-        },
-        catch: (cause) =>
-          new TranscriptExportFailed({
-            step: 'openController',
-            message: toErrorMessage(cause),
-            cause,
-          }),
-      }),
-      (exit) => (Exit.isSuccess(exit) ? 'Infinity' : 0),
-    ),
-  );
-
-  const exportTranscript = (runId: RunId) =>
-    Effect.gen(function* () {
-      if (!project.session.view.current().runs.has(runId)) {
-        return yield* Effect.fail(
-          new Unavailable({ runId, reason: 'The run is no longer open.' }),
-        );
-      }
-      yield* exportRunTranscript(runId, {
+        // Only the "ask the user for a key" step is host-specific: on the
+        // desktop that means opening the Models tab rather than a modal
+        // prompt. The controller re-reads the secret store after this
+        // returns.
+        promptForApiKey: (provider: ApiKeyProviderId) =>
+          Effect.gen(function* () {
+            postDesktopSettingsView(options.postToRenderer, 'models/keys');
+            yield* host.showInfoMessage(
+              'Add a provider API key in Models, then use "Retry" on the request.',
+            );
+          }).pipe(
+            Effect.catchTag(
+              'NotificationFailed',
+              (failure): Effect.Effect<void, ApiKeyPromptFailed> =>
+                Effect.fail(
+                  new ApiKeyPromptFailed({
+                    provider,
+                    message:
+                      'The desktop could not show the API key instruction.',
+                    cause: failure.cause,
+                  }),
+                ),
+            ),
+          ),
+      },
+      files: {
+        compareFiles: (baseFile: string, editedFile: string) =>
+          host
+            .openDiff(
+              { filePath: baseFile },
+              { filePath: editedFile },
+              `Compare: ${path.basename(editedFile)} <-> ${path.basename(baseFile)}`,
+            )
+            .pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DiffViewUnavailable({
+                    message: toErrorMessage(cause),
+                    cause,
+                  }),
+              ),
+            ),
+        acceptEditedFile: (baseFile: string, editedFile: string) =>
+          acceptEditedFileReplace<PromptFailed | NotificationFailed>(
+            pathToLocationIn(roots.workspace, baseFile),
+            pathToLocationIn(roots.workspace, editedFile),
+            {
+              confirm: (message) => host.confirmAcceptFile(message),
+              showInfo: (message) => host.showInfoMessage(message),
+            },
+          ),
+        latexdiffFile: (baseFile: string, editedFile: string) =>
+          withProcessServices(
+            runtime,
+            latexdiffFile(baseFile, editedFile),
+          ).pipe(
+            Effect.mapError((cause) => hostFailure('latexdiffFile', cause)),
+          ),
+        openDirectory: (directory: string) => host.openPath(directory),
+      },
+      export: {
         pickFormat: host.pickTranscriptExportFormat(),
         // The preview host has already shown its own notice; the port's
         // tag carries that refusal and its wording out unchanged.
-        openPath: (filePath) =>
+        openPath: (filePath: string) =>
           host.openPath(filePath).pipe(
             Effect.mapError(
               (cause) =>
@@ -319,214 +433,9 @@ export const createDesktopHostRequests = Effect.fnUntraced(function* (
                 }),
             ),
           ),
-        showInfo: (message) => host.showInfoMessage(message),
-        showWarning: (message) => host.showWarningMessage(message),
-        showError: rejectRequestEffect,
-        getController: getChatExportController,
-        getTraceViewerTemplate: () =>
-          path.join(options.resourcesPath, 'traceViewer', 'index.html'),
-      });
-    });
-
-  /**
-   * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
-   * them: latexdiff-vc over the base file against a commit, and the pack
-   * and clean housekeeping of what it produced. The diff opens in the PDF
-   * tab through the build display, as a run's outputs do. The math markup is
-   * left to `diffCommandExecutor`, which reads `LATEXDIFF_MATH_MARKUP`.
-   */
-  const latexdiffAgainstCommit = (
-    action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
-    baseFile: string,
-    commit: string,
-  ) =>
-    Effect.gen(function* () {
-      if (!baseFile) {
-        return yield* Effect.fail(
-          new Rejected({ reason: 'Choose a base file first.' }),
-        );
-      }
-      const base = pathToLocationIn(roots.workspace, baseFile);
-      if (action === 'latexdiffvc') {
-        const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiffVc(
-          base,
-          commit,
-        );
-        if (!result.success) {
-          return yield* Effect.fail(new Rejected({ reason: result.message }));
-        }
-        yield* host
-          .openBuildDisplay({ kind: 'external', absolutePath: result.diffPath })
-          .pipe(
-            Effect.catch((cause) =>
-              Effect.fail(hostFailure('host.openBuildDisplay', cause)),
-            ),
-          );
-        return;
-      }
-      const packed = yield* runPackLatexdiffvc(
-        baseFile,
-        commit,
-        action === 'cleanLatexdiffvc',
-      );
-      const message = latexdiffPackMessage(packed);
-      if (message) yield* host.showInfoMessage(message);
-    });
-
-  /** This window's half of the shared body's binding table: every verb
-   *  mapped onto the window's dialogs, its preview host, its settings view,
-   *  and the paper's launch path. */
-  const hostBindings: SharedHostRequestBindings = {
-    openPath: (file, line) => host.openPath(file, line),
-    openLabel: (label) =>
-      fileActions
-        .findAndOpenLabel(label)
-        .pipe(
-          Effect.mapError((cause) =>
-            hostFailure('fileActions.findAndOpenLabel', cause),
-          ),
-        ),
-    exportTranscript,
-    surfaceAction: (action) => options.postSurfaceAction(action),
-    showInfo: (message) => host.showInfoMessage(message),
-    // The window's paper is its one workspace: any launch runs as asked.
-    admitLaunch: () => Effect.void,
-    runWorkflowDiff,
-    // Info results are shown; error results reject the request, which the
-    // dispatcher surfaces. The wording is the shared `fileOpResultMessage`.
-    presentWorkflowFileOperation: (operation, { result, inputFile }) => {
-      const message = fileOpResultMessage(operation, result, inputFile);
-      return message.level === 'info'
-        ? host.showInfoMessage(message.text)
-        : Effect.fail(new Rejected({ reason: message.text }));
-    },
-    latexdiffAgainstCommit,
-    openSettings: (target) =>
-      Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, target),
-      ),
-    // Only the "ask the user for a key" step is host-specific: on the
-    // desktop that means opening the Models tab rather than a modal prompt.
-    setApiKey: Effect.sync(() =>
-      postDesktopSettingsView(options.postToRenderer, 'models/keys'),
-    ),
-    openApiKeyGuide: Effect.suspend(() =>
-      options.openExternalUrl('https://texra.ai/guide/configuration.html'),
-    ),
-    openCustomAgentDirectory: Effect.gen(function* () {
-      const directory = yield* AgentDirectories.use((directories) =>
-        directories.custom(),
-      );
-      yield* host.openPath(directory);
-    }),
-    openAgentDocs: Effect.suspend(() =>
-      options.openExternalUrl(`${DESKTOP_DOCS_URL}#agents`),
-    ),
-    recheckDependencies: Effect.suspend(() => options.recheckTools()),
-    openInstallGuide: () =>
-      Effect.sync(() =>
-        postDesktopSettingsView(options.postToRenderer, 'plugins'),
-      ),
-    onboarding: {
-      signInChatGpt: Effect.suspend(() =>
-        options.onboarding.signInWithChatGpt(),
-      ),
-      skip: Effect.suspend(() => options.onboarding.skipOnboarding()),
-      runSetup: Effect.suspend(() => options.onboarding.runSetup()),
-      skipSetup: Effect.suspend(() => options.onboarding.skipSetup()),
-      // The desktop has no walkthrough of its own: the card's "Open
-      // walkthrough" opens the desktop docs.
-      openGettingStarted: Effect.suspend(() =>
-        options.openExternalUrl(DESKTOP_DOCS_URL),
-      ),
-    },
-  };
-
-  /** The arms both GUI hosts answer through one body, now that this window's
-   *  ports are bound. */
-  const sharedRequests: SharedHostRequestPorts = {
-    runActions,
-    workflowFileActions,
-    snapshot: options.snapshot,
-    draftRequests,
-    toolEditApprovals: run.toolEditApprovals,
-    roots,
-    host: hostBindings,
-  };
-
-  const notOnDesktop = (what: string) =>
-    new Rejected({ reason: `${what} is not available in the desktop app.` });
-
-  /**
-   * One program per request: the arms this window performs its own way. Every
-   * other kind reaches the one shared body, which owns the order, the guards,
-   * and the refusal wording for both GUI hosts. A capability's failure is
-   * named through `hostFailure`, so the failure channel is the value the arm
-   * failed with and no dispatch arm re-enters the runtime between here and
-   * the bridge that runs this program.
-   */
-  function dispatch(
-    request: HostRequest,
-    port: string,
-  ): Effect.Effect<
-    HostOutcome,
-    HostRequestFailure,
-    ProcessServices | StorageFs | WorkspaceFs
-  > {
-    return Effect.gen(function* () {
-      if (isSharedHostRequest(request)) {
-        return yield* handleSharedHostRequest(sharedRequests, request, port);
-      }
-      switch (request.kind) {
-        case 'popOut':
-        case 'popBack':
-          return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
-        case 'pickFiles': {
-          const { fileType } = request;
-          if (fileType === 'base' || fileType === 'edited') {
-            return yield* Effect.fail(
-              notOnDesktop(`A picker for ${fileType} files`),
-            );
-          }
-          const paths = yield* options.files
-            .pickFiles(fileType)
-            .pipe(
-              Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
-            );
-          if (paths === null) return yield* Effect.fail(new Cancelled());
-          return { kind: 'files', paths };
-        }
-        case 'useCurrentFile':
-        case 'addOpenedFiles':
-          return yield* Effect.fail(notOnDesktop("The editor's current file"));
-        case 'gettingStarted':
-          return yield* Effect.fail(notOnDesktop('Starting a project'));
-        case 'workspaceFile':
-          return yield* options.workspaceFile(request.action);
-      }
-    });
-  }
-
-  /**
-   * The bridge's host-request port. A failure is answered as it is: the
-   * surface shows a refusal with its guide link, and a launch that fails has
-   * already been presented by the launch itself.
-   */
-  function handleHostRequest(
-    request: HostRequest,
-    port: string,
-  ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
-    // Over this paper's rooted filesystems: an arm that writes under the
-    // session's storage takes the view the layer above built from its roots.
-    return Effect.provide(
-      dispatch(request, port),
-      Layer.merge(sessionFiles, projectEnv),
-    );
-  }
-
-  return {
-    runValidated: runActions.runValidated,
-    handleHostRequest,
-    closePort: draftRequests.closePort,
-  };
-});
+        latexPreamble,
+        resourcesPath: options.resourcesPath,
+      },
+    };
+  },
+);

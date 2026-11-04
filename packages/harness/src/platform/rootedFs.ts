@@ -1,6 +1,9 @@
 /**
- * The rooted filesystems of a session, as Effect services: the workspace the session works on, the storage
- * root it keeps its own state under, and the cross-workspace global root.
+ * A session's roots (`SessionRoots`, the data every run, tool call and host
+ * command of the session takes its workspace from) and its rooted
+ * filesystems, as Effect services: the workspace the session works on, the
+ * storage root it keeps its own state under, and the cross-workspace global
+ * root.
  *
  * Each value is a {@link RootedFileSystem} — the standard library's
  * `FileSystem` confined to one root — and each layer captures that root when
@@ -19,6 +22,13 @@ import {
 } from '@utils/files/rootedFileSystem';
 
 import type { WorkspaceRoots } from './workspaceRoots';
+
+/** The roots of the session the caller runs in, as data: provided once by
+ *  the session layer, read by its runs, requests and host commands. */
+export class SessionRoots extends Context.Service<
+  SessionRoots,
+  WorkspaceRoots
+>()('@texra-ai/harness/session/SessionRoots') {}
 
 /** The workspace folder the session works on. */
 export class WorkspaceFs extends Context.Service<

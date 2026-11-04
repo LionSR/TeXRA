@@ -6,7 +6,8 @@
  * every task it starts.
  *
  * The payloads are the runtime's own wire schemas (the session bridge's
- * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `AgentConfig`), used as
+ * `Subscribe` and `EventsFrame`, `RuntimeRequest`, `StartRequestSchema`,
+ * `AgentConfig`), used as
  * they are; a procedure's error is the error class the handler fails with,
  * which the client receives as that class. The procedures:
  *
@@ -34,18 +35,20 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 import {
   AgentConfigSchema,
   JsonValueSchema,
+  LaunchNoticeSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
-  ApprovalPolicySchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
   RuntimeRequestSchema,
+  StartRequestSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
+  ResumeBlockedSchema,
 } from '@texra-ai/harness/transcript';
 import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
@@ -72,9 +75,38 @@ import type { ValueFamily } from '@texra-ai/harness/host';
 export const BUILD_VERSION: string =
   process.env.TEXRA_BUILD_VERSION || 'unknown';
 
-/** Bumped whenever a procedure or a payload changes shape. A client newer
- *  than the running service retires it; an older one stays in process. */
-export const PROTOCOL_VERSION = 34;
+/** The protocol's version and the shapes it versions. `version` is bumped
+ *  whenever a procedure or a payload changes shape: a client newer than the
+ *  running service retires it, an older one stays in process. `shapes` holds
+ *  each procedure's hash of its payload, success and error JSON Schemas at
+ *  that version. `protocolVersion.vitest.ts` fails when one moves, and
+ *  `npm run protocol:bump` advances the version and rewrites the hashes
+ *  together. A hash sees what JSON Schema shows: an opaque `Schema.declare`
+ *  or a `Schema.Json` field moves none. */
+export const PROTOCOL: {
+  readonly version: number;
+  readonly shapes: Readonly<Record<string, string>>;
+} = Object.freeze({
+  version: 53,
+  shapes: Object.freeze({
+    'service.hello': 'b883cf64d52c',
+    'service.stop': '8d19317aa364',
+    'tasks.list': 'f53aa5564aa8',
+    'task.watch': 'f3cdd07e24f8',
+    'task.request': 'f055ca5a4858',
+    'task.start': 'bd10b36a735a',
+    'task.resume': 'df1eb0f607ad',
+    'task.ended': 'b8a10423576c',
+    'task.config': 'ee42ee67ab23',
+    'task.exportTrace': 'f005493cb0c1',
+    'task.exportInput': 'fefc9f82f1e2',
+    'host.attach': '153808303ff7',
+    'state.get': '221cc7263384',
+    'state.set': 'e377b902a4e3',
+    'host.focus': 'fd20627c2222',
+    'host.answer': 'cc171cdead15',
+  }),
+});
 
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
@@ -125,12 +157,21 @@ const TaskSummarySchema = Schema.Struct({
 });
 export type TaskSummary = typeof TaskSummarySchema.Type;
 
-/** Why `task.start` or `task.resume` did not reach its run. */
+/** The run a `task.start` or `task.resume` reached, and a commit inside the
+ *  activation it reached: a window's handle reads that activation's events
+ *  from the rows up to it, whatever later activation the run has by then. */
+const TaskAdmitted = Schema.Struct({
+  runId: RunIdSchema,
+  activation: CommitOrdinalSchema,
+});
+
+/** Why `task.start` or `task.resume` did not reach its run. The service
+ *  shows it nowhere: the window that asked presents it. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   message: Schema.String,
-  /** The service already presented it, through the window attached to the
-   *  project: the caller does not present it again. */
-  presented: Schema.optional(Schema.Boolean),
+  /** A refused launch's notice (an unknown model, an unknown agent), which
+   *  the window shows in place of the message. */
+  notice: Schema.optional(LaunchNoticeSchema),
 }) {}
 
 /** Why a task's records have no answer: the service holds no such run in
@@ -184,46 +225,29 @@ export const TexraRpcs = RpcGroup.make(
     error: RequestErrorSchema,
   }),
   Rpc.make('task.start', {
-    payload: {
-      workspace,
-      runId: RunIdSchema,
-      config: AgentConfigSchema,
-      /** The chat's previous root: its bypass settings carry over. */
-      continues: Schema.NullOr(RunIdSchema),
-      /** Run on the configured helper model (the "fix LaTeX" actions). */
-      preferHelperModel: Schema.Boolean,
-      /** An Auto-approve launch: the run starts with delegated work
-       *  approved, as the run header's switch would set it. */
-      approveDelegatedWork: Schema.Boolean,
-      /** The policy the launch asked for: one stricter than the project's
-       *  narrows this task only; a more permissive one is ignored. */
-      approvalPolicy: Schema.NullOr(ApprovalPolicySchema),
-    },
+    /** The start as the window's `session.start` took it, less the window's
+     *  own tools, which a service cannot run: its case with a host's whole
+     *  configuration, which the service takes and resolves nothing for. */
+    payload: { workspace, start: StartRequestSchema.members[1] },
     /** The run that started: the asked id, or the one the launch resolved. */
-    success: RunIdSchema,
+    success: TaskAdmitted,
     error: TaskFailed,
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: RunIdSchema },
     /** The run that resumed: the asked one, or the parent that owns it;
-     *  null when something it needs (its agent, a plugin) is missing, so it
-     *  stays interrupted. */
-    success: Schema.NullOr(RunIdSchema),
+     *  or what it needs (its agent, a plugin) and is missing, so it stays
+     *  interrupted. */
+    success: Schema.Union([TaskAdmitted, ResumeBlockedSchema]),
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its
-   *  outcome, output, and the error a failed one ended with; and `at`,
-   *  the service's fold position where it saw the end, so a window's
-   *  fold at or past it shows the end (or the run's removal) too. */
+   *  stored end; and `at`, the service's view position where it saw the
+   *  end, so a window's view at or past it shows the end (or the run's
+   *  removal) too. */
   Rpc.make('task.ended', {
     payload: { workspace, runId: RunIdSchema },
-    success: RunEndSchema.mapFields(
-      Struct.pick(['outcome', 'output', 'error']),
-    ).mapFields(
-      Struct.assign({
-        at: CommitOrdinalSchema,
-      }),
-    ),
+    success: RunEndSchema.mapFields(Struct.assign({ at: CommitOrdinalSchema })),
     error: TaskFailed,
   }),
   /** The run's saved setup; null when it saved none. */

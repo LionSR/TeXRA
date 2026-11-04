@@ -1,10 +1,10 @@
 // The bounded static-scrollback ring behind `StaticConversationTranscript`:
 // what the retained tail contains (session header and finalized entries),
 // what it costs in rows and bytes, and how an incremental tick advances it.
-// Everything here is plain data over the transcript fold — no React, no Ink —
+// Everything here is plain data over the transcript — no React, no Ink —
 // so the component file holds only the component.
 
-import { getModelLabel, type RunPhase } from '@texra-ai/harness/schemas';
+import { getModelLabel } from '@texra-ai/harness/schemas';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 
 import {
@@ -41,7 +41,7 @@ export interface StaticTranscriptState {
   /** The layout width `totals` were measured under. */
   readonly layoutWidth: number | undefined;
   /** Incremented whenever items change non-append-only (trim, header insert,
-   *  hard reset, fold rebuild) so the `<Static>` identity remounts and
+   *  hard reset, view rebuild) so the `<Static>` identity remounts and
    *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
   readonly repaintEpoch: number;
   /** The last `staticTranscriptEraseEpoch` the state was rebuilt for. An
@@ -86,7 +86,7 @@ interface RingTail {
   readonly trimmed: boolean;
 }
 
-/** The header facts of a child run scrollback, read from the fold. */
+/** The header facts of a child run scrollback, read from the session view. */
 export interface ChildHeader {
   readonly label: string;
   readonly modelLabel: string | null;
@@ -95,15 +95,17 @@ export interface ChildHeader {
 }
 
 /**
- * What the scrollback paints: the run's folded rows joined with this
+ * What the scrollback paints: the run's rows joined with this
  * TUI's notices, its settled prefix, and the facts the session header names.
  */
 export interface StaticScrollbackSource {
   readonly entries: readonly TranscriptRow[] | undefined;
   readonly settledRows: number;
-  readonly status: RunPhase | undefined;
-  /** A child agent whose model the fold has not folded yet: the header
-   *  waits. Only an agent identity carries a model (the fold's `run.config`
+  /** Whether the run is working: its unsettled tail stays out of the
+   *  scrollback while it is. */
+  readonly working: boolean;
+  /** A child agent whose model the session view has not applied yet: the header
+   *  waits. Only an agent identity carries a model (the session view's `run.config`
    *  rule), so a process or workflow child paints at once. */
   readonly waitingForChildIdentity: boolean;
   /** The child header; undefined paints the session (root) header. */
@@ -543,7 +545,7 @@ function buildStaticTranscriptItems(
   for (const entry of orderedStaticTranscriptEntries(
     source.entries ?? [],
     source.settledRows,
-    source.status,
+    source.working,
   )) {
     items.push({ id: entry.id, kind: 'entry', entry });
   }
@@ -554,13 +556,13 @@ function buildStaticTranscriptItems(
 function scanStaticTranscriptFromStart(
   entries: readonly TranscriptRow[] | undefined,
   settledRows: number,
-  status: RunPhase | undefined,
+  working: boolean,
 ): StaticTranscriptScanCursor {
-  return incrementalStaticTranscriptEntries(entries, settledRows, status, {
+  return incrementalStaticTranscriptEntries(entries, settledRows, working, {
     entriesRef: undefined,
     scannedIndex: 0,
     lastScannedEntry: undefined,
-    status: undefined,
+    working: false,
     lastAppendedKey: undefined,
   }).cursor;
 }
@@ -592,13 +594,13 @@ export function buildStaticTranscriptState({
     ? incrementalStaticTranscriptEntries(
         source.entries,
         source.settledRows,
-        source.status,
+        source.working,
         undefined,
       ).cursor
     : scanStaticTranscriptFromStart(
         source.entries,
         source.settledRows,
-        source.status,
+        source.working,
       );
   return {
     ownerKey,
@@ -632,7 +634,7 @@ export function advanceStaticTranscriptState(
   const isHardReset = source.hardReset;
   const entries = source.entries;
   const settledRows = source.settledRows;
-  const status = source.status;
+  const working = source.working;
   const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
     buildStaticTranscriptState({
       eraseRequest,
@@ -703,7 +705,7 @@ export function advanceStaticTranscriptState(
   const plan = incrementalStaticTranscriptEntries(
     entries,
     settledRows,
-    status,
+    working,
     current.scan,
   );
   if (plan.rebuild) {
@@ -753,7 +755,7 @@ export function advanceStaticTranscriptState(
     cursor.entriesRef !== current.scan.entriesRef ||
     cursor.scannedIndex !== current.scan.scannedIndex ||
     cursor.lastScannedEntry !== current.scan.lastScannedEntry ||
-    cursor.status !== current.scan.status;
+    cursor.working !== current.scan.working;
   if (!changed && !cursorChanged) return current;
 
   return {

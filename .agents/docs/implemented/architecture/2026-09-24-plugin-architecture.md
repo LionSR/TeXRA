@@ -39,7 +39,6 @@ names (invariants 6 and 7).
 | `availability` | The probe of an external dependency; its tools are withheld while the dependency is missing.                                         |
 | `toggle`       | A user switch and its first-install position. A switched plugin must have `availability` (`ALWAYS_AVAILABLE` when nothing to probe). |
 | `injectedWhen` | Tools offered to every agent with tools while the plugin (and an optional boolean setting) is on.                                    |
-| `continuation` | What a parked run does next (built-ins only, `defineBuiltinPlugin`). At most one plugin in a list continues parked runs.             |
 | `prompt`       | One `PromptSection` of each request's system text.                                                                                   |
 | `processLayer` | Process-lifetime services, up while the plugin is on or a step pins it; its `drain` runs in the shutdown protocol.                   |
 | `sessionLayer` | Session-lifetime services, one build per open session; work that outlives its step holds it with `PluginHold`.                       |
@@ -57,7 +56,7 @@ layers, then erases that type. Authors import all of this from
 `toolTable` (`packages/harness/src/tools/toolTable.ts`) builds the process's
 `ToolTable` from the ordered plugin list and refuses a defective list when it
 is built: a malformed or repeated id, a tool name claimed twice, two
-continuations, two decision hooks for one request kind, an agent-file key
+decision hooks for one request kind, an agent-file key
 owned twice or equal to a persona key, or a switch without a probe. The
 `ToolRegistry` service holds the table; `pluginCatalogLayer`
 (`packages/harness/src/tools/pluginCatalog.ts`) builds it, and the tool
@@ -77,8 +76,7 @@ exports `harnessBuiltins`:
 - `web`: `web_search`, `web_fetch`;
 - `memory-workflow`: `memory` (injected while memory is on) and
   `executions`, with a prompt section;
-- `goal`: the `plan` tool, the parked-run continuation, and the `goal/state`
-  arm;
+- `goal`: the `plan` tool and the `goal/state` arm;
 - `multi-agent`: the `agent` tool, which runs a named agent as a child run;
 - `codemode`: the `script` tool, whose session layer is the QuickJS code
   sandbox the scripts run in.
@@ -121,10 +119,10 @@ documents plugin's `task:` block (`DOCUMENT_TASK_BLOCK`).
   request opens a step, and so does a park. It applies the switches and the
   enabled, trusted installed plugins, pins the current generation, and
   resolves the offered tools (`resolveStepTools`,
-  `packages/harness/src/agent/runtime/agentToolResolution.ts`), the
-  continuation, the hooks and the prompt sections of the plugins it pinned.
+  `packages/harness/src/agent/runtime/agentToolResolution.ts`), the hooks
+  and the prompt sections of the plugins it pinned.
   The pin is held hand over hand, so a response's calls run against the tools
-  its request offered. When the offered set, continuation, hooks or rendered
+  its request offered. When the offered set, hooks or rendered
   context differ from the run's last record, the step returns a
   `tools.offered` row (each tool's name, digest, plugin and revision), which
   the loop appends through the run's one writer before the request.
@@ -167,7 +165,7 @@ validate is skipped and the resolving run's transcript says why.
   `effect/process` (`packages/harness/src/tools/mcp/mcpServer.ts`).
 - Every MCP call goes through the one approval authority: the loop's guard
   (`guardedToolCall`, `packages/harness/src/agent/runtime/loop/toolGuard.ts`)
-  routes it to `requestBashApproval`. MCP tools are never parallel-safe, and
+  routes it to `askCommandApproval`. MCP tools are never parallel-safe, and
   are replay-safe only when the server marks them read-only or idempotent.
 - A server that fails to start yields no tools and a transcript warning; the
   run still opens.
@@ -224,7 +222,7 @@ These are not plugin surfaces; opening one needs its own owner decision.
   a second loader.
 - **The run loop.** `packages/harness/src/agent/runtime/loop/toolUse.ts` is
   the only run program. A plugin adds no step, node, task kind or wait; its
-  loop inputs are its continuation, prompt section and hooks.
+  loop inputs are its prompt section and hooks.
 - **The run history.** `RunCell.append` (from `RunHistory.open`,
   `packages/harness/src/shared/session/runHistory.ts`) is the one writer of a
   run's rows, and the session log's `transact` the door for every other row.

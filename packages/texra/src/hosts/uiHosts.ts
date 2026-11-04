@@ -9,7 +9,7 @@ export interface DiffSource {
  * The host's diff surface: showing a diff, the one verb the two windowed
  * hosts answer. The terminal has no second surface to show one in — its
  * tool-edit modal renders the diff inline, and no CLI action names the
- * `openDiff` host arm — so this port stays at two implementations.
+ * `openDiff` host case — so this port stays at two implementations.
  * Closing a diff, revealing its first change and reading back its proposed
  * side are VS Code's alone — its tab model is what they are written against —
  * so they live on `VscodeDiffViewHost` beside the approval host that calls

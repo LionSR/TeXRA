@@ -2,31 +2,40 @@
  * A host attached to one session of `@texra-ai/harness`: its presentation
  * surface, and its approval handler at work, which requests it is asked
  * (once each) and what is recorded when it does not answer. A request is
- * never left parked on a handler that failed, threw, or went quiet: that is
+ * never left waiting on a handler that failed, threw, or went quiet: that is
  * a denial, with the cause logged.
  */
 import {
   Cause,
+  Context,
   Deferred,
   Duration,
   Effect,
-  Exit,
   Fiber,
-  FiberSet,
-  Queue,
+  FiberMap,
   Schedule,
   type Scope,
   Stream,
-  SubscriptionRef,
 } from 'effect';
 
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  Interactions,
+  type HostInteractions,
+} from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { withLogChannel } from '@logger/effectLog';
-import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
-import type { PendingRequest } from '@shared/session/readonlyViews';
-import type { RequestError } from '@shared/session/runtimeRequest';
 import { attentionOf } from '@shared/session/sessionView';
+import { SessionViewAccess } from '@shared/session/runHistory';
+import {
+  answerMismatch,
+  blocksCaller,
+  type RequestDecision,
+} from '@shared/schemas';
+import type {
+  PendingRequest,
+  SessionView,
+} from '@shared/session/readonlyViews';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ApprovalHandler, SessionHost } from './sessions.js';
@@ -41,247 +50,157 @@ const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
 
 /** The handler's decision on `pending`, or a denial naming why it gave
- *  none: a failure, a throw, or no answer in time. A withdrawal (the
- *  prompt interrupted) stays one: it is no decision at all. */
+ *  none it can use: a failure, a throw, no answer in time, or a decision the
+ *  request's kind does not take. A withdrawal (the prompt interrupted) stays
+ *  one: it is no decision at all. */
 const decisionOf = (
   host: AnsweringHost,
   pending: PendingRequest,
 ): Effect.Effect<RequestDecision> =>
   // Called on the host itself: a class-based host keeps its receiver.
   Effect.suspend(() => host.approve(pending)).pipe(
+    Effect.flatMap((decision) => {
+      const mismatch = answerMismatch(pending.payload, decision);
+      return mismatch === null
+        ? Effect.succeed(decision)
+        : Effect.fail(new Error(mismatch));
+    }),
     Effect.timeout(APPROVAL_HANDLER_TIMEOUT),
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
         : Effect.logWarning(
-            `The approval handler gave no decision on request ${pending.requestId}; it is denied`,
+            `The approval handler gave no usable decision on request ${pending.requestId}; it is denied`,
           ).pipe(
             Effect.annotateLogs({ data: cause }),
             withLogChannel(CHANNEL),
             Effect.as<RequestDecision>({
               action: 'deny',
-              reason: `The approval handler gave no decision: ${toErrorMessage(Cause.squash(cause))}`,
+              reason: `The approval handler gave no usable decision: ${toErrorMessage(Cause.squash(cause))}`,
             }),
           ),
     ),
   );
 
-/** One attached host with an approval handler, on its session's list
- *  (newest last): the wake that tells it it became the newest, its prompts
- *  in flight (withdrawn when a newer handler attaches), and how its surface
- *  hears that a decision it made went to a newer one. A host without a
- *  handler (a viewer) is not on the list: it never takes prompts over. */
-export interface Approver {
-  readonly host: AnsweringHost;
-  readonly wake: Queue.Queue<void>;
-  readonly prompts: FiberSet.FiberSet<void>;
-  readonly superseded: (pending: PendingRequest) => Effect.Effect<void>;
-}
-
 /**
- * Answer the runs' requests of `session` with `approve` while it is the
- * newest attached handler (`active`), until interrupted: every request a
- * parked run waits on here (the attention rule every host reads), once,
- * through the session's one `request.decide`. It reads each view, and the
- * settled one again when `wake` says it became the newest, since a parked
- * run publishes none. A decision the session refuses to record is tried
- * again briefly, then logged and its request offered again on the next
- * view; a handler still deciding a request that left the view (another
- * surface answered it) is interrupted.
+ * Run `program` once for each request `select` picks from the session's
+ * view, for as long as the view lists it. A program that returns runs again
+ * on the next view that still lists its request; one that holds something
+ * for its request (a decision on record, a preview, a staged card) ends with
+ * `Effect.never` and releases it in a finalizer, which runs once the view
+ * drops the request, however it was decided.
  */
-function answerRequests(
-  session: RuntimeSessionHandle,
-  { host, wake, prompts, superseded }: Approver,
-  active: () => boolean,
-): Effect.Effect<void> {
-  // The handler fiber asked about each request, keyed by run and request
-  // as the fold keys a pending request.
-  const asked = new Map<string, Fiber.Fiber<void>>();
-  const keyOf = (request: PendingRequest): string =>
-    `${request.runId}\0${request.requestId}`;
-  const forget = (pending: PendingRequest): Effect.Effect<void> =>
-    Effect.sync(() => {
-      asked.delete(keyOf(pending));
-    });
-  // The session's one `request.decide`, tried again when its write is
-  // refused.
-  const record = (
-    pending: PendingRequest,
-    decision: RequestDecision,
-  ): Effect.Effect<void, RequestError> =>
-    session.requests
-      .request({
-        kind: 'request.decide',
-        runId: pending.runId,
-        requestId: pending.requestId,
-        decision,
-      })
-      .pipe(Effect.retry({ schedule: DECIDE_RETRY, times: 3 }), Effect.asVoid);
-  const answer = (pending: PendingRequest): Effect.Effect<void> =>
-    decisionOf(host, pending).pipe(
-      Effect.flatMap((decision) =>
-        // A newer handler attached as this one decided (its prompt is
-        // withdrawn on attach; this is the backstop): the newer one answers.
-        active()
-          ? record(pending, decision)
-          : Effect.logWarning(
-              `A decision on request ${pending.requestId} came from a handler no longer the newest; the newer one answers it`,
-            ).pipe(
-              withLogChannel(CHANNEL),
-              Effect.andThen(superseded(pending)),
-            ),
-      ),
-      Effect.asVoid,
-      // An interrupt is a withdrawal, handled above; anything else is logged.
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.void
-          : Effect.logWarning(
-              `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
-              withLogChannel(CHANNEL),
-              Effect.andThen(forget(pending)),
-            ),
-      ),
-    );
-  // A wake reads the view once the log settled: a decision the handler
-  // that left committed is folded by then, never asked about again.
-  const woken = Stream.fromQueue(wake).pipe(
-    Stream.mapEffect(() =>
-      Effect.andThen(
-        session.log.settled,
-        SubscriptionRef.get(session.view.ref),
-      ),
-    ),
-  );
-  return Stream.merge(session.view.changes, woken).pipe(
-    Stream.runForEach((view) =>
-      Effect.forEach(
-        attentionOf(view).requests.filter(
-          (pending) =>
-            active() &&
-            requestParksItsCaller(pending.payload) &&
-            !asked.has(keyOf(pending)),
-        ),
-        (pending) =>
-          // One handler awaiting its embedder never holds the next. Held
-          // in the map before it starts, so an attach can withdraw it, and
-          // forgotten by the fiber's own exit: a withdrawal (asked again
-          // should this handler become the newest) or a failure. The exit
-          // observer is what makes a prompt withdrawn in the tick it was
-          // forked, before its first step ran, forget itself too; a finalizer
-          // inside the effect never runs for a fiber that never started, and
-          // the key it left behind kept the request from ever being asked
-          // again. A decided request stays held until the view drops it, so
-          // the fold catching up cannot re-ask it.
-          FiberSet.run(prompts, answer(pending), {
-            startImmediately: false,
-          }).pipe(
-            Effect.tap((fiber) =>
-              Effect.sync(() => {
-                const key = keyOf(pending);
-                asked.set(key, fiber);
-                fiber.addObserver((exit) => {
-                  if (Exit.isFailure(exit) && asked.get(key) === fiber)
-                    asked.delete(key);
-                });
-              }),
-            ),
-          ),
+export const followPendingRequests = Effect.fn('followPendingRequests')(
+  function* <P extends PendingRequest, R>(
+    view: { readonly changes: Stream.Stream<SessionView> },
+    select: (view: SessionView) => readonly P[],
+    program: (request: P) => Effect.Effect<void, never, R>,
+  ): Effect.fn.Return<void, never, R | Scope.Scope> {
+    // Keyed by run and request, as the fold keys a pending request.
+    const keyOf = (request: PendingRequest): string =>
+      `${request.runId}\0${request.requestId}`;
+    const fibers = yield* FiberMap.make<string>();
+    yield* Stream.runForEach(view.changes, (level) => {
+      const listed = new Set(level.requests.map(keyOf));
+      return Effect.forEach(
+        [...fibers].filter(([key]) => !listed.has(key)),
+        // Forked: the view loop never waits on a program's finalizers.
+        ([, fiber]) => Effect.forkChild(Fiber.interrupt(fiber)),
         { discard: true },
       ).pipe(
-        // A request gone from the list is decided for good: a handler still
-        // deciding it lost to another surface's decision, so it stops.
         Effect.andThen(
-          Effect.suspend(() => {
-            const listed = new Set(view.requests.map(keyOf));
-            return Effect.forEach(
-              [...asked].filter(([id]) => !listed.has(id)),
-              ([id, fiber]) => {
-                asked.delete(id);
-                // Forked: the view loop never waits on an embedder's handler.
-                return Effect.forkChild(Fiber.interrupt(fiber));
-              },
-              { discard: true },
-            );
-          }),
-        ),
-      ),
-    ),
-  );
-}
-
-/**
- * Attach `host` to `session` for the caller's scope: the newest host
- * presents, and the newest handler in `approvers` (the session's own list)
- * answers the runs' requests, until the scope or the session closes. A
- * host with a handler can answer whatever its surface says.
- */
-export function attachHost(
-  session: RuntimeSessionHandle,
-  host: SessionHost,
-  approvers: Approver[],
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.gen(function* () {
-    // The session disposes its hosts as it closes: the answerer ends then.
-    const ended = yield* Deferred.make<void>();
-    yield* Effect.acquireRelease(
-      session.interactions.use(
-        overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
-      ),
-      (detach) => Effect.sync(detach),
-    );
-    if (!answers(host)) return;
-    const self: Approver = {
-      host,
-      wake: yield* Queue.unbounded<void>(),
-      prompts: yield* FiberSet.make<void>(),
-      superseded: (pending) =>
-        Effect.suspend(
-          () =>
-            host.emit?.('requestShowInstruction', {
-              key: `superseded-${pending.requestId}`,
-              message: 'This request was answered in a newer window.',
-            }) ?? Effect.void,
-        ).pipe(
-          Effect.catchCause((cause) =>
-            Effect.logWarning(
-              `The older window was not told request ${pending.requestId} went to a newer one`,
-            ).pipe(
-              Effect.annotateLogs({ data: cause }),
-              withLogChannel(CHANNEL),
-            ),
+          Effect.forEach(
+            select(level),
+            (request) =>
+              FiberMap.run(fibers, keyOf(request), program(request), {
+                onlyIfMissing: true,
+              }),
+            { discard: true },
           ),
         ),
-    };
-    // Attaching withdraws the older handler's prompts in flight: the newest
-    // asks them again. Leaving wakes the handler that becomes the newest: it
-    // re-reads the settled view, where a request this one asked still waits.
-    yield* Effect.acquireRelease(
-      Effect.gen(function* () {
-        const older = approvers.at(-1);
-        approvers.push(self);
-        if (older !== undefined) yield* FiberSet.clear(older.prompts);
-      }),
-      () =>
-        Effect.suspend(() => {
-          approvers.splice(approvers.indexOf(self), 1);
-          const next = approvers.at(-1);
-          return next === undefined
-            ? Effect.void
-            : Effect.asVoid(Queue.offer(next.wake, undefined));
-        }),
-    );
-    yield* Effect.forkScoped(
-      answerRequests(session, self, () => approvers.at(-1) === self).pipe(
-        Effect.raceFirst(Deferred.await(ended)),
-        // The session ended: no prompt still out decides against it.
-        Effect.ensuring(FiberSet.clear(self.prompts)),
+      );
+    });
+  },
+);
+
+/**
+ * Answer the runs' requests of `session` with the host's `approve`, until
+ * interrupted: every request a waiting run waits on here (the attention rule
+ * every host reads), once, through the session's one `request.decide`. A
+ * decision the session refuses to record is tried again briefly, then
+ * logged and its request offered again on the next view; a handler still
+ * deciding a request that left the view (another surface answered it) is
+ * interrupted.
+ */
+const answerRequests = (
+  session: Context.Context<SessionServices>,
+  host: AnsweringHost,
+): Effect.Effect<void, never, Scope.Scope> =>
+  followPendingRequests(
+    Context.get(session, SessionViewAccess),
+    (view) =>
+      attentionOf(view).requests.filter((pending) =>
+        blocksCaller(pending.payload),
       ),
-    );
-  });
-}
+    (pending) =>
+      decisionOf(host, pending).pipe(
+        Effect.flatMap((decision) =>
+          Context.get(session, SessionRequests)
+            .request({
+              kind: 'request.decide',
+              runId: pending.runId,
+              requestId: pending.requestId,
+              decision,
+            })
+            .pipe(
+              Effect.provide(session),
+              Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
+            ),
+        ),
+        // A decided request stays held until the view drops it, so the fold
+        // catching up cannot re-ask it.
+        Effect.andThen(Effect.never),
+        // An interrupt is a withdrawal; anything else is logged.
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logWarning(
+                `The decision on request ${pending.requestId} was not recorded; it is offered again on the next view`,
+              ).pipe(
+                Effect.annotateLogs({ data: cause }),
+                withLogChannel(CHANNEL),
+              ),
+        ),
+      ),
+  );
+
+/**
+ * Attach `host` to `session` for the caller's scope, the session's one host:
+ * it presents, and its handler answers the runs' requests, until the scope
+ * or the session closes. A host with a handler can answer whatever its
+ * surface says.
+ */
+export const attachHost = Effect.fn('attachHost')(function* (
+  session: Context.Context<SessionServices>,
+  host: SessionHost,
+): Effect.fn.Return<void, never, Scope.Scope> {
+  // The session disposes its host as it closes: the answerer ends then.
+  const ended = yield* Deferred.make<void>();
+  yield* Effect.acquireRelease(
+    Context.get(session, Interactions).use(
+      overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
+    ),
+    (detach) => Effect.sync(detach),
+  );
+  if (!answers(host)) return;
+  // The session ended: closing the answerer's scope interrupts every
+  // prompt still out, so none decides against it.
+  yield* Effect.forkScoped(
+    Effect.scoped(answerRequests(session, host)).pipe(
+      Effect.raceFirst(Deferred.await(ended)),
+    ),
+  );
+});
 
 /** A host that answers the runs' requests. */
 type AnsweringHost = SessionHost & { readonly approve: ApprovalHandler };

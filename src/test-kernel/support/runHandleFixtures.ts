@@ -1,7 +1,6 @@
-import { Effect, Fiber, SubscriptionRef } from 'effect';
+import { Effect, Fiber, FiberSet, type Scope, SubscriptionRef } from 'effect';
 
 // Local imports
-import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
 import {
   registryOf,
   RunRegistry,
@@ -10,86 +9,75 @@ import {
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
 import type { RunsShape } from '@agent/runtime/runs';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunServices } from '@agent/runtime/ToolServices';
 import { emptySessionView } from '@shared/session/sessionView';
-import type { RunId, RunIdentity } from '@shared/schemas';
-import { testRuntime } from './testProcessRuntime';
+import type { RunId } from '@shared/schemas';
+import { testWorkspaceRoots } from './testWorkspaceRoots';
 
-/** A registry's launch door over the harness's process runtime, standing in
- *  for the session context the session layer forks runs from. */
-export const testRunFork: RunRegistryInit['fork'] = (effect) =>
-  testRuntime().runFork(effect);
-
-/**
- * A live run handle for tests.
- *
- * The run struct is assembled here and typed as the canonical
- * {@link RunFacts}, so a schema change breaks every fixture in one place.
- */
-export function testRunHandle(input: {
-  runId: RunId;
-  /** The parent edge; omitted (or null) for a root. */
-  parent?: RunId | null;
-  agent: string;
-  /** Defaults to a native agent identity for `agent`. */
-  identity?: RunIdentity;
-}): RunHandle {
-  const run: RunFacts = {
-    runId: input.runId,
-    identity: input.identity ?? { kind: 'agent', agent: input.agent },
-  };
-  return new RunHandle(run, input.parent ?? null);
-}
+/** A registry's launch door over the calling fiber's process services,
+ *  standing in for the session context the session layer forks runs from:
+ *  the runs it starts end with the calling scope, as a session's end with
+ *  the session. */
+export const testRunFork: Effect.Effect<
+  RunRegistryInit['fork'],
+  never,
+  RunServices | Scope.Scope
+> = Effect.map(
+  FiberSet.makeRuntime<RunServices>(),
+  // cast: a test registry stands for no session, so what it starts reads
+  // none of a session's services
+  (fork) => fork as RunRegistryInit['fork'],
+);
 
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
-export function testRunRegistry(): RunRegistry {
-  // The registry reads its session's view (empty here), claims (no-ops)
-  // and its own `run.detach` batches (dropped); nothing else.
-  const session = {
-    view: { run: () => undefined, ref: emptyView },
-    log: {
-      transact: () => Effect.succeed([]),
-      hold: () => Effect.void,
-    },
-  } as unknown as SessionHandle;
-  return new RunRegistry({
-    session: () => session,
-    fork: testRunFork,
-    programs: testRunPrograms,
-    wake: () => {},
-  });
-}
+export const testRunRegistry: Effect.Effect<
+  RunRegistry,
+  never,
+  RunServices | Scope.Scope
+> = Effect.zipWith(
+  testRunFork,
+  // The empty fold the registry reads its grants from.
+  SubscriptionRef.make(emptySessionView('test-run-registry')),
+  (fork, emptyView) =>
+    // The registry reads its session's view (empty here), claims (no-ops)
+    // and its own `run.detach` batches (dropped); nothing else.
+    // cast: the registry reads only these members of its view and log.
+    new RunRegistry({
+      view: {
+        run: () => undefined,
+        ref: emptyView,
+      } as unknown as RunRegistryInit['view'],
+      log: {
+        transact: () => Effect.succeed([]),
+        hold: () => Effect.void,
+      } as unknown as RunRegistryInit['log'],
+      roots: testWorkspaceRoots(),
+      fork,
+      programs: testRunPrograms,
+      wake: () => {},
+    }),
+);
 
 /** The run programs a test registry runs: the production ones, each read
  *  per call so a suite's own mock of its module is the program it reaches. */
 export const testRunPrograms: RunPrograms = {
-  root: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/runtime/rootLaunch')),
-      (module) => module.rootRun(...args),
-    ),
   executeAgent: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/executeAgent')),
       (module) => module.executeAgent(...args),
     ),
-  resumeTurn: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/runtime/executeAgent')),
-      (module) => module.resumeToolUseFromResumeData(...args),
-    ),
   resume: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/runtime/resumeRun')),
-      (module) => module.resumeRun(...args),
+      (module) => module.decideResume(...args),
+    ),
+  finalize: (...args) =>
+    Effect.flatMap(
+      Effect.promise(() => import('@agent/storage/runLifecycle')),
+      (module) => module.finalizeRun(...args),
     ),
 };
-
-/** The empty fold a {@link testRunRegistry} reads its grants from. */
-const emptyView = Effect.runSync(
-  SubscriptionRef.make(emptySessionView('test-run-registry')),
-);
 
 /**
  * A run whose generation is live on the run registry, the way a real launch
@@ -102,6 +90,7 @@ export function admitInterruptibleRun(
   runs: RunsShape,
   runId: RunId,
   onInterrupt: () => void,
+  launchParent: RunId | null = null,
 ): Fiber.Fiber<void> {
   const interruptEffect = Effect.sync(onInterrupt);
   // Awaited as a root launch awaits: interrupting this fiber stops the run.
@@ -110,6 +99,7 @@ export function admitInterruptibleRun(
       runs,
       runId,
       Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
+      launchParent,
     ).pipe(Effect.ignore),
   );
 }
@@ -120,9 +110,10 @@ export function startAwaited<A, E, R extends AgentRunServices>(
   runs: RunsShape,
   runId: RunId,
   program: Effect.Effect<A, E, R>,
+  launchParent: RunId | null = null,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    registryOf(runs).start(runId, program, (run) => run),
+    registryOf(runs).start(runId, program, (run) => run, launchParent),
     (fiber) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );

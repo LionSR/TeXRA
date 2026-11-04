@@ -506,7 +506,7 @@ const bundledRuntimeResourceDirs = [
 ];
 // The Codex and Claude Code SDKs each pull a per-platform package carrying a
 // 250-410 MiB native CLI binary. The desktop app resolves a user-installed CLI
-// at runtime (packages/texra/src/tools/codexImport.ts, packages/texra/src/tools/claudeAgentImport.ts), so
+// at runtime (packages/texra/src/tools/agentCli/codexImport.ts, packages/texra/src/tools/agentCli/claudeAgentImport.ts), so
 // none of these packages may ship inside the app. The desktop manifest does not
 // declare the SDKs (packages/texra does, and esbuild inlines them from there),
 // and electron-builder copies only the manifest's production dependencies.
@@ -1623,10 +1623,6 @@ function conversationEvents({ approval = false } = {}) {
   log.entry(RUN, NOW + 1000, {
     messageType: 'modelResponse',
     message: 'I will inspect the manuscript and report missing citations.',
-  });
-  log.emit(RUN, NOW + 1500, {
-    type: 'conversation.progress',
-    progress: { toolCallCount: 1 },
   });
   if (approval) {
     startRun(log, {

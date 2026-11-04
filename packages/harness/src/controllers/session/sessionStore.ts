@@ -1,15 +1,13 @@
-/**
- * One session's store-facing owners: the log (`SessionLog`, the one
- * transaction door with its reads and claims) and the trace sink
- * (`RunTrace`), over the root's publisher and database.
+/** One session's store-facing owner: the log (`SessionLog`, the one
+ *  transaction door with its reads, claims and each run's trace), over the
+ *  root's publisher and database.
  *
- * "Published" means folded: a transaction returns once the session's tail
- * has delivered, and its view has folded, every commit it made, so a caller
- * that reads the view next sees what it wrote. The raw tail is delivered
- * here too ({@link SessionStore.deliver}): it drops the transient text a
- * committed row closes and hands a run's removal to the session. "Settled"
- * waits further, for the reader of the folded tail to run over a commit.
- */
+ *  "Published" means folded: a transaction returns once the session's tail
+ *  has delivered, and its view has folded, every commit it made, so a caller
+ *  that reads the view next sees what it wrote. The raw tail is delivered
+ *  here too ({@link SessionStore.deliver}): it drops the transient text a
+ *  committed row closes and hands a run's removal to the session. "Settled"
+ *  waits further, for the reader of the folded tail to run over a commit. */
 import {
   type Context,
   Deferred,
@@ -20,12 +18,6 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type {
-  RunTrace,
-  SessionLog,
-  SessionTransaction,
-} from '@agent/runtime/SessionHandle';
-import { tailFrom } from '@agent/runtime/SessionEvents';
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
@@ -45,23 +37,27 @@ import {
   ProcessIdentity,
   afterCommit,
   SessionEvents,
+  tailFrom,
   type Append,
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
+import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
+import type {
+  SessionLogShape,
+  SessionTransaction,
+} from '@shared/session/sessionLog';
 
 import { makeRunTrace } from './runTrace';
 import { SessionViewService } from './SessionView';
 import { TextChunkSource } from './sessionSources';
 
-const CHANNEL = 'sessionStore';
-
 /** What the session layer composes a session from, beside the handle. The
  *  store is the one owner of the session's publisher: nothing else reaches
  *  its transactions. */
 export interface SessionStore {
-  readonly log: SessionLog;
-  readonly trace: RunTrace;
+  readonly log: SessionLogShape;
   /** The publisher's detached door: for a producer with no fiber to wait on
    *  (the inbox's own sends, an interrupted request's cancellation). */
   readonly detach: SessionEventsShape['detach'];
@@ -71,24 +67,25 @@ export interface SessionStore {
    *  holds its state), for the session's one reader: `settled` waits until
    *  it has run over a commit, so it never waits on `settled` itself. */
   readonly folded: Stream.Stream<SessionEvent, DatabaseReadFailed>;
-  /**
-   * Deliver the raw tail from the store's opening commit for the caller's
-   * scope: each committed row drops the transient text it closes, a run's
-   * `run.removed` is handed to `removed`, and the position it reaches is
-   * what a transaction's settle waits for.
-   */
+  /** Deliver the raw tail from the store's opening commit for the caller's
+   *  scope: each committed row drops the transient text it closes, a run's
+   *  removal is handed to `removed`, and the position it reaches is what a
+   *  transaction's settle waits for. */
   readonly deliver: (
     removed: (runId: RunId) => void,
   ) => Effect.Effect<void, never, Scope.Scope>;
   /** Drain the publisher inside the close deadline, then shut the doors:
    *  from here on a trace row, a transcript subscription and an interrupted
-   *  request's cancellation write nothing, and the first late trace row
-   *  says so. */
+   *  request's cancellation write nothing; the first late trace row says so. */
   readonly close: Effect.Effect<void>;
   readonly closed: () => boolean;
 }
 
-type DatabaseShape = Context.Service.Shape<typeof Database>;
+const CHANNEL = 'sessionStore';
+
+/** Whether `row` is a run's deletion marker. */
+const isRemoval = (row: SessionEvent | undefined): boolean =>
+  row?.type === 'run.removed';
 
 /** Log a failure on this channel, with the failure attached as its `data`. */
 const logFailure =
@@ -96,11 +93,9 @@ const logFailure =
   (data: unknown) =>
     log(message).pipe(Effect.annotateLogs({ data }), withLogChannel(CHANNEL));
 
-/**
- * The settled level: the lesser of what the tail delivered and what the
- * view folded. `to(commit)` waits until it (or `level`) reaches `commit`;
- * it dies with the tail or the level's end, so it never hangs.
- */
+/** The settled level: the lesser of what the tail delivered and what the
+ *  view folded. `to(commit)` waits until it (or `level`) reaches `commit`;
+ *  it dies with the tail or the level's end, so it never hangs. */
 function settlement(
   view: Context.Service.Shape<typeof SessionViewService>,
   delivered: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
@@ -141,23 +136,21 @@ function settlement(
   return { cursor, changes, to };
 }
 
-/**
- * This process's holds on run claims: one count per run, whoever holds (a
- * publisher job or not). Each holder is counted before it takes, in its own
- * transaction (a job's, inside it): the first proves any prior owner dead
- * and takes the claim, later ones find it this process's. Only the last to
- * go decides the claim (`Scope.addFinalizer` keeps no context: in its
- * closer's transaction): given back to how the holders found it, or
- * released when a hold `ends` it. The session's close decides whatever is
- * still held.
- */
-const claimHolds = (database: DatabaseShape) => {
+/** This process's holds on run claims: one count per run, whoever holds (a
+ *  publisher job or not). Each holder is counted before it takes, in its own
+ *  transaction (a job's, inside it): the first proves any prior owner dead
+ *  and takes the claim, later ones find it this process's. Only the last to
+ *  go decides the claim (`Scope.addFinalizer` keeps no context: in its
+ *  closer's transaction): given back to how the holders found it, or
+ *  released when a hold `ends` it, unless a holder here holds it by the
+ *  time that release takes its write lock. Close decides what is left. */
+const claimHolds = (database: Context.Service.Shape<typeof Database>) => {
   type Hold = { count: number; taken: boolean; ended: boolean };
   const holds = new Map<AggregateId, Hold>();
   const decide = (id: AggregateId, hold: Hold) =>
     hold.taken || hold.ended
       ? database
-          .releaseClaims([id])
+          .releaseClaims([id], () => (holds.get(id)?.count ?? 0) > 0)
           .pipe(
             Effect.catch(
               logFailure(
@@ -166,24 +159,26 @@ const claimHolds = (database: DatabaseShape) => {
             ),
           )
       : Effect.void;
+  /** Drop an entry once its release ran, unless it is held again: kept till
+   *  then, a holder that comes back meanwhile keeps its `taken`. */
+  const forget = (id: AggregateId, hold: Hold) =>
+    hold.count === 0 && holds.get(id) === hold && holds.delete(id);
   const letGo = (id: AggregateId, hold: Hold) =>
     Effect.suspend(() => {
       hold.count -= 1;
       if (hold.count > 0 || holds.get(id) !== hold) return Effect.void;
-      holds.delete(id);
-      return decide(id, hold);
+      return decide(id, hold).pipe(
+        Effect.ensuring(Effect.sync(() => forget(id, hold))),
+      );
     });
   const close = Effect.suspend(() => {
     const held = [...holds];
     holds.clear();
-    return Effect.forEach(held, ([id, hold]) => decide(id, hold), {
-      discard: true,
-    });
+    return Effect.forEach(held, ([id, hold]) => decide(id, hold));
   });
-  const hold: SessionLog['hold'] = (runId, options = {}) => {
+  const hold: SessionLogShape['hold'] = (runId, options = {}) => {
     const id = qualifyAggregateId('run', runId);
-    // Taking the claim and recording it are one step: a claim committed
-    // under an interrupt that landed before `taken` would never be released.
+    // One step, so an interrupt cannot leave a claim taken and unrecorded.
     return Effect.uninterruptible(
       Effect.gen(function* () {
         const held = holds.get(id) ?? { count: 0, taken: false, ended: false };
@@ -201,16 +196,14 @@ const claimHolds = (database: DatabaseShape) => {
   );
 };
 
-/**
- * One transaction on the publisher, settled against its own last commit,
- * never another job's: one that appended nothing returns at once. A run the
- * job claimed or gave birth to is given back if the job fails, or if what it
- * committed never reaches the view.
- */
+/** One transaction on the publisher, settled against its own last commit,
+ *  never another job's: one that appended nothing returns at once. A run the
+ *  job claimed or gave birth to is given back if the job fails, or if what
+ *  it committed never reaches the view. */
 const transaction =
   (
     events: SessionEventsShape,
-    database: DatabaseShape,
+    database: Context.Service.Shape<typeof Database>,
     settleTo: (commit: CommitOrdinal) => Effect.Effect<void>,
   ) =>
   <A, E>(
@@ -220,36 +213,34 @@ const transaction =
       let committed: CommitOrdinal | null = null;
       const owned: AggregateId[] = [];
       const release = Effect.suspend(() =>
-        owned.length === 0
-          ? Effect.void
-          : database
-              .releaseClaims(owned)
-              .pipe(
-                Effect.catch(
-                  logFailure(
-                    'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
-                  ),
-                ),
+        database
+          .releaseClaims(owned)
+          .pipe(
+            Effect.catch(
+              logFailure(
+                'Claims a refused transaction took were not released; the next process proves this one dead before it takes them.',
               ),
+            ),
+          ),
       );
       const tx = (append: Append): SessionTransaction => ({
         append: (drafts) =>
           Effect.tap(append(drafts), (rows) =>
             Effect.sync(() => {
-              const last = rows.at(-1);
-              if (last !== undefined) committed = last.commit;
+              committed = rows.at(-1)?.commit ?? committed;
               for (const row of rows)
                 if (row.type === 'run.start') owned.push(row.aggregateId);
             }),
           ),
-        claim: (runId) => {
-          const id = qualifyAggregateId('run', runId);
+        claim: (runId) =>
           // Only what this call took: a claim the process already held is
           // not this transaction's to give back.
-          return Effect.tap(database.acquireClaims([id]), (taken) =>
-            Effect.sync(() => owned.push(...taken)),
-          );
-        },
+          Effect.tap(
+            database.acquireClaims([qualifyAggregateId('run', runId)]),
+            (taken) => Effect.sync(() => owned.push(...taken)),
+          ),
+        release: (runId) =>
+          database.releaseClaims([qualifyAggregateId('run', runId)]),
       });
       const value = yield* events
         .transact((append) => {
@@ -312,7 +303,7 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       settled,
       closed,
     });
-    const log: SessionLog = {
+    const log: SessionLogShape = {
       transact: <A, E>(
         work:
           | readonly UnfoldedDraft[]
@@ -325,17 +316,27 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
           : transact((tx) => tx.append(work));
       },
       publish: trace.publish,
+      lost: trace.lost,
+      closure: trace.closure,
       settled,
       afterCommit,
       now: () => SubscriptionRef.getUnsafe(database.observedCommit),
-      rows: (id, types) => database.readAggregate(id, 1, types),
+      history: (id, fromSeq = 1, types = RUN_STATE_ROW_TYPES) =>
+        database.readAggregate(id, fromSeq, types),
+      runRows: (id, read, through) =>
+        database
+          .readAggregate(id, 1, RUN_ROW_READS[read], through)
+          .pipe(Effect.map(runRowsFrom)),
       blobs: database.readBlobs,
-      records: (runId) =>
-        database.readRunRecords(qualifyAggregateId('run', runId)),
+      facts: (runId) =>
+        database
+          .readRunRecords(qualifyAggregateId('run', runId))
+          .pipe(Effect.map((rows) => (rows[0] ? runRowsFrom(rows) : null))),
+      // A removed run's rows end with its deletion marker: none to show.
       display: (runId) =>
         Effect.map(
           database.readDisplayAggregate(qualifyAggregateId('run', runId), 1),
-          (rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows),
+          (rows) => (isRemoval(rows.at(-1)) ? [] : rows),
         ),
       tail: events.all,
       listing: events.listing,
@@ -343,20 +344,16 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       owns: (runId) =>
         Effect.map(
           database.aggregateState([qualifyAggregateId('run', runId)]),
-          (states) =>
-            states.some(
-              (state) =>
-                state.startCommit !== null &&
-                !state.closed &&
-                state.ownerId === ownerId,
-            ),
+          ([state]) =>
+            state?.startCommit != null &&
+            !state.closed &&
+            state.ownerId === ownerId,
         ),
       owner: (runId) => database.claimOwner(qualifyAggregateId('run', runId)),
       movedAside: database.movedAside,
     };
     return {
       log,
-      trace,
       detach: events.detach,
       removeRun: events.removeRun,
       // Pulled in order: `foldedRead` moves once a read's rows were run.
@@ -368,11 +365,10 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       ).pipe(Stream.ensuring(Deferred.succeed(foldedEnded, undefined))),
       deliver: (removed) =>
         events.all(anchor, delivered).pipe(
-          Stream.runForEach((event) =>
-            Effect.gen(function* () {
+          Stream.runForEach(
+            Effect.fnUntraced(function* (event) {
               const target = aggregateTarget(event.aggregateId);
-              if (event.type === 'run.removed' && target.kind === 'run')
-                removed(target.id);
+              if (target.kind === 'run' && isRemoval(event)) removed(target.id);
               yield* trace.committed(event);
               yield* SubscriptionRef.set(delivered, event.commit);
             }),

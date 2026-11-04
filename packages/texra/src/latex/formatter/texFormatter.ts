@@ -7,6 +7,7 @@ import { TexraStateKey } from '@texra/shared/settingsView/texraSettings';
 import type { LatexFormatterValue } from '@texra/shared/constants/latexConfig';
 
 // Local file imports
+import type { ToolMissing } from '@texra/utils/system/toolChecks';
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -23,7 +24,11 @@ interface LatexFormatterDefinition {
     workspaceRoot: string | undefined,
     configPath: string,
     settings: SettingsStores,
-  ): Effect.Effect<boolean, never, FileSystem.FileSystem | ChildProcessSpawner>;
+  ): Effect.Effect<
+    boolean,
+    ToolMissing,
+    FileSystem.FileSystem | ChildProcessSpawner
+  >;
 }
 
 export interface LatexFormatter extends LatexFormatterDefinition {
@@ -65,8 +70,8 @@ const LATEX_FORMATTERS: Record<
  * config-file path come from that project rather than from whichever roots
  * the calling context happens to carry.
  */
-export function resolveLatexFormatter(stores: SettingsStores) {
-  return Effect.gen(function* () {
+export const resolveLatexFormatter = Effect.fn('resolveLatexFormatter')(
+  function* (stores: SettingsStores) {
     const formatter = yield* Settings.get<LatexFormatterValue>(
       stores,
       TexraStateKey.LATEX_FORMATTER,
@@ -77,8 +82,8 @@ export function resolveLatexFormatter(stores: SettingsStores) {
     const selected = LATEX_FORMATTERS[formatter];
     return {
       ...selected,
-      configPath: stores.config.get(selected.configKey, ''),
+      configPath: yield* Settings.get<string>(stores, selected.configKey),
       settings: stores,
     };
-  });
-}
+  },
+);

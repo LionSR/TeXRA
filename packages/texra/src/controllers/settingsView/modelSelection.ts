@@ -1,16 +1,20 @@
 // Third-party imports
-import { Effect, Result } from 'effect';
-import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
+import { Effect, Predicate, Result } from 'effect';
 
 // Local imports
-import { resolveModelSource } from '@texra-ai/llm';
+import {
+  MODEL_CONFIGS,
+  type ModelConfig,
+  type ReasoningEffort,
+  resolveModelSource,
+} from '@texra-ai/llm';
 import {
   getEnabledModels,
   getHelperModelName,
   readModelOptions,
   StateWriteFailed,
   type ModelOption,
-  type PlatformSecrets,
+  type Secrets,
   Settings,
 } from '@texra-ai/harness/host';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
@@ -35,20 +39,21 @@ const MODEL_SELECTION_SOURCES = new Set<string>(MODEL_SOURCE_ORDER);
  * are the three setting slots this tab answers for: `globalState` holds the
  * persisted picker state (enabled models, helper model, reasoning levels),
  * and all three are what the availability read resolves the routing
- * switches against, so the rows show the values a run will honor. `secrets`
- * are the provider credentials behind the availability on each option.
+ * switches against, so the rows show the values a run will honor. The
+ * process `Secrets` hold the provider credentials behind each option's
+ * availability.
  */
 export const buildModelSelectionMessage = Effect.fn(
   'buildModelSelectionMessage',
 )(function* (
   stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.fn.Return<UpdateModelSelectionMessage, Error> {
-  const models = yield* buildSelectionItems(stores, secrets);
+): Effect.fn.Return<UpdateModelSelectionMessage, Error, Secrets> {
+  const models = yield* buildSelectionItems(stores);
   return {
     command: SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION,
     models,
-    helperModel: yield* getHelperModelName(stores),
+    // TeXRA's catalog always names one; '' is the select's empty value.
+    helperModel: (yield* getHelperModelName(stores)) ?? '',
     preferShortModelNames: yield* Settings.get<boolean>(
       stores,
       GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
@@ -68,8 +73,8 @@ export function setReasoningLevel(
   // `reasoningEffortOverrides`.
   return globalState
     .modify(GlobalStateKey.REASONING_LEVELS, (stored) => {
-      const overrides = {
-        ...(stored as Record<string, string> | undefined),
+      const overrides: Record<string, unknown> = {
+        ...(Predicate.isObject(stored) && stored),
       };
       if (input.level == null) {
         delete overrides[input.modelName];
@@ -83,8 +88,7 @@ export function setReasoningLevel(
 
 const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
   stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.fn.Return<ModelSelectionItem[], Error> {
+): Effect.fn.Return<ModelSelectionItem[], Error, Secrets> {
   const enabledSet = new Set(yield* getEnabledModels(stores.globalState));
 
   // Resolve availability (personal-key, subscription) once for the
@@ -103,7 +107,7 @@ const buildSelectionItems = Effect.fn('buildModelSelectionItems')(function* (
     // `MODEL_SOURCE_ORDER` places it.
     .filter((config) => MODEL_SELECTION_SOURCES.has(resolveModelSource(config)))
     .map((config) => config.ref);
-  const options = yield* readModelOptions({ ...stores, secrets }, candidates);
+  const options = yield* readModelOptions(stores, candidates);
   const rows = modelOptionsFrom(options);
 
   const items: ModelSelectionItem[] = [];

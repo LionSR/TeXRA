@@ -8,10 +8,10 @@
  * from the session view on every check (`resolveBypass`), its own grants
  * first and then its ancestry's while the parent edge stands, so a toggle on
  * a parent reaches every descendant without a row of theirs. One value per
- * session, reached through the session itself (`SessionHandle.approvals`),
- * never from context.
+ * session, served as its `Approvals`.
  */
 import { Effect, SubscriptionRef } from 'effect';
+import { SessionRoots } from '@platform/rootedFs';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -24,62 +24,34 @@ import {
   type ApprovalBypassKind,
   type ApprovalGrants,
   type ApprovalGrantSource,
+  grantSource,
 } from '@shared/approvalBypassKind';
-import {
-  qualifyAggregateId,
-  type PermissionPayload,
-  type RunId,
-  type SessionEvent,
-  type SessionEventDraft,
-} from '@shared/schemas';
+import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
   heldElsewhereBy,
-  type DatabaseNotOwner,
-  type DatabaseReadFailed,
-  type DatabaseWriteFailed,
 } from '@shared/session/database';
 import {
   NotOwner,
   Rejected,
   Unavailable,
-  type Outcome,
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import { parentEdgeOf } from '@shared/session/runRelation';
+import type {
+  QueuedKind,
+  SessionApprovals,
+} from '@shared/session/sessionApprovals';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
+import { ancestryRows } from '@shared/session/runRelation';
+import {
+  Approvals,
+  SessionLog,
+  SessionViewAccess,
+} from '@shared/session/runHistory';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { SessionHandle } from './SessionHandle';
-
-/**
- * One queued approval. A request can wait behind another prompt for long:
- * if the user turns the run's bypass on meanwhile (say by answering the one
- * ahead with "approve and stop asking"), `bypassed` honours that decision
- * instead of prompting anyway.
- */
-interface QueuedApproval<A, E, R> {
-  /** Open the request and wait for its decision. */
-  readonly prompt: Effect.Effect<A, E, R>;
-  /** Result used instead when the run is bypassed by dispatch time. */
-  readonly bypassed: Effect.Effect<A, E, R>;
-}
-
-/** The kinds whose prompts queue one at a time per run. */
-type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
-
-/** A run's grants as its rows record them: the latest `approval.policy`,
- *  else the snapshot its `run.start` carried. */
-function recordedGrants(rows: readonly SessionEvent[]): ApprovalGrants {
-  const latest = rows.findLast(
-    (row) => row.type === 'approval.policy' || row.type === 'run.start',
-  );
-  if (latest?.type === 'approval.policy') return latest.snapshot;
-  return latest?.type === 'run.start'
-    ? (latest.approvalPolicy ?? NO_APPROVAL_GRANTS)
-    : NO_APPROVAL_GRANTS;
-}
+import { SessionRequests } from './requestPolicy';
 
 /**
  * A run's grants once it activates again, or null when they stand as
@@ -116,68 +88,20 @@ const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
   snapshot,
 });
 
-/**
- * The session's approvals: prompt lanes and the run's grants. Enforcement
- * reads {@link bypass}; every change goes through {@link change}.
- */
-export interface SessionApprovals {
-  /**
-   * Serialize one prompt at a time per run and kind, re-reading the run's
-   * bypass when the prompt reaches the head of its lane rather than at
-   * enqueue.
-   */
-  enqueue<A, E, R>(
-    kind: QueuedKind,
-    runId: RunId | undefined,
-    approval: QueuedApproval<A, E, R>,
-  ): Effect.Effect<A, E, R>;
-  /** Who bypasses one kind's prompts for a run, read from the view. */
-  bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
-  /**
-   * Commit a run's next grants, `edit` applied to what its rows hold, and
-   * return once they are durable and folded; an edit that changes nothing
-   * writes nothing. Read and append are one job of the publisher, so two
-   * changes of one run never lose each other's kind. `rows` commit in
-   * the same transaction (a goal's row beside the grant it implies), and is
-   * written even when the grants stand. The caller holds the run's claim.
-   */
-  change(
-    runId: RunId,
-    edit: (grants: ApprovalGrants) => ApprovalGrants,
-    rows?: readonly UnfoldedDraft[],
-  ): Effect.Effect<
-    void,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
-  >;
-  /**
-   * The grants row a run's activation commits beside its `run.activate`, if
-   * any (`afterActivation`), read from the rows of the run and its ancestry,
-   * never from a view that may not have folded them yet.
-   */
-  activationRows(
-    runId: RunId,
-  ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
-  /**
-   * The approval policy `runId`'s requests are decided under: the
-   * project's persisted `texra.approvalPolicy`, read at each call, narrowed
-   * by the strictest launch limit on the run's ancestry (`runPolicy`).
-   * The persisted setting is the one owner of a project's policy; a client
-   * changes it by writing that setting, never by telling a session, and a
-   * launch widens it only for its own run, by its grants (an Auto-approve
-   * launch). Without a run, the project's policy.
-   */
-  policy(runId?: RunId): ApprovalPolicy;
-}
-
-/** Build the session's approvals over its view, its record door and its
- *  config, read from `session` when first used. */
-export function createSessionApprovals(
-  session: () => Pick<SessionHandle, 'view' | 'log' | 'roots'>,
-): SessionApprovals {
-  const view = () => SubscriptionRef.getUnsafe(session().view.ref);
+/** The session's approvals over its view, its record door and its
+ *  config. */
+export const sessionApprovals: Effect.Effect<
+  SessionApprovals,
+  never,
+  SessionViewAccess | SessionLog | SessionRoots
+> = Effect.gen(function* () {
+  const { ref } = yield* SessionViewAccess;
+  const log = yield* SessionLog;
+  const roots = yield* SessionRoots;
+  const view = () => SubscriptionRef.getUnsafe(ref);
   // One lane per kind and run, which the run's prompts take in turn;
   // `withPerKeyLane` drops a lane from its map once its last prompt settles.
-  const lanes: Record<QueuedKind, Map<RunId | undefined, PerKeyLane>> = {
+  const lanes: Record<QueuedKind, Map<RunId, PerKeyLane>> = {
     bash: new Map(),
     toolEdit: new Map(),
   };
@@ -188,7 +112,7 @@ export function createSessionApprovals(
     policy: (runId) =>
       runPolicy(
         Settings.getConfig<ApprovalPolicy>(
-          session().roots.config,
+          roots.config,
           APPROVAL_POLICY_CONFIG_KEY,
         ),
         view(),
@@ -196,29 +120,21 @@ export function createSessionApprovals(
       ),
     enqueue: (kind, runId, approval) =>
       Effect.suspend(() =>
-        runId !== undefined && bypass(runId, kind) !== null
+        approval.grant !== null && bypass(runId, approval.grant) !== null
           ? approval.bypassed
           : approval.prompt,
       ).pipe(withPerKeyLane(lanes[kind], runId)),
-    activationRows: (runId) =>
-      Effect.gen(function* () {
-        const runs = new Map<RunId, { parentId: RunId | null }>();
-        const policy = new Map<RunId, ApprovalGrants>();
-        for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-          const rows: readonly SessionEvent[] =
-            yield* session().log.records(id);
-          const parentId: RunId | null = parentEdgeOf(rows)?.id ?? null;
-          runs.set(id, { parentId });
-          policy.set(id, recordedGrants(rows));
-          id = parentId;
-        }
-        const next = afterActivation(
-          { runs, policy },
-          runId,
-          policy.get(runId) ?? NO_APPROVAL_GRANTS,
-        );
-        return next === null ? [] : [policyRow(runId, next)];
-      }),
+    activationRows: Effect.fn('activationRows')(function* (runId) {
+      const source = grantSource(
+        yield* ancestryRows((id) => log.facts(id), runId),
+      );
+      const next = afterActivation(
+        source,
+        runId,
+        source.policy.get(runId) ?? NO_APPROVAL_GRANTS,
+      );
+      return next === null ? [] : [policyRow(runId, next)];
+    }),
     change: (runId, edit, rows = []) => {
       // The claim holder's own grants are folded by the time each change
       // returns, so a change the view already shows writes nothing.
@@ -229,9 +145,10 @@ export function createSessionApprovals(
         sameGrants(shown, edit(shown))
       )
         return Effect.void;
-      return session().log.transact((tx) =>
+      return log.transact((tx) =>
         Effect.gen(function* () {
-          const recorded = recordedGrants(yield* session().log.records(runId));
+          const recorded =
+            (yield* log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
           const next = edit(recorded);
           const all: readonly UnfoldedDraft[] = sameGrants(recorded, next)
             ? rows
@@ -241,7 +158,7 @@ export function createSessionApprovals(
       );
     },
   };
-}
+});
 
 /** A human's value for some kinds of one run: it supersedes the run's goal
  *  grant of those kinds. */
@@ -285,68 +202,46 @@ export const writeRejection =
       : claimRejection(unavailable.runId)(error);
 
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
+type Answer<A, R> = Effect.Effect<A, RequestError, R>;
 type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
 
-/** The request kinds each bypass covers. The delegated-work grant covers all
- *  three. A question, an inquiry, a retry and a plan approval never appear
- *  here: they need an answer, or carry their own credential semantics. */
-const COVERED_KINDS: Record<
-  ApprovalBypassKind,
-  readonly PermissionPayload['kind'][]
-> = {
-  bash: ['bash'],
-  toolEdit: ['toolEdit'],
-  superYolo: ['proposal', 'toolEdit', 'bash'],
-};
-
 /**
- * Approve what waits behind a bypass that was just turned on: the run's
- * pending requests of the kinds it covers. Each decision re-reads the
- * committed rows in the session's publisher, so a request a surface decided
- * meanwhile is left with that surface's answer. The request the surface
- * decides itself (its own decision may carry more than a plain approval) is
- * left to it, a tool edit staged on a host is approved by that host with the
- * user's edits, and so is a bash command that is another tool's call, which
- * offers no bypass. A request whose opening is still committing is not
- * listed yet and stays pending for the user.
+ * Approve the run's requests pending under a bypass just turned on. Each
+ * decision re-reads the rows, so one decided meanwhile keeps its answer; one
+ * offering no grant (another tool's call, a hook's ask) waits for a person;
+ * an edit's approval applies the user's edit; one still opening stays.
  */
-function approvePendingUnderBypass(
-  session: SessionHandle,
-  { runId, bypass, exceptRequestId }: BypassChange,
-): Effect.Effect<void, RequestError> {
-  const kinds = COVERED_KINDS[bypass];
-  return Effect.forEach(
-    SubscriptionRef.getUnsafe(session.view.ref).requests.filter(
-      ({ runId: requestRunId, requestId, payload }) =>
-        requestRunId === runId &&
-        requestId !== exceptRequestId &&
-        kinds.includes(payload.kind) &&
-        !(payload.kind === 'bash' && !payload.data.allowBypass),
-    ),
-    ({ requestId, payload }) =>
-      // A tool edit a host staged a diff view for is approved with the
-      // content the user edited there; the host answers `false` for one it
-      // staged nothing for, which the payload decides.
-      (payload.kind === 'toolEdit'
-        ? session.interactions.approveToolEdit(requestId)
-        : Effect.succeed(false)
-      ).pipe(
-        Effect.flatMap((hostDecided) =>
-          hostDecided
-            ? Effect.void
-            : session.requests.decide(runId, requestId, { action: 'approve' }),
-        ),
+const approvePendingUnderBypass = Effect.fn('approvePendingUnderBypass')(
+  function* ({
+    runId,
+    bypass,
+  }: BypassChange): Effect.fn.Return<
+    void,
+    RequestError,
+    SessionViewAccess | SessionRequests
+  > {
+    const { ref } = yield* SessionViewAccess;
+    const requests = yield* SessionRequests;
+    yield* Effect.forEach(
+      SubscriptionRef.getUnsafe(ref).requests.filter(
+        ({ runId: requestRunId, payload }) =>
+          requestRunId === runId &&
+          bypassCovers(bypass, payload.kind) &&
+          !('allowBypass' in payload.data && !payload.data.allowBypass),
       ),
-    { discard: true },
-  ).pipe(
-    Effect.mapError(
-      writeRejection({
-        runId,
-        reason: 'The pending requests could not be approved.',
-      }),
-    ),
-  );
-}
+      ({ requestId }) =>
+        requests.decide(runId, requestId, { action: 'approve' }),
+      { discard: true },
+    ).pipe(
+      Effect.mapError(
+        writeRejection({
+          runId,
+          reason: 'The pending requests could not be approved.',
+        }),
+      ),
+    );
+  },
+);
 
 /** Whether `change` only narrows a run (a bypass off, a lower limit): open
  *  on any run, live or not, where a widening needs a working run's `grant`. */
@@ -354,17 +249,20 @@ export const narrows = (change: PolicyChange): boolean =>
   change.field === 'limit' || !change.enabled;
 
 /**
- * Apply a grant change (a bypass, or a lower limit), acknowledged once its `approval.policy` row is
- * durable: the row is the grant, so nothing is held to undo when it does
- * not land. The caller holds the run's claim. Turning a bypass on then
- * approves what already waits behind it, on a run this process drives.
+ * Apply a grant change (a bypass, or a lower limit) once its `approval.policy`
+ * row is durable, then `decide`, the decision it came with. Turning a bypass
+ * on then approves what else waits behind it, on a run this process drives,
+ * even when `decide` fails. The caller holds the run's claim.
  */
-export function setPolicy(
-  session: SessionHandle,
+export function setPolicy<A, R>(
   change: PolicyChange,
   heldHere: boolean,
-): Effect.Effect<Outcome, RequestError> {
-  const { runId } = change;
+  decide: Effect.Effect<A, RequestError, R>,
+): Effect.Effect<
+  A,
+  RequestError,
+  R | Approvals | SessionViewAccess | SessionRequests
+> {
   // A limit only lowers; the delegated-work grant covers the command and
   // edit grants too.
   const edit =
@@ -382,19 +280,54 @@ export function setPolicy(
             : [change.bypass],
           change.enabled,
         );
-  return session.approvals.change(runId, edit).pipe(
+  return Approvals.use((approvals) =>
+    approvals.change(change.runId, edit),
+  ).pipe(
     Effect.mapError(
       writeRejection({
-        runId,
+        runId: change.runId,
         reason: 'The approval change could not be saved.',
       }),
     ),
+    Effect.andThen(Effect.exit(decide)),
     // A run held elsewhere has no fiber here to act on a decision.
-    Effect.andThen(
+    Effect.tap(() =>
       change.field === 'bypass' && change.enabled && heldHere
-        ? approvePendingUnderBypass(session, change)
+        ? approvePendingUnderBypass(change)
         : Effect.void,
     ),
-    Effect.as({ kind: 'done' } as const),
+    Effect.flatten,
   );
 }
+
+/**
+ * Decide `req` through `answer`, which `write`s it (did it land?) if it can
+ * still be decided. Its `grant` lands first whatever the request's state, so
+ * a request the run opens once it reads the decision is approved as it opens.
+ */
+export const decideUnderGrant = <A, R>(
+  req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
+  heldHere: boolean,
+  answer: (
+    write: Effect.Effect<boolean, RequestError, SessionRequests>,
+  ) => Answer<A, R>,
+): Answer<A, R | Approvals | SessionViewAccess | SessionRequests> => {
+  const { runId, requestId, decision, grant } = req;
+  const write = SessionRequests.use((requests) =>
+    requests.decide(runId, requestId, decision),
+  ).pipe(
+    Effect.mapError(
+      writeRejection({
+        runId,
+        reason: 'The decision could not be recorded.',
+      }),
+    ),
+  );
+  return grant == null
+    ? answer(write)
+    : setPolicy(
+        { field: 'bypass', runId, bypass: grant, enabled: true },
+        heldHere,
+        answer(write),
+      );
+};

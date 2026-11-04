@@ -3,47 +3,36 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentConfigSchema, PersonaSchema } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@texra-ai/harness/schemas';
+import type { RunLaunch } from '@agent/runtime/run/AgentRun';
+import { PersonaSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 interface TestLaunchContextInit {
   runId: RunId;
-  /** Session owning the run; defaults to the ambient default session. */
-  session?: SessionHandle;
   agent?: string;
   /** Trace the run publishes through; defaults to the silent trace. */
-  logger?: AgentLaunchContext['logger'];
+  logger?: RunLaunch['logger'];
 }
 
 /**
- * A minimal conversation `AgentLaunchContext` for driving `runWithLifecycle`
- * without a real model handler or flow.
+ * A minimal conversation `RunLaunch` for driving the run's terminal
+ * (`endRun`) without a real model handler or flow.
  */
 export function createTestLaunchContext({
   runId,
-  session = testDefaultSession(),
   agent = 'assistant',
   logger = noopTrace,
-}: TestLaunchContextInit): AgentLaunchContext {
+}: TestLaunchContextInit): RunLaunch {
   const config = Schema.decodeUnknownSync(AgentConfigSchema)({
     agent,
     model: 'test-model',
   });
 
-  const { stores, secrets } = makeFakeSettingsStores();
   return {
     config,
     persona: Schema.decodeUnknownSync(PersonaSchema)({}),
-    // The launch stores a real run carries; no fixture reads through them.
-    stores: { ...stores, secrets },
     runId,
-    session,
     logger,
     parentStage: logger.openStage(`Run: ${config.agent}`),
     opening: {
@@ -53,12 +42,12 @@ export function createTestLaunchContext({
       attachedMemoryMisses: [],
     },
     entry: {
+      parent: null,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,
       initialUserMessage: undefined,
     },
     toolPolicy: {},
-    modelConfig: buildTestModelConfig(),
   };
 }

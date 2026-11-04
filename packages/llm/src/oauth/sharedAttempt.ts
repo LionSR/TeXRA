@@ -18,7 +18,7 @@ import { Deferred, Effect } from 'effect';
  * The check, the claim and the fork run under one uninterruptible mask and
  * share one synchronous segment, so a second caller can never mint a second
  * attempt and an interrupt can never land between claiming the slot and
- * starting the fiber that settles it.
+ * starting the fiber that finishes it.
  */
 export class SharedAttempt<A, E> {
   private slot: Deferred.Deferred<A, E> | null = null;

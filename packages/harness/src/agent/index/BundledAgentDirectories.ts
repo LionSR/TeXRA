@@ -2,7 +2,8 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { AppState, type StateReadFailed } from '@platform/interfaces';
+import { AppState } from '@platform/interfaces';
+import type { StateReadFailed } from '@shared/config/settings';
 import { readDisabledTools } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -16,7 +17,7 @@ export const BUNDLED_AGENTS_DIRECTORY = 'agents' as const;
  * (a plugin that ships no agents has no such directory, which scans as none;
  * an unpackaged host has none). Their agents are bundled agents like the
  * core ones. A plugin is one on/off unit, so the user's switch
- * (`texra.tools.disabled`) that withholds its tools drops its agents too,
+ * (`tools.disabled`) that withholds its tools drops its agents too,
  * wherever agents are found: the catalog's scan and a copy's source root
  * alike (`agentSourceRoots`). Toggling a plugin refreshes the catalog. A
  * failed dependency probe does not drop them: a probe answers per workspace,

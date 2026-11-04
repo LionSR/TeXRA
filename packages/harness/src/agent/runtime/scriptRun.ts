@@ -13,8 +13,8 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
 import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunReport } from '@agent/runtime/runReport';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   qualifyAggregateId,
@@ -31,7 +31,6 @@ type ScriptCallStatus =
   | 'completed'
   | 'failed'
   | 'skipped'
-  | 'cancelled'
   /** No settlement yet: running while the run is, cut short after. */
   | 'unsettled';
 
@@ -51,7 +50,6 @@ export interface ScriptCallCard {
 const statusOf = (settled: ToolResultPayload | undefined): ScriptCallStatus => {
   if (settled === undefined) return 'unsettled';
   if (settled.result.status === 'executed') return 'completed';
-  if (settled.disposition === 'cancelled') return 'cancelled';
   if (settled.disposition === 'skipped' || settled.result.name === 'Skipped')
     return 'skipped';
   return 'failed';
@@ -59,31 +57,29 @@ const statusOf = (settled: ToolResultPayload | undefined): ScriptCallStatus => {
 
 /**
  * The run's script call's settlement and the calls its script issued, in
- * issue order, from the run's `script.call` and `tool.result` rows. The
- * script's own host functions (`searchTools()`, `describeTool()`) answer
- * from the catalog and open no card, so they are not among the calls.
+ * issue order, from the run's script calls and its calls' results (the
+ * `script` read). The script's own host functions (`searchTools()`,
+ * `describeTool()`) answer from the catalog and open no card, so they are
+ * not among the calls.
  */
 export const scriptRunCalls = Effect.fn('scriptRun.calls')(function* (
-  session: SessionHandle,
   runId: RunId,
 ) {
-  const rows = yield* session.log.rows(qualifyAggregateId('run', runId), [
-    'script.call',
-    'tool.result',
-  ]);
+  const { scriptCalls, results } = yield* (yield* SessionLog).runRows(
+    qualifyAggregateId('run', runId),
+    'script',
+  );
   const settled = new Map<string, ToolResultPayload>();
-  for (const row of rows) {
-    if (row.type !== 'tool.result') continue;
-    const known = settled.get(row.payload.callId);
-    if (known === undefined || known.attempt <= row.payload.attempt)
-      settled.set(row.payload.callId, row.payload);
+  for (const payload of results) {
+    const known = settled.get(payload.callId);
+    if (known === undefined || known.attempt <= payload.attempt)
+      settled.set(payload.callId, payload);
   }
   const script =
     [...settled.values()].find(({ callId }) => !callId.includes('/')) ?? null;
-  const calls = rows.flatMap((row): ScriptCallCard[] => {
-    if (row.type !== 'script.call' || row.payload.toolName.endsWith('()'))
-      return [];
-    const { seq, toolName, phase, callId } = row.payload;
+  const calls = scriptCalls.flatMap((call): ScriptCallCard[] => {
+    if (call.toolName.endsWith('()')) return [];
+    const { seq, toolName, phase, callId } = call;
     const result = settled.get(callId);
     const error =
       result?.result.status === 'error' ? result.result.error : null;
@@ -188,7 +184,6 @@ function deliveredFiles(
  * agent calls wrote with their diffstat, and the cause when it failed.
  */
 const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
-  session: SessionHandle,
   runId: RunId,
   name: string,
   outcome: ScriptDeliverySummary['outcome'],
@@ -197,8 +192,8 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
    *  counts from, never an idle gap. */
   startedAt: number,
 ) {
-  const { calls } = yield* scriptRunCalls(session, runId);
-  const view = yield* session.view.read([]);
+  const { calls } = yield* scriptRunCalls(runId);
+  const view = yield* (yield* SessionViewAccess).read([]);
   const now = yield* Clock.currentTimeMillis;
   const counts = { ok: 0, failed: 0, cancelled: 0, skipped: 0 };
   for (const call of calls) {
@@ -211,7 +206,6 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
         break;
       case 'failed':
       case 'skipped':
-      case 'cancelled':
         counts[call.status] += 1;
         break;
       default:
@@ -245,8 +239,8 @@ export function createScriptRunStrategy(
   params: Parameters<typeof createNativeSubagentStrategy>[0] & {
     readonly title: string;
   },
-): NativeChildStrategy<RunEndResult, AgentRunServices> {
-  const { session, runId, title, startedAt } = params;
+): NativeChildStrategy<RunReport, AgentRunServices> {
+  const { runId, title, startedAt } = params;
   const attributes = [{ name: 'title', value: title }];
   const native = createNativeSubagentStrategy(params);
   return {
@@ -254,9 +248,8 @@ export function createScriptRunStrategy(
     // It reports once, at its end: no progress follow-ups.
     launch: (_notify, turns) => native.launch(() => undefined, turns),
     stageLabel: `Script '${title}'`,
-    deliveryId: `${runId}:script:delivery`,
     formatDelivery: Effect.fn('scriptRun.formatDelivery')(function* () {
-      const { script } = yield* scriptRunCalls(session, runId);
+      const { script } = yield* scriptRunCalls(runId);
       if (script?.result.status === 'executed')
         return formatDelivery({
           tag: DELIVERY_TAG.scriptResult,
@@ -266,7 +259,6 @@ export function createScriptRunStrategy(
           lines: [
             scriptSummaryElement(
               yield* scriptRunSummary(
-                session,
                 runId,
                 title,
                 'completed',
@@ -286,14 +278,7 @@ export function createScriptRunStrategy(
         attributes,
         lines: [
           scriptSummaryElement(
-            yield* scriptRunSummary(
-              session,
-              runId,
-              title,
-              'failed',
-              cause,
-              startedAt,
-            ),
+            yield* scriptRunSummary(runId, title, 'failed', cause, startedAt),
           ),
         ],
         message: cause,
@@ -306,22 +291,24 @@ export function createScriptRunStrategy(
         attributes,
         message: `${toErrorMessage(err)}\n${resumeHint(runId)}`,
       }),
-    stopNotice: Effect.fn('scriptRun.stopNotice')(function* () {
-      const summary = yield* scriptRunSummary(
-        session,
-        runId,
-        title,
-        'stopped',
-        null,
-        startedAt,
-      );
-      return formatDelivery({
-        tag: DELIVERY_TAG.scriptError,
-        runId,
-        attributes,
-        lines: [scriptSummaryElement(summary)],
-        message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
-      });
-    }),
+    script: {
+      deliveryId: `${runId}:script:delivery`,
+      stopNotice: Effect.fn('scriptRun.stopNotice')(function* () {
+        const summary = yield* scriptRunSummary(
+          runId,
+          title,
+          'stopped',
+          null,
+          startedAt,
+        );
+        return formatDelivery({
+          tag: DELIVERY_TAG.scriptError,
+          runId,
+          attributes,
+          lines: [scriptSummaryElement(summary)],
+          message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
+        });
+      }),
+    },
   };
 }

@@ -15,9 +15,11 @@
 
 // The process every host composes: one `processLayer`, built once.
 export { processLayer } from './effect/processLayer.js';
+// A run's trace read back from a session's rows, for a session whose runs
+// run elsewhere (a window over the background service).
+export { replayTrace } from '@controllers/session/runTrace';
 // A project's view read cold from its store, for a multi-project listing.
 export { readSessionView } from '@controllers/session/readSessionView';
-export type { RunRejection } from '@agent/runtime/runClassification';
 export { ExportNodeSchema, type ExportNode } from '@agent/export/schemas';
 export {
   formatConversationMessage,
@@ -34,16 +36,19 @@ export type {
   RuntimePresentationEventPayloads,
 } from '@agent/runtime/runtimePresentationEvents';
 // The process the hosts compose: one `processLayer` for every host.
-export type { ProcessLayerOptions } from '@controllers/session/sessionLayer';
+export type { ProcessLayerOptions } from './effect/processLayer.js';
+export type { ProcessServicesOptions } from '@controllers/session/sessionLayer';
 // A project's `.env` over the process environment, for a one-project host.
 export { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 export {
   withProcessServices,
-  type AgentCatalogServices,
-  type PluginContext,
   type ProcessRuntime,
   type ProcessServices,
-} from '@platform/processRuntime';
+} from './effect/processLayer.js';
+export type { PlatformServices, PluginContext } from '@platform/processRuntime';
+// What a run's program requires of the process, beneath `ProcessServices`.
+export type { RunServices } from '@agent/runtime/ToolServices';
+export type { AgentCatalogServices } from '@agent/index/agentEntry';
 // The agent catalog: reads, launch resolution, custom copies, the workspace's
 // selection, and the agent directories a host serves it.
 export {
@@ -59,8 +64,6 @@ export {
   type WorkspaceAgentsControllerDeps,
   type WorkspaceAgentsEntry,
 } from '@agent/workspaceAgents/WorkspaceAgentsController';
-export * from '@common/teams/TeamPresets';
-export * from '@common/teams/TeamPlan';
 export type { AgentDelegationScope } from '@shared/schemas';
 export {
   AgentCustomizeRefused,
@@ -88,49 +91,52 @@ export {
   readStorageInventory,
   type StorageInventory,
 } from '@controllers/session/projectDatabase';
-export { heldElsewhereBy } from '@shared/session/database';
-// Follow-up delivery, error-presentation and prompt-escaping helpers hosts share.
+// Follow-up delivery helpers hosts share.
 export {
   describeFollowUpFailure,
   presentFollowUpResult,
 } from '@agent/followUp/ToolUseFollowUp';
-export {
-  attachErrorPresentationClaimed,
-  hasErrorPresentationClaimed,
-} from '@common/errors/sdkError/errorMetadata';
 // A host's presentation surface: session and sessionless interactions, the
-// emit handlers (one per event), and a failed run's presentation claim.
+// emit handlers (one per event), and a failed run's presentation, with the
+// notice a refused launch carries.
 export {
   SessionHostInteractions,
   type HostInteractions,
+  launchNoticeOf,
+  presentRunFailure,
 } from '@agent/runtime/HostInteractions';
-export type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-export { buildDiffHunks, type DiffHunks } from '@utils/text/unifiedDiff';
+// One program per pending request a host follows, while the view lists it.
+export { followPendingRequests } from './effect/requestAnswerer.js';
+export { buildDiffHunks, type DiffHunks } from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
-export { presentRunFailure } from '@agent/runtime/terminalResultToast';
 // Which side of a trace event a run wrote.
-export type { TraceArm } from '@agent/trace';
-export type { SettingHost } from '@shared/state/stateSettings';
+export type { TraceArm } from '@shared/session/agentEvent';
 export type { AggregateId, SessionCloseReport } from '@shared/schemas';
-// The platform's ports, their stores' failures, and the services plugins read.
+// The agent-directories port and the process services plugins read.
 export {
   AgentDirectories,
   AgentDirectoriesFailed,
   AppState,
-  ConfigWriteFailed,
-  StateReadFailed,
-  StateWriteFailed,
-  ToolMissingReporter,
   type AgentDirectoriesPort,
-  type ConfigProvider,
-  type StateStore,
-  type ToolMissingHandler,
 } from '@platform/interfaces';
 export { Secrets, type PlatformSecrets } from '@platform/secrets';
+// App-lifecycle signals: the process's hub, which `ProcessServices` serves,
+// and what hosts and the app publish and follow on it.
+export {
+  AppSignals,
+  appSignalStream,
+  emitAppSignal,
+  onAppSignal,
+  type AppSignal,
+  type AppSignalEvent,
+  type AppSignalPayloads,
+} from '@platform/appSignals';
 // The budget a session close waits for its runs: a plugin's drain fits it.
-export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionHandle';
+export { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
 // Model access outside a run: the user's key and endpoint (transcription).
 export { ownKeyCredential } from '@agent/runtime/modelAccess/credentials';
+// The canned model a package-validation build provides beneath the process.
+export { ValidationModel } from '@agent/runtime/modelAccess/routeDecision';
 export type { RouteCredential } from '@agent/runtime/modelAccess/credentials';
 // The models a host offers: each visible model's option, the enabled list and
 // its writer, run-model precedence, the reasoning policy, the helper model.
@@ -140,7 +146,6 @@ export {
   readModelOptions,
   setModelEnabled,
   type ModelOption,
-  type ModelOptionStores,
 } from '@model/computeModelOptions';
 export {
   decideRunModel,
@@ -160,8 +165,6 @@ export type { CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 export { getHelperModelName } from '@agent/runtime/helperModelName';
 // Where every model call's usage goes, and the entry a sender ships.
 export { UsageLog, type UsageLogEntry } from '@shared/usageLog';
-// What a used-up plan falls back to, as the retry copy names it.
-export { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 // The rooted file systems plugins read, and their layers outside a run.
 export {
   GlobalStorageFs,
@@ -177,18 +180,21 @@ export {
   createRunStorageLocation,
   createWorkspaceLocation,
   pathToLocationIn,
-} from '@utils/files/fileLocation';
+} from '@common/storage/fileLocation';
 // The user's MCP servers: their config file, and a namespaced tool's server.
-export { mcpConfigPathOf, readMcpConfig } from '@tools/mcp/mcpConfig';
+export { readMcpConfig } from '@tools/mcp/mcpConfig';
+export { mcpConfigPathOf } from '@common/plugins/mcpServers';
 export type { McpServerConfig } from '@common/plugins/mcpServers';
-export { mcpServerOfToolName } from '@tools/mcp/mcpServer';
+export { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 // The skills a session's roots discover (the settings inventory, the enabled
-// ones a person activates) with their issues, and a host's source options.
+// ones a person activates) with their issues, and a host's skill sources and
+// source options.
 export {
   Skills,
   type EnabledSkill,
   type SkillRoots,
 } from '@skills/runtimeSkills';
+export type { HostSkillOptions } from '@skills/skillSources';
 export type { SkillSourceOptions } from '@skills/skillSources';
 export type {
   SkillIssueCode,
@@ -217,21 +223,14 @@ export {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 // Failures as hosts and plugins read them: the agent error, predicates, cause
-// chain, abort, provider message (`toErrorMessage` is in `./schemas`).
+// chain, and a failure's message with its classification (`toErrorMessage`
+// is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export {
-  agentErrorPresentation,
-  type AgentErrorKind,
-  type AgentErrorPresentation,
-} from '@common/errors/agentErrorClassification';
+export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
-export {
-  isFileNotFoundError,
-  isModuleNotFoundError,
-  isNotADirectoryError,
-  isUserAbort,
-} from '@common/errors/errorPredicates';
-export { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+export { isModuleNotFoundError } from '@common/errors/errorPredicates';
+export { isNotADirectoryError } from '@utils/files/fsEntryExists';
+export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.
 export {
   getPathSegments,
@@ -256,25 +255,23 @@ export {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-// The tool catalog: enabled built-ins, plugin services, switches and their seed.
+// The tool catalog: enabled built-ins, plugin services and switches.
 export { ToolCatalog, type ToolCatalogShape } from '@tools/liveTools';
-export { seedDisabledToolDefaults } from '@tools/toolAvailability';
-// The harness's log output: where its entries go and how an entry reads.
-export {
-  entryChannel,
-  entryMessage,
-  LOG_CHANNEL,
-  setLogSink,
-  type LogEntry,
-  type LogSink,
-} from '@logger/logSink';
+// The channel an Effect's log entries name (`entryChannel`, `/node`).
 export { withLogChannel } from '@logger/effectLog';
 // The write path's redaction, for host text shown outside it.
 export { formatFatalErrorDetail, redactSecrets } from '@logger/redaction';
-// Every read and write of a catalog setting, against the stores a caller
-// holds (a session's roots), and the typed read of a non-catalog state key.
+// The config and state store ports a host implements, their failures, and
+// `Settings`: every read and write of a catalog setting against the stores a
+// caller holds (a session's roots), and the typed read of a non-catalog
+// state key.
 export {
+  ConfigWriteFailed,
   Settings,
+  StateReadFailed,
+  StateWriteFailed,
+  type ConfigProvider,
   type SettingsStores,
+  type StateStore,
   type StoredSetting,
 } from '@shared/config/settings';

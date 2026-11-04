@@ -2,145 +2,15 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `processLayer()`. Formerly one file per port under `interfaces/`.
  */
-import {
-  Context,
-  Effect,
-  FileSystem,
-  Layer,
-  type Result,
-  Schema,
-  Stream,
-} from 'effect';
+import { Context, Effect, FileSystem, Layer, Schema, Stream } from 'effect';
 import { AgentSourceSchema } from '@shared/schemas';
-import type { SettingsCatalog } from '@shared/state/stateSettings';
+import type { StateReadFailed, StateStore } from '@shared/config/settings';
 
 import type { GlobalStorageFs } from './rootedFs';
 
 // ---------------------------------------------------------------------------
-// Config
+// Application state
 // ---------------------------------------------------------------------------
-
-/**
- * Where a config write lands. `workspace` is the project's committable
- * `.texra/config.json`, which a cloned repository controls; `local` is this
- * user's private file for the workspace, under the storage root and never in
- * the project; `global` is the user's file for every workspace.
- */
-export type ConfigTarget = 'global' | 'workspace' | 'local';
-
-/** One key's stored values, by the scope that holds each. */
-export type ConfigInspection<T = unknown> = Partial<
-  Record<'globalValue' | 'workspaceValue', T>
->;
-
-/**
- * A configuration write the store refused. Every implementation bottoms out in
- * the same `JsonStore` as the secret and state stores, so the reasons are that
- * store's: a filesystem error under the config path, or a config file whose
- * contents are no longer a JSON object.
- *
- * {@link ConfigProvider.update} raises it as the failure of the write itself,
- * so a caller inside a program composes the write rather than adopting a
- * rejection it cannot type.
- */
-export class ConfigWriteFailed extends Schema.TaggedError<ConfigWriteFailed>()(
-  'ConfigWriteFailed',
-  {
-    key: Schema.String,
-    target: Schema.Literals(['global', 'workspace', 'local']),
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
- * Platform configuration provider interface.
- */
-export interface ConfigProvider {
-  /**
-   * Resolution order an implementation must honor: stored workspace value,
-   * stored global value, the setting catalog's own default
-   * (`catalog.configDefault`), and only then the caller's `defaultValue`.
-   * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
-   * for keys the catalog does not own.
-   *
-   * It is synchronous, and it casts: the value it returns is whatever the
-   * store holds. A reader that needs the value checked reads through
-   * `Settings.get`, which resolves the key's catalog row and safe-parses the
-   * stored value against the row's schema; a hand-edited `"false"` in a
-   * boolean row is a truthy string here and silently means the opposite.
-   * Nothing may cache what either read returns: a setting the user changes
-   * mid-process is read on the next call.
-   *
-   * Path conventions:
-   * - Use dot notation with or without the canonical `texra.` prefix.
-   * - Host settings such as `latex-workshop.*` must use the host adapter
-   *   rather than this shared configuration path.
-   */
-  get<T>(key: string, defaultValue?: T): T;
-  /**
-   * Persist one value to the target's store. The write is an `Effect` so it
-   * composes directly into the caller's program: the store's own write is an
-   * Effect, and a Promise face here could only be an injected runner that
-   * executes that Effect on the caller's behalf.
-   */
-  update<T>(
-    key: string,
-    value: T,
-    target?: ConfigTarget,
-  ): Effect.Effect<void, ConfigWriteFailed>;
-  inspect<T = unknown>(key: string): ConfigInspection<T>;
-  /** The setting rows this provider resolves against: the harness's and
-   *  its host's, built once per composition and carried with the stores. */
-  readonly catalog: SettingsCatalog;
-}
-
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-
-/** An authoritative state read failed; absence is a successful read. */
-export class StateReadFailed extends Schema.TaggedError<StateReadFailed>()(
-  'StateReadFailed',
-  {
-    key: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/** A host or database refused an application-state write. */
-export class StateWriteFailed extends Schema.TaggedError<StateWriteFailed>()(
-  'StateWriteFailed',
-  {
-    key: Schema.String,
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
- * Application state read from its authority when the Effect executes. A read
- * answers the stored JSON as `unknown`: the caller decodes it with its key's
- * schema (`readState`), which also owns the default of an absent key. Updates
- * finish after commit. A change
- * that depends on the current value goes through `modify`, never a `get`
- * then an `update`: the settings surfaces do not serialize their messages,
- * and hosts in separate processes share one store.
- */
-export interface StateStore {
-  get(key: string): Effect.Effect<unknown, StateReadFailed>;
-  update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
-  /**
-   * Read-modify-write of one key as one step at the store's authority:
-   * `change` sees the stored value (`undefined` when absent) and returns the
-   * next one, or refuses with its own error and nothing is written.
-   */
-  modify<T, E = never>(
-    key: string,
-    change: (current: unknown) => Result.Result<T, E>,
-  ): Effect.Effect<T, E | StateWriteFailed>;
-}
 
 /** The global state store, and what changes in it. */
 export interface AppStateStore extends StateStore {
@@ -182,7 +52,7 @@ export class AppState extends Context.Service<AppState, AppStateStore>()(
  * created, or the platform refused the filesystem call behind either.
  *
  * {@link AgentDirectoriesPort}'s readers raise it as the failure of the
- * read itself, for the same reason {@link StateWriteFailed} exists: the reads
+ * read itself, for the same reason `StateWriteFailed` exists: the reads
  * travel with the agent-catalog load beside them, so a caller inside a program
  * composes the read rather than adopting a rejection it cannot type.
  */
@@ -224,6 +94,16 @@ export interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   /**
+   * The member names of the workspace's team `teamId`, read from its
+   * repository state; `undefined` for a team the workspace has none of. The
+   * app owns what a team is; the harness only stores a selection naming one
+   * by id. Absent, the app has no teams.
+   */
+  readonly teamMembers?: (
+    repoState: StateStore,
+    teamId: string,
+  ) => Effect.Effect<readonly string[] | undefined, StateReadFailed>;
+  /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
    * an embedder's own directories, or the CLI entries that load no agents.
@@ -236,52 +116,10 @@ export interface AgentDirectoriesPort {
  * composition root through `processLayer`. The shape is the port itself: a
  * program that resolves one of the three local agent directories yields the
  * port's own readers instead of reaching for the process platform's copy.
- *
- * `layer` takes the port itself, for the same reason `Secrets.layer` does:
- * every root builds its agent directories before it installs the runtime that
- * serves them, so the service is the value the root already holds.
+ * A root holds its port before it installs the runtime that serves it, so the
+ * layer is `Layer.succeed(AgentDirectories)(port)`.
  */
 export class AgentDirectories extends Context.Service<
   AgentDirectories,
   AgentDirectoriesPort
->()('@texra-ai/harness/platform/AgentDirectories') {
-  static layer(
-    directories: AgentDirectoriesPort,
-  ): Layer.Layer<AgentDirectories> {
-    return Layer.succeed(AgentDirectories)(directories);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Tool-missing reporter
-// ---------------------------------------------------------------------------
-
-/**
- * The host's optional "tool is missing" reporter. The VS Code host is the only
- * one with a UI for it; every other host omits it, and callers treat an absent
- * reporter as silence. It settles its own presentation failures, so the probe
- * that reports a missing tool still gets its answer.
- */
-export type ToolMissingHandler = (
-  message: string,
-  /** The guide page that covers installing the tool, when one is known. */
-  docsPage?: string,
-) => Effect.Effect<void>;
-
-/**
- * The process's tool-missing reporter as an Effect service, provided once
- * by the composition root through `processLayer`. A program that needs to surface a
- * missing tool yields it via `Effect.serviceOption`, so an absent reporter is
- * silence rather than a missing requirement.
- *
- * `layer` takes the reporter the root already holds; a host without a
- * tool-missing UI omits the service, exactly as it omitted the platform port.
- */
-export class ToolMissingReporter extends Context.Service<
-  ToolMissingReporter,
-  ToolMissingHandler
->()('@texra-ai/harness/platform/ToolMissingReporter') {
-  static layer(report: ToolMissingHandler): Layer.Layer<ToolMissingReporter> {
-    return Layer.succeed(ToolMissingReporter)(report);
-  }
-}
+>()('@texra-ai/harness/platform/AgentDirectories') {}

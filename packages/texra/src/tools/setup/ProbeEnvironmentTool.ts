@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as os from 'node:os';
-import { Config, Effect, Option, Schema } from 'effect';
+import { Config, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import {
@@ -14,9 +14,9 @@ import {
 import { defineTool } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import { Secrets, withLogChannel } from '@texra-ai/harness/host';
-import { withExtendedPath } from '@texra-ai/harness/node';
+import { homeDirectory, withExtendedPath } from '@texra-ai/harness/node';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
   IMAGE_TOOL_LABEL,
@@ -31,7 +31,11 @@ import { detectPackageManager } from '@texra/utils/system/toolChecks';
 
 // Local file imports
 
-import { getChatGptSubscriptionStatus, SetupPlatform } from './platform';
+import {
+  getChatGptSubscriptionStatus,
+  SetupHost,
+  SetupPlatform,
+} from './platform';
 import { locateTool, missingCoreTools } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
@@ -110,23 +114,15 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   }
 
   const platform = yield* SetupPlatform;
+  const host = yield* SetupHost;
   const secrets = yield* Secrets;
   const { roots } = (yield* ToolContext).env;
 
-  // `os.homedir()` can throw UV_ENOENT in container/remote environments
-  // where the home directory is not resolvable; the report names it
-  // unresolved and the cause is logged, so the probe still answers.
-  const homedir = yield* Effect.try({
-    try: () => os.homedir(),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `The home directory could not be resolved: ${error.message}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as('<unresolved>')),
-    ),
-  );
-  const extendedPath = withExtendedPath({ PATH: process.env.PATH }).PATH ?? '';
+  // Where no home directory resolves (logged by `homeDirectory`), the
+  // report names it unresolved, so the probe still answers.
+  const homedir = (yield* homeDirectory) ?? '<unresolved>';
+  const extendedPath =
+    withExtendedPath({ PATH: process.env.PATH }, commandDirs()).PATH ?? '';
   const pm = detectPackageManager();
   const hostInfo = yield* readHostInfo;
   const [
@@ -158,7 +154,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
         ),
         { concurrency: 'unbounded' },
       ),
-      hasUsableSetupCredential(roots, secrets).pipe(
+      hasUsableSetupCredential(roots).pipe(
         // A check that cannot be answered is not "no credential"; advice
         // built on it would send a configured user to sign in again.
         Effect.catch((failure) =>
@@ -205,7 +201,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
   );
 
   const summary = {
-    host: roots.host,
+    host,
     os: {
       platform: hostInfo.platform,
       arch: hostInfo.arch,
@@ -301,7 +297,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       'usable credential',
     credentials.storedSecrets === 'unavailable' &&
       'credential store unreadable',
-  ].filter((cred): cred is string => typeof cred === 'string');
+  ].filter(Predicate.isString);
   parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
   const headline = parts.join('; ');
 

@@ -10,7 +10,7 @@ import {
   type RootedFileSystem,
   WorkspaceFs,
 } from '@texra-ai/harness/host';
-import { executeCommand, findCommand } from '@texra-ai/harness/node';
+import { executeCommand } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { VscodeExternalOpener } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
@@ -28,6 +28,7 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import { COMMIT_HASH_PATTERN } from '@texra/utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@texra/utils/git/commitLogFormat';
 import type { WorkspaceRoots } from '@texra-ai/harness';
@@ -48,78 +49,77 @@ const openUrl = (url: string) =>
       ),
     );
 
-export function findCommitInHistory(roots: WorkspaceRoots, commitHash: string) {
-  return Effect.gen(function* () {
-    if (typeof commitHash !== 'string') {
-      return null;
-    }
+export const findCommitInHistory = Effect.fn('findCommitInHistory')(function* (
+  roots: WorkspaceRoots,
+  commitHash: string,
+) {
+  if (typeof commitHash !== 'string') {
+    return null;
+  }
 
-    const sanitizedCommit = commitHash.trim();
-    if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
-      return null;
-    }
+  const sanitizedCommit = commitHash.trim();
+  if (!COMMIT_HASH_PATTERN.test(sanitizedCommit)) {
+    return null;
+  }
 
-    const workspacePath = roots.workspace;
-    if (!workspacePath) {
-      return null;
-    }
+  const workspacePath = roots.workspace;
+  if (!workspacePath) {
+    return null;
+  }
 
-    const gitOptions = {
-      cwd: workspacePath,
-      settings: roots,
-      quiet: true,
-    };
-    const verifyResult = yield* executeCommand(
-      ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-      gitOptions,
-    );
+  const gitOptions = {
+    cwd: workspacePath,
+    settings: roots,
+    quiet: true,
+  };
+  const verifyResult = yield* executeCommand(
+    ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
+    gitOptions,
+  );
 
-    if (!verifyResult.success) {
-      return null;
-    }
+  if (!verifyResult.success) {
+    return null;
+  }
 
-    const labelResult = yield* executeCommand(
-      ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-      gitOptions,
-    );
+  const labelResult = yield* executeCommand(
+    ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
+    gitOptions,
+  );
 
-    if (!labelResult.success) {
-      return sanitizedCommit;
-    }
+  if (!labelResult.success) {
+    return sanitizedCommit;
+  }
 
-    return labelResult.stdout;
-  });
-}
+  return labelResult.stdout;
+});
 
-function promptInput(
+const promptInput = Effect.fn('promptInput')(function* (
   title: string,
   prompt: string,
   password = false,
-): Effect.Effect<string | null, HostPromptFailed> {
-  return Effect.gen(function* () {
-    const val = yield* inputBox({
-      title,
-      prompt,
-      password,
-      ignoreFocusOut: true,
-    });
-    const trimmed = val?.trim() ?? '';
-    if (!trimmed) {
-      // Show cancellation message only if user dismissed with empty string (not Escape)
-      if (val !== undefined) {
-        yield* Effect.forkDetach(
-          announce(
-            CHANNEL,
-            vscodeUi.showWarningMessage('Clone cancelled.'),
-            undefined,
-          ),
-        );
-      }
-      return null;
-    }
-    return trimmed;
+): Effect.fn.Return<string | null, HostPromptFailed> {
+  const val = yield* inputBox({
+    title,
+    prompt,
+    password,
+    ignoreFocusOut: true,
   });
-}
+  const trimmed = val?.trim() ?? '';
+  if (!trimmed) {
+    // Show cancellation message only if user dismissed with empty string (not Escape)
+    if (val !== undefined) {
+      yield* Effect.forkDetach(
+        announce(
+          CHANNEL,
+          vscodeUi.showWarningMessage('Clone cancelled.'),
+          undefined,
+        ),
+      );
+    }
+    return null;
+  }
+  return trimmed;
+});
 
 /**
  * Platform-specific package-manager install options surfaced when `git` is
@@ -290,8 +290,8 @@ function buildOverleafClonePorts(
   };
 }
 
-export function cloneOverleafProject() {
-  return Effect.gen(function* () {
+export const cloneOverleafProject = Effect.fn('cloneOverleafProject')(
+  function* () {
     const input = yield* promptInput(
       'Clone Overleaf/ShareLaTeX Project',
       'Enter project URL or 24-character project ID.',
@@ -327,5 +327,5 @@ export function cloneOverleafProject() {
         yield* ChildProcessSpawner,
       ),
     );
-  });
-}
+  },
+);

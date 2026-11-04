@@ -2,20 +2,10 @@ import { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 import type { SubscriptionAuthStatus } from '@texra/shared/model/subscriptionAuth';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
-  codingPlanForUsageRoute,
   type CodingPlanSubscription,
   type CodingPlanSubscriptionId,
 } from '@texra/shared/model/codingPlans';
-import {
-  CHATGPT_AUTH,
-  GROK_AUTH,
-  SUBSCRIPTION_AUTH_COPY,
-} from '@ui/copy/accountAuth';
-import { OWN_API_KEYS } from '@ui/copy/modelAccess';
-import type {
-  DeclinableUsageRoute,
-  UsageRoute,
-} from '@texra-ai/harness/schemas';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 
 // Kept to one rendered row: the /login form and the account panel both
 // budget a single line for this description (75 columns at most).
@@ -63,44 +53,6 @@ export type CliModelAccessItemsInput =
       readonly kind: 'pending';
       readonly state: 'failed' | 'loading';
     };
-
-/** Own API keys (or no route yet) are the default; every other route is a
- *  subscription the run can decline. */
-export function isSubscriptionRoute(
-  route: UsageRoute | undefined,
-): route is DeclinableUsageRoute {
-  return route !== undefined && route !== 'api-key';
-}
-
-export function formatCliModelAccessRoute(
-  route: UsageRoute | undefined,
-): string {
-  switch (route) {
-    case 'chatgpt-subscription':
-      return CHATGPT_AUTH.subscriptionLabel;
-    case 'xai-subscription':
-      return GROK_AUTH.subscriptionLabel;
-    case 'kimi-code-subscription':
-    case 'glm-coding-plan-subscription':
-      return codingPlanForUsageRoute(route).preferenceLabel;
-    case undefined:
-    case 'api-key':
-      return OWN_API_KEYS.label;
-    default:
-      return route satisfies never;
-  }
-}
-
-/** Sentence-fragment form derived from the canonical access label. */
-export function formatCliModelAccessRouteInline(
-  route: UsageRoute | undefined,
-): string {
-  const label = formatCliModelAccessRoute(route);
-  // Proper-noun labels keep their casing; plain labels lowercase like prose.
-  return isSubscriptionRoute(route)
-    ? label
-    : label.charAt(0).toLowerCase() + label.slice(1);
-}
 
 /** The account a subscription session is signed in as, when it names one. */
 export function subscriptionAccountLabel(

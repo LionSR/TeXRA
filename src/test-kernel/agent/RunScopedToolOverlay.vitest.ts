@@ -1,39 +1,51 @@
-import '@test/support/defaultSessionTestSetup';
-
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { it } from '@effect/vitest';
-import { Effect, Layer, Schema } from 'effect';
-import { afterAll, assert, beforeAll, describe, expect, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Layer, Schema, Context } from 'effect';
+import { afterAll, assert, beforeAll, expect, vi } from 'vitest';
 
-import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
+import { AgentConfigSchema, generateRunId } from '@texra-ai/harness/schemas';
+import {
+  AppSignals,
+  AppState,
+  mcpConfigPathOf,
+  Secrets,
+} from '@texra-ai/harness/host';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
-import { AppState } from '@platform/interfaces';
-import { AgentConfigSchema } from '@shared/schemas';
+import {
+  AgentRun,
+  agentRunLayer,
+  type RunLaunch,
+} from '@agent/runtime/run/AgentRun';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { validationModelLayer } from '@cli/runtime/validationModel';
 import { RunHistory } from '@shared/session/runHistory';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { fakeHostAppState, setupPlatform } from '@test/support/setupPlatform';
+import { fakeHostAppState } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
+import {
+  createFakeWorkspaceRoots,
+  FakeSecrets,
+} from '@test/support/FakePlatform';
+import {
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 import { texraPlugins } from '@texra/tools/registry';
-import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { pluginCatalogLayer } from '@tools/pluginCatalog';
-import { generateRunId } from '@utils/core';
 
-import { sessionWithInteractions } from './progressTestUtils';
 import { createTestLaunchContext } from './runtime/launchContextTestUtils';
+import type { ITool } from '@texra-ai/harness';
 
 function tool(name: string): ITool {
   return {
@@ -45,14 +57,13 @@ function tool(name: string): ITool {
 /** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
-  config: AgentLaunchContext['config'],
-): AgentLaunchContext {
+  config: RunLaunch['config'],
+): RunLaunch {
   return {
     ...createTestLaunchContext(init),
     config: { ...config, instruction: 'Do the thing.' },
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
-    modelConfig: buildTestModelConfig(),
   };
 }
 
@@ -70,7 +81,8 @@ function observingInvokerLayer(seen: InvokeRequest[]) {
 
 /** The run's layer over a launch, with the given run-scoped tools. */
 function runLayer(
-  ctx: AgentLaunchContext,
+  session: Context.Context<SessionServices>,
+  ctx: RunLaunch,
   tools: ITool[],
   seen: InvokeRequest[] = [],
 ) {
@@ -78,20 +90,33 @@ function runLayer(
     observingInvokerLayer(seen),
     nativeToolTestLayer(),
   ).pipe(
-    Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
-    Layer.provideMerge(Layer.succeed(RunHistory, ctx.session.runHistory)),
+    Layer.provideMerge(
+      agentRunLayer(ctx, {
+        modelConfig: buildTestModelConfig(),
+        tools,
+        callbacks: {},
+      }),
+    ),
+    Layer.provideMerge(Layer.succeedContext(session)),
     Layer.provideMerge(testHttpClientLayer),
+    // No key is read: every launch here binds the validation model.
+    Layer.provideMerge(Secrets.layer(new FakeSecrets())),
     Layer.provideMerge(
       pluginCatalogLayer(
-        texraPlugins(),
+        texraPlugins({ name: 'vscode' }),
         mcpConfigPathOf(createFakeWorkspaceRoots().storageRoot),
       ).pipe(
         Layer.provide(
-          Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+          Layer.mergeAll(
+            nodePlatformLayer,
+            AppState.layer(fakeHostAppState),
+            AppSignals.layer,
+          ),
         ),
       ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
+    Layer.provideMerge(validationModelLayer),
   );
 }
 
@@ -99,14 +124,10 @@ function runLayer(
 // real route: the guarded package-validation gate, opened as validation opens it.
 beforeAll(() => {
   const flag = path.join(mkdtempSync(path.join(tmpdir(), 'texra-vm-')), 'flag');
-  writeFileSync(flag, 'overlay');
+  writeFileSync(flag, 'texra-cli-run-validation');
   for (const [name, value] of Object.entries({
-    TEXRA_CLI_INCLUDE_INTERNAL_VALIDATION_MODEL: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_ENV: 'TEXRA_OVERLAY_VALIDATION',
-    TEXRA_OVERLAY_VALIDATION: '1',
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_ENV: 'TEXRA_OVERLAY_FLAG',
-    TEXRA_OVERLAY_FLAG: flag,
-    TEXRA_CLI_INTERNAL_VALIDATION_MODEL_FLAG_CONTENT: 'overlay',
+    TEXRA_INTERNAL_VALIDATE_MODEL: '1',
+    TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
   }))
     vi.stubEnv(name, value);
 });
@@ -114,14 +135,18 @@ afterAll(() => {
   vi.unstubAllEnvs();
 });
 
-describe('run-scoped tool resolution', () => {
-  setupPlatform({ workspacePath: process.cwd() });
-
+layer(
+  Layer.provideMerge(
+    SessionGraph.layer,
+    FakeHost.layer({ workspacePath: process.cwd() }),
+  ),
+  { excludeTestServices: true },
+)('run-scoped tool resolution', (it) => {
   it.effect(
     'a resumed step offers the recorded tools that are still the same tool, and names each one gone',
     () =>
       Effect.gen(function* () {
-        const session = yield* sessionWithInteractions({ emit: () => {} });
+        const session = yield* isolatedTestSession({ emit: () => {} });
         const runId = generateRunId();
         publishTestRunStart(session, runId);
         const config = Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -129,18 +154,18 @@ describe('run-scoped tool resolution', () => {
           model: 'test-model',
           workingDirectory: process.cwd(),
         });
-        const ctx = validationLaunch({ runId, session }, config);
+        const ctx = validationLaunch({ runId }, config);
         yield* runToolUse({ resume: false }).pipe(
-          Effect.provide(runLayer(ctx, [tool('gone'), tool('kept')])),
+          Effect.provide(runLayer(session, ctx, [tool('gone'), tool('kept')])),
           Effect.orDie,
         );
 
         // `gone` vanished and `added` appeared since the run opened.
         const step = yield* Effect.gen(function* () {
-          const state = yield* session.runHistory.load(runId);
+          const state = yield* Context.get(session, RunHistory).load(runId);
           return yield* stepFor(yield* AgentRun, state!, 'request', false);
         }).pipe(
-          Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
+          Effect.provide(runLayer(session, ctx, [tool('kept'), tool('added')])),
           Effect.orDie,
         );
 
@@ -167,7 +192,6 @@ describe('run-scoped tool resolution', () => {
             },
           ],
         });
-        yield* closeSessionOf(session);
       }),
   );
 });

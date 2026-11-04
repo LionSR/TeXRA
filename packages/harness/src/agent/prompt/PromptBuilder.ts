@@ -3,16 +3,16 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports - agent
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
+import { delegationUpdate } from '@agent/runtime/delegation/delegationAvailability';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunContext, SkillCatalogEntry } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settings';
-import { delegationUpdate } from '@tools/delegation/delegationAvailability';
 import type { Plugin } from '@tools/plugins';
 import type { PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
 import { renderPrompt } from '@utils/prompt';
 import { loadAgentsMd } from '@utils/files/agentsMd';
-import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
+import { buildWorkspaceInfoBlock } from './workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
@@ -20,7 +20,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
  * the model or the settings is rendered by each step (`stepInstructions`).
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
-Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
+Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
 Explicit user constraints override general workflow guidance elsewhere in the agent prompt. If the user forbids memory, planning, file access, or a tool, do not use it. Report any resulting conflict instead.
 
 Prefer using tools over asking the user to take manual actions.
@@ -29,7 +29,6 @@ Do only what the task requires. Do not refactor, restructure, or "improve" mater
 When an approved plan or autonomous objective is active, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
 In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
-For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 </tool_use_instructions>`;
 
 /**
@@ -118,10 +117,11 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     personaPrompt: string,
     { inputs, attachedMemories }: TemplateOpening,
     options: {
-      /** The run's workspace root: its `AGENTS.md` and `<workspace_info>`. */
-      workspace: string | undefined;
-      /** The same session's setting slots, for the `<workspace_info>` git reads. */
-      settings: SettingsStores;
+      /** The run's session roots: the workspace whose `AGENTS.md` and
+       *  `<workspace_info>` it reads, the storage root whose `AGENTS.md`
+       *  stands in when the workspace has none, and the setting slots the
+       *  `<workspace_info>` git reads take. */
+      roots: WorkspaceRoots;
       /** A persona that declares no tools: no tool-use suffix. */
       textOnly: boolean;
     },
@@ -131,13 +131,14 @@ export const buildOpeningSystemPrompt = Effect.fn('prompt.openingSystem')(
     FileSystem.FileSystem | ChildProcessSpawner
   > {
     const rendered = yield* renderPrompt(personaPrompt, inputs);
+    const { roots } = options;
     // The two workspace reads are independent; run them together.
     const [agentsMd, workspaceInfo] = yield* Effect.all(
       [
-        loadAgentsMd(options.workspace),
+        loadAgentsMd(roots.workspace, roots.storageRoot),
         options.textOnly
           ? Effect.succeed('')
-          : buildWorkspaceInfoBlock(options.workspace, options.settings),
+          : buildWorkspaceInfoBlock(roots.workspace, roots),
       ],
       { concurrency: 'unbounded' },
     );

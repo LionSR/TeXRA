@@ -1,9 +1,10 @@
 import { it } from '@effect/vitest';
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 import { describe, expect } from 'vitest';
 
-import type { RunId } from '@shared/schemas';
+import { AppSignals } from '@texra-ai/harness/host';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const RUN = 'ab12cd' as RunId;
 
@@ -23,7 +24,6 @@ function createDeps(
       latexdiffFile: () => Effect.void,
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,
-      showError: () => Effect.void,
       ...overrides,
     },
     storageRoot: '/storage',
@@ -75,9 +75,13 @@ describe('ProgressWorkflowFileActionsController', () => {
         expect(followUps[0]).toMatch(/edited\.tex/);
       }).pipe(
         Effect.provide(
-          FileSystem.layerNoop({
-            readFileString: () => Effect.sync(() => readResults.shift() ?? ''),
-          }),
+          Layer.merge(
+            FileSystem.layerNoop({
+              readFileString: () =>
+                Effect.sync(() => readResults.shift() ?? ''),
+            }),
+            AppSignals.layer,
+          ),
         ),
       );
     },

@@ -2,6 +2,7 @@
 // lead-model picker. Distinct from `/model`, which only chooses the active
 // model among those already enabled and runnable.
 
+import { Predicate } from 'effect';
 import { Text } from 'ink';
 
 import {
@@ -16,7 +17,7 @@ interface EnabledModelsFormProps {
   readonly availableRows?: number;
   /**
    * The global state the enabled-model list reads and each toggle writes, with
-   * the runtime that settles that write: Ink components own no runtime, so both
+   * the runtime that runs that write: Ink components own no runtime, so both
    * arrive as props from the surface that opened the form.
    */
   readonly state: StateStore;
@@ -29,7 +30,7 @@ function formatEnabledModelDescription(model: CliEnabledModelRow): string {
     model.enabled ? 'enabled' : 'disabled',
     model.provider,
     model.deprecated ? 'deprecated' : undefined,
-  ].filter((part): part is string => part != null);
+  ].filter(Predicate.isNotNullish);
   return parts.join(' · ');
 }
 

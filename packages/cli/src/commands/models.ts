@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty';
 import { Cause, Effect, Exit } from 'effect';
 
-import { MODELS } from 'llm-zoo';
+import { MODELS } from '@texra-ai/llm';
 
 import { getEnabledModels } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -36,7 +36,7 @@ import type { CliContext } from '../runtime/cliContext';
  * The report every model command gives when its platform cannot come up: one
  * stderr line and `ModelOrNetworkError`. Each command hands it to
  * `defineCliCommand` as its `catchExitCode`, so a failure of the process
- * runtime install — which happens before any program below can fold it —
+ * runtime install — which happens before any program below can handle it —
  * reads the same way an init failure inside one does.
  */
 function reportModelPlatformFailure(cause: unknown): number {
@@ -53,71 +53,67 @@ function reportModelPlatformFailure(cause: unknown): number {
   return CliExitCode.ModelOrNetworkError;
 }
 
-function listModels(context: CliContext, options: CliModelListOptions) {
-  // The init and the access read are one program on the process runtime the
-  // command entry installs. Any cause counts, defects and interruption
-  // included.
-  return Effect.gen(function* () {
-    const outcome = yield* Effect.exit(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform(context);
-        return yield* getCliModelAccessList({
-          stores: services,
-          models: options.includeUnavailable === true ? MODELS : undefined,
-        });
-      }),
-    );
-    if (Exit.isFailure(outcome)) {
-      return reportModelPlatformFailure(Cause.squash(outcome.cause));
-    }
-    const models: readonly CliModelAccess[] = outcome.value;
+const listModels = Effect.fn('listModels')(function* (
+  context: CliContext,
+  options: CliModelListOptions,
+) {
+  const outcome = yield* Effect.exit(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform(context);
+      return yield* getCliModelAccessList({
+        stores: services,
+        models: options.includeUnavailable === true ? MODELS : undefined,
+      });
+    }),
+  );
+  if (Exit.isFailure(outcome)) {
+    return reportModelPlatformFailure(Cause.squash(outcome.cause));
+  }
+  const models: readonly CliModelAccess[] = outcome.value;
 
-    const listedModels = listableModelAccessEntries(models, options);
-    if (context.outputFormat === 'text' && listedModels.length === 0) {
-      writeTextStderr(formatNoListableModelsMessage(options));
-    }
-    const records = listedModels.map(({ model }) => cliModelRecord(model));
-    yield* emitPagedCliResult(context, {
-      json: records,
-      ndjson: records.map((model) => ({ kind: 'model', model })),
-      text: listedModels
-        .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
-        .join('\n'),
-    });
-    return CliExitCode.Success;
+  const listedModels = listableModelAccessEntries(models, options);
+  if (context.outputFormat === 'text' && listedModels.length === 0) {
+    writeTextStderr(formatNoListableModelsMessage(options));
+  }
+  const records = listedModels.map(({ model }) => cliModelRecord(model));
+  yield* emitPagedCliResult(context, {
+    json: records,
+    ndjson: records.map((model) => ({ kind: 'model', model })),
+    text: listedModels
+      .map(({ model, status }) => `${model.value}\t${model.label}\t${status}`)
+      .join('\n'),
   });
-}
+  return CliExitCode.Success;
+});
 
-function showModel(context: CliContext, id: string) {
-  // One program for the init and the entry lookup: the lookup loads the
-  // access list itself, so `show` settles neither the init nor the list into
-  // a Promise only to hand it straight back to a second run.
-  return Effect.gen(function* () {
-    const outcome = yield* Effect.exit(
-      Effect.gen(function* () {
-        const services = yield* initCliPlatform(context);
-        return yield* loadCliModelAccessEntry(id, { stores: services });
-      }),
-    );
-    if (Exit.isFailure(outcome)) {
-      return reportModelPlatformFailure(Cause.squash(outcome.cause));
-    }
-    const entry: CliModelAccess | undefined = outcome.value;
+const showModel = Effect.fn('showModel')(function* (
+  context: CliContext,
+  id: string,
+) {
+  const outcome = yield* Effect.exit(
+    Effect.gen(function* () {
+      const services = yield* initCliPlatform(context);
+      return yield* loadCliModelAccessEntry(id, { stores: services });
+    }),
+  );
+  if (Exit.isFailure(outcome)) {
+    return reportModelPlatformFailure(Cause.squash(outcome.cause));
+  }
+  const entry: CliModelAccess | undefined = outcome.value;
 
-    if (!entry) {
-      writeTextStderr(`Model not found: ${id}`);
-      return CliExitCode.Usage;
-    }
+  if (!entry) {
+    writeTextStderr(`Model not found: ${id}`);
+    return CliExitCode.Usage;
+  }
 
-    const record = cliModelRecord(entry.model);
-    emitCliResult(context, {
-      json: record,
-      ndjson: { kind: 'model', model: record },
-      text: formatCliModelDetails(entry),
-    });
-    return CliExitCode.Success;
+  const record = cliModelRecord(entry.model);
+  emitCliResult(context, {
+    json: record,
+    ndjson: { kind: 'model', model: record },
+    text: formatCliModelDetails(entry),
   });
-}
+  return CliExitCode.Success;
+});
 
 const modelsListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List available models' },
@@ -165,63 +161,65 @@ function initModelCommandPlatform(
   );
 }
 
-function listEnabledModels(context: CliContext) {
-  return Effect.gen(function* () {
-    const services = yield* initModelCommandPlatform(context);
-    if ('exitCode' in services) return services.exitCode;
-    const catalog = yield* listCliEnabledModelCatalog(services.globalState);
-    const enabled = yield* getEnabledModels(services.globalState);
-    yield* emitPagedCliResult(context, {
-      json: { enabled, catalog },
-      ndjson: [
-        { kind: 'models-enabled' as const, models: enabled },
-        ...catalog.map((model) => ({
-          kind: 'model-catalog' as const,
-          model,
-        })),
-      ],
-      text: catalog
-        .map(
-          (model) =>
-            `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
-        )
-        .join('\n'),
-    });
-    return CliExitCode.Success;
+const listEnabledModels = Effect.fn('listEnabledModels')(function* (
+  context: CliContext,
+) {
+  const services = yield* initModelCommandPlatform(context);
+  if ('exitCode' in services) return services.exitCode;
+  const catalog = yield* listCliEnabledModelCatalog(services.globalState);
+  const enabled = yield* getEnabledModels(services.globalState);
+  yield* emitPagedCliResult(context, {
+    json: { enabled, catalog },
+    ndjson: [
+      { kind: 'models-enabled' as const, models: enabled },
+      ...catalog.map((model) => ({
+        kind: 'model-catalog' as const,
+        model,
+      })),
+    ],
+    text: catalog
+      .map(
+        (model) =>
+          `${model.enabled ? 'on' : 'off'}\t${model.id}\t${model.label}\t${model.provider}`,
+      )
+      .join('\n'),
   });
-}
+  return CliExitCode.Success;
+});
 
-function setModelEnabled(context: CliContext, id: string, enabled: boolean) {
-  return Effect.gen(function* () {
-    const services = yield* initModelCommandPlatform(context);
-    if ('exitCode' in services) return services.exitCode;
-    return yield* setCliModelEnabled(services.globalState, id, enabled).pipe(
-      Effect.map((result) => {
-        emitCliResult(context, {
-          json: result,
-          ndjson: {
-            kind: 'model-enabled',
-            model: {
-              id: result.model,
-              enabled: result.enabled,
-              list: result.list,
-            },
+const setModelEnabled = Effect.fn('setModelEnabled')(function* (
+  context: CliContext,
+  id: string,
+  enabled: boolean,
+) {
+  const services = yield* initModelCommandPlatform(context);
+  if ('exitCode' in services) return services.exitCode;
+  return yield* setCliModelEnabled(services.globalState, id, enabled).pipe(
+    Effect.map((result) => {
+      emitCliResult(context, {
+        json: result,
+        ndjson: {
+          kind: 'model-enabled',
+          model: {
+            id: result.model,
+            enabled: result.enabled,
+            list: result.list,
           },
-          text: result.enabled
-            ? `Enabled ${result.model} in the model picker.`
-            : `Disabled ${result.model} in the model picker.`,
-        });
-        return CliExitCode.Success;
+        },
+        text: result.enabled
+          ? `Enabled ${result.model} in the model picker.`
+          : `Disabled ${result.model} in the model picker.`,
+      });
+      return CliExitCode.Success;
+    }),
+    Effect.catchCause((cause) =>
+      Effect.sync(() => {
+        writeTextStderr(toErrorMessage(Cause.squash(cause)));
+        return CliExitCode.Usage;
       }),
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          writeTextStderr(toErrorMessage(Cause.squash(cause)));
-          return CliExitCode.Usage;
-        }),
-      ),
-    );
-  });
-}
+    ),
+  );
+});
 
 const modelsEnabledCommand = defineCliCommand({
   meta: {

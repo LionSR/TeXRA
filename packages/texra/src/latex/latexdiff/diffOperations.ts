@@ -4,8 +4,8 @@
  * which the run's own `document_diff` shares.
  *
  * Takes the run's recorded round outputs (its documents, as the host's view
- * of the session folds them), builds one diff operation per pair each round's
- * outputs call for, and runs them. That fold is the only source: run storage
+ * of the session applies them), builds one diff operation per pair each round's
+ * outputs call for, and runs them. That view is the only source: run storage
  * is never rescanned and no workspace filename is parsed, so a run with no
  * recorded outputs has no diff operations. Every host (VS Code command,
  * desktop) keeps only its own UX (progress chrome, prompts, result rendering)
@@ -162,7 +162,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
     for (const [round, infos] of roundIndexedEntries(rounds)) {
       for (const info of infos) {
         // Extraction records every output's lineage; one with no base in it
-        // is a new document (a `rewrite: false` task's), not a failure.
+        // is a new document (a task that declares `outputs`), not a failure.
         // Only an output whose lineage was never recorded lacks a base the
         // run could have named.
         if (info.lineage !== null) continue;

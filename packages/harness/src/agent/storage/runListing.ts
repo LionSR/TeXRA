@@ -2,19 +2,18 @@
 
 import { Effect, Stream, Predicate } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-
 import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateTarget,
-  type SessionEvent,
+  qualifyAggregateId,
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
-  type RunLifecycleStatus,
+  type RunOutcome,
 } from '@shared/schemas';
+import { recordsOf } from '@shared/session/runFacts';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { deriveResumability } from './resumability';
@@ -30,9 +29,8 @@ const RUN_STORAGE_CONCURRENCY = 32;
 export interface AgentRunListingEntry {
   id: RunId;
   timestamp: string;
-  /** The run's folded status; a terminal outcome phase is its durable
-   *  outcome. */
-  status: RunLifecycleStatus;
+  /** The run's durable outcome (its `run.end`), null while none has landed. */
+  outcome: RunOutcome | null;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -44,72 +42,64 @@ export interface AgentRunListingEntry {
    *  loadability are settled when the run is opened. */
   resumable: boolean;
   /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, or an earlier build wrote them.
-   *  Absent when it resumes or simply has nothing to continue from. */
+   *  continue from: they could not be read, an earlier build wrote them, or
+   *  they hold a fact of a plugin this process does not load. Absent when
+   *  it resumes or simply has nothing to continue from. */
   resumeBlocked?: string;
   /** What the run is — the durable authority, stamped at registration. */
   identity: Extract<RunIdentity, { kind: 'agent' }>;
   record: AgentConfig;
 }
 
-/** The latest `run.config` row of each run in one committed listing. */
-function recordRows(
-  rows: readonly SessionEvent[],
-): Map<RunId, Extract<SessionEvent, { type: 'run.config' }>> {
-  const records = new Map<
-    RunId,
-    Extract<SessionEvent, { type: 'run.config' }>
-  >();
-  for (const row of rows) {
-    if (row.type !== 'run.config') continue;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind === 'run') records.set(target.id, row);
-  }
-  return records;
-}
-
 /**
  * The runs a user started, newest first, each with its private record: the
  * view rebuilt cold from the log (the same `RunView` a live session holds)
- * beside the same
- * listing's `run.config` rows, already decoded by the database read.
+ * beside the same listing's rows, already decoded by the database read and
+ * folded per run (`recordsOf`) for its configuration.
  */
-export const listRuns = Effect.fn('listRuns')(function* (
-  session: SessionHandle,
-): Effect.fn.Return<AgentRunListingEntry[], Error> {
+export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
+  AgentRunListingEntry[],
+  Error,
+  SessionLog | SessionViewAccess
+> {
+  const log = yield* SessionLog;
   const [view, listing] = yield* Effect.all([
-    session.view.read([]),
-    Stream.runCollect(session.log.listing()),
+    (yield* SessionViewAccess).read([]),
+    Stream.runCollect(log.listing()),
   ]);
-  const records = recordRows(listing);
+  const rows = Map.groupBy(listing, (row) => row.aggregateId);
   const results = yield* Effect.forEach(
     [...view.runs.values()].filter(
       (run) => run.identity.kind === 'agent' && run.parentId === null,
     ),
     (run) =>
-      Effect.gen(function* (): Effect.fn.Return<AgentRunListingEntry, Error> {
+      Effect.gen(function* (): Effect.fn.Return<
+        AgentRunListingEntry,
+        Error,
+        SessionLog
+      > {
         const { id, identity } = run;
-        const record = records.get(id)?.config;
+        const own = rows.get(qualifyAggregateId('run', id)) ?? [];
+        const record = recordsOf(own, id).config;
         // Registration commits `run.config` in the `run.start` batch, so an
         // agent run without an AgentConfig is corrupt: skipped loudly below.
         if (identity.kind !== 'agent' || !record || !isAgentRunRecord(record))
           return yield* Effect.fail(
             new Error('agent run without an AgentConfig'),
           );
-        const resumeFrom = yield* deriveResumability(id, session);
+        const resumeFrom = yield* deriveResumability(id);
         return {
           id,
           timestamp: new Date(run.launchedAt).toISOString(),
-          status: run.status,
+          outcome: run.durableOutcome,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           resumable: resumeFrom.kind === 'checkpoint',
-          ...(resumeFrom.kind === 'unreadable' && {
+          ...((resumeFrom.kind === 'unreadable' ||
+            resumeFrom.kind === 'earlierBuild' ||
+            resumeFrom.kind === 'pluginUnavailable') && {
             resumeBlocked: resumeFrom.cause,
-          }),
-          ...(resumeFrom.kind === 'earlierBuild' && {
-            resumeBlocked: resumeFrom.refusal.message,
           }),
           identity,
           record,

@@ -1,6 +1,9 @@
 // Node imports
 import { hash } from 'node:crypto';
 
+// Third-party imports
+import { Predicate } from 'effect';
+
 // Local imports - canonical model contract
 import type { ModelOrigin } from '../protocol.js';
 import type { ResolvedTurn } from '../turn.js';
@@ -15,9 +18,7 @@ export function prefixFingerprint(
   const encoded = JSON.stringify(
     [domain, origin, system ?? null, messages],
     (_key, value: unknown) => {
-      if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-        return value;
-      }
+      if (!Predicate.isObject(value)) return value;
       return Object.fromEntries(
         Object.entries(value).sort(([left], [right]) =>
           left < right ? -1 : Number(left > right),

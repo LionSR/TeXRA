@@ -1,15 +1,17 @@
-import { Settings } from '@texra-ai/harness/host';
+import { Secrets, Settings } from '@texra-ai/harness/host';
 import { Effect } from 'effect';
 
 import { loadApiKeyStatusMap } from '@texra-ai/llm';
 import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  ensureError,
   toErrorMessage,
-  type SurfacedSettingEntry,
 } from '@texra-ai/harness/schemas';
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@texra/common/secrets/storeCredential';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { applyStateSettingUpdate } from '@texra/shared/settingsView/handlers/stateSettingWrite';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 import {
   GITHUB_TOKEN_STORAGE_KEY,
   resolveGitHubTokenSource,
@@ -33,7 +35,7 @@ import {
 import { SkillsSettingsForm } from './SkillsSettingsForm';
 import type { ApprovalPolicy } from '@texra-ai/harness/schemas';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type { ProcessRuntime, PlatformSecrets } from '@texra-ai/harness/host';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 export interface CliConfigFormProps {
   readonly availableRows?: number;
@@ -41,20 +43,15 @@ export interface CliConfigFormProps {
    *  writes, and the project the process opened, for the agents and skills
    *  rows. */
   readonly roots: WorkspaceRoots;
-  /**
-   * The secret store the API-key and GitHub-token rows read and write. Ink
-   * components run no Effect, so the process store arrives as a prop from the
-   * surface that opened this form.
-   */
-  readonly secrets: PlatformSecrets;
-  /** The process runtime the rows' reads and writes run on, from the same surface. */
+  /** The process runtime the rows' reads and writes run on, from the same
+   *  surface; the API-key and GitHub-token rows read and write its `Secrets`. */
   readonly runtime: ProcessRuntime;
   readonly onClose: () => void;
   readonly onError?: (error: unknown) => void;
   /**
-   * Applies the approval-policy side effect when that row is written here — the
-   * chat TUI's live-session hook, identical to the one `/approval` drives.
-   * Omitted by `texra config edit`, whose process holds no session to update.
+   * Repaints the live session's approval policy after that row is written
+   * here, the same hook `/approval` drives. Omitted by `texra config edit`,
+   * whose process holds no session.
    */
   readonly onApprovalPolicyChanged?: (policy: ApprovalPolicy) => void;
 }
@@ -64,11 +61,11 @@ export interface CliConfigFormProps {
  * it, so persistence and runtime side effects cannot diverge between them.
  */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const { roots, secrets, runtime } = props;
+  const { roots, runtime } = props;
   // The status reads are programs like the save and remove rows below them,
-  // so this surface settles all of them on the runtime it was handed.
+  // so this surface runs all of them on the runtime it was handed.
   const apiKeys = useAsyncResource({
-    load: () => loadApiKeyStatusMap(secrets),
+    load: () => Effect.flatMap(Secrets, loadApiKeyStatusMap),
     runtime,
     onError: props.onError,
   });
@@ -78,7 +75,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
     error: apiKeys.error !== undefined,
   };
   const githubToken = useAsyncResource({
-    load: () => resolveGitHubTokenSource(secrets),
+    load: () => Effect.flatMap(Secrets, resolveGitHubTokenSource),
     runtime,
     onError: props.onError,
   });
@@ -105,51 +102,64 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
   });
 
   // The one CLI write path for a `/config` row: the same
-  // `applyStateSettingUpdate` the extension and desktop settings views call, so
-  // a row that carries a live side effect (approval policy) cannot be persisted
-  // from here while the running session keeps enforcing the old value. The
-  // catalog row still owns the write consequences:
+  // `applyStateSettingUpdate` the extension and desktop settings views call.
+  // After the write this form applies its consequences: the catalog row's
   // `onWrite.invalidatesModelOptions` marks the rows whose change re-routes
-  // models, so this form keeps no key list of its own. `null` is the shared
-  // reset convention (delete the key so the schema default reappears).
-  const applyUpdate = (
-    entry: SurfacedSettingEntry,
+  // models, and an approval-policy write repaints the live session's policy
+  // line (enforcement reads the config itself). `null` is the shared reset
+  // convention (delete the key so the schema default reappears).
+  const applyUpdate = Effect.fn('applyUpdate')(function* (
+    entry: TexraSettingRow,
     value: unknown,
-  ): Effect.Effect<void, Error> =>
-    Effect.gen(function* () {
-      const result = yield* applyStateSettingUpdate(entry.key, value, {
-        host: 'cli',
-        stores: roots,
-        onApprovalPolicyChanged: props.onApprovalPolicyChanged,
-      });
-      const label = entry.title ?? entry.key;
-      switch (result.kind) {
-        case 'applied':
-          break;
-        case 'rejected':
-        case 'failed':
-          // ConfigForm rolls its optimistic value back on a failure and
-          // reports it, so a refused write must fail rather than read as
-          // applied.
-          return yield* Effect.fail(
-            new Error(
-              `Failed to update "${label}": ${toErrorMessage(result.error)}`,
-              { cause: result.error },
-            ),
-          );
-        case 'ignored':
-        case 'workspace-required':
-          return yield* Effect.fail(
-            new Error(
-              `Setting "${label}" is not writable from /config (${result.kind}).`,
-            ),
-          );
-      }
-      settings.reload();
-      if (entry.onWrite?.invalidatesModelOptions) {
-        bumpCodexPreferenceVersion();
-      }
+  ): Effect.fn.Return<void, Error> {
+    const result = yield* applyStateSettingUpdate(entry.key, value, {
+      host: 'cli',
+      stores: roots,
     });
+    const label = entry.title ?? entry.key;
+    switch (result.kind) {
+      case 'applied':
+        break;
+      case 'rejected':
+      case 'failed':
+        // ConfigForm rolls its optimistic value back on a failure and
+        // reports it, so a refused write must fail rather than read as
+        // applied.
+        return yield* Effect.fail(
+          new Error(
+            `Failed to update "${label}": ${toErrorMessage(result.error)}`,
+            { cause: result.error },
+          ),
+        );
+      case 'ignored':
+      case 'workspace-required':
+        return yield* Effect.fail(
+          new Error(
+            `Setting "${label}" is not writable from /config (${result.kind}).`,
+          ),
+        );
+    }
+    settings.reload();
+    if (entry.onWrite?.invalidatesModelOptions) {
+      bumpCodexPreferenceVersion();
+    }
+    if (entry.key === APPROVAL_POLICY_CONFIG_KEY) {
+      // The value is written: a failed repaint is reported, never rolled back.
+      yield* Settings.get<ApprovalPolicy>(roots, entry.key).pipe(
+        Effect.flatMap((policy) =>
+          Effect.try({
+            try: () => props.onApprovalPolicyChanged?.(policy),
+            catch: ensureError,
+          }),
+        ),
+        Effect.tapError((error) => Effect.sync(() => props.onError?.(error))),
+        Effect.ignore({
+          log: 'Warn',
+          message: 'Approval policy written; session repaint failed',
+        }),
+      );
+    }
+  });
 
   const transient = renderAsyncListFormTransient({
     loading: settings.data === undefined && settings.loading,
@@ -201,7 +211,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             statusView={apiKeyStatusView}
             runtime={runtime}
             // The save and the refresh that follows it are one program; the
-            // form settles it on the runtime this surface handed it.
+            // form runs it on the runtime this surface handed it.
             onSave={(provider, key) =>
               Effect.gen(function* () {
                 yield* commitCliProviderApiKey(roots, provider, key);
@@ -222,7 +232,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             runtime={runtime}
             onSave={(token) =>
               Effect.gen(function* () {
-                yield* storeCredential(secrets, {
+                yield* storeCredential(yield* Secrets, {
                   secretName: GITHUB_TOKEN_STORAGE_KEY,
                   value: token,
                   kind: 'github',
@@ -233,7 +243,7 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             }
             onRemove={() =>
               Effect.gen(function* () {
-                yield* secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
+                yield* (yield* Secrets).delete(GITHUB_TOKEN_STORAGE_KEY);
                 yield* githubToken.refresh();
               })
             }

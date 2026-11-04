@@ -1,66 +1,53 @@
-import { Effect, SubscriptionRef } from 'effect';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { Effect } from 'effect';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { closeLeftoverRun } from '@agent/runtime/runLaunchGuard';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  aggregateTarget,
-  type SessionEvent,
-  type RunId,
-} from '@shared/schemas';
-import { lastLifecycleRow } from '@shared/session/runFacts';
+import { isLoopDriven, type RunId } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { RunView } from '@shared/session/sessionView';
 
 const CHANNEL = 'LeftoverRunSweep';
 
-/** Runs still going: held by this process, or listed by the view as
- *  running or waiting (a run whose owner process died is listed as
- *  interrupted, so it is swept). */
-function runningRuns(session: SessionHandle): Set<RunId> {
-  const running = new Set(session.runs.get().map((run) => run.runId));
-  for (const run of SubscriptionRef.getUnsafe(session.view.ref).runs.values()) {
-    if (run.group === 'running' || run.group === 'waiting') running.add(run.id);
-  }
-  return running;
-}
-
-/** Remove the nonresumable background-shell cohort captured before session open. */
-export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
-  session: SessionHandle,
-  rows: readonly SessionEvent[],
-) {
-  // A shell parked holding its result for its parent in its current
-  // lifecycle stays until that result is delivered.
-  const holds = (row: SessionEvent): boolean => {
-    if (row.type !== 'child.park' || row.heldFor === undefined) return false;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') return false;
-    const since = lastLifecycleRow(rows, target.id);
-    return since?.type !== 'run.end' && row.commit > (since?.commit ?? 0);
-  };
-  const removed = new Set(
-    rows
-      .filter((row) => row.type === 'run.removed' || holds(row))
-      .map((row) => row.aggregateId),
+/** The warning a failed step for `runId` leaves; the sweep goes on. */
+const warning = (message: string, runId: RunId) => (error: unknown) =>
+  Effect.logWarning(message).pipe(
+    Effect.annotateLogs({ data: { runId, error } }),
+    withLogChannel(CHANNEL),
   );
-  const running = runningRuns(session);
-  for (const row of rows) {
-    if (
-      row.type !== 'run.start' ||
-      row.identity.kind !== 'process' ||
-      removed.has(row.aggregateId)
-    )
+
+/**
+ * The process runs (background shells, agent CLIs) of the cohort captured
+ * before session open that no resume will finish. One left running with no
+ * parent, a detach having let it go, is closed as interrupted once its
+ * claim shows no live owner ({@link closeLeftoverRun}); one with a parent
+ * is that parent's to finish as it resumes (`closeLeftoverChildren`). An
+ * ended background shell is removed: a shell is not resumable, its end gave
+ * its parent its result, and a detached one's report was there to read in
+ * the session that ended it.
+ */
+export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
+  cohort: Iterable<RunView>,
+) {
+  const requests = yield* SessionRequests;
+  for (const run of cohort) {
+    if (isLoopDriven(run.identity)) continue;
+    if (!isTerminalOutcomePhase(run.status)) {
+      if (run.parentId === null)
+        yield* closeLeftoverRun(null, run).pipe(
+          Effect.catch(
+            warning('A detached process run was left unclosed.', run.id),
+          ),
+        );
       continue;
-    const target = aggregateTarget(row.aggregateId);
-    if (target.kind !== 'run') continue;
-    const runId = target.id;
-    if (running.has(runId)) continue;
-    yield* session.requests
-      .removeRun(runId, 'automatic', row.commit)
+    }
+    if (run.identity.kind !== 'process') continue;
+    yield* requests
+      .removeRun(run.id, 'automatic', run.createdAt)
       .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
+        Effect.catch(
+          warning(
             'A background shell was retained because automatic deletion was refused.',
-          ).pipe(
-            Effect.annotateLogs({ data: { runId, error } }),
-            withLogChannel(CHANNEL),
+            run.id,
           ),
         ),
       );

@@ -28,7 +28,7 @@ import {
 } from '@texra-ai/harness/host';
 import { ensureError } from '@texra-ai/harness/schemas';
 import { jitteredExponentialBackoffMs } from '@texra-ai/harness/plugins';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal, type AppSignals } from '@texra-ai/harness/host';
 
 import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import { unrefSleepClock } from '@texra/utils/system/unrefSleepClock';
@@ -41,6 +41,7 @@ import {
   type GitHubServices,
 } from './githubClient';
 import { shouldDropBotEvent } from './botFilter';
+import { GITHUB_POLL_INTERVAL_MS } from './prSubscriptionConstants';
 import type { DedupedResource } from './pollingDedup';
 import type { GhUser } from './prTypes';
 
@@ -87,14 +88,15 @@ export class PollHookRejected extends Schema.TaggedError<PollHookRejected>()(
   },
 ) {}
 
+/** What a source's subscriptions and poll rounds run on: the GitHub calls'
+ *  services and the process's signal hub, which hears a rejected token
+ *  (`githubTokenInvalid`). */
+export type PollServices = GitHubServices | AppSignals;
+
 interface PollingSourceConfig {
   /** Display name used as the log channel and in exception messages. */
   name: string;
-  pollIntervalMs: number;
   maxConcurrent: number;
-  backoffBaseMs: number;
-  backoffMaxMs: number;
-  maxFailureDurationMs: number;
 }
 
 /** Where a source's poll loop and admitted deliveries run. */
@@ -149,14 +151,11 @@ type SuccessfulConditionalResponse<T> = Extract<
   { status: 200 }
 >;
 
-export const DEFAULT_POLLING_BACKOFF_CONFIG = Object.freeze({
-  backoffBaseMs: 60_000,
-  backoffMaxMs: 3_600_000,
-  maxFailureDurationMs: 24 * 3_600_000,
-} satisfies Pick<
-  PollingSourceConfig,
-  'backoffBaseMs' | 'backoffMaxMs' | 'maxFailureDurationMs'
->);
+/** First retry delay after a failed poll; doubles per consecutive failure. */
+const BACKOFF_BASE_MS = 60_000;
+const BACKOFF_MAX_MS = 3_600_000;
+/** A subscription with no successful poll for this long is detached. */
+const MAX_FAILURE_DURATION_MS = 24 * 3_600_000;
 
 /**
  * `K` is the canonical string key (PR keys flatten to `owner/repo#N`,
@@ -183,13 +182,14 @@ export abstract class PollingSourceBase<
   /** The stop request for the owned poll loop; absent while it is stopped. */
   private pollLoopStop: Deferred.Deferred<void> | undefined;
 
-  constructor(
-    protected readonly config: PollingSourceConfig,
-    /** Where this source polls and delivers; absent on a source a test
-     *  drives through its hooks alone, whose deliveries belong to the
-     *  caller and which cannot be subscribed to. */
-    private readonly lifetime?: PollingLifetime,
-  ) {
+  protected readonly config: PollingSourceConfig;
+  /** Where this source polls and delivers; absent on a source a test
+   *  drives through its hooks alone, whose deliveries belong to the
+   *  caller and which cannot be subscribed to. */
+  private readonly lifetime?: PollingLifetime;
+  constructor(config: PollingSourceConfig, lifetime?: PollingLifetime) {
+    this.config = config;
+    this.lifetime = lifetime;
     this.inLogChannel = withLogChannel(config.name);
   }
 
@@ -203,11 +203,11 @@ export abstract class PollingSourceBase<
     state: S,
   ): Effect.Effect<void, Error, GitHubServices>;
 
-  /** Optional subclass hook that runs after all subscription polls settle. */
+  /** Optional subclass hook that runs after all subscription polls finish. */
   protected afterTick(
     _entries: ReadonlyArray<readonly [K, S]>,
     _now: number,
-  ): Effect.Effect<void, PollHookRejected, GitHubServices> {
+  ): Effect.Effect<void, PollHookRejected, PollServices> {
     return Effect.void;
   }
 
@@ -269,7 +269,7 @@ export abstract class PollingSourceBase<
     key: K,
     initState: (now: number) => S,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, GitHubServices> {
+  ): Effect.Effect<Disposable, never, PollServices> {
     return Effect.uninterruptible(
       Effect.flatMap(Clock.currentTimeMillis, (now) => {
         const lifetime = this.lifetime;
@@ -471,7 +471,7 @@ export abstract class PollingSourceBase<
    */
   private ensurePolling(
     lifetime: PollingLifetime,
-  ): Effect.Effect<void, never, GitHubServices> {
+  ): Effect.Effect<void, never, PollServices> {
     return Effect.uninterruptible(
       Effect.gen({ self: this }, function* () {
         if (this.pollLoopStop) return;
@@ -497,7 +497,7 @@ export abstract class PollingSourceBase<
     function* (this: PollingSourceBase<K, S>) {
       const clock = yield* Clock.Clock;
       yield* Effect.repeat(this.runRound(), {
-        schedule: Schedule.fixed(Duration.millis(this.config.pollIntervalMs)),
+        schedule: Schedule.fixed(Duration.millis(GITHUB_POLL_INTERVAL_MS)),
         while: () => {
           if (this.subscriptions.size > 0) return true;
           // Retire before yielding so a new subscription starts a fresh loop.
@@ -600,12 +600,7 @@ export abstract class PollingSourceBase<
             return Effect.failCause(cause);
           }
           return Effect.flatMap(Clock.currentTimeMillis, (failedAt) =>
-            this.handleFailure(
-              key,
-              state,
-              (reason.error as PollHookRejected).cause,
-              failedAt,
-            ),
+            this.handleFailure(key, state, reason.error.cause, failedAt),
           );
         }),
         Effect.catchCause((cause) => {
@@ -648,7 +643,7 @@ export abstract class PollingSourceBase<
         err,
       );
       yield* this.emit(state, this.formatErrorEvent(state, err.message));
-      emitAppSignal('githubTokenInvalid', { message: err.message });
+      yield* emitAppSignal('githubTokenInvalid', { message: err.message });
       this.detach(key, state);
       return;
     }
@@ -667,7 +662,7 @@ export abstract class PollingSourceBase<
       // A subscription that's been continuously rate-limited (or any mix of
       // failures) past the 24 h window should still age out — without this
       // check the rate-limit branch would hold a slot indefinitely.
-      if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
+      if (now - state.lastSuccessAt >= MAX_FAILURE_DURATION_MS) {
         yield* this.logWarning(
           `Rate limited polling ${key} and unreachable for over 24 h; detaching.`,
         );
@@ -687,13 +682,13 @@ export abstract class PollingSourceBase<
     // Jittered +/-20% so a network outage doesn't stampede every subscription
     // back at exactly the same moment.
     const actualDelayMs = jitteredExponentialBackoffMs(
-      this.config.backoffBaseMs,
+      BACKOFF_BASE_MS,
       state.consecutiveFailures,
-      this.config.backoffMaxMs,
+      BACKOFF_MAX_MS,
       yield* Random.next,
     );
     state.skipPollUntilMs = now + actualDelayMs;
-    if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
+    if (now - state.lastSuccessAt >= MAX_FAILURE_DURATION_MS) {
       yield* this.logWarning(
         `Poll failed for ${key}; unreachable for over 24 h, detaching.`,
         { failureCount: state.consecutiveFailures, error: err },

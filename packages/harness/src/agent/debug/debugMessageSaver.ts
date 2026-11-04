@@ -3,10 +3,10 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
+import { runDirUnder } from '@common/storage/storageLayout';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
-import { runDirUnder } from '@utils/files/runStorageFs';
 
 /** One model request or response to save under its run's directory. */
 interface SaveDebugParams {
@@ -20,14 +20,14 @@ interface SaveDebugParams {
   /**
    * The run's session roots, passed as data: the file lands under the
    * storage root, and the config provider is the session's own, so the
-   * `texra.debug.saveModelIO` guard below cannot throw before platform init.
+   * `debug.saveModelIO` guard below cannot throw before platform init.
    */
   readonly roots: WorkspaceRoots;
 }
 
 /**
  * Save debug objects (messages or responses) to a JSON file when
- * `texra.debug.saveModelIO` is enabled.
+ * `debug.saveModelIO` is enabled.
  *
  * Takes the process filesystem from context: the target is an absolute path
  * built from the run's own roots, and the write is a plain (non-atomic) one.
@@ -57,8 +57,7 @@ export function maybeSaveDebugObject({
     });
 
   return Effect.gen(function* () {
-    if (!(yield* Settings.get<boolean>(roots, 'texra.debug.saveModelIO')))
-      return;
+    if (!(yield* Settings.get<boolean>(roots, 'debug.saveModelIO'))) return;
     const fs = yield* FileSystem.FileSystem;
     yield* fs.makeDirectory(runDir, { recursive: true });
     yield* fs.writeFileString(filePath, JSON.stringify(object, null, 2));

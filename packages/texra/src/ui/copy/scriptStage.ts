@@ -1,13 +1,22 @@
 /**
- * How a script stage's calls read in every renderer: the word for each
- * call's status (`ScriptCallView.status`) and a call's one plain line. The
- * progress view, the terminal popup and `texra run`'s plain output print
- * these, so one status cannot read two ways.
+ * How a script stage reads in every renderer (the progress view, the terminal
+ * popup, `texra run`'s plain output): each call's status word, detail and
+ * plain line, and the stage's summary, so one status cannot read two ways;
+ * and what a tool card the run's end cut short says.
  */
-import type {
-  ScriptCallStatus,
-  ScriptCallView,
+import {
+  formatCostUsd,
+  formatResultCount,
+  type ScriptCallStatus,
+  type ScriptCallView,
+  type ScriptStageView,
 } from '@texra-ai/harness/transcript';
+
+/** The error a tool card shows when the run's end cut its call short
+ *  (`ToolRow.cutByRunEnd`): the call never finished, so nothing records how
+ *  it ended. */
+export const TOOL_CUT_BY_RUN_END_NOTE =
+  'The task ended before this tool completed.';
 
 export const SCRIPT_CALL_STATUS_LABEL = {
   queued: 'Queued',
@@ -21,9 +30,53 @@ export const SCRIPT_CALL_STATUS_LABEL = {
   'not run': 'Not run',
 } as const satisfies Record<ScriptCallStatus, string>;
 
+/** What a row says before its answer, in one line. */
+function detailText(detail: NonNullable<ScriptCallView['detail']>): string {
+  if (detail.kind === 'error') return detail.text;
+  if (detail.kind !== 'request')
+    return detail.kind === 'notRun'
+      ? 'The task ended before this call started.'
+      : 'Stopped with its task. Resume the task to continue.';
+  const { payload } = detail;
+  switch (payload.kind) {
+    case 'bash':
+      return `Wants bash: ${payload.data.command}`;
+    case 'toolEdit':
+      return `Wants edit: ${payload.data.relativePath}`;
+    case 'retry':
+      return `Wants retry: ${payload.data.operation}`;
+    case 'proposal':
+      return 'Wants approval for a proposal';
+    case 'planApproval':
+      return 'Wants approval for a plan';
+    case 'plugin':
+      return 'Wants an answer';
+    case 'userQuestion':
+      return 'Wants an answer to a question';
+    default:
+      return payload satisfies never;
+  }
+}
+
+/** A row's one line: its `detail`, else its answer. */
+export function scriptCallSummary(call: ScriptCallView): string | undefined {
+  return call.detail === undefined ? call.summary : detailText(call.detail);
+}
+
 /** A call's one line: `Running: drafter · gpt-5 — Wants bash: make`. */
 export function scriptCallLine(call: ScriptCallView): string {
   const facts = call.facts.length > 0 ? ` · ${call.facts.join(' · ')}` : '';
-  const detail = call.detail ? ` — ${call.detail.text}` : '';
+  const detail = call.detail ? ` — ${detailText(call.detail)}` : '';
   return `${SCRIPT_CALL_STATUS_LABEL[call.status]}: ${call.label}${facts}${detail}`;
+}
+
+/** `3 agents · 1 needs you · $0.840`; a count or cost of zero is left out. */
+export function scriptStageSummary(stage: ScriptStageView): string {
+  return [
+    stage.agents > 0 ? formatResultCount(stage.agents, 'agent') : undefined,
+    stage.needsYou > 0 ? `${stage.needsYou} needs you` : undefined,
+    stage.costUsd > 0 ? formatCostUsd(stage.costUsd) : undefined,
+  ]
+    .filter((part) => part !== undefined)
+    .join(' · ');
 }

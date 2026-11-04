@@ -2,7 +2,7 @@ import { Schema, SchemaGetter, SchemaIssue, Struct } from 'effect';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineChangesSchema } from './lineChanges';
-import { Sha256Schema } from './offeredTools';
+import { Sha256Schema } from './identifiers';
 
 /**
  * Base schema for file references (metadata only, no binary data).
@@ -135,12 +135,12 @@ const ToolResultSharedFields = {
   attachmentSummary: Schema.optional(Schema.String),
 };
 
-/** A `plugin.fact` of one of the calling tool's plugin's arms
- *  (`Plugin.arms`), committed in its call's `tool.result` batch. */
+/** A `plugin.fact` of one of the calling tool's plugin's fact kinds
+ *  (`Plugin.factKinds`), committed in its call's `tool.result` batch. */
 const ToolFactSchema = Schema.Struct({
   plugin: Schema.String.check(Schema.isMinLength(1)),
   kind: Schema.String.check(Schema.isMinLength(1)),
-  /** The arm's version `value` is written at. */
+  /** The fact kind's version `value` is written at. */
   version: Schema.Int.check(Schema.isGreaterThan(0)),
   value: JsonValueSchema,
   /** The plugin's own aggregate the fact is about (`<plugin>:<key>`), hung
@@ -161,6 +161,12 @@ const ExecutedToolResultSchema = Schema.Struct({
   error: Schema.optional(Schema.Undefined),
   /** Records of edits made during tool run */
   edits: Schema.optional(Schema.Array(EditRecordSchema)),
+  /** The files the call read, spelled as `edits[].path` spells a file: a
+   *  later edit of an existing file requires one of them (or an edit of it)
+   *  in the run's rows, whichever process runs the edit. */
+  reads: Schema.optional(
+    Schema.Array(Schema.String.check(Schema.isMinLength(1))),
+  ),
   /** File attachments (may contain binary data) */
   files: Schema.optional(Schema.Array(ToolFileAttachmentSchema)),
   /** What a script's `await` gets for this call in place of
@@ -202,6 +208,9 @@ const ErrorToolResultSchema = Schema.Struct({
 /** The synthetic tool a run with an output schema submits its structured
  *  output through: its settled result's `value` is the run's output. */
 export const STRUCTURED_OUTPUT_TOOL_NAME = 'submit_output';
+
+/** The tool that runs a named agent as a child of the calling run. */
+export const AGENT_TOOL_NAME = 'agent' as const;
 
 export const ToolResultSchema = Schema.Union([
   ExecutedToolResultSchema,

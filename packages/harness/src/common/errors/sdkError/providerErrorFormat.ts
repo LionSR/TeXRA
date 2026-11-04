@@ -1,46 +1,32 @@
 import { getReasonPhrase } from 'http-status-codes';
-import prettyMilliseconds from 'pretty-ms';
-import { Result } from 'effect';
-import { ModelError } from '@texra-ai/llm';
+import { Result, String as Str } from 'effect';
+import { ModelError, PLAN_ROUTES, providerDisplayName } from '@texra-ai/llm';
 
 import type {
+  CredentialSwitch,
+  DeclinableUsageRoute,
   ErrorContext,
   ErrorLogData,
   ProviderError,
+  ProviderErrorClassification,
 } from '@shared/schemas';
 import {
   extractErrorMessage,
   toErrorMessage,
 } from '@utils/errors/errorMessage';
+import { formatCompactDuration } from '@utils/text/stringUtils';
 
-import { RouteUnavailable } from '../agentErrors';
-import {
-  findInCauseChain,
-  isDiskFullError,
-  isUserAbort,
-} from '../errorPredicates';
-import { attachProviderError, detectProviderError } from './errorMetadata';
+import { AgentError, RouteUnavailable } from '../agentErrors';
+import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 
-/**
- * Format a coarse "1d 20h" / "20h 22m" / "5m" duration from a second count.
- * Day+hour, hour+minute, or minute granularity is plenty for a reset-window
- * hint; sub-minute collapses to a friendly phrase. Pure (no clock read), so it
- * stays usable from this synchronous formatter. Backed by `pretty-ms` (top 2
- * units) rather than hand-rolled day/hour/minute math — minutes are truncated
- * once the duration reaches a day, matching the "day granularity drops
- * minutes" rule of the original hand-rolled formatter (pretty-ms would
- * otherwise back-fill a zero hour component with minutes, e.g. "1d 58m").
- */
-export function formatResetDuration(totalSeconds: number): string {
-  const wholeMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
-  if (wholeMinutes === 0) return 'less than a minute';
-  const flooredMinutes =
-    wholeMinutes >= 1440 ? wholeMinutes - (wholeMinutes % 60) : wholeMinutes;
-  return prettyMilliseconds(flooredMinutes * 60_000, { unitCount: 2 });
-}
+/** A used-up plan as the failure records it. */
+type UsedUpPlan = Extract<
+  ProviderErrorClassification,
+  { readonly kind: DeclinableUsageRoute }
+>;
 
 /** An HTTP status's reason phrase; undefined for an unknown code (`getReasonPhrase` throws). */
-export function safeGetReasonPhrase(statusCode: number): string | undefined {
+function safeGetReasonPhrase(statusCode: number): string | undefined {
   return Result.getOrUndefined(Result.try(() => getReasonPhrase(statusCode)));
 }
 
@@ -48,7 +34,7 @@ export function safeGetReasonPhrase(statusCode: number): string | undefined {
  * The user-facing text of a failure: `HTTP {code}[ {text}] – {message}`
  * under a status, the message alone without one. Pure display formatting.
  */
-export function httpErrorMessage(
+function httpErrorMessage(
   statusCode: number | undefined,
   message: string,
   statusText = statusCode === undefined
@@ -60,70 +46,163 @@ export function httpErrorMessage(
     : message;
 }
 
-/** A failure formatted fresh: an abort, a full disk, a model failure, or any error's message. */
-function formatFailure(err: unknown): ProviderError {
-  if (isUserAbort(err))
-    return { message: 'Request aborted', userRetryable: false };
-  if (isDiskFullError(err)) {
-    return {
-      message: 'No space left on device. Free up disk space and try again.',
-      userRetryable: false,
-    };
-  }
-  const known = findInCauseChain(err, (cause) =>
-    cause instanceof ModelError || cause instanceof RouteUnavailable
-      ? cause
-      : undefined,
-  );
-  if (known instanceof RouteUnavailable) {
-    return {
-      message: known.message,
-      userRetryable: false,
-      ...(known.reason === 'missing-api-key' && {
-        classification: { kind: 'missing-api-key' as const },
-      }),
-    };
-  }
-  if (known instanceof ModelError) {
-    const statusText =
-      known.status === undefined
-        ? undefined
-        : safeGetReasonPhrase(known.status);
-    return {
-      message: httpErrorMessage(
-        known.status,
-        known.message || statusText || 'Provider request failed',
-        statusText,
-      ),
-      userRetryable: known.retryable,
-      ...(known.status !== undefined && { statusCode: known.status }),
-      ...(statusText !== undefined && { statusText }),
-      ...(known.kind === 'context-overflow' && {
-        classification: { kind: 'context-window' as const },
-      }),
-      ...(known.requestId !== undefined && { requestId: known.requestId }),
-      ...(known.cause !== undefined && { rawErrorBody: known.cause }),
-    };
-  }
+/** The plan a quota verdict says ran out, with the tier and reset the
+ *  provider stated; none for the account's own credit. */
+function usedUpPlan({ quota }: ModelError): UsedUpPlan | undefined {
+  if (quota === undefined || quota.plan === null) return undefined;
   return {
-    message: extractErrorMessage(err) ?? 'Provider request failed',
-    // No status: likely a network-level failure; offer the retry.
-    userRetryable: true,
+    kind: quota.plan,
+    ...(quota.planType ? { planType: quota.planType } : {}),
+    ...(quota.resetsInMs === undefined ? {} : { resetsInMs: quota.resetsInMs }),
   };
 }
 
-/**
- * Normalize a failure for display and logs. A `ProviderError` a run recorded
- * and carried back (attached on its error, possibly on a deeper `cause`) is
- * recovered as recorded; anything else is formatted fresh, uncached.
- */
-export function normalizeProviderError(err: unknown): ProviderError {
-  const cached = findInCauseChain(err, detectProviderError);
-  if (cached) {
-    attachProviderError(err, cached);
-    return cached;
+/** A failure's classification: an overflowed window, a used-up credential,
+ *  a missing key, or a subscription session that could not bill. */
+function classificationOf(
+  error: ModelError | RouteUnavailable,
+): ProviderErrorClassification | undefined {
+  if (!(error instanceof ModelError)) {
+    if (error.session !== undefined)
+      return {
+        kind: 'subscription-session',
+        ...error.session,
+        sessionError: error.message,
+      };
+    return error.reason === 'missing-api-key'
+      ? { kind: 'missing-api-key' }
+      : undefined;
   }
-  return formatFailure(err);
+  if (error.kind === 'context-overflow') return { kind: 'context-window' };
+  if (error.quota?.plan === null) return { kind: 'upstream-credit' };
+  return usedUpPlan(error);
+}
+
+/**
+ * The provider a plan bills, by its own name (`OpenAI` for a ChatGPT plan):
+ * how the plain words below name a plan, so an embedder without copy of its
+ * own reads what ran out. An app's switch and sign-in labels are its copy,
+ * worded from the same facts where it shows them.
+ */
+const planOwner = (plan: DeclinableUsageRoute): string =>
+  providerDisplayName(PLAN_ROUTES[plan].provider);
+
+/** A used-up plan: which, its tier, when it resets, and what to do. */
+function usedUpPlanMessage({ kind, planType, resetsInMs }: UsedUpPlan): string {
+  const tier = planType ? ` ${Str.capitalize(planType)}` : '';
+  const reset =
+    resetsInMs === undefined
+      ? ''
+      : ` Resets in ${formatCompactDuration(resetsInMs)}.`;
+  return (
+    `Usage limit reached on your ${planOwner(kind)}${tier} plan.${reset}` +
+    ' Switch to your own API key to keep working, or wait until the limit resets.'
+  );
+}
+
+/** The words of a route that cannot carry the call: a subscription's own
+ *  failure with its remedy, else the route's message. */
+function routeMessage({ message, session }: RouteUnavailable): string {
+  if (session === undefined) return message;
+  const remedy = session.needsReauth
+    ? 'Sign in again'
+    : 'Try again in a moment';
+  return `Your ${planOwner(session.route)} subscription is unavailable: ${message} ${remedy}, or turn the subscription off.`;
+}
+
+/**
+ * The notice of a used-up plan's automatic retry on the model's own key,
+ * the move its retry request records; the run records the route beside the
+ * notice for an app's words.
+ */
+export function quotaFallbackMessage({
+  route,
+  provider,
+}: Extract<CredentialSwitch, { readonly kind: 'decline-route' }>): string {
+  return `Usage limit reached on your ${planOwner(route)} plan; retrying on your own ${providerDisplayName(provider)} API key.`;
+}
+
+/**
+ * The words of a vendor failure. A used-up plan says what ran out and what
+ * to do; an overflowed window says why a retry cannot help; anything else
+ * is the reply's message under its status.
+ */
+function failureMessage(error: ModelError): string {
+  const plan = usedUpPlan(error);
+  if (plan !== undefined) return usedUpPlanMessage(plan);
+  if (error.kind === 'context-overflow')
+    return (
+      `${error.message} Retrying would resend the same oversized request. ` +
+      'Start a new session, or reduce attached files and tool output.'
+    );
+  const reason =
+    error.status === undefined ? undefined : safeGetReasonPhrase(error.status);
+  return httpErrorMessage(
+    error.status,
+    error.message || reason || 'Provider request failed',
+  );
+}
+
+/**
+ * A model call's failure as the person reads it, worded once for the retry a
+ * run records (`failureInfo`) and for a failure formatted fresh: a helper
+ * call, which records nothing, or a run that ended before recording one.
+ */
+export function providerErrorOf(
+  error: ModelError | RouteUnavailable,
+): ProviderError {
+  const vendor = error instanceof ModelError ? error : undefined;
+  const status = vendor?.status;
+  const statusText =
+    status === undefined ? undefined : safeGetReasonPhrase(status);
+  const classification = classificationOf(error);
+  return {
+    message:
+      error instanceof ModelError ? failureMessage(error) : routeMessage(error),
+    ...(status !== undefined && { statusCode: status }),
+    ...(statusText !== undefined && { statusText }),
+    ...(classification !== undefined && { classification }),
+    ...(vendor?.requestId !== undefined && { requestId: vendor.requestId }),
+    ...(vendor?.cause !== undefined && { rawErrorBody: vendor.cause }),
+  };
+}
+
+/** The words of a full disk, wherever one is met. */
+const DISK_FULL_MESSAGE =
+  'No space left on device. Free up disk space and try again.';
+
+/** What a failure is, decided once for every reader: a full disk (an
+ *  errno), the model failure in the cause chain (as the run that ended on it
+ *  recorded it, else llm's verdict or the missing route worded fresh), or
+ *  anything else in its own words. */
+export function failureIn(
+  err: unknown,
+):
+  | { readonly kind: 'disk-full'; readonly message: string }
+  | { readonly kind: 'model'; readonly failure: ProviderError }
+  | { readonly kind: 'unexpected'; readonly message: string } {
+  if (isDiskFullError(err))
+    return { kind: 'disk-full', message: DISK_FULL_MESSAGE };
+  const failure = findInCauseChain(err, (cause) => {
+    if (cause instanceof AgentError) return cause.failure;
+    return cause instanceof ModelError || cause instanceof RouteUnavailable
+      ? providerErrorOf(cause)
+      : undefined;
+  });
+  return failure === undefined
+    ? {
+        kind: 'unexpected',
+        message: extractErrorMessage(err) ?? 'Provider request failed',
+      }
+    : { kind: 'model', failure };
+}
+
+/** A failure as a host reads it: a full disk, a model failure, or the error's words. */
+export function normalizeProviderError(err: unknown): ProviderError {
+  const failure = failureIn(err);
+  return failure.kind === 'model'
+    ? failure.failure
+    : { message: failure.message };
 }
 
 /** The user-facing message of any failure. */

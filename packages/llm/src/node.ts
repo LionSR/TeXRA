@@ -13,10 +13,9 @@
  *   load only the requested protocol (`anthropic-messages`, `openai-responses`,
  *   `google-interactions`), manage scoped connections and file uploads in the
  *   caller's `Scope`, and classify provider failures into `ModelError`.
- * - **Subscription sign-in (`codex`, `xai`)**: ChatGPT
- *   ([`codexCoordinator`](#codexcoordinator),
- *   [`codexLoginWithLoopback`](#codexloginwithloopback),
- *   [`codexLoginWithDeviceCode`](#codexloginwithdevicecode)) and Grok
+ * - **Subscription sign-in (`chatgpt`, `xai`)**: ChatGPT
+ *   ([`chatgptCoordinator`](#chatgptcoordinator),
+ *   [`chatgptLoginWithLoopback`](#chatgptloginwithloopback)) and Grok
  *   ([`xaiCoordinator`](#xaicoordinator),
  *   [`xaiLoginWithLoopback`](#xailoginwithloopback),
  *   [`xaiLoginWithDeviceCode`](#xailoginwithdevicecode)) OAuth flows, plus
@@ -28,50 +27,47 @@ import { toErrorMessage } from './oauth/support.js';
 import { originOf, type ModelOrigin } from './protocol.js';
 import type { ModelConfig } from 'llm-zoo';
 
+import type { CredentialRoute } from './models/modelRoute.js';
 import type { ReasoningChoice } from './models/reasoningChoice.js';
 import type { Model, ModelConfiguration } from './turn.js';
 
 /**
  * The credential a binding sends: an API key (or any bearer token the
- * endpoint takes as one), or a ChatGPT (Codex) session token, which also
- * names its account and is served on the Responses protocol only.
+ * endpoint takes as one), or a ChatGPT plan's access token, which the
+ * Responses protocol alone serves, under that plan's request rules.
  */
 export type ModelCredential =
   | { readonly kind: 'api-key'; readonly apiKey: string }
-  | {
-      readonly kind: 'codex';
-      readonly accessToken: string;
-      readonly accountId: string | null;
-    };
+  | { readonly kind: 'chatgpt'; readonly accessToken: string };
 
-/** One model on one route, and what the caller asks of it. */
+/**
+ * One model on one decided route, and what the caller asks of it. The
+ * protocol is the model's provider's, and the route fixes the config it runs
+ * (`routeConfig`), the credential scope stamped on its origin and the plan
+ * it bills.
+ */
 export interface BindSpec {
-  readonly protocol: ModelOrigin['protocol'];
-  /** The llm-zoo entry after `routeConfig`. */
+  /** The llm-zoo entry, before its route's overrides. */
   readonly model: ModelConfig;
+  readonly route: CredentialRoute;
   readonly endpoint: string;
-  /** A non-secret name of the credential route, stamped on the origin. */
-  readonly credentialScope: string;
   readonly credential: ModelCredential;
-  /** The route the binding bills through. */
-  readonly billing: BillingRoute;
-  readonly options: {
-    /** The output ceiling, before the model's own rules. */
-    readonly maxOutputTokens: number;
-    /** The sampling temperature, applied where the model takes one. */
-    readonly temperature: number;
-    readonly reasoning: ReasoningChoice;
-    readonly parallelToolCalls: boolean;
-    /** GPT-5 sends a reasoning summary only when asked. */
-    readonly reasoningSummary: boolean;
+  /** Each option has a default; the booleans default to `false`. */
+  readonly options?: {
+    /** The output ceiling, before the model's own rules; the catalog's by default. */
+    readonly maxOutputTokens?: number;
+    /** The sampling temperature where the model takes one; the provider's own by default. */
+    readonly temperature?: number;
+    /** The model's default reasoning (`chooseReasoning`) unless given. */
+    readonly reasoning?: ReasoningChoice;
     /** Google keeps the conversation server-side. */
-    readonly serverState: boolean;
+    readonly serverState?: boolean;
     /** OpenAI's fast service tier, where the model offers it. */
-    readonly fastTier: boolean;
+    readonly fastTier?: boolean;
     /** The caller would serve Responses over its WebSocket. */
-    readonly webSocket: boolean;
+    readonly webSocket?: boolean;
     /** The caller would deliver turns as background work; it wins over the socket. */
-    readonly background: boolean;
+    readonly background?: boolean;
     /** The fetch every HTTP request goes through. */
     readonly fetch?: typeof fetch;
   };
@@ -81,17 +77,24 @@ export interface BindSpec {
 export interface Binding {
   readonly model: Model;
   readonly origin: ModelOrigin;
+  /**
+   * The config the model runs and bills with on its route: its window, its
+   * prices, and the media its route carries (`capabilities`).
+   */
+  readonly config: ModelConfig;
+  /** The route the binding bills through. */
+  readonly billing: BillingRoute;
+  /** The output limit a turn takes unless it asks for less; null where the route takes none. */
+  readonly maxOutputTokens: number | null;
   /** Turns can run as background work (submit and observe). */
   readonly background: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
   readonly serviceTier: 'fast' | null;
   /** The route takes a tool choice naming one function. */
   readonly forcedToolChoice: boolean;
 }
 
-/** A synchronous protocol factory's refusal, kept as the `ModelError` it is. */
-const constructed = (make: () => Model) =>
+/** A synchronous factory's refusal, kept as the `ModelError` it is. */
+const constructed = <A>(make: () => A) =>
   Effect.try({
     try: make,
     catch: (cause) =>
@@ -147,11 +150,7 @@ const construct = Effect.fn('llm.construct')(function* (
       const authentication =
         credential.kind === 'api-key'
           ? credential
-          : {
-              kind: credential.kind,
-              accessToken: credential.accessToken,
-              accountId: credential.accountId,
-            };
+          : { kind: credential.kind, accessToken: credential.accessToken };
       if (webSocket) {
         const { openaiResponsesWebSocketModel } = yield* Effect.promise(
           () => import('./api/openaiResponsesWebSocket.js'),
@@ -183,13 +182,19 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
   const [wire, { judgedModel }] = yield* Effect.promise(() =>
     Promise.all([import('./api/configuration.js'), import('./api/verdict.js')]),
   );
-  const configuration = wire.configurationFor(spec);
-  const webSocket = wire.servesWebSocket(spec, configuration);
+  const { config, options, configuration } = yield* constructed(() =>
+    wire.configurationFor(spec),
+  );
+  // A ChatGPT plan's token is served over HTTP: OpenAI documents the
+  // token-sharing route's requests as HTTP streams.
+  const webSocket =
+    spec.credential.kind === 'api-key' &&
+    wire.servesWebSocket(options, configuration);
   const model = yield* construct(
     configuration,
     spec.credential,
     webSocket,
-    spec.options.fetch,
+    options.fetch,
   );
   const { releaseUploads } = model;
   if (releaseUploads !== undefined) {
@@ -199,22 +204,26 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
           unreleased.length === 0
             ? Effect.void
             : Effect.logWarning(
-                `Could not delete ${unreleased.length} uploaded file(s) when the ${spec.model.label} binding closed; the provider expires them on its own.`,
+                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.label} binding closed; the provider expires them on its own.`,
               ).pipe(Effect.annotateLogs({ unreleased })),
         ),
       ),
     );
   }
+  const { route } = spec;
+  const billing = route.kind === 'api-key' ? route.usageRoute : route.kind;
   return {
-    model: judgedModel(model, spec.billing),
+    model: judgedModel(model, billing),
     origin: originOf(configuration),
+    config,
+    billing,
+    maxOutputTokens: configuration.defaults.maxOutputTokens,
     background: model.background !== undefined,
-    persistentConnection: webSocket,
     serviceTier:
       configuration.protocol === 'openai-responses'
         ? configuration.defaults.serviceTier
         : null,
-    forcedToolChoice: wire.forcedToolChoice(configuration, spec.model),
+    forcedToolChoice: wire.forcedToolChoice(configuration, config),
   };
 });
 
@@ -229,18 +238,18 @@ export { LoopbackTransportUnavailableError } from './oauth/loopbackLogin.js';
 export type { LoopbackLoginOptions } from './oauth/loopbackLogin.js';
 export type {
   SubscriptionAuthorizeRequest,
+  SubscriptionCallback,
   SubscriptionCoordinator,
   SubscriptionSession,
   SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from './oauth/subscriptionCoordinator.js';
 export {
-  codexCoordinator,
-  codexLoginWithLoopback,
-  getCodexStatus,
-  type CodexSession,
-} from './oauth/codex/codexProvider.js';
-export { codexLoginWithDeviceCode } from './oauth/codex/codexDeviceLogin.js';
+  chatgptCoordinator,
+  chatgptLoginWithLoopback,
+  getChatgptStatus,
+  type ChatgptSession,
+} from './oauth/chatgpt/chatgptProvider.js';
 export {
   getXaiStatus,
   xaiCoordinator,

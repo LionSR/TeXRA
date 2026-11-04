@@ -1,26 +1,29 @@
 import { lstat, mkdir, readlink, realpath, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import { LatexMediaManager, type LatexTrace } from '@latex/LatexMediaManager';
-import { sessionFsLayer } from '@platform/rootedFs';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
-} from '@platform/defaults/workspaceStorage';
-import type { RunId } from '@shared/schemas';
+} from '@texra-ai/harness/node';
+import {
+  createWorkspaceLocation,
+  sessionFsLayer,
+} from '@texra-ai/harness/host';
+import { runDirUnder } from '@common/storage/storageLayout';
+import { LatexMediaManager, type LatexTrace } from '@latex/LatexMediaManager';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installPlatform } from '@test/support/setupPlatform';
+import type { FakePlatformOptions } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { FakeHost } from '@test/support/testKernel';
 import type { DocumentTaskOptions } from '@texra/shared/plugins/documents';
-import { createWorkspaceLocation } from '@utils/files/fileLocation';
-import { runDirUnder } from '@utils/files/runStorageFs';
-import { RunFileService } from '@utils/files/runStorage';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const logger: LatexTrace = spiedTrace();
 
@@ -38,6 +41,7 @@ describe('LatexMediaManager figure extraction', () => {
   async function writeFixture(): Promise<{
     texPath: string;
     figurePath: string;
+    host: FakePlatformOptions;
   }> {
     const tempDir = await makeTempDir('texra-latex-media-', tempDirs);
     const workspaceDir = path.join(tempDir, 'workspace');
@@ -58,12 +62,15 @@ describe('LatexMediaManager figure extraction', () => {
       ].join('\n'),
     );
     await writeFile(figurePath, 'fake-png-bytes');
-    await installPlatform({
-      workspacePath: workspaceDir,
-      storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-      globalStoragePath: resolveGlobalStoragePath(storageRoot),
-    });
-    return { texPath, figurePath };
+    return {
+      texPath,
+      figurePath,
+      host: {
+        workspacePath: workspaceDir,
+        storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+        globalStoragePath: resolveGlobalStoragePath(storageRoot),
+      },
+    };
   }
 
   /** Resolve the symlink `mirrorWorkspaceFile` creates in run storage and
@@ -87,7 +94,8 @@ describe('LatexMediaManager figure extraction', () => {
   it.effect('processInputFiles records and mirrors an included figure', () =>
     Effect.gen(function* () {
       const runId = 'extract-figure' as RunId;
-      const { texPath, figurePath } = yield* Effect.promise(writeFixture);
+      const { texPath, figurePath, host } = yield* Effect.promise(writeFixture);
+      yield* Layer.build(FakeHost.layer(host));
 
       const roots = testWorkspaceRoots();
       const manager = new LatexMediaManager(

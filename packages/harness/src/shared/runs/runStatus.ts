@@ -14,30 +14,14 @@ import {
 // ============================================================================
 //
 // `RunOutcome` is the canonical terminal fact, decided once at the run
-// lifecycle boundary. The two derivation rules below are the only production
-// mappings — `deriveRunOutcome` from the terminal facts and
-// `outcomeFromCause` from a failure cause — and flows and hosts must not
-// hand-roll their own.
+// lifecycle boundary. The rule below is the only production mapping, and
+// flows and hosts must not hand-roll their own.
 
 /**
- * The single facts → outcome derivation rule, shared by every flow exit.
- * Priority: failed > cancelled > completed.
- */
-export function deriveRunOutcome(facts: {
-  readonly failed: boolean;
-  readonly cancelled: boolean;
-}): RunOutcome {
-  if (facts.failed) return RUN_OUTCOME.FAILED;
-  if (facts.cancelled) return RUN_OUTCOME.CANCELLED;
-  return RUN_OUTCOME.COMPLETED;
-}
-
-/**
- * The one verdict of a run's failure cause. Any interrupt in it is a stop,
- * even when a finalizer then failed (`Interrupt` + `Die`): the run lifecycle
- * already reports that run `CANCELLED`, so every terminal row agrees. This is
- * the only cause → outcome mapping — callers that end a run from an `Exit`
- * must route through it rather than re-deriving the ternary.
+ * The one verdict of how a run that did not return ended, from its failure
+ * cause: a stop outranks a failure, and any interrupt in the cause is a
+ * stop, even when a finalizer then failed (`Interrupt` + `Die`), so every
+ * terminal row agrees.
  */
 export function outcomeFromCause(cause: Cause.Cause<unknown>): RunOutcome {
   return Cause.hasInterrupts(cause)
@@ -69,10 +53,6 @@ export function isTranscriptSettlementPhase(
   return phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
-export function isActivePhase(phase: RunLifecycleStatus | undefined): boolean {
-  return phase === RUN_PHASE.RUNNING;
-}
-
 export function isInFlightPhase(
   phase: RunLifecycleStatus | undefined,
 ): boolean {
@@ -81,11 +61,16 @@ export function isInFlightPhase(
 
 /**
  * Where the loop stands, as its own branches read it: between turns
- * (`waiting`, `halted`) or somewhere inside a turn. Never written: derived
- * from the run's `run.position` rows.
+ * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
+ * from the run's `run.position` rows, so it is not the stored `halted`
+ * position, which changes no phase.
  */
 export type RunLoopPhase =
-  'model.ready' | 'model.submitted' | 'results.ready' | 'waiting' | 'halted';
+  | 'model.ready'
+  | 'model.submitted'
+  | 'results.ready'
+  | 'waiting'
+  | 'turn.ended';
 
 /**
  * The phase a position leaves an opened loop in. A `halted` position changes
@@ -102,7 +87,7 @@ const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
     'turn.begin': 'model.ready',
     'response.ready': 'model.submitted',
     'results.ready': 'results.ready',
-    'turn.end': 'halted',
+    'turn.end': 'turn.ended',
     waiting: 'waiting',
   };
 export const phaseAfter = (

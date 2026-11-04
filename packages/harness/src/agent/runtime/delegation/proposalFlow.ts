@@ -1,0 +1,349 @@
+/**
+ * Proposal/approval handshake and agent/model resolution for delegation tools.
+ *
+ * If proposal bypass is active for a stream, launches immediately; otherwise
+ * waits for user approval through the session's requests before executing.
+ */
+
+// Third-party imports
+import { Cause, Context, type Deferred, Effect, Exit } from 'effect';
+
+// Local imports
+import {
+  AgentCatalog,
+  findAgentByIdentifier,
+  type WorkspaceAgentsStores,
+} from '@agent/index/agentCatalog';
+import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
+import { recordedDecision } from '@agent/runtime/requestPolicy';
+import { isTrustedScript } from '@agent/core/definition/RunRecord';
+import type {
+  AgentProposal,
+  DecisionOf,
+  RefusalDecision,
+  RequestDecision,
+  ToolResult,
+} from '@shared/schemas';
+import type {
+  DatabaseNotOwner,
+  DatabaseReadFailed,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
+import { Approvals, type RunHistoryRefused } from '@shared/session/runHistory';
+import { errorResult } from '@tools/core/result';
+import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { selectAvailableDelegationModel } from './delegationAvailability';
+
+// Local file imports
+import type { ApprovalMeta, DelegatedChildApproval } from './subagentRun';
+
+const DEFAULT_DELEGATION_REJECTION_FEEDBACK = [
+  'No feedback provided.',
+  'Do not retry the same or equivalent delegation unless the user explicitly asks for it;',
+  'continue directly with available context, or ask the user a clarifying question.',
+].join(' ');
+
+/** Resolve `name` from the agents `run` may launch, listing them on
+ *  failure. A trusted script's calls resolve in the catalog, past any scope
+ *  or shadowing. */
+export const requireAgent = Effect.fn('requireAgent')(function* (
+  stores: WorkspaceAgentsStores,
+  name: string,
+  run: Pick<RunToolCall['run'], 'config'>,
+) {
+  const catalog = yield* AgentCatalog;
+  const pinned = isTrustedScript(run.config) ? catalog.get(name) : undefined;
+  if (pinned) return pinned;
+  const agents = yield* catalog.visible(
+    stores,
+    run.config.delegationAgentScope ?? undefined,
+  );
+  const agent = findAgentByIdentifier(agents, name);
+  if (agent) return agent;
+  return yield* Effect.fail(
+    new Error(
+      `Unknown agent '${name}'. Available: ${agents.map((a) => a.name).join(', ') || 'none'}`,
+    ),
+  );
+});
+
+/** Build a concise summary of proposal parameters for rejection echo. */
+function summarizeProposal(proposal: AgentProposal): string {
+  const parts = [`Agent: ${proposal.agent}`, `Model: ${proposal.model}`];
+  if (proposal.inputFiles[0]) {
+    parts.push(`File: ${proposal.inputFiles[0]}`);
+  }
+  if (proposal.memories.length > 0) {
+    parts.push(`Memories: ${proposal.memories.join(', ')}`);
+  }
+  parts.push(
+    `Instruction: "${truncateWithEllipsis(proposal.instruction, 120)}"`,
+  );
+  return parts.join(', ');
+}
+
+/** A declined proposal, as the call's result. */
+function proposalRefusalResult(
+  refusal: RefusalDecision,
+  proposal: AgentProposal,
+): ToolResult {
+  const { agent: agentName } = proposal;
+  const echo = summarizeProposal(proposal);
+  switch (refusal.action) {
+    case 'cancel': {
+      const cause = refusal.cause?.trim();
+      const detail = cause ? `\n${cause}` : '';
+      return errorResult(
+        `Delegation approval for '${agentName}' was cancelled.\nYour delegation was: ${echo}${detail}`,
+        { summary: `Delegation approval cancelled for '${agentName}'` },
+      );
+    }
+    case 'deny': {
+      const reason = refusal.reason.trim();
+      const detail = reason ? `\n${reason}` : '';
+      return errorResult(
+        `Delegation to '${agentName}' was denied.\nYour delegation was: ${echo}${detail}`,
+        { summary: `Delegation denied for '${agentName}'` },
+      );
+    }
+    case 'reject': {
+      const feedback = refusal.feedback?.trim();
+      const feedbackLine = feedback
+        ? `\nUser feedback: ${feedback}`
+        : `\n${DEFAULT_DELEGATION_REJECTION_FEEDBACK}`;
+      return errorResult(
+        `Delegation to '${agentName}' was rejected.\nYour delegation was: ${echo}${feedbackLine}`,
+        { summary: `User rejected delegation to '${agentName}'` },
+      );
+    }
+  }
+}
+
+interface DelegationProposalDecision {
+  readonly result: DecisionOf<'proposal'>;
+  /** How the child's own grants record this approval (see
+   *  {@link DelegatedChildApproval}); `inherit` unless the run's proposal
+   *  bypass supplied it. */
+  readonly childApproval: DelegatedChildApproval;
+}
+
+type ProposalRequestError =
+  | DatabaseNotOwner
+  | DatabaseReadFailed
+  | DatabaseWriteFailed
+  | RunHistoryRefused;
+
+/** The key of the request the `agent` calls of one script share
+ *  (`ScriptScope.shared`): the `ask` {@link decideDelegation} takes. */
+export const AgentRequest =
+  Context.Service<Deferred.Deferred<RequestDecision, ProposalRequestError>>(
+    'agent:request',
+  );
+
+/** How a child records an approval the run's delegated-work grant gave. */
+const GRANTED_CHILD = {
+  goal: 'goal-approved',
+  human: 'auto-approved',
+} as const;
+
+/** Request the shared proposal decision, honoring the run's bypass policy.
+ *  `ask` presents it in place of this call's own proposal request: the
+ *  calls of one script share one request (`agent`). */
+const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
+  function* (
+    proposal: AgentProposal,
+    parent: RunToolCall,
+    ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
+  ): Effect.fn.Return<
+    DelegationProposalDecision,
+    ProposalRequestError,
+    Approvals
+  > {
+    const { runId, config } = parent.run;
+    const approvals = yield* Approvals;
+    const hook = (yield* RunCall)?.hook;
+    // A trusted recipe's delegation is approved unless a hook asked for it.
+    if (isTrustedScript(config) && hook !== 'ask')
+      return { result: { action: 'approve' }, childApproval: 'inherit' };
+    const answer = approvals.permission(runId, 'proposal', hook);
+    if (answer !== 'allow' && answer !== 'ask')
+      return { result: answer, childApproval: 'inherit' };
+    if (answer === 'allow') {
+      // Under `yolo` alone the child inherits, so its bash and edits still
+      // gate; the run's delegated-work grant approves them too.
+      const granted = approvals.bypass(runId, 'superYolo');
+      const childApproval = granted ? GRANTED_CHILD[granted] : 'inherit';
+      return { result: { action: 'approve' }, childApproval };
+    }
+    // The script's shared request may answer from its recorded row.
+    if (ask !== undefined) {
+      const result = yield* recordedDecision({ kind: 'proposal' }, yield* ask);
+      return { result, childApproval: 'inherit' };
+    }
+
+    // A call made under a run opens its requests through the loop's door.
+    const { requests } = parent;
+    const { decision: result } = yield* requests.open({
+      kind: 'proposal',
+      data: {
+        requestId: requests.nextId('proposal'),
+        allowBypass: hook !== 'ask',
+        runId,
+        ...proposal,
+      },
+    });
+    return { result, childApproval: 'inherit' };
+  },
+);
+
+/** The fields an approval changed from the proposal, other than its agent
+ *  and model: the instruction, the file lists and the plugin's options. */
+function formEdits(
+  proposal: AgentProposal,
+  approval: Extract<DecisionOf<'proposal'>, { action: 'approve' }>,
+): Partial<AgentProposal> {
+  const changed = (
+    edited: readonly string[] | null | undefined,
+    proposed: readonly string[],
+  ): edited is readonly string[] =>
+    edited != null &&
+    (edited.length !== proposed.length ||
+      edited.some((file, index) => file !== proposed[index]));
+  const { instruction, inputFiles, contextFiles, mediaFiles, options } =
+    approval;
+  return {
+    ...(instruction != null &&
+      instruction !== proposal.instruction && { instruction }),
+    ...(changed(inputFiles, proposal.inputFiles) && {
+      inputFiles: [...inputFiles],
+      outputFiles: [],
+    }),
+    ...(changed(contextFiles, proposal.contextFiles) && {
+      contextFiles: [...contextFiles],
+    }),
+    ...(changed(mediaFiles, proposal.mediaFiles) && {
+      mediaFiles: [...mediaFiles],
+    }),
+    ...(options != null && proposal.task && { options }),
+  };
+}
+
+/** How an approved delegation launches: the proposal with the agent and
+ *  model the approval settled on, and how it was approved. */
+interface ApprovedDelegation {
+  readonly proposal: AgentProposal;
+  readonly approvalMeta: ApprovalMeta;
+}
+
+/**
+ * The proposal-or-bypass decision every delegation takes, and the agent and
+ * model an approval changed, re-checked against the live lists: a declined
+ * or unusable approval is the call's result, an approval is what launches.
+ * A request the calls of one script share (`ask`) approves the script, not
+ * one call's agent or model, so it changes neither.
+ */
+export const decideDelegation = Effect.fn('decideDelegation')(function* (
+  parent: RunToolCall,
+  proposal: AgentProposal,
+  ask?: Effect.Effect<RequestDecision, ProposalRequestError>,
+) {
+  const decision = yield* requestDelegationProposal(proposal, parent, ask);
+  if (decision.childApproval !== 'inherit') {
+    // Preserve the approved delegation's edit grant explicitly on the child.
+    // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
+    return {
+      proposal,
+      approvalMeta: {
+        autoApproved: true,
+        childApproval: decision.childApproval,
+      },
+    } satisfies ApprovedDelegation;
+  }
+
+  const { result } = decision;
+  if (result.action !== 'approve')
+    return proposalRefusalResult(result, proposal);
+
+  // Route an approved model override through the same availability gate the
+  // initial delegation uses (selectAvailableDelegationModel), so an unavailable
+  // model fails synchronously here instead of launching and then failing
+  // asynchronously. Re-selecting the proposed model needs no re-check — it was
+  // already resolved when the proposal was built.
+  const changes = ask === undefined;
+  let modelOverride: string | undefined;
+  if (changes && result.model && result.model !== proposal.model) {
+    const modelExit = yield* Effect.exit(
+      selectAvailableDelegationModel({
+        requestedModel: result.model,
+        parentModel: proposal.model,
+        settings: parent.env.roots,
+      }),
+    );
+    if (Exit.isFailure(modelExit)) {
+      return errorResult(
+        `Cannot launch with model '${result.model}': ${toErrorMessage(Cause.squash(modelExit.cause))} Re-propose the delegation.`,
+        {
+          summary: `Approved model override '${result.model}' is not available`,
+        },
+      );
+    }
+    modelOverride = modelExit.value;
+  }
+
+  const agentOverride =
+    changes && result.agent && result.agent !== proposal.agent
+      ? result.agent
+      : undefined;
+  const resolvedAgentOverride = agentOverride
+    ? findAgentByIdentifier(
+        yield* (yield* AgentCatalog).visible(
+          parent.env.roots,
+          parent.run.config.delegationAgentScope ?? undefined,
+        ),
+        agentOverride,
+      )
+    : undefined;
+
+  // Re-validate against the current registry — between proposal display and
+  // approval the agent may have been removed/renamed, or the approval could
+  // carry a malformed value. Fail fast so the orchestrator sees the problem
+  // synchronously instead of after an async launch.
+  if (agentOverride && !resolvedAgentOverride) {
+    return errorResult(
+      `Cannot launch '${agentOverride}': it is not currently a visible agent (removed, renamed, or disabled since the proposal was shown). Re-propose the delegation.`,
+      {
+        summary: `Approved agent override '${agentOverride}' is not available`,
+      },
+    );
+  }
+
+  // What the person changed in the launch form besides the agent and model.
+  // A changed input list drops the proposal's outputs: they were named for
+  // its inputs, and the task names its own for the new ones.
+  const edited = changes ? formEdits(proposal, result) : {};
+  return {
+    proposal: {
+      ...proposal,
+      ...edited,
+      ...(modelOverride && { model: modelOverride }),
+      // Carry the override's resolved source alongside its name so launch
+      // pins the exact entry the re-validation just resolved.
+      ...(resolvedAgentOverride && {
+        agent: resolvedAgentOverride.name,
+        agentSource: resolvedAgentOverride.source,
+      }),
+    },
+    approvalMeta: {
+      autoApproved: false,
+      ...(modelOverride && {
+        modelOverride,
+        requestedModel: proposal.model,
+      }),
+      ...(agentOverride && {
+        agentOverride,
+        requestedAgent: proposal.agent,
+      }),
+    },
+  } satisfies ApprovedDelegation;
+});

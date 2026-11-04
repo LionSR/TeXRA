@@ -80,7 +80,7 @@ function detectInstallMethod(): InstallMethod | undefined {
 function currentModulePath(): string {
   // A bundled or otherwise non-file module has no `file:` URL to convert.
   // `fileURLToPath` can still fail on a `file:` URL with a non-local host
-  // or a malformed path; fold that into the entrypoint fallback so this
+  // or a malformed path; fall back to the entrypoint path for that so this
   // check stays best-effort and never blocks `chat` startup.
   if (!import.meta.url.startsWith('file:')) return readCliEntrypointPath();
   return Result.getOrElse(
@@ -128,23 +128,22 @@ function fetchLatestCliVersion(): Effect.Effect<
   });
 }
 
-const readBrewStdout = (
+const readBrewStdout = Effect.fn('readBrewStdout')(function* (
   args: readonly string[],
   cwd: string,
-): Effect.Effect<string | undefined, Error, ChildProcessSpawner> =>
-  Effect.gen(function* () {
-    // Runs before platform init (chat startup), so pass an
-    // explicit cwd — the wrapper's workspace-root default would throw — no
-    // setting slots, since none are open yet, and quiet: true so wrapper debug
-    // lines can't leak to the console sink.
-    const result = yield* executeCommand(['brew', ...args], {
-      timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
-      cwd,
-      settings: undefined,
-      quiet: true,
-    });
-    return result.success ? result.stdout : undefined;
+): Effect.fn.Return<string | undefined, Error, ChildProcessSpawner> {
+  // Runs before platform init (chat startup), so pass an
+  // explicit cwd — the wrapper's workspace-root default would throw — no
+  // setting slots, since none are open yet, and quiet: true so wrapper debug
+  // lines can't leak to the console sink.
+  const result = yield* executeCommand(['brew', ...args], {
+    timeout: HOMEBREW_COMMAND_TIMEOUT_MS,
+    cwd,
+    settings: undefined,
+    quiet: true,
   });
+  return result.success ? result.stdout : undefined;
+});
 
 /**
  * Shape of `brew info --json=v2` that we read. Tolerant by design: a single
@@ -195,24 +194,24 @@ function parseHomebrewFormulaVersion(
  * already be fresh enough to offer the right prompt — but report
  * `refreshed: false` so the caller knows the version may be stale.
  */
-function fetchLatestHomebrewFormulaVersion(
+const fetchLatestHomebrewFormulaVersion = Effect.fn(
+  'fetchLatestHomebrewFormulaVersion',
+)(function* (
   cwd: string,
-): Effect.Effect<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
-  return Effect.gen(function* () {
-    const refreshStdout = yield* readBrewStdout(['update', '--quiet'], cwd);
-    const stdout = yield* readBrewStdout(
-      ['info', '--json=v2', CLI_HOMEBREW_FORMULA],
-      cwd,
-    );
-    return {
-      version:
-        stdout == null
-          ? undefined
-          : parseHomebrewFormulaVersion(stdout, CLI_HOMEBREW_FORMULA),
-      refreshed: refreshStdout != null,
-    };
-  });
-}
+): Effect.fn.Return<UpdateCheckFetchResult, Error, ChildProcessSpawner> {
+  const refreshStdout = yield* readBrewStdout(['update', '--quiet'], cwd);
+  const stdout = yield* readBrewStdout(
+    ['info', '--json=v2', CLI_HOMEBREW_FORMULA],
+    cwd,
+  );
+  return {
+    version:
+      stdout == null
+        ? undefined
+        : parseHomebrewFormulaVersion(stdout, CLI_HOMEBREW_FORMULA),
+    refreshed: refreshStdout != null,
+  };
+});
 
 function runCliUpdate(
   method: InstallMethod,
@@ -243,28 +242,31 @@ let updateNotifyStarted = false;
  * never gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
+ *
+ * Answers the exit code the command ends with when the process should go no
+ * further (an update ran, or its installer was cancelled), else `undefined`.
  */
 export function notifyCliUpdate(
   context: CliContext,
-): Effect.Effect<void, Error, ProcessServices> {
-  if (updateNotifyStarted) return Effect.void;
+): Effect.Effect<number | undefined, Error, ProcessServices> {
+  if (updateNotifyStarted) return Effect.undefined;
   updateNotifyStarted = true;
 
   const ambient = readCliAmbientState();
-  if (ambient.isCi) return Effect.void;
+  if (ambient.isCi) return Effect.undefined;
   // Require all three standard runs to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like
   // `texra chat > out` is an interactive-mode usage error the command rejects
   // before this runs, and we must not prompt for (or run) a self-update
   // before it does.
   if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
-    return Effect.void;
+    return Effect.undefined;
   if (context.outputFormat === 'ndjson' || context.quietLogs === true)
-    return Effect.void;
+    return Effect.undefined;
   // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
   // node_modules tree; an `npm install -g` prompt can't update it, so skip.
   const method = detectInstallMethod();
-  if (!method) return Effect.void;
+  if (!method) return Effect.undefined;
 
   const { command, args } = buildUpdateCommand(method);
   const updateCmd = [command, ...args].join(' ');
@@ -327,16 +329,16 @@ export function notifyCliUpdate(
     writeTextStderr(style.muted(`Updating via ${method}…`));
     const update = yield* Effect.exit(runCliUpdate(method));
     if (Exit.isFailure(update)) {
-      // Ctrl-C on the installer interrupts the foreground command. No command
-      // boundary owns this exit, so the interrupt's exit code is set here, as
-      // the success path below exits here too; any other failure propagates.
+      // Ctrl-C on the installer interrupts the foreground command: the
+      // command ends with the interrupt's code, as it does with the success
+      // path's below; any other failure propagates.
       if (!Cause.hasInterruptsOnly(update.cause))
         return yield* Effect.failCause(update.cause);
       writeTextStderr(
         style.muted('Update cancelled. Update later with: ') +
           style.command(updateCmd),
       );
-      return process.exit(CliExitCode.Interrupted);
+      return CliExitCode.Interrupted;
     }
     if (!update.value) {
       writeTextStderr(
@@ -356,6 +358,6 @@ export function notifyCliUpdate(
         style.command('texra') +
         style.muted(' again to use it.'),
     );
-    return process.exit(CliExitCode.Success);
+    return CliExitCode.Success;
   });
 }

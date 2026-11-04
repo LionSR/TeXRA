@@ -1,7 +1,6 @@
 // Third-party imports
 import {
   Cause,
-  Clock,
   Effect,
   Exit,
   Result,
@@ -11,71 +10,10 @@ import {
 } from 'effect';
 
 // Local imports - canonical protocol binding
-import {
-  JsonObjectSchema,
-  sameModelOrigin,
-  type ModelOrigin,
-} from '../protocol.js';
-import { ObservationPolicySchema, type ResolvedTurn } from '../turn.js';
+import { JsonObjectSchema } from '../protocol.js';
 
 // Local imports - canonical model errors
-import { boundOperation, ModelError, type RemoteOperation } from '../errors.js';
-
-/** A background turn on `protocol`. */
-type ObservedTurn<P> = Extract<
-  ResolvedTurn,
-  { protocol: P; mode: 'background' }
->;
-
-const isObservedTurn = <P extends ResolvedTurn['protocol']>(
-  turn: ResolvedTurn,
-  protocol: P,
-): turn is ObservedTurn<P> =>
-  turn.protocol === protocol && turn.mode === 'background';
-
-/**
- * Admit a background observation: `input` must be this binding's operation,
- * `turn` its background turn on `protocol`, and the policy's original
- * deadline still ahead. Yields the turn, the operation, that deadline, and
- * the error the observation fails with once it passes.
- */
-export const admitObservation = Effect.fn('llm.admitObservation')(function* <
-  P extends ResolvedTurn['protocol'],
->(
-  protocol: P,
-  origin: ModelOrigin,
-  turn: ResolvedTurn,
-  input: RemoteOperation,
-  policy: typeof ObservationPolicySchema.Type,
-) {
-  const operation = yield* boundOperation(input, origin);
-  if (
-    !isObservedTurn(turn, protocol) ||
-    !sameModelOrigin(turn, operation.origin)
-  )
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message: 'The admitted turn belongs to another model binding.',
-      operation,
-    });
-  const parsed = Schema.decodeUnknownResult(ObservationPolicySchema)(policy);
-  if (!Result.isSuccess(parsed))
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The observation deadline is invalid.',
-      cause: parsed.failure,
-      operation,
-    });
-  const { deadlineAtMs } = parsed.success;
-  const deadline = new ModelError({
-    kind: 'observation-deadline',
-    message: 'The original observation deadline has expired.',
-    operation,
-    responseId: operation.providerResponseId,
-  });
-  if (deadlineAtMs <= (yield* Clock.currentTimeMillis)) return yield* deadline;
-  return { turn, operation, deadlineAtMs, deadline };
-});
+import { ModelError } from '../errors.js';
 
 /**
  * The value a pull source yields while it is not done: the `value` of the
@@ -86,6 +24,14 @@ export const admitObservation = Effect.fn('llm.admitObservation')(function* <
 type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
 
 /**
+ * One pull's result, discriminated on `done`: a value while not done. A pull
+ * source's result type is constrained by this over its own {@link PullValue},
+ * so checking `done` narrows to the member that carries the value.
+ */
+type PullResult<A> =
+  { readonly done?: false; readonly value: A } | { readonly done: true };
+
+/**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async
  * iterator — that ends when the source reports `done`.
  *
@@ -94,10 +40,7 @@ type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
  * ladder. Only the source and the failure classifier ever differed, so those
  * are the parameters.
  */
-export const pullStream = <
-  R extends { readonly done?: boolean; readonly value?: unknown },
-  E,
->(
+export const pullStream = <R extends PullResult<PullValue<R>>, E>(
   pull: () => PromiseLike<R>,
   onError: (cause: unknown) => E,
 ): Stream.Stream<PullValue<R>, E> =>
@@ -105,13 +48,7 @@ export const pullStream = <
     Effect.succeed(
       Effect.tryPromise({ try: () => pull(), catch: onError }).pipe(
         Effect.flatMap((next) =>
-          next.done
-            ? Cause.done()
-            : // `done` is false here, so the result is the value-carrying
-              // member of the union `PullValue` picked the type from.
-              Effect.succeed([
-                (next as { readonly value: PullValue<R> }).value,
-              ] as const),
+          next.done ? Cause.done() : Effect.succeed([next.value] as const),
         ),
       ),
     ),
@@ -132,9 +69,10 @@ export const sdkStream = Effect.fn('llm.sdkStream')(function* <E>(
     Effect.sync(() => source[Symbol.asyncIterator]()),
     (iterator) => {
       source.controller.abort();
-      return iterator.return
+      const returnIterator = iterator.return?.bind(iterator);
+      return returnIterator
         ? Effect.tryPromise({
-            try: () => iterator.return!(),
+            try: () => returnIterator(),
             catch: cleanupFailure,
           }).pipe(Effect.orDie)
         : Effect.void;
@@ -285,8 +223,6 @@ export const readerAbortSignal = Effect.fn('transport.readerAbortSignal')(
  * rejoining the pending promise before the effect completes. On rejoin
  * failure, only the primary failure's own cause, or a caller-recognized
  * abort (`isAbortMatch`), is dropped; anything else is an independent defect.
- * `deadline`, when given, races the primary request only — rejoining always
- * waits out the pending promise so its cleanup cause is not discarded.
  */
 export function ownedAbortSafeRequest<A>(
   request: (signal: AbortSignal) => Promise<A>,
@@ -298,35 +234,21 @@ export function ownedAbortSafeRequest<A>(
       exit: Exit.Exit<A, ModelError>,
     ) => boolean;
     readonly cleanupFailure?: (cause: unknown) => ModelError;
-    readonly deadline?: {
-      readonly duration: number;
-      readonly error: ModelError;
-    };
   },
 ): Effect.Effect<A, ModelError> {
-  const { isAbortMatch, cleanupFailure = classify, deadline } = options;
+  const { isAbortMatch, cleanupFailure = classify } = options;
   return Effect.suspend(() => {
     let started:
       | { readonly signal: AbortSignal; readonly pending: Promise<A> }
       | undefined;
-    const wait = Effect.tryPromise({
+    return Effect.tryPromise({
       try: (signal) => {
         const pending = request(signal);
         started = { signal, pending };
         return pending;
       },
       catch: classify,
-    });
-    return (
-      deadline === undefined
-        ? wait
-        : wait.pipe(
-            Effect.timeoutOrElse({
-              duration: deadline.duration,
-              orElse: () => Effect.fail(deadline.error),
-            }),
-          )
-    ).pipe(
+    }).pipe(
       Effect.onExit((exit) => {
         if (started === undefined) return Effect.void;
         const { signal, pending } = started;

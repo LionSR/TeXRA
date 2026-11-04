@@ -25,7 +25,7 @@ import {
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
-import { stringifyPayload, transcriptText } from './transcriptText';
+import { transcriptText } from './transcriptText';
 import type {
   ErrorRow,
   ErrorRowDetail,
@@ -33,7 +33,6 @@ import type {
   LogRow,
   StatItem,
   StreamingTextRow,
-  ToolCallFacts,
   ToolRow,
   TranscriptRow,
   TranscriptRowBase,
@@ -59,6 +58,7 @@ export function streamingTextRow(
   kind: StreamingTextRow['kind'],
   text: string,
   streaming: boolean,
+  cut?: StreamingTextRow['cut'],
 ): StreamingTextRow | undefined {
   const measured = transcriptText(text);
   if (!measured.oneLine.trim()) return undefined;
@@ -67,6 +67,7 @@ export function streamingTextRow(
     kind,
     text: measured,
     streaming,
+    ...(cut === undefined ? {} : { cut }),
     ...(kind === 'assistant' &&
     hasIncompleteEmbeddedSubagentFollowup(measured.full)
       ? { pendingEmbeddedFollowup: true }
@@ -85,9 +86,7 @@ export function streamingTextRow(
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
- * request's own payload, never from a projected row. So is `userRetryable`:
- * the runtime's retry routing flag, which the row's own retry affordance
- * already expresses to a reader.
+ * request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -125,15 +124,19 @@ function errorRow(
   summary: string,
   data: ErrorLogData | undefined,
 ): ErrorRow {
-  const details = errorDetails(data, summary);
   return {
     ...base,
     kind: 'error',
     summary: transcriptText(summary),
-    details,
-    detailText: transcriptText(
-      details.map((detail) => `${detail.key}: ${detail.value}`).join('\n'),
-    ),
+    details: errorDetails(data, summary),
+    ...(data?.classification === undefined
+      ? {}
+      : {
+          failure: {
+            message: data.message,
+            classification: data.classification,
+          },
+        }),
   };
 }
 
@@ -179,14 +182,20 @@ const MAX_TOKENS_REDUCED_DISPLAY_THRESHOLD = 32_768;
 // Tool and workflow-call rows
 // ---------------------------------------------------------------------------
 
+/** What a tool row says of its call beyond its payload, as the transcript
+ *  fold holds it: from the card's `tool.start`, a script's call's phase and
+ *  attempt; from the run, a cut by its end. */
+export type ToolCallFacts = Pick<ToolRow, 'phase' | 'attempt' | 'cutByRunEnd'>;
+
 /** A tool card from its decoded payload; `output` is the live text a running
- *  card printed, which paints in place of the durable output. */
+ *  card printed, which paints in place of the durable output, and `call` is
+ *  what its slot holds beyond the payload, which every repaint carries. */
 export function toolRow(
   base: TranscriptRowBase,
   log: ToolUseLog,
   output: string | undefined,
   runLabels: ToolRowModelContext['runLabels'],
-  call: ToolCallFacts = {},
+  call: ToolCallFacts,
 ): ToolRow {
   const shown = output === undefined ? log : { ...log, output };
   const toolUse = normalizeToolUse(shown);
@@ -240,9 +249,7 @@ export function logPayloadRow(
         ...(payload.data?.attachments
           ? { attachments: payload.data.attachments }
           : {}),
-        ...(payload.data?.mediaFiles
-          ? { mediaFiles: payload.data.mediaFiles }
-          : {}),
+        ...(payload.data?.media ? { media: payload.data.media } : {}),
         ...(forkAt === undefined ? {} : { forkAt }),
       };
     }
@@ -255,7 +262,6 @@ export function logPayloadRow(
       return {
         ...base,
         kind: 'webSearch',
-        label: `Web Search${query ? `: "${query}"` : ''}`,
         ...(query !== undefined ? { query } : {}),
       };
     }
@@ -326,15 +332,20 @@ export function logPayloadRow(
       };
     }
 
-    case MESSAGE_TYPES.PROGRESS_STATUS: {
-      const detail = stringifyPayload(payload.data).text;
+    case MESSAGE_TYPES.PROGRESS_STATUS:
       return {
         ...base,
         kind: 'progressStatus',
         summary: transcriptText(text.trim() || 'Status update'),
-        ...(detail.full ? { detail } : {}),
       };
-    }
+
+    case MESSAGE_TYPES.QUOTA_FALLBACK:
+      return {
+        ...base,
+        kind: 'progressStatus',
+        summary: transcriptText(text),
+        quotaFallback: payload.data.route,
+      };
 
     case MESSAGE_TYPES.DEFAULT:
       return plainLogRow(base, text);

@@ -6,7 +6,7 @@ import {
 } from '@texra-ai/llm/node';
 import { Skills, withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal } from '@eventBus/AppSignals';
+import { onAppSignal } from '@texra-ai/harness/host';
 import { unsupported } from '@texra/shared/utils/dispatcher';
 import type { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 import { SettingsViewInboundMessageSchema } from '@texra/shared/settingsView/settingsViewMessages';
@@ -24,11 +24,7 @@ import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
 import type { WorkspaceRoots } from '@texra-ai/harness';
-import type {
-  StorageFs,
-  ProcessServices,
-  PlatformSecrets,
-} from '@texra-ai/harness/host';
+import type { StorageFs, ProcessServices } from '@texra-ai/harness/host';
 import type { DesktopSpawn } from './desktopWindows.js';
 
 const NO_EXTENSION_HOSTING =
@@ -59,7 +55,6 @@ export interface DesktopSettingsIpcOptions {
   /** The roots of the project this settings surface serves. The desktop has
    *  no process-default roots, so they must be passed. */
   readonly roots: WorkspaceRoots;
-  readonly secrets: PlatformSecrets;
   /** Root of the packaged resources tree, which holds the agent templates. */
   readonly resourcesPath: string;
   /** Runs this surface's background work on fibers of the scope it opens in. */
@@ -175,7 +170,6 @@ export function createDesktopSettingsIpc(
     // The approval policy is the project's persisted setting: the write
     // is the change, which this session and the service both read.
     roots: options.roots,
-    secrets: options.secrets,
     resourcesPath: options.resourcesPath,
     skillDisplay: Skills.display(options.roots),
     accountCopy: ACCOUNT_OUTCOME,
@@ -196,15 +190,9 @@ export function createDesktopSettingsIpc(
     ),
   };
 
-  const { repaintOn, settle } = body;
   const subscriptions: Array<Effect.Effect<void, never, ProcessServices>> = [
-    body.followToolAvailability,
-    ...(Object.keys(repaintOn) as Array<keyof typeof repaintOn>).map((signal) =>
-      onAppSignal(signal, (payload) => {
-        const work = repaintOn[signal](payload as never);
-        if (work) spawn(settle(work));
-      }),
-    ),
+    // Each repaint runs as a fiber of the window, like its other callbacks.
+    body.followRepaints((repaint) => Effect.sync(() => spawn(repaint))),
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: the token status reports only which store
     // holds a token, and rejection leaves the secret in place, so re-posting

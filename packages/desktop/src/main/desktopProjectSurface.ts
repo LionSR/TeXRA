@@ -20,14 +20,10 @@ import {
   agentDocumentForPath,
   AgentDocumentUnavailable,
 } from './desktopAgentDocuments.js';
-import type {
-  ProcessRuntime,
-  ProcessServices,
-  PlatformSecrets,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { ProjectBindings } from './desktopProjectBindings.js';
 import type { DesktopPromptController } from './desktopPromptController.js';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -56,9 +52,8 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
     readonly runtime: ProcessRuntime;
     readonly projects: DesktopProjectRegistry;
     readonly bindings: ProjectBindings;
-    readonly onboarding: DesktopOnboardingIpc;
+    readonly onboarding: WindowOnboarding;
     readonly promptController: DesktopPromptController;
-    readonly secrets: PlatformSecrets;
     readonly resourcesPath: string;
   }): Effect.fn.Return<ProjectSurface, never, Scope.Scope> {
     const { host, runtime, projects, bindings, onboarding } = options;
@@ -162,8 +157,8 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
         // an agent mode separately sends the chosen root to that project's
         // launcher. Each project's catalogs answer for that project: its
         // snapshot source was built over its own roots.
-        refreshCatalogs: (selectedAgent) =>
-          Effect.gen(function* () {
+        refreshCatalogs: Effect.fn('refreshCatalogs')(
+          function* (selectedAgent) {
             yield* bindings.eachSnapshot(
               (snapshot) => snapshot.refreshCatalogs,
             );
@@ -174,11 +169,12 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
               kind: 'launch',
               patch: { agent: selectedAgent },
             });
-          }),
+          },
+        ),
         refreshCredentialStatus: Effect.suspend(() =>
           Effect.andThen(
             bindings.eachSnapshot((snapshot) => snapshot.refreshHostBanners),
-            onboarding.refreshOnboardingFunnel(),
+            onboarding.refresh,
           ),
         ),
         // Selection is the surface's: a settings jump asks the shown
@@ -195,7 +191,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           }),
         runLabel: (runId) =>
           projects.active().session.view.current().runs.get(runId)?.label,
-        stateSettingApplied: () => Effect.void,
         runInTerminal: (_name, command) =>
           Effect.sync(() => {
             if (bindings.get(project.key) !== documentBinding) return;
@@ -240,7 +235,6 @@ export const openProjectSurface = Effect.fn('desktop.openProjectSurface')(
           ),
         },
         roots: project.roots,
-        secrets: options.secrets,
         resourcesPath: options.resourcesPath,
         spawn: desktopSpawner(runtime, owner, project.root),
       }).pipe(

@@ -7,7 +7,6 @@
 import { Effect } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import { Secrets } from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   subscriptionProvider,
@@ -91,12 +90,15 @@ export const signInCliSubscription = Effect.fn(
           { copyable: true },
         );
       }),
+    // A device request reaches the browser flow only for a provider without
+    // a device code (ChatGPT); the shell that asked for one cannot open a
+    // browser, so the URL is printed.
     presentSignInUrl: (url) =>
       presentCliSignInUrl({
         writeProgress: options.writeProgress,
         displayName,
         url,
-        noBrowser: init.noBrowser,
+        noBrowser: init.noBrowser || init.device,
       }).pipe(Effect.provideService(ChildProcessSpawner, spawner)),
   };
 
@@ -118,8 +120,7 @@ export const signOutCliSubscription = Effect.fn(
   'subscriptionLogin.signOutCliSubscription',
 )(function* (stores: SettingsStores, providerId: SubscriptionProviderId) {
   const provider = subscriptionProvider(providerId);
-  const secrets = yield* Secrets;
-  yield* provider.signOut(secrets).pipe(Effect.mapError(ensureError));
+  yield* provider.signOut().pipe(Effect.mapError(ensureError));
   return yield* provider.setPreferSubscription(stores, false).pipe(
     Effect.mapError(ensureError),
     Effect.match({

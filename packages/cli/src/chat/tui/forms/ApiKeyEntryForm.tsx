@@ -8,7 +8,7 @@ import {
   providerDisplayName,
 } from '@texra-ai/llm';
 import { providerKeyUrl } from '@texra/model/providerPresentation';
-import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
+import { planCreditsHint } from '@ui/copy/modelAccess';
 
 import { TextEntryForm } from './_shared/TextEntryForm';
 
@@ -27,6 +27,7 @@ export function ApiKeyEntryForm(
 ): React.JSX.Element {
   const label = providerDisplayName(props.provider);
   const keyUrl = providerKeyUrl(props.provider);
+  const planCredits = planCreditsHint(props.provider);
 
   return (
     <TextEntryForm
@@ -35,9 +36,9 @@ export function ApiKeyEntryForm(
         <>
           <Text dimColor>Provider: {label}</Text>
           {keyUrl ? <Text dimColor>Get a key: {keyUrl}</Text> : null}
-          {props.provider === 'anthropic' ? (
+          {planCredits ? (
             <Text dimColor>
-              {ANTHROPIC_PLAN_CREDITS.hint} {ANTHROPIC_PLAN_CREDITS.docUrl}
+              {planCredits.hint} {planCredits.docUrl}
             </Text>
           ) : null}
         </>

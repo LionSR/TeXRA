@@ -36,7 +36,7 @@ import {
 
 /**
  * Open the stores backing the workspace and local config targets. The desktop
- * opens one pair per paper beside the process-wide global store;
+ * opens one pair per project beside the process-wide global store;
  * single-workspace hosts go through {@link openTexraConfigStores}.
  *
  * One home per target, fixed by one rule: a workspace's project configuration
@@ -95,7 +95,8 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
     { concurrency: 'unbounded' },
   );
   for (const key of workspace.keys()) {
-    if (!projectValueIgnored(catalog, key, workspace.get(key))) continue;
+    const row = catalog.byStoredKey(key);
+    if (!projectValueIgnored(row, workspace.get(key))) continue;
     warn(
       `Ignoring "${key}" in ${projectConfigPath}: a project file cannot set it. Set it in the settings view or with /config.`,
     );

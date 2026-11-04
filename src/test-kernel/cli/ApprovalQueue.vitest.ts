@@ -2,7 +2,9 @@
  * The TUI's approval Surface over the fold: which request the modal shows,
  * in what order, and how the status bar's attention list reads.
  */
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Layer } from 'effect';
+import { afterEach, beforeEach, expect } from 'vitest';
 
 import {
   attentionRequests,
@@ -14,14 +16,14 @@ import {
   rootRunId,
   sessionListRunIds,
 } from '@cli/chat/tui/state/cliState';
-import type { RunId } from '@shared/schemas';
-
+import { SessionGraph } from '@test/support/testKernel';
 import {
-  bindTestSessionView,
+  boundTestSessionView,
   makeRunView,
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const ROOT = 'chat-root' as RunId;
 const RUN_A = 'run-a' as RunId;
@@ -34,11 +36,14 @@ function bashPayload(runId: RunId | '', requestId = `bash-${runId}`) {
   } satisfies ApprovalPayload;
 }
 
-beforeAll(bindTestSessionView);
-beforeEach(() => rootRunId.set(ROOT));
-afterEach(() => resetCliState());
+// The view is bound on a runtime over the session graph, as the chat entry
+// binds it; the surface itself is read synchronously.
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
+  excludeTestServices: true,
+})('CLI approval surface', (it) => {
+  beforeEach(() => rootRunId.set(ROOT));
+  afterEach(() => resetCliState());
 
-describe('CLI approval surface', () => {
   it('isolates approval prompts, counts, and run lists to the current chat', () => {
     const local = bashPayload(RUN_A);
     const foreign = bashPayload(RUN_B);

@@ -8,12 +8,42 @@ import { Predicate, Schema } from 'effect';
 import { JsonObjectSchema, type TurnRequest } from '@texra-ai/llm';
 
 // Local imports - agent runtime
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { convertToolSchema } from '@agent/core/tools/toolSchema';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { sha256 } from '@utils/core/idHash';
 
 type ToolDefinitions = NonNullable<TurnRequest['tools']>;
+type Parameters = ToolDefinitions[number]['parameters'];
+
+/** A JSON value frozen through every level. */
+const deepFrozen = <T>(value: T): T => {
+  if (Predicate.isObject(value) && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFrozen(child);
+    Object.freeze(value);
+  }
+  return value;
+};
+
+/** Each input schema's wire parameters, frozen since every run shares them:
+ *  a tool's schema is one value for the life of the process, and converting
+ *  it is most of what building a step's request costs. */
+const parametersBySchema = new WeakMap<object, Parameters>();
+
+const parametersOf = (definition: ToolDefinition): Parameters => {
+  const convert = () =>
+    Schema.decodeUnknownSync(JsonObjectSchema)(
+      convertToolSchema(definition) ?? { type: 'object', properties: {} },
+    );
+  const { schema } = definition;
+  if (schema === undefined) return convert();
+  const known = parametersBySchema.get(schema);
+  if (known !== undefined) return known;
+  const parameters = deepFrozen(convert());
+  parametersBySchema.set(schema, parameters);
+  return parameters;
+};
 
 /** The package's uniform tool definitions for the run's resolved tool list. */
 export function toolDefinitionsFor(
@@ -22,16 +52,15 @@ export function toolDefinitionsFor(
   return definitions.map((definition) => ({
     name: definition.name,
     description: definition.description ?? '',
-    parameters: Schema.decodeUnknownSync(JsonObjectSchema)(
-      convertToolSchema(definition) ?? { type: 'object', properties: {} },
-    ),
+    parameters: parametersOf(definition),
   }));
 }
 
 /**
  * The tool definitions a step's requests send, in wire form: the offered
- * tools whose record marks them `sent` (every tool, or, under script-only
- * tools, `script` and the run's own alone). The step's record decides, so
+ * tools whose record marks them `sent` (every tool but a script's own
+ * function, or, under script-only tools, `script` and the run's own
+ * alone). The step's record decides, so
  * a resumed step sends what it recorded whatever the setting says now.
  */
 export const sentDefinitions = (tools: {
@@ -48,7 +77,7 @@ export const sentDefinitions = (tools: {
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {
-  readonly tool: ITool;
+  readonly tool: ITool<Error, PluginToolServices>;
   /** The contributing plugin's id. */
   readonly plugin: string;
   /** The plugin's revision, which rows record: `builtin` for a built-in
@@ -149,12 +178,12 @@ export const toolDigests = (
 /** A plugin's tools as catalog entries under one revision. */
 export const entriesOf = (
   plugin: string,
-  tools: ReadonlyMap<string, ITool>,
+  tools: Iterable<ITool<Error, PluginToolServices>>,
   loaded?: { readonly revision: string },
 ): ReadonlyMap<string, ToolEntry> =>
   new Map(
-    [...tools].map(([name, tool]) => [
-      name,
+    [...tools].map((tool) => [
+      tool.definition.name,
       {
         tool,
         plugin,

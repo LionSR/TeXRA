@@ -7,6 +7,8 @@ import {
   resolveStepTools,
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
+import { SessionRoots } from '@platform/rootedFs';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { ToolCatalogOwner } from '@tools/liveTools';
 import { readDisabledTools } from '@tools/plugins';
 
@@ -14,45 +16,46 @@ import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 
 /**
  * Hold the loaded plugins the declarations name in a session catalog of
- * the caller's scope, read the switches `stores` holds and pin the tools
- * they give, then resolve what a step would offer from them and pin the
- * services of the plugins it offers.
+ * the caller's scope, read the switches `roots` holds and pin the tools
+ * they give, then resolve what a step of a session over `roots` would offer
+ * from them and pin the services of the plugins it offers.
  */
-export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
-  input: Omit<
-    StepToolInputs,
-    | 'held'
-    | 'runTools'
-    | 'approvalPromptsUnavailable'
-    | 'hostCapabilities'
-    | 'injectInstalled'
-  > &
-    Partial<
-      Pick<
-        StepToolInputs,
-        | 'runTools'
-        | 'approvalPromptsUnavailable'
-        | 'hostCapabilities'
-        | 'injectInstalled'
-      >
-    >,
-) {
+export const resolveTestStep = Effect.fn('resolveTestStep')(function* ({
+  roots,
+  ...input
+}: Omit<
+  StepToolInputs,
+  | 'held'
+  | 'runTools'
+  | 'approvalPromptsUnavailable'
+  | 'hostCapabilities'
+  | 'injectInstalled'
+> &
+  Partial<
+    Pick<
+      StepToolInputs,
+      | 'runTools'
+      | 'approvalPromptsUnavailable'
+      | 'hostCapabilities'
+      | 'injectInstalled'
+    >
+  > & { readonly roots: WorkspaceRoots }) {
   const tools = yield* (yield* ToolCatalogOwner).session;
   const held = yield* tools.hold(declaredToolNames(input.tools), true);
-  const pinned = yield* tools.pin(readDisabledTools(input.stores.globalState), {
+  const pinned = yield* tools.pin(readDisabledTools(roots.globalState), {
     held,
   });
   const resolved = yield* resolveStepTools(pinned.entries, {
     runTools: [],
     approvalPromptsUnavailable: false,
-    // The extension's own session reads its editor's diagnostics.
-    hostCapabilities: new Set(input.host === 'vscode' ? ['diagnostics'] : []),
+    hostCapabilities: new Set(),
     injectInstalled: false,
     ...input,
     held,
   }).pipe(
     // No probe has answered: the gate withholds nothing on its account.
     Effect.provide(unprobedToolAvailability),
+    Effect.provideService(SessionRoots, roots),
   );
   // The services of the plugins it offers, as a step pins them.
   yield* pinned.services(new Set(resolved.offered.map(({ plugin }) => plugin)));

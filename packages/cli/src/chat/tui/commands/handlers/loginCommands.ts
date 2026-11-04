@@ -32,9 +32,9 @@ import {
 import type {
   AgentCatalogServices,
   Secrets,
-  PlatformSecrets,
   SettingsStores,
 } from '@texra-ai/harness/host';
+import type { HttpClient } from 'effect/http';
 
 const CHAT_LOGIN_USAGE = [
   'Usage: /login chatgpt [--no-browser] [--device]',
@@ -98,14 +98,17 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
 /**
  * The sign-out lines for one sign-out target. Every leg reports its failure
  * as a line instead of throwing, so one failed provider never hides the
- * others' outcomes — the fold happens where each call settles, on the typed
+ * others' outcomes — each failure becomes a line where its call finishes, on the typed
  * channel.
  */
 const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
   target: CliLogoutTarget,
   stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.fn.Return<readonly string[], never, Secrets | AgentCatalogServices> {
+): Effect.fn.Return<
+  readonly string[],
+  never,
+  Secrets | AgentCatalogServices | HttpClient.HttpClient
+> {
   const lines: string[] = [];
 
   for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
@@ -130,7 +133,7 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
     );
   }
 
-  const overviewLines = yield* loadCliModelAccessOverview(stores, secrets).pipe(
+  const overviewLines = yield* loadCliModelAccessOverview(stores).pipe(
     Effect.match({
       onFailure: (error) => [toErrorMessage(error)],
       onSuccess: (overview) => overview.lines,
@@ -143,9 +146,8 @@ const logoutLines = Effect.fn('loginCommands.logoutLines')(function* (
 export const logoutFromChat = Effect.fn('logoutFromChat')(function* (
   target: CliLogoutTarget,
   stores: SettingsStores,
-  secrets: PlatformSecrets,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ) {
-  const lines = yield* logoutLines(target, stores, secrets);
+  const lines = yield* logoutLines(target, stores);
   output.appendOutcome(lines.join('\n'));
 });

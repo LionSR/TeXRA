@@ -32,10 +32,8 @@ Commands such as **TeXRA: Agent Team Settings** or **TeXRA: Git Settings**
 open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
-Provider transport knobs (OpenAI background responses, parallel tool calls, the
-GPT-5 reasoning summary, OpenAI fast processing, and Google background
-responses) keep their defaults
-unless you set them in `config.json`. File-handling rules and other internal
+Provider transport knobs (OpenAI fast processing and Google background
+responses) keep their defaults unless you set them in `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 
 ## Where settings live
@@ -78,11 +76,11 @@ The JSON files use flat `texra.*` keys. For example:
 Prefer the settings views for ordinary changes: they validate values and place
 them at the intended project or user scope.
 
-Approval settings (the approval policy and the two approval switches) are the
-exception to the project scope: a project file can be supplied by a repository
-you clone, so TeXRA never reads them from it. They are kept per workspace in
-your own storage, and a value in your user file applies to every workspace. A
-project file that sets one is ignored with a warning naming the key.
+The approval policy is the exception to the project scope: a project file can
+be supplied by a repository you clone, so TeXRA never reads it from there. It
+is kept per workspace in your own storage, and a value in your user file
+applies to every workspace. A project file that sets it is ignored with a
+warning naming the key.
 Usage logging (`texra.telemetry.enabled`) follows the same rule with one
 exception: a project file may switch it off but never on, so a `false` there
 is honoured and a `true` is ignored with the same warning.
@@ -148,20 +146,23 @@ A new ID is made on the next send.
 
 ## Goal mode
 
-A goal is a script that runs the agent again, in rounds. Each round
-continues the conversation as it stood when the goal started, is given the
-objective and the last round's report, works toward the objective with the
-agent's own tools, and ends by submitting a verdict: done, keep going, or
-needs you. The goal ends when a round verifies the objective, when a round
-needs you, or at the spend cap, and its result says which, with the last
-report.
+A goal is a script that runs the agent again, in rounds. By default, each
+round continues the conversation as it stood when the goal started, is given
+the objective and the last round's report, works toward the objective with
+the agent's own tools, and ends by submitting a verdict: done, keep going,
+or needs you. The goal ends when a round verifies the objective, when a
+round needs you, or at the spend cap, and its result says which, with the
+last report.
 
 Approving a plan with **Run as goal** (press `r` in the terminal) runs the
 plan as a goal: a background script of the conversation, which you can
 watch like any other. It auto-approves shell commands in the goal (or all
 agent work, if you chose that); the conversation's own approvals stay as
-they were. The goal's result arrives in the conversation when it ends. A
-script can run the same loop itself with
+they were. The goal's result arrives in the conversation when it ends:
+`completed`, or `paused` with the reason (a round needs you, a round
+failed, a round gave no verdict, or the spend cap), the rounds it ran and
+what it spent. The rounds are a script module, `builtIn:goal`, which a
+script can also call itself; a script can equally run its own loop with
 [`self()`](./multi-agent-workflows.md), with a stopping rule of its own.
 
 On your own API key a goal has no natural end, so it carries a spend cap:

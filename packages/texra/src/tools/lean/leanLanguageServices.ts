@@ -1,7 +1,7 @@
 /**
  * Injectable language services for Lean tools.
  *
- * Provides a seam between the platform-agnostic tool implementations
+ * Provides a boundary between the platform-agnostic tool implementations
  * in `packages/texra/src/tools/lean/` and the host-specific integrations (VS Code
  * extension in `packages/extension/src/frontend/lean/`, direct LSP for
  * CLI / desktop in `packages/texra/src/tools/lean/direct/`).
@@ -11,14 +11,17 @@
  * LSP requests).
  */
 
-import { Context, type Effect, Schema } from 'effect';
+import { Context, type Effect } from 'effect';
 
 import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { LeanServerInfo } from './leanServerRegistry';
 import type {
   LeanFileCommand,
+  LeanFileCommandFailed,
+  LeanFileUnreadable,
   LeanProjectCommand,
+  LeanUnavailable,
   FetchDiagnosticsResult,
   LeanDiagnostic,
   LspHover,
@@ -33,30 +36,16 @@ import type {
  * is composed directly by the native tool dispatcher. Run ownership is passed
  * explicitly at invocation; adapters never recover it from ambient state. The adapters' failure
  * channels are disjoint (the VS Code bridge fails with its editor, command
- * and extension tags, the direct pool with its own) and every consumer folds
+ * and extension tags, the direct pool with its own) and every consumer converts
  * a failure into a `ToolError`, so the port declares `Error` rather than a
- * union no caller switches on; a file command, whose cause the tool reports,
- * fails with {@link LeanFileCommandFailed}, which each adapter maps to.
+ * union no caller switches on. The file calls, whose cause the tool reports,
+ * fail with the tags in `./leanTypes` (`LeanUnavailable`, `LeanFileUnreadable`,
+ * `LeanFileCommandFailed`), which each adapter maps to.
  *
  * Every file parameter is an absolute path: the calling tool resolves the
  * model's input against the run's working directory (`leanFilePath` in
  * `LspTools.ts`) before invoking the port, so an adapter never re-resolves.
  */
-/**
- * A `lean_file` command did not run. `reason` says whether the cause is a
- * missing or unusable Lean setup (no `lake`/`lean`, no Lake project, no Lean
- * 4 extension), which the tool answers with setup guidance, or anything else,
- * which it reports by `message` alone.
- */
-export class LeanFileCommandFailed extends Schema.TaggedError<LeanFileCommandFailed>()(
-  'LeanFileCommandFailed',
-  {
-    reason: Schema.Literals(['toolchain_unavailable', 'failed']),
-    message: Schema.String,
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {}
-
 export interface LeanLanguageServicesShape {
   /**
    * The servers this adapter currently holds, for the Tools dashboard. The
@@ -71,7 +60,7 @@ export interface LeanLanguageServicesShape {
     command: LeanFileCommand,
     filePath: string,
     runId?: RunId,
-  ): Effect.Effect<void, LeanFileCommandFailed>;
+  ): Effect.Effect<void, LeanFileCommandFailed | LeanUnavailable>;
   getGoalState(
     filePath: string,
     line: number,
@@ -93,7 +82,10 @@ export interface LeanLanguageServicesShape {
   fetchDiagnosticsForFile(
     file: string,
     runId?: RunId,
-  ): Effect.Effect<FetchDiagnosticsResult>;
+  ): Effect.Effect<
+    FetchDiagnosticsResult,
+    LeanUnavailable | LeanFileUnreadable
+  >;
   /**
    * Move the host editor cursor to the first error in `diagnostics`, when the
    * host has an editor to move (VS Code). A host capability, not a query:
@@ -123,7 +115,7 @@ export interface LeanLanguageServicesShape {
 
 /**
  * The Lean 4 plugin's port, its process layer (`lean4` in
- * `@texra/tools/integrationPlugins`): the direct `lake env lean --server` pool, or
+ * `./plugin`): the direct `lake env lean --server` pool, or
  * the VS Code extension's Lean 4 bridge, which that host passes with TeXRA's
  * plugins (`texraPlugins`). A Lean tool reads it with
  * `yield* LeanLanguageServices`, served by the step that pinned the plugin;

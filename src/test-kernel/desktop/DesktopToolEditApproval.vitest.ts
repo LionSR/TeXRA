@@ -1,45 +1,34 @@
-import { access, writeFile } from 'node:fs/promises';
+import { access, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import {
   Effect,
   Fiber,
   type FileSystem,
   type Path,
-  Stream,
   SubscriptionRef,
+  Context,
 } from 'effect';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, expect, vi } from 'vitest';
 
-import type { RunId } from '@shared/schemas';
-import { testSessionOf, testRuntime } from '@test/support/testProcessRuntime';
-import { closeSessionOf } from '@test/support/sessionEnd';
-
+import { DesktopToolEditApprovalHost } from '@desktop/main/desktopToolEditApproval';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import type { ToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
+import {
+  ToolEditApprovalController,
+  type ToolEditPreview,
+} from '@texra/controllers/approval/ToolEditApprovalController';
+import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
+import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
-
-/**
- * The host wiring point's run. The controller's verbs are Effects and it
- * holds no runtime of its own; a desktop window hands them its process
- * runtime, and so does this suite.
- */
-const onRuntime = <A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
-  >,
-): Effect.Effect<A, unknown> =>
-  Effect.tryPromise({
-    try: () => testRuntime().runPromise(program),
-    catch: (error) => error,
-  });
 
 async function pathExists(filePath: string): Promise<boolean> {
   try {
@@ -50,147 +39,230 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-describe('desktop tool edit approval', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
+/**
+ * A session, the desktop windows that follow its tool edits, and the one
+ * edit a write_file call asks it for: `beta` in place of `alpha`.
+ */
+const review = Effect.gen(function* () {
+  // The window's process runtime. The controller's verbs are Effects and it
+  // holds no runtime of its own; a desktop window hands them its process
+  // runtime, and so does this suite.
+  const runtime = yield* SessionGraph.runtime;
+  const onRuntime = <A, E>(
+    program: Effect.Effect<
+      A,
+      E,
+      FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+    >,
+  ) => Effect.promise(() => runtime.runPromise(program));
+  const localSession = yield* TestSession.open(undefined, { host: {} });
+  const session = yield* sessionHandleOf(localSession);
+  const roots = createFakeWorkspaceRoots({ workspacePath: '/workspace' });
+  /** One desktop window following the session's tool edits. */
+  const openWindow = (focused: boolean) =>
+    Effect.gen(function* () {
+      const opened: string[] = [];
+      const warnings: string[] = [];
+      // The previews the host staged, as each program produces one.
+      const staged: ToolEditPreview[] = [];
+      const host = new DesktopToolEditApprovalHost({
+        spawn: (program) => {
+          runtime.runFork(program);
+        },
+        focused: () => focused,
+        ui: {
+          openPath: (filePath) =>
+            Effect.sync(() => {
+              opened.push(filePath);
+            }),
+          openBuildDisplay: () => Effect.void,
+          openDiff: () => Effect.void,
+          showErrorMessage: () => Effect.void,
+          showWarningMessage: (message) =>
+            Effect.sync(() => {
+              warnings.push(message);
+            }),
+          closeDiff: () => Effect.void,
+        },
+      });
+      const stageOnHost = host.stagePreview.bind(host);
+      vi.spyOn(host, 'stagePreview').mockImplementation((request) =>
+        stageOnHost(request).pipe(
+          Effect.tap((preview) => Effect.sync(() => staged.push(preview))),
+        ),
+      );
+      const controller = new ToolEditApprovalController({
+        host,
+        session: localSession,
+        roots,
+      });
+      const window = runtime.runFork(controller.follow);
+      yield* Effect.addFinalizer(() => Fiber.interrupt(window));
+      return { controller, opened, staged, warnings };
+    });
+  /** Ask for the edit; the fiber ends with its answer. */
+  const requestEdit = Effect.gen(function* () {
+    // A request row is only ever appended to a run the history knows.
+    const runId = 'a40000' as RunId;
+    publishTestRunStart(session, runId);
+    yield* Context.get(session, SessionLog).settled;
+    return yield* Effect.forkScoped(
+      requestToolEditApproval({
+        path: '/workspace/notes.txt',
+        originalContent: 'alpha\n',
+        proposedContent: 'beta\n',
+        sourceTool: 'write_file',
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            roots,
+            workingDirectory: '/workspace',
+            run: { runId, session, toolPolicy: {} },
+          }),
+        ),
+      ),
+    );
   });
+  const pendingRequestId = () =>
+    SubscriptionRef.getUnsafe(Context.get(session, SessionViewAccess).ref)
+      .requests[0]!.requestId;
+  return { onRuntime, openWindow, requestEdit, pendingRequestId };
+});
 
-  it.live(
-    'applies user edits made in the proposed preview file',
-    () =>
-      Effect.scoped(
+// Live clock: the window follows the session's log, and the user acts on
+// it, on real turns.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'desktop tool edit approval',
+  (it) => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it.effect(
+      'applies the proposed copy as the user left it when the window approves',
+      () =>
         Effect.gen(function* () {
-          const { requestToolEditApproval, controllerModule, desktopModule } =
-            yield* Effect.tryPromise(async () => {
-              vi.resetModules();
-              const { installPlatform } =
-                await import('@test/support/setupPlatform');
-              await installPlatform({ workspacePath: '/workspace' });
-              await import('@test/support/sessionGraphTestSetup');
-              const [approval, controllerModule, desktopModule] =
-                await Promise.all([
-                  import('@tools/approval/toolEditApproval'),
-                  import('@texra/controllers/approval/ToolEditApprovalController'),
-                  import('@desktop/main/desktopToolEditApproval'),
-                ]);
-              return {
-                requestToolEditApproval: approval.requestToolEditApproval,
-                controllerModule,
-                desktopModule,
-              };
-            });
-          const session = yield* createTestSession();
-          yield* Effect.addFinalizer(() => closeSessionOf(session));
-          const opened: string[] = [];
-          const host = new desktopModule.DesktopToolEditApprovalHost({
-            spawn: (program) => {
-              testRuntime().runFork(program);
-            },
-            ui: {
-              openPath: (filePath) =>
-                Effect.sync(() => {
-                  opened.push(filePath);
-                }),
-              openBuildDisplay: () => Effect.void,
-              openDiff: () => Effect.void,
-              showErrorMessage: () => Effect.void,
-              closeDiff: () => Effect.void,
-            },
-          });
-          // The previews the host actually staged. `stagePreview` hands back
-          // a program, so the spy's recorded results are descriptions; what
-          // each program produces is collected as it produces it instead.
-          const staged: ToolEditPreview[] = [];
-          const stageOnHost = host.stagePreview.bind(host);
-          const stagePreview = vi
-            .spyOn(host, 'stagePreview')
-            .mockImplementation((request, context) =>
-              stageOnHost(request, context).pipe(
-                Effect.tap((preview) =>
-                  Effect.sync(() => staged.push(preview)),
-                ),
-              ),
-            );
-          const controller = new controllerModule.ToolEditApprovalController({
-            host,
-            session: testSessionOf(session),
-          });
-          yield* Effect.addFinalizer(() =>
-            onRuntime(controller.dispose()).pipe(Effect.orDie),
-          );
-          yield* Effect.forkScoped(
-            Stream.runForEach(session.log.tail(session.log.now()), (event) =>
-              onRuntime(controller.handleSessionEvent(event)),
-            ),
-          );
-          // The attached host stages the preview the durable payload cannot carry.
-          const detach = yield* session.interactions.use({
-            presentToolEdit: (request) => {
-              testRuntime().runFork(controller.present(request));
-            },
-          });
-          yield* Effect.addFinalizer(() => Effect.sync(detach));
-
-          // A request row is only ever appended to a run the history knows.
-          const runId = 'a40000' as RunId;
-          publishTestRunStart(session, runId);
-          yield* session.log.settled;
-          const result = yield* Effect.forkScoped(
-            requestToolEditApproval({
-              path: '/workspace/notes.txt',
-              originalContent: 'alpha\n',
-              proposedContent: 'beta\n',
-              sourceTool: 'write_file',
-              runId,
-            }).pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  roots: createFakeWorkspaceRoots({
-                    workspacePath: '/workspace',
-                  }),
-                  workingDirectory: '/workspace',
-                  run: { runId, session, toolPolicy: {} },
-                }),
-              ),
-            ),
-          );
-          // Staged on the host and listed by the fold, where a surface's
-          // decision finds it.
+          const { onRuntime, openWindow, requestEdit, pendingRequestId } =
+            yield* review;
+          const window = yield* openWindow(true);
+          const result = yield* requestEdit;
+          // Listed by the fold and staged from the request's own content.
           yield* Effect.tryPromise(() =>
-            vi.waitFor(() => {
-              expect(staged).toHaveLength(1);
-              expect(
-                SubscriptionRef.getUnsafe(session.view.ref).requests,
-              ).toHaveLength(1);
-            }, 10_000),
+            vi.waitFor(() => expect(window.staged).toHaveLength(1), 10_000),
           );
-          const { requestId } = stagePreview.mock.calls[0]![0].permission;
+          const requestId = pendingRequestId();
 
+          // The user opens the proposed copy and edits it on disk.
           yield* onRuntime(
-            controller.handleAction({ requestId, action: 'previewProposed' }),
+            window.controller.handleAction({
+              requestId,
+              action: 'previewProposed',
+            }),
           );
           yield* Effect.tryPromise(() =>
-            vi.waitFor(() => expect(opened).toHaveLength(1)),
+            vi.waitFor(() => expect(window.opened).toHaveLength(1)),
           );
+          const edited = 'beta\nwith user edits\nand more\n';
           yield* Effect.tryPromise(() =>
-            writeFile(opened[0], 'beta\nwith user edits\nand more\n', 'utf8'),
-          );
-          yield* onRuntime(
-            controller.handleAction({ requestId, action: 'approve' }),
+            writeFile(window.opened[0]!, edited, 'utf8'),
           );
 
+          // Approve sends the copy as the user left it with the decision,
+          // which applies it.
+          yield* onRuntime(
+            window.controller.handleAction({ requestId, action: 'approve' }),
+          );
           expect(yield* Fiber.join(result)).toMatchObject({
             action: 'apply',
-            appliedContent: 'beta\nwith user edits\nand more\n',
+            appliedContent: edited,
             lineChanges: { added: 3, removed: 1 },
           });
           yield* Effect.tryPromise(() =>
             vi.waitFor(async () => {
-              await expect(pathExists(opened[0])).resolves.toBe(false);
+              await expect(
+                pathExists(window.staged[0]!.proposedPath),
+              ).resolves.toBe(false);
             }),
           );
         }),
-      ),
-    30_000,
-  );
-});
+      30_000,
+    );
+
+    // Two windows edit one request. What can go wrong with a window's
+    // proposed copy when its request ends, each checked below:
+    //  1. another window answers while the copy holds edits, and they go
+    //     with the preview without a word;
+    //  2. a copy nobody changed is kept, or reported;
+    //  3. a window's own recorded approval is reported as not applied;
+    //  4. a stale copy replaces the answer another window recorded;
+    //  5. an unchanged approval applies anything but the proposal.
+    it.effect(
+      'keeps the edits of a window whose request another window answers',
+      () =>
+        Effect.gen(function* () {
+          const { onRuntime, openWindow, requestEdit, pendingRequestId } =
+            yield* review;
+          const answering = yield* openWindow(true);
+          const editing = yield* openWindow(false);
+          const result = yield* requestEdit;
+          yield* Effect.tryPromise(() =>
+            vi.waitFor(() => {
+              expect(answering.staged).toHaveLength(1);
+              expect(editing.staged).toHaveLength(1);
+            }, 10_000),
+          );
+          const requestId = pendingRequestId();
+
+          // The user edits the proposed copy in one window, on disk as the
+          // editor the desktop opens it in saves it...
+          yield* onRuntime(
+            editing.controller.handleAction({
+              requestId,
+              action: 'previewProposed',
+            }),
+          );
+          yield* Effect.tryPromise(() =>
+            vi.waitFor(() => expect(editing.opened).toHaveLength(1)),
+          );
+          const copy = editing.opened[0]!;
+          yield* Effect.addFinalizer(() =>
+            Effect.promise(() =>
+              rm(dirname(copy), { recursive: true, force: true }),
+            ),
+          );
+          const edited = 'beta\nedited in the other window\n';
+          yield* Effect.tryPromise(() => writeFile(copy, edited, 'utf8'));
+
+          // ...and approves the untouched proposal in the other.
+          yield* onRuntime(
+            answering.controller.handleAction({ requestId, action: 'approve' }),
+          );
+          expect(yield* Fiber.join(result)).toMatchObject({
+            action: 'apply',
+            appliedContent: 'beta\n',
+          });
+
+          // The editing window's changes were not applied: it keeps them
+          // where its editor has them, and says so once.
+          yield* Effect.tryPromise(() =>
+            vi.waitFor(() => expect(editing.warnings).toHaveLength(1)),
+          );
+          expect(editing.warnings[0]).toContain('notes.txt');
+          expect(editing.warnings[0]).toContain(copy);
+          expect(yield* Effect.promise(() => readFile(copy, 'utf8'))).toBe(
+            edited,
+          );
+          // The answering window sent its copy: nothing to keep or say.
+          yield* Effect.tryPromise(() =>
+            vi.waitFor(async () => {
+              await expect(
+                pathExists(answering.staged[0]!.proposedPath),
+              ).resolves.toBe(false);
+            }),
+          );
+          expect(answering.warnings).toStrictEqual([]);
+        }),
+      30_000,
+    );
+  },
+);

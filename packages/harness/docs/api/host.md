@@ -108,7 +108,7 @@ interface AgentCatalogShape {
     AgentEntry,
     AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
-  /** The workspace's agent selection and team presets, over this catalog. */
+  /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
     stores: WorkspaceAgentsStores,
   ) => WorkspaceAgentsController<AgentEntry>;
@@ -169,10 +169,8 @@ The process's agent directories as an Effect service, provided once by the
 composition root through `processLayer`. The shape is the port itself: a
 program that resolves one of the three local agent directories yields the
 port's own readers instead of reaching for the process platform's copy.
-
-`layer` takes the port itself, for the same reason `Secrets.layer` does:
-every root builds its agent directories before it installs the runtime that
-serves them, so the service is the value the root already holds.
+A root holds its port before it installs the runtime that serves it, so the
+layer is `Layer.succeed(AgentDirectories)(port)`.
 
 ```ts
 class AgentDirectories extends Context.Service<
@@ -188,7 +186,7 @@ custom directory is not an absolute path, its parent is gone, it cannot be
 created, or the platform refused the filesystem call behind either.
 
 {@link AgentDirectoriesPort}'s readers raise it as the failure of the
-read itself, for the same reason {@link StateWriteFailed} exists: the reads
+read itself, for the same reason `StateWriteFailed` exists: the reads
 travel with the agent-catalog load beside them, so a caller inside a program
 composes the read rather than adopting a rejection it cannot type.
 
@@ -234,6 +232,16 @@ interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   /**
+   * The member names of the workspace's team `teamId`, read from its
+   * repository state; `undefined` for a team the workspace has none of. The
+   * app owns what a team is; the harness only stores a selection naming one
+   * by id. Absent, the app has no teams.
+   */
+  readonly teamMembers?: (
+    repoState: StateStore,
+    teamId: string,
+  ) => Effect.Effect<readonly string[] | undefined, StateReadFailed>;
+  /**
    * The packaged resources root a host ships its bundled agents under,
    * the tool plugins' agent directories among them. Absent where none ships:
    * an embedder's own directories, or the CLI entries that load no agents.
@@ -263,6 +271,8 @@ interface AgentDirectoryServiceOptions {
   resourcesPath: string;
   /** Where the configured custom agent directory is read from. */
   state: Pick<StateStore, 'get'>;
+  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
+  teamMembers?: AgentDirectoriesPort['teamMembers'];
   /** Defaults to logging the issue at `warn`; hosts with an interactive
    * notification surface (e.g. the VS Code extension) can override it. */
   issueReporter?: {
@@ -299,18 +309,25 @@ interface AgentEntry {
 
 ## AgentError
 
-A runtime failure of the agent layer: a launch it refuses or a run that
-ended failed.
+A runtime failure of the agent layer: a launch it refuses, a run that
+ended failed, or a model call that failed as its rows record it.
 
 Host-neutral, so any host can reference it.
 A more specific error should be added only when a concrete thrower and
 catcher exist for it — anything else duplicates the existing
-`ProviderError` schema and `isUserAbort` machinery.
+`ProviderError` schema.
 
 ```ts
 class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
+  /** A refused launch's notice (an unknown model, an unknown agent), which
+   *  the launch's caller shows in place of the generic error. */
+  notice: Schema.optional(LaunchNoticeSchema),
+  /** A model failure as the run's rows record it (the run ended on it, or a
+   *  helper call raised it), which a host reads in place of this message's
+   *  words. */
+  failure: Schema.optional(RetryErrorInfoSchema),
 })
 ```
 
@@ -320,42 +337,10 @@ class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 ```
 
-## agentErrorPresentation
-
-Map a classified error to host guidance, with no notification for aborts.
-
-```ts
-function agentErrorPresentation(error: {
-  kind: AgentErrorKind;
-  message?: string;
-  /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
-   *  beside the error so the host's dialog keeps the guide affordance. */
-  docsPage?: string;
-}): AgentErrorPresentation | null
-```
-
-## AgentErrorPresentation
-
-How a host presents an agent error: an instruction, or a plain error.
-
-```ts
-type AgentErrorPresentation =
-  | {
-      readonly type: 'instruction';
-      readonly payload: RequestShowInstructionPayload;
-    }
-  | {
-      readonly type: 'error';
-      readonly payload: RequestShowErrorPayload;
-    };
-```
-
 ## AgentRuntimeEmitOptions
 
 ```ts
 interface AgentRuntimeEmitOptions {
-  /** Retain a presentation event until a temporarily detached UI returns. */
-  readonly replayWhenAttached?: boolean;
   /**
    * Shown through `requestShowError` on the same host when presenting this
    * event throws, live or on replay: for a notice that is a failure's only
@@ -371,6 +356,214 @@ The key one lifecycle's events ride on in the event table.
 
 ```ts
 type AggregateId = typeof AggregateIdSchema.Type;
+```
+
+## AppSignal
+
+The name of one app signal.
+
+```ts
+type AppSignal = keyof AppSignalPayloads;
+```
+
+## AppSignalEvent
+
+One published signal. The key and its payload are correlated by `emit`
+and the subscriptions below, which is where a caller proves the pair; on the
+hub they travel as what every subscription reads, a key and one of the
+declared payloads.
+
+```ts
+interface AppSignalEvent {
+  readonly signal: AppSignal;
+  readonly payload: AppSignalPayloads[AppSignal];
+}
+```
+
+## AppSignalPayloads
+
+Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
+credentials, workspace-file writes). Not for run/session progress
+events — those extend `AgentEvent` (`agent/trace/`) or the `SessionEvent`
+schema (`shared/schemas/sessionEvent.ts`), per the event-channel rule in
+the harness AGENTS.md.
+
+Delivery and error order, which this module owns and no caller may vary:
+
+- Publishing (`emit`, `emitAppSignal`) enqueues and returns. It never runs
+  a subscriber, so a subscriber can neither block nor fail the code that
+  emitted.
+- Each subscriber drains its own `PubSub` subscription on its own fiber,
+  forked at the host's run edge (the fork lives at the host entry, not
+  in the bus, since only a host runs Effects). One subscriber sees the
+  signals it subscribed to in publication order; there is no order *between* subscribers, and a slow
+  one holds up neither the publisher nor another subscriber.
+- A subscriber that throws is logged at `warn` by its own delivery fiber
+  and keeps its subscription: one broken listener never truncates a
+  delivery. This is the one contract the `PubSub` conversion changed — the
+  `EventEmitter` this replaces ran every listener on the emitter's stack
+  and then rethrew the first listener's error into `emit`, so a settings
+  view that failed to repaint could fail the tool call that wrote the
+  file. Nothing depended on that throw; every caller emitted as a
+  statement.
+- A subscriber is live once its forked fiber has reached the `subscribe`
+  below, which is a later scheduler turn than the `runFork` at the host's
+  run edge: `runFork` schedules the fiber and returns, it does not run it.
+  So a signal published in the same synchronous turn that subscribed
+  reaches nobody — the ordinary `PubSub` rule that a subscription only
+  receives what is published after it exists, and the reason the suites
+  here yield once before they publish.
+
+Every signal below records which hosts consume it and — where a host does
+not — why not. A signal with no such note is the ambiguous middle this file
+exists to prevent: a host that silently never reacts is indistinguishable
+from a host that deliberately doesn't. Keep the note truthful when you add a
+subscriber; "no equivalent surface" is a valid, and common, answer.
+
+```ts
+interface AppSignalPayloads {
+  /**
+   * GitHub rejected the configured token. Frontends can surface the failure
+   * and direct the user to token settings.
+   *
+   * Consumed by: extension (modal error + jump to Git settings), desktop
+   * (error dialog + re-post of the Git tab's token status). Not the CLI: a
+   * poller rejection arrives with no chat turn to attach it to, and the TUI
+   * has no out-of-band notice surface — the rejection is logged instead.
+   */
+  githubTokenInvalid: { message: string };
+
+  /**
+   * A write or removal of one secret-store entry settled. Emitted by the
+   * store itself, so every writer is covered — the settings controllers, the
+   * setup agent's `unset_api_key`, the GitHub token forms — without any of
+   * them remembering to. The one file store emits from its own commit
+   * finalizer, and a window's watch of the file (`FileSecrets.watch`)
+   * emits for writes from other processes. The finalizer runs on every exit of the write, failure and
+   * interruption included, because an interrupted commit may still have
+   * landed; the signal means "re-read this key", never "the value changed".
+   * The same stores hold OAuth tokens and other credentials, so a subscriber filters on `key` and ignores the rest: an
+   * OAuth refresh must not repaint the profile tab.
+   *
+   * Consumed by: extension and desktop (an `apiKey.*` change repaints the
+   * credential-dependent settings, launcher and model surfaces), the CLI chat
+   * TUI (an `apiKey.*` change bumps the subscription-preference version its
+   * status bar reads), and the `ToolAvailability` process service on every
+   * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
+   * such as the GitHub token, re-probes each workspace it holds, which the
+   * next step's tool list reads).
+   */
+  credentialChanged: { key: string };
+
+  /**
+   * The active GitHub subscriptions (PR, repo, or issue) or their stream owners
+   * changed. Keyless on purpose: every listener re-reads the full subscription
+   * list, so which kind changed carries no information.
+   *
+   * Consumed by: extension and desktop settings views, both re-reading the
+   * full subscription list for their Git tab. Not the CLI: it lists
+   * subscriptions on demand from a slash command and has no persistent panel
+   * that could go stale.
+   */
+  githubSubscriptionsChanged: undefined;
+
+  /**
+   * The workspace agents changed outside a settings round-trip. Keyless
+   * on purpose: every listener re-reads the agent list, so which team or agent
+   * moved carries no information.
+   *
+   * Emitted, in every process sharing the global store, when the default
+   * team changes (`apply_team`, which the setup agent runs mid-conversation,
+   * even in a background service task; `agentCatalogFollower`); and by the tool
+   * registry (`pluginCatalogLayer`) once it has reloaded the agent catalog
+   * after a tool switch or the plugin install record changed, in this
+   * process or another.
+   * Settings-originated changes repaint through their own handler and do not
+   * emit.
+   *
+   * Consumed by: extension and desktop settings views, both re-reading the
+   * agent list and team presets. Not the CLI: it reads the agent list per command
+   * and has no persistent panel that could go stale.
+   */
+  workspaceAgentsChanged: undefined;
+
+  /**
+   * The approval policy was written from a settings view (the shared
+   * settings commands' `updateStateSetting`).
+   *
+   * Consumed by: the extension's status-bar tooltip, painted outside the
+   * settings webview's round-trip. The settings views repaint their own
+   * approval snapshot inline, and the CLI repaints its session line from the
+   * `/config` form and `/approval` directly. Enforcement reads the config
+   * live, so this signal only repaints.
+   */
+  approvalPolicyChanged: undefined;
+
+  /**
+   * One or more files were written directly to the workspace. Frontends can
+   * badge or refresh those files without routing through a run-scoped channel.
+   * A run's accepted files arrive as its `documents/accepted` fact, announced
+   * in every process that folds the run (the arm's `writes`); a host's own
+   * write (an accepted diff, the progress view's Accept) emits here directly.
+   *
+   * Consumed by: extension (VS Code's `FileDecorationProvider` badges the
+   * written Explorer entries) and desktop (its file tree caches a directory
+   * listing and has no filesystem watcher, so this is the only notice it gets
+   * that a write landed behind its back). Not the CLI: it has no file tree or
+   * decoration surface — accepted paths are printed into the transcript by the
+   * tool row, which is built from the tool result and cannot go stale.
+   */
+  workspaceFilesWritten: { absolutePaths: string[] };
+}
+```
+
+## AppSignals
+
+The process's signal hub: one unbounded `PubSub`, built once by the
+process layer and served to every program of the process from context.
+Unbounded and never shut down, so publishing never blocks or drops; a
+subscription only receives what is published after it exists.
+
+```ts
+class AppSignals extends Context.Service<
+  AppSignals,
+  {
+    /**
+     * Publish `signal` to every current subscriber and return. Synchronous
+     * by construction: the publish is the enqueue, and the hub is unbounded,
+     * so it always accepts without suspending. The delivery itself runs on
+     * each subscriber's own fiber — see the delivery and error order above.
+     * For an owner whose callbacks run outside any fiber (a secret store's
+     * commit, a registry's close listener), which captures the service
+     * where its layer is built; a program publishes with
+     * {@link emitAppSignal}.
+     */
+    readonly emit: <K extends AppSignal>(
+      signal: K,
+      payload: AppSignalPayloads[K],
+    ) => void;
+    /** A subscription to every signal, held for the caller's scope. */
+    readonly subscribe: Effect.Effect<
+      PubSub.Subscription<AppSignalEvent>,
+      never,
+      Scope.Scope
+    >;
+  }
+>()('@texra-ai/harness/AppSignals')
+```
+
+## appSignalStream
+
+`signal`'s payloads, as a stream for a host to run where it holds the
+lifetime: each run subscribes when it starts and unsubscribes when it
+ends, so it reads what is published after it starts. A caller that must
+know the subscription is live before it reads the state the signal
+announces uses {@link onAppSignal} and its `subscribed`.
+
+```ts
+function appSignalStream<K extends AppSignal>(
+  signal: K,
+): Stream.Stream<AppSignalPayloads[K], never, AppSignals>
 ```
 
 ## AppState
@@ -414,22 +607,6 @@ type AssembleTraceResult =
   | { readonly status: 'config_missing' | 'streamLogs_missing' };
 ```
 
-## attachErrorPresentationClaimed
-
-Marks that this failure was presented, so no later presenter (a generic
-handler on the same call stack, a host's own fallback) shows it again.
-Attached when a targeted notification owns its presentation (its emit
-confirmed delivery, or no host was attached and it was retained for
-replay), when the session's presenter showed a run's failure from its
-`run.end` row (`presentRunFailure`, `receiveTerminalFailure`), and when
-another process (a service) showed it to this window. Never for a
-fire-and-forget or declined emit, so a host that could not render a
-targeted notification leaves the generic surface free to fire.
-
-```ts
-const attachErrorPresentationClaimed: (err: unknown) => void
-```
-
 ## AvailabilityResults
 
 Each workspace root's last results (`undefined` = no folder open); a root
@@ -440,14 +617,6 @@ type AvailabilityResults = ReadonlyMap<
   string | undefined,
   readonly ExternalToolCheckResult[]
 >;
-```
-
-## availableTeamMemberCount
-
-Distinct member keys available to the run, excluding the root itself.
-
-```ts
-function availableTeamMemberCount(plan: TeamRunPlan): number
 ```
 
 ## buildDiffHunks
@@ -481,14 +650,6 @@ Why a model call failed: the vendor's verdict, or no route to send it on.
 type CallFailure = ModelError | RouteUnavailable;
 ```
 
-## canLaunchTeam
-
-```ts
-function canLaunchTeam<T extends TeamCatalogAgent>(
-  plan: TeamRunPlan<T>,
-): plan is TeamRunPlan<T> & { readonly rootAgent: T }
-```
-
 ## causeChain
 
 `err` followed by its `cause` chain, outermost first; an
@@ -508,10 +669,9 @@ Platform configuration provider interface.
 interface ConfigProvider {
   /**
    * Resolution order an implementation must honor: stored workspace value,
-   * stored global value, the setting catalog's own default
-   * (`catalog.configDefault`), and only then the caller's `defaultValue`.
-   * Callers of a cataloged `texra.*` key therefore omit `defaultValue`; it is
-   * for keys the catalog does not own.
+   * stored global value, then the setting catalog's own default
+   * (`catalog.configDefault`); a key no row owns reads as `undefined` when
+   * absent.
    *
    * It is synchronous, and it casts: the value it returns is whatever the
    * store holds. A reader that needs the value checked reads through
@@ -521,12 +681,10 @@ interface ConfigProvider {
    * Nothing may cache what either read returns: a setting the user changes
    * mid-process is read on the next call.
    *
-   * Path conventions:
-   * - Use dot notation with or without the canonical `texra.` prefix.
-   * - Host settings such as `latex-workshop.*` must use the host adapter
-   *   rather than this shared configuration path.
+   * Keys are relative to `catalog.namespace` (`memory.enabled`), which the
+   * provider adds to every key it stores.
    */
-  get<T>(key: string, defaultValue?: T): T;
+  get<T>(key: string): T;
   /**
    * Persist one value to the target's store. The write is an `Effect` so it
    * composes directly into the caller's program: the store's own write is an
@@ -749,6 +907,14 @@ interface DraftBlob {
 }
 ```
 
+## emitAppSignal
+
+Publish `signal` from a program: {@link AppSignals}' `emit`.
+
+```ts
+const emitAppSignal: <K extends AppSignal>(signal: K, payload: AppSignalPayloads[K]) => Effect<void, never, AppSignals>
+```
+
 ## EnabledSkill
 
 One skill a person may activate: its display row, and the activation
@@ -759,29 +925,6 @@ interface EnabledSkill {
   readonly display: SkillDisplayItem;
   readonly activation: string;
 }
-```
-
-## entryChannel
-
-Which channel an entry belongs to, or `undefined` when it names none. An
-`Effect.log*` carries one only through `Effect.annotateLogs`; a tracer span
-opened by `Effect.withSpan` does not supply it, because the entry's `spans`
-field reads `CurrentLogSpans` (`Effect.withLogSpan`), a separate mechanism.
-An unattributed entry lands on the host's shared surface, which is the right
-home for it.
-
-```ts
-function entryChannel(entry: LogEntry): string | undefined
-```
-
-## entryMessage
-
-Render an entry's message for a host that wants one line of text. Effect
-hands `message` through as a single value or an array of them, so both
-shapes fold here rather than at each host.
-
-```ts
-function entryMessage(entry: LogEntry): string
 ```
 
 ## EventsRead
@@ -806,7 +949,7 @@ type ExportNode = typeof ExportNodeSchema.Type;
 One node of a run's conversation as an export reads it.
 
 ```ts
-const ExportNodeSchema: Union<readonly [Struct<{ readonly kind: Literal<"user-message">; readonly parts: $Array<Union<readonly [Struct<{ readonly type: Literal<"text">; readonly text: String; }>, Struct<{ readonly type: Literal<"attachment">; readonly attachmentType: Literals<readonly ["image", "document"]>; }>]>>; }>, Struct<{ readonly kind: Literal<"assistant-text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"thinking">; readonly text: String; }>, Struct<{ readonly kind: Literal<"tool-call">; readonly name: String; readonly input: Unknown; }>, Struct<{ readonly kind: Literal<"tool-result">; readonly text: String; }>, Struct<{ readonly kind: Literal<"web-search">; readonly query: String; }>]>
+const ExportNodeSchema: Union<readonly [Struct<{ readonly kind: Literal<"user-message">; readonly parts: $Array<Union<readonly [Struct<{ readonly type: Literal<"text">; readonly text: String; }>, Struct<{ readonly type: Literal<"attachment">; readonly attachmentType: Literals<readonly ["image", "document"]>; }>]>>; }>, Struct<{ readonly kind: Literal<"assistant-text">; readonly text: String; }>, Struct<{ readonly kind: Literal<"thinking">; readonly text: String; }>, Struct<{ readonly kind: Literal<"tool-call">; readonly name: String; readonly input: Unknown; }>, Struct<{ readonly kind: Literal<"tool-result">; readonly text: String; readonly value: optional<Codec<Json, Json, never, never>>; }>, Struct<{ readonly kind: Literal<"web-search">; readonly query: String; }>]>
 ```
 
 ## ExternalToolCheckResult
@@ -820,18 +963,22 @@ interface ExternalToolCheckResult {
   readonly status: 'available' | 'not-found' | 'unknown';
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
-  /** Human-readable status detail from the group's `detailCheck`, if any. */
+  /** Human-readable explanation from the plugin's check, if any. */
   readonly statusDetail?: string;
 }
 ```
 
-## findTeamPreset
+## followPendingRequests
+
+Run `program` once for each request `select` picks from the session's
+view, for as long as the view lists it. A program that returns runs again
+on the next view that still lists its request; one that holds something
+for its request (a decision on record, a preview, a staged card) ends with
+`Effect.never` and releases it in a finalizer, which runs once the view
+drops the request, however it was decided.
 
 ```ts
-function findTeamPreset(
-  presets: readonly TeamPreset[],
-  query: string,
-): TeamPreset | undefined
+const followPendingRequests: <P extends PendingRequest, R>(view: { readonly changes: Stream<{ readonly key: string; readonly runs: ReadonlyMap<string & Brand<"RunId">, { readonly title: string; readonly worktree: { readonly workingDirectory: string; } | null; readonly id: string & Brand<"RunId">; readonly description: string | null; readonly identity: { readonly kind: "agent"; readonly agent: string; readonly tool?: string | undefined; } | { readonly kind: "process"; readonly tool: string; } | { readonly kind: "script"; readonly title: string; }; readonly model: string | null; readonly inputFiles: readonly string[]; readonly label: string; readonly status: "completed" | "cancelled" | "failed" | "waiting" | "running" | "ready"; readonly recipe: string | null; readonly usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly output: { readonly files: readonly string[]; readonly response: string; readonly structured?: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null | undefined; } | null; readonly turn: number | null; readonly command: string | null; readonly context: { readonly inputTokens: number; readonly contextWindow: number; readonly utilizationPercent: number; } | null; readonly parentId: (string & Brand<"RunId">) | null; readonly facts: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; }; readonly ownerId: string | null; readonly descriptionBy: "model" | "user" | null; readonly modelLabel: string | null; readonly substate: "paused" | "starting" | "resuming" | "resultWaiting" | null; readonly durableOutcome: "completed" | "cancelled" | "failed" | null; readonly statusNotice: { readonly kind: "damaged" | "earlierBuild"; } | { readonly kind: "resumeBlocked"; readonly reason: { readonly kind: "blocked"; readonly blocker: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; }; } | { readonly kind: "interrupted"; } | { readonly kind: "held"; readonly pid: number; } | { readonly kind: "lost"; readonly message: string; } | null; readonly resumeBlocked: { readonly kind: "blocked"; readonly blocker: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; } | null; readonly lost: string | null; readonly statusKey: "completed" | "cancelled" | "failed" | "paused" | "waiting" | "running" | "ready" | "starting" | "resuming" | "resultWaiting" | "interrupted" | "waitingOnUser"; readonly tone: "success" | "running" | "danger" | "neutral" | "warning"; readonly turnStartedAt: number | null; readonly runStartedAt: number | null; readonly launchParentId: (string & Brand<"RunId">) | null; readonly forkedFrom: { readonly id: string & Brand<"RunId">; readonly at: number; } | null; readonly forkPoint: number | null; readonly parentCard: string | null; readonly ancestors: readonly { readonly id: string & Brand<"RunId">; readonly label: string; }[]; readonly childIds: readonly (string & Brand<"RunId">)[]; readonly rollup: { readonly total: number; readonly running: number; readonly finished: number; }; readonly approval: "own" | "descendant" | "none"; readonly actions: readonly ("fork" | "files" | "compact" | "stop" | "copy" | "grant" | "resume" | "runAgain" | "delete" | "rename" | "openRunStorage" | "export")[]; readonly latestLine: string | null; readonly ownedHere: boolean; readonly createdAt: number; readonly launchedAt: number; readonly working: boolean; readonly lastTimestamp: number; readonly followUpSupport: "unsupported" | "nativeInteractive" | "terminalBacked"; readonly readOnly: boolean; readonly forceExpanded: boolean; readonly group: "waiting" | "running" | "interrupted" | "recent"; readonly treeUsage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly thinkingActive: boolean; readonly compactingActive: boolean; readonly transcript: { readonly rows: readonly ({ readonly kind: "thinking" | "scratchpad" | "assistant"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly streaming: boolean; readonly pendingEmbeddedFollowup?: boolean | undefined; readonly cut?: "length" | "content-filter" | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "user"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly scriptSummary?: { readonly name: string; readonly outcome: "completed" | "failed" | "stopped"; readonly phaseCount: number; readonly tally: { readonly total: number; readonly ok: number; readonly failed: number; readonly cancelled: number; readonly skipped: number; }; readonly costUsd: number; readonly durationMs: number; readonly files: readonly { readonly path: string; readonly added: number | null; readonly removed: number | null; }[]; readonly errorCause: string | null; } | undefined; readonly attachments?: readonly ("image" | "document")[] | undefined; readonly media?: readonly { readonly mimeType: string; readonly digest: string; readonly name: string; }[] | undefined; readonly forkAt?: number | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "error"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly details: readonly { readonly key: "message" | TypeOptionalKeys<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly rawMessage: optional<String>; readonly operation: optional<String>; readonly model: optional<String>; }>; readonly value: string; }[]; readonly failure?: { readonly message: string; readonly classification: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; }; } | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "tool"; readonly toolUse: { readonly toolName: string; readonly errorText: string; readonly outputText: string; readonly exitCode?: number | undefined; readonly userInstructionText: string; readonly input: unknown; readonly isUserFeedback: boolean; readonly headerSummary: string; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; }; readonly model: { readonly headerLabel: string; readonly headerPreview: string; readonly sections: readonly ({ readonly kind: "text"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly label: string; } | { readonly kind: "code"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly language: string; readonly label: string; } | { readonly kind: "identifier"; readonly value: string; readonly note?: string | undefined; readonly label: string; } | { readonly kind: "file"; readonly path: string; readonly startLine?: number | undefined; readonly endLine?: number | undefined; readonly namespace: ToolFileNamespace; readonly label: string; } | { readonly kind: "fileGroups"; readonly groups: readonly { readonly label: string; readonly files: readonly string[]; readonly clickable: boolean; }[]; readonly label: string; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly from?: string | undefined; readonly note?: string | undefined; readonly lineChanges?: { readonly added: number; readonly removed: number; } | undefined; }[]; readonly label: string; } | { readonly kind: "diff"; readonly oldText: string; readonly newText: string; readonly fileLabel?: string | undefined; readonly label: string; } | { readonly kind: "badges"; readonly badges: readonly string[]; readonly label: string; } | { readonly kind: "status"; readonly status: string; readonly label: string; })[]; readonly output?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly errorPreview?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly userInstruction?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly showOutput: boolean; readonly outputSuppression?: ToolOutputSuppression | undefined; readonly showsNoOutputMarker: boolean; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly isError: boolean; readonly isUserFeedback: boolean; readonly isInProgress: boolean; readonly exitCode?: number | undefined; }; readonly log: { readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly error?: string | undefined; readonly output?: unknown; readonly toolName?: string | undefined; readonly input?: unknown; readonly exitCode?: number | undefined; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; }; readonly phase?: string | undefined; readonly attempt?: number | undefined; readonly cutByRunEnd?: true | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "webSearch"; readonly query?: string | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly ok: boolean; readonly media?: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; } | undefined; readonly source?: string | undefined; readonly sourceDisplay?: string | undefined; readonly varName?: string | undefined; }[]; readonly summary: string; readonly media: readonly { readonly path: string; readonly media: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; }; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "contextManagement"; readonly data: { readonly action: "max_tokens_reduced"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly originalMaxTokens: number; readonly reducedMaxTokens: number; readonly details?: string | undefined; } | { readonly action: "compaction" | "clear_tool_uses" | "clear_thinking" | "truncation"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly tokensAfter: number; readonly utilizationAfter: number; readonly details?: string | undefined; }; readonly label: string; readonly items: readonly { readonly key: string; readonly label: string; readonly value: string; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "progressStatus"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly quotaFallback?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "compactionActivity"; readonly block: { readonly operationId: string; readonly status: CompactionActivityStatus; readonly finalized: boolean; readonly settledThroughSeqNo?: number | undefined; readonly startPosition: number; readonly startedAt: number; readonly finishedAt?: number | undefined; readonly freed?: { readonly tokens: number; readonly utilizationBefore: number; readonly utilizationAfter: number; } | undefined; }; readonly label: string; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "log"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; })[]; readonly taskGroups: readonly { readonly id: string; readonly name: string; readonly status: "completed" | "cancelled" | "failed" | "running"; readonly startTime: number; readonly kind?: "script" | "run" | "session" | undefined; readonly endTime?: number | undefined; readonly parentGroupId?: string | undefined; }[]; readonly settledRows: number; }; readonly agentScope?: readonly string[] | null | undefined; }>; readonly order: readonly (string & Brand<"RunId">)[]; readonly cursor: number; readonly debug: boolean; readonly transcriptSeq: ReadonlyMap<string & Brand<"AggregateId">, number>; readonly rollup: { readonly running: number; readonly waiting: number; readonly interrupted: number; }; readonly requests: readonly { readonly runId: string & Brand<"RunId">; readonly requestId: string; readonly payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly allowBypass: boolean; readonly runId: "" | (string & Brand<"RunId">); readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; readonly content: string; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly operation: string; readonly errorDetails: { readonly message: string; readonly statusCode?: number | undefined; readonly statusText?: string | undefined; readonly provider?: string | undefined; readonly classification?: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; } | undefined; readonly requestId?: string | undefined; readonly partialText?: string | undefined; }; readonly model?: string | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly allowBypass: boolean; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; } | { readonly kind: "plugin"; readonly plugin: string; readonly blocksCaller: boolean; readonly answers: readonly ("retry" | "approve" | "approve_and_goal" | "submit" | "answer" | "skip")[]; readonly data: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; }; }[]; readonly policy: ReadonlyMap<string & Brand<"RunId">, { readonly own: { readonly bash?: "parent" | "on" | "off" | undefined; readonly toolEdit?: "parent" | "on" | "off" | undefined; readonly superYolo?: "parent" | "on" | "off" | undefined; }; readonly goal: readonly ("bash" | "toolEdit" | "superYolo")[]; readonly limit?: "never" | "ask" | undefined; }>; readonly pluginFacts: readonly { readonly kind: string; readonly parent: (string & Brand<"RunId">) | null; readonly plugin: string; readonly type: "plugin.fact"; readonly aggregateId: string & Brand<"AggregateId">; readonly version: number; readonly value: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly stageId?: string | undefined; }[]; readonly queuedFollowUps: ReadonlyMap<string & Brand<"RunId">, readonly { readonly followUpId: string; readonly text: string; }[]>; }, never, never>; }, select: (view: { readonly key: string; readonly runs: ReadonlyMap<string & Brand<"RunId">, { readonly title: string; readonly worktree: { readonly workingDirectory: string; } | null; readonly id: string & Brand<"RunId">; readonly description: string | null; readonly identity: { readonly kind: "agent"; readonly agent: string; readonly tool?: string | undefined; } | { readonly kind: "process"; readonly tool: string; } | { readonly kind: "script"; readonly title: string; }; readonly model: string | null; readonly inputFiles: readonly string[]; readonly label: string; readonly status: "completed" | "cancelled" | "failed" | "waiting" | "running" | "ready"; readonly recipe: string | null; readonly usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly output: { readonly files: readonly string[]; readonly response: string; readonly structured?: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null | undefined; } | null; readonly turn: number | null; readonly command: string | null; readonly context: { readonly inputTokens: number; readonly contextWindow: number; readonly utilizationPercent: number; } | null; readonly parentId: (string & Brand<"RunId">) | null; readonly facts: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; }; readonly ownerId: string | null; readonly descriptionBy: "model" | "user" | null; readonly modelLabel: string | null; readonly substate: "paused" | "starting" | "resuming" | "resultWaiting" | null; readonly durableOutcome: "completed" | "cancelled" | "failed" | null; readonly statusNotice: { readonly kind: "damaged" | "earlierBuild"; } | { readonly kind: "resumeBlocked"; readonly reason: { readonly kind: "blocked"; readonly blocker: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; }; } | { readonly kind: "interrupted"; } | { readonly kind: "held"; readonly pid: number; } | { readonly kind: "lost"; readonly message: string; } | null; readonly resumeBlocked: { readonly kind: "blocked"; readonly blocker: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; } | null; readonly lost: string | null; readonly statusKey: "completed" | "cancelled" | "failed" | "paused" | "waiting" | "running" | "ready" | "starting" | "resuming" | "resultWaiting" | "interrupted" | "waitingOnUser"; readonly tone: "success" | "running" | "danger" | "neutral" | "warning"; readonly turnStartedAt: number | null; readonly runStartedAt: number | null; readonly launchParentId: (string & Brand<"RunId">) | null; readonly forkedFrom: { readonly id: string & Brand<"RunId">; readonly at: number; } | null; readonly forkPoint: number | null; readonly parentCard: string | null; readonly ancestors: readonly { readonly id: string & Brand<"RunId">; readonly label: string; }[]; readonly childIds: readonly (string & Brand<"RunId">)[]; readonly rollup: { readonly total: number; readonly running: number; readonly finished: number; }; readonly approval: "own" | "descendant" | "none"; readonly actions: readonly ("fork" | "files" | "compact" | "stop" | "copy" | "grant" | "resume" | "runAgain" | "delete" | "rename" | "openRunStorage" | "export")[]; readonly latestLine: string | null; readonly ownedHere: boolean; readonly createdAt: number; readonly launchedAt: number; readonly working: boolean; readonly lastTimestamp: number; readonly followUpSupport: "unsupported" | "nativeInteractive" | "terminalBacked"; readonly readOnly: boolean; readonly forceExpanded: boolean; readonly group: "waiting" | "running" | "interrupted" | "recent"; readonly treeUsage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly thinkingActive: boolean; readonly compactingActive: boolean; readonly transcript: { readonly rows: readonly ({ readonly kind: "thinking" | "scratchpad" | "assistant"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly streaming: boolean; readonly pendingEmbeddedFollowup?: boolean | undefined; readonly cut?: "length" | "content-filter" | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "user"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly scriptSummary?: { readonly name: string; readonly outcome: "completed" | "failed" | "stopped"; readonly phaseCount: number; readonly tally: { readonly total: number; readonly ok: number; readonly failed: number; readonly cancelled: number; readonly skipped: number; }; readonly costUsd: number; readonly durationMs: number; readonly files: readonly { readonly path: string; readonly added: number | null; readonly removed: number | null; }[]; readonly errorCause: string | null; } | undefined; readonly attachments?: readonly ("image" | "document")[] | undefined; readonly media?: readonly { readonly mimeType: string; readonly digest: string; readonly name: string; }[] | undefined; readonly forkAt?: number | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "error"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly details: readonly { readonly key: "message" | TypeOptionalKeys<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly rawMessage: optional<String>; readonly operation: optional<String>; readonly model: optional<String>; }>; readonly value: string; }[]; readonly failure?: { readonly message: string; readonly classification: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; }; } | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "tool"; readonly toolUse: { readonly toolName: string; readonly errorText: string; readonly outputText: string; readonly exitCode?: number | undefined; readonly userInstructionText: string; readonly input: unknown; readonly isUserFeedback: boolean; readonly headerSummary: string; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; }; readonly model: { readonly headerLabel: string; readonly headerPreview: string; readonly sections: readonly ({ readonly kind: "text"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly label: string; } | { readonly kind: "code"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly language: string; readonly label: string; } | { readonly kind: "identifier"; readonly value: string; readonly note?: string | undefined; readonly label: string; } | { readonly kind: "file"; readonly path: string; readonly startLine?: number | undefined; readonly endLine?: number | undefined; readonly namespace: ToolFileNamespace; readonly label: string; } | { readonly kind: "fileGroups"; readonly groups: readonly { readonly label: string; readonly files: readonly string[]; readonly clickable: boolean; }[]; readonly label: string; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly from?: string | undefined; readonly note?: string | undefined; readonly lineChanges?: { readonly added: number; readonly removed: number; } | undefined; }[]; readonly label: string; } | { readonly kind: "diff"; readonly oldText: string; readonly newText: string; readonly fileLabel?: string | undefined; readonly label: string; } | { readonly kind: "badges"; readonly badges: readonly string[]; readonly label: string; } | { readonly kind: "status"; readonly status: string; readonly label: string; })[]; readonly output?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly errorPreview?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly userInstruction?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly showOutput: boolean; readonly outputSuppression?: ToolOutputSuppression | undefined; readonly showsNoOutputMarker: boolean; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly isError: boolean; readonly isUserFeedback: boolean; readonly isInProgress: boolean; readonly exitCode?: number | undefined; }; readonly log: { readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly error?: string | undefined; readonly output?: unknown; readonly toolName?: string | undefined; readonly input?: unknown; readonly exitCode?: number | undefined; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; }; readonly phase?: string | undefined; readonly attempt?: number | undefined; readonly cutByRunEnd?: true | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "webSearch"; readonly query?: string | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly ok: boolean; readonly media?: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; } | undefined; readonly source?: string | undefined; readonly sourceDisplay?: string | undefined; readonly varName?: string | undefined; }[]; readonly summary: string; readonly media: readonly { readonly path: string; readonly media: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; }; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "contextManagement"; readonly data: { readonly action: "max_tokens_reduced"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly originalMaxTokens: number; readonly reducedMaxTokens: number; readonly details?: string | undefined; } | { readonly action: "compaction" | "clear_tool_uses" | "clear_thinking" | "truncation"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly tokensAfter: number; readonly utilizationAfter: number; readonly details?: string | undefined; }; readonly label: string; readonly items: readonly { readonly key: string; readonly label: string; readonly value: string; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "progressStatus"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly quotaFallback?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "compactionActivity"; readonly block: { readonly operationId: string; readonly status: CompactionActivityStatus; readonly finalized: boolean; readonly settledThroughSeqNo?: number | undefined; readonly startPosition: number; readonly startedAt: number; readonly finishedAt?: number | undefined; readonly freed?: { readonly tokens: number; readonly utilizationBefore: number; readonly utilizationAfter: number; } | undefined; }; readonly label: string; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "log"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; })[]; readonly taskGroups: readonly { readonly id: string; readonly name: string; readonly status: "completed" | "cancelled" | "failed" | "running"; readonly startTime: number; readonly kind?: "script" | "run" | "session" | undefined; readonly endTime?: number | undefined; readonly parentGroupId?: string | undefined; }[]; readonly settledRows: number; }; readonly agentScope?: readonly string[] | null | undefined; }>; readonly order: readonly (string & Brand<"RunId">)[]; readonly cursor: number; readonly debug: boolean; readonly transcriptSeq: ReadonlyMap<string & Brand<"AggregateId">, number>; readonly rollup: { readonly running: number; readonly waiting: number; readonly interrupted: number; }; readonly requests: readonly { readonly runId: string & Brand<"RunId">; readonly requestId: string; readonly payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly allowBypass: boolean; readonly runId: "" | (string & Brand<"RunId">); readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; readonly content: string; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly operation: string; readonly errorDetails: { readonly message: string; readonly statusCode?: number | undefined; readonly statusText?: string | undefined; readonly provider?: string | undefined; readonly classification?: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; } | undefined; readonly requestId?: string | undefined; readonly partialText?: string | undefined; }; readonly model?: string | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly allowBypass: boolean; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; } | { readonly kind: "plugin"; readonly plugin: string; readonly blocksCaller: boolean; readonly answers: readonly ("retry" | "approve" | "approve_and_goal" | "submit" | "answer" | "skip")[]; readonly data: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; }; }[]; readonly policy: ReadonlyMap<string & Brand<"RunId">, { readonly own: { readonly bash?: "parent" | "on" | "off" | undefined; readonly toolEdit?: "parent" | "on" | "off" | undefined; readonly superYolo?: "parent" | "on" | "off" | undefined; }; readonly goal: readonly ("bash" | "toolEdit" | "superYolo")[]; readonly limit?: "never" | "ask" | undefined; }>; readonly pluginFacts: readonly { readonly kind: string; readonly parent: (string & Brand<"RunId">) | null; readonly plugin: string; readonly type: "plugin.fact"; readonly aggregateId: string & Brand<"AggregateId">; readonly version: number; readonly value: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly stageId?: string | undefined; }[]; readonly queuedFollowUps: ReadonlyMap<string & Brand<"RunId">, readonly { readonly followUpId: string; readonly text: string; }[]>; }) => readonly P[], program: (request: P) => Effect<void, never, R>) => Effect<void, never, Scope | R>
 ```
 
 ## formatConversationMessage
@@ -856,43 +1003,31 @@ so a crash dialog is never the one surface that shows a secret unredacted.
 function formatFatalErrorDetail(error: unknown): string
 ```
 
-## formatTeamLaunchBlockedMessage
-
-```ts
-function formatTeamLaunchBlockedMessage(
-  teamId: string,
-  reason: string,
-): string
-```
-
-## formatUnknownTeamMessage
-
-```ts
-function formatUnknownTeamMessage(teamId: string): string
-```
-
 ## getEnabledModels
 
 The models the pickers show — the single reader of
 `GlobalStateKey.MODEL_SELECTION` for every host.
 
 ```ts
-function getEnabledModels(state: Pick<StateStore, 'get'>)
+const getEnabledModels: (state: Pick<StateStore, "get">) => Effect<readonly string[], StateReadFailed, never>
 ```
 
 ## getHelperModelName
 
 The helper model a run, a merge, or the Models tab uses: the configured
-choice while it is enabled, else the built-in default. The built-in default
-is always accepted because it is used for internal auxiliary tasks, not
-user-facing generation; never fall back to the first picker model, which is
-a premium default. An empty enabled list falls through to the default too.
+choice while it is enabled, else the catalog's default for the setting;
+`undefined` when neither names one, and a run's helper calls use its own
+model. The harness names no default: an app's catalog supplies its own
+(`settingsCatalog`'s `defaults`). That default is always accepted because it
+serves internal auxiliary tasks, not user-facing generation; a disabled
+choice falls back to it, never to the first picker model, which is a
+premium default.
 
 The one resolution of the chain: every surface that shows or uses the
 helper model reads it here, from the setting slots the caller holds.
 
 ```ts
-function getHelperModelName(stores: SettingsStores)
+const getHelperModelName: (stores: SettingsStores) => Effect<string | undefined, StateReadFailed, never>
 ```
 
 ## getPathSegments
@@ -900,17 +1035,13 @@ function getHelperModelName(stores: SettingsStores)
 Get path segments as an array.
 Only converts backslashes — does NOT resolve '..' so callers can detect
 traversal attempts (e.g. AcceptRunFilesTool's `includes('..')` guard).
+It also trims its input, so a caller that must keep a leading or trailing
+space in a name (hidden-file and excluded-directory checks, published
+artifact paths) cannot route through it; those call sites split on their
+own, and each handles `..` its own way on purpose.
 
 ```ts
 function getPathSegments(input: string): string[]
-```
-
-## getSdkErrorMessage
-
-The user-facing message of any failure.
-
-```ts
-function getSdkErrorMessage(err: unknown): string
 ```
 
 ## GlobalStorageFs
@@ -940,15 +1071,6 @@ class GlobalValues extends Context.Service<
 >()('@texra-ai/harness/GlobalValues')
 ```
 
-## hasErrorPresentationClaimed
-
-Whether the claim is on `err` or anywhere in its rethrow chain, so a
-wrapper that preserves `{ cause }` stays classifiable.
-
-```ts
-const hasErrorPresentationClaimed: (err: unknown) => boolean
-```
-
 ## hasExtension
 
 Check if a file path has a specific extension (case-insensitive).
@@ -962,26 +1084,18 @@ Consolidates scattered `.toLowerCase().endsWith('.ext')` patterns.
 function hasExtension(filePath: string, extension: string): boolean
 ```
 
-## heldElsewhereBy
-
-The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
-names (not proven alive); null for a closed or ownerless one.
-
-```ts
-const heldElsewhereBy: (error: unknown) => string | null
-```
-
 ## helperCall
 
-One helper call: bind the configured helper model for this call alone and
-run one completion through the one retry loop (`run/invocation.ts`),
-gated on the process's retry gate, priced and reported to the usage log as
-`attribution`. No row is written. Returns the turn's assistant text.
-`stores` are the asking session's setting slots and the process secret
-store: the binding, the retry limit and the usage consent read them.
+One helper call: bind the configured helper model (else `runModel`) for
+this call alone and run one completion through the one retry loop
+(`run/invocation.ts`), gated on the process's retry gate, priced and
+reported to the usage log as `attribution`. No row is written. Returns the
+turn's assistant text. `stores` are the asking session's setting slots: the
+binding, the retry limit and the usage consent read them, beside the
+process `Secrets`.
 
 ```ts
-const helperCall: (stores: ModelOptionStores, args_1: HelperPrompt, attribution: UsageAttribution, retries?: number | undefined) => Effect<string, Error | CallFailure, HttpClient | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<string, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
 ```
 
 ## HelperPrompt
@@ -1032,36 +1146,6 @@ interface HostInteractions {
    * nothing.
    */
   approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
-  /**
-   * Stage a tool edit's preview (its original and proposed content, which
-   * the durable request payload does not carry) for the request the fold
-   * lists under `request.permission.requestId`. The decision comes back as
-   * that request's `request.decide`; a host that stages nothing leaves the
-   * request answerable from its payload alone.
-   *
-   * The session's own {@link SessionHostInteractions.presentToolEdit} hands
-   * its caller the release for what this staged; a host implements the
-   * staging alone.
-   */
-  presentToolEdit?(request: ToolEditApprovalRequest): void;
-  /**
-   * Drop what {@link presentToolEdit} staged for one request, for the single
-   * case no `request.decided` ever reaches: a request whose `request.opened`
-   * never committed. Every host that stages implements both. An `Effect`:
-   * the cleanup (a diff view to close, temp files to delete) is a program the
-   * session composes into its own. Built when staged, run only then.
-   */
-  releaseToolEdit?(requestId: string): Effect.Effect<void>;
-  /**
-   * Approve a request {@link presentToolEdit} staged, with the content the
-   * user edited in the host's view. `false` when nothing is staged, which
-   * the caller then approves from the payload; `true` when the host took
-   * the decision (a failed read of the edit included, left pending).
-   */
-  approveToolEdit?(requestId: string): Effect.Effect<boolean>;
-  /** What {@link presentToolEdit} staged for a pending request, or null:
-   *  the answer to a `request.preview`. */
-  preview?(requestId: string): Effect.Effect<ToolEditContent | null>;
   dispose?(): void;
 }
 ```
@@ -1076,6 +1160,30 @@ of its own.
 
 ```ts
 type HostPresentation = Effect.Effect<void, Error> | void;
+```
+
+## HostSkillOptions
+
+A process's skill sources (`ProcessLayerOptions.skills`,
+`Composition.skills`): its bundled resources tree, under which each of its
+tool plugins ships its bundled skills (`plugins/<id>/skills`), the folder
+it keeps in each project, and its process-wide source options (the CLI's
+flags). Discovery reads custom roots, project skills, user skills (the
+storage root's `skills/`) and the bundled ones in that precedence. A
+process given none discovers no skills at all.
+
+```ts
+interface HostSkillOptions {
+  readonly resourcesPath: string;
+  /**
+   * The folder the host keeps in each project, relative to a session's
+   * workspace (TeXRA's `.texra`): its `skills/` holds the project's own
+   * skills. Absent, a project has no skills but those a custom root or an
+   * interop listing reads.
+   */
+  readonly projectFolder?: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
+}
 ```
 
 ## InstalledPlugin
@@ -1094,7 +1202,7 @@ session's `WorkspaceRoots` is one), so a host acts on the record its
 process opened.
 
 ```ts
-const InstalledPlugins: Readonly<{ readonly unloadedComponents: readonly ("LSP servers" | "output styles" | "apps")[]; readonly origin: (input: string, cwd: string, ref: string | undefined) => Result<PluginOrigin, PluginRequestError>; readonly install: (origin: PluginOrigin, only: readonly string[], env: PluginEnv) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly commit?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], Error, FileSystem | ChildProcessSpawner>; readonly update: (names: readonly string[], env: PluginEnv) => Effect<PluginUpdate[], PluginRequestError | PluginError, FileSystem | ChildProcessSpawner>; readonly remove: (name: string, env: PluginEnv) => Effect<{ name: string; path: string; local: boolean; leftover: boolean; }, PluginRequestError | PluginError, FileSystem>; readonly list: (env: PluginEnv) => Effect<PluginListing[], PluginError, FileSystem>; readonly enable: <E, R>(name: string, env: PluginEnv, confirm: (review: PluginReview) => Effect<boolean, E, R>) => Effect<"enabled" | "declined", E | PluginRequestError | PluginError, FileSystem | R>; readonly disable: (name: string, env: PluginEnv) => Effect<undefined, PluginRequestError | PluginError, never>; readonly loaded: (env: Pick<PluginEnv, "globalState">) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly commit?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], never, FileSystem>; readonly describeHook: (hook: ConfiguredHook) => string; }>
+const InstalledPlugins: Readonly<{ readonly unloadedComponents: readonly ("LSP servers" | "output styles" | "apps")[]; readonly origin: (input: string, cwd: string, ref: string | undefined) => Result<PluginOrigin, PluginRequestError>; readonly install: (origin: PluginOrigin, only: readonly string[], env: PluginEnv) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], Error, FileSystem | ChildProcessSpawner>; readonly update: (names: readonly string[], env: PluginEnv) => Effect<PluginUpdate[], PluginError | PluginRequestError, FileSystem | ChildProcessSpawner>; readonly remove: (name: string, env: PluginEnv) => Effect<{ name: string; path: string; local: boolean; leftover: boolean; }, PluginError | PluginRequestError, FileSystem>; readonly list: (env: PluginEnv) => Effect<PluginListing[], PluginError, FileSystem>; readonly enable: <E, R>(name: string, env: PluginEnv, confirm: (review: PluginReview) => Effect<boolean, E, R>) => Effect<"enabled" | "declined", PluginError | PluginRequestError | E, FileSystem | R>; readonly disable: (name: string, env: PluginEnv) => Effect<undefined, PluginError | PluginRequestError, never>; readonly loaded: (env: Pick<PluginEnv, "globalState">) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], never, FileSystem>; readonly describeHook: (hook: ConfiguredHook) => Effect<string, never, never>; }>
 ```
 
 ## InvalidAgentTeamError
@@ -1104,14 +1212,6 @@ class InvalidAgentTeamError extends Schema.TaggedError<InvalidAgentTeamError>()(
   'InvalidAgentTeamError',
   { message: Schema.String },
 )
-```
-
-## isFileNotFoundError
-
-Check if an error represents a file-not-found condition.
-
-```ts
-function isFileNotFoundError(err: unknown): boolean
 ```
 
 ## isModuleNotFoundError
@@ -1148,20 +1248,14 @@ True if `target` is a strict descendant of `base` (excludes `target === base`).
 function isStrictlyWithin(base: string, target: string): boolean
 ```
 
-## isUserAbort
+## launchNoticeOf
 
-True if `err` is an `AbortController` abort (a DOM `AbortError`).
-
-```ts
-function isUserAbort(err: unknown): boolean
-```
-
-## launchableTeamPresets
-
-The catalog's launchable teams: every preset but the setup starter.
+The notice a refused launch carries for its caller to show
+(`AgentError.notice`), read through a `Session` start's `RunFailure`;
+undefined for any other failure, which its caller words itself.
 
 ```ts
-function launchableTeamPresets(customRaw: unknown): TeamPreset[]
+function launchNoticeOf(error: unknown): LaunchNotice | undefined
 ```
 
 ## listRunGeneratedFiles
@@ -1176,44 +1270,6 @@ walks the storage of the session it names.
 
 ```ts
 const listRunGeneratedFiles: (runId: string & Brand<"RunId">, storage: string) => Effect<RunGeneratedFile[], PlatformError, FileSystem>
-```
-
-## loadTeamOptions
-
-```ts
-function loadTeamOptions<T extends TeamCatalogAgent>(
-  ports: Omit<TeamRunOptions<T>, 'agentOverride'> & {
-    customPresetsRaw: unknown;
-  },
-): TeamOptionData[]
-```
-
-## LOG_CHANNEL
-
-Annotation naming the logical channel an entry belongs to.
-
-```ts
-const LOG_CHANNEL: "channel"
-```
-
-## LogEntry
-
-One diagnostic record, shaped by Effect's own structured formatter rather
-than by a type of ours: `Logger.formatStructured` already carries level,
-fiber, timestamp, message, cause, annotations, and spans, so the logger
-layer maps straight onto this with no adaptation.
-
-```ts
-type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
-```
-
-## LogSink
-
-```ts
-interface LogSink {
-  write(entry: LogEntry): void;
-  dispose?(): void;
-}
 ```
 
 ## mcpConfigPathOf
@@ -1307,22 +1363,12 @@ type ModelOption =
     };
 ```
 
-## ModelOptionStores
+## normalizeProviderError
 
-Every store an availability answer here reads: the secret store behind the
-provider-key checks, and the three setting slots behind the picker's
-persisted choices and the routing switches (the two "prefer my
-subscription" preferences, the Kimi Code preference). Callers
-hold them (a session's `roots`, the `Secrets` service, the stores a host
-root threaded down) and pass them in, so this module never looks a host up
-and never needs the caller's workspace-roots frame to answer for the
-caller's workspace.
+A failure as a host reads it: a full disk, a model failure, or the error's words.
 
 ```ts
-interface ModelOptionStores extends SettingsStores {
-  readonly secrets: PlatformSecrets;
-  readonly globalState: StateStore;
-}
+function normalizeProviderError(err: unknown): ProviderError
 ```
 
 ## OFFICE_EXTENSIONS
@@ -1333,6 +1379,23 @@ File extensions for binary office document formats (case-insensitive, with leadi
 const OFFICE_EXTENSIONS: readonly string[]
 ```
 
+## onAppSignal
+
+Deliver `signal` to `listener` until the caller interrupts. The program a
+host's run edge forks: its scope holds the subscription, so interrupting
+the fiber unsubscribes, and the `warn` on a failing listener is this
+module's, not the host's. `subscribed` completes once the subscription is
+live, for a caller that must not miss a signal published after it reads
+the state the signal announces.
+
+```ts
+function onAppSignal<K extends AppSignal>(
+  signal: K,
+  listener: (payload: AppSignalPayloads[K]) => void,
+  subscribed?: Deferred.Deferred<void>,
+): Effect.Effect<void, never, AppSignals>
+```
+
 ## ownKeyCredential
 
 The user's own `provider` key and the endpoint they set for it, for a
@@ -1340,7 +1403,7 @@ request llm does not model (audio transcription): the route a model of
 `config` takes with every preference off.
 
 ```ts
-const ownKeyCredential: (stores: ModelOptionStores, config: ModelConfig, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode") => Effect<RouteCredential, RouteUnavailable, never>
+const ownKeyCredential: (stores: SettingsStores, config: ModelConfig, provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode") => Effect<RouteCredential, RouteUnavailable, Secrets>
 ```
 
 ## pathToLocationIn
@@ -1396,24 +1459,6 @@ interface PerKeyLanes<Key> {
 }
 ```
 
-## planTeamRun
-
-```ts
-function planTeamRun<T extends TeamCatalogAgent>(
-  preset: TeamPreset,
-  options: TeamRunOptions<T>,
-): TeamRunPlan<T>
-```
-
-## planTeamRuns
-
-```ts
-function planTeamRuns<T extends TeamCatalogAgent>(
-  presets: readonly TeamPreset[],
-  options: TeamRunOptions<T>,
-): TeamRunPlan<T>[]
-```
-
 ## PlatformSecrets
 
 Provider for secure secret storage (API keys, tokens).
@@ -1432,9 +1477,9 @@ nothing was written. A post-commit step cannot run as a step after the
 write: a commit the store landed still exits as interrupted when its caller
 was cancelled during it, so the step would be skipped over a credential
 that is now on disk. The host stores therefore own the post-commit facts
-themselves, in an `Effect.ensuring` finalizer that runs on every exit: they
-publish the `credentialChanged` app signal (the VS Code store publishes it
-from `SecretStorage.onDidChange` instead). A writer does not by hand.
+themselves, in an `Effect.ensuring` finalizer that runs on every exit: the
+file store tells the `credentialChanged` app signal its layer hands it
+(`Secrets.announcing`). A writer does not by hand.
 
 ```ts
 interface PlatformSecrets extends CredentialStore {
@@ -1444,6 +1489,43 @@ interface PlatformSecrets extends CredentialStore {
    */
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed>;
 }
+```
+
+## PlatformServices
+
+The platform- and shared-owned services every process serves, merged once
+in `processLayer`'s `services` layer: the host ports, the language-model
+bridge and the HTTP client, plus the standard library's `FileSystem`,
+`Path` and `ChildProcessSpawner`, which the same install provides from
+`@effect/platform-node` so a program that reads a file or starts a child
+process takes them from context instead of building a Node layer of its
+own, and `GlobalStorageFs`, the cross-workspace storage view every session
+of the process shares, `GlobalDatabase`, that same root's one database
+handle, which the app's records and the CLI's input history read through,
+`ProjectDatabases`, whose project-scoped borrows share each persistent
+connection between application state and a session graph, and
+`AppSignals`, the process's app-lifecycle signal hub. Every run and
+session of the process is provided these, beneath the run-level services
+the agent runtime adds (`RunServices`) and the `ProcessServices` a
+composition root runs on.
+
+```ts
+type PlatformServices =
+  | ProcessIdentity
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner
+  | GlobalStorageFs
+  | GlobalDatabase
+  | ProjectDatabases
+  | HttpClient.HttpClient
+  | Secrets
+  | AppState
+  | AgentDirectories
+  | GlobalValues
+  | StateStores
+  | UsageLog
+  | AppSignals;
 ```
 
 ## PluginContext
@@ -1586,12 +1668,16 @@ function presentFollowUpResult(
 
 ## presentRunFailure
 
-Present a failed run from its raw error: the primary failure, classified,
-worded as `prefix` plus its text (a `Rejected` request's reason), and
-replayed to a surface that attaches later, then marked presented. A
-failure already presented (here, by the terminal-result presenter, or
-through a targeted notice) presents nothing. A `Session` start's
-`RunFailure` is presented as the failure it carries.
+Present a failed run from its raw error, replayed to a surface that
+attaches later: a refused launch's notice ({@link launchNoticeOf}), or
+else the primary failure as `prefix` plus its text (a `Rejected`
+request's reason). With no prefix, a model failure is shown as its run
+would record it, its classification beside, which a host may word in its
+place; a prefixed text says more than the failure, so it is shown as
+written. A host that throws on the notice shows that text as an error
+instead. It presents whatever it is given, so each failure has one
+presenter: a launch that failed before its run opened is its caller's,
+and a run's end is the session's ({@link presentTerminalResult}).
 
 ```ts
 function presentRunFailure(
@@ -1614,20 +1700,78 @@ becomes the process's global one, and the rest of its HTTP traffic follows
 the same proxy policy. An embedder's process (`Sessions.layer`) keeps its
 own global dispatcher: its model traffic carries the transport anyway.
 
+A plugin list the harness cannot compose (the defects `toolTable`
+refuses: an id that is not lowercase letters, digits and dashes, an id or
+tool name listed twice, a second plugin continuing waiting runs or
+recording one request kind's decisions, a switch on a plugin with no
+availability probe) fails the build with {@link PluginsRefused} before
+anything is built, so the refusal names the plugin rather than failing
+the first session open. A global store the process builds itself is
+seeded with the first-install tool switches; a store handed in is left as
+it is. Every root run is labelled with a short title from the helper model
+(its `run.description`): an extra model request per root run, outside the
+run's usage, which every host's run list shows.
+
 ```ts
 function processLayer(
   options: ProcessLayerOptions,
-): Layer.Layer<ProcessServices | Sessions>
+): Layer.Layer<ProcessServices | Sessions, PluginsRefused>
 ```
 
 ## ProcessLayerOptions
 
-What a composition root composes its process from: the app's plugins and
-setting rows and the host's own ports. What every host builds the same
-way (the process identity, the global root's database) has a default.
+What a composition root composes its process from: the services' options
+(`ownerProcessLayer`) and its skill sources.
 
 ```ts
-interface ProcessLayerOptions {
+interface ProcessLayerOptions extends Omit<
+  ProcessServicesOptions,
+  'appState'
+> {
+  /** The host's skill sources; absent, the process discovers no skills. */
+  readonly skills?: HostSkillOptions;
+  /** The global store: absent, the global root's (`globalAppStateLayer`);
+   *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
+  readonly appState?: ProcessServicesOptions['appState'];
+}
+```
+
+## ProcessRuntime
+
+The runtime a composition root makes over `processLayer`: the process
+services, and the `Sessions` that open and close its sessions. Its build
+cannot fail, so the root has already decided what a `PluginsRefused`
+means (a host with a fixed list, `Layer.orDie`).
+
+```ts
+type ProcessRuntime = ManagedRuntime.ManagedRuntime<
+  ProcessServices | Sessions,
+  never
+>;
+```
+
+## ProcessServices
+
+The process services a composition root runs on, the public name every
+host writes against: what a run's program requires of the process
+({@link RunServices}) and `ToolCatalog`, the tool catalog each session's
+steps pin their tools in (its owner's view, `ToolCatalogOwner`, stays
+inside the composition). Every run and session of the process is provided
+these; the {@link Sessions} above them is the composition root's alone
+({@link ProcessRuntime}).
+
+```ts
+type ProcessServices = RunServices | ToolCatalog;
+```
+
+## ProcessServicesOptions
+
+What the process services are composed from: the app's plugins and the
+host's own ports; what every host builds the same way (the process
+identity, the global root's database) has a default.
+
+```ts
+interface ProcessServicesOptions {
   /** The process-start read the process identity is derived from, once per
    *  process: absent, this Node process's own (`nodeProcesses.selfIdentity`). */
   readonly processStart?: Effect.Effect<
@@ -1637,26 +1781,23 @@ interface ProcessLayerOptions {
   >;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
+  /** The config's catalog: the state stores key rows under its namespace. */
+  readonly settings: SettingsCatalog;
   /**
-   * The app's plugins, in order, the harness's built-ins among them: the
-   * process serves them as `ToolRegistry` and the tool catalog over it
-   * (`ToolCatalog`). The harness names no plugin of its own: an app passes
-   * its list, `harnessBuiltins` among it.
+   * The app's plugins, in order, `harnessBuiltins` among them (the harness
+   * names no plugin of its own): the process serves them as `ToolRegistry`
+   * and the tool catalog over it (`ToolCatalog`).
    */
   readonly plugins: readonly Plugin[];
-  readonly secrets: PlatformSecrets;
+  readonly secrets: Layer.Layer<Secrets, never, AppSignals>;
   /** The host's agent-directory layer: it may capture AppState as it is
    *  built, which its readers never see. */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /** The host's tool-missing reporter, served as `ToolMissingReporter`;
-   *  absent (no UI for it), a probe still answers, without surfacing. */
-  readonly toolMissingReporter?: ToolMissingHandler;
-  /**
-   * The host's global application-state layer, acquired in this runtime's
-   * scope. Absent, the global root's values (`globalAppStateLayer`); the
-   * SDK's embedder store, or a platform-less CLI entry's refusing one.
-   */
-  readonly appState?: Layer.Layer<
+  /** The app's directories on every command's PATH (`CommandDirs`). */
+  readonly commandDirs?: () => readonly string[];
+  /** The global application-state layer, acquired in this runtime's scope
+   *  (`processLayer` picks the host's and seeds it). */
+  readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
     GlobalDatabase | ProcessIdentity | ProcessProbe
@@ -1685,78 +1826,12 @@ interface ProcessLayerOptions {
   /** The runtime's emission threshold for Effect diagnostics, from facts that
    *  cannot change mid-process: the surface (the extension's channel filters
    *  itself: `'Trace'`; the desktop's log file: `'Debug'`) or the CLI's
-   *  `--quiet` / `--verbose`. It is read before any logger runs, so a live
-   *  user setting arrives by another road (the fold's `debug` flag). */
-  readonly minimumLogLevel: LogLevel.LogLevel;
+   *  `--quiet` / `--verbose`; no live setting changes it. Absent (an
+   *  embedder), no logger, level or tracer is installed: its own decide. */
+  readonly minimumLogLevel?: LogLevel.LogLevel;
   /** A single-project host's folder, whose `.env` its own reads see. */
   readonly workspace?: string;
 }
-```
-
-## ProcessRuntime
-
-The runtime a composition root makes over `processLayer`: the process
-services, and the `Sessions` that open and close its sessions.
-
-```ts
-type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  ProcessServices | Sessions,
-  never
->;
-```
-
-## ProcessServices
-
-The runtime over the process-lifetime services every entry provides: the
-cohort-A tags, the language-model bridge and the HTTP client, merged once in
-`processLayer`'s `services` layer, plus the standard library's
-`FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
-provides from `@effect/platform-node` so a program that reads a file or
-starts a child process takes them from context instead of building a Node
-layer of its own, and
-`GlobalStorageFs`, the cross-workspace storage view every session of the
-process shares, `GlobalDatabase`, that same root's one database handle,
-which the app's records and the CLI's input history read through,
-`ProjectDatabases`, whose project-scoped borrows share each persistent
-connection between application state and a session graph, `ToolRegistry`,
-the plugin table every run's offered tools are rebuilt from,
-`ToolCatalog`, the tool catalog each session's steps pin their tools in
-(its owner's view, `ToolCatalogOwner`, stays inside the composition), and
-`ToolAvailability`, each workspace's last dependency probe. Every run
-and session of the process is provided these; the `Sessions` above them
-is the composition root's alone ({@link ProcessRuntime}).
-
-```ts
-type ProcessServices =
-  | ProcessIdentity
-  | FileSystem.FileSystem
-  | Path.Path
-  | ChildProcessSpawner
-  | GlobalStorageFs
-  | GlobalDatabase
-  | ProjectDatabases
-  | HttpClient.HttpClient
-  | Secrets
-  | AppState
-  | AgentDirectories
-  | AgentCatalog
-  | GlobalValues
-  | StateStores
-  | UsageLog
-  | ToolRegistry
-  | ToolCatalog
-  | ToolAvailability
-  | RouteRetries;
-```
-
-## quotaFallbackRouteFor
-
-The catalog entry of a declinable route. Every declinable route has one.
-
-```ts
-function quotaFallbackRouteFor(
-  usageRoute: DeclinableUsageRoute,
-): QuotaFallbackRoute
 ```
 
 ## readCustomAgentDir
@@ -1776,7 +1851,10 @@ wrong shape is one warning and no servers. The Plugins page lists them
 read-only from here, and the CLI warns of a broken file at startup.
 
 ```ts
-const readMcpConfig: (fs: FileSystem, file: string) => Effect<{ servers: McpServerConfig[]; warnings: string[]; } | null, never, never>
+const readMcpConfig: (
+  fs: FileSystem.FileSystem,
+  file: string,
+) => Effect.Effect<ReturnType<typeof parseMcpServers> | null>
 ```
 
 ## readModelOptions
@@ -1789,10 +1867,12 @@ finished purely over them, so the ~157-model settings pass costs no
 per-model awaits. Every host read fails in its typed channel
 ({@link ModelHostFactUnreadable}). `models`, when given, is honored
 verbatim, one option each, in order. Nothing is cached here: the sign-in
-state is read live by design.
+state is read live by design. `stores` are the caller's setting slots (a
+session's `roots`); provider keys and sign-ins come from the process
+{@link Secrets} service.
 
 ```ts
-const readModelOptions: (stores: ModelOptionStores, models?: readonly string[] | undefined) => Effect<ModelOption[], ModelHostFactUnreadable, never>
+const readModelOptions: (stores: SettingsStores, models?: readonly string[] | undefined) => Effect<ModelOption[], ModelHostFactUnreadable, Secrets>
 ```
 
 ## readSessionView
@@ -1804,7 +1884,7 @@ otherwise the read opens the store for itself without ever creating one,
 so a store a prune just removed is read as gone, never made again.
 
 ```ts
-const readSessionView: (storage: string) => Effect<Option<{ readonly key: string; readonly runs: ReadonlyMap<string & Brand<"RunId">, { readonly usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cacheReadInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheCreationInputTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly title: string; readonly worktree: { readonly workingDirectory: string; } | null; readonly id: string & Brand<"RunId">; readonly description: string | null; readonly identity: { readonly kind: "agent"; readonly agent: string; readonly tool?: string | undefined; } | { readonly kind: "process"; readonly tool: string; } | { readonly kind: "script"; readonly title: string; }; readonly model: string | null; readonly inputFiles: readonly string[]; readonly label: string; readonly status: "completed" | "cancelled" | "failed" | "waiting" | "running" | "ready"; readonly recipe: string | null; readonly plan: { readonly objective: string; } | null; readonly turn: number | null; readonly command: string | null; readonly context: { readonly inputTokens: number; readonly contextWindow: number; readonly utilizationPercent: number; } | null; readonly transcript: { readonly rows: readonly ({ readonly kind: "thinking" | "scratchpad" | "assistant"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly streaming: boolean; readonly pendingEmbeddedFollowup?: boolean | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "user"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly scriptSummary?: { readonly name: string; readonly outcome: "completed" | "failed" | "stopped"; readonly phaseCount: number; readonly tally: { readonly total: number; readonly ok: number; readonly failed: number; readonly cancelled: number; readonly skipped: number; }; readonly costUsd: number; readonly durationMs: number; readonly files: readonly { readonly path: string; readonly added: number | null; readonly removed: number | null; }[]; readonly errorCause: string | null; } | undefined; readonly attachments?: readonly ("image" | "document")[] | undefined; readonly mediaFiles?: readonly string[] | undefined; readonly forkAt?: number | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "error"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly details: readonly { readonly key: "message" | "userRetryable" | TypeOptionalKeys<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Struct<{ readonly kind: Union<readonly [Literal<"missing-api-key">, Literal<"context-window">, Literals<readonly ["upstream-credit", "chatgpt-subscription", "kimi-code-subscription", "glm-coding-plan", "xai-subscription"]>]>; }>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly userRetryable: Boolean; readonly rawMessage: optional<String>; readonly operation: optional<String>; readonly model: optional<String>; }>; readonly value: string; }[]; readonly detailText: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "tool"; readonly toolUse: { readonly toolName: string; readonly errorText: string; readonly outputText: string; readonly exitCode?: number | undefined; readonly userInstructionText: string; readonly input: unknown; readonly isUserFeedback: boolean; readonly headerSummary: string; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; }; readonly model: { readonly headerLabel: string; readonly headerPreview: string; readonly sections: readonly ({ readonly kind: "text"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly label: string; } | { readonly kind: "code"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly language: string; readonly label: string; } | { readonly kind: "identifier"; readonly value: string; readonly note?: string | undefined; readonly label: string; } | { readonly kind: "file"; readonly path: string; readonly startLine?: number | undefined; readonly endLine?: number | undefined; readonly namespace: ToolFileNamespace; readonly label: string; } | { readonly kind: "fileGroups"; readonly groups: readonly { readonly label: string; readonly files: readonly string[]; readonly clickable: boolean; }[]; readonly label: string; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly from?: string | undefined; readonly note?: string | undefined; readonly lineChanges?: { readonly added: number; readonly removed: number; } | undefined; }[]; readonly label: string; } | { readonly kind: "diff"; readonly oldText: string; readonly newText: string; readonly fileLabel?: string | undefined; readonly label: string; } | { readonly kind: "badges"; readonly badges: readonly string[]; readonly label: string; } | { readonly kind: "status"; readonly status: string; readonly label: string; })[]; readonly output?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly errorPreview?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly userInstruction?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly showOutput: boolean; readonly outputSuppression?: ToolOutputSuppression | undefined; readonly showsNoOutputMarker: boolean; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly isError: boolean; readonly isUserFeedback: boolean; readonly isInProgress: boolean; readonly exitCode?: number | undefined; }; readonly log: { readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly error?: string | undefined; readonly output?: unknown; readonly toolName?: string | undefined; readonly input?: unknown; readonly exitCode?: number | undefined; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; }; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; readonly phase?: string | undefined; readonly attempt?: number | undefined; } | { readonly kind: "webSearch"; readonly label: string; readonly query?: string | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly ok: boolean; readonly source?: string | undefined; readonly sourceDisplay?: string | undefined; readonly varName?: string | undefined; readonly media?: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; } | undefined; }[]; readonly summary: string; readonly media: readonly { readonly path: string; readonly media: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; }; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "contextManagement"; readonly data: { readonly action: "max_tokens_reduced"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly originalMaxTokens: number; readonly reducedMaxTokens: number; readonly details?: string | undefined; } | { readonly action: "compaction" | "clear_tool_uses" | "clear_thinking" | "truncation"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly tokensAfter: number; readonly utilizationAfter: number; readonly details?: string | undefined; }; readonly label: string; readonly items: readonly { readonly key: string; readonly label: string; readonly value: string; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "progressStatus"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly detail?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "compactionActivity"; readonly block: { readonly operationId: string; readonly status: CompactionActivityStatus; readonly finalized: boolean; readonly settledThroughSeqNo?: number | undefined; readonly startPosition: number; readonly startedAt: number; readonly finishedAt?: number | undefined; readonly freed?: { readonly tokens: number; readonly utilizationBefore: number; readonly utilizationAfter: number; } | undefined; }; readonly label: string; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "log"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; })[]; readonly taskGroups: readonly { readonly id: string; readonly name: string; readonly status: "completed" | "cancelled" | "failed" | "running"; readonly startTime: number; readonly kind?: "script" | "run" | "session" | undefined; readonly endTime?: number | undefined; readonly parentGroupId?: string | undefined; }[]; readonly settledRows: number; }; readonly parentId: (string & Brand<"RunId">) | null; readonly facts: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; }; readonly ownerId: string | null; readonly descriptionBy: "model" | "user" | null; readonly modelLabel: string | null; readonly substate: "paused" | "starting" | "resuming" | "resultWaiting" | null; readonly durableOutcome: "completed" | "cancelled" | "failed" | null; readonly statusNotice: { readonly kind: "damaged" | "earlierBuild"; } | { readonly kind: "resumeBlocked"; readonly reason: { readonly kind: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; }; readonly retry: boolean; } | { readonly kind: "interrupted"; } | { readonly kind: "held"; readonly pid: number; } | { readonly kind: "lost"; readonly message: string; } | null; readonly resumeBlocked: { readonly kind: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; } | null; readonly lost: string | null; readonly statusKey: "completed" | "cancelled" | "failed" | "paused" | "waiting" | "running" | "ready" | "starting" | "resuming" | "resultWaiting" | "interrupted" | "waitingOnUser"; readonly tone: "success" | "running" | "danger" | "neutral" | "warning"; readonly runStartedAt: number | null; readonly launchParentId: (string & Brand<"RunId">) | null; readonly forkedFrom: { readonly id: string & Brand<"RunId">; readonly at: number; } | null; readonly forkPoint: number | null; readonly parentCard: string | null; readonly ancestors: readonly { readonly id: string & Brand<"RunId">; readonly label: string; }[]; readonly childIds: readonly (string & Brand<"RunId">)[]; readonly rollup: { readonly total: number; readonly running: number; readonly finished: number; }; readonly approval: "own" | "descendant" | "none"; readonly actions: readonly ("fork" | "files" | "compact" | "stop" | "grant" | "resume" | "runAgain" | "delete" | "rename" | "openRunStorage" | "export" | "copy")[]; readonly latestLine: string | null; readonly ownedHere: boolean; readonly createdAt: number; readonly launchedAt: number; readonly lastTimestamp: number; readonly conversationProgress: { readonly toolCallCount: number; }; readonly followUpSupport: "unsupported" | "nativeInteractive" | "terminalBacked"; readonly readOnly: boolean; readonly forceExpanded: boolean; readonly group: "waiting" | "running" | "interrupted" | "recent"; readonly treeUsage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cacheReadInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheCreationInputTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly thinkingActive: boolean; readonly compactingActive: boolean; readonly agentScope?: readonly string[] | null | undefined; }>; readonly order: readonly (string & Brand<"RunId">)[]; readonly cursor: number; readonly debug: boolean; readonly transcriptSeq: ReadonlyMap<string & Brand<"AggregateId">, number>; readonly rollup: { readonly running: number; readonly waiting: number; readonly interrupted: number; }; readonly requests: readonly { readonly runId: string & Brand<"RunId">; readonly requestId: string; readonly payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly allowBypass: boolean; readonly runId: "" | (string & Brand<"RunId">); readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly operation: string; readonly model?: string | undefined; readonly errorMessage?: string | undefined; readonly errorDetails?: { readonly message?: string | undefined; readonly statusCode?: number | undefined; readonly statusText?: string | undefined; readonly provider?: string | undefined; readonly classification?: { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "missing-api-key" | "context-window" | "upstream-credit" | "glm-coding-plan"; } | undefined; readonly requestId?: string | undefined; readonly partialText?: string | undefined; readonly userRetryable?: boolean | undefined; } | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "externalInquiry"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly question: string; readonly threadId: string; readonly context?: string | null | undefined; readonly suggestSearch?: boolean | null | undefined; readonly attachFiles?: readonly string[] | null | undefined; readonly sessionLinks?: readonly string[] | null | undefined; readonly transcript?: readonly ({ readonly kind: "answered"; readonly question: string; readonly turnIndex: number; readonly timestamp: string; readonly answer: string; readonly answeredAt: string; readonly context?: string | null | undefined; readonly suggestSearch?: boolean | null | undefined; readonly attachFiles?: readonly string[] | null | undefined; readonly sessionLinks?: readonly string[] | null | undefined; } | { readonly kind: "open"; readonly question: string; readonly turnIndex: number; readonly timestamp: string; readonly context?: string | null | undefined; readonly suggestSearch?: boolean | null | undefined; readonly attachFiles?: readonly string[] | null | undefined; })[] | null | undefined; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; }; }[]; readonly policy: ReadonlyMap<string & Brand<"RunId">, { readonly own: { readonly bash?: "parent" | "on" | "off" | undefined; readonly toolEdit?: "parent" | "on" | "off" | undefined; readonly superYolo?: "parent" | "on" | "off" | undefined; }; readonly goal: readonly ("bash" | "toolEdit" | "superYolo")[]; readonly limit?: "never" | "ask" | undefined; }>; readonly pluginFacts: readonly { readonly kind: string; readonly parent: (string & Brand<"RunId">) | null; readonly plugin: string; readonly type: "plugin.fact"; readonly aggregateId: string & Brand<"AggregateId">; readonly value: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly version: number; readonly stageId?: string | undefined; }[]; readonly queuedFollowUps: ReadonlyMap<string & Brand<"RunId">, readonly { readonly followUpId: string; readonly text: string; }[]>; }>, DatabaseOpenFailed, ProcessIdentity | ProjectDatabases | ToolRegistry | ProcessProbe>
+const readSessionView: (storage: string) => Effect<Option<{ readonly key: string; readonly runs: ReadonlyMap<string & Brand<"RunId">, { readonly title: string; readonly worktree: { readonly workingDirectory: string; } | null; readonly id: string & Brand<"RunId">; readonly description: string | null; readonly identity: { readonly kind: "agent"; readonly agent: string; readonly tool?: string | undefined; } | { readonly kind: "process"; readonly tool: string; } | { readonly kind: "script"; readonly title: string; }; readonly model: string | null; readonly inputFiles: readonly string[]; readonly label: string; readonly status: "completed" | "cancelled" | "failed" | "waiting" | "running" | "ready"; readonly recipe: string | null; readonly usage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly output: { readonly files: readonly string[]; readonly response: string; readonly structured?: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null | undefined; } | null; readonly turn: number | null; readonly command: string | null; readonly context: { readonly inputTokens: number; readonly contextWindow: number; readonly utilizationPercent: number; } | null; readonly parentId: (string & Brand<"RunId">) | null; readonly facts: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; }; readonly ownerId: string | null; readonly descriptionBy: "model" | "user" | null; readonly modelLabel: string | null; readonly substate: "paused" | "starting" | "resuming" | "resultWaiting" | null; readonly durableOutcome: "completed" | "cancelled" | "failed" | null; readonly statusNotice: { readonly kind: "damaged" | "earlierBuild"; } | { readonly kind: "resumeBlocked"; readonly reason: { readonly kind: "blocked"; readonly blocker: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; }; } | { readonly kind: "interrupted"; } | { readonly kind: "held"; readonly pid: number; } | { readonly kind: "lost"; readonly message: string; } | null; readonly resumeBlocked: { readonly kind: "blocked"; readonly blocker: "agentMissing" | "pluginOff" | "pluginUntrusted"; readonly name: string; } | null; readonly lost: string | null; readonly statusKey: "completed" | "cancelled" | "failed" | "paused" | "waiting" | "running" | "ready" | "starting" | "resuming" | "resultWaiting" | "interrupted" | "waitingOnUser"; readonly tone: "success" | "running" | "danger" | "neutral" | "warning"; readonly turnStartedAt: number | null; readonly runStartedAt: number | null; readonly launchParentId: (string & Brand<"RunId">) | null; readonly forkedFrom: { readonly id: string & Brand<"RunId">; readonly at: number; } | null; readonly forkPoint: number | null; readonly parentCard: string | null; readonly ancestors: readonly { readonly id: string & Brand<"RunId">; readonly label: string; }[]; readonly childIds: readonly (string & Brand<"RunId">)[]; readonly rollup: { readonly total: number; readonly running: number; readonly finished: number; }; readonly approval: "own" | "descendant" | "none"; readonly actions: readonly ("fork" | "files" | "compact" | "stop" | "copy" | "grant" | "resume" | "runAgain" | "delete" | "rename" | "openRunStorage" | "export")[]; readonly latestLine: string | null; readonly ownedHere: boolean; readonly createdAt: number; readonly launchedAt: number; readonly working: boolean; readonly lastTimestamp: number; readonly followUpSupport: "unsupported" | "nativeInteractive" | "terminalBacked"; readonly readOnly: boolean; readonly forceExpanded: boolean; readonly group: "waiting" | "running" | "interrupted" | "recent"; readonly treeUsage: { readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; }; readonly thinkingActive: boolean; readonly compactingActive: boolean; readonly transcript: { readonly rows: readonly ({ readonly kind: "thinking" | "scratchpad" | "assistant"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly streaming: boolean; readonly pendingEmbeddedFollowup?: boolean | undefined; readonly cut?: "length" | "content-filter" | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "user"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly scriptSummary?: { readonly name: string; readonly outcome: "completed" | "failed" | "stopped"; readonly phaseCount: number; readonly tally: { readonly total: number; readonly ok: number; readonly failed: number; readonly cancelled: number; readonly skipped: number; }; readonly costUsd: number; readonly durationMs: number; readonly files: readonly { readonly path: string; readonly added: number | null; readonly removed: number | null; }[]; readonly errorCause: string | null; } | undefined; readonly attachments?: readonly ("image" | "document")[] | undefined; readonly media?: readonly { readonly mimeType: string; readonly digest: string; readonly name: string; }[] | undefined; readonly forkAt?: number | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "error"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly details: readonly { readonly key: "message" | TypeOptionalKeys<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly rawMessage: optional<String>; readonly operation: optional<String>; readonly model: optional<String>; }>; readonly value: string; }[]; readonly failure?: { readonly message: string; readonly classification: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; }; } | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "tool"; readonly toolUse: { readonly toolName: string; readonly errorText: string; readonly outputText: string; readonly exitCode?: number | undefined; readonly userInstructionText: string; readonly input: unknown; readonly isUserFeedback: boolean; readonly headerSummary: string; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; }; readonly model: { readonly headerLabel: string; readonly headerPreview: string; readonly sections: readonly ({ readonly kind: "text"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly label: string; } | { readonly kind: "code"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly language: string; readonly label: string; } | { readonly kind: "identifier"; readonly value: string; readonly note?: string | undefined; readonly label: string; } | { readonly kind: "file"; readonly path: string; readonly startLine?: number | undefined; readonly endLine?: number | undefined; readonly namespace: ToolFileNamespace; readonly label: string; } | { readonly kind: "fileGroups"; readonly groups: readonly { readonly label: string; readonly files: readonly string[]; readonly clickable: boolean; }[]; readonly label: string; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly from?: string | undefined; readonly note?: string | undefined; readonly lineChanges?: { readonly added: number; readonly removed: number; } | undefined; }[]; readonly label: string; } | { readonly kind: "diff"; readonly oldText: string; readonly newText: string; readonly fileLabel?: string | undefined; readonly label: string; } | { readonly kind: "badges"; readonly badges: readonly string[]; readonly label: string; } | { readonly kind: "status"; readonly status: string; readonly label: string; })[]; readonly output?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly errorPreview?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly userInstruction?: { readonly lineCount: number; readonly full: string; readonly oneLine: string; } | undefined; readonly showOutput: boolean; readonly outputSuppression?: ToolOutputSuppression | undefined; readonly showsNoOutputMarker: boolean; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly isError: boolean; readonly isUserFeedback: boolean; readonly isInProgress: boolean; readonly exitCode?: number | undefined; }; readonly log: { readonly card?: { readonly title: string; readonly sections: readonly ({ readonly kind: "text"; readonly label: string; readonly text: string; } | { readonly kind: "status"; readonly label: string; readonly status: string; } | { readonly kind: "identifier"; readonly label: string; readonly value: string; } | { readonly kind: "badges"; readonly label: string; readonly badges: readonly string[]; } | { readonly kind: "fileList"; readonly label: string; readonly files: readonly { readonly path: string; readonly note?: string | undefined; }[]; })[]; } | undefined; readonly status?: "completed" | "failed" | "in_progress" | undefined; readonly error?: string | undefined; readonly output?: unknown; readonly toolName?: string | undefined; readonly input?: unknown; readonly exitCode?: number | undefined; readonly summary?: string | undefined; readonly userInstruction?: string | undefined; }; readonly phase?: string | undefined; readonly attempt?: number | undefined; readonly cutByRunEnd?: true | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "webSearch"; readonly query?: string | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "fileList"; readonly files: readonly { readonly path: string; readonly ok: boolean; readonly media?: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; } | undefined; readonly source?: string | undefined; readonly sourceDisplay?: string | undefined; readonly varName?: string | undefined; }[]; readonly summary: string; readonly media: readonly { readonly path: string; readonly media: { readonly kind: "image"; readonly mimeType: string; readonly sizeBytes: number; } | { readonly kind: "audio"; readonly mimeType: string; readonly sizeBytes: number; }; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "contextManagement"; readonly data: { readonly action: "max_tokens_reduced"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly originalMaxTokens: number; readonly reducedMaxTokens: number; readonly details?: string | undefined; } | { readonly action: "compaction" | "clear_tool_uses" | "clear_thinking" | "truncation"; readonly contextWindow: number; readonly tokensBefore: number; readonly utilizationBefore: number; readonly tokensAfter: number; readonly utilizationAfter: number; readonly details?: string | undefined; }; readonly label: string; readonly items: readonly { readonly key: string; readonly label: string; readonly value: string; }[]; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "progressStatus"; readonly summary: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly quotaFallback?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | undefined; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "compactionActivity"; readonly block: { readonly operationId: string; readonly status: CompactionActivityStatus; readonly finalized: boolean; readonly settledThroughSeqNo?: number | undefined; readonly startPosition: number; readonly startedAt: number; readonly finishedAt?: number | undefined; readonly freed?: { readonly tokens: number; readonly utilizationBefore: number; readonly utilizationAfter: number; } | undefined; }; readonly label: string; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; } | { readonly kind: "log"; readonly text: { readonly lineCount: number; readonly full: string; readonly oneLine: string; }; readonly id: string; readonly seqNo?: number | undefined; readonly settlementSeqNo?: number | undefined; readonly timestamp: number; readonly level: "error" | "warn" | "info" | "debug"; readonly verbose?: boolean | undefined; readonly groupId?: string | undefined; readonly messageType?: "fileList" | "error" | "toolUse" | "thinking" | "scratchpad" | "webSearch" | "modelResponse" | "userMessage" | "progressStatus" | "quotaFallback" | "contextCompactionActivity" | "contextManagement" | "default" | undefined; readonly origin?: "local" | undefined; })[]; readonly taskGroups: readonly { readonly id: string; readonly name: string; readonly status: "completed" | "cancelled" | "failed" | "running"; readonly startTime: number; readonly kind?: "script" | "run" | "session" | undefined; readonly endTime?: number | undefined; readonly parentGroupId?: string | undefined; }[]; readonly settledRows: number; }; readonly agentScope?: readonly string[] | null | undefined; }>; readonly order: readonly (string & Brand<"RunId">)[]; readonly cursor: number; readonly debug: boolean; readonly transcriptSeq: ReadonlyMap<string & Brand<"AggregateId">, number>; readonly rollup: { readonly running: number; readonly waiting: number; readonly interrupted: number; }; readonly requests: readonly { readonly runId: string & Brand<"RunId">; readonly requestId: string; readonly payload: { readonly kind: "toolEdit"; readonly data: { readonly requestId: string; readonly allowBypass: boolean; readonly runId: "" | (string & Brand<"RunId">); readonly path: string; readonly relativePath: string; readonly sourceTool: string; readonly addedLines: number; readonly removedLines: number; readonly content: string; }; } | { readonly kind: "bash"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly command: string; readonly cwd?: string | undefined; }; } | { readonly kind: "retry"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly operation: string; readonly errorDetails: { readonly message: string; readonly statusCode?: number | undefined; readonly statusText?: string | undefined; readonly provider?: string | undefined; readonly classification?: { readonly kind: "missing-api-key" | "context-window" | "upstream-credit"; } | { readonly kind: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly planType?: string | undefined; readonly resetsInMs?: number | undefined; } | { readonly kind: "subscription-session"; readonly route: "chatgpt-subscription" | "xai-subscription"; readonly needsReauth: boolean; readonly sessionError: string; } | undefined; readonly requestId?: string | undefined; readonly partialText?: string | undefined; }; readonly model?: string | undefined; readonly credentialSwitch?: { readonly kind: "decline-route"; readonly route: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; readonly automatic: boolean; } | { readonly kind: "new-key"; readonly provider: "openai" | "anthropic" | "google" | "xai" | "deepseek" | "moonshot" | "dashscope" | "minimax" | "glm" | "meta" | "kimiCode"; } | null | undefined; }; } | { readonly kind: "proposal"; readonly data: { readonly agent: string; readonly model: string; readonly instruction: string; readonly inputFiles: readonly string[]; readonly contextFiles: readonly string[]; readonly mediaFiles: readonly string[]; readonly outputFiles: readonly string[]; readonly memories: readonly string[]; readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly allowBypass: boolean; readonly task: boolean; readonly script?: { readonly title: string | null; readonly source: string; readonly calls: readonly { readonly toolName: string; readonly preview: string; }[]; } | null | undefined; readonly workingDirectory?: string | null | undefined; readonly agentSource?: "plugin" | "custom" | "builtIn" | "inline" | null | undefined; readonly persona?: { readonly name: string; readonly description?: string | undefined; readonly prompt?: string | undefined; readonly tools?: readonly string[] | undefined; readonly temperature?: number | undefined; } | null | undefined; readonly rootUserInstruction?: string | null | undefined; readonly options?: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; } | null | undefined; }; } | { readonly kind: "planApproval"; readonly data: { readonly requestId: string; readonly runId: string & Brand<"RunId">; readonly plan: { readonly objective: string; }; }; } | { readonly kind: "userQuestion"; readonly data: { readonly requestId: string; readonly runId: "" | (string & Brand<"RunId">); readonly allowBypass: boolean; readonly questions: readonly { readonly options: readonly { readonly label: string; readonly description?: string | null | undefined; }[]; readonly question: string; readonly header?: string | null | undefined; readonly multiSelect?: boolean | null | undefined; readonly allowFreeText?: boolean | null | undefined; }[]; readonly context?: string | null | undefined; }; } | { readonly kind: "plugin"; readonly plugin: string; readonly blocksCaller: boolean; readonly answers: readonly ("retry" | "approve" | "approve_and_goal" | "submit" | "answer" | "skip")[]; readonly data: { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; }; }[]; readonly policy: ReadonlyMap<string & Brand<"RunId">, { readonly own: { readonly bash?: "parent" | "on" | "off" | undefined; readonly toolEdit?: "parent" | "on" | "off" | undefined; readonly superYolo?: "parent" | "on" | "off" | undefined; }; readonly goal: readonly ("bash" | "toolEdit" | "superYolo")[]; readonly limit?: "never" | "ask" | undefined; }>; readonly pluginFacts: readonly { readonly kind: string; readonly parent: (string & Brand<"RunId">) | null; readonly plugin: string; readonly type: "plugin.fact"; readonly aggregateId: string & Brand<"AggregateId">; readonly version: number; readonly value: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | { readonly [x: string]: string | number | boolean | any | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null)[] | { readonly [x: string]: string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | readonly (string | number | boolean | any | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null)[] | any | null; } | null; readonly stageId?: string | undefined; }[]; readonly queuedFollowUps: ReadonlyMap<string & Brand<"RunId">, readonly { readonly followUpId: string; readonly text: string; }[]>; }>, DatabaseOpenFailed, ToolRegistry | ProcessIdentity | ProjectDatabases | ProcessProbe>
 ```
 
 ## readStorageInventory
@@ -1833,15 +1913,40 @@ follower runs it for a change written anywhere else.
 const registerCustomAgentRoot: Effect<void, never, FileSystem | GlobalStorageFs | AgentDirectories>
 ```
 
-## resolveTeamLaunch
+## replayTrace
+
+A run's trace read back from its session's view inputs, for every reader
+of `Run.events`: the rows of the reader's activation, then each as it
+commits with the text streamed between them, until its `run.end` (or,
+with none stored, every row committed when the run was over);
+then `result`'s failure. A stream that ended before the reader came
+arrives as one chunk of its final text, so a reader's chunks always add
+up to each stream's final text.
 
 ```ts
-function resolveTeamLaunch<T extends TeamCatalogAgent>(
-  args: Omit<TeamRunOptions<T>, 'agentOverride'> & {
-    teamId: string;
-    customPresetsRaw: unknown;
+function replayTrace<E>(
+  session: {
+    /** Ordered view inputs for one reader: a session handle's, or a
+     *  `Session.view.watch` with its arguments spread. */
+    readonly view: {
+      readonly inputs: (
+        set: readonly TranscriptSubscription[],
+        fromCommit: CommitOrdinal,
+        debug: boolean,
+      ) => Stream.Stream<readonly SessionViewInput[]>;
+    };
+    /** `settled`: every write enqueued so far is committed; `now()`: the
+     *  head. */
+    readonly log: {
+      readonly settled: Effect.Effect<void>;
+      readonly now: () => CommitOrdinal;
+    };
   },
-): TeamLaunchResolution
+  runId: RunId,
+  /** A commit in the reader's activation: it reads the latest at or before. */
+  activation: CommitOrdinal,
+  result: Effect.Effect<unknown, E>,
+): Stream.Stream<AgentEvent, E>
 ```
 
 ## RootedFileSystem
@@ -1878,7 +1983,7 @@ interface RootedFileSystem extends FileSystem.FileSystem {
     target: string,
     data: Uint8Array,
   ) => Effect.Effect<void, PlatformError.PlatformError>;
-  /** Directory entries with the type of each, one `stat` per entry. */
+  /** Directory entries with the type of each, from one typed listing. */
   readonly readDirectoryTyped: (
     target: string,
   ) => Effect.Effect<
@@ -1902,7 +2007,6 @@ type RouteCredential = {
   | { readonly route: 'api-key' | 'xai-subscription' }
   | {
       readonly route: 'chatgpt-subscription';
-      readonly accountId: string | null;
       /** The ChatGPT plan the session's token names; display-only. */
       readonly plan: string | undefined;
     }
@@ -1945,7 +2049,9 @@ be read, the subscription session needs a sign-in, or the model is unknown
 or unavailable. A failure of the
 harness's own model access, never a vendor's (that is llm's `ModelError`).
 `missing-api-key` is the one reason a host acts on (it offers the key
-setting); every other reason is read as its message.
+setting); every other reason is read as its message, which for a
+subscription session is the session's own failure, classified with its
+route and remedy (`subscription-session`) by `providerErrorOf`.
 
 ```ts
 class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
@@ -1953,6 +2059,14 @@ class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   {
     reason: Schema.Literals(['missing-api-key', 'unavailable']),
     message: Schema.String,
+    /** A signed-in subscription that could not bill the call: its route,
+     *  and whether only a fresh sign-in can help (else it may recover). */
+    session: Schema.optional(
+      Schema.Struct({
+        route: SubscriptionSessionRouteSchema,
+        needsReauth: Schema.Boolean,
+      }),
+    ),
     cause: Schema.optional(Schema.Defect()),
   },
 )
@@ -1975,7 +2089,6 @@ interface RunGeneratedFile {
 interface RunModelCandidate {
   readonly model?: string | null;
   readonly reason: RunModelDecisionReason;
-  readonly fallbackMode?: RunModelFallbackMode;
 }
 ```
 
@@ -1999,7 +2112,7 @@ interface RunModelDecision {
 ## RunModelDecisionReason
 
 ```ts
-type RunModelDecisionReason = keyof typeof RUN_MODEL_PRECEDENCE;
+type RunModelDecisionReason = keyof typeof RUN_MODEL_REASONS;
 ```
 
 ## RunModelFallbackMode
@@ -2011,15 +2124,21 @@ one with a notice, or run it silently.
 type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
 ```
 
-## RunRejection
+## RunServices
 
-Why this process cannot resume a run (see the module note).
+What a run's program requires of the process: the platform services every
+process serves, the agent catalog, the plugin table its offered tools are
+rebuilt from, each workspace's last dependency probe and the model routes'
+retry gate. The composition's tool catalog (`ToolCatalog`) is not among
+them: no run names it.
 
 ```ts
-type RunRejection =
-  | { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId }
-  | { readonly kind: 'finished' }
-  | { readonly kind: 'earlier_build' };
+type RunServices =
+  | PlatformServices
+  | AgentCatalog
+  | RouteRetries
+  | ToolRegistry
+  | ToolAvailability;
 ```
 
 ## RuntimePresentationEvent
@@ -2030,21 +2149,19 @@ type RuntimePresentationEvent = keyof RuntimePresentationEventPayloads;
 
 ## RuntimePresentationEventPayloads
 
-Host-presentation requests emitted by agent/runtime code.
-
-These are not progress facts and do not belong to the frozen host progress
-compatibility vocabulary. Hosts may render them, ignore them, or route them
-to their own presentation channel without changing the agent loop.
-Presentation is fire-and-forget: a host that cannot render an event logs
-the cause itself.
+The notices the runtime and an embedder's tools show a person through the
+session's host, each named for what it says, never for a screen of one
+application. They are not progress facts and are not stored. Hosts may
+render them, ignore them, or route them to their own presentation channel
+without changing the agent loop. Presentation is fire-and-forget: a host
+that cannot render an event logs the cause itself.
 
 ```ts
 interface RuntimePresentationEventPayloads {
-  requestOpenFile: RequestOpenFilePayload;
+  openFile: OpenFilePayload;
   requestShowInstruction: RequestShowInstructionPayload;
-  showAgentConfigBanner: ShowAgentConfigBannerPayload;
+  agentNotFound: AgentNotFoundPayload;
   requestShowError: RequestShowErrorPayload;
-  requestEnsureProgressView: RequestEnsureProgressViewPayload;
 }
 ```
 
@@ -2067,31 +2184,13 @@ The process's secret store as an Effect service, provided once by the compositio
 or writes a credential yields the store's own Effect and matches
 {@link SecretsFailed}.
 
-`layer` takes the store itself. Every root builds its stores before it
-installs the runtime that serves them, so there is nothing left to defer:
-the service is the value the root already holds, not a thunk resolved per
-member call.
+`layer` takes a store built before the runtime (an embedder's, a test's):
+the service is that value, not a thunk resolved per member call.
 
 ```ts
 class Secrets extends Context.Service<Secrets, PlatformSecrets>()(
   '@texra-ai/harness/platform/Secrets',
 )
-```
-
-## seedDisabledToolDefaults
-
-Seed the disabled-tool list for first-time users only, on every host and
-in the agent package: every plugin of `plugins` whose switch starts `off`.
-DISABLED_TOOLS is its own fresh-install signal: only this seed writes it
-before the user does, so an absent value means the list was never set, and
-a present one (an empty list included) holds the user's choices, which a
-re-seed would silently undo. The read and the seed are one `modify`, so a
-switch another process records between them is kept. A recorded id that
-names no plugin of `plugins` is kept: one composition's list is not every
-list that shares the store, and an id no plugin has switches nothing.
-
-```ts
-const seedDisabledToolDefaults: (state: StateStore, plugins: readonly Plugin[]) => Effect<void, StateReadFailed | StateWriteFailed, never>
 ```
 
 ## SentReasoning
@@ -2112,8 +2211,8 @@ type SentReasoning =
 ## SESSION_CLOSE_DEADLINE_MS
 
 The budget one session close spends waiting for its runs to end before it
-ends the ones still live itself (`SessionOwner.close`). A hung run must
-not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+reports the ones still live abandoned (`SessionOwner.close`). A hung run
+must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
 stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
 together, so they finish under one deadline for the process, not one each.
 
@@ -2149,26 +2248,13 @@ function sessionFsLayer(
 
 ## SessionHostInteractions
 
-Stable per-session presentation owner. The `SessionHandle` exposes this
-object once, while hosts may attach and detach presentation adapters; the
-newest attachment presents, and notices raised while none is attached are
-replayed to the next one.
+Stable per-session presentation owner. The session serves this object
+once (`Interactions`), while one host at a time attaches and detaches; the host the
+session was opened with answers while none is, and notices raised while
+none is are replayed to the next one.
 
 ```ts
 class SessionHostInteractions implements HostInteractions
-```
-
-## setLogSink
-
-Install the host sink, disposing whatever it replaces. Entries are redacted
-unless the host identifies a local operator terminal as trusted. Passing
-`null` restores the console fallback.
-
-```ts
-function setLogSink(
-  next: LogSink | null,
-  options: { readonly trusted?: boolean } = {},
-): void
 ```
 
 ## setModelEnabled
@@ -2187,21 +2273,12 @@ function setModelEnabled(input: {
 })
 ```
 
-## SettingHost
-
-The product hosts, spelled once: for settings and `unavailableHosts`.
-`sdk` is the agent package embedded in someone else's process.
-
-```ts
-type SettingHost = 'vscode' | 'cli' | 'desktop' | 'sdk';
-```
-
 ## Settings
 
 Every read and write of a setting; see the module comment.
 
 ```ts
-const Settings: Readonly<{ readonly get: <T>(stores: SettingsStores, key: string) => Effect<T, StateReadFailed, never>; readonly inspect: <T>(stores: SettingsStores, key: string) => Effect<StoredSetting<T>, StateReadFailed, never>; readonly getConfig: <T>(config: ConfigProvider, key: string) => T; readonly set: (stores: SettingsStores, key: string, value: unknown, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, key: string, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
+const Settings: Readonly<{ readonly get: <T>(stores: SettingsStores, key: string) => Effect<T, StateReadFailed, never>; readonly inspect: <T>(stores: SettingsStores, key: string) => Effect<StoredSetting<T>, StateReadFailed, never>; readonly getConfig: <T>(config: ConfigProvider, key: string) => T; readonly defaultOf: <T>(catalog: SettingsCatalog, key: string) => T; readonly set: (stores: SettingsStores, key: string, value: unknown, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly reset: (stores: SettingsStores, key: string, target?: ConfigTarget | undefined) => Effect<void, Error | ConfigWriteFailed, never>; readonly state: <S extends Schema.Codec<unknown, unknown>>(store: Pick<StateStore, "get">, key: string, schema: S) => Effect<S["Type"], StateReadFailed, never>; }>
 ```
 
 ## SettingsStores
@@ -2210,8 +2287,6 @@ The setting slots a caller holds: a `WorkspaceRoots` is one.
 
 ```ts
 interface SettingsStores {
-  /** The host these stores belong to (`WorkspaceRoots.host`). */
-  readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
   readonly repoState: StateStore;
@@ -2275,7 +2350,7 @@ installed plugins' as they load now, and the bundled ones the host
 installed. Every read answers with the discovery issues beside the skills.
 
 ```ts
-const Skills: Readonly<{ readonly interopDirs: readonly [".agents", ".claude", ".codex", ".gemini"]; readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, StateReadFailed, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, StateReadFailed, FileSystem>; }>
+const Skills: Readonly<{ readonly interopDirs: readonly [".agents", ".claude", ".codex", ".gemini"]; readonly display: (roots: SkillRoots) => Effect<{ skills: { readonly name: string; readonly description: string; readonly scope: "custom" | "user" | "bundled" | "project" | "interop"; readonly label: string; readonly path: string; readonly sourcePath: string; readonly enabled: boolean; }[]; issues: { readonly message: string; readonly path?: string | undefined; }[]; }, Error, FileSystem>; readonly enabled: (roots: SkillRoots, options?: SkillSourceOptions | undefined) => Effect<{ skills: EnabledSkill[]; issues: SkillLoadIssue[]; }, Error, FileSystem>; }>
 ```
 
 ## SkillSourceOptions
@@ -2423,146 +2498,6 @@ its write in the scope that controls it (`set`).
 const SubscriptionPreference: Readonly<{ get: (provider: "chatgpt" | "grok", stores: SettingsStores) => boolean; set: (provider: "chatgpt" | "grok", stores: SettingsStores, enabled: boolean) => Effect<void, Error | ConfigWriteFailed, never>; }>
 ```
 
-## TEAM_SELECTION_REQUIRED_MESSAGE
-
-```ts
-const TEAM_SELECTION_REQUIRED_MESSAGE: "Team selection required."
-```
-
-## TeamAgentAvailability
-
-```ts
-interface TeamAgentAvailability {
-  readonly available: number;
-  readonly total: number;
-  readonly missing: readonly string[];
-  readonly label: string;
-}
-```
-
-## TeamAgentResolver
-
-The workspace agents' member identity rule (`AgentCatalog.get` in
-production): a bare name matches by name, a `source:name` key exactly.
-
-```ts
-type TeamAgentResolver<T> = (identifier: string) => T | undefined;
-```
-
-## teamAvailability
-
-```ts
-function teamAvailability(plan: TeamRunPlan): TeamAvailability
-```
-
-## TeamAvailability
-
-```ts
-interface TeamAvailability {
-  readonly status: TeamPlanStatus;
-  readonly agents: TeamAgentAvailability;
-  readonly rootAgent?: {
-    readonly key: string;
-    readonly name: string;
-    readonly source: AgentSource;
-  };
-  readonly missingAgentOverride?: string;
-}
-```
-
-## TeamCatalogAgent
-
-```ts
-interface TeamCatalogAgent {
-  readonly name: string;
-  readonly source: AgentSource;
-  readonly tools?: string[];
-}
-```
-
-## teamLaunchBlockReason
-
-```ts
-function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined
-```
-
-## TeamLaunchResolution
-
-```ts
-type TeamLaunchResolution =
-  | {
-      readonly status: 'ready';
-      readonly fields: ReturnType<typeof teamExecutionFields>;
-      readonly missingNames: readonly string[];
-    }
-  | { readonly status: 'unknown-team' }
-  | { readonly status: 'blocked'; readonly reason: string };
-```
-
-## teamPlanStatus
-
-```ts
-function teamPlanStatus(plan: TeamRunPlan): TeamPlanStatus
-```
-
-## TeamPlanStatus
-
-```ts
-type TeamPlanStatus = 'available' | 'degraded' | 'unavailable';
-```
-
-## TeamPreset
-
-A team preset as the catalog lists it, with where it came from.
-
-```ts
-interface TeamPreset extends AgentModePreset {
-  readonly source: 'built-in' | 'custom';
-  /** The setup starter: an agent list a workspace can select, never a launch. */
-  readonly setupOnly?: true;
-}
-```
-
-## teamPresets
-
-The one team preset catalog, in display order: the setup starter (tagged
-`setupOnly`), the built-in teams, then the workspace's custom presets.
-Built-in ids are reserved: a custom preset with the same id is dropped so
-the built-in always wins.
-
-```ts
-function teamPresets(customRaw: unknown): TeamPreset[]
-```
-
-## TeamRunOptions
-
-```ts
-interface TeamRunOptions<T extends TeamCatalogAgent> {
-  readonly resolveAgent: TeamAgentResolver<T>;
-  /**
-   * The agents a built-in team runs as its root, in preference order: the
-   * first one among the team's delegating members leads it, and a built-in
-   * team with none of them has no root. A custom team is led by its first
-   * delegating member. The app owns these names.
-   */
-  readonly rootAgentNames: readonly string[];
-  readonly agentOverride?: string;
-}
-```
-
-## TeamRunPlan
-
-```ts
-interface TeamRunPlan<T extends TeamCatalogAgent = TeamCatalogAgent> {
-  readonly preset: TeamPreset;
-  readonly rootAgent?: T;
-  readonly missingAgentOverride?: string;
-  readonly agentKeys: readonly string[];
-  /** Members that did not resolve, in preset-declaration order. */
-  readonly missingAgents: readonly string[];
-}
-```
-
 ## ToolAvailability
 
 ```ts
@@ -2632,72 +2567,6 @@ interface ToolCatalogShape {
 }
 ```
 
-## ToolEditApprovalRequest
-
-Tool-edit approval request / result shapes.
-
-The request reaches a host through `SessionHandle.interactions.presentToolEdit`
-(the preview the durable payload cannot carry); the decision comes back as
-the request's `request.decide`. Its content carries the diff a host shows
-(hunks, the first changed line), computed here once; the line counts are
-the permission's.
-
-```ts
-interface ToolEditApprovalRequest extends ToolEditContent {
-  readonly path: string;
-  readonly sourceTool: string;
-  readonly runId?: RunId | null;
-  /**
-   * The session's workspace roots, as data: a host's preview of this request
-   * writes its temp files under the workspace and reads the diff's settings
-   * from these slots, and that preview program runs on the host's own runner
-   * rather than inside the tool call that raised the request, so the roots
-   * have to travel with the request instead of being read from an ambient
-   * workspace scope. {@link requestToolEditApproval} — the one producer of a
-   * request — fills them from the run's session.
-   */
-  readonly roots: WorkspaceRoots;
-  /**
-   * What the UI shows for this request, prepared once at the tool boundary
-   * (`prepareToolEditApprovalPrompt`): the payload of the `request.opened`
-   * fact the session publishes, and what every host surface renders.
-   */
-  readonly permission: ToolEditPermission;
-}
-```
-
-## ToolMissingHandler
-
-The host's optional "tool is missing" reporter. The VS Code host is the only
-one with a UI for it; every other host omits it, and callers treat an absent
-reporter as silence. It settles its own presentation failures, so the probe
-that reports a missing tool still gets its answer.
-
-```ts
-type ToolMissingHandler = (
-  message: string,
-  /** The guide page that covers installing the tool, when one is known. */
-  docsPage?: string,
-) => Effect.Effect<void>;
-```
-
-## ToolMissingReporter
-
-The process's tool-missing reporter as an Effect service, provided once
-by the composition root through `processLayer`. A program that needs to surface a
-missing tool yields it via `Effect.serviceOption`, so an absent reporter is
-silence rather than a missing requirement.
-
-`layer` takes the reporter the root already holds; a host without a
-tool-missing UI omits the service, exactly as it omitted the platform port.
-
-```ts
-class ToolMissingReporter extends Context.Service<
-  ToolMissingReporter,
-  ToolMissingHandler
->()('@texra-ai/harness/platform/ToolMissingReporter')
-```
-
 ## toPosixPath
 
 Convert a path to POSIX style (forward slashes, collapsed separators, resolved `.` and `..`).
@@ -2715,11 +2584,10 @@ display door, and those rows commit through the run's cell
 (`runEventDraft`, typed to an unfolded draft, refuses any other).
 
 ```ts
-type TraceArm<
-  T extends Exclude<AgentEvent, StreamChunkEvent>['type'] | 'run.end',
-> = T extends unknown
-  ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
-  : never;
+type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
+  T extends unknown
+    ? Omit<Extract<SessionEventDraft, { type: T }>, 'aggregateId'>
+    : never;
 ```
 
 ## UsageAttribution
@@ -2761,6 +2629,25 @@ class UsageLog extends Context.Service<
 
 ```ts
 type UsageLogEntry = typeof UsageLogEntrySchema.Type;
+```
+
+## ValidationModel
+
+The canned model a package-validation build provides beneath the process
+layer, and whether a new run takes it. Absent, none does, and a run
+recorded on the validation route fails to bind.
+
+```ts
+class ValidationModel extends Context.Service<
+  ValidationModel,
+  {
+    readonly enabled: Effect.Effect<boolean>;
+    readonly bind: (config: ModelConfig) => {
+      readonly model: Model;
+      readonly origin: ModelOrigin;
+    };
+  }
+>()('@texra-ai/harness/ValidationModel')
 ```
 
 ## ValueFamily
@@ -2806,11 +2693,9 @@ the tail, waits for its predecessor's, and hands off in `ensuring` once
 interruptible; a waiter interrupted before entering hands its successor
 the wait for its own predecessor, so the successor still waits for whoever
 actually holds the lane. A hand-off through a `Deferred` resumes the next
-fiber directly, so fibers started in sequence enter in that order — a
-`Semaphore` barges: its release wakes waiters in a scheduled task, and a
-fiber started in between takes the free permit ahead of them. The lane is
-created on first use and deleted from `lanes` once the last fiber holding
-or waiting on it settles.
+fiber directly, so fibers started in sequence enter in that order. The
+lane is created on first use and deleted from `lanes` once the last fiber
+holding or waiting on it settles.
 
 A `Queue` of tickets served by one detached worker fiber (the shape
 `sessionFrames.ts` uses) was prototyped against this chain in review and
@@ -2845,16 +2730,14 @@ function withPerKeyLane<Key, RefusalE = never>(
 `effect` over this runtime's services (a {@link ProcessRuntime}'s, or a
 host runtime's that serves more), as a program rather than a run: a
 composition root hands the process services to a program it must give away
-— a shutdown handler, a host callback typed as an Effect — without
+(a shutdown handler, a host callback typed as an Effect) without
 stepping through a Promise to get them. The services are the runtime's own
 context, built once and cached there, so this is the same provision
 `runPromise` would have made, minus the boundary.
 
 ```ts
 function withProcessServices<A, E, R = ProcessServices | Sessions>(
-  // Not named `runtime`: the migration ratchet pins this file's one approved
-  // `runtime` binding to `withForkFailureReporting`'s parameter.
-  processRuntime: ManagedRuntime.ManagedRuntime<R, never>,
+  runtime: ManagedRuntime.ManagedRuntime<R, never>,
   effect: Effect.Effect<A, E, NoInfer<R>>,
 ): Effect.Effect<A, E>
 ```
@@ -2892,6 +2775,8 @@ interface WorkspaceAgentsControllerDeps<
 > {
   readonly repoState: StateStore;
   readonly globalState: StateStore;
+  /** The app's team membership read (`AgentDirectoriesPort.teamMembers`). */
+  readonly teamMembers: AgentDirectoriesPort['teamMembers'];
   readonly getAgents: () => Entry[];
   /**
    * Resolve one stored identifier without collapsing exact source identity.

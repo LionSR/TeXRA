@@ -272,6 +272,24 @@ Deleting the list (the allowlist is the ruling). Building a second internal
 cancellation tree beside the fiber's, which is what converting these to
 signals-of-signals would produce.
 
+**Amendment (2026-10-28, owner decision D1 of the
+[target designs](../../proposed/architecture/2026-10-27-tech-debt-target-designs.md)).**
+`childRunLoop.ts` left the list: a child run's stop is its run fiber's
+interruption, for every kind of run, as a root's already was
+(`AgentRunLifecycle`'s masked terminal). The second bullet's reason holds
+without the controller: the turn's settlement, parent delivery and
+finalization run in the loop's exit handler (`endChildLoop`, an
+`Effect.onExit` run uninterruptible), which a fiber interrupt reaches after
+the body unwinds, as the root path's `uninterruptibleMask` terminal does. A
+stop's reason is data on the registry's activation record, read by the loop,
+not a signal. A foreign SDK or process call takes a signal derived from the
+interruption (`Effect.abortSignal` over the call's scope, or
+`Effect.tryPromise`'s), whose only source is the fiber, so it is no second
+tree; a killed background shell's result is rebuilt from the output it
+buffered (`ProcessChildStrategy.interruptedTurn`). The residue is
+`claudeAgent.ts` alone, whose SDK takes a controller, linked to that
+derived signal.
+
 ## Runtime threading: each composition root holds its `ManagedRuntime` in a local (ruled 2026-09-18; answers Effect-4 PRD §15 decision 2)
 
 **Question.** Decision 2 asked whether the host managed runtime belongs
@@ -473,9 +491,8 @@ speculative generality. The drain itself is an Effect program, so fiber
 interruption is the cancellation mechanism the rest of the runtime already
 uses, and keeping a parallel `AbortSignal` channel would be a second
 cancellation vocabulary on the one path that most needs a single owner. The
-permanent `AbortController` residents are foreign contracts (agent-CLI child
-processes, the Codex SDK, the Claude Agent SDK); a session close is not one
-of them.
+permanent `AbortController` resident is a foreign contract (the Claude Agent
+SDK, which takes a controller); a session close is not one.
 
 **Forbids.** Re-adding an `AbortSignal` parameter anywhere on the session close
 chain, on any host or on the SDK surface. Cancelling a drain by any mechanism
@@ -614,9 +631,9 @@ write path for plugin rows; a second plugin-layer cache, `Layer.fresh` on a
 plugin layer, or a plugin layer constructed per step (its identity is what
 makes it shared); a host-specific refusing `SetupPlatform` in the harness.
 
-**Not moved, and why.** The `run.fact` plan row stays core: the plan tool is
-the harness's (`packages/harness/src/tools/plan/PlanTool.ts`) and `run.fact`
-is its display mirror.
+**Moved since.** The plan, once a core `run.fact` row, is the goal plugin's
+`goal/plan` arm (2026-10-29): one kind of application state, committed with
+the approving `plan` result. `run.fact` is a retired row kind.
 
 ---
 
@@ -869,3 +886,22 @@ The owner does not want a model-chosen, candidate-file document workflow
 replacing the fixed document workflow (today the documents plugin's recipe,
 `packages/texra/src/agent/output/documentRecipe.ts`). Do not re-propose it as
 specified.
+
+## Ratchet scope: base-relative counts and the store layer (ruled 2026-10-30)
+
+Two decisions from the tech-debt target designs
+(`.agents/docs/proposed/architecture/2026-10-27-tech-debt-target-designs.md`,
+D6 and D9), approved by the owner on 2026-10-30:
+
+- **Core-quality counts are measured against the merge base, not committed.**
+  A rule held at zero stays a lint error or a `ZERO_RULES` entry with no
+  file (already in force). For the numeric rules the baseline becomes the
+  count on `origin/main`'s tree: a PR fails a file whose count rose and
+  carries no JSON edit when a count fell. The committed count files,
+  `--update` and `--move` go with that change (slices R3 and R4), after the
+  test-kernel work. File-size caps keep their stepped rounding.
+- **The store layer is exempt from the row-reader baseline.** `Database.ts`,
+  `rowCodec.ts`, `rowReader.ts`, `SessionEvents.ts` and `HistoryQuery.ts`
+  dispatch on a row's type to encode, decode, version and index it, and
+  decide no fact. `STORE_LAYER` in `factOwnerRatchet.vitest.ts` names them;
+  the baseline lists application readers only.

@@ -1,9 +1,8 @@
 /**
  * External tool availability: the process's `ToolAvailability` service.
  *
- * Runs every group's checks concurrently — one shared `probe` per group feeds
- * its `check` (availability), `statusLabel` (badge), and `detailCheck`
- * (human-readable detail) — and holds each workspace's last results in one
+ * Runs every group's check concurrently — each answers availability with
+ * its badge and human-readable detail — and holds each workspace's last results in one
  * `SubscriptionRef`. What to check is each plugin's `availability`.
  *
  * The composition root builds the service with the process runtime, so every
@@ -37,14 +36,13 @@ import {
 } from 'effect';
 
 // Local imports
-import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import type { StateStore } from '@platform/interfaces';
+import { onAppSignal, type AppSignals } from '@platform/appSignals';
+import type { StateStore } from '@shared/config/settings';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { storedDisabledTools, type Plugin } from '@tools/plugins';
 import type {
   ToolAvailabilityChecks,
-  ToolProbeError,
   ToolProbeInputs,
   ToolProbeServices,
 } from '@tools/toolProbes';
@@ -55,13 +53,12 @@ import {
 } from '@tools/toolAvailabilityService';
 import { ToolCatalog } from '@tools/liveTools';
 import { ToolRegistry } from '@tools/toolTable';
-import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
 
 /**
- * Deadline on one group's probe, check, status label and detail. A probe is
+ * Deadline on one group's complete check, including its label and detail. A probe is
  * shared by every caller of its root, so no caller's interrupt ends a stalled
  * child-process lookup, SDK import or secret read: without this bound one
  * hung group would hold its root's probe, and every caller joining it, until
@@ -98,7 +95,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
       }),
     );
     if (!seeded) return;
-    yield* Effect.logInfo(
+    // Debug: the seed runs while a host's runtime builds, before the CLI's
+    // platform silences its stderr diagnostics.
+    yield* Effect.logDebug(
       `First install: plugins switched off by default: ${defaults.join(', ')}`,
     ).pipe(withLogChannel(CHANNEL));
   },
@@ -135,7 +134,7 @@ interface ProbeRound {
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   never,
-  ToolProbeServices | ToolRegistry | ToolCatalog
+  ToolProbeServices | ToolRegistry | ToolCatalog | AppSignals
 > = Layer.effect(
   ToolAvailability,
   Effect.gen(function* () {
@@ -251,11 +250,6 @@ export const toolAvailabilityLayer: Layer.Layer<
           }),
         )
         .pipe(Effect.uninterruptible);
-    // Every trigger (Re-check, a key saved, an extension or folder added)
-    // may follow an install, so a tool it just installed must not be
-    // answered from a remembered miss.
-    const trigger = (inputs: ToolProbeInputs) =>
-      Effect.andThen(Effect.sync(forgetToolMisses), start(inputs));
 
     // A committed write to a declared secret re-probes every held root with
     // its newest inputs. The bus delivers to a synchronous listener, so the
@@ -277,7 +271,7 @@ export const toolAvailabilityLayer: Layer.Layer<
         Effect.andThen(Queue.take(changes), () =>
           Effect.forEach(
             [...held.values()].flatMap((holders) => holders.slice(-1)),
-            trigger,
+            start,
             { discard: true },
           ),
         ),
@@ -286,7 +280,7 @@ export const toolAvailabilityLayer: Layer.Layer<
 
     return {
       results,
-      refresh: (inputs) => Effect.flatMap(trigger(inputs), Fiber.join),
+      refresh: (inputs) => Effect.flatMap(start(inputs), Fiber.join),
       // A session's own probe answers from the miss cache, so opening
       // sessions back to back does not repeat the lookups.
       hold: (roots) =>
@@ -314,48 +308,8 @@ export const toolAvailabilityLayer: Layer.Layer<
 );
 
 /**
- * Run one group's check, status label and detail from one shared probe
- * result. Some groups touch async local state (a local service, a CLI), so
- * running the callbacks independently can duplicate the same probe work.
- */
-const checkToolGroup = Effect.fn('checkToolGroup')(function* (
-  {
-    id,
-    tools,
-    availability: { probe, check, statusLabel: getStatusLabel, detailCheck },
-  }: ProbedToolPlugin,
-  inputs: ToolProbeInputs,
-): Effect.fn.Return<
-  ExternalToolCheckResult,
-  ToolProbeError,
-  ToolProbeServices
-> {
-  const probeResult = probe ? yield* probe(inputs) : undefined;
-  const available = yield* check(probeResult);
-  const statusDetail = yield* resolveOptionalStatus(
-    detailCheck,
-    probeResult,
-    id,
-    'status detail',
-  );
-  const statusLabel = yield* resolveOptionalStatus(
-    getStatusLabel,
-    probeResult,
-    id,
-    'status label',
-  );
-  return {
-    id,
-    tools: Object.keys(tools ?? {}),
-    status: available ? 'available' : 'not-found',
-    statusLabel,
-    statusDetail,
-  };
-});
-
-/**
- * {@link checkToolGroup} under the group deadline. A failure or a defect
- * (a callback that throws) is logged and reported as `unknown`; only an
+ * One plugin's check under the group deadline. A failure or a defect
+ * (a check that throws) is logged and reported as `unknown`; only an
  * interrupt ends the probe.
  */
 const probeToolGroup = (
@@ -368,13 +322,20 @@ const probeToolGroup = (
       withLogChannel(CHANNEL),
       Effect.as({
         id: plugin.id,
-        tools: Object.keys(plugin.tools ?? {}),
+        tools: (plugin.tools ?? []).map((tool) => tool.definition.name),
         status: 'unknown' as const,
         statusLabel: undefined,
         statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
       }),
     );
-  return checkToolGroup(plugin, inputs).pipe(
+  return Effect.suspend(() => plugin.availability.check(inputs)).pipe(
+    Effect.map(({ available, statusLabel, statusDetail }) => ({
+      id: plugin.id,
+      tools: (plugin.tools ?? []).map((tool) => tool.definition.name),
+      status: available ? ('available' as const) : ('not-found' as const),
+      statusLabel,
+      statusDetail,
+    })),
     Effect.timeoutOrElse({
       duration: Duration.millis(GROUP_PROBE_TIMEOUT_MS),
       orElse: () =>
@@ -388,25 +349,3 @@ const probeToolGroup = (
     Effect.catchDefect(unknown),
   );
 };
-
-function resolveOptionalStatus(
-  getStatus:
-    | ((
-        probeResult?: unknown,
-      ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>)
-    | undefined,
-  probeResult: unknown,
-  pluginId: string,
-  field: string,
-): Effect.Effect<string | undefined, never, ToolProbeServices> {
-  if (!getStatus) return Effect.succeed(undefined);
-  return getStatus(probeResult).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(`Failed to resolve ${field} for ${pluginId}`).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.as(undefined),
-      ),
-    ),
-  );
-}

@@ -35,7 +35,7 @@ import {
   listingKeyOf,
   isTranscriptEvent,
   ownerPid,
-  requestParksItsCaller,
+  blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
   sumUsageStats,
@@ -64,10 +64,9 @@ import {
   freshRunRows,
   isSharedRunRow,
   pendingMessages,
-  phaseMoveOf,
-  type RunRows,
   type SharedRunRow,
 } from './runRows';
+import { phaseMoveOf } from './runRowReads';
 import { applyTranscriptEvent } from './transcriptUpdate';
 import {
   applyLiveText,
@@ -84,6 +83,7 @@ import {
 
 import { runActions } from './runActions';
 import { emptySessionView, rollupOf } from './sessionView';
+import type { RunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -327,14 +327,16 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     status: RUN_LIFECYCLE_READY,
     substate: null,
     durableOutcome: null,
+    output: null,
     statusNotice: null,
     lost: null,
     ...runStatus(RUN_LIFECYCLE_READY),
     createdAt: event.commit,
     launchedAt: event.at,
+    turnStartedAt: null,
     runStartedAt: null,
+    working: false,
     lastTimestamp: event.at,
-    conversationProgress: { toolCallCount: 0 },
     turn: null,
     followUpSupport: event.userFollowUpSupport,
     context: null,
@@ -363,7 +365,7 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     latestLine: null,
     transcript: emptyTranscript(),
   };
-  return { ...common, recipe: null, plan: null };
+  return { ...common, recipe: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -436,14 +438,15 @@ function withAggregates(u: Update, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const held = own || heldBy !== null;
   const paused = RESTING_SUBSTATES.has(run.substate);
-  // Only a request that blocks its tool is a wait: a dispatched inquiry left
+  // Only a request that blocks its tool is a wait: one that does not left
   // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
-    (r) => r.runId === run.id && requestParksItsCaller(r.payload),
+    (r) => r.runId === run.id && blocksCaller(r.payload),
   );
   const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
+  const working = !interrupted && !paused && run.status === RUN_PHASE.RUNNING;
   const unreadable = local.unreadable.find(
     (entry) => entry.runId === run.id,
   )?.reason;
@@ -475,11 +478,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   let statusNotice: RunView['statusNotice'] = null;
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (blockedEntry !== undefined)
-    statusNotice = {
-      kind: 'resumeBlocked',
-      reason: blockedEntry.reason,
-      retry: blockedEntry.retry,
-    };
+    statusNotice = { kind: 'resumeBlocked', reason: blockedEntry.reason };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
   else if (heldBy !== null)
     statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
@@ -493,6 +492,8 @@ function withAggregates(u: Update, run: RunView): RunView {
     ownedHere: own,
     forceExpanded,
     durableOutcome,
+    working,
+    runStartedAt: working && !waiting ? run.turnStartedAt : null,
     rollup: rollupOf(children),
     treeUsage,
     ...status,
@@ -715,9 +716,10 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         ...run,
         status: RUN_PHASE.RUNNING,
         substate,
-        runStartedAt: event.at,
+        turnStartedAt: event.at,
         turn: null,
         lost: null,
+        output: null,
       };
     }
     case 'run.config': {
@@ -742,8 +744,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         model: event.model,
         modelLabel: getModelLabel(event.model),
       };
-    case 'conversation.progress':
-      return { ...run, conversationProgress: event.progress };
     case 'context.state':
       return {
         ...run,
@@ -756,9 +756,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
           ),
         },
       };
-    case 'run.fact':
-      // Each family (and `plugin.fact` kind) is its own latest-only key.
-      return { ...run, plan: event.fact.plan };
     case 'plugin.fact':
       return {
         ...run,
@@ -781,10 +778,16 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
             title: event.description || run.label,
           };
     case 'run.end':
-      // The run ended: its outcome, and any result its end lost.
+      // The run ended: its outcome and output, and any result its end lost.
       return withTurnFinished(
         u,
-        { ...run, status: event.outcome, substate: null, runStartedAt: null },
+        {
+          ...run,
+          status: event.outcome,
+          output: event.output,
+          substate: null,
+          turnStartedAt: null,
+        },
         event.at,
         event.error,
       );
@@ -812,7 +815,7 @@ function withPosition(
     : movePhase(u, { ...run, turn }, phase === RUN_PHASE.WAITING, row.at);
 }
 
-/** Set the run waiting (its turn is over: `runStartedAt` clears and the
+/** Set the run waiting (its turn is over: `turnStartedAt` clears and the
  *  transcript's open compactions finish) or running. The one phase writer
  *  for both rows that make a run wait: a loop's `run.position` at `waiting`
  *  and an agent-CLI child's `child.park`. */
@@ -826,7 +829,7 @@ function movePhase(
     ...run,
     status: waiting ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
     substate: null,
-    runStartedAt: waiting ? null : (run.runStartedAt ?? at),
+    turnStartedAt: waiting ? null : (run.turnStartedAt ?? at),
   };
   return waiting ? withTurnFinished(u, moved, at) : moved;
 }
@@ -997,11 +1000,13 @@ function applyEvent(
   const known = u.view.runs.get(runId);
   // Only `run.start` creates a run, once. A fact for a run without one
   // changes nothing and leaves no entry (its publisher logs it).
-  if (!known && event.type !== 'run.start') return false;
+  let before: RunView;
+  if (known) before = known;
+  else if (event.type === 'run.start') before = createRun(u, event, runId);
+  else return false;
   latest.set(listingKey, event.commit);
   if (event.type === 'run.removed') return removeRun(u, runId);
   const created = !known;
-  const before = known ?? createRun(u, event as RunStartEvent, runId);
 
   // The rows the run loop's state is also built from are applied once, in
   // `runRows.ts`; every other row is the view's own.
@@ -1036,7 +1041,9 @@ function applyEvent(
     relink(u, next, created ? null : before.parentId);
     if (!created) walkUp(u, before.parentId);
   }
-  next = u.view.runs.get(next.id)!;
+  const linked = u.view.runs.get(next.id);
+  if (!linked) throw new Error(`Run ${next.id} left the view while relinking`);
+  next = linked;
   const statusMoved = own.status !== before.status;
   const aggregated = statusMoved
     ? withAggregates(u, withTranscriptFacts(u, next))

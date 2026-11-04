@@ -12,7 +12,7 @@
  *
  * `SessionFrames` supplies one ordered queue for the current generation.
  * It collects a replay through its completion marker before releasing it
- * to the fold, then delivers each frame's events before its text chunks.
+ * to the view, then delivers each frame's events before its text chunks.
  * A new generation discards the superseded queue and incomplete replay.
  */
 import {
@@ -31,6 +31,7 @@ import {
   RequestErrorSchema,
   RuntimeRequestSchema,
   RunIdSchema,
+  StoredMediaSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
@@ -79,7 +80,7 @@ export const EventsFrameSchema = Schema.Struct({
   chunks: Schema.Array(TextChunkSchema),
   local: Schema.NullOr(LocalRuntimeStateSchema),
   host: Schema.NullOr(HostSnapshotSchema),
-  /** Fold policy sampled by the process reader for this replay. */
+  /** Update policy sampled by the process reader for this replay. */
   debug: Schema.NullOr(Schema.Boolean),
   /** True on the frame that ends the reads this `Subscribe` started. */
   replayComplete: Schema.Boolean,
@@ -143,6 +144,13 @@ const SurfaceActionMessageSchema = Schema.Struct({
   action: Schema.Union([
     Schema.Struct({ kind: Schema.Literal('selectNew') }),
     Schema.Struct({ kind: Schema.Literal('select'), runId: RunIdSchema }),
+    /** A run the window started, in the host's view as of commit `cursor`:
+     *  the surface's view, framed after the host's, selects it on arrival. */
+    Schema.Struct({
+      kind: Schema.Literal('selectOnArrival'),
+      runId: RunIdSchema,
+      cursor: CommitOrdinalSchema,
+    }),
     /** Show Sessions (`texra.showProgressView`): a surface on the New-task
      *  state opens `runId`, the newest session; one already showing a
      *  session keeps it. The surface decides, since only it knows. */
@@ -151,13 +159,13 @@ const SurfaceActionMessageSchema = Schema.Struct({
      *  selection, a follow-up to the selected stream or a launch. */
     Schema.Struct({ kind: Schema.Literal('submit') }),
     /** A fork's composer holds the message "Fork from here" cut before,
-     *  with the files it attached as the composer's images. */
+     *  with the media it attached as the composer's images. */
     Schema.Struct({
       kind: Schema.Literal('draft'),
       runId: RunIdSchema,
       text: Schema.String,
       images: Schema.Array(
-        Schema.Struct({ fileName: Schema.String, path: Schema.String }),
+        Schema.Struct({ fileName: Schema.String, media: StoredMediaSchema }),
       ),
     }),
     /** A workflow run of this session left running for finished or
@@ -204,6 +212,14 @@ interface FrameRead {
   readonly queue: Queue.Queue<EventsFrame, Cause.Done>;
 }
 
+/** What a feed holds between frames: the inputs not yet published, and
+ *  whether the replay has completed with its debug flag known. */
+interface FrameInputs {
+  debug?: boolean;
+  pending: SessionViewInput[];
+  complete: boolean;
+}
+
 export class SessionFrames extends Context.Service<
   SessionFrames,
   {
@@ -232,12 +248,11 @@ export class SessionFrames extends Context.Service<
             Effect.map(SubscriptionRef.get(current), ({ queue }) =>
               Stream.fromQueue(queue).pipe(
                 Stream.mapAccum(
-                  (): {
-                    debug?: boolean;
-                    pending: SessionViewInput[];
-                    complete: boolean;
-                  } => ({ pending: [], complete: false }),
-                  (state, frame) => {
+                  (): FrameInputs => ({ pending: [], complete: false }),
+                  (
+                    state,
+                    frame,
+                  ): readonly [FrameInputs, readonly SessionViewInput[][]] => {
                     if (!state.complete && frame.debug !== null)
                       state.debug = frame.debug;
                     state.pending.push(...frame.events, ...frame.chunks);
@@ -258,7 +273,7 @@ export class SessionFrames extends Context.Service<
                     }
                     if (!state.complete) {
                       if (!frame.replayComplete || state.debug === undefined)
-                        return [state, []] as const;
+                        return [state, []];
                       const reset = state.debug !== previousDebug;
                       const prefix: SessionViewInput[] = [
                         { _tag: 'debug', enabled: state.debug },
@@ -271,19 +286,12 @@ export class SessionFrames extends Context.Service<
                         },
                       ];
                       return [
-                        {
-                          ...state,
-                          pending: [] as SessionViewInput[],
-                          complete: true,
-                        },
+                        { ...state, pending: [], complete: true },
                         [[...prefix, ...state.pending]],
-                      ] as const;
+                      ];
                     }
-                    if (frame.existence === null) return [state, []] as const;
-                    return [
-                      { ...state, pending: [] as SessionViewInput[] },
-                      [state.pending],
-                    ] as const;
+                    if (frame.existence === null) return [state, []];
+                    return [{ ...state, pending: [] }, [state.pending]];
                   },
                 ),
               ),

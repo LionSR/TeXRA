@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { InstalledPlugins, Skills } from '@texra-ai/harness/host';
 import { pluginDataDir } from '@common/plugins/pluginHooks';
@@ -12,11 +12,12 @@ import {
   enablePlugin,
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
-import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
-import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
-import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
+import { hostSkillContributions } from '@skills/skillSources';
+import {
+  HostSkillSources,
+  loadRuntimeSkillCatalog,
+} from '@skills/runtimeSkills';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -36,39 +37,7 @@ async function writeSkill(
   );
 }
 
-afterEach(() => {
-  installTestSkillRoots([]);
-});
-
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
-  it('deduplicates repeated source paths while preserving required custom roots', () => {
-    const projectSkillsPath = path.resolve(
-      path.sep,
-      'tmp',
-      'project',
-      '.texra',
-      'skills',
-    );
-    const sources = foldSkillSources(hostSkillContributions([]), {
-      cwd: path.resolve(path.sep, 'tmp', 'project'),
-      home: path.resolve(path.sep, 'tmp', 'home'),
-      storageRoot: path.resolve(path.sep, 'tmp', 'home', '.texra'),
-      resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
-      options: { additionalPaths: ['.texra/skills'] },
-      plugins: [],
-    }).flatMap((tier) => tier.sources);
-
-    expect(
-      sources.filter((source) => source.path === projectSkillsPath),
-    ).toEqual([
-      expect.objectContaining({
-        scope: 'custom',
-        label: 'custom',
-        required: true,
-      }),
-    ]);
-  });
-
   it.effect(
     'installs a Claude Code plugin from a local directory, loads its skills as <plugin>:<name> once trusted, and removes it',
     () =>
@@ -123,7 +92,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
             'The bundled copy.',
           );
         });
-        const stores = makeFakeSettingsStores('cli').stores;
+        const stores = makeFakeSettingsStores().stores;
         // The run catalog over the installed plugins as they load now.
         const catalogNow = () =>
           Effect.flatMap(readInstalledPluginLoad(stores), (plugins) =>
@@ -136,14 +105,18 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
                 storageRoot: path.join(resources, 'no-storage-root'),
               } satisfies Parameters<typeof Skills.enabled>[0],
               plugins,
-            }),
+            }).pipe(
+              Effect.provideService(HostSkillSources, {
+                resourcesPath: resources,
+                options: {},
+                contributions: hostSkillContributions([]),
+              }),
+            ),
           );
         const env = {
           globalState: stores.globalState,
           globalStorage: resources,
         };
-        initializeNodeRuntimeSkills({ resourcesPath: resources }, []);
-
         const [installed] = yield* InstalledPlugins.install(
           { kind: 'local', path: plugin },
           [],

@@ -5,7 +5,7 @@
  * the message that started it (`forkSeed`); fresh, it starts from `prompt` alone with the
  * conversation's files and memories. Either way it is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
- * The goal is this function in a loop (`goalScript`).
+ * The default goal strategy is this function in a loop (`builtIn:goal`).
  */
 import { Effect, Result, Schema, SynchronizedRef } from 'effect';
 
@@ -17,24 +17,23 @@ import {
   type ScriptScope,
 } from '@agent/runtime/RunCall';
 import { getRunRecords } from '@agent/storage/runRecords';
-import {
-  AgentConfigSchema,
-  type DispatchFacts,
-  qualifyAggregateId,
-  ToolError,
-  type SubagentProgressUpdate,
-} from '@shared/schemas';
-import { defineTool } from '@tools/core/definition';
-import { nullishWithDefault } from '@tools/core/inputSchema';
-import { errorResult } from '@tools/core/result';
-import { childResult, failedResult } from '@tools/delegation/AgentTool';
+import { childResult, failedResult } from '@agent/runtime/delegation/AgentTool';
 import {
   agentChildRunId,
   countLaunch,
   recoverAgentChild,
-} from '@tools/delegation/agentChild';
-import { executeSubagentInBand } from '@tools/delegation/inBandSubagentRun';
-import { describeSubagentProgress } from '@tools/delegation/subagentRun';
+} from '@agent/runtime/delegation/agentChild';
+import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
+import { describeSubagentProgress } from '@agent/runtime/delegation/subagentRun';
+import {
+  AgentConfigSchema,
+  ToolError,
+  type SubagentProgressUpdate,
+} from '@shared/schemas';
+import { RunHistory, SessionLog } from '@shared/session/runHistory';
+import { defineTool } from '@tools/core/definition';
+import { nullishWithDefault } from '@tools/core/inputSchema';
+import { errorResult } from '@tools/core/result';
 import { normalizeStructuredOutputSchema } from '@tools/structuredOutput';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -79,47 +78,24 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     };
   if (script.kind !== 'background')
     return { config: run.config, source: null, before: 0, boundAt: undefined };
-  const start = (yield* run.session.log.records(run.runId)).find(
-    (row) => row.type === 'run.start',
-  );
+  const start = (yield* (yield* SessionLog).facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
-  const edge = start?.type === 'run.start' ? start.parent : null;
+  const edge = start?.parent;
   if (edge?.call == null) return yield* Effect.fail(missing);
   const { id: parent } = edge;
   const { card } = edge.call;
-  const config = yield* getRunRecords(run.session, parent).readConfig();
+  const config = yield* getRunRecords(parent).readConfig();
   // The cut is the response that issued the script, not the script's own
   // start, which a full child-run budget can delay past later turns: the
   // one whose call opened the card the script's start names (a provider
   // may reuse a call id, never a card), or, for a call a script of the
   // conversation made, the response that issued that script.
-  const rows = yield* run.session.log.rows(qualifyAggregateId('run', parent), [
-    'model.message',
-    'script.call',
-  ]);
-  const issues = (
-    row: (typeof rows)[number],
-    ids: (call: DispatchFacts) => boolean,
-  ) =>
-    row.type === 'model.message' &&
-    row.payload.kind === 'response' &&
-    row.payload.calls.some(ids);
-  const at = rows.findIndex(
-    (row) =>
-      issues(row, ({ logId }) => logId === card) ||
-      (row.type === 'script.call' && row.payload.logId === card),
+  const conversation = yield* (yield* RunHistory).load(parent);
+  const issued = Object.values(conversation?.calls ?? {}).find(
+    ({ logId }) => logId === card,
   );
-  const owner = rows[at];
-  const issued =
-    owner?.type === 'script.call'
-      ? rows
-          .slice(0, at)
-          .findLast((row) =>
-            issues(row, ({ callId }) => callId === owner.payload.scriptCallId),
-          )
-      : owner;
   if (config === null || issued === undefined)
     return yield* Effect.fail(missing);
   return {
@@ -136,7 +112,7 @@ const runSelf = Effect.fn('self.call')(function* (
   script: ScriptScope,
 ) {
   const { run } = call;
-  const { session, runId: parentRunId } = run;
+  const { runId: parentRunId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
     return errorResult(
@@ -177,17 +153,9 @@ const runSelf = Effect.fn('self.call')(function* (
     Effect.gen(function* () {
       const forked =
         input.fork && source !== null
-          ? yield* forkSeed(
-              session,
-              source,
-              before,
-              runId,
-              input.prompt,
-              boundAt,
-            )
+          ? yield* forkSeed(source, before, runId, input.prompt, boundAt)
           : null;
       return yield* executeSubagentInBand({
-        session,
         runId,
         parentRunId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -237,6 +205,9 @@ Forked (the default), the child continues this conversation as it stood when the
     if (script === null)
       return errorResult('self() runs only inside a script.');
     const budget = yield* scriptChildBudget(call.env.roots, script);
-    return yield* budget.withPermits(1)(runSelf(call, input, script));
+    // The child launches under the session's runs the engine door holds.
+    return yield* budget.withPermits(1)(
+      runSelf(call, input, script).pipe(Effect.provide(call.session)),
+    );
   }),
 });

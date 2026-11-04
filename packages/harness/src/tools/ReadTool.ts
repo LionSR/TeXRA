@@ -3,7 +3,6 @@ import { Effect, FileSystem, Schema, SchemaGetter } from 'effect';
 
 // Local imports
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { recordToolFileRead } from '@agent/runtime/RunCall';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import {
   resolveToolPath,
@@ -117,7 +116,9 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
   const call = yield* ToolContext;
   const resolved = yield* resolveToolPath(call.env, input.path);
   const displayPath = resolved.display;
-  const filePath = resolved.fsPath;
+  // The result names the file read as an edit's result names an edited
+  // file, so an edit of it later in the run finds the read in the rows.
+  const reads = [displayPath];
 
   const attachmentKind = getAttachmentConfig(resolved.absolute);
   if (attachmentKind) {
@@ -126,8 +127,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
       attachmentKind,
       resolved,
     );
-    yield* recordToolFileRead(filePath);
-    return result;
+    return { ...result, reads };
   }
 
   // EML files use complex MIME encoding (multipart, base64, quoted-printable).
@@ -165,8 +165,6 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     );
   }
 
-  yield* recordToolFileRead(filePath);
-
   const range = input.range;
   const totalLines = lines.length;
   const startLine = range?.start ?? 1;
@@ -198,7 +196,7 @@ const read = Effect.fn('ReadFileTool.execute')(function* (
     );
   }
 
-  return result;
+  return { ...result, reads };
 });
 
 function getAttachmentConfig(filePath: string): AttachmentKind | null {
@@ -233,7 +231,11 @@ const returnBinaryAttachment = Effect.fn('ReadFileTool.returnBinaryAttachment')(
     input: ReadInput,
     kind: AttachmentKind,
     resolved: ToolPathResolution,
-  ): Effect.fn.Return<ToolResult, Error, ToolContext | FileSystem.FileSystem> {
+  ): Effect.fn.Return<
+    Extract<ToolResult, { status: 'executed' }>,
+    Error,
+    ToolContext | FileSystem.FileSystem
+  > {
     const copy = ATTACHMENT_COPY[kind];
     const attachment = yield* buildFileAttachment({
       filePath: resolved.fsPath,

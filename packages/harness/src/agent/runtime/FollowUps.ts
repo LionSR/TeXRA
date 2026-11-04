@@ -20,36 +20,46 @@
  * parent's tool call runs in that call's fiber, so a context service would
  * hand the child its parent's input.
  */
-import { Effect, type FileSystem, type Scope, SynchronizedRef } from 'effect';
+import {
+  Effect,
+  type FileSystem,
+  Result,
+  type Scope,
+  SynchronizedRef,
+} from 'effect';
 
 import {
   followUpDisplay,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
-import type { FollowUpBatch } from '@agent/followUp/RunInput';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import type { FollowUpBatch, RunInput } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
+  type StoredInputPart,
 } from '@shared/schemas';
-import {
-  consumedRow,
-  type InputPoint,
-  isInstruction,
-} from '@shared/session/runFacts';
+import { consumedRow, isInstruction } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { RunCell } from '@shared/session/runHistory';
+import { SessionLog, type RunCell } from '@shared/session/runHistory';
 import { activatedSkillNames } from '@skills/runtimeSkills';
 import { sha256 } from '@utils/core/idHash';
-import { type InputPart, mediaInputParts } from './run/mediaInput';
+import {
+  skippedMediaPart,
+  storedMediaPart,
+  storedPdfPages,
+  type InputPart,
+} from './run/mediaInput';
 import { blobRows } from './run/requestContext';
 import { appendRow, positionRow } from './loop/rows';
 import { promptHooks } from './loop/hooks';
 import { resolveActivations } from './loop/step';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { AgentRunShape } from './run/AgentRun';
+import type { SessionServices } from './rootLaunch';
 import type { AppendedMessage } from './storedTurn';
 
 /** A batch as the rows that consume it: its message's `append` carries what
@@ -57,8 +67,6 @@ import type { AppendedMessage } from './storedTurn';
  *  activates). `delivered` logs them once durable. */
 interface BatchRows {
   readonly rows: readonly RunHistoryDraft[];
-  /** Whether the rows carry a message a turn answers. */
-  readonly turn: boolean;
   readonly delivered: () => void;
 }
 
@@ -75,16 +83,8 @@ export interface ConsumeOptions {
 }
 
 export interface FollowUps {
-  /** Whether `next` would return now: a message readable at `at`, or a
-   *  `/compact`. */
-  readonly hasPending: (at: InputPoint) => Effect.Effect<boolean>;
-  /** The run's own pending requests (`/compact`, a model switch). */
-  readonly controls: Effect.Effect<readonly QueuedFollowUp[]>;
-  /** The messages readable at `at`, when there are any; nothing is taken. */
-  readonly read: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
-  /** Block for the next batch readable at `at`; null once the generation
-   *  ended. */
-  readonly next: (at: InputPoint) => Effect.Effect<FollowUpBatch | null>;
+  /** The run's reader: what is pending, read from its rows. */
+  readonly input: Pick<RunInput, 'hasPending' | 'controls' | 'read' | 'next'>;
   /** End the reader: the run stays recoverable, or takes no more input. */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
@@ -101,58 +101,76 @@ export interface FollowUps {
   ) => Effect.Effect<
     { readonly state: RunState; readonly turn: boolean },
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   >;
 }
 
 /** Open `run`'s own reader for the enclosing scope. */
 export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   run: AgentRunShape,
-): Effect.fn.Return<FollowUps, never, Scope.Scope> {
-  const { runId, session, logger } = run;
-  // Ended with the scope; the run's settleRun arm ends it first, saying
+): Effect.fn.Return<FollowUps, never, Scope.Scope | Inbox | SessionLog> {
+  const { runId, logger } = run;
+  const inbox = yield* Inbox;
+  const log = yield* SessionLog;
+  // Ended with the scope; the run's settleRun ends it first, saying
   // whether the run takes more input.
-  const input = yield* session.followUps.open(runId);
+  const input = yield* inbox.open(runId);
 
   /** The canonical user message of one batch: every item's text as its
-   *  own part, media parts after it; `kinds[i]` is item i's badges. */
+   *  own part, media parts after it; `kinds[i]` is item i's badges.
+   *  The media is the row's by address; a PDF for a model that takes
+   *  images but no PDF is sent as its pages, as an opening message's is. A
+   *  medium the model does not take, or one whose pages cannot be
+   *  rendered, is a text part saying so (`skippedMediaPart`): the model is
+   *  told, in the row that carries the message. */
   const batchMessage = Effect.fn('FollowUps.batchMessage')(function* (
     followUps: readonly QueuedFollowUp[],
-  ): Effect.fn.Return<
-    {
-      message: Extract<AppendedMessage, { readonly role: 'user' }>;
-      kinds: readonly (readonly MediaAttachmentKind[])[];
-    },
-    Error,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    const bound = yield* SynchronizedRef.get(run.model);
-    const parts: InputPart[] = [];
+  ) {
+    const { capabilities } = (yield* SynchronizedRef.get(run.model)).config;
+    const parts: (InputPart | StoredInputPart)[] = [];
     const kinds: (readonly MediaAttachmentKind[])[] = [];
     for (const { content } of followUps) {
       parts.push({ kind: 'text', text: content.text });
-      const files = content.mediaFiles ?? [];
-      const media = yield* mediaInputParts(
-        files.map((path) => run.fileService.createLocation(path)),
-        bound.config.capabilities,
-        logger,
-        run.session.roots.config,
-      );
-      parts.push(...media.parts);
-      kinds.push(media.kinds);
+      const badges: MediaAttachmentKind[] = [];
+      for (const { name, mimeType, digest } of content.media ?? []) {
+        const part = storedMediaPart(mimeType, digest, capabilities);
+        if (part !== null) {
+          parts.push(part);
+          if (part.kind === 'image' || part.kind === 'document')
+            badges.push(part.kind);
+        } else if (
+          mimeType === 'application/pdf' &&
+          capabilities.supportsVision
+        ) {
+          const base64 = (yield* log.blobs([digest])).get(digest);
+          const pages =
+            base64 === undefined
+              ? Result.fail(new Error('its bytes are not stored'))
+              : yield* Effect.result(storedPdfPages(name, base64));
+          if (Result.isSuccess(pages)) {
+            parts.push(...pages.success);
+            badges.push('document');
+          } else parts.push(skippedMediaPart(name, pages.failure.message));
+        } else
+          parts.push(skippedMediaPart(name, 'the model does not accept it'));
+      }
+      kinds.push(badges);
     }
-    return { message: { role: 'user', content: parts }, kinds };
+    return {
+      message: { role: 'user', content: parts } satisfies AppendedMessage,
+      kinds,
+    };
   });
 
   const logFollowUps = (
     followUps: readonly QueuedFollowUp[],
-    kinds: readonly (readonly MediaAttachmentKind[])[] = [],
+    kinds: readonly (readonly MediaAttachmentKind[])[],
   ): void => {
     for (const [i, { content }] of followUps.entries()) {
       const { text, scriptSummary } = followUpDisplay(content);
-      const { mediaFiles } = content;
+      const { media } = content;
       const attachments = kinds[i];
-      logUserMessage(logger, text, { attachments, mediaFiles, scriptSummary });
+      logUserMessage(logger, text, { attachments, media, scriptSummary });
     }
   };
 
@@ -163,25 +181,26 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const batchRows = Effect.fn('FollowUps.batchRows')(function* (
     state: RunState,
     batch: FollowUpBatch,
+    /** The turn the batch's message becomes part of; null for a batch with
+     *  no message (only notices of ended children). */
+    turn: number | null,
   ): Effect.fn.Return<
     BatchRows,
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   > {
     const followUps = batch.kind === 'followUps' ? batch.followUps : [];
     const stale = batch.kind === 'followUps' ? batch.stale : [];
-    const turn = batch.kind === 'synthetic' || followUps.length > 0;
-    const built = yield* (
+    const built =
       batch.kind === 'synthetic'
-        ? Effect.succeed({
+        ? {
             message: {
               role: 'user',
               content: [{ kind: 'text', text: batch.text }],
             } satisfies AppendedMessage,
             kinds: [],
-          })
-        : batchMessage(followUps)
-    ).pipe(Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps))));
+          }
+        : yield* batchMessage(followUps);
     if (stale.length > 0) {
       logger.debug(
         `Consumed ${stale.length} progress notice(s) of ended subagents without delivering them.`,
@@ -238,16 +257,25 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       ...(activated !== undefined && { activated }),
     };
     return {
-      turn,
       rows: [
-        ...blobRows(runId, state, [
-          ...(instruction === undefined ? [] : [instruction]),
-        ]),
-        ...[...followUps, ...stale].map((followUp) =>
-          consumedRow(runId, followUp.followUpId),
+        ...blobRows(
+          runId,
+          state,
+          instruction === undefined ? [] : [instruction],
+        ),
+        ...(turn === null
+          ? []
+          : followUps.map((followUp) =>
+              consumedRow(runId, followUp.followUpId, { kind: 'turn', turn }),
+            )),
+        ...stale.map((followUp) =>
+          consumedRow(runId, followUp.followUpId, {
+            kind: 'dropped',
+            reason: 'stale',
+          }),
         ),
         ...hooked.rows,
-        ...(turn ? [appendRow(runId, [message], { input })] : []),
+        ...(turn === null ? [] : [appendRow(runId, [message], { input })]),
       ],
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => logFollowUps(followUps, built.kinds),
@@ -262,31 +290,34 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   ): Effect.fn.Return<
     { readonly state: RunState; readonly turn: boolean },
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   > {
     const state = yield* cell.current;
-    const built = yield* batchRows(state, batch);
+    // A batch with a message opens the next turn, or joins the one running.
+    const turn = batch.kind === 'synthetic' || batch.followUps.length > 0;
+    const opens = turn && options.position !== false;
+    const built = yield* batchRows(
+      state,
+      batch,
+      turn ? state.turn + (opens ? 1 : 0) : null,
+    );
     const rows = [...(options.rows ?? []), ...built.rows];
-    const opens = built.turn && options.position !== false;
     const committed = yield* cell.append(
       opens ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
       options.alongside,
     );
     built.delivered();
-    return { state: committed, turn: built.turn };
+    return { state: committed, turn };
   });
 
   return {
-    hasPending: input.hasPending,
-    controls: input.controls,
-    read: input.read,
-    next: input.next,
+    input,
     // A child takes no more input once its loop ends: its parent resumes it.
     release: (next) =>
-      session.followUps.release(
+      inbox.release(
         runId,
         input,
-        next === 'terminal' || session.runs.get(runId)?.parent != null,
+        next === 'terminal' || run.entry.parent !== null,
       ),
     consume,
   };

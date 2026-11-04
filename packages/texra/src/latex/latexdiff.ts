@@ -7,7 +7,11 @@ import {
   withLogChannel,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import { executeCommand, readNormalizedFile } from '@texra-ai/harness/node';
+import {
+  absentReason,
+  executeCommand,
+  readNormalizedFile,
+} from '@texra-ai/harness/node';
 import { formatError, type FileLocation } from '@texra-ai/harness/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
@@ -61,15 +65,17 @@ export class LaTeXdiffService {
   private readonly fileProcessor: DiffFileProcessor;
   private readonly commandExecutor: DiffCommandExecutor;
 
+  private readonly channel: string;
+  private readonly roots: WorkspaceRoots;
+
   /**
    * @param roots The roots of the workspace being diffed, held as data: the
    * diff's settings, replacement rules and output location all answer for that
    * project rather than for whichever roots the calling fiber carries.
    */
-  constructor(
-    private readonly channel: string,
-    private readonly roots: WorkspaceRoots,
-  ) {
+  constructor(channel: string, roots: WorkspaceRoots) {
+    this.channel = channel;
+    this.roots = roots;
     this.fileProcessor = new DiffFileProcessor(roots.config);
     this.commandExecutor = new DiffCommandExecutor(channel, roots);
   }
@@ -94,14 +100,16 @@ export class LaTeXdiffService {
       });
   }
 
-  private read(
+  private readonly read = Effect.fn('LaTeXdiffService.read')(function* (
     absolutePath: string,
-  ): Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      return yield* readNormalizedFile(fs, absolutePath);
-    });
-  }
+  ): Effect.fn.Return<
+    string,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* readNormalizedFile(fs, absolutePath);
+  });
 
   /** Read both diff inputs, returning null when either input no longer exists. */
   private readDiffInputs(
@@ -119,9 +127,8 @@ export class LaTeXdiffService {
       ],
       { concurrency: 2 },
     ).pipe(
-      Effect.catchIf(
-        (error) => error.reason._tag === 'NotFound',
-        () => Effect.succeed<[string, string] | null>(null),
+      Effect.catchIf(absentReason, () =>
+        Effect.succeed<[string, string] | null>(null),
       ),
     );
   }

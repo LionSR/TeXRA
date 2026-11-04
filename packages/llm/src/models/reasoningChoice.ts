@@ -10,24 +10,60 @@
 import { Schema } from 'effect';
 import {
   EFFORT_SCALE,
+  ModelProvider,
   ReasoningEffort,
   type ModelConfig,
   type ModelSelection,
   type ReasoningMode,
 } from 'llm-zoo';
 
+import type { ModelRoute } from './modelRoute.js';
+
 /** The effort used when neither the caller nor the user names one. */
 const DEFAULT_EFFORT = ReasoningEffort.MEDIUM;
 
 /**
- * The Codex subscription backend runs every turn synchronously on one
- * connection, so an effort above medium risks the client timing out before
- * it answers: a route ceiling, applied through the one reasoning policy.
+ * The ChatGPT plan route's effort ceiling, applied through the one reasoning
+ * policy. It was set for ChatGPT's Codex backend, which ran every turn
+ * synchronously on one connection so that a higher effort risked a client
+ * timeout; the token-sharing route streams over the public API and keeps the
+ * ceiling until higher efforts are measured there.
  */
-export const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
+const CODEX_ROUTE_EFFORTS: readonly ReasoningEffort[] = [
   ReasoningEffort.LOW,
   ReasoningEffort.MEDIUM,
 ];
+
+/**
+ * The reasoning controls `config` has on `route`; without a route, the
+ * model's own. Each provider serves one protocol (`BACKEND_PROTOCOLS`):
+ * Gemini's Interactions request and Kimi's Responses request have no switch
+ * that turns thinking off, DashScope's has none that turns Qwen's thinking
+ * on, and the Codex subscription serves {@link CODEX_ROUTE_EFFORTS} only.
+ */
+function routeControls(
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
+  route: Pick<ModelRoute, 'kind'> | undefined,
+): ModelConfig['reasoning'] {
+  const { reasoning } = config;
+  if (route === undefined || reasoning === undefined) return reasoning;
+  switch (config.provider) {
+    case ModelProvider.DASHSCOPE:
+      return undefined;
+    case ModelProvider.GOOGLE:
+    case ModelProvider.MOONSHOT:
+      return { ...reasoning, off: undefined };
+    default:
+      return route.kind === 'chatgpt-subscription'
+        ? {
+            ...reasoning,
+            efforts: reasoning.efforts.filter((effort) =>
+              CODEX_ROUTE_EFFORTS.includes(effort),
+            ),
+          }
+        : reasoning;
+  }
+}
 
 /** What a request asks for, and how that differs from what was selected. */
 export interface ReasoningChoice {
@@ -82,11 +118,10 @@ function snapped(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
   label: string,
-  strict: boolean,
 ): { effort: ReasoningEffort; requested?: ReasoningEffort; note?: string } {
   if (accepted.includes(wanted)) return { effort: wanted };
   const effort = nearestEffort(accepted, wanted);
-  if (effort === undefined || strict) {
+  if (effort === undefined) {
     throw new ReasoningChoiceError({
       message: `${label} does not accept effort ${wanted} (accepts ${accepted.join(', ') || 'no effort level'}).`,
     });
@@ -98,18 +133,19 @@ function snapped(
   };
 }
 
-/** How {@link chooseReasoning} settles a request the model cannot serve. */
+/** How {@link chooseReasoning} resolves a request the model cannot serve. */
 export interface ChooseReasoningOptions {
   /** The user's saved level for this model, used when the selection names none. */
   readonly userEffort?: ReasoningEffort;
-  /** A route's own ceiling on the levels it can serve (e.g. the Codex subscription backend). */
+  /** The route the request is bound on, which may carry fewer controls than the model has. */
+  readonly route?: Pick<ModelRoute, 'kind'>;
+  /** The caller's own ceiling on the levels it can serve (e.g. an installed Codex CLI's). */
   readonly routeEfforts?: readonly ReasoningEffort[];
-  /** Refuse instead of substituting a nearby level. */
-  readonly strict?: boolean;
 }
 
 /**
- * Decide thinking, effort and mode for one request.
+ * Decide thinking, effort and mode for one request, over the controls the
+ * model has on `options.route`.
  *
  * - The effort is the selection's, else the user's saved level, else
  *   {@link DEFAULT_EFFORT}.
@@ -117,15 +153,14 @@ export interface ChooseReasoningOptions {
  *   thinking, as is thinking on a model that never thinks, because on/off
  *   changes the kind of answer, not its amount.
  * - Any other level the model lacks becomes the nearest level it has (ties
- *   go up), reported in `note`; `strict` refuses instead.
+ *   go up), reported in `note`.
  */
 export function chooseReasoning(
-  config: Pick<ModelConfig, 'label' | 'reasoning' | 'modes'>,
+  config: Pick<ModelConfig, 'label' | 'provider' | 'reasoning' | 'modes'>,
   request: ReasoningRequest = {},
   options: ChooseReasoningOptions = {},
 ): ReasoningChoice {
-  const { reasoning } = config;
-  const strict = options.strict ?? false;
+  const reasoning = routeControls(config, options.route);
   const label = config.label;
 
   if (
@@ -176,7 +211,9 @@ export function chooseReasoning(
         options.routeEfforts?.includes(effort),
       )
     : reasoning.efforts;
-  if (reasoning.efforts.length === 0) {
+  // A model with no levels of its own thinks without one; a route ceiling
+  // that leaves it none refuses the level instead (`snapped`).
+  if (config.reasoning?.efforts.length === 0) {
     if (explicit === undefined && options.userEffort === undefined)
       return { thinking: true, effort: null, mode };
     return {
@@ -187,17 +224,19 @@ export function chooseReasoning(
       note: `${label} has no effort levels; ignoring ${wanted}.`,
     };
   }
-  return { thinking: true, mode, ...snapped(accepted, wanted, label, strict) };
+  return { thinking: true, mode, ...snapped(accepted, wanted, label) };
 }
 
 /**
- * The effort values a route may send for a model: the levels it accepts
+ * The effort values `route` may send for a model: the levels it accepts
  * while thinking, plus `none` where `none` is how thinking is turned off.
+ * Without a route, the model's own.
  */
 export function acceptedEfforts(
-  config: Pick<ModelConfig, 'reasoning'>,
+  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
+  route?: Pick<ModelRoute, 'kind'>,
 ): ReasoningEffort[] {
-  const { reasoning } = config;
+  const reasoning = routeControls(config, route);
   if (reasoning === undefined) return [];
   return [
     ...(reasoning.off === undefined ? [] : [ReasoningEffort.NONE]),

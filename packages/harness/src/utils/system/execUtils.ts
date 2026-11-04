@@ -2,16 +2,15 @@ import * as path from 'node:path';
 
 import { Duration, Effect, Fiber, Result, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
-import { quote as shellQuote } from 'shell-quote';
+import * as CommandLine from 'effect/process/CommandLine';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settings';
-import { onAbort } from '@utils/core';
+import { Settings, type SettingsStores } from '@shared/config/settings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
-import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { toWindowsCommand } from '@utils/system/windowsCommandLine';
 import type {
   ChildProcessHandle,
@@ -24,15 +23,63 @@ const CHANNEL = 'execUtils';
 /** SIGTERM to SIGKILL escalation for every teardown the scope runs. */
 const FORCE_KILL_AFTER = Duration.seconds(5);
 const DEFAULT_MAX_BUFFER = 100_000_000;
-/** The sentinel prefixed to a POSIX shell's script, reading the lifeline on
- *  fd 3. On its own line, so the shell's error messages quote only the
- *  command. */
-const LIFELINE_SENTINEL =
-  '( (read x <&3; kill -s KILL 0) >/dev/null 2>&1 & ); exec 3<&-\n';
+/**
+ * A POSIX shell's script around `command`: a sentinel reading the lifeline
+ * on fd 3, then the command in a subshell, so a `wait` in it does not wait
+ * on the sentinel. Once the command ends the shell stops the sentinel and
+ * reaps it itself: an orphaned sentinel would stay in the process group as
+ * a zombie until init reaps it, and the spawner's teardown waits for the
+ * group to empty (seconds per command under a slow-reaping init). The
+ * command starts on line 2, so the shell's error messages number its lines
+ * as before.
+ */
+const withLifeline = (command: string): string =>
+  '(read x <&3; kill -s KILL 0) >/dev/null 2>&1 & texra_lifeline=$!; exec 3<&-; (\n' +
+  `${command}\n)\n` +
+  'texra_status=$?; kill $texra_lifeline 2>/dev/null; wait $texra_lifeline 2>/dev/null; exit $texra_status\n';
 
 function normalizeOutput(text: string | null | undefined): string {
   return text?.trim() ?? '';
 }
+
+/**
+ * Git author environment for a spawned process.
+ *
+ * When the calling session's workspace marks agent commits, these are merged
+ * into the environment of every command {@link executeCommand} runs, so any
+ * `git commit` carries the configured agent identity. Read at spawn time from
+ * the setting slots the caller named on the command options, not from a value
+ * applied once for the whole process: a process holding several projects
+ * attributes each project's commits by that project's own setting. Empty when
+ * the caller has no workspace, or when commit marking is off.
+ */
+const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
+  settings: SettingsStores | undefined,
+) {
+  if (!settings) return {};
+  if (
+    !(yield* Settings.get<boolean>(
+      settings,
+      WorkspaceStateKey.GIT_MARK_COMMITS,
+    ))
+  ) {
+    return {};
+  }
+  const name = yield* Settings.get<string>(
+    settings,
+    WorkspaceStateKey.GIT_AUTHOR_NAME,
+  );
+  const email = yield* Settings.get<string>(
+    settings,
+    WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+  );
+  return {
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
+  };
+});
 
 /**
  * The complete environment a command runs with: {@link inheritedEnv} on the
@@ -43,20 +90,19 @@ function commandEnv(
   inherited: Record<string, string>,
   workspacePath: string,
   authorEnv: Record<string, string | undefined> | undefined,
-  envOverrides?: Record<string, string>,
-): Record<string, string | undefined> {
-  // withExtendedPath, not a bare `env.PATH =`: on Windows the copy of
+  envOverrides: Record<string, string> | undefined,
+): Effect.Effect<Record<string, string | undefined>> {
+  // withCommandDirs, not a bare `env.PATH =`: on Windows the copy of
   // `process.env` carries the variable as `Path`, so assigning `PATH` would
   // leave both spellings on the environment handed to the shell, and the one
   // the shell resolves against is then undefined.
-  const env = withExtendedPath({
+  return withCommandDirs({
     ...inherited,
     ...authorEnv,
     ...envOverrides,
+    PROJECT_DIR: workspacePath,
+    PROJECT_NAME: path.basename(workspacePath),
   });
-  env.PROJECT_DIR = workspacePath;
-  env.PROJECT_NAME = path.basename(workspacePath);
-  return env;
 }
 
 function resultFromProcessOutput(
@@ -116,21 +162,10 @@ export interface ExecuteCommandBaseOptions {
   readonly buffer?: boolean;
   /** Maximum decoded characters retained per output stream before the command is stopped. */
   readonly maxBuffer?: number;
-  /**
-   * A caller-owned cancellation channel, for the one case fiber interruption
-   * cannot express: a command whose **result still has to be delivered** after
-   * it is stopped (the background bash child run, whose strategy sets
-   * `deliverAfterInterrupt`). Aborting it terminates the subprocess and any
-   * shell children, and the call still resolves with exit code 130.
-   *
-   * Every other caller stops the command by interrupting the fiber: teardown
-   * is identical and the abandoned result is exactly what interruption means.
-   */
-  readonly signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
   readonly quiet?: boolean;
   /**
-   * Terminate the whole process tree on abort or timeout instead of only the
+   * Terminate the whole process tree on interruption or timeout instead of only the
    * tracked process. Array form only: the shell form already signals its whole
    * group. Opt in for tools that hand the work to a delegate (ImageMagick and
    * GraphicsMagick rasterize PDF pages through Ghostscript) so the delegate is
@@ -157,11 +192,10 @@ type Outcome =
   // A stdout or stderr read failed before the child ended.
   | { readonly _tag: 'ReadFailed'; readonly description: string }
   | { readonly _tag: 'TimedOut' }
-  | { readonly _tag: 'Aborted' }
   | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr' }
   | { readonly _tag: 'SpawnFailed'; readonly error: PlatformError };
 
-/** Output kept so far; partial text survives a deadline or an abort. */
+/** Output kept so far; partial text survives a deadline. */
 interface Captured {
   stdout: string;
   stderr: string;
@@ -188,7 +222,7 @@ function buildCommand(
   if (Array.isArray(command)) {
     const [argv0, ...args] = command;
     // A process group only when asked: without one, a descendant that
-    // inherited stdio is left alone by an abort or timeout.
+    // inherited stdio is left alone by an interruption or timeout.
     const detached = options.killProcessTree === true && !IS_WINDOWS;
     return IS_WINDOWS
       ? toWindowsCommand(argv0, args, { ...common, detached })
@@ -199,15 +233,14 @@ function buildCommand(
   if (IS_WINDOWS) return ChildProcess.make(command, { ...common, shell: true });
   // A POSIX shell runs as its own process group, so a stop reaches piped
   // children and backgrounded jobs, and carries a lifeline: fd 3 is a pipe
-  // only this process holds the write end of. The sentinel below, forked into
-  // the group and out of the shell's job table (so a `wait` in the command
-  // does not wait on it), blocks reading it; when this process dies by any
-  // means, a SIGKILL or a crash included, the kernel closes the write end and
-  // the sentinel kills the whole group. The shell closes its own copy before
-  // the command runs, so nothing the command starts inherits it. A stop is
-  // still the scope's release (SIGTERM to the group, SIGKILL after five
-  // seconds), which ends the sentinel with the rest of the group.
-  return ChildProcess.make(`${LIFELINE_SENTINEL}${command}`, {
+  // only this process holds the write end of. The sentinel (`withLifeline`)
+  // blocks reading it; when this process dies by any means, a SIGKILL or a
+  // crash included, the kernel closes the write end and the sentinel kills
+  // the whole group. The shell closes its own copy before the command runs,
+  // so nothing the command starts inherits it. A stop is still the scope's
+  // release (SIGTERM to the group, SIGKILL after five seconds), which ends
+  // the sentinel with the rest of the group.
+  return ChildProcess.make(withLifeline(command), {
     ...common,
     shell: true,
     detached: true,
@@ -253,8 +286,12 @@ function describeFailure(error: PlatformError): string {
   return toErrorMessage(error.reason.cause ?? error.reason._tag);
 }
 
+/** The command for a log or a message: argv quoted as this platform's
+ *  programs split a command line, with control characters escaped. */
 function displayCommand(command: string | string[]): string {
-  return Array.isArray(command) ? shellQuote(command) : command;
+  return Array.isArray(command)
+    ? CommandLine.display(command, { format: IS_WINDOWS ? 'windows' : 'posix' })
+    : command;
 }
 
 function resultFromOutcome(
@@ -288,12 +325,6 @@ function resultFromOutcome(
         1,
         { timedOut: true },
       );
-    case 'Aborted':
-      return resultFromProcessOutput(
-        stdout,
-        stderr || 'Command aborted by user',
-        130,
-      );
     case 'LimitExceeded':
       return resultFromProcessOutput(
         stdout,
@@ -316,7 +347,7 @@ function resultFromOutcome(
   }
 }
 
-/** Wait for the command to end, or its deadline, abort or output limit. */
+/** Wait for the command to end, or its deadline or output limit. */
 const awaitOutcome = Effect.fnUntraced(function* (
   handle: ChildProcessHandle,
   captured: Captured,
@@ -356,23 +387,14 @@ const awaitOutcome = Effect.fnUntraced(function* (
     ),
   );
   const timeout = options.timeout ?? 0;
-  const bounded =
-    timeout > 0
-      ? settled.pipe(
-          Effect.timeoutOrElse({
-            duration: Duration.millis(timeout),
-            orElse: () => Effect.succeed<Outcome>({ _tag: 'TimedOut' }),
-          }),
-        )
-      : settled;
-  const { signal } = options;
-  if (signal === undefined) return yield* bounded;
-  const aborted = Effect.callback<Outcome>((resume) =>
-    Effect.sync(
-      onAbort(signal, () => resume(Effect.succeed({ _tag: 'Aborted' }))),
-    ),
-  );
-  return yield* Effect.raceFirst(bounded, aborted);
+  return yield* timeout > 0
+    ? settled.pipe(
+        Effect.timeoutOrElse({
+          duration: Duration.millis(timeout),
+          orElse: () => Effect.succeed<Outcome>({ _tag: 'TimedOut' }),
+        }),
+      )
+    : settled;
 });
 
 /** Spawn the command in the caller's scope and read how it ended. */
@@ -400,11 +422,11 @@ const runSpawned = Effect.fnUntraced(function* (
  * process's `ChildProcessSpawner`.
  *
  * Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
- * timeout (`timedOut`), an abort (130) and a max-buffer trip (2,
+ * timeout (`timedOut`) and a max-buffer trip (2,
  * `outputLimitExceeded`) are all reported in the {@link ExecResult}.
  *
  * The process lives exactly as long as this call's scope. A deadline, an
- * abort, an output-limit trip or an interrupted fiber closes that scope, and
+ * output-limit trip or an interrupted fiber closes that scope, and
  * that is the whole teardown: SIGTERM to the process (its group when it has
  * one), SIGKILL after five seconds, and a join on its exit. A command that
  * ends by itself gets the same release, so jobs its shell backgrounded end
@@ -417,9 +439,6 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   command: string | string[],
   options: ExecuteCommandBaseOptions,
 ): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {
-  if (options.signal?.aborted) {
-    return resultFromProcessOutput('', 'Command aborted by user', 130);
-  }
   const channel = options.channel ?? CHANNEL;
   const logError = (message: string) =>
     options.quiet
@@ -434,13 +453,13 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   }
   // The git identity is a setting read; a failed read fails this command,
   // reported like a spawn failure, rather than dropping the identity.
-  const authorEnv = yield* Effect.result(getGitAuthorEnv(options.settings));
+  const authorEnv = yield* Effect.result(gitAuthorEnv(options.settings));
   if (authorEnv._tag === 'Failure') {
     const message = toErrorMessage(authorEnv.failure);
     yield* logError(message);
     return resultFromProcessOutput('', message, 127);
   }
-  const env = commandEnv(
+  const env = yield* commandEnv(
     yield* inheritedEnv(),
     cwd,
     authorEnv.success,

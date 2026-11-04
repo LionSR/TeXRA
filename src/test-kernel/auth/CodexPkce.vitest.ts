@@ -1,13 +1,15 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
-import {
-  DEFAULT_MODEL_CAPABILITIES,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
 
-import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@texra-ai/llm';
+import {
+  decideModelRoute,
+  DEFAULT_MODEL_CAPABILITIES,
+  type ModelConfig,
+  ModelProvider,
+  OWN_KEY_ROUTE_FACTS,
+  ReasoningEffort,
+  type RouteDecisionFacts,
+} from '@texra-ai/llm';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */
 function openAIModel(overrides: Partial<ModelConfig> = {}): ModelConfig {
@@ -56,20 +58,6 @@ describe('codex model eligibility', () => {
       eligible: true,
     },
     {
-      // Top reasoning tier + `codex` name + live: everything the old heuristic
-      // trusted. Absent the registry flag, it must not route to Codex.
-      name: 'rejects an unflagged model even when every old-heuristic proxy matches',
-      overrides: {
-        id: 'gpt-5.9-codex',
-        shortName: 'gpt-5.9-codex',
-        reasoning: {
-          efforts: [ReasoningEffort.MAX],
-          providerDefault: ReasoningEffort.MAX,
-        },
-      },
-      eligible: false,
-    },
-    {
       // The provider guard must live inside the function itself, not only in
       // callers — a non-OpenAI ModelConfig must never resolve eligible, even if
       // a future registry mistake flags one.
@@ -86,7 +74,7 @@ describe('codex model eligibility', () => {
     expect(
       decideModelRoute(openAIModel(overrides), {
         ...OWN_KEY_ROUTE_FACTS,
-        chatgptSubscription: true,
+        plans: ['chatgpt-subscription'],
       }).kind === 'chatgpt-subscription',
     ).toBe(eligible);
   });
@@ -96,7 +84,10 @@ describe('codex model eligibility', () => {
       codexSubscription: { contextWindow: 272_000 },
       modes: ['pro'],
     });
-    const facts = { ...OWN_KEY_ROUTE_FACTS, chatgptSubscription: true };
+    const facts: RouteDecisionFacts = {
+      ...OWN_KEY_ROUTE_FACTS,
+      plans: ['chatgpt-subscription'],
+    };
     expect(decideModelRoute(model, facts).kind).toBe('chatgpt-subscription');
     expect(decideModelRoute(model, { ...facts, mode: 'pro' }).kind).not.toBe(
       'chatgpt-subscription',

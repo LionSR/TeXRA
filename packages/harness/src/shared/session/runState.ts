@@ -16,7 +16,7 @@ import {
   addTurnUsage,
   CommitOrdinalSchema,
   EMPTY_RUN_USAGE_TOTALS,
-  requestParksItsCaller,
+  blocksCaller,
   type CommitOrdinal,
   type HookOutcomes,
   type JsonValue,
@@ -29,14 +29,12 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { phaseAfter, type RunLoopPhase } from '@shared/runs/runStatus';
-import { NO_FACTS, withInput, type RunFacts } from './runFacts';
+import { closedBy, NO_FACTS, withInput, type RunFacts } from './runFacts';
 import {
   applyRunRow,
   type BatchCopies,
   freshRunPosition,
-  type FOLLOW_UP_TYPES,
   ownCopy,
-  type RunPosition,
   type SharedRunRow,
 } from './runRows';
 import {
@@ -46,6 +44,7 @@ import {
   type PendingResponse,
 } from './inFlight';
 import { outOfOrder, TURN_ROW_HANDLERS } from './turnRowHandlers';
+import type { RunPosition } from './runRowsShape';
 import type { HistoryMessage, Live, RunHistoryRow } from './historyTurns';
 
 /** The rows `RunCell.append` commits: the run history rows, and the display
@@ -56,6 +55,7 @@ export type RunHistoryDraft = Live<
 >;
 type RunHistoryDraftType =
   | 'run.position'
+  | 'run.end'
   | 'model.message'
   | 'context.edit'
   | 'tool.intent'
@@ -94,10 +94,8 @@ export class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsi
  */
 export type RunState = RunPosition &
   RunFacts & {
-    /** The last applied row. */
     readonly commit: CommitOrdinal;
-    /** Whether a run history row was applied: rows that only update an
-     *  existing state (requests, config, activation) do not count. */
+    /** A run history row was applied, not only requests, config, activation. */
     readonly hasHistoryRows: boolean;
     /** `null` until the opening `run.position` (then set by
      *  {@link phaseAfter}): no row that needs an opened run comes before it. */
@@ -129,10 +127,14 @@ export type RunState = RunPosition &
     /** Request ids answered since the latest `run.activate`, when this
      *  process took over the run; nothing waiting has seen them yet. */
     readonly decidedSinceActivation: ReadonlySet<string>;
+    /** True after a `run.activate` until the loop writes its next position. */
+    readonly resuming: boolean;
     /** The priced usage summed from its `response` and `context.edit` rows. */
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
     readonly lastEdit: number | null;
+    /** The turn compacted for a request the window could not hold. */
+    readonly overflowCompacted: boolean;
     /** The latest `tools.offered` row's set; `null` before the first. */
     readonly offeredTools: readonly OfferedTool[] | null;
     /** The address of the system text the run's context froze. */
@@ -154,56 +156,23 @@ export type RunState = RunPosition &
 /** Display rows a batch commits together with run history rows; the run
  *  state ignores them. */
 type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
-type CardType = 'tool.start' | 'tool.end' | 'stream.end';
+type CardType = 'tool.start' | 'tool.end' | 'stage.start' | 'stream.end';
 type ResultType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
-type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
+type EndType = 'stage.end' | 'followup.closed'; // and what it closes
 /** The row types the run state reads, each with a handler in
  *  `ROW_HANDLERS`. A run's input is not among them: the inbox reads it. */
 export type RunStateRowType = Exclude<
   SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
-  CardRowType | (typeof FOLLOW_UP_TYPES)[number]
+  CardRowType | 'followup.queued' | 'followup.consumed'
 >;
-/** The drafts the run state does not read (a run's input and the display
- *  rows above): any job may commit them without the run's cell. */
-export type RunInputDraft = Exclude<RunHistoryDraft, { type: RunStateRowType }>;
+/** The drafts any job may commit without the run's cell: the ones the run
+ *  state does not read (a run's input and the display rows above), and the
+ *  run's end, which nothing continues from until the next open folds it. */
+export type RunInputDraft = Exclude<
+  RunHistoryDraft,
+  { type: Exclude<RunStateRowType, 'run.end'> }
+>;
 
-/**
- * Display rows the run state ignores, by name: any other row type without
- * a handler is `unknown-run-row`, never a silent default. The record covers
- * every row type, so a new one fails to compile here until it gets a
- * handler or is listed.
- */
-const IGNORED_ROW_TYPES: Readonly<
-  Record<Exclude<SessionEvent['type'], RunStateRowType>, true>
-> = {
-  'tool.start': true,
-  'tool.end': true,
-  'stream.end': true,
-  'run.start': true,
-  'run.model': true,
-  'run.detach': true,
-  'run.end': true,
-  'run.removed': true,
-  'run.description': true,
-  'conversation.progress': true,
-  'run.fact': true,
-  'child.park': true,
-  'plugin.fact': true,
-  'approval.policy': true,
-  log: true,
-  'stage.start': true,
-  'stage.end': true,
-  usage: true,
-  'context.state': true,
-  'stream.start': true,
-  'run.report': true,
-  'run.result': true,
-  'followup.closed': true,
-  'followup.queued': true,
-  'followup.consumed': true,
-  // The child loop's own bookkeeping: its readers use it, not this loop.
-  'child.turn': true,
-};
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
@@ -222,9 +191,11 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   countStale: false,
   pendingResponse: null,
   decidedSinceActivation: new Set(),
+  resuming: false,
   usage: EMPTY_RUN_USAGE_TOTALS,
   ...NO_FACTS,
   lastEdit: null,
+  overflowCompacted: false,
   offeredTools: null,
   offeredWith: { skills: [], hooks: [], modules: {} },
   offeredSystem: null,
@@ -239,9 +210,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
  * re-enters and the one its script's calls share (attempt 0). Each of the
  * rest keeps a call waiting that a new process will not wait on, so a
  * resume cancels them before it continues the run (`RunHistory.activate`).
- * An `externalInquiry` is the exception by contract: its tool returns at
- * once and its answer arrives as a follow-up, to whichever process is
- * running the run by then, so it stays open across every batch.
+ * A request that does not block its caller (`blocksCaller`) keeps nothing
+ * waiting, so it stays open across every batch.
  */
 export function unboundRequests(state: RunState): readonly string[] {
   const { pendingResponse: pending, requests } = state;
@@ -260,7 +230,7 @@ export function unboundRequests(state: RunState): readonly string[] {
   return Object.entries(requests).flatMap(([requestId, request]) =>
     request.decision !== null ||
     own.has(requestId) ||
-    !requestParksItsCaller(request.payload)
+    !blocksCaller(request.payload)
       ? []
       : [requestId],
   );
@@ -327,16 +297,17 @@ const applySharedRow = (
   if (verdict.kind === 'contradiction') return outOfOrder(verdict.detail);
   return Result.succeed({
     ...state,
-    ...(row.type === 'request.decided'
-      ? {
-          decidedSinceActivation: new Set([
-            ...state.decidedSinceActivation,
-            row.requestId,
-          ]),
-          declinedRoutes: declinedBy(state, row),
-        }
-      : {}),
+    ...(row.type === 'request.decided' && {
+      decidedSinceActivation: new Set([
+        ...state.decidedSinceActivation,
+        row.requestId,
+      ]),
+      declinedRoutes: declinedBy(state, row),
+    }),
     ...verdict.rows,
+    ...(row.type === 'run.position' &&
+      row.payload.at === 'turn.begin' && { answer: '' }),
+    ...(row.type === 'run.position' && { resuming: false }),
     phase: phaseAfter(state.phase, verdict.rows.at),
   });
 };
@@ -350,12 +321,27 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'run.position': { requires: 'any', apply: applySharedRow },
   'request.opened': { requires: 'existing', apply: applySharedRow },
   'request.decided': { requires: 'existing', apply: applySharedRow },
+  'run.end': {
+    // The lifecycle's end. A shutdown's cut the attempt it stopped, which
+    // spends no retry when the run resumes.
+    requires: 'existing',
+    apply: (state, row) =>
+      Result.succeed({
+        ...state,
+        invocation:
+          row.reason === 'shutdown'
+            ? closedBy(state.invocation)
+            : state.invocation,
+      }),
+  },
   'run.activate': {
-    // A new process takes over the run: nothing waiting has read the
-    // decisions from here on.
     requires: 'existing',
     apply: (state) =>
-      Result.succeed({ ...state, decidedSinceActivation: new Set() }),
+      Result.succeed({
+        ...state,
+        decidedSinceActivation: new Set(),
+        resuming: true,
+      }),
   },
   'run.config': {
     // What the run runs on: its model, and once it binds, its backend and
@@ -427,6 +413,8 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       return Result.succeed({
         ...state,
         messages,
+        invocation: p.trigger === 'overflow' ? null : state.invocation,
+        overflowCompacted: state.overflowCompacted || p.trigger === 'overflow',
         continuation: null,
         // The next step renders the system text again, every change in it.
         offeredSystem: null,
@@ -473,15 +461,25 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   },
 };
 
-/** Whether the row's type has a handler. */
-const hasHandler = (row: RunHistoryRow): row is RowOf<RunStateRowType> =>
+/** The row kinds the run state reads: what a `history` read of a run
+ *  selects, so no display row reaches it. */
+export const RUN_STATE_ROW_TYPES: readonly RunStateRowType[] =
+  Struct.keys(ROW_HANDLERS);
+
+/** Whether the run state reads rows of `row`'s kind: its history rows,
+ *  not the cards and records a batch commits beside them. */
+export const isRunStateRow = <R extends Pick<SessionEvent, 'type'>>(
+  row: R,
+): row is Extract<R, { type: RunStateRowType }> =>
   Object.hasOwn(ROW_HANDLERS, row.type);
 
 /** The handler for `type`. */
 const handlerOf = <K extends RunStateRowType>(type: K): RowHandler<K> =>
   ROW_HANDLERS[type];
 
-/** One row applied to `current`: rejected, applied, or (`null`) ignored. */
+/** One row applied to `current`: rejected, applied, or (`null`) ignored. A
+ *  row of a kind the state does not read is corrupt history, never a
+ *  silent default: its reader selects the state's kinds. */
 function applyRow(
   current: RunState | null,
   row: RunHistoryRow,
@@ -497,10 +495,7 @@ function applyRow(
       'out-of-order',
       `commit ${commit} is not above ${current.commit}`,
     );
-  if (!hasHandler(row))
-    return Object.hasOwn(IGNORED_ROW_TYPES, row.type)
-      ? null
-      : rejected('unknown-run-row', row.type);
+  if (!isRunStateRow(row)) return rejected('unknown-run-row', row.type);
   const handler = handlerOf(row.type);
   const requires =
     typeof handler.requires === 'function'

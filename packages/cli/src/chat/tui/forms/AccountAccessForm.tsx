@@ -10,7 +10,6 @@ import {
   buildCliAccountAccessRows,
   buildCliModelAccessItems,
   CLI_ACCOUNT_ACCESS_DESCRIPTION,
-  formatCliModelAccessRoute,
   type CliModelAccessItemsInput,
   type CliModelAccessSelection,
 } from '@cli/runtime/modelAccessRoute';
@@ -18,6 +17,7 @@ import {
 import type { SelectItem } from '@cli/tui/ui/Select';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
   DEVICE_CODE_DESCRIPTION,
   SUBSCRIPTION_AUTH_COPY,
@@ -28,11 +28,7 @@ import {
 } from '@ui/copy/onboarding';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
-import type {
-  ProcessRuntime,
-  PlatformSecrets,
-  SettingsStores,
-} from '@texra-ai/harness/host';
+import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }
@@ -42,14 +38,14 @@ export type AccountAccessFormValue =
 
 interface AccountAccessFormProps {
   readonly availableRows?: number;
-  /**
-   * The secret store the access overview reads, with the runtime that settles
-   * it: the overview is a program, and Ink components own no runtime, so both
-   * arrive as props from the surface that opened this form.
-   */
-  readonly secrets: PlatformSecrets;
   /** The three setting slots the access overview reads its preferences from. */
   readonly stores: SettingsStores;
+  /**
+   * The runtime that runs the access overview (its credentials come from
+   * the runtime's `Secrets`): the overview is a program, and Ink components
+   * own no runtime, so it arrives as a prop from the surface that opened
+   * this form.
+   */
   readonly runtime: ProcessRuntime;
   /** No model is connected yet: the form is the chat's "Connect a model"
    *  panel rather than account management. */
@@ -211,7 +207,7 @@ export function AccountAccessForm(
   props: AccountAccessFormProps,
 ): React.JSX.Element {
   const overview = useAsyncResource({
-    load: () => loadCliModelAccessOverview(props.stores, props.secrets),
+    load: () => loadCliModelAccessOverview(props.stores),
     runtime: props.runtime,
   });
   const { data, error } = overview;
@@ -231,7 +227,7 @@ export function AccountAccessForm(
   if (data !== undefined) {
     // The rows already describe each preference and account; the detail block
     // only carries what no row says.
-    detailLines = [`Otherwise: ${formatCliModelAccessRoute('api-key')}`];
+    detailLines = [`Otherwise: ${OWN_API_KEYS.label}`];
   } else if (error !== undefined) {
     detailLines = [error];
   }

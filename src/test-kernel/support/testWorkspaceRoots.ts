@@ -1,12 +1,12 @@
 /**
- * The harness's installed workspace roots.
+ * The installed fake host's workspace roots.
  *
  * Production holds no process-wide roots record: every session is opened over
  * the roots its composition root named (`SessionHandleInit.roots`), and every
  * run, tool call and host command reads them from the session it serves. A
- * suite, though, is its own composition root — `installFakeHost` installs one
- * fake host per test — so the roots that host was built with live here, in the
- * harness, for the assertions and seeding that happen outside any session.
+ * suite, though, is its own composition root (`FakeHost.layer` installs one
+ * fake host per block or test), so the roots of the installed host are read
+ * here, for the assertions and seeding that happen outside any session.
  *
  * Reads go through a live view rather than a captured record, because a suite
  * installs a new fake host between tests and a helper that cached the record
@@ -14,49 +14,34 @@
  */
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 
-let installed: WorkspaceRoots | null = null;
+import { installedHost } from './setupPlatform';
 
-/** Install the harness's roots; called by `bindFakeHost`. */
-export function initTestWorkspaceRoots(roots: WorkspaceRoots): void {
-  installed = Object.freeze({ ...roots });
-}
-
-function requireInstalled(): WorkspaceRoots {
-  if (!installed) {
-    throw new Error(
-      'No fake host is installed: the test workspace roots arrive with `installFakeHost`.',
-    );
-  }
-  return installed;
-}
+const installed = (): WorkspaceRoots => installedHost().roots;
 
 const VIEW: WorkspaceRoots = Object.freeze({
-  get host() {
-    return requireInstalled().host;
-  },
   get workspace() {
-    return requireInstalled().workspace;
+    return installed().workspace;
   },
   get storageRoot() {
-    return requireInstalled().storageRoot;
+    return installed().storageRoot;
   },
   get storage() {
-    return requireInstalled().storage;
+    return installed().storage;
   },
   get globalStorage() {
-    return requireInstalled().globalStorage;
+    return installed().globalStorage;
   },
   get config() {
-    return requireInstalled().config;
+    return installed().config;
   },
   get workspaceState() {
-    return requireInstalled().workspaceState;
+    return installed().workspaceState;
   },
   get repoState() {
-    return requireInstalled().repoState;
+    return installed().repoState;
   },
   get globalState() {
-    return requireInstalled().globalState;
+    return installed().globalState;
   },
 });
 

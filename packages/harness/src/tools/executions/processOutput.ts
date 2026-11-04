@@ -7,7 +7,6 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
@@ -16,6 +15,7 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   type BackgroundBashOutputSource,
@@ -119,11 +119,10 @@ function projectProcessOutput(
  * renders properly.
  */
 export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
-  session: SessionHandle,
   runId: RunId,
   viewRange?: readonly [number, number],
 ) {
-  const run = session.view.run(runId);
+  const run = (yield* SessionViewAccess).run(runId);
   if (run === undefined) {
     return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
   }
@@ -139,7 +138,7 @@ export const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // committed, and the log read after it is complete. A status read after
   // the log could call finished a log that misses the final chunks.
   const { lines, chars } = projectProcessOutput(
-    yield* session.log.display(runId).pipe(Effect.orDie),
+    yield* (yield* SessionLog).display(runId),
   );
   // The footer states the same reading as the header, and both come from
   // the fold: "no handle in this process" alone never justifies calling a

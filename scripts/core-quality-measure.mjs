@@ -1,6 +1,6 @@
 // Measures the core-quality rules over CORE_QUALITY_DIRS (eslint.config.mjs).
 // Each rule yields its sites per file; check-core-quality.mjs compares the
-// per-file counts with config/ratchets/core-quality/<rule>.json.
+// per-file counts with the same measurement of the merge base's tree.
 //
 // The ESLint half runs ESLint's own rules without type information, so it
 // is fast and needs no project. The AST half reads each file with the
@@ -21,7 +21,7 @@
 // or interface member (Context.Service shapes included), or a parameter of
 // an exported function/signature, including const functions and Effect.fn.
 
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 import { build } from 'esbuild';
@@ -34,8 +34,20 @@ import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
 
-/** Lines a core file may hold before it needs a budget row. */
-const CORE_FILE_LINES = 400;
+/** Lines a core file may hold before file-size counts it. */
+export const CORE_FILE_LINES = 400;
+
+/**
+ * The reducer and fact-reader files, which file-size skips: a fact's reader
+ * belongs beside the rows that decide it, and a size cap would move it away.
+ */
+const FACT_FILES = new Set([
+  'packages/harness/src/shared/session/runRows.ts',
+  'packages/harness/src/shared/session/runState.ts',
+  'packages/harness/src/shared/session/runFacts.ts',
+  'packages/harness/src/shared/session/runRowReads.ts',
+  'packages/harness/src/shared/session/sessionViewUpdate.ts',
+]);
 
 const MIN_DEPTH_INTERFACE = 4;
 const MIN_MODULE_DEPTH = 3;
@@ -92,7 +104,7 @@ export const RULES = {
   'try-catch-effect':
     '`try/catch` around Effect code: errors belong in the typed error channel.',
   'silent-degradation':
-    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, and `Effect.ignore` without a log: a failure turned into a quiet default.',
+    'Empty `catch {}`, `.catch(() => value)`, `Effect.orElseSucceed`, `Effect.ignore` without a log, and `Effect.catch`, `catchCause` or `catchDefect` whose handler ignores its error and answers `Effect.succeed(...)` or `Effect.void`: a failure turned into a quiet default. `catchIf` and `catchTag` name the condition they absorb.',
   'missing-readme':
     'A core directory without a README holding a purpose line and a mermaid diagram.',
   'entry-files':
@@ -106,35 +118,67 @@ export const RULES = {
   'shallow-modules': `Modules with at least ${MIN_DEPTH_INTERFACE} interface elements and fewer than ${MIN_MODULE_DEPTH} non-comment lines per element: hide more work behind less interface.`,
   'core-module-mocks':
     '`vi.mock` of a core module in a test: path-keyed mocks break on every move; provide a layer instead.',
-  'non-erasable-syntax':
-    'Parameter properties, enums, runtime namespaces or `import =` in core: the packages ship `.ts` that type stripping must run.',
   'ranged-dependencies':
     'A core package dependency not pinned to an exact version: replay assumes the behaviour recorded at write time.',
   'durable-invariants':
     'The harness README must number its durable invariants (`**I1**`), and a conformance test must cite each (`invariant I1`).',
   'decision-codes':
-    'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path. Measured only, pending an owner ruling.',
+    'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path.',
+  'pass-through-outside-core':
+    'The pass-through rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'shallow-modules-outside-core':
+    'The shallow-modules rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'wide-records-outside-core':
+    'The wide-records rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'type-assertions-outside-core':
+    'The type-assertions rule over the source outside the core (the rest of the harness, the app, the hosts).',
 };
 
 /**
- * Rules the report counts but the gate does not hold: rule 10 of the study
- * waits on the owner's ruling about which codes stay as links.
+ * The rules that hold everywhere (the depth rules and unexplained `as`): the
+ * source outside the core is measured by the same code under its own rule
+ * name, so the core's rows and the rest are budgeted apart.
  */
-export const MEASURED_ONLY = new Set(['decision-codes']);
+const OUTSIDE_CORE_RULES = {
+  'pass-through': 'pass-through-outside-core',
+  'shallow-modules': 'shallow-modules-outside-core',
+  'wide-records': 'wide-records-outside-core',
+  'type-assertions': 'type-assertions-outside-core',
+};
+
+/** Every package's source; the part outside the core takes the depth rules. */
+export const SOURCE_DIRS = Object.freeze([
+  'packages/harness/src',
+  'packages/llm/src',
+  'packages/texra/src',
+  'packages/extension/src',
+  'packages/desktop/src',
+  'packages/cli/src',
+  'packages/trace-viewer/src',
+]);
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
 
-/** The repo-relative core source files, sorted. */
-function coreFiles(rootDir) {
-  return CORE_QUALITY_DIRS.flatMap((dir) =>
-    dir.endsWith('.ts')
-      ? [dir]
-      : walkFiles(path.join(rootDir, dir), {
-          include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
-          prune: (dir) => dir.endsWith('node_modules'),
-        }).map(({ relativePath }) => `${dir}/${relativePath}`),
-  ).toSorted();
+/**
+ * The repo-relative source files under `dirs`, sorted. A directory or entry
+ * file a change adds to the list is absent from the merge base's tree: it
+ * has no files there, so the head's start at zero. Nothing else is guarded:
+ * the manifests, src/test-kernel and the harness README exist at every base
+ * the check runs against.
+ */
+export function sourceFiles(rootDir, dirs) {
+  return dirs
+    .filter((dir) => existsSync(path.join(rootDir, dir)))
+    .flatMap((dir) =>
+      dir.endsWith('.ts')
+        ? [dir]
+        : walkFiles(path.join(rootDir, dir), {
+            include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
+            prune: (dir) => dir.endsWith('node_modules'),
+          }).map(({ relativePath }) => `${dir}/${relativePath}`),
+    )
+    .toSorted();
 }
 
 function addSite(byRule, rule, file, line, detail) {
@@ -233,6 +277,57 @@ function returnsQuietValue(handler) {
     ts.isNoSubstitutionTemplateLiteral(body) ||
     (ts.isArrayLiteralExpression(body) && body.elements.length === 0) ||
     (ts.isObjectLiteralExpression(body) && body.properties.length === 0)
+  );
+}
+
+const CATCH_ALLS = new Set(['catch', 'catchCause', 'catchDefect']);
+
+/** Whether `node` reads the identifier `name`: a property name of the same
+ *  spelling (`config.error`, `{ error: 1 }`) is not a read. */
+function mentions(node, name) {
+  if (ts.isIdentifier(node)) return node.text === name;
+  if (ts.isPropertyAccessExpression(node))
+    return mentions(node.expression, name);
+  if (ts.isPropertyAssignment(node)) {
+    const computed = ts.isComputedPropertyName(node.name);
+    if (computed && mentions(node.name.expression, name)) return true;
+    return mentions(node.initializer, name);
+  }
+  return (
+    ts.forEachChild(node, (child) => mentions(child, name) || undefined) ??
+    false
+  );
+}
+
+/** A catch-all whose handler never reads its error and answers
+ *  `Effect.succeed(...)` or `Effect.void`, as its body or its one `return`. */
+function dropsError(node) {
+  const call = node.parent;
+  if (!ts.isCallExpression(call) || call.expression !== node) return false;
+  const handler = call.arguments.at(-1);
+  if (
+    handler == null ||
+    !(ts.isArrowFunction(handler) || ts.isFunctionExpression(handler))
+  )
+    return false;
+  let body = handler.body;
+  if (ts.isBlock(body)) {
+    const [only, ...rest] = body.statements;
+    if (rest.length > 0 || only == null || !ts.isReturnStatement(only)) {
+      return false;
+    }
+    if (only.expression == null) return false;
+    body = only.expression;
+  }
+  while (ts.isParenthesizedExpression(body)) body = body.expression;
+  const readsError = handler.parameters.some(
+    ({ name }) => !ts.isIdentifier(name) || mentions(handler.body, name.text),
+  );
+  if (readsError) return false;
+  return (
+    body.getText() === 'Effect.void' ||
+    (ts.isCallExpression(body) &&
+      body.expression.getText() === 'Effect.succeed')
   );
 }
 
@@ -337,29 +432,11 @@ function undocumentedExports(sourceFile) {
 /** The decision-code shapes of the study's rule 10: `D6`, `HQ4b`, `#1234`. */
 const DECISION_CODE = /\b[A-Z]{1,2}\d{1,2}[a-z]?\b|#\d{3,6}\b/g;
 
+/** Technical names of the same shape that are not decision codes. */
+const NOT_DECISION_CODES = new Set(['BM25']);
+
 /** Public members an exported record may carry (study rule 11). */
 const WIDE_RECORD_MEMBERS = 20;
-
-const PARAMETER_PROPERTY = new Set([
-  ts.SyntaxKind.PublicKeyword,
-  ts.SyntaxKind.PrivateKeyword,
-  ts.SyntaxKind.ProtectedKeyword,
-  ts.SyntaxKind.ReadonlyKeyword,
-  ts.SyntaxKind.OverrideKeyword,
-]);
-
-/** Whether a namespace holds a value, so it compiles to runtime code. */
-function isInstantiated(node) {
-  const body = node.body;
-  if (body == null) return false;
-  if (ts.isModuleDeclaration(body)) return isInstantiated(body);
-  return body.statements.some(
-    (statement) =>
-      !ts.isInterfaceDeclaration(statement) &&
-      !ts.isTypeAliasDeclaration(statement) &&
-      !(ts.isModuleDeclaration(statement) && !isInstantiated(statement)),
-  );
-}
 
 const isHidden = (member) =>
   (member.name != null && ts.isPrivateIdentifier(member.name)) ||
@@ -899,15 +976,7 @@ function measureDepth(sourceFile, file, publicEntries, site, byRule) {
                 ts.SyntaxKind.ProtectedKeyword,
               ].includes(modifier.kind),
             );
-          elements +=
-            (publicConstructor ? 1 : 0) +
-            member.parameters.filter(
-              (parameter) =>
-                ts
-                  .getModifiers(parameter)
-                  ?.some((modifier) => PARAMETER_PROPERTY.has(modifier.kind)) &&
-                !isHidden(parameter),
-            ).length;
+          if (publicConstructor) elements += 1;
         }
       } else if (ts.isInterfaceDeclaration(node)) {
         // Each member, plus the parameters of its method, call or construct
@@ -996,7 +1065,7 @@ function measureAst(rootDir, files, byRule) {
     const lines = text.endsWith('\n')
       ? text.split('\n').length - 1
       : text.split('\n').length;
-    if (lines > CORE_FILE_LINES) {
+    if (lines > CORE_FILE_LINES && !FACT_FILES.has(file)) {
       byRule.get('file-size').set(file, {
         value: lines,
         sites: [{ line: 1, detail: `${lines} lines` }],
@@ -1015,7 +1084,9 @@ function measureAst(rootDir, files, byRule) {
       );
     };
     for (const comment of text.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g)) {
-      const codes = comment[0].match(DECISION_CODE) ?? [];
+      const codes = (comment[0].match(DECISION_CODE) ?? []).filter(
+        (code) => !NOT_DECISION_CODES.has(code),
+      );
       if (codes.length === 0) continue;
       const line = text.slice(0, comment.index).split('\n').length;
       for (const code of codes) {
@@ -1056,32 +1127,6 @@ function measureAst(rootDir, files, byRule) {
         node.exclamationToken != null
       ) {
         site('no-non-null-assertion', node, 'definite assignment `!`');
-      }
-      if (
-        ts.isParameter(node) &&
-        ts
-          .getModifiers(node)
-          ?.some((modifier) => PARAMETER_PROPERTY.has(modifier.kind))
-      ) {
-        site('non-erasable-syntax', node, 'parameter property');
-      } else if (
-        ts.isEnumDeclaration(node) &&
-        !ts
-          .getModifiers(node)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
-      ) {
-        site('non-erasable-syntax', node, `enum ${node.name.text}`);
-      } else if (
-        ts.isModuleDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        isInstantiated(node) &&
-        !ts
-          .getModifiers(node)
-          ?.some((modifier) => modifier.kind === ts.SyntaxKind.DeclareKeyword)
-      ) {
-        site('non-erasable-syntax', node, `namespace ${node.name.text}`);
-      } else if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly) {
-        site('non-erasable-syntax', node, 'import =');
       }
       if (
         ts.isAsExpression(node) &&
@@ -1126,6 +1171,12 @@ function measureAst(rootDir, files, byRule) {
           isQuietIgnore(node)
         ) {
           site('silent-degradation', node, `Effect.${member} without a log`);
+        } else if (CATCH_ALLS.has(member) && dropsError(node)) {
+          site(
+            'silent-degradation',
+            node,
+            `Effect.${member} dropping its error`,
+          );
         }
       }
       ts.forEachChild(node, visit);
@@ -1342,6 +1393,15 @@ function valueImportOf(statement) {
 /** A core package, which a test may name directly. */
 const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
 
+/** Where suites live under `rootDir`: the cross-package kernel and each package's own test/. */
+const testRoots = (rootDir) =>
+  [
+    'src/test-kernel',
+    ...readdirSync(path.join(rootDir, 'packages')).map(
+      (name) => `packages/${name}/test`,
+    ),
+  ].filter((root) => existsSync(path.join(rootDir, root)));
+
 /**
  * Study rule 12: literal module mocks of a core module, including shared
  * test support. A target is core when it resolves (alias or relative path)
@@ -1350,9 +1410,11 @@ const CORE_PACKAGE = /^@texra-ai\/(?:llm|harness)(?:\/|$)/;
  */
 function measureMocks(rootDir, files, options, byRule) {
   const core = new Set(files);
-  const tests = walkFiles(path.join(rootDir, 'src/test-kernel'), {
-    include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
-  });
+  const tests = testRoots(rootDir).flatMap((root) =>
+    walkFiles(path.join(rootDir, root), {
+      include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
+    }),
+  );
   for (const { absolutePath } of tests) {
     const file = path.relative(rootDir, absolutePath).replaceAll('\\', '/');
     const source = ts.createSourceFile(
@@ -1386,7 +1448,9 @@ function measureMocks(rootDir, files, options, byRule) {
         if (
           CORE_PACKAGE.test(target) ||
           core.has(resolvedFile) ||
-          (/^src\/test-kernel\/(?:cli|desktop|support)\//.test(file) &&
+          (/^(?:src\/test-kernel|packages\/[^/]+\/test)\/(?:cli|desktop|support)\//.test(
+            file,
+          ) &&
             /^@agent(?:\/|$)/.test(target))
         ) {
           const { line } = source.getLineAndCharacterOfPosition(
@@ -1452,12 +1516,11 @@ function measureInvariants(rootDir, byRule) {
   }
   const tests = `${readme} (tests)`;
   const cited = new Set();
-  for (const { absolutePath } of walkFiles(
-    path.join(rootDir, 'src/test-kernel'),
-    {
+  for (const { absolutePath } of testRoots(rootDir).flatMap((root) =>
+    walkFiles(path.join(rootDir, root), {
       include: (file) =>
         file.endsWith('.vitest.ts') || file === 'support/crashConformance.ts',
-    },
+    }),
   )) {
     for (const match of readFileSync(absolutePath, 'utf8').matchAll(
       /\binvariant (I\d+)\b/g,
@@ -1497,10 +1560,20 @@ function measureInvariants(rootDir, byRule) {
  * carries ratios for every eligible module, including those above the cutoff.
  */
 export async function measure(rootDir) {
-  const files = coreFiles(rootDir);
+  const files = sourceFiles(rootDir, CORE_QUALITY_DIRS);
   const byRule = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
   await measureEslint(rootDir, files, byRule);
   const moduleDepths = measureAst(rootDir, files, byRule);
+  const core = new Set(files);
+  const outside = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
+  measureAst(
+    rootDir,
+    sourceFiles(rootDir, SOURCE_DIRS).filter((file) => !core.has(file)),
+    outside,
+  );
+  for (const [rule, outsideRule] of Object.entries(OUTSIDE_CORE_RULES)) {
+    byRule.set(outsideRule, outside.get(rule));
+  }
   await measureCycles(rootDir, files, byRule);
   measureReadmes(rootDir, byRule);
   // The repo's module resolution (its `paths` aliases), for the graph rules.

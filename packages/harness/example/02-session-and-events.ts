@@ -4,16 +4,17 @@
  * Composes `Sessions.layer({ platform, plugins: harnessBuiltins })`, opens a
  * session, checks an `InlinePersonaSchema` definition, handles an `AgentNotFound`
  * refusal on a missing agent, and runs an inline persona while streaming its
- * `run.events` (through `responseText`) and awaiting `run.result` (`RunEndResult`).
+ * `run.events` (through `responseText`) and awaiting `run.result` (`RunEnd`),
+ * then reads the ended run's events again, replayed from the session.
  */
-import { Effect, Result, Schema, Stream } from 'effect';
+import { Effect, Layer, Result, Schema, Stream } from 'effect';
 import { responseText, Sessions } from '@texra-ai/harness';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import { InlinePersonaSchema } from '@texra-ai/harness/schemas';
 
 import { makeExampleWorkspace } from './_support.ts';
 
-const { platform } = await makeExampleWorkspace([
+const { platform, route } = await makeExampleWorkspace([
   {
     text: 'The abstract is 94 words and states the main bound in sentence two.',
   },
@@ -44,11 +45,11 @@ const program = Effect.gen(function* () {
   );
   console.log(`[02] refusal: ${refusal._tag} - ${refusal.message}`);
 
-  // 3. Start a run with the inline persona and stream its live trace events
+  // 3. Start a run with the inline persona and stream its events
   const run = yield* session.start({
     agent: personaResult.success,
     instruction: 'Check the abstract length.',
-    model: 'anthropic/claude-sonnet-5-5',
+    model: route.model,
   });
 
   // The answer's text only: the run's events also stream the model's
@@ -59,12 +60,28 @@ const program = Effect.gen(function* () {
   );
 
   const end = yield* run.result;
+
   console.log(
     `[02] run ended: outcome=${end.outcome} streamed="${chunks.join('')}"`,
   );
+
+  // 4. A second reader, after the run has ended, reads the same events
+  // back: the same answer text, whole.
+  const replayed = yield* Stream.runCollect(run.events.pipe(responseText));
+  if ([...replayed].join('') !== chunks.join(''))
+    return yield* Effect.fail(
+      new Error(
+        `replayed "${[...replayed].join('')}" differs from streamed "${chunks.join('')}"`,
+      ),
+    );
+  console.log(`[02] replayed after the end: "${[...replayed].join('')}"`);
 }).pipe(
   Effect.scoped,
-  Effect.provide(Sessions.layer({ platform, plugins: harnessBuiltins })),
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(route.transport),
+    ),
+  ),
 );
 
 await Effect.runPromise(program);

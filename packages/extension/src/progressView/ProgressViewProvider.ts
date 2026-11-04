@@ -15,10 +15,7 @@ import {
 } from 'effect';
 
 import {
-  AppState,
   withProcessServices,
-  SessionHostInteractions,
-  type HostInteractions,
   AgentCatalog,
   withLogChannel,
 } from '@texra-ai/harness/host';
@@ -28,16 +25,18 @@ import {
   agentKeyOf,
   type FileLocation,
   type RunId,
-  GlobalStateKey,
 } from '@texra-ai/harness/schemas';
-import { BundledViewContentProvider } from '@common/webview';
-import { appSignalStream, emitAppSignal } from '@eventBus/AppSignals';
+import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
-import { createAgentPresentationHost } from '@frontend/events/agentEventListeners';
+import {
+  createAgentPresentationHost,
+  revealProgressView,
+} from '@frontend/events/agentEventListeners';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import {
+  followFirstRunDone,
   getFirstRunDone,
   OnboardingFunnelRefresher,
   setOnboardingDeclined,
@@ -49,50 +48,35 @@ import {
 import {
   PdfOpenFailed,
   type EditorCapabilities,
-  type EditorRegistry,
 } from '@texra/tools/editorHost';
 import { projectDisplayOf } from '@texra/shared/session/hostSnapshot';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
-import { DOCUMENTS_OUTPUT_KEY } from '@texra/shared/plugins/documents';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
-import { ToolEditApprovalController } from '@texra/controllers/approval/ToolEditApprovalController';
-import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
-import {
-  attachWindowHost,
-  type WindowHost,
-} from '@texra/controllers/server/windowHost';
-import {
-  localExportRecords,
-  type ChatExportRecords,
-} from '@texra/controllers/progressView/ChatExportController';
-import {
-  localRunActionPorts,
-  type HostRunActions,
-  type RunActionRecordPorts,
-} from '@texra/controllers/session/hostRunActions';
-import { attachSessionHost } from '@texra/controllers/session/attachSessionHost';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
-  createHostSnapshotSource,
   HostSnapshotReadFailed,
   type HostSnapshotSource,
 } from '@texra/controllers/session/hostSnapshotSource';
 import {
+  openGuiWindow,
+  type GuiSession,
+} from '@texra/controllers/session/openGuiWindow';
+import type {
+  AttachedPort,
   SessionBridge,
-  type AttachedPort,
 } from '@texra/controllers/session/SessionBridge';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
-import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
+import { checkCoreDependencies } from './checkCoreDependencies';
+import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
-import type { LocalSession, Session, WorkspaceRoots } from '@texra-ai/harness';
+import type { Session, WorkspaceRoots } from '@texra-ai/harness';
 import type {
   ProcessRuntime,
   ProcessServices,
-  PlatformSecrets,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
@@ -125,18 +109,11 @@ interface Port {
   readonly scope: Scope.Closeable;
 }
 
-/** The window's session: the service's, or, when the service could not be
- *  reached, this process's own. */
-export type WindowSession =
-  | { readonly session: Session; readonly service: ServiceLink }
-  | { readonly session: LocalSession; readonly service?: undefined };
-
 export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
 
   private readonly bridge: SessionBridge;
   private readonly snapshot: HostSnapshotSource;
-  private readonly toolEditApprovals: ToolEditApprovalController;
 
   /** Everything the provider holds ends when {@link dispose} closes this,
    *  last-in first-out: the ports, attached later, close before the host. */
@@ -173,11 +150,11 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     showInSidebar: () => this.showInSidebar(),
     showSessions: (runId) =>
       this.bridge.surfaceAction({ kind: 'showSessions', runId }),
+    chime: () => this.chime(),
   });
 
   /**
-   * This host's half of the shared funnel loop (PRD: agent-native
-   * onboarding): its credential sources, its user-scoped flag store, and the
+   * This host's half of the shared funnel loop: its credential sources, its user-scoped flag store, and the
    * two things it does with a recomputed funnel — paint it into the host
    * snapshot, and on entering State 1 select the setup agent on the launcher.
    * It never auto-starts setup; the user launches it from the setup card.
@@ -185,28 +162,33 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly draftRequests = new HostDraftRequests();
 
+  private readonly globalState: StateStore;
+  private readonly runtime: ProcessRuntime;
+  private readonly roots: WorkspaceRoots;
+  private readonly paintSetupPill: (credentialUsable: boolean) => void;
   constructor(
     context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
-    private readonly secrets: PlatformSecrets,
+    globalState: StateStore,
     /** Process runtime shared with every extension surface. */
-    private readonly runtime: ProcessRuntime,
+    runtime: ProcessRuntime,
     /** The window's roots: its workspace, storage and settings stores. */
-    private readonly roots: WorkspaceRoots,
+    roots: WorkspaceRoots,
     /** Where this window's runs run: the service's session, or this
      *  process's own with the handle that owns it. */
-    windowSession: WindowSession,
-    /** The editor registry the extension's plugins read (`texraPlugins`). */
-    private readonly editors: EditorRegistry,
+    windowSession: GuiSession,
     /** The setup pill: painted from the same credential answer the funnel
      *  reads, so the pill and the "Connect a model" card agree. */
-    private readonly paintSetupPill: (credentialUsable: boolean) => void,
+    paintSetupPill: (credentialUsable: boolean) => void,
     /** The settings view at a target. The settings view is built after
      *  this one, so this waits for it. */
     openSettings: (
       target: SettingsTarget | undefined,
     ) => Effect.Effect<void, Error, ProcessServices>,
   ) {
+    this.globalState = globalState;
+    this.runtime = runtime;
+    this.roots = roots;
+    this.paintSetupPill = paintSetupPill;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
@@ -218,128 +200,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // refresher runs.
       hasCredential: () => Effect.sync(() => this.credentialUsable),
       flags: globalState,
-      apply: (transition) =>
-        Effect.gen({ self: this }, function* () {
-          yield* this.snapshot.setOnboarding(transition.state);
-          if (!transition.selectSetupAgent) return;
-          // Resolve the registry key so the dropdown matches by value.
-          const catalog = Context.get(
-            yield* this.runtime.contextEffect,
-            AgentCatalog,
-          );
-          const entry = catalog.get('setup');
-          this.bridge.surfaceAction({
-            kind: 'launch',
-            patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
-          });
-        }),
+      apply: Effect.fn('apply')({ self: this }, function* (transition) {
+        yield* this.snapshot.setOnboarding(transition.state);
+        if (!transition.selectSetupAgent) return;
+        // Resolve the registry key so the dropdown matches by value.
+        const catalog = Context.get(
+          yield* this.runtime.contextEffect,
+          AgentCatalog,
+        );
+        const entry = catalog.get('setup');
+        this.bridge.surfaceAction({
+          kind: 'launch',
+          patch: { agent: entry ? agentKeyOf(entry) : 'setup' },
+        });
+      }),
     });
 
     const runSession = windowSession.session;
     this.runSession = runSession;
-    // Install the recipient before host requests publish the recorder's state.
-    this.bridge = this.runtime.runSync(
-      SessionBridge.make({
-        session: runSession,
-        handleHostRequest: (request, port) =>
-          hostRequests.handleHostRequest(request, port),
-        onPortClosed: (port) => hostRequests.closePort(port),
-      }).pipe(Scope.provide(this.scope)),
-    );
-    this.snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(roots.storage, roots.workspace),
-      root: roots.workspace,
-      stores: roots,
-      secrets,
-      fileOptions: () =>
-        workspaceFileOptions(roots.workspace).pipe(
-          Effect.mapError(
-            (cause) =>
-              new HostSnapshotReadFailed({
-                member: 'fileOptions',
-                message: 'The workspace file lists could not be read.',
-                cause,
-              }),
-          ),
-        ),
-      workspaceRoots: () =>
-        vscode.workspace.workspaceFolders?.map((folder) => ({
-          label: folder.name,
-          value: folder.uri.fsPath,
-        })) ?? [],
-      gettingStartedBanner: true,
-      // Already an Effect program: the typed port lets the banner read it
-      // directly instead of settling it on the runtime first.
-      // The banner says a credential stopped working, so it is raised only
-      // once a task has finished; before that the card is the one prompt.
-      apiKeyBanner: () =>
-        Effect.all(
-          [
-            hasUsableSetupCredential(this.roots, this.secrets).pipe(
-              withLogChannel('Setup Credentials'),
-            ),
-            getFirstRunDone(globalState),
-          ],
-          { concurrency: 2 },
-        ).pipe(
-          Effect.tap(([usable]) =>
-            Effect.sync(() => {
-              this.credentialUsable = usable;
-              this.paintSetupPill(usable);
-            }),
-          ),
-          Effect.map(([usable, firstRunDone]) => ({
-            visible: !usable && firstRunDone,
-          })),
-          Effect.mapError(
-            (cause) =>
-              new HostSnapshotReadFailed({
-                member: 'apiKeyBanner',
-                message: 'The provider credential status could not be read.',
-                cause,
-              }),
-          ),
-        ),
-      // Already an Effect program, and one that answers a failed probe as a
-      // missing tool rather than failing, so the banner reads it directly.
-      dependencyBanner: () =>
-        checkCoreDependencies(false).pipe(
-          Effect.map((missingTools) => ({
-            visible: missingTools.length > 0,
-            missingTools: [...missingTools],
-          })),
-        ),
-      onError: (error) =>
-        this.runtime.runFork(
-          Effect.logError('Host snapshot refresh failed').pipe(
-            Effect.annotateLogs({ data: error }),
-            withLogChannel(CHANNEL),
-          ),
-        ),
-      publish: (snapshot) => this.bridge.setHost(snapshot),
-    });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
-    // The tool-edit preview: staged copies of the original and proposed
-    // content the diff editor shows. The request itself is the session's
-    // (`request.opened` folds into the view) and this host's decision goes
-    // back as that request's `request.decide`; the staged preview is
-    // discarded when `request.decided` folds, whichever way it went.
-    this.toolEditApprovals = new ToolEditApprovalController({
-      host: new VscodeToolEditApprovalHost(
-        path.join(storageRoot.fsPath, 'tool-edit-previews'),
-        this.runtime,
-        roots,
-        this.scope,
-      ),
-      // A decision goes where the run runs.
-      session: runSession,
-    });
-    this.runtime.runSync(
-      Effect.gen({ self: this }, function* () {
-        yield* Effect.forkIn(this.attention.follow(runSession), this.scope);
-        yield* Effect.forkIn(this.chimeOnDocuments(), this.scope);
-      }),
-    );
     const presentation = createAgentPresentationHost(
       this,
       globalState,
@@ -347,38 +226,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       roots,
       this.scope,
     );
-    const { records, exportRecords } = this.windowRecords(
-      windowSession,
-      presentation,
-    );
-    const hostRequests = createExtensionHostRequests({
-      records,
-      exportRecords,
-      runSession,
-      runtime: this.runtime,
-      scope: this.scope,
-      extensionPath: context.extensionPath,
-      extensionId: context.extension.id,
-      openSettings,
-      showConnectModel: () => this.showConnectModel(),
-      showProgressView: () => this.showProgressView(),
-      globalState,
-      snapshot: this.snapshot,
-      draftRequests: this.draftRequests,
-      toolEditApprovals: this.toolEditApprovals,
-      surfaceAction: (action) => this.bridge.surfaceAction(action),
-      presentLaunchedRun: (runId) => this.presentLaunchedRun(runId),
-      popOutToEditor: () => this.popOutToEditor(),
-      showInSidebar: () => this.showInSidebar(),
-      refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
-      refreshApiKeyStatus: this.refreshApiKeyStatus,
-    });
-    this.runValidated = hostRequests.runValidated;
-
-    // Attached for the window's life, before the first run of this window
-    // asks anything. Requests this host does not present (bash, plan,
-    // proposal, retry, question) stay pending in the fold until the view's
-    // request row decides them.
     // What this window does for a run, whether it runs here or in the
     // service: notices, and the editor's diagnostics, inline criticism and
     // PDF viewer, which the editor tools read through the registry.
@@ -411,85 +258,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           ),
         ),
     };
-    // A window that runs its tasks here attaches to its own session; a
-    // window of the service is its project's window there: the service's
-    // runs ask it for the same and stage their tool edits here.
-    if (windowSession.service === undefined) {
-      this.runtime.runSync(
-        this.editors
-          .attach(roots.storage, editor)
-          .pipe(
-            Effect.andThen(
-              attachSessionHost(
-                windowSession.session,
-                this.toolEditApprovals,
-                presentation,
-              ),
-            ),
-            Scope.provide(this.scope),
-          ),
-      );
-    }
-    const { service } = windowSession;
-    if (service !== undefined)
-      this.runtime.runFork(
-        this.attachToService(service, {
-          ...presentation,
-          ...editor,
-          // What a service task wrote, told here as a task here tells
-          // it: the file decorations follow it.
-          filesWritten: (absolutePaths) =>
-            emitAppSignal('workspaceFilesWritten', {
-              absolutePaths: [...absolutePaths],
-            }),
-        }).pipe(Scope.provide(this.scope)),
-      );
-
-    this.watchWorkspace();
-  }
-
-  /**
-   * What the run actions and the transcript export read, from the one
-   * place the window's runs are held: its own session, or the
-   * service. In service mode a failure before a run opens is presented on
-   * this window's presentation host, held for the provider's life.
-   */
-  private windowRecords(
-    windowSession: WindowSession,
-    presentation: Pick<HostInteractions, 'emit'>,
-  ): {
-    readonly records: RunActionRecordPorts;
-    readonly exportRecords: ChatExportRecords;
-  } {
-    if (windowSession.service === undefined)
-      return {
-        records: localRunActionPorts(windowSession.session),
-        exportRecords: localExportRecords(windowSession.session),
-      };
-    const present = new SessionHostInteractions();
-    this.runtime.runSync(
-      Effect.acquireRelease(present.use(presentation), (detach) =>
-        Effect.sync(detach),
-      ).pipe(Scope.provide(this.scope)),
-    );
-    const remote = serviceRecords(
-      windowSession.service,
-      this.roots.workspace ?? '',
-    );
-    return {
-      records: { roots: this.roots, readConfig: remote.readConfig, present },
-      exportRecords: { input: remote.exportInput, trace: remote.exportTrace },
-    };
-  }
-
-  /** Offer the service this window's capabilities for its project's runs. */
-  private attachToService(
-    service: ServiceLink,
-    capabilities: Omit<WindowHost, 'toolEdits'>,
-  ): Effect.Effect<void, never, Scope.Scope> {
-    const workspace = this.roots.workspace;
-    if (workspace === undefined) return Effect.void;
-    const focused = Stream.callback<void>((queue) =>
+    const focusChanged = Stream.callback<void>((queue) =>
       Effect.acquireRelease(
         Effect.sync(() =>
           vscode.window.onDidChangeWindowState((state) => {
@@ -499,64 +268,144 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         (listener) => Effect.sync(() => listener.dispose()),
       ),
     );
-    return Effect.gen({ self: this }, function* () {
-      yield* attachWindowHost(
-        service,
-        workspace,
-        {
-          ...capabilities,
-          toolEdits: {
-            controller: this.toolEditApprovals,
-            roots: this.roots,
-            services: yield* withProcessServices(
-              this.runtime,
-              Effect.context(),
-            ),
+    const gui = this.runtime.runSync(
+      Effect.gen({ self: this }, function* () {
+        const signals = yield* AppSignals;
+        return yield* openGuiWindow({
+          runs: windowSession,
+          roots,
+          project: projectDisplayOf(roots.storage, roots.workspace),
+          snapshot: {
+            fileOptions: () =>
+              workspaceFileOptions(roots.workspace).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new HostSnapshotReadFailed({
+                      member: 'fileOptions',
+                      message: 'The workspace file lists could not be read.',
+                      cause,
+                    }),
+                ),
+              ),
+            workspaceRoots: () =>
+              vscode.workspace.workspaceFolders?.map((folder) => ({
+                label: folder.name,
+                value: folder.uri.fsPath,
+              })) ?? [],
+            gettingStartedBanner: true,
+            // Already an Effect program: the typed port lets the banner read it
+            // directly instead of settling it on the runtime first.
+            // The banner says a credential stopped working, so it is raised only
+            // once a task has finished; before that the card is the one prompt.
+            apiKeyBanner: () =>
+              Effect.all(
+                [
+                  hasUsableSetupCredential(this.roots).pipe(
+                    withLogChannel('Setup Credentials'),
+                  ),
+                  getFirstRunDone(globalState),
+                ],
+                { concurrency: 2 },
+              ).pipe(
+                Effect.tap(([usable]) =>
+                  Effect.sync(() => {
+                    this.credentialUsable = usable;
+                    this.paintSetupPill(usable);
+                  }),
+                ),
+                Effect.map(([usable, firstRunDone]) => ({
+                  visible: !usable && firstRunDone,
+                })),
+                Effect.mapError(
+                  (cause) =>
+                    new HostSnapshotReadFailed({
+                      member: 'apiKeyBanner',
+                      message:
+                        'The provider credential status could not be read.',
+                      cause,
+                    }),
+                ),
+              ),
+            // Already an Effect program, and one that answers a failed probe as a
+            // missing tool rather than failing, so the banner reads it directly.
+            dependencyBanner: () =>
+              checkCoreDependencies().pipe(
+                Effect.map((missingTools) => ({
+                  visible: missingTools.length > 0,
+                  missingTools: [...missingTools],
+                })),
+              ),
+            onError: (error) =>
+              this.runtime.runFork(
+                Effect.logError('Host snapshot refresh failed').pipe(
+                  Effect.annotateLogs({ data: error }),
+                  withLogChannel(CHANNEL),
+                ),
+              ),
           },
-        },
-        vscode.window.state.focused
-          ? Stream.concat(Stream.succeed(undefined), focused)
-          : focused,
-      );
-      // While the link holds no service, the banner says why (reaching it
-      // again, or refused by a newer TeXRA), so the view never sits frozen
-      // without saying so.
-      yield* Effect.forkScoped(
-        Stream.runForEach(linkOutage(service), (reason) =>
-          this.snapshot.setServiceOffline(reason),
-        ),
-      );
-    });
+          // The tool-edit preview: staged copies of the original and proposed
+          // content the diff editor shows, for each tool edit the session
+          // where the runs run lists, until the view drops it or the window
+          // goes.
+          toolEdits: new VscodeToolEditApprovalHost(
+            path.join(storageRoot.fsPath, 'tool-edit-previews'),
+            this.runtime,
+            roots,
+            this.scope,
+          ),
+          focused: Stream.suspend(() =>
+            vscode.window.state.focused
+              ? Stream.concat(Stream.succeed(undefined), focusChanged)
+              : focusChanged,
+          ),
+          draftRequests: this.draftRequests,
+          host: (parts) =>
+            createExtensionHostRequests({
+              ...parts,
+              runSession,
+              roots,
+              window: {
+                ...presentation,
+                ...editor,
+                // What a service task wrote, told here as a task here tells
+                // it: the file decorations follow it.
+                filesWritten: (absolutePaths) =>
+                  signals.emit('workspaceFilesWritten', {
+                    absolutePaths: [...absolutePaths],
+                  }),
+              },
+              runtime: this.runtime,
+              extensionPath: context.extensionPath,
+              extensionId: context.extension.id,
+              openSettings,
+              showConnectModel: () => this.showConnectModel(),
+              showProgressView: () => this.showProgressView(),
+              revealProgress: (config) => revealProgressView(config, this),
+              globalState,
+              // The launcher is bound once the window has opened
+              // (`gui.runValidated` below): read when the setup assistant
+              // starts, not here.
+              launcher: () => this.runValidated,
+              popOutToEditor: () => this.popOutToEditor(),
+              showInSidebar: () => this.showInSidebar(),
+              refreshOnboardingFunnel: () => this.refreshOnboardingFunnel(),
+              refreshApiKeyStatus: this.refreshApiKeyStatus,
+            }),
+        });
+      }).pipe(Scope.provide(this.scope)),
+    );
+    this.bridge = gui.bridge;
+    this.snapshot = gui.snapshot;
+    this.runValidated = gui.runValidated;
+    this.runtime.runSync(
+      Effect.forkIn(this.attention.follow(runSession), this.scope),
+    );
+    this.watchWorkspace();
   }
 
-  /** The completion chime (PRD 12.4), one per process and never a renderer
-   *  transition hook every subscriber would replay: a document task (its
-   *  run holds the documents fact, which only its recipe records)
-   *  completing, here or in the service. A failed or cancelled run does not
-   *  chime; neither does one already ended when this window first sees it. */
-  private chimeOnDocuments(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      let open = new Set<RunId>();
-      return Stream.runForEach(this.runSession.view.changes, (view) =>
-        Effect.sync(() => {
-          const now = new Set<RunId>();
-          for (const run of view.runs.values()) {
-            if (run.durableOutcome === null) now.add(run.id);
-            else if (
-              open.has(run.id) &&
-              run.facts[DOCUMENTS_OUTPUT_KEY] !== undefined &&
-              run.durableOutcome === 'completed'
-            )
-              this.chime();
-          }
-          open = now;
-        }),
-      );
-    });
-  }
-
-  public initialize() {
-    return Effect.gen({ self: this }, function* () {
+  public readonly initialize = Effect.fn('ProgressViewProvider.initialize')(
+    { self: this },
+    function* () {
       // A finalizer of the activation scope: it runs after every session has
       // closed, which activation registers after this.
       yield* Effect.addFinalizer(() =>
@@ -564,34 +413,25 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       );
       yield* this.snapshot.refresh;
       yield* this.refreshOnboardingFunnel();
-      // The funnel then follows `firstRunDone` wherever it is written, not a
-      // run's end: a setup chat that parks after delegating has done its
-      // first run. Started after the refresh above, so that refresh owns the
-      // first transition and its setup-agent selection; the subscription's
-      // own first element still refreshes, for a write that landed between.
+      // Started after the refresh above, so that refresh owns the first
+      // transition and its setup-agent selection; the follower's own first
+      // refresh covers a write that landed between.
       yield* Effect.forkIn(
-        Stream.unwrap(
-          Effect.map(AppState, (appState) =>
-            appState.changes([GlobalStateKey.ONBOARDING_FIRST_RUN_DONE]),
+        followFirstRunDone(
+          this.refreshOnboardingFunnel().pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Refreshing the onboarding state',
+            }),
           ),
-        ).pipe(
-          Stream.runForEach(() =>
-            this.refreshOnboardingFunnel().pipe(
-              Effect.ignore({
-                log: 'Warn',
-                message: 'Refreshing the onboarding state',
-              }),
-            ),
-          ),
-          withLogChannel(CHANNEL),
-        ),
+        ).pipe(withLogChannel(CHANNEL)),
         this.scope,
       );
       yield* Effect.logDebug('ProgressViewProvider initialized').pipe(
         withLogChannel(CHANNEL),
       );
-    });
-  }
+    },
+  );
 
   // --- The host snapshot's producers ---
 
@@ -729,12 +569,13 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   /** Attach `view` as a port; when VS Code disposes the view, the port
    *  closes and `onDisposed` runs. */
-  private attach(
-    id: 'sidebar' | 'editor',
-    view: vscode.WebviewView | vscode.WebviewPanel,
-    onDisposed: () => void,
-  ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly attach = Effect.fn('ProgressViewProvider.attach')(
+    { self: this },
+    function* (
+      id: 'sidebar' | 'editor',
+      view: vscode.WebviewView | vscode.WebviewPanel,
+      onDisposed: () => void,
+    ): Effect.fn.Return<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
       // The post starts synchronously inside runFork, so sends keep their order.
       const send = (message: DownMessage): void => {
         this.runtime.runFork(
@@ -802,8 +643,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           Effect.sync(() => listener.dispose()),
         );
       return port;
-    });
-  }
+    },
+  );
 
   private closePort(port: Port | undefined): void {
     if (!port) return;
@@ -846,8 +687,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    *  Send in the view the user is in, which is the visible surface and its
    *  own draft. With none showing, the sidebar, shown first so the action
    *  has a surface to land on. */
-  public submit() {
-    return Effect.gen({ self: this }, function* () {
+  public readonly submit = Effect.fn('ProgressViewProvider.submit')(
+    { self: this },
+    function* () {
       const port = this.visibleSurfacePort();
       if (port !== undefined && port === this.editor?.port) {
         port.attached.surfaceAction({ kind: 'submit' });
@@ -855,8 +697,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
       yield* this.showInSidebar();
       this.sidebarPort?.attached.surfaceAction({ kind: 'submit' });
-    });
-  }
+    },
+  );
 
   public isViewVisible(): boolean {
     return (
@@ -884,97 +726,92 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    * now" is cleared so the card shows again on a first install; after a
    * finished task the credential-lost banner stands in its place.
    */
-  public showConnectModel() {
-    return Effect.gen({ self: this }, function* () {
-      yield* setOnboardingDeclined(this.globalState, false);
-      yield* this.refreshApiKeyStatus;
-      yield* this.showLauncher();
-    });
-  }
+  public readonly showConnectModel = Effect.fn(
+    'ProgressViewProvider.showConnectModel',
+  )({ self: this }, function* () {
+    yield* setOnboardingDeclined(this.globalState, false);
+    yield* this.refreshApiKeyStatus;
+    yield* this.showLauncher();
+  });
 
   /** The New-task state in the sidebar (`texra.showMainView`). */
-  public showLauncher() {
-    return Effect.gen({ self: this }, function* () {
+  public readonly showLauncher = Effect.fn('ProgressViewProvider.showLauncher')(
+    { self: this },
+    function* () {
       yield* this.showInSidebar();
       this.bridge.surfaceAction({ kind: 'selectNew' });
-    });
-  }
+    },
+  );
 
-  public showProgressView(options?: { inPlace?: boolean }) {
-    return Effect.gen({ self: this }, function* () {
-      if (this.editor) {
-        this.editor.panel.reveal(vscode.ViewColumn.One);
-        return;
-      }
-      if (!options?.inPlace) yield* this.showInSidebar();
-      // Each surface decides from its own selection: one on the New-task
-      // state opens the newest session, one showing a session keeps it.
-      const newest = this.runSession.view.current().order.at(0);
-      if (newest !== undefined)
-        this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
-    });
-  }
+  public readonly showProgressView = Effect.fn(
+    'ProgressViewProvider.showProgressView',
+  )({ self: this }, function* (options?: { inPlace?: boolean }) {
+    if (this.editor) {
+      this.editor.panel.reveal(vscode.ViewColumn.One);
+      return;
+    }
+    if (!options?.inPlace) yield* this.showInSidebar();
+    // Each surface decides from its own selection: one on the New-task
+    // state opens the newest session, one showing a session keeps it.
+    const newest = this.runSession.view.current().order.at(0);
+    if (newest !== undefined)
+      this.bridge.surfaceAction({ kind: 'showSessions', runId: newest });
+  });
 
-  /** Select a stream this window just launched (the launch's
-   *  `onAdmitted` hook): the launching surface selects it, and a
-   *  resolved agent retires the missing-agent warning. */
-  public presentLaunchedRun(runId: RunId): void {
-    this.bridge.surfaceAction({ kind: 'select', runId });
-    this.runtime.runFork(this.snapshot.clearAgentConfigBanner);
-  }
-
-  public revealRun(
-    runId: RunId,
-  ): Effect.Effect<ProgressRunRevealResult, SurfacePlacementFailed> {
-    return Effect.gen({ self: this }, function* () {
+  public readonly revealRun = Effect.fn('ProgressViewProvider.revealRun')(
+    { self: this },
+    function* (
+      runId: RunId,
+    ): Effect.fn.Return<ProgressRunRevealResult, SurfacePlacementFailed> {
       const view = this.runSession.view.current();
       if (!view.runs.has(runId)) return 'missing' as const;
       yield* this.showProgressView();
       this.bridge.surfaceAction({ kind: 'select', runId });
       return 'revealed' as const;
-    });
-  }
+    },
+  );
 
   public runLabel(runId: RunId): string | undefined {
     return this.runSession.view.current().runs.get(runId)?.label;
   }
 
-  public popOutToEditor() {
-    return Effect.gen({ self: this }, function* () {
-      if (this.editor) {
-        this.editor.panel.reveal(vscode.ViewColumn.One);
-        return;
-      }
-      const panel = vscode.window.createWebviewPanel(
-        'texra.progress.panel',
-        'TeXRA Tasks',
-        vscode.ViewColumn.One,
-        {
-          enableScripts: true,
-          enableCommandUris: true,
-          retainContextWhenHidden: true,
-          localResourceRoots: this.contentProvider.localResourceRoots,
-        },
-      );
-      panel.iconPath = new vscode.ThemeIcon('pulse');
-      const port = yield* this.attach('editor', panel, () => {
-        this.editor = undefined;
-      });
-      this.editor = { panel, port };
+  public readonly popOutToEditor = Effect.fn(
+    'ProgressViewProvider.popOutToEditor',
+  )({ self: this }, function* () {
+    if (this.editor) {
+      this.editor.panel.reveal(vscode.ViewColumn.One);
+      return;
+    }
+    const panel = vscode.window.createWebviewPanel(
+      'texra.progress.panel',
+      'TeXRA Tasks',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        enableCommandUris: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: this.contentProvider.localResourceRoots,
+      },
+    );
+    panel.iconPath = new vscode.ThemeIcon('pulse');
+    const port = yield* this.attach('editor', panel, () => {
+      this.editor = undefined;
     });
-  }
+    this.editor = { panel, port };
+  });
 
-  /** Awaits the preview files' removal and the recorder's stop: runtime
-   *  disposal (and its exit-time child kill) would cut a forked one short. */
-  private dispose(): Effect.Effect<void, never, ProcessServices> {
-    return Effect.gen({ self: this }, function* () {
+  /** Awaits the preview files' removal (the scope's close) and the
+   *  recorder's stop: runtime disposal (and its exit-time child kill) would
+   *  cut a forked one short. */
+  private readonly dispose = Effect.fn('ProgressViewProvider.dispose')(
+    { self: this },
+    function* (): Effect.fn.Return<void, never, ProcessServices> {
       this.closeSidebarPort();
       this.closePort(this.editor?.port);
       this.editor?.panel.dispose();
       this.editor = undefined;
       yield* Scope.close(this.scope, Exit.void);
       yield* this.draftRequests.shutdown;
-      yield* this.toolEditApprovals.dispose();
-    });
-  }
+    },
+  );
 }

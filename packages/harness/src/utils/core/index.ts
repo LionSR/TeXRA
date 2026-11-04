@@ -1,6 +1,5 @@
 /**
- * Core utilities: browser-safe path basics, abort and failure helpers, and
- * id minting.
+ * Core utilities: browser-safe path basics, abort and failure helpers.
  *
  * NOTE: pathCore stays a separate module because it depends on Node.js
  * 'path' while this file is reached from browser code through
@@ -10,10 +9,7 @@
  * filesystem-path semantics (containment, `.`/`..` resolution) should
  * import from '@utils/core/pathCore' instead.
  */
-import { customAlphabet, nanoid } from 'nanoid';
 import { basename as pathBasename, extname as pathExtname } from 'pathe';
-
-import type { RunId } from '@shared/schemas';
 
 // ---------------------------------------------------------------------------
 // pathBasics (browser-safe; Node-dependent path helpers live in pathCore.ts)
@@ -59,25 +55,6 @@ export function getFileStem(filePath: string | undefined | null): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Register an abort handler, firing it immediately if `signal` is already
- * aborted (an `addEventListener` after the fact never fires on its own).
- * Returns a disposer that detaches the listener; safe to call even after the
- * handler already fired. No-ops when `signal` is undefined.
- */
-export function onAbort(
-  signal: AbortSignal | undefined,
-  fn: () => void,
-): () => void {
-  if (!signal) return () => {};
-  if (signal.aborted) {
-    fn();
-    return () => {};
-  }
-  signal.addEventListener('abort', fn, { once: true });
-  return () => signal.removeEventListener('abort', fn);
-}
-
-/**
  * Reduce a NON-EMPTY failure list to the value to throw: the lone failure
  * unwrapped when there is exactly one, or an {@link AggregateError} carrying
  * `message` when there are several. Use as `throw aggregateError(...)` where a
@@ -120,28 +97,4 @@ export function jitteredExponentialBackoffMs(
   );
   const jitter = 1 - JITTER_FRACTION + unitRandom * 2 * JITTER_FRACTION;
   return Math.min(maxMs, Math.round(exponential * jitter));
-}
-
-// ---------------------------------------------------------------------------
-// runId
-// ---------------------------------------------------------------------------
-
-/** Generate a 12-char lowercase-hex ID (48 bits of entropy). */
-const hexId12 = customAlphabet('0123456789abcdef', 12);
-
-/** Mint a run id: 12 lowercase hex chars (48 bits of entropy). One of the
- *  two minting sites (`deriveRunId` is the other), so the brand is
- *  applied here and nowhere downstream. */
-export function generateRunId(): RunId {
-  return hexId12() as RunId;
-}
-
-/**
- * Generate a short unique ID for non-schema-constrained uses (temp
- * filenames, log entry IDs): nanoid's standard 21-char URL-safe alphabet.
- * A run id, which its schema constrains to lowercase hex, is
- * `generateRunId`'s.
- */
-export function generateShortId(): string {
-  return nanoid();
 }

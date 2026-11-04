@@ -8,7 +8,11 @@ import DelegatedStreamHero from '../.vitepress/components/DelegatedStreamHero.vu
 TeXRA agents can delegate programming tasks—such as running numerical checks or writing figure scripts—to a local coding agent. Two integrations are supported:
 
 - **OpenAI Codex**: a sandboxed coding agent on your ChatGPT Plus / Pro plan
-  (or an OpenAI API key). TeXRA agents reach it through the `codex` tool.
+  (or an OpenAI API key). TeXRA agents reach it through the `codex` tool. A
+  Pro or Business plan also includes
+  [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
+  for an OpenAI API key, which TeXRA's own OpenAI models can use; Codex itself
+  does not draw on them.
 - **Claude Code**: Anthropic's coding agent on your Claude Pro / Max plan
   (or an Anthropic API key). TeXRA agents reach it through the `claude_code`
   tool. A Max or Team plan also includes
@@ -36,7 +40,7 @@ In the terminal client, `/plugins` lists the same integrations with their
 state and switches each one on or off. Install and sign in to each CLI with its
 own installer and sign-in command.
 
-Each integration's options live on its row and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → General → Approval**: an **Approval policy** select (Ask, Block, or Auto-approve; default Ask) plus two toggles shown under Ask, **Require approval for file edits** and **Require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
+Each integration's options live on its row and are scoped to the current workspace. Per-call approval prompts are governed by **Settings → General → Approval**: the **Approval policy** select (Ask, Block, or Auto-approve; default Ask). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or approve all agent work for the task on its first request card. The child's own sandbox or permission mode follows that decision: a launch you approved runs Codex in `workspace-write` and Claude Code in `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex with full access (`danger-full-access`) and Claude Code with every permission bypassed. Codex never stops to ask on its own.
 
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
@@ -56,12 +60,10 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Settings
 
-| Setting              | Options                                                                     | Default           | What it controls                                                                                                                           |
-| -------------------- | --------------------------------------------------------------------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Model**            | the current OpenAI models your ChatGPT plan can use in Codex                | `GPT-6.1 Sol`     | Which model Codex runs.                                                                                                                    |
-| **Sandbox mode**     | `read-only`, `workspace-write`, `danger-full-access`                        | `workspace-write` | File-system access. Agents may override per call via `sandbox_mode`.                                                                       |
-| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`, `max`                                     | `medium`          | How deeply Codex deliberates. A level the model or your installed Codex lacks becomes the nearest one it has; older installs stop at High. |
-| **Approval policy**  | `auto approve`, `ask when requested`, `ask for untrusted`, `ask on failure` | `auto approve`    | When the Codex child process may stop to ask before running commands.                                                                      |
+| Setting              | Options                                                      | Default       | What it controls                                                                                                                           |
+| -------------------- | ------------------------------------------------------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Model**            | the current OpenAI models your ChatGPT plan can use in Codex | `GPT-6.1 Sol` | Which model Codex runs.                                                                                                                    |
+| **Reasoning effort** | `low`, `medium`, `high`, `xhigh`, `max`                      | `medium`      | How deeply Codex deliberates. A level the model or your installed Codex lacks becomes the nearest one it has; older installs stop at High. |
 
 Providers, MCP servers, and custom instructions come from Codex's own `~/.codex/config.toml`.
 
@@ -80,11 +82,10 @@ delivery. The new prompt joins that Codex session as the next turn.
 
 ### Settings
 
-| Setting              | Options                                                                                            | Default             | What it controls                                                                                     |
-| -------------------- | -------------------------------------------------------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------- |
-| **Model**            | the current Claude models                                                                          | `Sonnet 5.5`        | Which Claude model the delegated agent runs on. Agents may override per call.                        |
-| **Permission mode**  | `Prompt for risky actions`, `Auto-accept edits`, `Bypass all (dangerous)`, `Plan only (read-only)` | `Auto-accept edits` | How much the Claude Code child process may do before stopping to ask.                                |
-| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum`                                                   | `Medium`            | How deeply Claude deliberates before acting; a level the model lacks becomes the nearest one it has. |
+| Setting              | Options                                          | Default      | What it controls                                                                                     |
+| -------------------- | ------------------------------------------------ | ------------ | ---------------------------------------------------------------------------------------------------- |
+| **Model**            | the current Claude models                        | `Sonnet 5.5` | Which Claude model the delegated agent runs on. Agents may override per call.                        |
+| **Reasoning effort** | `Low`, `Medium`, `High`, `Extra high`, `Maximum` | `Medium`     | How deeply Claude deliberates before acting; a level the model lacks becomes the nearest one it has. |
 
 MCP servers, custom instructions, and hooks come from Claude Code's own configuration.
 
@@ -151,9 +152,9 @@ tools:
 
 - **Every call goes through shell-command approval.** The prompt shows the
   server, the tool and its arguments. It follows **Settings → General →
-  Approval** like a shell command does: no prompt under
-  Auto-approve, or under Ask with **require approval for shell commands**
-  turned off, and every call refused under Block. A session where approval
+  Approval** like a shell command does: no prompt under Auto-approve or
+  once you approve all agent work for the task, and every call refused
+  under Block. A session where approval
   prompts can't be shown (a headless run) is not offered MCP tools.
 - **The server runs only while a run uses it.** TeXRA starts it when the first
   run that names it begins and stops it when the last such run ends. Editing a

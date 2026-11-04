@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { fakeConfig } from '@test/support/FakePlatform';
 
 // ---------------------------------------------------------------------------
 // fencedLatexBlocksRegex
@@ -49,9 +49,8 @@ describe('personal style contextual replacements', () => {
       '$\\mathrm{Tr}$ and $\\mathrm{tr}$',
     ].join('\n');
 
-    const result = replacementEngine.applyAll(input, (key) =>
-      testWorkspaceRoots().config.get(key),
-    ).text;
+    // A fake host's config, with every rule at its catalog default.
+    const result = replacementEngine.applyAll(input, fakeConfig()).text;
 
     const expected = [
       '\\newcommand{\\tr}{\\mathrm{Tr}}',

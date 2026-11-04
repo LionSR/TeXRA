@@ -40,16 +40,14 @@ const INTERNAL_ALIAS_PATH_GROUPS = INTERNAL_ALIAS_NAMES.flatMap((alias) => [
 ]);
 
 const COMPOSITION_ROOT_FILES = new Set([
-  path.join(__dirname, 'packages/extension/src/extension.ts'),
-  path.join(__dirname, 'packages/desktop/src/main/platform/index.ts'),
-  path.join(__dirname, 'packages/cli/src/runtime/cliProcessRuntime.ts'),
+  // TeXRA's process layer, which the three hosts build their runtime over.
+  path.join(__dirname, 'packages/texra/src/controllers/texraProcessLayer.ts'),
   // The package's composition root: `Sessions.layer` composes the process
   // its projection serves.
   path.join(__dirname, 'packages/harness/src/effect/sessions.ts'),
-  // The test suite's composition root: the one harness file that installs
-  // the process runtime the session graph runs on, over the plugin list its
-  // setup module passes (`sessionGraphTestSetup`).
-  path.join(__dirname, 'src/test-kernel/support/sessionGraphInstall.ts'),
+  // The test suite's composition root: the session graph a block builds with
+  // `it.layer`.
+  path.join(__dirname, 'src/test-kernel/support/testKernel.ts'),
 ]);
 
 // The CLI reads process input only through its runtime context and writes to
@@ -92,7 +90,6 @@ const VSCODE_FREE_ZONE_DIRS = [
   'packages/texra/src',
   'packages/llm/src',
   'packages/desktop/src',
-  'packages/extension/src/progressView/frontend',
   'packages/extension/src/settingsView/frontend',
 ].map((dir) => path.join(__dirname, dir));
 // A zone that names a missing directory would hold nothing: fail loudly, so
@@ -114,6 +111,24 @@ const BROWSER_HARNESS_ENTRY_PATTERN = {
     'A browser bundle takes nothing from this harness entry, types included: use @texra-ai/harness/schemas or @texra-ai/harness/transcript.',
 };
 
+// The browser bundles (the settings webview frontend and the UI toolkit) may
+// use host-neutral types from backend modules, but runtime values must come
+// from browser-safe shared modules.
+const BROWSER_RUNTIME_IMPORT_PATTERNS = [
+  {
+    group: ['@common', '@common/**', '@tools', '@tools/**'],
+    allowTypeImports: true,
+    message:
+      'A browser bundle must import runtime values from browser-safe shared modules.',
+  },
+  {
+    group: ['@utils', '@utils/**'],
+    allowTypeImports: true,
+    message:
+      'A browser bundle reaches harness helpers through @texra-ai/harness/schemas or @texra-ai/harness/transcript, whose closures the browser build proves.',
+  },
+];
+
 // The SDK's entry files: the package's public surface and its Effect
 // boundary, as opposed to the harness modules under it.
 const HARNESS_ENTRY_FILES = [
@@ -128,7 +143,7 @@ const HARNESS_ENTRY_FILES = [
 // The named runtime entries that may call `Effect.run*` outside a host
 // package (the no-restricted-syntax block below).
 const EFFECT_RUN_ENTRIES = [
-  'packages/extension/src/progressView/frontend/sessionTransport.ts',
+  'packages/texra/src/ui/progress/sessionTransport.ts',
   'packages/texra/src/shared/signals.ts',
   'packages/harness/src/platform/processRuntime.ts',
   // Worker entry: no process runtime exists in the worker.
@@ -139,8 +154,8 @@ const EFFECT_RUN_ENTRIES = [
 // quality like pi"): the harness side of the package split (PR #13639,
 // harness-package-split.md §1) plus the model package. `any`, `new Promise`,
 // `.then(` and `Effect.run*` outside a named entry are hard lint errors here
-// (the blocks below); the rest is the shrink-only ratchet in
-// scripts/check-core-quality.mjs over config/ratchets/core-quality/.
+// (the blocks below); the rest is the ratchet in
+// scripts/check-core-quality.mjs, measured against the merge base.
 export const CORE_QUALITY_DIRS = [
   'packages/harness/src/agent',
   'packages/harness/src/shared/session',
@@ -155,14 +170,6 @@ export const CORE_QUALITY_DIRS = [
 const CORE_QUALITY_GLOBS = CORE_QUALITY_DIRS.map((entry) =>
   entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
 );
-
-const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
-  {
-    name: '@common/webview',
-    message:
-      'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
-  },
-];
 
 const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
   {
@@ -649,6 +656,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.{ts,mts}',
+      'packages/*/test/**/*.{ts,mts}',
       'packages/harness/src/**/*.{ts,mts}',
       'packages/texra/src/**/*.{ts,mts}',
       'packages/llm/src/**/*.{ts,mts}',
@@ -727,7 +735,7 @@ export default tseslint.config(
         },
       ],
 
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       'no-useless-escape': 'off',
       'no-useless-assignment': 'error',
       'preserve-caught-error': 'off',
@@ -747,6 +755,20 @@ export default tseslint.config(
       ],
       'local/no-unused-imports': 'error',
       'local/no-vscode-import-in-free-zones': 'error',
+      // The catalog reaches everything outside the model package through
+      // `@texra-ai/llm`, which pins the one llm-zoo version. The core rule's
+      // options are replaced per block, so this uses the typescript-eslint one.
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            { name: 'llm-zoo', message: 'Import it from @texra-ai/llm.' },
+          ],
+          patterns: [
+            { group: ['llm-zoo/**'], message: 'Import it from @texra-ai/llm.' },
+          ],
+        },
+      ],
       'prefer-const': 'error',
 
       // No temporary adapters (owner ruling 2026-09-06, Effect 4 migration
@@ -758,20 +780,36 @@ export default tseslint.config(
     },
   },
 
-  // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
-  // rather than a ratchet row. No disable comment reaches past the core's
-  // lint errors, so a site cannot hide behind one.
+  // No package's source asserts a value present with `!`: a lookup that may
+  // miss says what happens when it does.
+  {
+    files: ['packages/*/src/**/*.{ts,mts}', 'packages/*/src/**/*.tsx'],
+    ignores: ['**/*.vitest.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'error' },
+  },
+
+  // The core holds no `any`, no `!` and no asserted object literal, so they
+  // are lint errors rather than ratchet rows; an unexplained `as` is held at
+  // zero by scripts/check-core-quality.mjs. No disable comment reaches past
+  // the core's lint errors, so a site cannot hide behind one.
   {
     files: CORE_QUALITY_GLOBS,
     ignores: ['**/*.vitest.ts'],
     linterOptions: { noInlineConfig: true },
-    rules: { '@typescript-eslint/no-explicit-any': 'error' },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/consistent-type-assertions': [
+        'error',
+        { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' },
+      ],
+    },
   },
 
   // Tests run separately so their application-wide program is not retained
   // alongside the production programs. Both passes keep the same rules.
   {
-    files: ['src/test-kernel/**/*.{ts,mts}'],
+    files: ['src/test-kernel/**/*.{ts,mts}', 'packages/*/test/**/*.{ts,mts}'],
     languageOptions: {
       parserOptions: { project: ['./tsconfig.test-kernel.json'] },
     },
@@ -793,6 +831,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: { project: ['./packages/llm/tsconfig.json'] },
     },
+    rules: { '@typescript-eslint/no-restricted-imports': 'off' },
   },
 
   // The live tier is a separate program over the same package: its own
@@ -839,7 +878,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
@@ -854,7 +892,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
             ...HARNESS_NO_APP_IMPORT_PATTERNS,
@@ -872,7 +909,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: AGENT_CORE_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
@@ -906,30 +942,16 @@ export default tseslint.config(
     },
   },
 
-  // Extension browser frontends may use host-neutral types from backend
-  // modules, but runtime values must come from browser-safe shared modules.
+  // The settings webview frontend, a browser bundle outside the UI kit.
   {
-    files: [
-      'packages/extension/src/{progressView,settingsView}/frontend/**/*.{ts,tsx,mts}',
-    ],
+    files: ['packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
-            {
-              group: ['@common', '@common/**', '@tools', '@tools/**'],
-              allowTypeImports: true,
-              message:
-                'Extension browser frontends must import runtime values from browser-safe shared modules.',
-            },
+            ...BROWSER_RUNTIME_IMPORT_PATTERNS,
             BROWSER_HARNESS_ENTRY_PATTERN,
-            {
-              group: ['@utils', '@utils/**'],
-              allowTypeImports: true,
-              message:
-                'A browser bundle reaches harness helpers through @texra-ai/harness/schemas or @texra-ai/harness/transcript, whose closures the browser build proves.',
-            },
           ],
         },
       ],
@@ -953,9 +975,9 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
+            ...BROWSER_RUNTIME_IMPORT_PATTERNS,
             BROWSER_HARNESS_ENTRY_PATTERN,
           ],
         },
@@ -1040,7 +1062,7 @@ export default tseslint.config(
   // entries, which are exempt whole-file: that the run is on the entry's own
   // runtime is enforced by review). Everywhere else a run is below the
   // boundary: convert the file and its callers so the run moves to a host
-  // entry. `new AbortController()` is held to its two permanent residents
+  // entry. `new AbortController()` is held to its one permanent resident
   // (rulings ledger, "permanent AbortController residents"). Flat config
   // replaces the `no-restricted-syntax` array for a file, so each file group
   // below lists every selector that applies to it. The core
@@ -1071,7 +1093,7 @@ export default tseslint.config(
     const abort = {
       selector: "NewExpression[callee.name='AbortController']",
       message:
-        'No new AbortController: the two permanent residents are named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
+        'No new AbortController: the permanent resident is named in eslint.config.mjs (rulings ledger). Use fiber interruption or Effect.abortSignal.',
     };
     const promise = [
       {
@@ -1084,15 +1106,34 @@ export default tseslint.config(
         message: '`.then(` chains in core: compose with Effect instead.',
       },
     ];
+    // A test support module awaits nothing and runs no Effect when it is
+    // imported: what a suite runs over is a layer its blocks build
+    // (support/testKernel.ts). Each selector matches at module scope only,
+    // outside every function.
+    const moduleScope = (selector, node) =>
+      `${selector}:not(:function ${node})`;
+    const supportMessage = (what) =>
+      `No module-scope ${what} in test support: what a suite runs over is a layer its blocks build (support/testKernel.ts), or a function the suite calls.`;
+    const supportImport = [
+      {
+        selector: moduleScope('AwaitExpression', 'AwaitExpression'),
+        message: supportMessage('await'),
+      },
+      {
+        selector: moduleScope('ForOfStatement[await=true]', 'ForOfStatement'),
+        message: supportMessage('await'),
+      },
+      ...run.map(({ selector }) => ({
+        selector: moduleScope(selector, 'CallExpression'),
+        message: supportMessage('Effect run'),
+      })),
+    ];
     const inCore = (file) =>
       CORE_QUALITY_DIRS.some(
         (dir) => file === dir || file.startsWith(`${dir}/`),
       );
     const entries = EFFECT_RUN_ENTRIES;
-    const residents = [
-      'packages/harness/src/agent/runtime/childRunLoop.ts',
-      'packages/texra/src/tools/claudeAgent.ts',
-    ];
+    const residents = ['packages/texra/src/tools/agentCli/claudeAgent.ts'];
     const iconFile = 'packages/texra/src/ui/wa/webAwesomeIcons.ts';
     const block = (files, ignores, ...selectors) => ({
       files,
@@ -1120,7 +1161,6 @@ export default tseslint.config(
           'packages/texra/src/**/*.{ts,tsx,mts}',
           'packages/llm/src/**/*.{ts,tsx,mts}',
           'packages/trace-viewer/src/**/*.{ts,tsx,mts}',
-          'packages/extension/src/progressView/frontend/**/*.{ts,tsx,mts}',
           'packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}',
         ],
         [
@@ -1139,14 +1179,23 @@ export default tseslint.config(
       block([iconFile], [], ...run, abort),
       block(
         CORE_QUALITY_GLOBS,
-        ['**/*.vitest.ts', ...entries, ...residents],
+        ['**/*.vitest.ts', ...entries],
         waIcon,
         ...run,
         abort,
         ...promise,
       ),
       block(entries.filter(inCore), [], waIcon, abort, ...promise),
-      block(residents.filter(inCore), [], waIcon, ...run, ...promise),
+      // No disable comment reaches past the support rule.
+      {
+        ...block(
+          ['src/test-kernel/support/**/*.{ts,mts}'],
+          [],
+          waIcon,
+          ...supportImport,
+        ),
+        linterOptions: { noInlineConfig: true },
+      },
     ];
   })(),
 );

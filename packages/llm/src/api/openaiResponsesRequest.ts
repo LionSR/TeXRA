@@ -7,15 +7,15 @@ import OpenAI from 'openai';
 
 // Local imports - canonical model contract
 import {
-  ResolvedTurnSchema,
+  type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnRequest,
 } from '../turn.js';
-import { decodeTurnRequest } from './turnInput.js';
-import { backgroundCapable, sameModelOrigin } from '../protocol.js';
+import { resolveTurn } from './turnInput.js';
+import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
-import { responseInput } from './openaiResponsesLower.js';
+import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
@@ -25,77 +25,48 @@ type ResponsesTransport = Extract<
   { protocol: 'openai-responses'; mode: 'foreground' }
 >['transport'];
 
-/** Resolves controls before admission; no transport request is made here. */
-export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
-  function* (
-    config: OpenAIResponsesConfiguration,
-    origin: ResponseOrigin,
-    transport: ResponsesTransport,
-    request: TurnRequest,
-    uploads: UploadCache | null,
-  ) {
-    const author = yield* decodeTurnRequest(
-      request,
-      'The model input is invalid.',
-    );
-    if (
-      (author.continuation !== undefined &&
-        author.continuation.origin.protocol !== 'openai-responses') ||
-      (author.mode === 'background' &&
-        (!backgroundCapable(config) || transport.kind !== 'http')) ||
-      (!config.supportsMaxOutputTokens &&
-        author.maxOutputTokens !== undefined) ||
-      (!config.supportsStorage && author.store === true)
-    ) {
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'The model does not support the requested controls or continuation.',
-      });
-    }
-    const turn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
-      ...origin,
-      mode: author.mode ?? 'foreground',
-      transport,
-      system:
-        config.instructions.kind === 'required'
-          ? author.system?.trim() || config.instructions.fallback
-          : author.system,
-      messages: author.messages,
-      tools: author.tools ?? [],
-      continuation: author.continuation,
-      controls: {
-        temperature: config.supportsTemperature
-          ? config.defaults.temperature
-          : null,
-        maxOutputTokens:
-          author.maxOutputTokens ?? config.defaults.maxOutputTokens,
-        store: author.store ?? config.defaults.store,
-        parallelToolCalls: config.defaults.parallelToolCalls,
-        toolChoice: author.toolChoice ?? 'auto',
-        reasoning: config.defaults.reasoning,
-        serviceTier: config.defaults.serviceTier,
-        ...(config.openaiEndpoint && author.cacheKey !== undefined
-          ? { promptCacheKey: author.cacheKey }
-          : {}),
-      },
-    });
-    if (turn.protocol !== 'openai-responses')
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'The prepared protocol changed.',
-      });
-    yield* responseParameters(
-      config,
-      origin,
-      transport,
-      turn,
-      turn.mode,
-      uploads,
-    );
-    return turn;
-  },
-);
+/** Resolves controls before admission; a route with no output limit
+ *  ignores the request's, and the lowering refuses a continuation on a
+ *  route that does not store. No transport request is made here. */
+export const prepareResponsesTurn = (
+  config: OpenAIResponsesConfiguration,
+  origin: ResponseOrigin,
+  transport: ResponsesTransport,
+  request: TurnRequest,
+  uploads: UploadCache | null,
+  background: Model['background'],
+): Effect.Effect<ResolvedTurn, ModelError> =>
+  resolveTurn(
+    request,
+    origin,
+    background,
+    (author) =>
+      Effect.succeed({
+        ...origin,
+        mode: author.mode ?? 'foreground',
+        transport,
+        system: author.system,
+        messages: author.messages,
+        tools: author.tools ?? [],
+        continuation: author.continuation,
+        controls: {
+          temperature: config.defaults.temperature,
+          maxOutputTokens:
+            config.defaults.maxOutputTokens === null
+              ? null
+              : (author.maxOutputTokens ?? config.defaults.maxOutputTokens),
+          store: config.defaults.store,
+          toolChoice: author.toolChoice ?? 'auto',
+          reasoning: config.defaults.reasoning,
+          serviceTier: config.defaults.serviceTier,
+          ...(config.openaiEndpoint && author.cacheKey !== undefined
+            ? { promptCacheKey: author.cacheKey }
+            : {}),
+        },
+      }),
+    (turn) =>
+      responseParameters(config, origin, transport, turn, turn.mode, uploads),
+  );
 
 /** Validates the admitted binding and lowers one request without transport flags. */
 export const responseParameters = Effect.fn('llm.responses.parameters')(
@@ -120,12 +91,11 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       });
     }
     if (
-      (!config.supportsTemperature && turn.controls.temperature !== null) ||
-      (!config.supportsMaxOutputTokens &&
+      (config.defaults.temperature === null &&
+        turn.controls.temperature !== null) ||
+      (config.defaults.maxOutputTokens === null &&
         turn.controls.maxOutputTokens !== null) ||
-      (!config.supportsStorage &&
-        (turn.controls.store || turn.continuation !== undefined)) ||
-      (config.instructions.kind === 'required' && !turn.system?.trim()) ||
+      (!turn.controls.store && turn.continuation !== undefined) ||
       (turn.controls.reasoning?.effort != null &&
         !config.allowedReasoningEfforts.includes(
           turn.controls.reasoning.effort,
@@ -140,7 +110,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     const reasoning = turn.controls.reasoning;
     // A compatible route sends `store` only to ask for storage it defaults off.
     let storage: Pick<ResponseCreateParamsBase, 'store' | 'include'> = {};
-    if (config.requestDialect === 'openai') {
+    if (config.requestDialect !== 'compatible') {
       storage = {
         store: turn.controls.store,
         include: ['reasoning.encrypted_content'],
@@ -186,17 +156,23 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         : {}),
       ...(turn.tools.length > 0
         ? {
-            tools: turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
-              config.requestDialect === 'openai'
-                ? { type: 'function', ...tool, strict: false }
-                : // The vendor endpoints take no `strict`, which the
-                  // OpenAI typings require.
-                  ({
-                    type: 'function',
-                    ...tool,
-                  } as OpenAI.Responses.FunctionTool),
+            tools: groupedTools(
+              toolNamespaceOf(config),
+              turn.tools.map((tool): OpenAI.Responses.FunctionTool => {
+                if (config.requestDialect !== 'compatible')
+                  return { type: 'function', ...tool, strict: false };
+                const vendorTool: Omit<
+                  OpenAI.Responses.FunctionTool,
+                  'strict'
+                > = { type: 'function', ...tool };
+                // The vendor endpoints take no `strict`, which the OpenAI
+                // typings require; the SDK sends the body as written.
+                // cast: a FunctionTool without `strict`.
+                return vendorTool as OpenAI.Responses.FunctionTool;
+              }),
             ),
-            parallel_tool_calls: turn.controls.parallelToolCalls,
+            // OpenAI's default, stated so a compatible endpoint takes it too.
+            parallel_tool_calls: true,
             tool_choice:
               turn.controls.toolChoice === 'auto'
                 ? ('auto' as const)
@@ -210,6 +186,22 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     return { turn, parameters };
   },
 );
+
+/** The function tools, inside the route's one namespace when it requires one. */
+const groupedTools = (
+  namespace: string | null,
+  tools: OpenAI.Responses.FunctionTool[],
+): OpenAI.Responses.Tool[] =>
+  namespace === null
+    ? tools
+    : [
+        {
+          type: 'namespace',
+          name: namespace,
+          description: 'The tools this agent can call.',
+          tools,
+        },
+      ];
 
 /** OpenAI's abort signature: the raw abort reason, or the SDK's wrapper around it. */
 export const openaiAbortMatch = (
@@ -227,14 +219,9 @@ export const ResponseAuthenticationSchema = Schema.Union([
     ),
   }),
   Schema.Struct({
-    kind: Schema.Literal('codex'),
+    kind: Schema.Literal('chatgpt'),
     accessToken: Schema.String.check(Schema.isMinLength(1)).check(
       Schema.isPattern(/^[^\r\n]+$/),
-    ),
-    accountId: Schema.NullOr(
-      Schema.String.check(Schema.isMinLength(1)).check(
-        Schema.isPattern(/^[^\r\n]+$/),
-      ),
     ),
   }),
 ]);
@@ -252,18 +239,13 @@ export function responseAuthentication(
   const authentication = Schema.decodeUnknownSync(ResponseAuthenticationSchema)(
     input,
   );
-  return authentication.kind === 'api-key'
-    ? { token: authentication.apiKey, headers: {} }
-    : {
-        token: authentication.accessToken,
-        headers: {
-          ...(authentication.accountId !== null
-            ? { 'chatgpt-account-id': authentication.accountId }
-            : {}),
-          originator: 'texra',
-          'openai-beta': 'responses=experimental',
-        },
-      };
+  return {
+    token:
+      authentication.kind === 'api-key'
+        ? authentication.apiKey
+        : authentication.accessToken,
+    headers: {},
+  };
 }
 
 /** The SDK client for one selected Responses deployment: no retries, no ambient organization. */

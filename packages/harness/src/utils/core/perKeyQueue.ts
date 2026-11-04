@@ -32,11 +32,9 @@ export interface PerKeyLanes<Key> {
  * interruptible; a waiter interrupted before entering hands its successor
  * the wait for its own predecessor, so the successor still waits for whoever
  * actually holds the lane. A hand-off through a `Deferred` resumes the next
- * fiber directly, so fibers started in sequence enter in that order — a
- * `Semaphore` barges: its release wakes waiters in a scheduled task, and a
- * fiber started in between takes the free permit ahead of them. The lane is
- * created on first use and deleted from `lanes` once the last fiber holding
- * or waiting on it settles.
+ * fiber directly, so fibers started in sequence enter in that order. The
+ * lane is created on first use and deleted from `lanes` once the last fiber
+ * holding or waiting on it settles.
  *
  * A `Queue` of tickets served by one detached worker fiber (the shape
  * `sessionFrames.ts` uses) was prototyped against this chain in review and

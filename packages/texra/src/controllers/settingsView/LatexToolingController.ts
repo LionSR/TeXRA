@@ -2,8 +2,8 @@ import { Cause, Effect } from 'effect';
 
 // Local imports - shared constants
 import { withLogChannel } from '@texra-ai/harness/host';
-import { findCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   type LatexSettingsStatus,
@@ -16,11 +16,10 @@ import {
   PROBED_LATEX_TOOLS,
   SCOOP_INSTALL_COMMAND,
   SUPPORTED_LATEX_COMPILERS,
-  type ProbedLatexTool,
 } from '@texra/shared/constants/latexToolchain';
 import {
-  checkToolInstalled,
   detectPackageManager,
+  probeTool,
 } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -57,17 +56,15 @@ export function detectLatexSettingsStatus(
 ): Effect.Effect<LatexSettingsStatus, never, ChildProcessSpawner> {
   const platform = normalizePlatform(process.platform);
   return Effect.gen(function* () {
-    const installed = Object.fromEntries(
-      yield* Effect.all(
-        PROBED_LATEX_TOOLS.map((tool) =>
-          Effect.map(
-            checkToolInstalled(tool, false),
-            (isInstalled) => [tool, isInstalled] as const,
-          ),
-        ),
-        { concurrency: 'unbounded' },
+    const probes = yield* Effect.all(
+      PROBED_LATEX_TOOLS.map((tool) =>
+        Effect.map(probeTool(tool), (isInstalled) => ({ tool, isInstalled })),
       ),
-    ) as Record<ProbedLatexTool, boolean>;
+      { concurrency: 'unbounded' },
+    );
+    const installedTools = new Set(
+      probes.flatMap(({ tool, isInstalled }) => (isInstalled ? [tool] : [])),
+    );
     // Perl backs latexindent but is never shown with a path of its own.
     const commandPath = (name: string) =>
       Effect.map(findCommand(name), (found) => found?.resolvedPath ?? null);
@@ -86,14 +83,16 @@ export function detectLatexSettingsStatus(
     );
     return {
       ...editor,
-      texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some(
-        (compiler) => installed[compiler],
+      texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some((compiler) =>
+        installedTools.has(compiler),
       ),
-      latexdiffInstalled: installed.latexdiff,
-      latexindentInstalled: installed.latexindent && installed.perl,
-      texcountInstalled: installed.texcount,
+      latexdiffInstalled: installedTools.has('latexdiff'),
+      latexindentInstalled:
+        installedTools.has('latexindent') && installedTools.has('perl'),
+      texcountInstalled: installedTools.has('texcount'),
       imageProcessingInstalled:
-        installed.gs && IMAGE_LATEX_TOOLS.some((tool) => installed[tool]),
+        installedTools.has('gs') &&
+        IMAGE_LATEX_TOOLS.some((tool) => installedTools.has(tool)),
       platform,
       ...toolPaths,
       graphicsmagickPath: gm ?? magick,

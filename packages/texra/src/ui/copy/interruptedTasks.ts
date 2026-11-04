@@ -4,14 +4,14 @@
  * every host prints for them. The progress view paints it as a notice above
  * the composer, the TUI above its input; neither blocks typing.
  *
- * The list is the fold's: a root task in the `interrupted` group that this
+ * The list is the view's: a root task in the `interrupted` group that this
  * window can resume. What blocks one (`RunView.resumeBlocked`) comes from
  * the session's follower, and the fix it names has one home, Settings ›
  * Plugins (the TUI's `/plugins`), which the notice links to.
  */
 import {
   formatResultCount,
-  type ResumeBlocker,
+  type ResumeBlocked,
 } from '@texra-ai/harness/transcript';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 
@@ -23,7 +23,7 @@ export interface InterruptedTask {
   readonly stoppedAt: number | null;
   /** "2 of 4 agents done", or null for a task that started none. */
   readonly agents: string | null;
-  readonly blocked: ResumeBlocker | null;
+  readonly blocked: ResumeBlocked | null;
 }
 
 /**
@@ -75,8 +75,8 @@ export const INTERRUPTED_NOTICE = Object.freeze({
 
 /** What a blocked task waits for, in one line: "needs the zotero plugin,
  *  which is off". */
-export function resumeBlockerLine(reason: ResumeBlocker): string {
-  switch (reason.kind) {
+export function resumeBlockerLine(reason: ResumeBlocked): string {
+  switch (reason.blocker) {
     case 'agentMissing':
       return `needs the ${reason.name} agent, which is not installed`;
     case 'pluginOff':
@@ -91,8 +91,8 @@ export function resumeBlockerLine(reason: ResumeBlocker): string {
  * missing agent's file is the user's to restore). Each opens the one home of
  * the plugin switch and its trust review, Settings › Plugins.
  */
-export function resumeBlockerFix(reason: ResumeBlocker): string | null {
-  switch (reason.kind) {
+export function resumeBlockerFix(reason: ResumeBlocked): string | null {
+  switch (reason.blocker) {
     case 'agentMissing':
       return null;
     case 'pluginOff':

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import {
   Cause,
+  type Context,
   Deferred,
   Effect,
   Exit,
@@ -20,14 +21,11 @@ import {
 import { Sessions, WorkspaceRoots } from '@texra-ai/harness';
 import {
   AppState,
-  processLayer,
   type ProcessRuntime,
   type GlobalValues,
-  ToolMissingHandler,
   withProcessServices,
   StateStores,
   withLogChannel,
-  setLogSink,
   ToolAvailability,
   Settings,
 } from '@texra-ai/harness/host';
@@ -40,34 +38,27 @@ import {
   FileSecrets,
   JsonConfigProvider,
   secretsDirectory,
+  setLogSink,
 } from '@texra-ai/harness/node';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import {
-  appSignalStream,
-  emitAppSignal,
-  onAppSignal,
-} from '@eventBus/AppSignals';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import {
   executeVscodeCommand,
   safeExecuteCommand,
-  vscodeToolMissingReporter,
 } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { initializeLatexSupport } from '@frontend/setup';
-import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
+import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
-import { agentDirectoriesLayer } from '@frontend/agents/agentDirectoriesLayer';
-import { announce } from '@frontend/ui/errorHandlingUtils';
+import {
+  announce,
+  showLoggedMessageWithDocs,
+} from '@frontend/ui/errorHandlingUtils';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -79,7 +70,6 @@ import {
 } from '@frontend/comments/inlineComments';
 import { createVsCodeLogSink } from '@frontend/vscode/vscodeLogSink';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
-import { usageLogLayer } from '@telemetry/UsageLogService';
 import { openTexraConfigStores } from '@texra/platform/defaults/nodeStores';
 import { defaultNodeStorageRoot } from '@texra/platform/defaults/nodeStorage';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -92,24 +82,19 @@ import {
   serviceSession,
 } from '@texra/controllers/server/serviceSession';
 import type { ServiceLink } from '@texra/controllers/server/client';
-import { bootstrapHost } from '@texra/controllers/hostBootstrap';
+import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { makeEditorHost, type EditorRegistry } from '@texra/tools/editorHost';
-import { texraPlugins } from '@texra/tools/registry';
+import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
+import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import {
-  formatApprovalPolicy,
-  approvalPolicyLabel,
-} from '@ui/copy/approvalPolicy';
+import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { usageCostLabel } from '@ui/copy/modelAccess';
 import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
-import type { WindowSession } from './progressView/ProgressViewProvider';
 import type { SettingsViewProvider } from './settingsView/SettingsViewProvider';
 
 const EXTENSION_CHANNEL = 'extension';
@@ -132,8 +117,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   context: vscode.ExtensionContext,
   workspaceRoot: string | undefined,
   extras: {
-    /** The editor's tool-missing UI, served as `ToolMissingReporter` below. */
-    readonly toolMissingHandler?: ToolMissingHandler;
     /** The background service this window is a client of: reached once
      *  the runtime that serves its record exists. A window that reaches it
      *  reads the project's state there and opens no project store. */
@@ -150,15 +133,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     defaultNodeStorageRoot(),
     workspaceRoot,
   );
-  // The one credential store every host shares (`~/.texra/secrets/`):
-  // the background service reads the keys this window saves.
-  const secrets = new FileSecrets(
-    secretsDirectory(defaultNodeStorageRoot()),
-    (key) => emitAppSignal('credentialChanged', { key }),
-  );
-  // The editor registry the plugins' editor tools read; the progress view
-  // attaches this window's editor to it.
-  const editors = makeEditorHost();
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -166,32 +140,30 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       : undefined;
   const managed = withForkFailureReporting(
     ManagedRuntime.make(
-      processLayer({
+      texraProcessLayer({
+        name: 'vscode',
+        inquiryPanel: true,
+        // The Comments UI behind the `inline_comment` tool. The provider reads
+        // the controller this host registers at activation, so it is a value
+        // from module load; nothing about it waits on that registration.
+        inlineComments: inlineCommentProvider,
+        // Lean through the Lean 4 extension, not a direct `lake` pool.
+        lean: Layer.effect(
+          LeanLanguageServices,
+          Effect.map(AppState, createVscodeLeanLanguageServices),
+        ),
+        // The editor's commands, extensions and terminal, for the setup tools
+        // and the Lean 4 probe.
+        setup: vscodeSetupPlatform,
         storageRoot: defaultNodeStorageRoot(),
-        plugins: texraPlugins({
-          editors,
-          // The Comments UI behind the `inline_comment` tool. The provider reads
-          // the controller this host registers at activation, so it is a value
-          // from module load; nothing about it waits on that registration.
-          inlineComments: inlineCommentProvider,
-          // Lean through the Lean 4 extension, not a direct `lake` pool.
-          lean: Layer.effect(
-            LeanLanguageServices,
-            Effect.map(AppState, createVscodeLeanLanguageServices),
-          ),
-          // The editor's commands, extensions and terminal, for the setup tools
-          // and the Lean 4 probe.
-          setup: vscodeSetupPlatform,
-        }),
-        secrets,
-        agentDirectories: agentDirectoriesLayer(context.extensionPath),
-        toolMissingReporter: extras.toolMissingHandler,
-        usageLog: usageLogLayer({
+        resourcesPath: path.join(context.extensionPath, 'resources'),
+        agentIssues: showLoggedMessageWithDocs,
+        usageLog: {
           version: extensionVersion,
           editorType: vscode.env.appName || undefined,
           // VS Code's own telemetry setting, read live: it overrides ours.
           hostTelemetryEnabled: () => vscode.env.isTelemetryEnabled,
-        }),
+        },
         // The Output channel owns filtering, so emit every level.
         minimumLogLevel: 'Trace',
         // The window's own reads (credential status, model discovery) see
@@ -207,8 +179,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // at the end of activation), then the host's own resources, then the
   // project scope, and the runtime last of all. The status-bar refresh and
   // the app-signal listeners are fibers of this scope, so they end before
-  // any of those; `statusBarItem` is owned solely by `context.subscriptions`
-  // (see the push near the end of activation), matching the setup pill.
+  // any of those; the task pill's item is owned solely by
+  // `context.subscriptions` (`taskStatusBar`), matching the setup pill.
   yield* Effect.addFinalizer(() => runtime.disposeEffect);
   const projectScope = yield* Scope.make();
   // The window's session closes before the project state it reads.
@@ -219,7 +191,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ).pipe(Effect.ensuring(Scope.close(projectScope, Exit.void))),
   );
   return yield* withProcessServices(
-    runtime,
+    managed,
     Effect.gen(function* () {
       const globalState = yield* AppState;
       const reached: Result.Result<ServiceLink, Error> =
@@ -240,7 +212,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
         yield* openTexraConfigStores(
-          TEXRA_SETTINGS,
+          TEXRA_SETTINGS.catalog,
           defaultNodeStorageRoot(),
           workspaceRoot,
           (message) => {
@@ -260,7 +232,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         ),
       );
       const roots = createNodeWorkspaceRoots({
-        host: 'vscode',
         workspacePath: workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
         storage,
@@ -268,13 +239,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         workspaceState: projectState,
         repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
         globalState,
-      });
-      // The once-per-process installs, in the order the shared bootstrap owns.
-      yield* bootstrapHost({
-        roots,
-        skills: {
-          resourcesPath: path.join(context.extensionPath, 'resources'),
-        },
       });
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
@@ -289,7 +253,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             undefined,
           ),
         );
-      return { secrets, runtime, roots, editors, reached };
+      return { runtime, roots, hosts: yield* HostWindows, reached };
     }),
   );
 });
@@ -311,8 +275,8 @@ type WalkthroughCommandNeedingWorkspace =
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 
-const explainWorkspaceRequired = (extensionPath: string) =>
-  Effect.gen(function* () {
+const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
+  function* (extensionPath: string) {
     const openFolder = 'Open Folder';
     const createSample = 'Create Sample Project';
     const choice = yield* vscodeUi.info(
@@ -324,7 +288,8 @@ const explainWorkspaceRequired = (extensionPath: string) =>
     } else if (choice === createSample) {
       yield* createSampleProjectWithoutWorkspace(extensionPath);
     }
-  });
+  },
+);
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,
@@ -426,11 +391,13 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // A folder's window is a client of the one background service, so its
   // tasks keep running when it closes and other windows and terminals see
   // them. Decided once: a reconnect never re-enters it.
-  const { secrets, runtime, roots, editors, reached } =
-    yield* initVscodePlatform(context, workspaceRoot, {
-      toolMissingHandler: vscodeToolMissingReporter,
+  const { runtime, roots, hosts, reached } = yield* initVscodePlatform(
+    context,
+    workspaceRoot,
+    {
       service: reachExtensionService(context.extensionPath),
-    });
+    },
+  );
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
   // the runtime it was handed instead of reading the global back.
@@ -439,7 +406,7 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, secrets, runtime, roots, editors, reached).pipe(
+    activateWorkspace(context, runtime, roots, hosts, reached).pipe(
       Effect.provideService(Scope.Scope, activationScope),
     ),
   );
@@ -453,10 +420,9 @@ const activateExtension = Effect.fn('activateExtension')(function* (
 /** The workspace path's activation, over the process runtime it just built. */
 const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   context: vscode.ExtensionContext,
-  secrets: FileSecrets,
   runtime: ProcessRuntime,
   roots: WorkspaceRoots,
-  editors: EditorRegistry,
+  hosts: Context.Service.Shape<typeof HostWindows>,
   /** The background service, as the activation reached it once. */
   reached: Result.Result<ServiceLink, Error>,
 ) {
@@ -475,7 +441,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
         ),
       ),
     );
-  let windowSession: WindowSession;
+  let windowSession: GuiSession;
   if (Result.isSuccess(reached)) {
     windowSession = {
       service: reached.success,
@@ -488,10 +454,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   } else {
     const session = yield* (yield* Sessions).open(roots, {
       persistent: true,
-      host: { interruptedTasks: 'offer' },
+      host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
     });
     yield* recordFirstCompletedRun(session);
-    windowSession = { session };
+    windowSession = { session, link: yield* hosts.localLink(session) };
     const reason = `TeXRA runs this window's tasks here only, so other windows and terminals will not see them: ${reached.failure.message}`;
     yield* Effect.logWarning(reason).pipe(withLogChannel(EXTENSION_CHANNEL));
     yield* warn(reason);
@@ -521,11 +487,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const progressViewProvider = new ProgressViewProvider(
     context,
     globalState,
-    secrets,
     runtime,
     roots,
     windowSession,
-    editors,
     (usable) => (usable ? setupPill.hide() : setupPill.show()),
     (target) =>
       Effect.flatMap(Deferred.await(settingsView), (view) =>
@@ -546,7 +510,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   const settingsViewProvider = registerCommands(
     context,
     progressViewProvider,
-    secrets,
     runtime,
     roots,
     session,
@@ -554,7 +517,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   yield* Deferred.succeed(settingsView, settingsViewProvider);
   registerWalkthroughWorkspaceAction(context, true, runtime);
   // Keys another window or the service writes reach this one's surfaces.
-  yield* Effect.forkScoped(secrets.watch());
+  yield* Effect.forkScoped(
+    FileSecrets.watch(secretsDirectory(defaultNodeStorageRoot()), (key) =>
+      emitAppSignal('credentialChanged', { key }),
+    ),
+  );
   yield* registerFileDecorations(context, session);
 
   // VS Code's event emitters don't await async listeners, so we funnel
@@ -611,6 +578,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
                       log: 'Warn',
                       message: 'Opening the Git settings',
                     }),
+                    withLogChannel(EXTENSION_CHANNEL),
                   )
               : Effect.void,
           ),
@@ -623,96 +591,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   yield* Effect.forkScoped(followInlineCriticism(session, roots));
   registerInlineComments(context);
 
-  const statusBarItem = vscode.window.createStatusBarItem(
-    'texra.taskStatus',
-    vscode.StatusBarAlignment.Left,
-  );
-  statusBarItem.name = 'TeXRA Tasks';
-  statusBarItem.command = 'texra.showProgressView';
-  // Shown only while a run is active (`updateStatusBarText`).
-
-  const statusBarUsageTracker = new StatusBarUsageTracker(session);
-  const updateStatusBarTooltip = () => {
-    // The project's persisted policy: what a run here, or the service's
-    // for this project, decides under.
-    const policy = Settings.getConfig<ApprovalPolicy>(
-      roots.config,
-      APPROVAL_POLICY_CONFIG_KEY,
-    );
-    const policyLine = `Approval policy: ${approvalPolicyLabel(policy)} — ${formatApprovalPolicy(policy)}`;
-    const usage = statusBarUsageTracker.totalUsage;
-    const { cost, inputTokens, outputTokens } = usage;
-    if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-      statusBarItem.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;
-      return;
-    }
-    const tip = new vscode.MarkdownString(
-      [
-        policyLine,
-        '',
-        '| TeXRA usage | |',
-        '| --- | ---: |',
-        `| Cost | ${usageCostLabel(usage)} |`,
-        `| Input tokens | ${inputTokens.toLocaleString()} |`,
-        `| Output tokens | ${outputTokens.toLocaleString()} |`,
-        '',
-        '*Click to show TeXRA sessions*',
-      ].join('\n'),
-    );
-    tip.isTrusted = false;
-    statusBarItem.tooltip = tip;
-  };
-  const updateStatusBarText = () => {
-    const count = statusBarUsageTracker.activeRunCount;
-    if (statusBarUsageTracker.activity === 'approval') {
-      statusBarItem.text = '$(bell-dot) TeXRA: Waiting for you';
-      statusBarItem.accessibilityInformation = {
-        label: 'TeXRA tasks, waiting for you',
-      };
-    } else if (count > 1) {
-      statusBarItem.text = `$(loading~spin) TeXRA: ${count} active`;
-      statusBarItem.accessibilityInformation = {
-        label: `TeXRA tasks, ${count} active`,
-      };
-    } else if (count === 1) {
-      statusBarItem.text = '$(loading~spin) TeXRA: Running';
-      statusBarItem.accessibilityInformation = {
-        label: 'TeXRA tasks, one active',
-      };
-    } else {
-      // Nothing running: no pill. The setup pill covers the first run.
-      statusBarItem.hide();
-      return;
-    }
-    statusBarItem.show();
-  };
-
-  yield* Effect.forkScoped(
-    refreshStatusBarOnViewChanges({
-      session,
-      tracker: statusBarUsageTracker,
-      onStatusChanged: () => {
-        updateStatusBarTooltip();
-        updateStatusBarText();
-      },
-      // The tracker projects the running runs' usage totals from the
-      // session view; the tooltip repaints when they change.
-      onUsageChanged: updateStatusBarTooltip,
-    }),
-    { startImmediately: true },
-  );
-  // Paint the policy line immediately; otherwise the tooltip shows the
-  // generic "Show TeXRA Tasks" text until the first status/usage event.
-  updateStatusBarTooltip();
-  // Approval-policy setting updates emit on this signal; the subscription
-  // here is what makes the refresh reachable, so a missed subscribe is a
-  // missing behavior rather than a silent no-op.
-  yield* Effect.forkScoped(
-    onAppSignal('approvalPolicyChanged', updateStatusBarTooltip),
-    { startImmediately: true },
-  );
-
-  context.subscriptions.push(statusBarItem);
+  yield* taskStatusBar(context, session, roots.config);
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`
   // keeps them hidden until every command handler is registered. This must run
@@ -720,7 +599,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   // entries can fire before their handlers exist and produce "command not
   // found" errors.
   yield* executeVscodeCommand('setContext', 'texra.activated', true);
-  const welcomeKey = 'texra.welcomeShown';
+  const welcomeKey = 'welcomeShown';
   if (
     !(yield* Settings.state(
       globalState,

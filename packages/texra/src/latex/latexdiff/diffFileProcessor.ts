@@ -3,7 +3,6 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { readNormalizedFile } from '@texra-ai/harness/node';
 import replacementEngine, {
   logReplacementDiagnostics,
-  type ReplacementConfigRead,
 } from '@replacement/engine';
 import type { FileLocation } from '@texra-ai/harness/schemas';
 import type { ConfigProvider } from '@texra-ai/harness/host';
@@ -56,23 +55,28 @@ const THEBIBLIOGRAPHY_BLOCK =
 const BIBITEM_START = /(?:^|\n)\s*(?:\\DIF(?:add|del)\{)?\\bibitem\b/;
 
 export class DiffFileProcessor {
-  /** The replacement rules' reader over the workspace's own configuration. */
-  private readonly readReplacementConfig: ReplacementConfigRead;
+  /** The configuration of the workspace being diffed, held as data: the
+   *  replacement rules are read from it. */
+  private readonly config: ConfigProvider;
 
-  /** `config`: the configuration of the workspace being diffed, held as data. */
   constructor(config: ConfigProvider) {
-    this.readReplacementConfig = (path) => config.get(path);
+    this.config = config;
   }
 
   // Intentionally does not swallow failures: a read/transform/write error here
   // means the diff output is missing or corrupt, so it must stay in the error
   // channel for the caller (LaTeXdiffService.runDiff*/) to turn into a
   // `{ success: false }` result. Recovering here would falsely report success.
-  processDiffFile(
-    diffFileLocation: FileLocation,
-    editedFileLocation?: FileLocation,
-  ): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  readonly processDiffFile = Effect.fn('DiffFileProcessor.processDiffFile')(
+    { self: this },
+    function* (
+      diffFileLocation: FileLocation,
+      editedFileLocation?: FileLocation,
+    ): Effect.fn.Return<
+      void,
+      PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > {
       const fs = yield* FileSystem.FileSystem;
       const [content, editedContent] = yield* Effect.all(
         [
@@ -91,7 +95,7 @@ export class DiffFileProcessor {
       processedContent = this.processLineByLine(processedContent);
       const replaced = replacementEngine.applyAll(
         processedContent,
-        this.readReplacementConfig,
+        this.config,
       );
       yield* logReplacementDiagnostics(replaced.diagnostics);
       processedContent = replaced.text;
@@ -102,8 +106,8 @@ export class DiffFileProcessor {
         diffFileLocation.absolutePath,
         processedContent,
       );
-    });
-  }
+    },
+  );
 
   private restoreFlattenedBibliography(
     content: string,

@@ -1,53 +1,44 @@
 /**
  * The setting rows of the two external coding-agent plugins, `codex` and
  * `claude-agent`: TeXRA's catalog lists them (`./texraSettings`) and their
- * dashboard cards render them inline (`@texra/tools/pluginCards`). They live here,
+ * dashboard cards render them inline (`PluginCard.settings`). They live here,
  * in a browser-safe module, because the settings view's webview renders them.
  */
 
-// Third-party imports
-import { Effect, Schema } from 'effect';
-
 // Local imports
-import { type SurfacedSettingEntry } from '@texra-ai/harness/schemas';
 import {
   AGENT_CLI_EFFORT_SETTING,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
   CLAUDE_AGENT_MODEL_SETTING,
-  ClaudeAgentPermissionModeSchema,
-  CODEX_APPROVAL_POLICY_DEFAULT,
   CODEX_MODEL_SETTING,
-  CODEX_SANDBOX_MODE_DEFAULT,
-  CodexApprovalPolicySchema,
-  CodexSandboxModeSchema,
 } from '@texra/shared/agentCliSettings';
 import { type PluginSettingRow } from '@texra/shared/settingsView/settingRows';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
 /** The `codex` plugin's repository-scoped keys. */
-export enum CodexStateKey {
-  MODEL = 'texra.codexModel',
-  SANDBOX_MODE = 'texra.codexSandboxMode',
-  REASONING_EFFORT = 'texra.codexReasoningEffort',
-  APPROVAL_POLICY = 'texra.codexApprovalPolicy',
-}
+export const CodexStateKey = Object.freeze({
+  MODEL: 'codexModel',
+  REASONING_EFFORT: 'codexReasoningEffort',
+} as const);
+export type CodexStateKey = (typeof CodexStateKey)[keyof typeof CodexStateKey];
 
 /** The `claude-agent` plugin's repository-scoped keys. */
-export enum ClaudeAgentStateKey {
-  MODEL = 'texra.claudeAgentModel',
-  PERMISSION_MODE = 'texra.claudeAgentPermissionMode',
-  EFFORT = 'texra.claudeAgentEffort',
-}
+export const ClaudeAgentStateKey = Object.freeze({
+  MODEL: 'claudeAgentModel',
+  EFFORT: 'claudeAgentEffort',
+} as const);
+export type ClaudeAgentStateKey =
+  (typeof ClaudeAgentStateKey)[keyof typeof ClaudeAgentStateKey];
 
 /** An external coding agent's row: repo-scoped, on the approval tab and in `/config`. */
 function agentCliSetting(
-  entry: Omit<SurfacedSettingEntry, 'category' | 'slot' | 'surfaces'>,
-): SurfacedSettingEntry {
+  entry: Omit<TexraSettingRow, 'category' | 'slot' | 'surfaces'>,
+): TexraSettingRow {
   return {
     ...entry,
     category: 'ai-agents',
     slot: 'repoState',
     surfaces: { settingsView: 'approval', cliConfig: true },
-  } satisfies SurfacedSettingEntry;
+  } satisfies TexraSettingRow;
 }
 
 /** The `codex` plugin's rows, in its card's order. */
@@ -62,18 +53,6 @@ export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
     }),
   },
   {
-    label: 'Sandbox mode',
-    row: agentCliSetting({
-      key: CodexStateKey.SANDBOX_MODE,
-      schema: CodexSandboxModeSchema.pipe(
-        Schema.withDecodingDefault(Effect.succeed(CODEX_SANDBOX_MODE_DEFAULT)),
-      ),
-      title: 'Codex sandbox mode',
-      description: 'Filesystem access mode used when TeXRA launches Codex.',
-      enumLabels: ['Read-only', 'Workspace write', 'Full access'],
-    }),
-  },
-  {
     label: 'Reasoning effort',
     row: agentCliSetting({
       key: CodexStateKey.REASONING_EFFORT,
@@ -81,25 +60,6 @@ export const CODEX_SETTINGS: readonly PluginSettingRow[] = [
       title: 'Codex reasoning effort',
       description:
         'Reasoning effort for Codex runs, up to what the model takes.',
-    }),
-  },
-  {
-    label: 'Approval policy',
-    row: agentCliSetting({
-      key: CodexStateKey.APPROVAL_POLICY,
-      schema: CodexApprovalPolicySchema.pipe(
-        Schema.withDecodingDefault(
-          Effect.succeed(CODEX_APPROVAL_POLICY_DEFAULT),
-        ),
-      ),
-      title: 'Codex approval policy',
-      description: 'When Codex should ask for approval before risky actions.',
-      enumLabels: [
-        'Auto approve',
-        'Ask when requested',
-        'Ask for untrusted',
-        'Ask on failure',
-      ],
     }),
   },
 ];
@@ -123,25 +83,6 @@ export const CLAUDE_AGENT_SETTINGS: readonly PluginSettingRow[] = [
       title: 'Claude Code reasoning effort',
       description:
         'Reasoning effort for Claude Code, up to what the model takes.',
-    }),
-  },
-  {
-    label: 'Permission mode',
-    row: agentCliSetting({
-      key: ClaudeAgentStateKey.PERMISSION_MODE,
-      schema: ClaudeAgentPermissionModeSchema.pipe(
-        Schema.withDecodingDefault(
-          Effect.succeed(CLAUDE_AGENT_DEFAULT_PERMISSION_MODE),
-        ),
-      ),
-      title: 'Claude Code permission mode',
-      description: 'Permission policy used by Claude Code agent sessions.',
-      enumLabels: [
-        'Prompt for risky actions',
-        'Auto-accept edits',
-        'Bypass all (dangerous)',
-        'Plan only (read-only)',
-      ],
     }),
   },
 ];

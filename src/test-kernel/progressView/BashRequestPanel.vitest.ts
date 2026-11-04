@@ -2,21 +2,22 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { BashRequestPanel } from '@progressView/frontend/components/BashRequestPanel';
-import type { BashPermission, RunId } from '@shared/schemas';
-import type { RuntimeRequest } from '@shared/session/runtimeRequest';
-
-// Local file imports
+import type { BashRequestPanel } from '@ui/progress/components/BashRequestPanel';
 import {
   mountComponent,
   useLitComponentTestDom,
 } from '../settings/litComponentTestUtils';
+import type {
+  BashPermission,
+  RunId,
+  RuntimeRequest,
+} from '@texra-ai/harness/schemas';
 
 // Every card shares one action row (BaseRequestPanel); the bash card is where
 // it guards the most, so these pin the row's keys here.
 describe('bash-request-panel', () => {
   useLitComponentTestDom(
-    () => import('@progressView/frontend/components/BashRequestPanel'),
+    () => import('@ui/progress/components/BashRequestPanel'),
   );
 
   it('rejects on one "n", sends an opened note with it, and never answers on Escape', async () => {

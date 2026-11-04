@@ -5,7 +5,7 @@
 
 import { Box, Text } from 'ink';
 import { useState } from 'react';
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -39,12 +39,7 @@ interface PluginsListFormProps {
    *  availability probes read its folder and configuration. */
   readonly roots: Pick<
     WorkspaceRoots,
-    | 'host'
-    | 'workspace'
-    | 'config'
-    | 'globalState'
-    | 'globalStorage'
-    | 'storageRoot'
+    'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
   >;
   /** The process runtime the probes and writes run on. */
   readonly runtime: ProcessRuntime;
@@ -69,7 +64,7 @@ function rowDescription(row: PluginRow): string {
     pluginRowProblem(row),
     pluginRowUsedBy(row),
   ]
-    .filter((part): part is string => part !== null)
+    .filter(Predicate.isNotNull)
     .join(' · ');
 }
 

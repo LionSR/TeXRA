@@ -25,8 +25,6 @@
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
  * read: a checked-in file that spawns processes needs a trust prompt first.
  */
-import * as path from 'node:path';
-
 import {
   Duration,
   Effect,
@@ -40,29 +38,22 @@ import {
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
-import type { RuntimeTool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
   envDigest,
   jsonSyntaxError,
+  mcpPluginId,
   parseMcpServers,
   type McpServerConfig,
 } from '@common/plugins/mcpServers';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 import { sha256 } from '@utils/core/idHash';
+import { absentReason } from '@utils/files/fsEntryExists';
 
-import {
-  acquireMcpServer,
-  mcpPluginId,
-  mcpServerOfToolName,
-} from './mcpServer';
-
-/** The config file's name inside the user's `~/.texra` directory. */
-const MCP_CONFIG_FILE_NAME = 'mcp.json';
-
-/** The user's MCP config file: `mcp.json` at a storage root. */
-export function mcpConfigPathOf(storageRoot: string): string {
-  return path.join(storageRoot, MCP_CONFIG_FILE_NAME);
-}
+import { acquireMcpServer } from './mcpServer';
 
 const McpConfigFileSchema = Schema.Struct({
   mcpServers: Schema.Record(Schema.String, Schema.Unknown),
@@ -75,10 +66,7 @@ const readConfigText = (
 ): Effect.Effect<string | null, Error> =>
   fs.readFileString(file).pipe(
     Effect.map((text): string | null => text),
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(null),
-    ),
+    Effect.catchIf(absentReason, () => Effect.succeed(null)),
     Effect.mapError(
       (error) =>
         new Error(`Could not read ${file}: ${error.message}`, { cause: error }),
@@ -91,11 +79,13 @@ const readConfigText = (
  * wrong shape is one warning and no servers. The Plugins page lists them
  * read-only from here, and the CLI warns of a broken file at startup.
  */
-export const readMcpConfig = (
+export const readMcpConfig: (
   fs: FileSystem.FileSystem,
   file: string,
-): Effect.Effect<ReturnType<typeof parseMcpServers> | null> =>
-  Effect.gen(function* () {
+) => Effect.Effect<ReturnType<typeof parseMcpServers> | null> = Effect.fn(
+  'readMcpConfig',
+)(
+  function* (fs: FileSystem.FileSystem, file: string) {
     const text = yield* readConfigText(fs, file);
     if (text === null) return null;
     const json = yield* Effect.try({
@@ -114,15 +104,15 @@ export const readMcpConfig = (
       ),
     );
     return parseMcpServers(file, config.mcpServers);
-  }).pipe(
-    Effect.catch((error) =>
-      Effect.succeed({ servers: [], warnings: [error.message] }),
-    ),
-  );
+  },
+  Effect.catch((error) =>
+    Effect.succeed({ servers: [], warnings: [error.message] }),
+  ),
+);
 
 /** What a server answers once up: its tools, or why none. */
 export interface LoadedPluginTools {
-  readonly tools: ReadonlyMap<string, RuntimeTool>;
+  readonly tools: ReadonlyMap<string, ITool<Error, PluginToolServices>>;
   /** Why the server offers no tools (it failed to start). */
   readonly failure?: string;
 }
@@ -151,6 +141,30 @@ export interface McpServerPlugin {
  *  each resolution, and the configuration problems the read found. */
 export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
   readonly plugins: readonly McpServerPlugin[];
+  readonly warnings: readonly string[];
+}>;
+
+/**
+ * An installed plugin a step loads while it is enabled and trusted: its MCP
+ * servers, if any, whose tools the catalog contributes under its one id and every
+ * tool-use run is offered, and the plugin as read, whose
+ * skills the step lists. Its servers are held under its trust digest
+ * (`source.trust.digest`), which changes exactly when what it would start
+ * or ship does, and so replaces them.
+ */
+interface InstalledToolPlugin {
+  readonly id: string;
+  readonly servers: readonly McpServerPlugin[];
+  readonly source: LoadablePlugin;
+}
+
+/**
+ * The installed plugins that load now, read at each step, each with the
+ * servers it starts (none for one that ships only skills), and why each
+ * enabled one that does not load is held back.
+ */
+export type InstalledToolReader = Effect.Effect<{
+  readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
 }>;
 

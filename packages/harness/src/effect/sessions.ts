@@ -6,28 +6,21 @@
  * behind them are `sessionPrograms.ts`'s.
  */
 
-import type { AgentEvent } from '@agent/trace';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
   HostInteractions,
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
-import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { AgentRunListingEntry } from '@agent/storage/runListing';
-import type {
-  AgentDirectoriesPort,
-  ToolMissingHandler,
-} from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import type { ApprovalPolicy } from '@shared/approvalPolicy';
+import type { AgentPlatform } from '@platform/agentPlatform';
+import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
   CommitOrdinal,
   DisplaySessionEvent,
   SessionViewInput,
-  InlinePersona,
   RequestDecision,
+  RunEnd,
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
@@ -36,11 +29,16 @@ import type {
   SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { RequestError } from '@shared/session/runtimeRequest';
-import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type {
+  OutcomeOf,
+  RuntimeRequest,
+  StartRequestSchema,
+} from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
 } from '@shared/session/readonlyViews';
+import type { HostSkillOptions } from '@skills/skillSources';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';
 
@@ -49,33 +47,17 @@ import type {
   ResumeRefused,
   RunFailure,
   ToolsRefused,
-  TraceUnavailable,
 } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 
-/**
- * The process services the package composes, together with the workspace
- * roots the package's runs work in. `nodePlatform()` builds all of them; an
- * embedder supplying its own names its workspace roots beside them.
- */
-export interface AgentPlatform {
-  /** The agent directories this process's `AgentDirectories` service serves. */
-  readonly agentDirectories: AgentDirectoriesPort;
-  /** Surfaces a tool-missing error to the embedder, served as
-   *  `ToolMissingReporter`; absent, a missing-tool probe answers without
-   *  surfacing. */
-  readonly toolMissingHandler?: ToolMissingHandler;
-  readonly roots: WorkspaceRoots;
-  /** The secret store this process's `Secrets` service reads from. */
-  readonly secrets: PlatformSecrets;
-}
-
-/** What an embedder composes the process from: its platform and its
- *  plugins (the harness's built-ins among them). The setting rows its
- *  plugins read travel with the platform's config (`ConfigProvider.catalog`). */
+/** What an embedder composes the process from: its platform, its plugins
+ *  (the harness's built-ins among them) and its skill sources, without
+ *  which it discovers no skills. The setting rows its plugins read travel
+ *  with the platform's config (`ConfigProvider.catalog`). */
 export interface Composition {
   readonly platform: AgentPlatform;
   readonly plugins: readonly Plugin[];
+  readonly skills?: HostSkillOptions;
 }
 
 /**
@@ -83,8 +65,8 @@ export interface Composition {
  * approval, a denial with its reason, or for a retry, `retry` or `cancel`.
  * The session records it as the request's `request.decided`, through the
  * same `request.decide` a {@link Session.request} sends. A handler that
- * fails, throws, or has not answered within ten minutes is a denial, with
- * the cause logged.
+ * fails, throws, answers with a decision the request's kind does not take,
+ * or has not answered within ten minutes is a denial, with the cause logged.
  */
 export type ApprovalHandler = (
   request: PendingRequest,
@@ -106,13 +88,15 @@ export interface OpenOptions {
    * answer until a host with an `approve` handler attaches
    * ({@link Session.attach}), so every request is denied.
    *
-   * `interruptedTasks` handles runs that a closed or crashed process left
-   * unfinished. Both values resume such a run once what it was missing (an
-   * agent, a plugin) is back. `offer` also lists them when the session
-   * opens, and continues them when the `texra.resumeOnOpen` setting is
-   * `auto`.
+   * `interruptedTasks` is what the session does at open with the root
+   * runs a closed or crashed process left unfinished, the one place that
+   * decides it. Both values mark what blocks each one (an agent, a plugin:
+   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
+   * leaves them for the host to list and resume; `resume` continues them,
+   * and a blocked one once it is back. Absent, the session recovers
+   * nothing at open.
    */
-  readonly host?: { readonly interruptedTasks?: 'offer' | 'retry' };
+  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
 }
 
 /**
@@ -127,36 +111,11 @@ export interface SessionHost extends Omit<HostInteractions, 'dispose'> {
   readonly approve?: ApprovalHandler;
 }
 
-/** What starting a run takes: an agent (a name from the agent
- *  directories, or a persona written inline, which the run stores so a
- *  resume needs no file) and the instruction to give it. Everything else
- *  is optional. `config` replaces both with a complete configuration an
- *  application host has already resolved. */
-export type StartInput = (
-  | {
-      readonly agent: string | InlinePersona;
-      readonly instruction: string;
-      readonly model?: string;
-    }
-  | { readonly config: AgentConfig }
-) & {
-  /** The run's id. Absent, one is generated. */
-  readonly runId?: RunId;
-  /** The earlier run this one continues in a chat: the new run starts with
-   *  the approvals the person granted there. */
-  readonly continues?: RunId;
-  /** Run on the configured helper model instead of the selected one. */
-  readonly helperModel?: boolean;
-  /** A stricter approval policy for this run (it can only narrow the
-   *  project's), and whether work it delegates to other agents starts
-   *  approved. */
-  readonly approval?: {
-    readonly policy?: ApprovalPolicy;
-    readonly delegated?: boolean;
-  };
-  /** Keep the run open for follow-up messages after each answer, as a chat
-   *  window does. Absent, the run ends after its first answer. */
-  readonly interactive?: boolean;
+/** What starting a run takes: the start as data (`StartRequestSchema`:
+ *  an agent and its instruction, or a resolved `config`, with the optional
+ *  `runId`, `continues`, `helperModel`, `approval` and `interactive`), and
+ *  the run's own tools. */
+export type StartInput = typeof StartRequestSchema.Type & {
   /** Tools for this run only, made with `defineTool`. A resume needs the
    *  same tools passed again. */
   readonly tools?: readonly ITool[];
@@ -175,11 +134,13 @@ export interface Run {
    *  this names the child you asked for. */
   readonly redirectedFrom?: RunId;
   /**
-   * How the run ended. A failed run fails this with its own
-   * {@link RunFailure}. A finished run's result arrives once the session
-   * view shows its stored outcome, so a view read afterwards includes it.
+   * How this activation ended: the end it stored, whatever its outcome. A
+   * failed run's end carries its classified `error`, a stopped one's is
+   * `cancelled`. It fails with {@link RunFailure} only when the activation
+   * stored no end that can be read. It arrives once the session view shows
+   * that end, so a view read afterwards includes it.
    */
-  readonly result: Effect.Effect<RunEndResult, RunFailure>;
+  readonly result: Effect.Effect<RunEnd, RunFailure>;
   /**
    * The session view while this run lasts: from the first snapshot that
    * shows the run to the first that shows its stored outcome. It cannot
@@ -189,14 +150,14 @@ export interface Run {
   /**
    * What the run does as it does it: streamed text, tool calls, stages,
    * usage. Pipe it through `responseText` for just the answer's text.
-   * Ends when the run ends, and fails with {@link RunFailure} if the run
-   * failed. Read it once, from the moment `start` returns: events wait
-   * for you only briefly, and stopping early stops your reading, not the
-   * run. A reader that comes too late fails with {@link TraceUnavailable}
-   * instead of seeing nothing.
+   * Ends when the run ends, and fails as {@link result} does. Read it as
+   * often as you like and whenever you like: each read is this activation's
+   * events read back from the session, from the activation's start, and
+   * stopping early stops your reading, not the run. A stream that ended
+   * before the read reached it arrives whole, as one chunk.
    */
-  readonly events: Stream.Stream<AgentEvent, RunFailure | TraceUnavailable>;
-  /** Stop the run. */
+  readonly events: Stream.Stream<AgentEvent, RunFailure>;
+  /** Stop the run, as the user's `run.stop` does. */
   readonly interrupt: Effect.Effect<void>;
 }
 
@@ -226,7 +187,9 @@ export interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host.
+   * returned to you and shown to no host: a launch refused for an unknown
+   * model, or for a `config` naming an unknown agent, carries the notice a
+   * host shows for it (`launchNoticeOf` in `./host`).
    */
   readonly start: (
     input: StartInput,
@@ -245,13 +208,15 @@ export interface Session {
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).
-   *  Answered exactly once, with an outcome or a {@link RequestError}. */
-  readonly request: (
-    request: RuntimeRequest,
-  ) => Effect.Effect<Outcome, RequestError>;
-  /** Attach `host` until the caller's scope closes. The most recently
-   *  attached host shows notices, and its `approve` answers the runs'
-   *  approval requests. */
+   *  Answered exactly once, with the outcome its kind is answered with
+   *  (`OutcomeOf`) or a {@link RequestError}. A decision a request's kind
+   *  does not take is `Rejected`. */
+  readonly request: <R extends RuntimeRequest>(
+    request: R,
+  ) => Effect.Effect<OutcomeOf<R['kind']>, RequestError>;
+  /** Attach `host` until the caller's scope closes: it shows notices, and
+   *  its `approve` answers the runs' approval requests. A session has one
+   *  host at a time; attaching a second while one is attached is a defect. */
   readonly attach: (
     host: SessionHost,
   ) => Effect.Effect<void, never, Scope.Scope>;
@@ -283,6 +248,13 @@ export interface LocalSession extends Session {
      * {@link head}, or a snapshot's `cursor`), in write order, then each
      * new one as it is written. `drained`, if given, is updated to the
      * position each read reached.
+     *
+     * Another process's commit reaches this stream and the view on the same
+     * poll of the store (about 250 ms), but the view applies it on its own
+     * update fiber, so `current` read right after an event here can still
+     * be the snapshot before it. A caller that acts on an event and then
+     * needs the snapshot to show it waits on `changes` rather than reading
+     * `current` once.
      */
     readonly events: (
       from: CommitOrdinal,
@@ -309,9 +281,8 @@ export interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the most recently attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been

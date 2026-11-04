@@ -6,18 +6,21 @@
  * subscription instead of the user's API key; `readModelSettings` reads the
  * sign-in from the session store (`@texra-ai/llm/node`).
  */
-import type { ConfigTarget, ConfigWriteFailed } from '@platform/interfaces';
+import {
+  Settings,
+  type ConfigTarget,
+  type ConfigWriteFailed,
+  type SettingsStores,
+} from '@shared/config/settings';
 import type { SubscriptionAuthProvider } from '@shared/model/subscriptionAuth';
-import { Settings } from '@shared/config/settings';
-import type { SettingsStores } from '@shared/config/settings';
 import type { Effect } from 'effect';
 
 /** Config key of each provider's "prefer my subscription" switch. */
 const PREFER_SUBSCRIPTION_KEYS: Readonly<
   Record<SubscriptionAuthProvider, string>
 > = {
-  chatgpt: 'texra.chatgptCodex.preferSubscription',
-  grok: 'texra.xaiGrok.preferSubscription',
+  chatgpt: 'chatgptCodex.preferSubscription',
+  grok: 'xaiGrok.preferSubscription',
 };
 
 /** Whether the user has switched on "prefer my subscription" for `provider`. */

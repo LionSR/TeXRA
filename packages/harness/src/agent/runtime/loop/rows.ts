@@ -15,6 +15,7 @@ import { Effect, SynchronizedRef } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import {
   qualifyAggregateId,
+  type FollowUpDisposition,
   type PositionAt,
   type RunBinding,
   type RunId,
@@ -28,32 +29,59 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../storedTurn';
+import type { TurnResult } from '@texra-ai/llm';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-/** The row making `text` the response shown as final: a row of the run's
- *  history, awaited, never a detached trace row. */
+/** The row making `text` the response shown as final, with the limit that
+ *  ended it early when one did (`turn`, the turn that wrote it): a row of
+ *  the run's history, awaited, never a detached trace row. */
 export const finalizedRows = (
   runId: RunId,
   text: string,
-): RunHistoryDraft[] => [
-  {
-    type: 'response.finalized',
-    aggregateId: qualifyAggregateId('run', runId),
-    text,
-  },
-];
+  turn: TurnResult | null,
+): RunHistoryDraft[] => {
+  const finish = turn?.finishReason;
+  return [
+    {
+      type: 'response.finalized',
+      aggregateId: qualifyAggregateId('run', runId),
+      text,
+      ...((finish === 'length' || finish === 'content-filter') && {
+        cut: finish,
+      }),
+    },
+  ];
+};
 
-/** Where the loop stands; a run's first one opens it. */
+/** Where the loop stands; a run's first one opens it. A turn's end says
+ *  how the turn ended. */
+export function positionRow(
+  runId: RunId,
+  state: Pick<RunState, 'turn'>,
+  at: Exclude<PositionAt, 'halted' | 'turn.end'>,
+): RunHistoryDraft;
+export function positionRow(
+  runId: RunId,
+  state: Pick<RunState, 'turn'>,
+  at: 'turn.end',
+  outcome: Exclude<RunOutcome, 'cancelled'>,
+): RunHistoryDraft;
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,
   at: Exclude<PositionAt, 'halted'>,
+  outcome?: RunOutcome,
 ): RunHistoryDraft {
   return {
     type: 'run.position',
     aggregateId: qualifyAggregateId('run', runId),
-    payload: { family: 'toolUse', at, turn: state.turn },
+    payload: {
+      family: 'toolUse',
+      at,
+      turn: state.turn,
+      ...(outcome !== undefined && { outcome }),
+    },
   };
 }
 
@@ -68,7 +96,12 @@ export function haltedPositionRow(
   return {
     type: 'run.position',
     aggregateId: position.aggregateId,
-    payload: { family, at: 'halted', turn, outcome },
+    payload: {
+      family,
+      at: 'halted',
+      turn,
+      outcome,
+    },
   };
 }
 
@@ -121,15 +154,19 @@ export function configRow(
   };
 }
 
-/** Each arm of a draft union keeps its own required fields. */
+/** Each case of a draft union keeps its own required fields. */
 type Unqualified<T> = T extends unknown ? Omit<T, 'aggregateId'> : never;
 
 /** A display row the loop commits atomically with a run history row: the card a
- *  tool call opens, closes, or both, in the batch that settles it. */
+ *  tool call opens, closes, or both, in the batch that settles it, and the
+ *  stage a script's calls open under. */
 export function displayRow(
   runId: RunId,
   draft: Unqualified<
-    Extract<SessionEventDraft, { type: 'tool.start' | 'tool.end' }>
+    Extract<
+      SessionEventDraft,
+      { type: 'tool.start' | 'tool.end' | 'stage.start' | 'stage.end' }
+    >
   >,
 ): RunHistoryDraft {
   return { ...draft, aggregateId: qualifyAggregateId('run', runId) };
@@ -177,15 +214,17 @@ export const handedDown = Effect.fn('rows.handedDown')(function* (
  *  nested calls are `script/<seq>`. */
 const SCRIPT_CALL_ID = 'script';
 
-/** The `followup.consumed` rows of the run's pending requests of `kind`,
- *  or of every kind. */
-export const consumedRows = (
-  runId: RunId,
-  controls: readonly QueuedFollowUp[],
-  kind?: NonNullable<QueuedFollowUp['control']>['kind'],
-): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
-  controls.flatMap(({ followUpId, control }) =>
-    control !== undefined && (kind === undefined || control.kind === kind)
-      ? [consumedRow(runId, followUpId)]
-      : [],
-  );
+/** The `followup.consumed` rows of the run's pending requests of `kind` (or
+ *  of every kind), each with the `disposition` given. A caller names the run
+ *  and the kind once and records a different disposition per call. */
+export const consumedRows =
+  (runId: RunId, kind?: NonNullable<QueuedFollowUp['control']>['kind']) =>
+  (
+    controls: readonly QueuedFollowUp[],
+    disposition: FollowUpDisposition,
+  ): Extract<RunHistoryDraft, { type: 'followup.consumed' }>[] =>
+    controls.flatMap(({ followUpId, control }) =>
+      control !== undefined && (kind === undefined || control.kind === kind)
+        ? [consumedRow(runId, followUpId, disposition)]
+        : [],
+    );

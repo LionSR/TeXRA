@@ -56,11 +56,12 @@ import {
 } from './handlers';
 import {
   BUILD_VERSION,
-  PROTOCOL_VERSION,
+  PROTOCOL,
   ServiceInfoSchema,
   TexraRpcs,
   type ServiceRecord,
 } from './protocol';
+import type { HostWindows } from './hostWindows';
 
 /** A live service already answers on this storage root's socket. */
 export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunning>()(
@@ -95,12 +96,12 @@ interface ServeOptions {
   readonly idleAfter: Duration.Input;
   /** The host's own stop (a signal): ends the run as a `stop` would. */
   readonly shutdown: Deferred.Deferred<void>;
-  /** Stop and settle every task, run once the service is ending and while
+  /** Stop and finish every task, run once the service is ending and while
    *  its clients are still connected, so they see each task's last rows. */
   readonly settle: Effect.Effect<void>;
 }
 
-/** How long the watch streams get to carry the settled tasks' last rows
+/** How long the watch streams get to carry the finished tasks' last rows
  *  (their framers cut every 16 ms) before the socket closes. */
 const FRAME_FLUSH = '250 millis';
 
@@ -117,7 +118,7 @@ export const serve = Effect.fn('server.serve')(function* (
 ): Effect.fn.Return<
   ServeExit,
   ServiceAlreadyRunning | ServiceListenFailed | ServiceUnavailable,
-  ProcessServices | Sessions | ServiceProjects | Scope.Scope
+  ProcessServices | Sessions | ServiceProjects | HostWindows | Scope.Scope
 > {
   if (process.platform === 'win32')
     return yield* Effect.fail(
@@ -147,7 +148,7 @@ export const serve = Effect.fn('server.serve')(function* (
   const startedAt = yield* Clock.currentTimeMillis;
   const record: ServiceRecord = {
     pid: process.pid,
-    protocol: PROTOCOL_VERSION,
+    protocol: PROTOCOL.version,
     version: BUILD_VERSION,
     socket,
     startedAt,

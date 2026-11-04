@@ -175,34 +175,30 @@ export class GitCloneFailed extends Schema.TaggedError<GitCloneFailed>()(
  * `env`: `extendEnv: false`, because `makeMachineGitEnv` omits the
  * credential-helper keys a merge with `process.env` would bring back.
  */
-const runGit = (
+const runGit = Effect.fn('runGit')(function* (
   args: readonly string[],
   cwd: string,
   env: Readonly<Record<string, string>>,
   input?: string,
-) =>
-  Effect.gen(function* () {
-    const handle = yield* ChildProcess.make('git', [...args], {
-      cwd,
-      env: { ...makeMachineGitEnv(), ...env },
-      extendEnv: false,
-      stdin:
-        input === undefined
-          ? 'ignore'
-          : Stream.make(new TextEncoder().encode(input)),
-      stdout: 'ignore',
-      detached: false,
-      forceKillAfter: '5 seconds',
-    });
-    const [stderr, code] = yield* Effect.all(
-      [
-        handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
-        handle.exitCode,
-      ],
-      { concurrency: 'unbounded' },
-    );
-    return { stderr: stderr.trim(), code };
-  }).pipe(Effect.scoped);
+) {
+  const handle = yield* ChildProcess.make('git', [...args], {
+    cwd,
+    env: { ...(yield* makeMachineGitEnv), ...env },
+    extendEnv: false,
+    stdin:
+      input === undefined
+        ? 'ignore'
+        : Stream.make(new TextEncoder().encode(input)),
+    stdout: 'ignore',
+    detached: false,
+    forceKillAfter: '5 seconds',
+  });
+  const [stderr, code] = yield* Effect.all(
+    [handle.stderr.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
+    { concurrency: 'unbounded' },
+  );
+  return { stderr: stderr.trim(), code };
+}, Effect.scoped);
 
 /**
  * git translates its messages; the clone runs in the C locale so its stderr
@@ -300,8 +296,8 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
             .showCloneSucceeded(label)
             .pipe(Effect.as<OverleafCloneOutcome>({ status: 'success' })),
         ),
-        Effect.catch((error) =>
-          Effect.gen(function* () {
+        Effect.catch(
+          Effect.fnUntraced(function* (error) {
             const authError = isCloneAuthError(error);
             if (authError) {
               yield* ports.secrets.delete(overleafTokenSpec(remote).tokenKey);

@@ -1,17 +1,17 @@
 /**
  * A tool call made under a run, as only the harness's built-in tools read
- * it (`RunCall`): the run's step and callbacks, the response and attempt
- * the call belongs to, the script that issued it, and, for a `script` call,
- * the door its guest calls the run's tools through. `RunCall` is a
- * `Context.Reference` whose default is null, so a standalone host
- * invocation outside a run provides nothing. The public contract every tool
- * reads, the run included, is `ToolContext`; an app's tool reads nothing
- * else. The read-before-edit helpers here (`recordToolFileRead`,
- * `requireFileReadForEdit`) read the run's `fileService.readFiles` through
- * `ToolContext`, so any tool may use them.
+ * it (`RunCall`): the run's step and callbacks, the session's runs, the response and attempt the call belongs to, the script that
+ * issued it, and, for a `script` call, the door its guest calls the run's
+ * tools through. `RunCall` is a `Context.Reference` whose default is null,
+ * so a standalone host invocation outside a run provides nothing. The
+ * public contract every tool reads, the run included, is `ToolContext`; an
+ * app's tool reads nothing else. `requireFileReadForEdit` here answers an
+ * edit's read prerequisite from the run's facts (`RunCallShape.facts`), so
+ * a resumed run counts the reads its rows record.
  */
 import {
   Context,
+  type Deferred,
   Effect,
   Schema,
   type Scope,
@@ -28,19 +28,21 @@ import {
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
-  type AgentDelegationScope,
-  type PermissionPayload,
+  type PluginRequest,
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
 } from '@shared/schemas';
+import type { RunFacts } from '@shared/session/runFacts';
 import type { CellError } from '@shared/session/runHistory';
 import { errorResult } from '@tools/core/result';
-import type { RunFileService } from '@utils/files/runStorage';
 
 import type { InvokeError } from './ModelInvoker';
+import type { SessionServices } from './rootLaunch';
+import type { PluginToolServices } from './ToolServices';
 import type { BoundModel } from './modelAccess/ModelAccess';
 import type { AgentRunShape, ToolPolicy } from './run/AgentRun';
 import type {
@@ -112,13 +114,6 @@ export interface ScriptDoor {
   ) => Effect.Effect<ToolResultPayload['result'], ScriptDiverged | InvokeError>;
   /** The sandbox delivered `seq`'s settlement to the guest. */
   readonly delivered: (seq: number) => Effect.Effect<void>;
-  /**
-   * Settles, as skipped, every call the script issued that has no result
-   * yet. Run once the guest has ended and no issued call runs any more, and
-   * before the script's own result commits, so no row of the script's stays
-   * open behind it: a resume then finds nothing to replay or re-adopt.
-   */
-  readonly settleAbandoned: Effect.Effect<void, InvokeError>;
 }
 
 /**
@@ -134,13 +129,14 @@ export interface ScriptScope extends ScriptSource {
     readonly { readonly toolName: string; readonly input: unknown }[]
   >;
   /**
-   * The value the script's calls share under `key`: the first call to ask
+   * The value the script's calls share under `key`, a key its caller
+   * declares once with the value's type and failure: the first call to ask
    * makes it, and every later one, concurrent or not, gets what that made
    * (its failure included). Held in memory for the script's run in this
    * process; what must outlive a restart is made from rows.
    */
   readonly shared: <A, E, R>(
-    key: string,
+    key: Context.Key<unknown, Deferred.Deferred<A, E>>,
     make: Effect.Effect<A, E, R>,
   ) => Effect.Effect<A, E, R>;
 }
@@ -148,10 +144,11 @@ export interface ScriptScope extends ScriptSource {
 /**
  * The rest of what a plugin's tool reads of its run (`ToolRun`, whose id
  * the core declares): exactly the fields the app's tools read. Its policy,
- * configuration, model, delegation scope, scope (a tool that starts
- * something the run should stop registers that stop there), opening,
+ * configuration (which holds its delegation scope), model, scope (a tool that
+ * starts something the run should stop registers that stop there), opening,
  * trace and stage (what a plugin's own stages nest under); and its run
- * files, which hold what the run read (`fileService.readFiles`). Never its
+ * files (its storage directory, with the snapshots and mirrors it
+ * prepares). Never its
  * session: a plugin reaches the session's runs through `ChildRuns`, and
  * shows the person something through its call's `requests.present`.
  * What only the built-ins read is `BuiltinRun`.
@@ -161,7 +158,6 @@ declare module '../core/tools/ToolTypes.js' {
     readonly toolPolicy: ToolPolicy;
     readonly config: AgentConfig;
     readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
-    readonly delegationAgentScope?: AgentDelegationScope | null;
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;
     readonly logger: AgentTrace;
@@ -170,14 +166,18 @@ declare module '../core/tools/ToolTypes.js' {
   }
   interface CallRequests {
     /**
-     * Open a request the call does not wait on, under `requestId`: its
-     * `request.opened` commits on the run's history, and the plugin owning
-     * its kind takes the decision when it lands (`Plugin.decision`). A
-     * failed commit is not proof that nothing landed: the run's rows decide.
+     * Open a plugin's request the call does not wait on, under
+     * `requestId`: its `request.opened` commits on the run's history, with
+     * `data` stored as the JSON it writes, and the plugin's decision hook
+     * takes each answer when it lands (`Plugin.decision`). A failed commit
+     * is not proof that nothing landed: the run's rows decide.
      */
     readonly post: (
       requestId: string,
-      payload: PermissionPayload,
+      request: Omit<PluginRequest, 'blocksCaller' | 'data'> & {
+        readonly blocksCaller: false;
+        readonly data: Pick<PluginRequest['data'], 'requestId' | 'runId'>;
+      },
     ) => Effect.Effect<void, CellError>;
     /** Show the person something on the session's host (a file opened
      *  beside what they are looking at, a notice), answered by nothing. */
@@ -189,15 +189,19 @@ declare module '../core/tools/ToolTypes.js' {
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with its session, its open step and its host
- *  callbacks. */
-type BuiltinRun = ToolRun &
-  Pick<AgentRunShape, 'session' | 'steps' | 'callbacks'>;
+ *  sees (`ToolRun`), with its open step and its host callbacks. A built-in
+ *  reads its session's owners from its run's context. */
+type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {
   /** The run the call works for, as the built-ins read it. */
   readonly run: BuiltinRun;
+  /** The session's services, picked where the loop dispatched the call: a
+   *  built-in runs over them, and so do the doors a plugin's tool calls
+   *  through (its child runs, an edit's review); no plugin tool is served
+   *  them, a plugin's reaches the session's runs through `ChildRuns`. */
+  readonly session: Context.Context<SessionServices>;
   /** The response whose call this is; a script's calls are its script's.
    *  A provider's call ids are unique within one response only. */
   readonly responseId: string;
@@ -209,11 +213,25 @@ export interface RunCallShape {
   /** The card this call's rows open under: what a run the call launches
    *  names as its `parent.call.card`. */
   readonly logId: string;
+  /** The run's facts as its rows stand when read (`RunFacts`): what it has
+   *  read and edited so far, a sibling call's settled result included,
+   *  from the loop's cell, so a resumed run answers as the live one did. */
+  readonly facts: Effect.Effect<RunFacts>;
   /** The script that issued this call; null for a call a response issued. */
   readonly script: ScriptScope | null;
   /** For a `script` call, the door its guest calls the run's tools through,
-   *  built on the first `yield*`; null for any other call. */
-  readonly scriptCalls: Effect.Effect<ScriptDoor> | null;
+   *  built in the scope that yields it, which owns the calls the guest
+   *  issues: an end of it other than an interrupt settles each still without
+   *  a result as skipped, before the script's own result commits; an
+   *  interrupt leaves the rows for the resume. Null for any other call. */
+  readonly scriptCalls: Effect.Effect<
+    ScriptDoor,
+    never,
+    PluginToolServices | SessionServices
+  > | null;
+  /** What the call's `PreToolUse` hooks said, for the review its body
+   *  opens (an edit, a plan, a delegation proposal); absent: no answer. */
+  readonly hook?: 'allow' | 'ask';
 }
 
 /** The current call's place in its run, which the run loop provides beside
@@ -223,14 +241,6 @@ export const RunCall = Context.Reference<RunCallShape | null>(
   '@texra-ai/harness/agent/RunCall',
   { defaultValue: () => null },
 );
-
-/** The session of a call's run, for the harness's own helpers a plugin's
- *  tool may call (an edit's approval, which `accept_run_files` asks for);
- *  a plugin's tool reads no session. */
-export const sessionOf = (run: ToolRun): AgentRunShape['session'] =>
-  // The run on every call the runtime makes is its `AgentRun`.
-  // cast: `toolUseDispatch` puts the `AgentRun`, which has its session.
-  (run as BuiltinRun).session;
 
 /** The run the current call works for; none for a standalone host call. */
 export const callerRun: Effect.Effect<ToolRun | undefined, never, ToolContext> =
@@ -282,37 +292,26 @@ export const requireToolRun = Effect.fn('RunCall.requireToolRun')(function* (
   return { ...call, ...runCall };
 });
 
-/** Count `path` as read by the current call's run: a later edit of it then
- *  needs no fresh read. */
-export const recordToolFileRead = Effect.fn('RunCall.recordFileRead')(
-  function* (path: string): Effect.fn.Return<void, never, ToolContext> {
-    const files = (yield* ToolContext).env.run?.fileService;
-    // Recording a read is this helper's job alone: plugins see it read-only.
-    // cast: what the run read is a Set; the contract shows it read-only.
-    if (path) (files?.readFiles as Set<string> | undefined)?.add(path);
-  },
-);
-
 /** The refusal an edit of an existing file gets when the run never read it,
- *  or null: an edit needs a read first, which the run's files record. */
+ *  or null. `path` is the file as the results spell it (`reads`,
+ *  `edits[].path`): the run has read it once a settled call's result names
+ *  it, in this process or in the one that ran the read (`RunCallShape.facts`);
+ *  outside a run nothing has. */
 export const requireFileReadForEdit = Effect.fn('RunCall.requireReadForEdit')(
   function* (
     path: string,
     exists: boolean,
     errorMessage?: string,
-    /** How the card names the file; the tracker keys on `path`. */
-    displayPath: string = path,
-  ): Effect.fn.Return<ToolResult | null, never, ToolContext> {
-    const { run } = (yield* ToolContext).env;
-    if (!exists || run?.fileService.readFiles.has(path) === true) {
-      return null;
-    }
+  ): Effect.fn.Return<ToolResult | null> {
+    if (!exists) return null;
+    const call = yield* RunCall;
+    if (call !== null && (yield* call.facts).read.includes(path)) return null;
     return errorResult(
       errorMessage ??
         'Edits to existing files require a prior read in this session. Please call read_file first.',
       {
         // Not "Read …": the card would read as a read_file call.
-        summary: `Not edited: ${displayPath} was not read first`,
+        summary: `Not edited: ${path} was not read first`,
         diagnostics: { reason: 'unread-file', path },
       },
     );

@@ -10,7 +10,7 @@ import { Effect } from 'effect';
 
 import { type ApiKeyProviderId, apiProviderOfSecretName } from '@texra-ai/llm';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { onAppSignal } from '@eventBus/AppSignals';
+import { onAppSignal, type AppSignals } from '@texra-ai/harness/host';
 import {
   ProviderKeyActionFailed,
   SettingsProfileKeyController,
@@ -68,11 +68,12 @@ export const promptForCliProviderApiKey = (
  * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens)
  * are ignored.
  */
-export const followCliCredentialChanges: Effect.Effect<void> = onAppSignal(
-  'credentialChanged',
-  ({ key }) => {
-    if (apiProviderOfSecretName(key) !== undefined) {
-      bumpCodexPreferenceVersion();
-    }
-  },
-);
+export const followCliCredentialChanges: Effect.Effect<
+  void,
+  never,
+  AppSignals
+> = onAppSignal('credentialChanged', ({ key }) => {
+  if (apiProviderOfSecretName(key) !== undefined) {
+    bumpCodexPreferenceVersion();
+  }
+});

@@ -7,7 +7,7 @@
     "npm:@supabase/postgrest-js@2.115.0": "2.115.0",
     "npm:@supabase/realtime-js@2.115.0": "2.115.0",
     "npm:@supabase/storage-js@2.115.0": "2.115.0",
-    "npm:effect@4.0.6": "4.0.6",
+    "npm:effect@4.1.0": "4.1.0",
     "npm:llm-zoo@2.0.0": "2.0.0"
   },
   "jsr": {
@@ -58,8 +58,8 @@
         "tslib"
       ]
     },
-    "effect@4.0.6": {
-      "integrity": "sha512-Tc3mkzuLR6t6P9dhLt0D2GrxYtmU5td4XEJEiXCmILz53IRIfJyHsKZWjTA3xEjiwpNTtXBgI4iqYPxMztBDrw=="
+    "effect@4.1.0": {
+      "integrity": "sha512-lGx2MJJyrXA8RZb2UpQ/0Nkb5Utaimby7oD92+18noBxLPE85IFOvptdzau8dvcxAOwfwHo9iqapbKeFzqQM/Q=="
     },
     "iceberg-js@0.8.1": {
       "integrity": "sha512-1dhVQZXhcHje7798IVM+xoo/1ZdVfzOMIc8/rgVSijRK38EDqOJoGula9N/8ZI5RD8QTxNQtK/Gozpr+qUqRRA=="
@@ -74,7 +74,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@supabase/supabase-js@2.115.0",
-      "npm:effect@4.0.6",
+      "npm:effect@4.1.0",
       "npm:llm-zoo@2.0.0"
     ]
   }

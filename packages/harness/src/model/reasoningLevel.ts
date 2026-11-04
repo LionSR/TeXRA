@@ -1,37 +1,36 @@
 import { Effect, Result, Schema } from 'effect';
-import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
-import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
 import {
   acceptedEfforts,
   BACKEND_PROTOCOLS,
-  chooseReasoning,
-  CODEX_ROUTE_EFFORTS,
   type BackendProviderId,
+  chooseReasoning,
+  type ModelConfig,
   type ModelOrigin,
   type ModelRoute,
   type ReasoningChoice,
+  ReasoningEffort,
+  ReasoningEffortSchema,
   type ReasoningRequest,
   wireEffort,
 } from '@texra-ai/llm';
-import type { StateStore } from '@platform/interfaces';
+import { Settings, type StateStore } from '@shared/config/settings';
 import { ModelBackendSchema, type ModelBackend } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { Settings } from '@shared/config/settings';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /**
  * The user's per-model reasoning effort overrides, in llm-zoo's vocabulary,
  * keyed by model reference (`provider/id`).
  *
- * This is the one boundary between the persisted `texra.reasoningLevels`
+ * This is the one boundary between the persisted `reasoningLevels`
  * record and the runtime: the stored strings are parsed here, so no caller
  * carries a bare string and an entry that is not an effort is reported rather
  * than quietly disappearing. Reads only; the write path keeps the stored
  * record verbatim so an unreadable entry is never dropped from storage.
  */
-export function reasoningEffortOverrides(state: StateStore) {
-  return Effect.gen(function* () {
+export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
+  function* (state: StateStore) {
     const stored = yield* Settings.state(
       state,
       GlobalStateKey.REASONING_LEVELS,
@@ -55,8 +54,8 @@ export function reasoningEffortOverrides(state: StateStore) {
       );
     }
     return overrides;
-  });
-}
+  },
+);
 
 /** The protocol each backend serves a run on. */
 export const PROTOCOL_BY_BACKEND: Readonly<
@@ -70,68 +69,25 @@ type _EveryBackendProviderIsStored = AssertNever<
 >;
 
 /**
- * The backend a fresh run on `route` serves `config` from: the model's own
- * provider on a direct route (any credential), or the validation model.
+ * The backend a fresh run serves `config` from off the validation model: the
+ * model's own provider, whatever credential its route bills.
  */
 export function servingBackend(
   config: Pick<ModelConfig, 'provider'>,
-  route: { readonly kind: ModelRoute['kind'] },
 ): ModelBackend | undefined {
-  if (route.kind === 'validation') return 'validation';
   return Result.getOrUndefined(
     Schema.decodeUnknownResult(ModelBackendSchema)(config.provider),
   );
 }
 
-/** The route a request is bound on, as far as reasoning is concerned. */
-export interface ReasoningRoute {
-  readonly protocol: string;
-  readonly codexSubscription: boolean;
-}
-
 /**
- * The reasoning route of a run on `backend` over the decided `route`: the
- * protocol the backend serves, and whether the Codex subscription carries
- * it. The bind, a model switch and the model options all read it here.
+ * The route a run's reasoning is decided on. The validation model carries
+ * every control the model has, so it names no llm route.
  */
-export function reasoningRouteOf(
-  route: { readonly kind: ModelRoute['kind'] },
-  backend: ModelBackend,
-): ReasoningRoute {
-  return {
-    protocol: PROTOCOL_BY_BACKEND[backend],
-    codexSubscription: route.kind === 'chatgpt-subscription',
-  };
-}
+type ReasoningRoute = { readonly kind: ModelRoute['kind'] | 'validation' };
 
-/**
- * The model's reasoning as this route can control it. Gemini's Interactions
- * request and Kimi's Responses request have no switch that turns thinking
- * off; DashScope's has none that turns Qwen's thinking on. The policy then
- * refuses a request the route cannot carry and records what really happens.
- */
-function routeReasoning(
-  config: Pick<ModelConfig, 'provider' | 'reasoning'>,
-  route: ReasoningRoute,
-): ModelConfig['reasoning'] {
-  const { reasoning } = config;
-  if (reasoning === undefined) return undefined;
-  const responses = route.protocol === 'openai-responses';
-  if (responses && config.provider === ModelProvider.DASHSCOPE) {
-    return undefined;
-  }
-  if (
-    route.protocol === 'google-interactions' ||
-    (responses && config.provider === ModelProvider.MOONSHOT)
-  ) {
-    return { ...reasoning, off: undefined };
-  }
-  return reasoning;
-}
-
-/** The levels the Codex subscription narrows a route to; none elsewhere. */
-const routeCeiling = (route: ReasoningRoute) =>
-  route.codexSubscription ? CODEX_ROUTE_EFFORTS : undefined;
+const llmRoute = (route: ReasoningRoute) =>
+  route.kind === 'validation' ? undefined : { kind: route.kind };
 
 /** {@link decideReasoning} as a value: the choice, or why it is refused. */
 function chooseOnRoute(
@@ -142,14 +98,7 @@ function chooseOnRoute(
 ): Result.Result<ReasoningChoice, Error> {
   return Result.try({
     try: () =>
-      chooseReasoning(
-        { ...config, reasoning: routeReasoning(config, route) },
-        request,
-        {
-          userEffort,
-          routeEfforts: routeCeiling(route),
-        },
-      ),
+      chooseReasoning(config, request, { userEffort, route: llmRoute(route) }),
     catch: ensureError,
   });
 }
@@ -157,9 +106,9 @@ function chooseOnRoute(
 /**
  * The run's reasoning decision: the model string's own request, else the
  * user's saved level for the model, else the default, for the reasoning the
- * route can control; the Codex subscription narrows the levels. A level the
- * model lacks is substituted (the choice's `note` says so); a request the
- * route cannot carry fails.
+ * route can control (`chooseReasoning`'s route rules). A level the model
+ * lacks is substituted (the choice's `note` says so); a request the route
+ * cannot carry fails.
  */
 export function decideReasoning(
   config: ModelConfig,
@@ -217,21 +166,20 @@ export function routeReasoningOf(input: {
   readonly route: ReasoningRoute;
 }): RouteReasoning | undefined {
   const { config, request, saved, route } = input;
-  const sent = sentOf(config, chooseOnRoute(config, request, saved, route));
+  const chosen = chooseOnRoute(config, request, saved, route);
+  const sent = sentOf(config, chosen);
   const fallback =
     saved === undefined
       ? sent
       : sentOf(config, chooseOnRoute(config, request, undefined, route));
-  const reasoning = routeReasoning(config, route);
-  if (reasoning === undefined && !('refused' in sent)) return undefined;
-  const ceiling = routeCeiling(route);
-  // `none` turns thinking off rather than naming a level, so no ceiling
-  // applies to it (the policy's own reading).
-  const efforts = acceptedEfforts({ reasoning }).filter(
-    (effort) =>
-      effort === ReasoningEffort.NONE ||
-      ceiling === undefined ||
-      ceiling.includes(effort),
-  );
+  const efforts = acceptedEfforts(config, llmRoute(route));
+  // The model does not reason on the route: no level, and no thinking.
+  if (
+    efforts.length === 0 &&
+    Result.isSuccess(chosen) &&
+    !chosen.success.thinking
+  ) {
+    return undefined;
+  }
   return { efforts, sent, fallback };
 }

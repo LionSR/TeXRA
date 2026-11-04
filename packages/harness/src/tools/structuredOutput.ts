@@ -8,7 +8,7 @@ import {
 } from 'effect';
 
 // Internal imports
-import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { ITool } from '@agent/core/tools/ToolTypes';
 import {
   convertToolSchema,
   type JSONSchemaObject,
@@ -130,7 +130,7 @@ function assertSafeSandboxSchema(schema: unknown): void {
     }
     for (const key of SUBSCHEMA_RECORD_KEYS) {
       const schemas = record[key];
-      if (schemas !== null && typeof schemas === 'object') {
+      if (Predicate.isObjectOrArray(schemas)) {
         for (const name of Object.keys(schemas)) {
           if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
             throw new Error(
@@ -185,7 +185,7 @@ export function normalizeStructuredOutputSchema(
 /**
  * Build a terminal tool from a normalized structured-output schema.
  *
- * The guarantee is the tool layer's own spine: `defineTool` validates
+ * The guarantee is the tool layer's own guarantee: `defineTool` validates
  * the model's call before `execute` runs, and an invalid call surfaces a
  * `SchemaError` the model self-corrects. `execute` then enforces the persisted
  * JSON-value contract and returns it as the result's `value`: the settled

@@ -1,4 +1,5 @@
-import { quote } from 'shell-quote';
+import { Result } from 'effect';
+import * as CommandLine from 'effect/process/CommandLine';
 
 import {
   CLI_COMPLETION_SHELLS,
@@ -12,6 +13,10 @@ import {
   type CompletionFlag,
   type CompletionFlagVariant,
 } from './completionCommandTree';
+
+/** Words of the script; the command tree's names hold no NUL to fail on. */
+const shellWords = (words: readonly string[]): string =>
+  words.map((word) => Result.getOrThrow(CommandLine.quote(word))).join(' ');
 
 function zshFlagValueSuffix(
   flag: CompletionFlag,
@@ -69,15 +74,15 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
     .map((command) => {
       const key = commandKey(command.path);
       const subs = command.subcommands.length
-        ? `_values 'subcommands' ${quote(command.subcommands)}`
+        ? `_values 'subcommands' ${shellWords(command.subcommands)}`
         : 'true';
       const positionalSpec = specsByPath[key];
       const specs = [
         ...command.flags.flatMap(zshFlagSpec),
         ...(positionalSpec ? [positionalSpec] : []),
       ];
-      const args = specs.length ? `_arguments ${quote(specs)}` : 'true';
-      return `${quote([key])}) ${subs}; ${args} ;;`;
+      const args = specs.length ? `_arguments ${shellWords(specs)}` : 'true';
+      return `${shellWords([key])}) ${subs}; ${args} ;;`;
     })
     .join('\n    ');
   const rootSpecs = [
@@ -97,7 +102,7 @@ _texra() {
 
   case "$command_path" in
     ${pathCases}
-    *) _arguments ${quote(rootSpecs)} ;;
+    *) _arguments ${shellWords(rootSpecs)} ;;
   esac
 }
 

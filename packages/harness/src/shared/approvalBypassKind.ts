@@ -9,7 +9,6 @@
 import { Schema } from 'effect';
 
 import type { ApprovalPolicy } from './approvalPolicy';
-import type { RunId, SessionEvent } from './schemas';
 
 export const APPROVAL_BYPASS_KINDS = ['bash', 'toolEdit', 'superYolo'] as const;
 
@@ -184,27 +183,6 @@ export function grantsKept<Id>(
   return { ...inheritedGrants(seeded, runId), goal: own.goal };
 }
 
-/** {@link grantsKept} from a child's own rows, its `run.start` and newest
- *  `approval.policy`; `undefined` for a child with no start (unborn). */
-export function grantsKeptFromRows(
-  source: ApprovalGrantSource<RunId>,
-  runId: RunId,
-  parentId: RunId,
-  rows: readonly SessionEvent[],
-): ApprovalGrants | undefined {
-  const start = rows.find((row) => row.type === 'run.start');
-  if (start?.type !== 'run.start') return undefined;
-  const own = rows.findLast((row) => row.type === 'approval.policy');
-  return grantsKept(
-    source,
-    runId,
-    start.parent?.id ?? parentId,
-    own?.type === 'approval.policy'
-      ? own.snapshot
-      : (start.approvalPolicy ?? NO_APPROVAL_GRANTS),
-  );
-}
-
 /** The human values a run's ancestry gives it, as grants of its own: what a
  *  run keeps when its edge goes, or a conversation's next round starts
  *  with. A goal's grant is not carried: it ends with its goal. */
@@ -223,4 +201,24 @@ export function inheritedGrants<Id>(
   }
   const limit = policyLimit(source, runId);
   return { own, goal: [], ...(limit !== undefined && { limit }) };
+}
+
+/** The grant source over runs' rows: each run's parent edge and its grants,
+ *  none for a run whose rows carry none. */
+export function grantSource<Id>(
+  rows: ReadonlyMap<
+    Id,
+    {
+      readonly parent: { readonly id: Id } | null;
+      readonly grants: ApprovalGrants | null;
+    }
+  >,
+): ApprovalGrantSource<Id> {
+  const runs = new Map<Id, { parentId: Id | null }>();
+  const policy = new Map<Id, ApprovalGrants>();
+  for (const [id, own] of rows) {
+    runs.set(id, { parentId: own.parent?.id ?? null });
+    policy.set(id, own.grants ?? NO_APPROVAL_GRANTS);
+  }
+  return { runs, policy };
 }

@@ -10,16 +10,18 @@ import {
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { providerEndpointKey } from '@texra-ai/harness/schemas';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import type { SubscriptionUsageSnapshots } from '@texra/shared/model/subscriptionUsage';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
-import { TickerController } from '@texra/shared/litControllers/TickerController';
 import type {
   ProviderKeyStatus,
   ProviderSetting,
 } from '@texra/shared/settingsView/profileViewMessages';
 import { CODING_PLAN_BY_API_PROVIDER } from '@texra/shared/model/codingPlans';
-import { ANTHROPIC_PLAN_CREDITS } from '@ui/copy/modelAccess';
+import { TickerController } from '@ui/litControllers/TickerController';
+import { planCreditsHint, type PlanCredits } from '@ui/copy/modelAccess';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -35,8 +37,6 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import './SubscriptionUsageRow';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 @customElement('provider-key-list')
 export class ProviderKeyList extends LitElement {
@@ -126,7 +126,8 @@ export class ProviderKeyList extends LitElement {
               .value=${entry.customEndpoint}
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
-                const value = (e.target as WaInput).value?.trim() ?? '';
+                if (!(e.target instanceof WaInput)) return;
+                const value = e.target.value?.trim() ?? '';
                 const key = providerEndpointKey(entry.provider);
                 if (key) postStateSetting(key, value);
               }}
@@ -155,15 +156,16 @@ export class ProviderKeyList extends LitElement {
   }
 
   private renderProviderSetting(setting: ProviderSetting): TemplateResult {
+    const { warningUrl } = setting;
     const warningLink =
-      setting.warningUrl && setting.warningUrlLabel
+      warningUrl && setting.warningUrlLabel
         ? html` <wa-button
             class="provider-setting-link btn-ghost is-link"
             appearance="plain"
             size="s"
             @click=${() =>
               postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
-                url: setting.warningUrl!,
+                url: warningUrl,
               })}
           >
             ${setting.warningUrlLabel}
@@ -180,8 +182,10 @@ export class ProviderKeyList extends LitElement {
       <div class="provider-setting provider-setting--block">
         <wa-switch
           ?checked=${setting.value}
-          @change=${(e: Event) =>
-            postStateSetting(setting.key, (e.target as WaSwitch).checked)}
+          @change=${(e: Event) => {
+            if (e.target instanceof WaSwitch)
+              postStateSetting(setting.key, e.target.checked);
+          }}
         >
           ${setting.label}
         </wa-switch>
@@ -193,6 +197,7 @@ export class ProviderKeyList extends LitElement {
 
   private renderRow(entry: ProviderKeyStatus): TemplateResult {
     const isExpanded = this.expandedProvider === entry.provider;
+    const planCredits = planCreditsHint(entry.provider);
 
     return html`
       <section class="settings-disclosure" role="listitem">
@@ -221,9 +226,8 @@ export class ProviderKeyList extends LitElement {
           </div>
         </div>
         ${
-          entry.provider === 'anthropic' &&
-          (isExpanded || entry.status !== 'set')
-            ? renderPlanCreditsHint()
+          planCredits && (isExpanded || entry.status !== 'set')
+            ? renderPlanCreditsHint(planCredits)
             : nothing
         }
         ${isExpanded ? this.renderDetails(entry) : nothing}
@@ -258,21 +262,23 @@ export class ProviderKeyList extends LitElement {
   }
 }
 
-/** Under the Anthropic row while it has no key or is expanded: a Max or Team
- *  plan's monthly API credits are spent through the key this row sets. */
-function renderPlanCreditsHint(): TemplateResult {
+/** Under a provider row while it has no key or is expanded, for the providers
+ *  whose consumer plans include monthly API credits (Claude Max or Team,
+ *  ChatGPT Pro or Business): the credits are spent through the key this row
+ *  sets. */
+function renderPlanCreditsHint(credits: PlanCredits): TemplateResult {
   return html`<p class="provider-row-hint">
-    ${ANTHROPIC_PLAN_CREDITS.hint}
+    ${credits.hint}
     <wa-button
       class="provider-setting-link btn-ghost is-link"
       appearance="plain"
       size="s"
       @click=${() =>
         postMessage(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL, {
-          url: ANTHROPIC_PLAN_CREDITS.docUrl,
+          url: credits.docUrl,
         })}
     >
-      ${ANTHROPIC_PLAN_CREDITS.docLabel}
+      ${credits.docLabel}
     </wa-button>
   </p>`;
 }

@@ -4,8 +4,9 @@ import { ToolContext } from '@agent/core/tools/ToolTypes';
 
 // Local imports - tools
 import type { AgentCatalog } from '@agent/index/agentCatalog';
-import type { ConfigProvider } from '@platform/interfaces';
+import type { AppSignals } from '@platform/appSignals';
 import { WorkspaceFs } from '@platform/rootedFs';
+import type { ConfigProvider } from '@shared/config/settings';
 import type { ToolResult } from '@shared/schemas';
 import {
   applyApprovedFileEdit,
@@ -44,7 +45,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
 ): Effect.fn.Return<
   ToolResult,
   Error,
-  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog
+  ToolContext | FileSystem.FileSystem | WorkspaceFs | AgentCatalog | AppSignals
 > {
   const call = yield* ToolContext;
   const prepared = yield* resolveWritableTarget(input.path, {

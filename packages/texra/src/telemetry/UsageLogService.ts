@@ -7,6 +7,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Predicate,
   Queue,
   Schedule,
   Schema,
@@ -159,8 +160,8 @@ export const usageLoggingOptOut = Effect.fnUntraced(function* (
  * A queued entry with the configuration of the workspace it was recorded in.
  * The flush runs on a timer or at shutdown, outside any run: re-reading
  * consent from the ambient roots there would consult the process roots (on
- * the desktop, the no-workspace session) instead of the paper that produced
- * the entry, and miss that paper's opt-out.
+ * the desktop, the no-workspace session) instead of the project that produced
+ * the entry, and miss that project's opt-out.
  */
 interface QueuedUsageEntry {
   readonly entry: UsageLogEntry;
@@ -232,17 +233,13 @@ class UsageLogServiceImpl {
         Queue.take(triggers).pipe(Effect.andThen(this.backgroundFlush())),
       ),
     );
-    // The first request waits one interval; the unref'd sleeps never keep
-    // the host process alive.
+    // `Effect.schedule` waits one interval before the first request; the
+    // unref'd sleeps never keep the host process alive.
     this.flushTimer = yield* Effect.forkScoped(
       Clock.clockWith((clock) =>
-        Effect.sleep(Duration.millis(this.config.flushIntervalMs)).pipe(
-          Effect.andThen(
-            Effect.sync(() => this.requestFlush()).pipe(
-              Effect.schedule(
-                Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
-              ),
-            ),
+        Effect.sync(() => this.requestFlush()).pipe(
+          Effect.schedule(
+            Schedule.spaced(Duration.millis(this.config.flushIntervalMs)),
           ),
           Effect.provideService(Clock.Clock, unrefSleepClock(clock)),
         ),
@@ -380,7 +377,7 @@ class UsageLogServiceImpl {
     ),
   );
 
-  /** Settle the next batch: sent, discarded, or failed with it kept. */
+  /** Finish the next batch: sent, discarded, or failed with it kept. */
   private readonly sendNextBatch = Effect.fn('UsageLogService.sendNextBatch')(
     function* (this: UsageLogServiceImpl) {
       let batch = this.retryBatch;
@@ -459,7 +456,7 @@ class UsageLogServiceImpl {
     const log = this.warnedRejected ? Effect.logDebug : Effect.logWarning;
     this.warnedRejected = true;
     const cause = [rejection.errorCode, rejection.error]
-      .filter((part) => part !== undefined)
+      .filter(Predicate.isNotUndefined)
       .join(': ');
     return log(
       `Usage endpoint rejected batch ${batch.batchId} as not retryable (${cause || 'no reason given'}); dropped ${batch.entries.length} entries`,

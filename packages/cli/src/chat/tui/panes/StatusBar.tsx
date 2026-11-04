@@ -2,12 +2,8 @@ import { Box, Text, useStderr, useWindowSize } from 'ink';
 import { Cause, Effect, Exit, type Fiber } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { readModelOptions, type PlatformSecrets } from '@texra-ai/harness/host';
-import {
-  isActivePhase,
-  isEmptyUsage,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { readModelOptions } from '@texra-ai/harness/host';
+import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
@@ -18,13 +14,10 @@ import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
-  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
-import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
-import { activeStartedAt } from '../state/childControls';
+import { sessionView, runViewOf } from '../state/sessionView';
 import {
-  chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   runStopFacts as runStopFactsSignal,
 } from '../state/sessionRunState';
@@ -48,14 +41,13 @@ const SUBSCRIPTION_QUOTA_REFRESH_MS = 30_000;
 interface StatusBarProps {
   /** True when the focused stream has a composer for slash commands and text. */
   readonly chatInputAvailable: boolean;
-  /**
-   * The secret store the subscription quota and route probes read, with the
-   * runtime that settles the route program, threaded from the chat surface
-   * that opened it — this component owns no runtime of its own.
-   */
-  readonly secrets: PlatformSecrets;
   /** The three setting slots the subscription route probe reads. */
   readonly stores: SettingsStores;
+  /**
+   * The runtime that runs the quota and route programs (their credentials
+   * come from its `Secrets`), threaded from the chat surface that opened it —
+   * this component owns no runtime of its own.
+   */
   readonly runtime: ProcessRuntime;
   readonly childListFocused?: boolean;
   readonly childListSelectionKillable?: boolean;
@@ -72,8 +64,8 @@ interface StatusBarProps {
 /**
  * Poll `read` every `intervalMs` on the shared poll registry, and at once when
  * `key` changes. One rule governs staleness: a key already in flight is not
- * re-read, and only the latest request settles: a superseded read is
- * interrupted, as is the read in flight at unmount. The settled exit is
+ * re-read, and only the latest request finishes: a superseded read is
+ * interrupted, as is the read in flight at unmount. The finished exit is
  * returned only while its key is still current; an undefined key reads
  * nothing.
  */
@@ -131,12 +123,8 @@ function usePolledRead<K extends string, A, E>(
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const subscriptionUsage = useMemo(
-    () =>
-      new SubscriptionUsageService({
-        secrets: props.secrets,
-        stores: props.stores,
-      }),
-    [props.secrets, props.stores],
+    () => new SubscriptionUsageService({ stores: props.stores }),
+    [props.stores],
   );
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
@@ -150,20 +138,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // closure's identity, which froze the hint at its boot-time value for the
   // whole run (#8273).
   const runStopFacts = useSignal(runStopFactsSignal);
-  const ownedRunIds = useSignal(rootRunIdsSignal);
   const target = statusBarRunTarget({
     activeRunId,
-    canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
-    // The whole pending-run window, not just its launch gap: a restored
-    // stream's phase is derived, so a run whose stream has not reported one
-    // yet must still read "stop" — Ctrl-C would stop it.
-    canStopPendingRun: chatTuiCanStopActiveRun(runStopFacts),
-    ownedRunIds,
+    canStop: chatTuiCanStopVisibleRun(runStopFacts),
     view,
   });
   const displayRunId = target.displayRunId;
   const displayRun = runViewOf(view, displayRunId);
-  const displayStatus = runPhaseOf(displayRun);
   // The run's cumulative usage: the same figure the subagent rows and the
   // exit summary present.
   const displayUsage =
@@ -186,12 +167,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     props.runtime,
     routeReadKey,
     () =>
-      readModelOptions({ ...props.stores, secrets: props.secrets }, [
-        accessModel,
-      ]).pipe(Effect.map(([option]) => option?.usageRoute)),
+      readModelOptions(props.stores, [accessModel]).pipe(
+        Effect.map(([option]) => option?.usageRoute),
+      ),
     CODEX_SUBSCRIPTION_REFRESH_MS,
   );
-  // Only a read of the current key settles here, so a probe that a newer key
+  // Only a read of the current key finishes here, so a probe that a newer key
   // overtook neither reports nor latches its failure.
   useEffect(() => {
     if (routeRead === undefined) return;
@@ -233,12 +214,10 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? quotaRead.value
       : undefined;
 
-  const runStartedAt = isActivePhase(displayStatus)
-    ? activeStartedAt(displayRun)
-    : undefined;
+  const runStartedAt = displayRun?.runStartedAt ?? undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  // Every request awaiting the user: the fold's pending approvals, the
+  // Every request awaiting the user: the session view's pending approvals, the
   // same list the modal and the title read.
   const attention = useSignal(attentionRequestsSignal);
 
@@ -285,7 +264,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
-      holdAvailable: props.chatInputAvailable && isActivePhase(displayStatus),
+      holdAvailable: props.chatInputAvailable && displayRun?.working === true,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable: props.transcriptAvailable,

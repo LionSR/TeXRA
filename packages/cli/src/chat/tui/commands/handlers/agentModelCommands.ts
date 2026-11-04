@@ -1,14 +1,9 @@
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, Predicate } from 'effect';
 
 import {
   toErrorMessage,
   agentName as bareAgentName,
 } from '@texra-ai/harness/schemas';
-import {
-  formatTeamLaunchBlockedMessage,
-  formatUnknownTeamMessage,
-  resolveTeamLaunch,
-} from '@texra-ai/harness/host';
 import { resolveCliRunAgent } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliTeamName } from '@cli/runtime/cliTeams';
@@ -28,6 +23,11 @@ import {
   appendLocalNotice,
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
+import {
+  formatTeamLaunchBlockedMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+} from '@texra/shared/teamLaunch';
 import { createTeamCatalogPorts } from '@texra/controllers/mainView/teamCatalogPorts';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -48,39 +48,36 @@ export function resolveChatToolUseAgent(
   );
 }
 
-export function applyInitialCliAgentSelection(
-  agentName: string,
-  context: SlashCommandContext,
-) {
-  return Effect.gen(function* () {
-    const fixedAgentNotice =
-      'The agent is fixed for this task. Start a new task to use a different agent.';
-    if (!chatTuiCanStartRootRun(context.session)) {
-      setTransientNotice(fixedAgentNotice);
-      return;
-    }
+export const applyInitialCliAgentSelection = Effect.fn(
+  'applyInitialCliAgentSelection',
+)(function* (agentName: string, context: SlashCommandContext) {
+  const fixedAgentNotice =
+    'The agent is fixed for this task. Start a new task to use a different agent.';
+  if (!chatTuiCanStartRootRun(context.session)) {
+    setTransientNotice(fixedAgentNotice);
+    return;
+  }
 
-    const nextAgent = agentName.trim();
-    const entry = yield* resolveChatToolUseAgent(context.stores, nextAgent);
-    if (entry instanceof CliUsageError) {
-      setTransientNotice(entry.message);
-      return;
-    }
-    // State validation can yield while another input claims the root run.
-    if (!chatTuiCanStartRootRun(context.session)) {
-      setTransientNotice(fixedAgentNotice);
-      return;
-    }
-    patchSessionMeta({
-      agent: nextAgent,
-      agentSource: entry.source,
-      teamName: undefined,
-      cliTeamId: undefined,
-      delegationAgentScope: undefined,
-    });
-    appendLocalNotice(`Root agent set to ${nextAgent}.`);
+  const nextAgent = agentName.trim();
+  const entry = yield* resolveChatToolUseAgent(context.stores, nextAgent);
+  if (entry instanceof CliUsageError) {
+    setTransientNotice(entry.message);
+    return;
+  }
+  // State validation can yield while another input claims the root run.
+  if (!chatTuiCanStartRootRun(context.session)) {
+    setTransientNotice(fixedAgentNotice);
+    return;
+  }
+  patchSessionMeta({
+    agent: nextAgent,
+    agentSource: entry.source,
+    teamName: undefined,
+    cliTeamId: undefined,
+    delegationAgentScope: undefined,
   });
-}
+  appendLocalNotice(`Root agent set to ${nextAgent}.`);
+});
 
 /**
  * `/agent` → a team: the same launch resolution the extension and desktop
@@ -143,7 +140,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
           ? `Unavailable members: ${resolution.missingNames.join(', ')}.`
           : undefined,
       ]
-        .filter((line) => line !== undefined)
+        .filter(Predicate.isNotUndefined)
         .join(' '),
     );
   },
@@ -156,11 +153,7 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       const selection = yield* selectCliRunnableModel(
         [{ model: nextModel, reason: 'explicit-override' }],
         {
-          stores: {
-            ...context.stores,
-            secrets: context.secrets,
-            runtime: context.runtime,
-          },
+          stores: { ...context.stores, runtime: context.runtime },
           noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
             CHAT_API_MODE_MODEL_RECOVERY,
           ),

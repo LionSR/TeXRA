@@ -1,10 +1,10 @@
 import { Effect } from 'effect';
 import { readChildTurnState } from '@agent/storage/runRecords';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { AttemptKey } from '@agent/storage/runRecords';
+import type { AttemptKey } from '@shared/session/runRowsShape';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunId } from '@shared/schemas';
-import type { RunView } from '@shared/session/sessionView';
+import { type RunView } from '@shared/session/sessionView';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { describeRunNotice } from '../executionFormatters';
 /**
  * Turn attribution for the executions tool's single latest-value slots.
@@ -51,11 +51,10 @@ function turnFate(turn: AttemptKey, run: RunView | undefined): string {
  */
 export const turnAttributionNote = Effect.fn('turnAttributionNote')(function* (
   runId: RunId,
-  session: SessionHandle,
 ) {
-  const { active, lastCompleted } = yield* readChildTurnState(session, runId);
+  const { active, lastCompleted } = yield* readChildTurnState(runId);
   if (active === null) return null;
-  const fate = turnFate(active, session.view.run(runId));
+  const fate = turnFate(active, (yield* SessionViewAccess).run(runId));
   const showing = lastCompleted
     ? `showing the latest completed turn (${turnLabel(lastCompleted)}).`
     : 'no turn has completed yet.';

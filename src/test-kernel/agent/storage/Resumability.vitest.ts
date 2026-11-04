@@ -1,90 +1,105 @@
-import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
-import { beforeEach, describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Schema, Context } from 'effect';
+import { expect } from 'vitest';
 
-import { deriveResumability } from '@agent/storage/resumability';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { positionRow } from '@agent/runtime/loop/rows';
 import {
   AgentConfigSchema,
-  qualifyAggregateId,
   emptyRunEndOutput,
+  qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
-} from '@shared/schemas';
-import {
-  createProcessSession,
-  publishTestRunStart,
-  seedRows,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+} from '@texra-ai/harness/schemas';
+import { deriveResumability } from '@agent/storage/resumability';
+import { positionRow } from '@agent/runtime/loop/rows';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog, RunHistory } from '@shared/session/runHistory';
+import { publishTestRunStart, seedRows } from '@test/support/sessionTestUtils';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 
-describe('deriveResumability', () => {
-  setupPlatform({ workspacePath: '/workspace' });
+type Session = Context.Context<SessionServices>;
 
-  let session: SessionHandle;
-  beforeEach(async () => {
-    session = await Effect.runPromise(createProcessSession());
+/** The test's session over the process roots. */
+const processSession = Effect.flatMap(TestSession.open(), sessionHandleOf);
+
+const start = (session: Session, runId: RunId) =>
+  Effect.sync(() => publishTestRunStart(session, runId)).pipe(
+    Effect.andThen(Context.get(session, SessionLog).settled),
+  );
+
+/** Open the run aggregate the way the loop does: claim, then the
+ *  position that opens it. */
+const open = (session: Session, runId: RunId) =>
+  Effect.gen(function* () {
+    const cell = yield* Context.get(session, RunHistory).open(runId, {
+      activation: () => Effect.succeed([]),
+    });
+    yield* cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]);
   });
 
-  const start = (runId: RunId) =>
-    Effect.sync(() => publishTestRunStart(session, runId)).pipe(
-      Effect.andThen(session.log.settled),
-    );
+const fail = (session: Session, runId: RunId) =>
+  Context.get(session, SessionLog).transact([
+    {
+      type: 'run.end',
+      aggregateId: qualifyAggregateId('run', runId),
+      outcome: RUN_OUTCOME.FAILED,
+      output: emptyRunEndOutput(),
+    },
+  ]);
 
-  /** Open the run aggregate the way the loop does: claim, then the
-   *  position that opens it. */
-  const open = (runId: RunId) =>
-    Effect.gen(function* () {
-      const cell = yield* session.runHistory.open(runId, {
-        activation: () => Effect.succeed([]),
-      });
-      yield* cell.append([positionRow(runId, { turn: 0 }, 'turn.ready')]);
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'deriveResumability',
+  (it) => {
+    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect('keeps a failed run resumable while its rows stand', () =>
+        Effect.gen(function* () {
+          const session = yield* processSession;
+          const runId = 'ac0000' as RunId;
+          yield* start(session, runId);
+          yield* fail(session, runId);
+          yield* open(session, runId);
+
+          expect(
+            yield* deriveResumability(runId).pipe(Effect.provide(session)),
+          ).toMatchObject({
+            kind: 'checkpoint',
+          });
+        }),
+      );
+
+      it.effect(
+        'does not resume a document task that ended: it runs again',
+        () =>
+          Effect.gen(function* () {
+            const session = yield* processSession;
+            const runId = 'ac0001' as RunId;
+            yield* start(session, runId);
+            yield* seedRows(Context.get(session, SessionLog))([
+              {
+                type: 'run.config',
+                aggregateId: qualifyAggregateId('run', runId),
+                config: Schema.decodeUnknownSync(AgentConfigSchema)(
+                  asDocumentTask({ agent: 'polish', model: 'test-model' }),
+                ),
+              },
+            ]);
+            yield* open(session, runId);
+            yield* fail(session, runId);
+
+            expect(
+              yield* deriveResumability(runId).pipe(Effect.provide(session)),
+            ).toEqual({
+              kind: 'finished',
+            });
+          }),
+      );
     });
-
-  const fail = (runId: RunId) =>
-    session.log.transact([
-      {
-        type: 'run.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome: RUN_OUTCOME.FAILED,
-        output: emptyRunEndOutput(),
-      },
-    ]);
-
-  it.effect('keeps a failed run resumable while its rows stand', () =>
-    Effect.gen(function* () {
-      const runId = 'ac0000' as RunId;
-      yield* start(runId);
-      yield* fail(runId);
-      yield* open(runId);
-
-      expect(yield* deriveResumability(runId, session)).toMatchObject({
-        kind: 'checkpoint',
-      });
-    }),
-  );
-
-  it.effect('does not resume a document task that ended: it runs again', () =>
-    Effect.gen(function* () {
-      const runId = 'ac0001' as RunId;
-      yield* start(runId);
-      yield* seedRows(session.log)([
-        {
-          type: 'run.config',
-          aggregateId: qualifyAggregateId('run', runId),
-          config: Schema.decodeUnknownSync(AgentConfigSchema)(
-            asDocumentTask({ agent: 'polish', model: 'test-model' }),
-          ),
-        },
-      ]);
-      yield* open(runId);
-      yield* fail(runId);
-
-      expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'none',
-      });
-    }),
-  );
-});
+  },
+);

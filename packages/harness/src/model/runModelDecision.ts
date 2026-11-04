@@ -1,28 +1,35 @@
 import { Predicate } from 'effect';
 
-const RUN_MODEL_PRECEDENCE = {
-  'explicit-override': 0,
-  environment: 1,
-  'agent-config': 2,
-  'command-config': 3,
-  'workspace-config': 4,
-  'user-config': 5,
-  history: 6,
-  'parent-run': 7,
-  credential: 8,
-  'builtin-default': 9,
-  'access-list-default': 10,
-} as const;
-
-export type RunModelDecisionReason = keyof typeof RUN_MODEL_PRECEDENCE;
 /** What happens when a candidate's model cannot run: refuse, run the next
  *  one with a notice, or run it silently. */
 export type RunModelFallbackMode = 'reject' | 'notice' | 'silent';
 
+/** Where a run's model may come from, highest precedence first, and what
+ *  happens when that candidate cannot run: a model a person named, or a
+ *  credential chose, is refused; a configured or remembered one falls back
+ *  with a notice; a default falls back silently. The one table of both. */
+const RUN_MODEL_REASONS = {
+  'explicit-override': { rank: 0, fallback: 'reject' },
+  environment: { rank: 1, fallback: 'reject' },
+  'agent-config': { rank: 2, fallback: 'notice' },
+  'command-config': { rank: 3, fallback: 'notice' },
+  'workspace-config': { rank: 4, fallback: 'notice' },
+  'user-config': { rank: 5, fallback: 'notice' },
+  history: { rank: 6, fallback: 'notice' },
+  'parent-run': { rank: 7, fallback: 'notice' },
+  credential: { rank: 8, fallback: 'reject' },
+  'builtin-default': { rank: 9, fallback: 'silent' },
+  'access-list-default': { rank: 10, fallback: 'silent' },
+} as const satisfies Record<
+  string,
+  { readonly rank: number; readonly fallback: RunModelFallbackMode }
+>;
+
+export type RunModelDecisionReason = keyof typeof RUN_MODEL_REASONS;
+
 export interface RunModelCandidate {
   readonly model?: string | null;
   readonly reason: RunModelDecisionReason;
-  readonly fallbackMode?: RunModelFallbackMode;
 }
 
 type NormalizedRunModelCandidate = RunModelCandidate & {
@@ -57,7 +64,8 @@ export function decideRunModel(
     .filter(Predicate.isNotNullish)
     .toSorted(
       (left, right) =>
-        RUN_MODEL_PRECEDENCE[left.reason] - RUN_MODEL_PRECEDENCE[right.reason],
+        RUN_MODEL_REASONS[left.reason].rank -
+        RUN_MODEL_REASONS[right.reason].rank,
     );
   const fallback = ordered.find(
     (candidate) =>
@@ -74,7 +82,7 @@ export function decideRunModel(
   if (isRunnable(primary.model)) {
     return { model: primary.model, reason: primary.reason };
   }
-  const mode = primary.fallbackMode ?? 'reject';
+  const mode = RUN_MODEL_REASONS[primary.reason].fallback;
   if (mode === 'reject' || !fallback) {
     return {
       model: primary.model,

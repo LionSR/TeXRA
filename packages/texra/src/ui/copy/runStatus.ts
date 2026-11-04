@@ -1,6 +1,6 @@
 /**
  * How a run's place reads in every renderer: its loop position, and the
- * sections a run list is grouped into. English copy over the fold's facts
+ * sections a run list is grouped into. English copy over the view's facts
  * (`RunView.turn`, `RunView.group`), so the dock, the TUI and the trace
  * viewer cannot word one thing two ways.
  */
@@ -16,7 +16,7 @@ export function formatLoopPositionLabel(
 }
 
 /**
- * One section per `group` arm, and the order the sections are painted in.
+ * One section per `group` case, and the order the sections are painted in.
  * Both surfaces that group a run list — the webview tab strip and the
  * TUI's run tree — read this table rather than spelling the four labels
  * again, so a renamed section cannot say one thing in the dock and another
@@ -35,7 +35,9 @@ export const RUN_GROUP_LABELS: Readonly<Record<RunGroup, string>> =
 
 /** Section order, in the group union's own order. */
 export const RUN_GROUP_ORDER: readonly RunGroup[] = Object.freeze(
-  Object.keys(RUN_GROUP_LABELS) as RunGroup[],
+  Object.keys(RUN_GROUP_LABELS).filter((key): key is RunGroup =>
+    Object.hasOwn(RUN_GROUP_LABELS, key),
+  ),
 );
 
 /**
@@ -66,26 +68,24 @@ export function runStatusLabel(key: RunStatusKey): string {
 
 type RunNotice = NonNullable<RunView['statusNotice']>;
 
-/** What a resume found blocking a run, and what then happens: it continues
- *  by itself (`retry`: a resume was asked for), or can be resumed. */
+/** What a resume found blocking a run: it can continue once that is back
+ *  (by itself under `resumeOnOpen: auto`, else when resumed). */
 function resumeBlockedText({
   reason,
-  retry,
 }: Extract<RunNotice, { kind: 'resumeBlocked' }>): string {
-  const then = retry ? 'It continues once' : 'You can resume it once';
-  switch (reason.kind) {
+  switch (reason.blocker) {
     case 'agentMissing':
-      return `This task's agent, ${reason.name}, is no longer installed. ${then} the agent is back.`;
+      return `This task's agent, ${reason.name}, is no longer installed. It can continue once the agent is back.`;
     case 'pluginOff':
-      return `This task's agent comes from the ${reason.name} plugin, which is off. ${then} the plugin is on.`;
+      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
     case 'pluginUntrusted':
-      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. ${then} you trust it.`;
+      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once you trust it.`;
   }
 }
 
 /**
  * The banner a run's notice (`RunView.statusNotice`) reads as, in every
- * host: its banner, tooltip and copied diagnostics. Null when the fold
+ * host: its banner, tooltip and copied diagnostics. Null when the view
  * gave it none.
  */
 export function runNoticeText(notice: RunNotice | null): string | null {

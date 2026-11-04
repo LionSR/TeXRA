@@ -12,13 +12,14 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Result, Schema, SchemaGetter } from 'effect';
+import { Cause, Effect, Predicate, Result, Schema, SchemaGetter } from 'effect';
 import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
 // Local imports
 import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
+import { Settings } from '@texra-ai/harness/host';
 import {
   isTransportReason,
   scopedClient,
@@ -35,9 +36,9 @@ const ZOTERO_CONNECTOR_TIMEOUT_MS = 30_000; // 30 s
 /** The configured Zotero port: one port for both the Connector API and the
  *  Better BibTeX JSON-RPC (different paths). Every reader takes it from the
  *  configuration it was handed — a tool from its call
- *  (`call.env.roots.config.get(ZOTERO_PORT_KEY)`), the dashboard's
+ *  (`Settings.get(call.env.roots, ZOTERO_PORT_KEY)`), the dashboard's
  *  availability group from its probe inputs. */
-export const ZOTERO_PORT_KEY = 'texra.bib.zoteroPort';
+export const ZOTERO_PORT_KEY = 'bib.zoteroPort';
 
 /**
  * The `execute` every Zotero tool wants: take the call, read the configured
@@ -58,7 +59,7 @@ export const withZoteroPort =
       const call = yield* ToolContext;
       return yield* run(
         input,
-        call.env.roots.config.get<number>(ZOTERO_PORT_KEY),
+        yield* Settings.get<number>(call.env.roots, ZOTERO_PORT_KEY),
       );
     });
 
@@ -402,7 +403,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
       ZOTERO_CONNECTOR_TIMEOUT_MS,
       Effect.gen(function* () {
         // The request scope stays open through the body read, after the
-        // header request has already settled.
+        // header request has already finished.
         const client = yield* scopedClient;
         const response = yield* client.post(
           zoteroUrl(port, `/connector/${endpoint}`),
@@ -418,16 +419,17 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         // body; it is read under the same deadline as the headers. Keep this
         // body-only recovery separate so request failures retain their own
         // reachability/timeout classification.
-        const data = yield* (
-          response.json as Effect.Effect<{ error?: string } | null, Error>
-        ).pipe(
+        const data = yield* response.json.pipe(
           // Body is not JSON or is empty; use the generic status message.
           Effect.catch(() => Effect.succeed(undefined)),
         );
+        const error = Predicate.hasProperty(data, 'error')
+          ? data.error
+          : undefined;
         return {
           status: 'error',
-          message: data?.error
-            ? String(data.error)
+          message: error
+            ? String(error)
             : `Unexpected response status: ${response.status}`,
         } satisfies ConnectorResult;
       }),

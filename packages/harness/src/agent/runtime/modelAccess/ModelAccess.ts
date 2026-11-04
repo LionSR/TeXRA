@@ -14,27 +14,23 @@
 import { ConfigProvider, Context, Effect, Layer, type Scope } from 'effect';
 import { HttpClient } from 'effect/http';
 import {
-  selectModel,
-  type Model,
-  type ModelOrigin,
+  type ModelConfig,
+  type ModelError,
   type ModelRoute,
+  selectModel,
   type TurnRequest,
 } from '@texra-ai/llm';
 
 import { getHelperModelName } from '@agent/runtime/helperModelName';
 import type { RoutePolicy } from '@agent/runtime/ModelRetryGate';
 import { RouteUnavailable } from '@common/errors/agentErrors';
-import {
-  readModelOptions,
-  type ModelOptionStores,
-} from '@model/computeModelOptions';
 import { readModelSettings } from '@model/modelSettings';
-import type { StateReadFailed } from '@platform/interfaces';
+import { Secrets } from '@platform/secrets';
+import type { SettingsStores, StateReadFailed } from '@shared/config/settings';
 import type {
   CredentialSwitch,
   DeclinableUsageRoute,
   ModelBackend,
-  RetryErrorInfo,
 } from '@shared/schemas';
 import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
@@ -45,39 +41,33 @@ import {
   decideRoute,
   type SwitchRefusal,
 } from './routeDecision';
+import type { Binding } from '@texra-ai/llm/node';
 import type { CallFailure } from './failureInfo';
-import type { ModelConfig } from 'llm-zoo';
 
 /**
- * One bound model: the llm `Model` and the facts of its binding the run
- * reads. Everything else a binding needs (its credential, its reasoning
- * choice, the toggles it was bound under) stays inside model access.
+ * One bound model: llm's `Binding` (or the validation model's) and the facts
+ * of the run the binding serves. Everything else a binding needs (its
+ * credential, its reasoning choice, the toggles it was bound under) stays
+ * inside model access.
  */
-export interface BoundModel {
+export interface BoundModel extends Binding {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
-  /**
-   * The config the model runs and bills with on its route: its window, its
-   * prices, and the media its route carries (`capabilities`).
-   */
-  readonly config: ModelConfig;
-  readonly model: Model;
-  readonly origin: ModelOrigin;
-  /** The route decision this binding carries out. */
-  readonly route: ModelRoute;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
+  /** The route decision this binding carries out, or the validation model. */
+  readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
   readonly automaticRetries: number;
   /** Bound for a text-only persona, with the model's whole output budget; a
    *  rebinding keeps it. */
   readonly textOnly: boolean;
-  /** The route can be told to call one named tool. */
-  readonly forcedToolChoice: boolean;
-  /** One connection a failed turn invalidates (the Responses WebSocket). */
-  readonly persistentConnection: boolean;
-  /** The service tier and subscription plan pricing bills, where the route names them. */
-  readonly billing: { readonly serviceTier?: 'fast'; readonly plan?: string };
+  /** The ChatGPT plan the subscription's token names; display-only. */
+  readonly plan?: string;
   /** The retry gate's routes: the model on its wire route, then the wire route. */
   readonly routes: readonly [RoutePolicy, RoutePolicy];
   /** How the next turn is delivered, from the live toggles. */
@@ -106,6 +96,8 @@ export interface BindRequest {
 /** The configured helper model, for one call; `rejected` as for a run's. */
 interface HelperRequest {
   readonly purpose: 'helper';
+  /** The asking run's model, bound when no helper model is configured. */
+  readonly runModel?: string;
   readonly rejected?: string;
 }
 
@@ -123,45 +115,46 @@ export class ModelAccess extends Context.Service<
       current: BoundModel,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<SwitchRefusal | null, RouteUnavailable>;
-    /** The move onto the user's own credential a failure on `failed` offers. */
+    /** The move onto the user's own credential a used-up `quota` (llm's
+     *  verdict on a failure of `failed`) offers. */
     readonly credentialSwitch: (
       failed: BoundModel,
-      recorded: RetryErrorInfo,
+      quota: ModelError['quota'],
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CredentialSwitch | null>;
   }
 >()('@texra-ai/harness/ModelAccess') {}
 
 /** The settings one binding reads. */
-const settingsOf = (stores: ModelOptionStores) =>
+const settingsOf = (stores: SettingsStores) =>
   Effect.mapError(readModelSettings(stores), RouteUnavailable.of);
 
-/** The helper model's request: the configured model, if it can serve now. */
+/** The helper model's request: the configured model, else the asking run's.
+ *  Its bind decides whether it can serve now, as a run's does. */
 const helperRequest = Effect.fn('ModelAccess.helper')(function* (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
+  runModel: string | undefined,
 ): Effect.fn.Return<BindRequest, RouteUnavailable> {
-  const modelId = yield* Effect.mapError(
-    getHelperModelName(stores),
-    RouteUnavailable.of,
-  );
-  const [option] = yield* Effect.mapError(
-    readModelOptions(stores, [modelId]),
-    RouteUnavailable.of,
-  );
-  const reason = option?.unavailableReason;
-  if (reason) return yield* RouteUnavailable.of(new Error(reason));
+  const modelId =
+    (yield* Effect.mapError(getHelperModelName(stores), RouteUnavailable.of)) ??
+    runModel;
+  if (modelId === undefined) {
+    return yield* RouteUnavailable.of(
+      new Error('No helper model is configured, and no run model to use.'),
+    );
+  }
   // One-shot deterministic text: the whole output budget, never sampled.
   return { modelId, declinedRoutes: [], textOnly: true, temperature: 0 };
 });
 
 /** Bind `request` over one settings read. */
 const bindOver = Effect.fn('ModelAccess.bind')(function* (
-  stores: ModelOptionStores,
+  stores: SettingsStores,
   request: BindRequest,
 ): Effect.fn.Return<
   BoundModel,
   CallFailure,
-  Scope.Scope | HttpClient.HttpClient
+  Scope.Scope | HttpClient.HttpClient | Secrets
 > {
   const selected = selectModel(request.modelId);
   const catalog = request.config ?? selected?.config;
@@ -187,44 +180,41 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
     mode: ask.mode,
   });
   return yield* bindRoute(
-    {
-      request,
-      requested,
-      ask,
-      settings,
-      decision,
-      backend: request.backend ?? decision.backend,
-    },
+    { request, requested, ask, settings, decision },
     stores,
   );
 });
 
 /**
- * Model access over `stores` (a session's setting slots and the process
- * secret store), for the project whose environment is in force where the
+ * Model access over `stores` (a session's setting slots) and the process
+ * {@link Secrets}, for the project whose environment is in force where the
  * layer is built.
  */
 export const modelAccessLayer = (
-  stores: ModelOptionStores,
-): Layer.Layer<ModelAccess, never, HttpClient.HttpClient> =>
+  stores: SettingsStores,
+): Layer.Layer<ModelAccess, never, HttpClient.HttpClient | Secrets> =>
   Layer.effect(
     ModelAccess,
     Effect.gen(function* () {
       const http = yield* HttpClient.HttpClient;
       const env = yield* ConfigProvider.ConfigProvider;
       const project = yield* ProjectEnvironment;
+      const secrets = yield* Secrets;
       const inProject = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         effect.pipe(
           Effect.provideService(HttpClient.HttpClient, http),
           Effect.provideService(ConfigProvider.ConfigProvider, env),
           Effect.provideService(ProjectEnvironment, project),
+          Effect.provideService(Secrets, secrets),
         );
       return {
         bind: (request) =>
           inProject(
             'purpose' in request
-              ? Effect.flatMap(helperRequest(stores), (helper) =>
-                  bindOver(stores, { ...helper, rejected: request.rejected }),
+              ? Effect.flatMap(
+                  helperRequest(stores, request.runModel),
+                  (helper) =>
+                    bindOver(stores, { ...helper, rejected: request.rejected }),
                 )
               : bindOver(stores, request),
           ),
@@ -241,8 +231,10 @@ export const modelAccessLayer = (
             ),
           );
         },
-        credentialSwitch: (failed, recorded, declined) =>
-          credentialSwitch(failed, recorded, declined, stores.secrets),
+        credentialSwitch: (failed, quota, declined) =>
+          credentialSwitch(failed, quota, declined).pipe(
+            Effect.provideService(Secrets, secrets),
+          ),
       };
     }),
   );

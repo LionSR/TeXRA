@@ -8,7 +8,7 @@
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Cause, Duration, Effect, Exit, Layer, Result, Schema } from 'effect';
+import { Duration, Effect, Layer, Predicate, Result, Schema } from 'effect';
 
 import {
   CodeSandbox,
@@ -148,7 +148,9 @@ const settlementOf = (
       _tag: 'Value',
       value:
         op.name === `${SEARCH_TOOLS}()`
-          ? (JSON.parse(result.output ?? '[]') as unknown)
+          ? Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(
+              result.output ?? '[]',
+            )
           : result.output,
     });
   if (result.endTurn === true) return Effect.fail(new EndedTurn({ result }));
@@ -173,20 +175,25 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
     run !== undefined &&
     run.toolPolicy.stopAfterCycle !== true
   )
-    return yield* launchBackgroundScript(
-      yield* requireToolRun('script run_in_background'),
-      {
-        code: input.code,
-        ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
-      },
-      input.title ?? 'Script',
+    return yield* Effect.flatMap(
+      requireToolRun('script run_in_background'),
+      (call) =>
+        launchBackgroundScript(
+          call,
+          {
+            code: input.code,
+            ...(input.timeoutMs != null && { timeoutMs: input.timeoutMs }),
+          },
+          input.title ?? 'Script',
+        ).pipe(Effect.provide(call.session)),
     );
-  const issued = (yield* RunCall)?.scriptCalls;
-  if (issued == null)
+  const runCall = yield* RunCall;
+  const issued = runCall?.scriptCalls;
+  if (runCall == null || issued == null)
     return yield* Effect.fail(
       new ToolError('A script runs only as a call of an agent run.'),
     );
-  const scriptCalls = yield* issued;
+  const scriptCalls = yield* issued.pipe(Effect.provide(runCall.session));
   const sandbox = yield* CodeSandbox;
   // The last `RUN_LOG_MAX_LINES` lines the guest logged, for the result.
   const tail: string[] = [];
@@ -240,7 +247,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           // `name(first, opts)` is `tools.name({ ...opts, [positional]: first })`:
           // the call is the tool's, recorded as the tool's.
           const [first, rest] = Array.isArray(op.input) ? op.input : [];
-          if (rest != null && (typeof rest !== 'object' || Array.isArray(rest)))
+          if (rest != null && !Predicate.isObject(rest))
             return Effect.succeed<ScriptSettlement>({
               _tag: 'Failure',
               name: 'TypeError',
@@ -272,16 +279,6 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
       onDelivered: scriptCalls.delivered,
     })
     .pipe(
-      // An interruption of the run leaves every row as it stands, for the
-      // resume that replays the script. Every other exit (the guest returned
-      // or threw, the deadline, a sandbox fault) has ended the calls the
-      // guest issued: one it never awaited to its end is settled before this
-      // call's result, so nothing of the script's stays open behind it.
-      Effect.onExit((exit) =>
-        Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)
-          ? Effect.void
-          : scriptCalls.settleAbandoned,
-      ),
       Effect.map((result) => ({ _tag: 'Returned' as const, result })),
       Effect.catchTag('EndedTurn', (ended) => Effect.succeed(ended)),
       // A script that ends in failure still returns its log tail: the lines

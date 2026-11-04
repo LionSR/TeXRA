@@ -1,7 +1,7 @@
 import { Effect, Schema } from 'effect';
 
 import { hasUsableApiKey } from '@texra-ai/llm';
-import { Secrets, type PlatformSecrets } from '@texra-ai/harness/host';
+import { Secrets } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   SUBSCRIPTION_AUTH_PROVIDERS,
@@ -16,13 +16,13 @@ import {
   type SubscriptionProviderId,
 } from '@texra/controllers/modelAccess/subscriptionProviders';
 
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import {
   shouldUseSubscriptionDeviceCode,
   signInCliSubscription,
   type CliSubscriptionLoginOptions,
 } from './subscriptionLogin';
 import {
-  formatCliModelAccessRouteInline,
   type CliModelAccessSelection,
   type CliModelAccessStatus,
 } from './modelAccessRoute';
@@ -50,47 +50,47 @@ class ModelAccessPreferenceFailed extends Schema.TaggedError<ModelAccessPreferen
 
 /**
  * A program: each coding plan's key status is a credential read that types its
- * own failure, so the surface that wants this status yields it or settles it
+ * own failure, so the surface that wants this status yields it or runs it
  * on the runtime it holds.
  */
 export const readCliModelAccessStatus = Effect.fn(
   'modelAccessSelection.readCliModelAccessStatus',
-)(function* (stores: SettingsStores, secrets: PlatformSecrets) {
+)(function* (stores: SettingsStores) {
+  const secrets = yield* Secrets;
   const [subscriptionEntries, codingPlanEntries] = yield* Effect.all(
     [
       Effect.forEach(
         SUBSCRIPTION_AUTH_PROVIDERS,
         (provider) =>
           Effect.map(
-            subscriptionAuthStatus(provider, stores, secrets),
+            subscriptionAuthStatus(provider, stores),
             (status) => [provider, status] as const,
           ),
         { concurrency: 'unbounded' },
       ),
       Effect.forEach(
         codingPlanSubscriptionRuntimes,
-        (runtime) =>
-          Effect.gen(function* () {
-            const keySet = yield* hasUsableApiKey(
-              secrets,
-              runtime.descriptor.apiProvider,
-            );
-            const preferred = yield* runtime.getEnabled(stores);
-            return [runtime.descriptor.id, { preferred, keySet }] as const;
-          }),
+        Effect.fnUntraced(function* (runtime) {
+          const keySet = yield* hasUsableApiKey(
+            secrets,
+            runtime.descriptor.apiProvider,
+          );
+          const preferred = yield* runtime.getEnabled(stores);
+          return [runtime.descriptor.id, { preferred, keySet }] as const;
+        }),
         { concurrency: 'unbounded' },
       ),
     ] as const,
     { concurrency: 'unbounded' },
   );
-  return {
-    subscriptions: Object.fromEntries(
-      subscriptionEntries,
-    ) as CliModelAccessStatus['subscriptions'],
-    codingPlans: Object.fromEntries(
-      codingPlanEntries,
-    ) as CliModelAccessStatus['codingPlans'],
-  } satisfies CliModelAccessStatus;
+  type Access = CliModelAccessStatus;
+  const subscriptions =
+    // cast: one entry per SUBSCRIPTION_AUTH_PROVIDERS member, the record's keys.
+    Object.fromEntries(subscriptionEntries) as Access['subscriptions'];
+  const codingPlans =
+    // cast: one runtime per coding plan, so the plan ids are the record's keys.
+    Object.fromEntries(codingPlanEntries) as Access['codingPlans'];
+  return { subscriptions, codingPlans } satisfies Access;
 });
 
 // ---------------------------------------------------------------------------
@@ -111,7 +111,6 @@ const updateSubscriptionCliModelAccess = Effect.fn(
   options: CliSubscriptionLoginOptions,
 ) {
   const provider = subscriptionProvider(providerId);
-  const secrets = yield* Secrets;
   const { displayName, modelFamily } = provider;
   if (selection.state === 'off') {
     yield* provider.setPreferSubscription(stores, false).pipe(
@@ -130,7 +129,7 @@ const updateSubscriptionCliModelAccess = Effect.fn(
     } satisfies CliModelAccessSelectionResult;
   }
 
-  const status = yield* provider.getStatus(secrets);
+  const status = yield* provider.getStatus();
   let accountLabel = status.label;
   if (!status.signedIn) {
     const init = { device: false, noBrowser: false };
@@ -207,7 +206,7 @@ const updateKeyedCliModelAccess = Effect.fn(
     ),
   );
   return {
-    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${formatCliModelAccessRouteInline('api-key')}.`,
+    message: `${plan.preferenceLabel} enabled for ${plan.modelFamily} · other models still use ${OWN_API_KEYS.inline}.`,
   } satisfies CliModelAccessSelectionResult;
 });
 

@@ -96,9 +96,11 @@ export class ModelRetryGate {
     });
 
   private readonly routes = new Map<string, RouteState>();
-  private closed = false;
 
-  private constructor(private readonly scope: Scope.Scope) {}
+  private readonly scope: Scope.Scope;
+  private constructor(scope: Scope.Scope) {
+    this.scope = scope;
+  }
 
   /**
    * Run `attempt` gated on every route in `routes`, narrowest first (see
@@ -208,7 +210,6 @@ export class ModelRetryGate {
   /** Interrupt every call still waiting; the scope interrupts the probe fibers. */
   private close(): Effect.Effect<void> {
     return Effect.suspend(() => {
-      this.closed = true;
       const waiting = [...this.routes.values()].flatMap((state) =>
         state.waiters.splice(0),
       );
@@ -233,13 +234,11 @@ export class ModelRetryGate {
   ): Effect.Effect<RetryPermit> {
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
-        if (this.closed) return yield* Effect.interrupt;
-        const healthyPermit = this.acquireHealthy(route);
-        if (healthyPermit) return healthyPermit;
-        // Safe: acquireHealthy only returns undefined when it found an
-        // existing, non-healthy state for `route` (the create-on-miss branch
-        // always returns a permit), so the state it read is still in the map.
-        const state = this.routes.get(route)!;
+        if (this.scope.state._tag === 'Closed') return yield* Effect.interrupt;
+        const state = this.routeState(route);
+        if (state.phase === 'healthy') {
+          return { version: state.version, probe: false };
+        }
 
         const now = yield* Clock.currentTimeMillis;
         onWait?.(Math.max(0, state.retryAt - now));
@@ -268,22 +267,20 @@ export class ModelRetryGate {
     });
   }
 
-  private acquireHealthy(route: string): RetryPermit | undefined {
-    const state = this.routes.get(route);
-    if (state && state.phase !== 'healthy') return undefined;
-    const healthyState = state ?? {
+  /** The route's state, created healthy on first use. */
+  private routeState(route: string): RouteState {
+    const existing = this.routes.get(route);
+    if (existing) return existing;
+    const created: RouteState = {
       version: 0,
-      phase: 'healthy' as const,
+      phase: 'healthy',
       failures: 0,
       retryAt: 0,
       probe: undefined,
       waiters: [],
     };
-    this.routes.set(route, healthyState);
-    return {
-      version: healthyState.version,
-      probe: false,
-    };
+    this.routes.set(route, created);
+    return created;
   }
 
   private markRouteFailure(

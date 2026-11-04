@@ -1,6 +1,7 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
+import { withSessionFs } from '@texra-ai/harness/host';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 
 import { CliExitCode } from '../runtime/exitCodes';
@@ -9,7 +10,6 @@ import {
   formatCliMemoryList,
   formatCliMemoryPreview,
   loadCliMemoryDetail,
-  runCliMemory,
 } from '../runtime/memory';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -17,40 +17,39 @@ import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
-function runMemoryList(context: CliContext) {
-  // The init and the read it feeds are one program, run on the process
-  // runtime the command entry installs.
-  return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    // Pass the full list to `formatCliMemoryList`; it owns truncation (the
-    // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
-    // consumers should see every memory, not a capped slice.
-    const items = yield* runCliMemory(services.roots, MemoryStore.list);
+const runMemoryList = Effect.fn('runMemoryList')(function* (
+  context: CliContext,
+) {
+  const services = yield* initCliPlatform(context);
+  // Pass the full list to `formatCliMemoryList`; it owns truncation (the
+  // `Memories (N):` total and `... N more` overflow line) and JSON/NDJSON
+  // consumers should see every memory, not a capped slice.
+  const items = yield* withSessionFs(services.roots, MemoryStore.list);
 
-    emitCliResult(context, {
-      json: items,
-      ndjson: items.map((memory) => ({ kind: 'memory', memory })),
-      text: formatCliMemoryList(items),
-    });
-    return CliExitCode.Success;
+  emitCliResult(context, {
+    json: items,
+    ndjson: items.map((memory) => ({ kind: 'memory', memory })),
+    text: formatCliMemoryList(items),
   });
-}
+  return CliExitCode.Success;
+});
 
-function runMemoryShow(context: CliContext, inputPath: string) {
-  return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    const record = yield* runCliMemory(
-      services.roots,
-      loadCliMemoryDetail(inputPath),
-    );
-    emitCliResult(context, {
-      json: record,
-      ndjson: { kind: 'memory-detail', ...record },
-      text: formatCliMemoryPreview(record),
-    });
-    return CliExitCode.Success;
+const runMemoryShow = Effect.fn('runMemoryShow')(function* (
+  context: CliContext,
+  inputPath: string,
+) {
+  const services = yield* initCliPlatform(context);
+  const record = yield* withSessionFs(
+    services.roots,
+    loadCliMemoryDetail(inputPath),
+  );
+  emitCliResult(context, {
+    json: record,
+    ndjson: { kind: 'memory-detail', ...record },
+    text: formatCliMemoryPreview(record),
   });
-}
+  return CliExitCode.Success;
+});
 
 const memoryListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored memories' },

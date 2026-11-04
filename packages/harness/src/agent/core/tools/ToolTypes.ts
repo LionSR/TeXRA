@@ -13,14 +13,14 @@ import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   DispatchFacts,
   PermissionPayload,
-  RequestDecision,
+  DecisionOf,
   RunId,
   ToolDefinition,
   ToolResult,
 } from '@shared/schemas';
 import type { DatabaseNotOwner } from '@shared/session/database';
+import type { DraftBlob } from '@shared/session/historyTurns';
 import type { CellError } from '@shared/session/runHistory';
-import type { SettingHost } from '@shared/state/stateSettings';
 import type { StepRoot } from '@utils/files/externalRoots';
 
 /**
@@ -30,7 +30,7 @@ import type { StepRoot } from '@utils/files/externalRoots';
  * either is asked for, so no tool body opens its own approval prompt or
  * re-checks its own roots.
  */
-export interface ToolGuard<T, R = never> {
+export interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -38,22 +38,30 @@ export interface ToolGuard<T, R = never> {
    */
   readonly writes?: (input: T) => readonly string[];
   /**
-   * The command this call runs, spelled as the approval prompt shows it. The
-   * loop puts it through the session's bash approval before the body runs.
-   * Only the `bash` tool's commands take the run's command grant; any other
-   * tool's call is asked about per call.
-   * An Effect because the spelling can depend on settings the prompt must
-   * show (a Codex sandbox mode, a Claude permission mode).
+   * The command this call runs. Present: the loop puts it through the
+   * session's command approval before the body runs.
    */
-  readonly bash?: (input: T) => Effect.Effect<string, Error, R>;
-  /**
-   * Where the approved command actually runs, when that is not the call's own
-   * directory. Omitted: the call's working directory, else the workspace,
-   * which is what a shell-shaped tool uses. `'unknown'`: the executor cannot name one, so the
-   * prompt names none rather than a directory the command may not run in
-   * (`send_to_terminal` reuses a terminal whose shell has its own directory).
-   */
-  readonly cwd?: 'unknown';
+  readonly command?: {
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
+    /**
+     * The standing grant that answers this tool's commands. `'bash'`: the
+     * run's command grant ("approve all commands in this task"), which the
+     * shell declares. Omitted: each call is asked about and only the
+     * delegated-work grant covers it, so a tool whose prompt looks like a
+     * command (an MCP tool, codex) never inherits shell permission.
+     */
+    readonly grant?: 'bash';
+    /**
+     * Where the approved command actually runs, when that is not the call's
+     * own directory. Omitted: the call's working directory, else the
+     * workspace, which is what a shell-shaped tool uses. `'unknown'`: the
+     * executor cannot name one, so the prompt names none rather than a
+     * directory the command may not run in (`send_to_terminal` reuses a
+     * terminal whose shell has its own directory).
+     */
+    readonly cwd?: 'unknown';
+  };
 }
 
 /**
@@ -65,8 +73,6 @@ export interface ToolGuard<T, R = never> {
  */
 export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
-  /** Hosts this tool is statically excluded from; an omitted host supports it. */
-  readonly unavailableHosts?: readonly SettingHost[];
   /** The host capability (named by the plugin that serves it,
    *  `HostCapabilities`) the session's host must serve for this tool to be
    *  offered, read live each step: a window that attaches mid-run brings it. */
@@ -98,7 +104,7 @@ export interface ITool<E = Error, R = never> {
    * field as the first argument and the rest as the second:
    * `agent(prompt, opts)` for `tools.agent({ prompt, ...opts })`.
    * `withScript`: a function of scripts alone (`self()`), offered whenever
-   * the script tool is.
+   * the script tool is and never sent to the model as a tool of its own.
    */
   readonly scriptGlobal?: {
     readonly positional: string;
@@ -115,21 +121,19 @@ export interface ITool<E = Error, R = never> {
    */
   readonly replay?: 'safe' | 'unsafe';
   /**
-   * Whether a call needs a person's approval, and who asks for it. `true`:
-   * the run loop asks before the body runs, spelling the call as `guard.bash`
-   * does when the guard names one and as the tool's name and arguments
-   * otherwise, so a tool cannot declare approval and run unasked.
-   * `'inBody'`: the body opens its own request (a file-edit review, a plan, a
-   * question, a delegation proposal, an external inquiry) and the loop does
-   * not ask again. Either
-   * way, a run that cannot present a prompt is not offered the tool.
+   * Whether a call needs a person's approval, and who asks. `true` (implied
+   * by `guard.command`): the run loop, before the body runs. `'inBody'`: the
+   * body's own request (an edit's review, a plan, a delegation proposal, a
+   * question, a plugin's request), which answers what the call's hooks
+   * said. A run that cannot present a prompt is not offered such a tool
+   * (`asksApproval`).
    */
-  readonly requiresApproval?: boolean | 'inBody';
+  readonly requiresApproval?: true | 'inBody';
   /** Its card opens before the call runs; a fast tool's opens and closes
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
    * A description rendered from the other tools the run declares, in place
    * of `definition.description`: rendered at the step that freezes the
@@ -159,11 +163,19 @@ export interface CallRequests {
    *  it opens. */
   readonly nextId: (kind: PermissionPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
-   *  decision, as `SessionRequests.ask` does. */
-  readonly open: (
-    payload: PermissionPayload,
-    options?: { readonly onNeverCommitted?: Effect.Effect<void> },
-  ) => Effect.Effect<RequestDecision, DatabaseNotOwner | CellError>;
+   *  decision. The returned payload is the request actually answered,
+   *  which on resume may differ from the proposal recomputed by the caller.
+   *  `blobs` are the strings the payload names by address, stored with its row. */
+  readonly open: <P extends PermissionPayload>(
+    payload: P,
+    blobs?: readonly DraftBlob[],
+  ) => Effect.Effect<
+    {
+      readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
+      readonly decision: DecisionOf<P['kind']>;
+    },
+    DatabaseNotOwner | CellError
+  >;
 }
 
 /**

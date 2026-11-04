@@ -33,6 +33,8 @@ interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
   isBrowserCovered(): boolean;
+  /** Asks before discarding a dirty tab; runs `discard` only on consent. */
+  confirmDiscard(title: string, discard: () => void): void;
   conversationView: HTMLElement;
   fileTree: ReturnType<typeof createEditorPane>;
   editorFor(id: string): ReturnType<typeof createEditorPane>;
@@ -62,7 +64,8 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   element.addEventListener('keydown', (event) => {
     if (event.defaultPrevented || event.key !== 'F10' || !event.shiftKey)
       return;
-    const tab = (event.target as HTMLElement)
+    if (!(event.target instanceof Element)) return;
+    const tab = event.target
       .closest('.dv-tab')
       ?.querySelector<HTMLElement>('.shell-dock-tab');
     if (!tab) return;
@@ -254,11 +257,14 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
 
   function disposeWorkbenchTab(id: string) {
     const tab = tabFor(id);
-    if (
-      !tab ||
-      (tab.dirty && !window.confirm(`Discard unsaved changes to ${tab.title}?`))
-    )
-      return;
+    if (!tab) return;
+    if (tab.dirty) deps.confirmDiscard(tab.title, () => removeTab(id));
+    else removeTab(id);
+  }
+
+  function removeTab(id: string) {
+    const tab = tabFor(id);
+    if (!tab || disposed) return;
     reconciling = true;
     try {
       const panel = dock?.getPanel(id);
@@ -294,7 +300,8 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
 
   function positionFor(tab: WorkbenchTab): AddPanelPositionOptions | undefined {
     if (openingGroup) return { referenceGroup: openingGroup };
-    if (!dock?.panels.length) return undefined;
+    const firstPanel = dock?.panels.at(0);
+    if (!dock || !firstPanel) return undefined;
     const sameKind = dock.panels.find(
       (panel) => tabFor(panel.id)?.kind === tab.kind,
     );
@@ -306,7 +313,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     );
     if (tab.kind === 'terminal' || tab.kind === 'logs') {
       return {
-        referencePanel: document ?? dock.activePanel ?? dock.panels[0]!,
+        referencePanel: document ?? dock.activePanel ?? firstPanel,
         direction: 'below',
       };
     }
@@ -317,7 +324,7 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
     if (['editor', 'pdf', 'review', 'browser'].includes(tab.kind) && document)
       return { referencePanel: document };
     return {
-      referencePanel: files ?? dock.activePanel ?? dock.panels[0]!,
+      referencePanel: files ?? dock.activePanel ?? firstPanel,
       direction: 'right',
     };
   }
@@ -419,9 +426,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
       },
     });
     reconciling = true;
-    if (getState().dockLayout) {
+    const savedLayout = getState().dockLayout;
+    if (savedLayout) {
       try {
-        dock.fromJSON(getState().dockLayout!);
+        dock.fromJSON(savedLayout);
       } catch (error) {
         console.warn('[desktop] Rebuilding unreadable docking layout', error);
         dock.clear();
@@ -480,7 +488,10 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
   }
 
   const actions = {
-    api: () => dock!,
+    api: () => {
+      if (!dock) throw new Error('The workbench dock is not created yet.');
+      return dock;
+    },
     tab: tabFor,
     open: openKind,
     close: disposeWorkbenchTab,

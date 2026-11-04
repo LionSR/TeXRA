@@ -14,11 +14,11 @@ import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
 import {
   settingsCatalog,
-  type StateSettingEntry,
+  type SettingsCatalog,
 } from '@shared/state/stateSettings';
 import { canonicalizeWorkspacePath } from '@utils/system/nodeWorkspace';
 
-import type { AgentPlatform } from '../../effect/sessions.js';
+import type { AgentPlatform } from '../agentPlatform';
 
 /** Filesystem locations used by the default Node platform. */
 export interface NodePlatformOptions {
@@ -26,13 +26,15 @@ export interface NodePlatformOptions {
   readonly workspaceDir?: string;
   /**
    * The directory this platform stores run history, checkpoints and its
-   * global state under, and reads its `mcp.json` from. Required: the package
-   * never falls back to a per-user default directory.
+   * global state under, and reads the user's own files from: its
+   * `mcp.json`, the `AGENTS.md` a workspace without one falls back to, and,
+   * given skill sources, the skills under its `skills/`. Required: the
+   * package never falls back to a per-user default directory.
    */
   readonly storageDir: string;
-  /** The setting rows the embedder's plugins read, resolved beside the
-   *  harness's own by the platform's config. */
-  readonly settings?: readonly StateSettingEntry[];
+  /** The catalog the platform's config resolves against (`settingsCatalog`);
+   *  absent, the harness's rows alone, under the `harness` namespace. */
+  readonly settings?: SettingsCatalog;
 }
 
 const NO_PERSISTED_SECRETS =
@@ -78,13 +80,14 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       builtIn: () => Effect.succeed(''),
     },
     roots: createNodeWorkspaceRoots({
-      host: 'sdk',
       workspacePath: workspaceDir,
       storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
       storageRoot: options.storageDir,
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
-      config: new MemoryConfigProvider(settingsCatalog(options.settings ?? [])),
+      config: new MemoryConfigProvider(
+        options.settings ?? settingsCatalog({ namespace: 'harness', rows: [] }),
+      ),
       workspaceState: new MemoryStateStore(),
       repoState: new MemoryStateStore(),
       globalState,

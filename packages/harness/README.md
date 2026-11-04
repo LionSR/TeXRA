@@ -32,11 +32,11 @@ patch while `@effect/*` packages float.
 ```jsonc
 {
   "dependencies": {
-    "@effect/platform-node": "^4.0.6",
-    "@effect/sql-sqlite-node": "^4.0.6",
+    "@effect/platform-node": "^4.1.0",
+    "@effect/sql-sqlite-node": "^4.1.0",
     "@texra-ai/harness": "^0.1.0",
     "@texra-ai/llm": "^0.1.0",
-    "effect": "^4.0.6",
+    "effect": "^4.1.0",
   },
 }
 ```
@@ -45,6 +45,9 @@ A provider API key can come from the environment (`ANTHROPIC_API_KEY`, …).
 A Claude Max or Team plan includes [monthly API credits](https://platform.claude.com/docs/en/about-claude/api-credits-for-subscribers)
 that an Anthropic API key can spend once you link a Console organization to
 the plan.
+A ChatGPT Pro or Business plan includes [monthly API credits](https://help.openai.com/en/articles/20001626-api-credits-benefit-for-eligible-chatgpt-subscriptions)
+that an OpenAI API key can spend once you claim them for an API organization
+you own.
 
 ## Usage
 
@@ -134,9 +137,12 @@ session is closed.
 A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
-`reason` is `finished`, `owned_elsewhere` (a live process holds it), `blocked`
-(an agent or plugin it needs is missing), `unusable_checkpoint`, or
-`not_resumable` (it is running here, or it was deleted). If `runId` belongs to
+`reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
+and `RunView.resumeBlocked` give: its `kind` is `finished`, `ownedElsewhere`
+(a live process holds it, named by `owner`), `blocked` (the agent or plugin
+named by `name` is missing, off or not trusted), `unusableCheckpoint`,
+`earlierBuild` (with its `cause`), or `notResumable` (it is running here, or
+it was deleted). If `runId` belongs to
 a child run owned by an active parent call, `session.resume` resumes the parent
 and sets `run.redirectedFrom` to the requested child `runId`. Pass the same
 custom `tools` to `resume` that were passed to `start`. Calling `resume` on a
@@ -197,28 +203,27 @@ const program = Effect.gen(function* () {
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `Sessions` | The process's sessions: `open(roots, options?)`, `close(roots)`, `list`. One session per workspace storage root. `processLayer` (`./host`) serves it; `Sessions.layer({ platform, plugins })` composes that process for the layer's lifetime. Build it once per process.                                          |
 | `Session`  | One workspace's runs: `start` and `resume` give a `Run`; `request` sends everything else (follow-ups, approvals, stop, fork); `attach(host)` answers approvals until the caller's scope closes; `view.current()` and `view.changes` read the session's state as immutable snapshots. `roots` names the workspace. |
-| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`. `start` returns once the run exists, before its first model call.                                                        |
+| `Run`      | `runId`; `events`, what the run does as it does it (`events.pipe(responseText)` for the answer's text); `result`, how it ended; `view`, the session's state while it lasts; `interrupt`, the user's `run.stop`. `start` returns once the run exists, before its first model call.                                 |
 
-`run.events` is the run's trace as a `Stream`. Trace events are buffered from
-the moment the run enters its session, so a reader begun right after `start`
-misses none of the launch events. Ending the stream's consumption detaches
-the event source while the run itself continues, and a run that finishes
-without ever being read discards what it buffered. That buffer is only the
-handover to the first reader, and it is bounded: a run whose events pass the
-handover window with nobody reading has no reader, so it logs a warning
-naming the run and detaches its trace. Taking only `result` therefore never
-retains a long run's whole trace. A reader that attaches after that, or
-after the run finished unread, fails with `TraceUnavailable` (`truncated` or
-`ended`) rather than reading an empty trace; so does any reader of a run
-another process runs, which keeps its trace (`remote`). A reader that did attach in
-time is never dropped: past its first pull the buffer is that reader's, and
-nothing discards what it has yet to read.
+`run.events` is the run's trace as a `Stream`, and any number of readers
+can read it at any time. Each read is the run's events read back from the
+session, from the start of the activation the handle is for, following the
+run until that activation ends; it fails as `result` does. A `Run` is a
+view of one activation of the run in its session and holds nothing: ending a
+read stops that reader, not the run. Every event except `stream.chunk` is a
+stored row, and streamed text arrives as the session holds it: a stream
+that ended before the read reached it comes as one chunk of its final text,
+so a reader's chunks always add up to each stream's final text.
 
 Every failure is a typed error on the effect that owns it. A refusal before
 any model work fails `session.start` with one of the tagged errors the
-surface names (`AgentNotFound`, `ToolsRefused`); a run that fails after entering its session
-fails `run.result` and `run.events` with `RunFailure`, whose `cause` is
-exactly what the launch path threw.
+surface names (`AgentNotFound`, `ToolsRefused`); a launch that fails
+before its run enters the session fails `start` with `RunFailure`, whose
+`cause` is exactly what the launch path threw. No host is shown such a
+failure: a launch refused for an unknown model, or for a `config` naming an
+unknown agent, carries the notice to show for it (`AgentError.notice`, read
+with `launchNoticeOf` from `./host`). A run that fails after entering stores
+a failed end, which `run.result` returns.
 
 `run.view` is the derived session state every host renders, so run
 status, transcript rows, and pending approvals are read from it rather than
@@ -228,9 +233,7 @@ final view is included even when consumption starts after `result` completes,
 and the first view yielded always holds the run's row. `result` completes
 only once the final view is applied, independently of whether the caller
 reads it; if the session's state reducer dies first, `result` and every `view`
-consumer die with its defect instead of waiting. A run that fails on its own
-fails `result` with its own error without waiting for the view update; a
-reducer defect then reaches `view` consumers only. Ending consumption stops that
+consumer die with its defect instead of waiting. Ending consumption stops that
 reader while the run continues. If launch fails before the run enters the
 session, there is no `view` at all: `start` itself carries the failure.
 
@@ -242,9 +245,9 @@ the latest level. The exported `SessionView`, `RunView`, and
 `TranscriptView` types are read-only all the way down (`ReadonlyMap`, readonly
 arrays); a write through a cast corrupts the session every later run in the
 process reads. A run is a row of `SessionView.runs`. The run's transcript rows
-(`RunView.transcript`) are subscribed on its behalf, the run itself and its
-descendants as they appear, until the run's final view: a reader that needs
-them later watches them (`view.watch`).
+(`RunView.transcript`) are subscribed while its `run.view` is read, the run
+itself and its descendants as they appear, until the run's final view: a
+reader that needs them otherwise watches them (`view.watch`).
 
 Runs share one session per workspace storage root: opening a root twice
 resolves the session already open there, while a second root gets its own. A
@@ -266,6 +269,33 @@ a root the first holds is refused at open ("already open in this process";
 the guard is `processRoots` beside `SessionOwner`): share that session
 instead. Builds over different roots each work, and a later build after the
 first one is released is fine.
+
+### Messages to a run, and their receipts
+
+`session.request({ kind: 'followUp.send', runId, text, id })` sends a run a
+message under the caller's `id` (one is minted and returned when absent).
+
+- A retry under the same `id` answers with the first send's receipt instead of
+  sending the message twice. That includes a retry after a lost reply and a
+  retry once the run takes no more input.
+- A different message under that `id` fails with `Conflict`. The id is
+  scoped to the run and to sends, and the comparison is on what the message
+  says (its text, media and hold), not on how it was serialized.
+
+`session.request({ kind: 'followUp.receipt', runId, id })` reads where the
+message stands, from the run's committed rows. Nothing extra is stored. The
+receipt is one of:
+
+- `accepted` while it is queued;
+- `incorporated` into turn `turn` while that turn runs;
+- `answered`, naming the row that answered it (`answer`, its `seq`);
+- `unanswered`, with the reason nothing will answer it: the turn failed, the
+  run ended before the turn did, or the message left the queue unread.
+
+With `wait: true` the read returns once the message is answered or
+unanswered. Messages that join one turn share that turn's answer. Wait on
+the receipt rather than counting model calls or watching for a `waiting`
+status.
 
 ## Durable invariants
 
@@ -332,13 +362,44 @@ the session store's source; in short:
   `DatabaseClaimRefused`, both typed): nothing was written. A run that loses its own
   claim stops, with no retry. When another process holds the run, every
   caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
-  answers `owned_elsewhere`, a request `NotOwner`.
+  answers `ownedElsewhere`, a request `NotOwner`.
+
+## Generated files and deletion
+
+Under its storage root a session owns the store (`texra.db`) and one
+directory per run, `executions/<runId>/`, holding the files the run
+generated. A deletion removes nothing else: the project's own files are
+never touched, and a store moved aside (`texra.db.pre1`) is never read again
+and goes only when a person deletes it (`deleteStorageInventory`, which
+`texra doctor --prune-storage` runs after asking).
+
+- Deleting a run (the `run.delete` request) commits a deletion marker, the
+  `run.removed` row that closes the run and every run it owns. Nothing on
+  disk is removed before that row commits, and a deletion removes only the
+  directories of the runs its marker closed.
+- The session collects committed markers when it opens and after each
+  deletion: it removes the closed runs' directories, then their rows and the
+  blobs no other row uses. Each step may run twice, in one process or two,
+  with the same result.
+- A removal that fails leaves its marker pending, with a warning, and the
+  next collection retries it. The deleted run stays deleted meanwhile.
+- The only runs the harness deletes on its own are ended background shells
+  an earlier process left, at session open, through the same marker.
+- Before removing anything, the collector resolves the storage root and its
+  `executions` directory, which must resolve to itself. If it was replaced by
+  a link elsewhere, the collection is refused and stays pending; each target
+  must also fall inside it. This is resolve-then-check: a directory replaced
+  between the check and the removal is not detected.
+- The `run.files` request copies a stopped run's directory into the project,
+  or removes the directory without deleting the run.
 
 ## Run results
 
-There is exactly one result shape: `RunEndResult`, the run's `run.end`
-payload plus the `runId` it belongs to. It carries an `outcome`, an optional
-`usage`, an `output`, and, on a failed run, a structured `error`. Every run's
+There is exactly one result shape: `RunEnd`, the end the run stored for
+its activation. It carries an `outcome`, an optional `usage`, an `output`,
+and, on a failed run, its classified `error` (`kind`, `message`): a failed
+run's `result` succeeds with that end, and fails with `RunFailure` only when
+no end was stored. Every run's
 output is one shape, `{ response, files, structured? }`: the reply text, the
 workspace-relative files its tool calls edited, and the `structured` value of
 a `submit_output` tool when the run used one. A recipe's run (`script.kind:
@@ -368,7 +429,7 @@ files.
 | `@texra-ai/harness/schemas`    | Browser-safe: Effect schemas + derived types for agent definitions, configs, and run results; the read-only `SessionView`, `RunView` and `TranscriptView` and their reads; the approval policy; error messages                                                                                  |
 | `@texra-ai/harness/transcript` | Browser-safe: `RemoteSessionView`, a session's view built over the `SessionInputs` a transport serves; the transcript rows a `TranscriptView` holds and the projections a renderer derives from them                                                                                            |
 | `@texra-ai/harness/plugins`    | The built-in plugins (`harnessBuiltins`, or one by one), and what a plugin or tool is written with: `definePlugin`, `ToolContext`, `executed`/`errorResult`, `nullishWithDefault`, `resolveToolPath`, `ToolRegistry`                                                                            |
-| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots                                                                                                                                                                                                             |
+| `@texra-ai/harness/node`       | `nodePlatform(options)`, a ready-made Node `AgentPlatform` with its workspace roots; where the log entries go (`setLogSink`, `LogSink`) and at which level (`effectDiagnosticsLayer`)                                                                                                           |
 | `@texra-ai/harness/host`       | What a full application host composes beyond the root: `processLayer`, the agent catalog, settings and stores, skills, installed plugins, model options, the presentation surface (`HostInteractions`), and shared file, error and log helpers. TeXRA's own hosts read it; no stability promise |
 
 Every entry needs the peers installed. See [Install](#install). Each entry's
@@ -380,27 +441,73 @@ version of the usage program against a packed tarball is in
 ## The platform
 
 Every run needs an `AgentPlatform`: the process services the package
-composes (the agent directories, secrets, the resume
-port, and an optional `toolMissingHandler` that surfaces
-a missing external tool) plus the `WorkspaceRoots` of the folder the runs
+composes (the agent directories, secrets and the resume
+port) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
 process-wide global state). The tool registry reads the MCP servers of the
-`mcp.json` at the storage root that global storage lies under.
+`mcp.json` at the storage root that global storage lies under, and a run's
+system prompt carries the workspace's `AGENTS.md`, or the storage root's when
+the workspace has none.
 `nodePlatform()` supplies all of them: process-local config and state,
 the ordinary storage layout under the `storageDir` you name (required; the
-package never falls back to a per-user directory), that directory's `mcp.json`,
-and environment-variable secrets (so provider API keys are read from
+package never falls back to a per-user directory), that directory's `mcp.json`
+and `AGENTS.md`, and environment-variable secrets (so provider API keys are read from
 `process.env`; nothing is persisted). The setting rows your own plugins read
-go to it as `nodePlatform({ settings })`, resolved after the harness's own; a
-platform with its own `ConfigProvider` carries them as its `catalog`, built
-with `settingsCatalog(rows)` from `@texra-ai/harness/schemas`. Code reads and
+go to it as `nodePlatform({ settings })`, a catalog built with
+`settingsCatalog({ namespace, rows })` from `@texra-ai/harness/schemas`, which
+resolves them after the harness's own; a platform with its own
+`ConfigProvider` carries that catalog as its `catalog`. Keys are relative to
+the namespace (`'memory.enabled'`), which the stores add to every key they
+write. Code reads and
 writes a setting through `Settings` (`get`, `set`, `reset`) against the
 stores it holds.
 
 Model requests carry their own HTTP transport: the environment's proxy policy
 (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
 timeout, bound to each model rather than installed as your process's global
-dispatcher.
+dispatcher. To answer model requests yourself, for a scripted model in a test
+or a recording transport, merge `ModelFetch` (a `fetch`) beneath
+`Sessions.layer`; every model request of the layer's runs then goes through
+it, and it owns the proxy policy and timeouts too:
+
+```ts
+import { Effect, Layer } from 'effect';
+import { ModelFetch, Sessions } from '@texra-ai/harness';
+
+const scripted: typeof fetch = async () =>
+  new Response(/* the provider's wire reply */);
+
+program.pipe(
+  Effect.provide(
+    Sessions.layer({ platform, plugins: harnessBuiltins }).pipe(
+      Layer.provideMerge(Layer.succeed(ModelFetch)(scripted)),
+    ),
+  ),
+);
+```
+
+The fetch has to stay in the runtime's context, where the runs read it, so
+the sample merges it with `Layer.provideMerge` rather than handing it only to
+the layer's build with `Layer.provide`. Leave it out and the harness's own
+transport carries the requests.
+[`example/_support.ts`](./example/_support.ts) answers with an in-memory
+Anthropic Messages stream this way.
+
+The harness logs with `Effect.log*`, and `Sessions.layer` installs no logger
+of its own: its entries (a store that failed, a plugin that did not load, a
+run's warnings) go through the loggers, minimum level and tracer your program
+provides. Effect's default logger prints `Info` and above to the console;
+provide your own with `Logger.layer([...])`, or `Logger.layer([])` to drop
+them. To send them through the harness's sink instead, which redacts secrets,
+provide `effectDiagnosticsLayer(level)` from `@texra-ai/harness/node` around
+the program and name a destination with `setLogSink({ write(entry) { … } })`:
+it receives each `LogEntry`, Effect's structured record (level, message,
+cause, annotations), and `entryChannel` / `entryMessage` read its channel and
+text. Setting a sink disposes the one it replaces (its optional `dispose`),
+and `setLogSink(null)` restores the console. Entries reach the sink with
+secrets redacted, unless you pass `{ trusted: true }`. The few lines written
+outside any fiber (a trace sink that threw, a stored setting that does not
+read) always go to the sink, the console until you set one.
 
 The platform is **process-wide** for the layer's lifetime: create one and
 reuse it for every run, with the one `Sessions.layer` built over it.

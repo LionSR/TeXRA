@@ -24,10 +24,8 @@ import {
   Path,
   type Scope,
 } from 'effect';
-import type { AgentCatalog } from '@agent/index/agentCatalog';
-import type { RouteRetries } from '@agent/runtime/run/invocation';
-import type { SessionOwnerShape } from '@agent/runtime/SessionHandle';
 import { writeLogEntry } from '@logger/logSink';
+import type { AppSignals } from '@platform/appSignals';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
 import {
   DatabaseOpenFailed,
@@ -36,10 +34,6 @@ import {
   type ProjectDatabases,
 } from '@shared/session/database';
 import type { UsageLog } from '@shared/usageLog';
-import type { ToolCatalog } from '@tools/liveTools';
-import type { ToolAvailability } from '@tools/toolAvailabilityService';
-import type { ToolRegistry } from '@tools/toolTable';
-import type { Sessions } from '../effect/processLayer.js';
 import type { HttpClient } from 'effect/http';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -76,26 +70,23 @@ export class StateStores extends Context.Service<
 >()('@texra-ai/harness/StateStores') {}
 
 /**
- * The runtime over the process-lifetime services every entry provides: the
- * cohort-A tags, the language-model bridge and the HTTP client, merged once in
- * `processLayer`'s `services` layer, plus the standard library's
- * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
- * provides from `@effect/platform-node` so a program that reads a file or
- * starts a child process takes them from context instead of building a Node
- * layer of its own, and
- * `GlobalStorageFs`, the cross-workspace storage view every session of the
- * process shares, `GlobalDatabase`, that same root's one database handle,
- * which the app's records and the CLI's input history read through,
+ * The platform- and shared-owned services every process serves, merged once
+ * in `processLayer`'s `services` layer: the host ports, the language-model
+ * bridge and the HTTP client, plus the standard library's `FileSystem`,
+ * `Path` and `ChildProcessSpawner`, which the same install provides from
+ * `@effect/platform-node` so a program that reads a file or starts a child
+ * process takes them from context instead of building a Node layer of its
+ * own, and `GlobalStorageFs`, the cross-workspace storage view every session
+ * of the process shares, `GlobalDatabase`, that same root's one database
+ * handle, which the app's records and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
- * connection between application state and a session graph, `ToolRegistry`,
- * the plugin table every run's offered tools are rebuilt from,
- * `ToolCatalog`, the tool catalog each session's steps pin their tools in
- * (its owner's view, `ToolCatalogOwner`, stays inside the composition), and
- * `ToolAvailability`, each workspace's last dependency probe. Every run
- * and session of the process is provided these; the `Sessions` above them
- * is the composition root's alone ({@link ProcessRuntime}).
+ * connection between application state and a session graph, and
+ * `AppSignals`, the process's app-lifecycle signal hub. Every run and
+ * session of the process is provided these, beneath the run-level services
+ * the agent runtime adds (`RunServices`) and the `ProcessServices` a
+ * composition root runs on.
  */
-export type ProcessServices =
+export type PlatformServices =
   | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
@@ -107,14 +98,10 @@ export type ProcessServices =
   | Secrets
   | AppState
   | AgentDirectories
-  | AgentCatalog
   | GlobalValues
   | StateStores
   | UsageLog
-  | ToolRegistry
-  | ToolCatalog
-  | ToolAvailability
-  | RouteRetries;
+  | AppSignals;
 
 /**
  * The services a step pinned from its plugins' layers (a plugin's
@@ -125,30 +112,6 @@ export type ProcessServices =
  * to the call.
  */
 export type PluginContext = Context.Context<never>;
-
-/**
- * The services an agent catalog load reads: the global and filesystem views
- * the local agent directories are scanned through, the app state the
- * disabled-plugin switch is read from, and the plugin table whose agent-file
- * blocks a scan admits.
- */
-export type AgentCatalogServices =
-  | GlobalStorageFs
-  | FileSystem.FileSystem
-  | AgentDirectories
-  | AppState
-  | ToolRegistry;
-
-/**
- * The process's session owner: one session per workspace storage root,
- * served by `processLayer` over the `LayerMap` that owns every session's
- * lifetime; its shape is
- * {@link SessionOwnerShape}.
- */
-export class SessionOwner extends Context.Service<
-  SessionOwner,
-  SessionOwnerShape
->()('@texra-ai/harness/SessionOwner') {}
 
 /** A root's holder (one composition) and how many of its sessions hold it. */
 type RootHold = { readonly holder: object; count: number };
@@ -201,33 +164,6 @@ export const holdProcessRoot = Effect.fn('processRuntime.holdProcessRoot')(
     );
   },
 );
-
-/** The runtime a composition root makes over `processLayer`: the process
- *  services, and the `Sessions` that open and close its sessions. */
-export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
-  ProcessServices | Sessions,
-  never
->;
-
-/**
- * `effect` over this runtime's services (a {@link ProcessRuntime}'s, or a
- * host runtime's that serves more), as a program rather than a run: a
- * composition root hands the process services to a program it must give away
- * — a shutdown handler, a host callback typed as an Effect — without
- * stepping through a Promise to get them. The services are the runtime's own
- * context, built once and cached there, so this is the same provision
- * `runPromise` would have made, minus the boundary.
- */
-export function withProcessServices<A, E, R = ProcessServices | Sessions>(
-  // Not named `runtime`: the migration ratchet pins this file's one approved
-  // `runtime` binding to `withForkFailureReporting`'s parameter.
-  processRuntime: ManagedRuntime.ManagedRuntime<R, never>,
-  effect: Effect.Effect<A, E, NoInfer<R>>,
-): Effect.Effect<A, E> {
-  return Effect.flatMap(processRuntime.contextEffect, (context) =>
-    Effect.provide(effect, context),
-  );
-}
 
 /**
  * An exit the fiber's interruption produced. Interrupting a consumer of a

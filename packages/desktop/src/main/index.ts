@@ -2,7 +2,11 @@ import { Cause, Effect, Exit, Result, Scope } from 'effect';
 import { app, BrowserWindow, dialog, session } from 'electron';
 
 import { Sessions } from '@texra-ai/harness';
-import { GlobalValues, withProcessServices } from '@texra-ai/harness/host';
+import {
+  GlobalValues,
+  withLogChannel,
+  withProcessServices,
+} from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { NotificationFailed } from '@texra/hosts/uiHosts';
@@ -70,7 +74,7 @@ function installContentSecurityPolicy(): void {
 }
 
 // The desktop entry: one program from Electron's `whenReady` to the wired
-// window. Its fatal report is the one fold, and it runs on the default
+// window. Its fatal report is the one handler, and it runs on the default
 // runner because it is what builds the process runtime.
 void Effect.runPromise(
   Effect.gen(function* () {
@@ -280,7 +284,10 @@ void Effect.runPromise(
             Effect.catchCause((cause) =>
               Cause.hasInterruptsOnly(cause)
                 ? Effect.void
-                : Effect.sync(() => console.error(Cause.squash(cause))),
+                : Effect.logError('A desktop background task failed').pipe(
+                    Effect.annotateLogs({ data: Cause.squash(cause) }),
+                    withLogChannel('desktop'),
+                  ),
             ),
             Effect.forkIn(processScope),
           );

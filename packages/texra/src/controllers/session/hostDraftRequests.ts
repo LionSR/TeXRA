@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 import { Deferred, Effect, Fiber, FileSystem } from 'effect';
-import { MODEL_CONFIGS } from 'llm-zoo';
+import { MODEL_CONFIGS } from '@texra-ai/llm';
 
 import { Cancelled, Rejected, type WorkspaceRoots } from '@texra-ai/harness';
 import {
@@ -43,7 +43,7 @@ interface Take {
   readonly descriptor: Recording;
   /** Start's answer: the transcription, or why the take ended without one. */
   readonly result: Deferred.Deferred<HostOutcome, Rejected | Cancelled>;
-  /** Settled by the first Stop or Cancel. The take fiber waits on it once
+  /** Finished by the first Stop or Cancel. The take fiber waits on it once
    *  the microphone is up, then reads `cancelled` to decide what to do. */
   readonly settled: Deferred.Deferred<void>;
   stopping: boolean;
@@ -79,7 +79,7 @@ export class HostDraftRequests {
     );
   }
 
-  /** Every open paper observes the same recorder and its destination. */
+  /** Every open project observes the same recorder and its destination. */
   subscribe(listener: (recording: Recording | null) => void): () => void {
     this.listeners.add(listener);
     listener(this.recording());
@@ -106,10 +106,7 @@ export class HostDraftRequests {
   > {
     switch (request.kind) {
       case 'polish': {
-        // A host port takes no services, so the secret store the helper
-        // model is resolved against is read here.
-        const secrets = yield* Secrets;
-        const text = yield* polishTextWithAI(request.text, roots, secrets).pipe(
+        const text = yield* polishTextWithAI(request.text, roots).pipe(
           Effect.mapError((error) => new Rejected({ reason: error.message })),
         );
         return { kind: 'text', text };
@@ -187,7 +184,7 @@ export class HostDraftRequests {
   });
 
   /** The take from microphone startup to its answer. Completion belongs to
-   *  Start, even when another paper or view stops the recorder. */
+   *  Start, even when another project or view stops the recorder. */
   private readonly runTake = Effect.fn('HostDraftRequests.take')(function* (
     this: HostDraftRequests,
     take: Take,
@@ -197,9 +194,6 @@ export class HostDraftRequests {
       Rejected | Cancelled,
       Secrets | FileSystem.FileSystem | ChildProcessSpawner
     > = Effect.gen(function* () {
-      // Transcription binds its OpenAI credential against the process
-      // secret store the host root provides.
-      const secrets = yield* Secrets;
       // sox lives in this block's scope. Its close (SIGTERM, then a join on
       // the exit) is the stop, so the microphone is off before anything
       // below reads a credential. The recorder writes under the take's own
@@ -246,7 +240,7 @@ export class HostDraftRequests {
       // transcription as data.
       const postStop = Effect.gen(function* () {
         const credential = yield* ownKeyCredential(
-          { ...take.roots, secrets },
+          take.roots,
           MODEL_CONFIGS['openai/gpt-4o-2024-11-20'],
           'openai',
         ).pipe(

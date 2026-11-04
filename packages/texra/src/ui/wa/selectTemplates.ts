@@ -2,8 +2,8 @@
  * Helpers for Web Awesome select and dropdown events.
  */
 
-import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import type WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
+import WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import WaSelect from '@awesome.me/webawesome/dist/components/select/select.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /**
@@ -13,17 +13,17 @@ import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js
  * `HTMLSelectElement` is the wrong type for this Web Component anyway.
  */
 export function readSelectValue(event: Event): string {
-  const select = event.currentTarget as WaSelect | null;
-  return typeof select?.value === 'string' ? select.value : '';
+  const select = event.currentTarget;
+  return select instanceof WaSelect && typeof select.value === 'string'
+    ? select.value
+    : '';
 }
 
 /** The chosen item's `value` from a `wa-dropdown`'s `wa-select` event; ''
  *  when the item is not a `wa-dropdown-item`. */
 export function selectedItemValue(event: WaSelectEvent): string {
   const { item } = event.detail;
-  return item.localName === 'wa-dropdown-item'
-    ? (item as WaDropdownItem).value
-    : '';
+  return item instanceof WaDropdownItem ? item.value : '';
 }
 
 /**

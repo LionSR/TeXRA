@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 import { createRunStorageLocation, Settings } from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
@@ -28,7 +28,6 @@ import {
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
 
 import {
   publishCompiledPdfArtifact,
@@ -79,13 +78,21 @@ const notRun = (reason: string): RoundLatexdiffs => ({
 export class LatexDiffManager {
   private readonly latexdiffService: LaTeXdiffService;
 
+  private readonly logger: AgentTrace;
+  private readonly runId: RunId;
+  private readonly fileService: RunFileService;
+  private readonly roots: WorkspaceRoots;
   constructor(
-    private readonly logger: AgentTrace,
-    private readonly runId: RunId,
-    private readonly fileService: RunFileService,
+    logger: AgentTrace,
+    runId: RunId,
+    fileService: RunFileService,
     /** The run's session roots: the workspace and setting stores it reads. */
-    private readonly roots: WorkspaceRoots,
+    roots: WorkspaceRoots,
   ) {
+    this.logger = logger;
+    this.runId = runId;
+    this.fileService = fileService;
+    this.roots = roots;
     this.latexdiffService = new LaTeXdiffService(runId, roots);
   }
 
@@ -96,17 +103,17 @@ export class LatexDiffManager {
    * was removed under us, or a link cycle) falls back to the path as given —
    * the same directory latexdiff would have used without resolution.
    */
-  private getWorkingDirectory(
+  private readonly getWorkingDirectory = Effect.fn(
+    'LatexDiffManager.getWorkingDirectory',
+  )(function* (
     location: FileLocation,
-  ): Effect.Effect<string, never, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const resolved = yield* fs
-        .realPath(location.absolutePath)
-        .pipe(Effect.orElseSucceed(() => location.absolutePath));
-      return path.dirname(resolved);
-    });
-  }
+  ): Effect.fn.Return<string, never, FileSystem.FileSystem> {
+    const fs = yield* FileSystem.FileSystem;
+    const resolved = yield* fs
+      .realPath(location.absolutePath)
+      .pipe(Effect.orElseSucceed(() => location.absolutePath));
+    return path.dirname(resolved);
+  });
 
   private logLatexdiffResult(result: LaTeXdiffResult, operation: string): void {
     if (result.success) {
@@ -168,14 +175,8 @@ export class LatexDiffManager {
     outputFiles: readonly OutputFileInfo[],
     previousOutputs: readonly OutputFileInfo[],
   ): Effect.Effect<RoundLatexdiffs, never, DiffServices> {
+    // A missing latexdiff is each pair's failure, carrying its install steps.
     const execute = Effect.gen({ self: this }, function* () {
-      if (!(yield* checkToolInstalled('latexdiff'))) {
-        this.logger.warn(
-          'Skipping latexdiff operations - latexdiff not installed',
-        );
-        return notRun('latexdiff is not installed');
-      }
-
       if (outputFiles.length === 0) {
         this.logger.warn(
           `No output files found for round ${currRound}, skipping latexdiff operations`,
@@ -348,22 +349,23 @@ export class LatexDiffManager {
     );
   }
 
-  private compileDiff(
-    diffPath: string,
-    referenceLocation: FileLocation,
-    diffDirectory: DiffOutputDirectory,
-    round: number,
-    sourceLocation: FileLocation,
-    pdfStemSuffix: string,
-  ): Effect.Effect<
-    {
-      diffLocation: FileLocation;
-      artifact: RunStorageFileLocation | null;
-    },
-    Error,
-    DiffServices
-  > {
-    return Effect.gen({ self: this }, function* () {
+  private readonly compileDiff = Effect.fn('LatexDiffManager.compileDiff')(
+    { self: this },
+    function* (
+      diffPath: string,
+      referenceLocation: FileLocation,
+      diffDirectory: DiffOutputDirectory,
+      round: number,
+      sourceLocation: FileLocation,
+      pdfStemSuffix: string,
+    ): Effect.fn.Return<
+      {
+        diffLocation: FileLocation;
+        artifact: RunStorageFileLocation | null;
+      },
+      Error,
+      DiffServices
+    > {
       const diffFileName = path.basename(diffPath);
       const diffLocation = createRunStorageLocation(
         path.join(diffDirectory.absolutePath, diffFileName),
@@ -391,13 +393,18 @@ export class LatexDiffManager {
         // folder.
         resolveWorkspaceSourceDir(this.roots, referenceLocation) ??
           path.dirname(referenceLocation.absolutePath),
-      ].filter((dir): dir is string => dir !== null);
+      ].filter(Predicate.isNotNull);
       const compiled = yield* compileLatex2Pdf(diffLocation, this.roots, {
         channel: this.runId,
         outputDirectory: buildDir,
         timeout: timeoutMs,
         extraInputDirs,
-      });
+      }).pipe(
+        // No compiler costs this diff its PDF, not the diff itself.
+        Effect.catchTag('ToolMissing', (missing) =>
+          Effect.succeed({ ok: false, logTail: missing.message } as const),
+        ),
+      );
 
       if (!compiled.ok) {
         // Keep the missing auxiliary PDF visible, but leave the compiler tail
@@ -441,6 +448,6 @@ export class LatexDiffManager {
           ),
       );
       return { diffLocation, artifact };
-    });
-  }
+    },
+  );
 }

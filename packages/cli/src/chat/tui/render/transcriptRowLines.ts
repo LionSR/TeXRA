@@ -8,7 +8,6 @@
 import {
   elideText,
   transcriptText,
-  type StatItem,
   type TranscriptText,
 } from '@texra-ai/harness/transcript';
 import { safeTerminalText } from '@cli/runtime/terminalText';
@@ -16,6 +15,7 @@ import { hiddenRowsText } from '@cli/tui/overflowText';
 import { CROSS, TICK, TOOL_OUTPUT_CORNER } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { formatBytes } from '@ui/copy/format';
+import { errorRowText } from '@ui/copy/modelAccess';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice
@@ -70,10 +70,6 @@ function cornerBlock(lines: readonly string[]): string[] {
   );
 }
 
-function statItemLines(items: readonly StatItem[]): string[] {
-  return items.map((item) => `${item.label}: ${item.value}`);
-}
-
 function fileListLines(row: Extract<TranscriptRow, { kind: 'fileList' }>) {
   const mediaByPath = new Map(row.media.map((ref) => [ref.path, ref.media]));
   return row.files.map((file) => {
@@ -103,13 +99,12 @@ export function transcriptRowBodyLines(
       case 'scratchpad':
         return elidedTextLines(row.text, elide);
       case 'error':
-        return elidedTextLines(row.detailText, elide);
+        return elidedTextLines(errorRowText(row).detailText, elide);
       case 'fileList':
         return fileListLines(row);
       case 'contextManagement':
-        return statItemLines(row.items);
+        return row.items.map((item) => `${item.label}: ${item.value}`);
       case 'progressStatus':
-        return row.detail ? elidedTextLines(row.detail, elide) : [];
       case 'assistant':
       case 'user':
       case 'tool':

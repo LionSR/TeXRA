@@ -1,27 +1,22 @@
 /**
  * What the service asks of a window: the host capabilities a run uses while
  * it runs in the service (a file's diagnostics, an inline criticism, a PDF
- * to open, a tool edit's preview to stage, a notice to show). A window
+ * to open, a notice to show). A window
  * offers the capabilities it has when it attaches (`host.attach`); each call
  * reaches it as a frame of that stream, and it answers with `host.answer`.
  * A call's result enters the run's history only through the tool result
  * that used it.
  */
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 
 import {
   ApprovalPolicySchema,
-  ToolEditContentSchema,
   type ApprovalPolicyDenial,
   FileLocationSchema,
-  INSTRUCTION_ACTION,
+  LaunchNoticeSchema,
+  RequestShowErrorPayloadSchema,
   RunIdSchema,
-  ToolEditPermissionSchema,
-  type RequestEnsureProgressViewPayload,
-  type RequestOpenFilePayload,
-  type RequestShowErrorPayload,
-  type RequestShowInstructionPayload,
-  type ShowAgentConfigBannerPayload,
+  type OpenFilePayload,
 } from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
@@ -32,7 +27,6 @@ const HOST_CAPABILITIES = [
   'readDiagnostics',
   'addCriticism',
   'openPdf',
-  'toolEdits',
   'notices',
 ] as const;
 export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
@@ -86,63 +80,23 @@ const ApprovalPolicyDenialSchema = Schema.Union([
   }),
 ]) satisfies Schema.Codec<ApprovalPolicyDenial, unknown>;
 
-/** The runtime's notices, by event, as a window presents them. */
+/** The runtime's notices, by event, as a window presents them: the two a
+ *  refused launch carries among them. */
 const NoticeSchema = Schema.Union([
   Schema.Struct({
-    event: Schema.Literal('requestOpenFile'),
+    event: Schema.Literal('openFile'),
     payload: Schema.Struct({
       location: FileLocationSchema,
       preserveFocus: Schema.Boolean,
-    }) satisfies Schema.Codec<RequestOpenFilePayload, unknown>,
+    }) satisfies Schema.Codec<OpenFilePayload, unknown>,
   }),
-  Schema.Struct({
-    event: Schema.Literal('requestShowInstruction'),
-    payload: Schema.Struct({
-      key: Schema.String,
-      message: Schema.String,
-      actions: Schema.optional(Schema.Array(Schema.Enum(INSTRUCTION_ACTION))),
-      showSuppress: Schema.optional(Schema.Boolean),
-    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
-  }),
-  Schema.Struct({
-    event: Schema.Literal('showAgentConfigBanner'),
-    payload: Schema.Struct({
-      agentName: Schema.String,
-    }) satisfies Schema.Codec<ShowAgentConfigBannerPayload, unknown>,
-  }),
+  ...LaunchNoticeSchema.members,
   Schema.Struct({
     event: Schema.Literal('requestShowError'),
-    payload: Schema.Struct({
-      message: Schema.String,
-      docsPage: Schema.optional(Schema.String),
-    }) satisfies Schema.Codec<RequestShowErrorPayload, unknown>,
-  }),
-  Schema.Struct({
-    event: Schema.Literal('requestEnsureProgressView'),
-    payload: Schema.Struct({
-      fallbackNotification: Schema.optional(
-        Schema.Struct({
-          agentName: Schema.String,
-          modelName: Schema.String,
-          inputName: Schema.String,
-          outputInfo: Schema.String,
-        }),
-      ),
-    }) satisfies Schema.Codec<RequestEnsureProgressViewPayload, unknown>,
+    payload: RequestShowErrorPayloadSchema,
   }),
 ]);
 export type Notice = typeof NoticeSchema.Type;
-
-/** A tool edit's preview as a window stages it: the request without the
- *  service's workspace roots, which the window supplies itself. */
-const ToolEditStagingSchema = ToolEditContentSchema.mapFields(
-  Struct.assign({
-    path: Schema.String,
-    sourceTool: Schema.String,
-    runId: Schema.NullOr(RunIdSchema),
-    permission: ToolEditPermissionSchema,
-  }),
-);
 
 /** One call of the service on a window. */
 const HostCallSchema = Schema.Union([
@@ -158,18 +112,6 @@ const HostCallSchema = Schema.Union([
     kind: Schema.Literal('openPdf'),
     location: FileLocationSchema,
     preserveFocus: Schema.Boolean,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('presentToolEdit'),
-    request: ToolEditStagingSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('releaseToolEdit'),
-    requestId: Schema.String,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('approveToolEdit'),
-    requestId: Schema.String,
   }),
   Schema.Struct({ kind: Schema.Literal('notice'), notice: NoticeSchema }),
   // Files a task of the project wrote past the editor's own write path, as
@@ -193,9 +135,6 @@ export const CALL_CAPABILITY: Readonly<
   readDiagnostics: 'readDiagnostics',
   addCriticism: 'addCriticism',
   openPdf: 'openPdf',
-  presentToolEdit: 'toolEdits',
-  releaseToolEdit: 'toolEdits',
-  approveToolEdit: 'toolEdits',
   notice: 'notices',
   filesWritten: 'notices',
   approvalDenied: 'notices',
@@ -205,7 +144,6 @@ export const CALL_CAPABILITY: Readonly<
 export const CallResultSchemas = {
   readDiagnostics: Schema.Array(GenericDiagnosticSchema),
   addCriticism: Schema.Boolean,
-  approveToolEdit: Schema.Boolean,
 } as const;
 
 /** A frame of `host.attach`: the attachment's id first, then the calls. */

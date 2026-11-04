@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createFlushableDebounce,
   type FlushableDebounce,
-} from '@texra/utils/core/flushableDebounce';
+} from '@texra/shared/utils/flushableDebounce';
 import { deriveRunId } from '@utils/core/idHash';
 
 describe('deriveRunId', () => {

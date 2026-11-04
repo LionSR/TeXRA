@@ -27,7 +27,6 @@ import {
 import {
   compactionActivityRow,
   type StreamingTextRow,
-  type ToolCallFacts,
   type TranscriptRow,
   type TranscriptRowBase,
 } from '@shared/transcript/transcriptRow';
@@ -37,6 +36,7 @@ import {
   streamingTextRow,
   toolRow,
   type LogRowPayload,
+  type ToolCallFacts,
 } from '@shared/transcript/projectTranscriptRow';
 
 import type { TranscriptView } from './sessionView';
@@ -74,12 +74,14 @@ export type Slot =
       /** The durable text; live text is held apart (`live`). */
       text: string;
       running: boolean;
+      /** The limit that ended an answer early (`response.finalized`). */
+      cut?: StreamingTextRow['cut'];
     }
   | {
       readonly kind: 'tool';
       base: TranscriptRowBase;
       log: ToolUseLog;
-      /** What the card's `tool.start` says of a script's call. */
+      /** What the row says of the call beyond its payload. */
       call: ToolCallFacts;
     }
   | {
@@ -190,8 +192,9 @@ export function writableArray<K extends keyof DraftArrays>(
   key: K,
 ): DraftArrays[K] {
   const current = transcript[key];
-  // cast: an array in `owned` is the copy this function made for the current
-  // call, so writing it reaches no published transcript.
+  // An array in `owned` is the copy this function made for the current call,
+  // so writing it reaches no published transcript.
+  // cast: an owned array is this key's own writable copy.
   if (work.owned.has(current)) return current as DraftArrays[K];
   // cast: a spread of `transcript[key]` is that key's array, writable.
   const copy = [...current] as DraftArrays[K];
@@ -330,7 +333,13 @@ function rowOf(
     case 'text': {
       const text = live ?? slot.text;
       return slot.rowKind
-        ? streamingTextRow(slot.base, slot.rowKind, text, slot.running)
+        ? streamingTextRow(
+            slot.base,
+            slot.rowKind,
+            text,
+            slot.running,
+            slot.cut,
+          )
         : plainLogRow(slot.base, text);
     }
     case 'tool':
@@ -362,11 +371,12 @@ export function paint(d: Draft, slot: Slot): void {
   const live = streamingText || runningTool ? ix.live.get(id) : undefined;
   const row = rowOf(slot, live, d.ctx);
   if (row) upsertRow(d, next, row);
-  const current = rowById(next, ix, id);
-  if (current?.kind === 'thinking') {
+  const at = ix.rowIndex.get(id);
+  const current = at === undefined ? undefined : next.rows[at];
+  if (at !== undefined && current?.kind === 'thinking') {
     const newest = ix.thinkingRowId;
-    const at = ix.rowIndex.get(id)!;
-    if (newest === undefined || ix.rowIndex.get(newest)! <= at) {
+    const newestAt = newest === undefined ? undefined : ix.rowIndex.get(newest);
+    if (newest === undefined || (newestAt !== undefined && newestAt <= at)) {
       ix.thinkingRowId = id;
     }
   }

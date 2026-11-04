@@ -1,13 +1,12 @@
-import { Effect, PlatformError, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
-import { withSessionFs, type StorageFs } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   type MemoryViewItem,
   truncateSummary,
 } from '@texra-ai/harness/schemas';
 import { formatBytes } from '@ui/copy/format';
-import type { WorkspaceRoots } from '@texra-ai/harness';
 
 export const CLI_MEMORY_LIST_LIMIT = 50;
 const MEMORY_DESCRIPTION_MAX = 72;
@@ -58,16 +57,12 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
     // A typed argument: its surrounding whitespace is not part of the name.
     const storagePath = yield* MemoryStore.storagePath(inputPath.trim());
     const preview = yield* MemoryStore.preview(storagePath).pipe(
-      Effect.catchIf(
-        (error) =>
-          PlatformError.isPlatformError(error) &&
-          error.reason._tag === 'NotFound',
-        () =>
-          Effect.fail(
-            new Error(
-              `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
-            ),
+      Effect.catchIf(absentReason, () =>
+        Effect.fail(
+          new Error(
+            `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
           ),
+        ),
       ),
     );
     return {
@@ -77,21 +72,6 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
     } satisfies CliMemoryDetail;
   },
 );
-
-/**
- * A memory program over the storage view of the roots its calling surface
- * holds — the root is chosen here rather than read inside the program. The
- * command action, the slash-command handler, and the list form each run the
- * returned program once, on the runtime their surface already holds. An
- * unreadable memory ends the command with the error the filesystem raised;
- * the CLI's error reporter prints that message.
- */
-export function runCliMemory<A>(
-  roots: Pick<WorkspaceRoots, 'workspace' | 'storage' | 'globalStorage'>,
-  program: Effect.Effect<A, Error, StorageFs>,
-) {
-  return withSessionFs(roots, Effect.orDie(program));
-}
 
 export function formatCliMemoryPreview(detail: CliMemoryDetail): string {
   const lines = [`Memory: ${detail.path}`];

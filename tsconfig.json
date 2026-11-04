@@ -36,9 +36,6 @@
         "./packages/texra/src/*.ts",
         "./packages/texra/src/*/index.ts"
       ],
-      "@common/webview": [
-        "./packages/extension/src/common/webview/BundledViewContentProvider.ts"
-      ],
       "@common/*": [
         "./packages/harness/src/common/*",
         "./packages/harness/src/common/*.ts",
@@ -124,11 +121,6 @@
         "./packages/harness/src/tools/*.ts",
         "./packages/harness/src/tools/*/index.ts"
       ],
-      "@eventBus/*": [
-        "./packages/harness/src/eventBus/*",
-        "./packages/harness/src/eventBus/*.ts",
-        "./packages/harness/src/eventBus/*/index.ts"
-      ],
       "@platform/*": [
         "./packages/harness/src/platform/*",
         "./packages/harness/src/platform/*.ts",
@@ -157,6 +149,7 @@
     },
     "moduleResolution": "nodenext",
     "strict": true,
+    "erasableSyntaxOnly": true,
     "noImplicitOverride": true,
     "skipLibCheck": true,
     "types": ["node", "vscode"]

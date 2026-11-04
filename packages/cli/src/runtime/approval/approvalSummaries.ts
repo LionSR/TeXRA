@@ -4,12 +4,15 @@ import {
   type AgentProposalPermission,
   type BashPermission,
   type RetryPermission,
+  type ToolEditContent,
+  type ToolEditPermission,
   type UserQuestionPermission,
   formatHunkLines,
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { agentProposalLabel } from '@texra/shared/plugins/documents';
 import { DEFINED_AGENT_COPY } from '@ui/copy/delegationApproval';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import {
   SCRIPT_REQUEST_COPY,
   scriptRequestCallLine,
@@ -17,7 +20,6 @@ import {
 } from '@ui/copy/scriptRequest';
 
 import { type CliApprovalContent } from './approvalPrompts';
-import type { ToolEditApprovalRequest } from '@texra-ai/harness/host';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -220,7 +222,7 @@ export function buildAgentProposalApprovalContent(
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
-  return `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
+  return `Retry requested (${payload.operation}): ${modelFailureText(payload.errorDetails)}`;
 }
 
 export function formatBashApprovalSummary(payload: BashPermission): string {
@@ -228,9 +230,11 @@ export function formatBashApprovalSummary(payload: BashPermission): string {
   return `Command requested:\n${cwd}${payload.command}`;
 }
 
-function toolEditDiffLines(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
-): readonly string[] {
+/** What a tool edit's prompt shows: its path and tool, and the diff. */
+type ToolEditPrompt = Pick<ToolEditPermission, 'path' | 'sourceTool'> &
+  Pick<ToolEditContent, 'hunks'>;
+
+function toolEditDiffLines(request: ToolEditPrompt): readonly string[] {
   const { hunks } = request;
   if (hunks.length === 0) return [];
 
@@ -254,7 +258,7 @@ function boundedToolEditDiffLines(
 }
 
 function toolEditApprovalSummary(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
+  request: ToolEditPrompt,
   diffLines: readonly string[],
 ): string {
   const header = `Tool edit requested by ${request.sourceTool}: ${request.path}`;
@@ -266,7 +270,7 @@ function toolEditApprovalSummary(
 }
 
 export function buildToolEditApprovalContent(
-  request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
+  request: ToolEditPrompt,
 ): CliApprovalContent {
   const diffLines = toolEditDiffLines(request);
   const boundedDiffLines = boundedToolEditDiffLines(diffLines);

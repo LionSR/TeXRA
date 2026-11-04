@@ -16,6 +16,11 @@ export const SubscriptionSessionBaseSchema = Schema.Struct({
   accessToken: Schema.String.check(Schema.isMinLength(1)),
   refreshToken: Schema.String.check(Schema.isMinLength(1)),
   idToken: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
+  /**
+   * The client the provider registered for this user at sign-in. Absent for
+   * a provider with one fixed client id, whose grants use the policy's.
+   */
+  clientId: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
   /** Absolute expiry (ms since epoch). */
   expiresAtMs: Schema.Number,
 });
@@ -34,4 +39,6 @@ export const SubscriptionTokenResponseSchema = Schema.Struct({
     Schema.NullOr(Schema.String.check(Schema.isMinLength(1))),
   ),
   expires_in: Schema.Number,
+  /** The scopes granted, space-separated, when the endpoint reports them. */
+  scope: Schema.optional(Schema.NullOr(Schema.String)),
 });

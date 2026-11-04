@@ -1,59 +1,57 @@
-import { Cache, Cause, Clock, Duration, Effect } from 'effect';
-import { Settings, withLogChannel } from '@texra-ai/harness/host';
+import {
+  Cache,
+  Cause,
+  Clock,
+  Duration,
+  Effect,
+  Record as EffectRecord,
+} from 'effect';
+import { Secrets, Settings, withLogChannel } from '@texra-ai/harness/host';
 import { HttpClientError } from 'effect/http';
 
-import { codexCoordinator, SubscriptionOAuthError } from '@texra-ai/llm/node';
 import { lookupApiKey } from '@texra-ai/llm';
-import { toErrorMessage, GlobalStateKey } from '@texra-ai/harness/schemas';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type {
   SubscriptionUsageProvider,
   SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
 } from '@texra/shared/model/subscriptionUsage';
-import { SUBSCRIPTION_USAGE_PROVIDERS } from '@texra/shared/model/subscriptionUsage';
-import { CODING_PLAN_SUBSCRIPTIONS } from '@texra/shared/model/codingPlans';
+import {
+  CODING_PLAN_SUBSCRIPTIONS,
+  type CodingPlanSubscription,
+} from '@texra/shared/model/codingPlans';
 
-import { fetchChatGptUsage } from './codexUsageAdapter';
 import {
   fetchGlmCodingPlanUsage,
   GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
-import type { PlatformSecrets, SettingsStores } from '@texra-ai/harness/host';
+import type { SettingsStores } from '@texra-ai/harness/host';
 import type { ParsedSubscriptionUsage } from './subscriptionUsageParsing';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SubscriptionUsage';
 
+/** A coding plan's stored key, from the process `Secrets`. */
+const lookupStoredKey = (provider: 'kimiCode' | 'glm') =>
+  Effect.flatMap(Secrets, (secrets) => lookupApiKey(secrets, provider));
+
 const CACHE_TTL = Duration.seconds(30);
 /** The one deadline over a usage request and its body read. */
 const REQUEST_TIMEOUT_MS = 15_000;
 
-type CodingPlanUsageProvider =
-  (typeof CODING_PLAN_SUBSCRIPTIONS)[number]['usageProvider'];
+const [KIMI_CODE_PLAN, GLM_CODING_PLAN] = CODING_PLAN_SUBSCRIPTIONS;
 
-function mapCodingPlanSubscriptions(
-  field: 'credentialName' | 'displayName',
-): Record<CodingPlanUsageProvider, string> {
-  return Object.fromEntries(
-    CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.usageProvider, plan[field]]),
-  ) as Record<CodingPlanUsageProvider, string>;
-}
+/** Each subscription's catalog plan, by the provider that reports its usage. */
+const PLAN_BY_PROVIDER = {
+  [KIMI_CODE_PLAN.usageProvider]: KIMI_CODE_PLAN,
+  [GLM_CODING_PLAN.usageProvider]: GLM_CODING_PLAN,
+} satisfies Record<SubscriptionUsageProvider, CodingPlanSubscription>;
 
-const PROVIDER_NAMES: Record<SubscriptionUsageProvider, string> = {
-  chatgpt: 'ChatGPT',
-  ...mapCodingPlanSubscriptions('credentialName'),
-};
-
-const DEFAULT_PLAN_NAMES: Record<SubscriptionUsageProvider, string> = {
-  chatgpt: 'ChatGPT Coding Plan',
-  ...mapCodingPlanSubscriptions('displayName'),
-};
-
-/** The credential stores this service reads. */
+/** The setting slots this service reads; credentials come from the process
+ *  `Secrets`. */
 interface SubscriptionUsageServiceInit {
-  readonly secrets: PlatformSecrets;
   readonly stores: SettingsStores;
 }
 
@@ -74,7 +72,7 @@ interface SubscriptionUsageAdapter {
   ) => Effect.Effect<
     ParsedSubscriptionUsage | null,
     Error,
-    HttpClient.HttpClient
+    HttpClient.HttpClient | Secrets
   >;
 }
 
@@ -83,10 +81,9 @@ interface SubscriptionUsageAdapter {
  * program: results are short-lived, coalesced per provider, and always
  * succeed with a snapshot rather than exposing provider transport failures to
  * extension or CLI consumers — the failure channel is `never`, so a caller
- * has no error arm to write.
+ * has no error case to write.
  */
 export class SubscriptionUsageService {
-  private readonly secrets: PlatformSecrets;
   private readonly stores: SettingsStores;
   private readonly adapters: Readonly<
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
@@ -96,12 +93,11 @@ export class SubscriptionUsageService {
         UsageCacheKey,
         SubscriptionUsageSnapshot,
         never,
-        HttpClient.HttpClient
+        HttpClient.HttpClient | Secrets
       >
     | undefined;
 
   constructor(init: SubscriptionUsageServiceInit) {
-    this.secrets = init.secrets;
     this.stores = init.stores;
     this.adapters = this.createAdapters();
   }
@@ -134,43 +130,12 @@ export class SubscriptionUsageService {
     Record<SubscriptionUsageProvider, SubscriptionUsageAdapter>
   > {
     // Each adapter fetch is already a program over the `HttpClient` service,
-    // so the client's own failure reaches the fold below unchanged.
+    // so the client's own failure reaches the handler below unchanged.
     // `REQUEST_TIMEOUT_MS` is the one deadline over the request and body read.
     return Object.freeze({
-      chatgpt: {
-        // A 401 on a token its stored expiry still calls fresh refreshes
-        // that token, while it is still the stored one; a refresh the server
-        // refuses clears the session, so the account reads as signed out
-        // instead of "ready to use".
-        fetch: () => {
-          const fetchOnce = Effect.flatMap(
-            this.loadChatGptCredential(),
-            (credential) =>
-              credential
-                ? fetchChatGptUsage(credential, REQUEST_TIMEOUT_MS)
-                : Effect.succeed(null),
-          );
-          return Effect.flatMap(this.loadChatGptCredential(), (sent) =>
-            sent === null
-              ? Effect.succeed(null)
-              : fetchChatGptUsage(sent, REQUEST_TIMEOUT_MS).pipe(
-                  Effect.catchIf(
-                    (error) =>
-                      HttpClientError.isHttpClientError(error) &&
-                      error.reason._tag === 'StatusCodeError' &&
-                      error.reason.response.status === 401,
-                    () =>
-                      codexCoordinator(this.secrets)
-                        .refreshRejected(sent.accessToken)
-                        .pipe(Effect.andThen(fetchOnce)),
-                  ),
-                ),
-          );
-        },
-      },
       kimiCode: {
         fetch: () =>
-          Effect.flatMap(lookupApiKey(this.secrets, 'kimiCode'), (apiKey) =>
+          Effect.flatMap(lookupStoredKey('kimiCode'), (apiKey) =>
             apiKey
               ? fetchKimiCodeUsage(apiKey, REQUEST_TIMEOUT_MS)
               : Effect.succeed(null),
@@ -178,9 +143,9 @@ export class SubscriptionUsageService {
       },
       glmCodingPlan: {
         resolveVariant: () =>
-          Settings.get<boolean>(this.stores, GlobalStateKey.GLM_USE_CHINA),
+          Settings.get<boolean>(this.stores, 'glm.useChina'),
         fetch: (useChina) =>
-          Effect.flatMap(lookupApiKey(this.secrets, 'glm'), (apiKey) =>
+          Effect.flatMap(lookupStoredKey('glm'), (apiKey) =>
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
@@ -196,41 +161,28 @@ export class SubscriptionUsageService {
   }
 
   /**
-   * The stored ChatGPT session's usage credential, or `null` when no session
-   * is stored. Refreshing an expiring session is the coordinator's own job, so
-   * a refresh that fails reaches {@link fetchUsage}'s classification as the
-   * `SubscriptionOAuthError` it raised.
-   */
-  private readonly loadChatGptCredential = Effect.fn(
-    'SubscriptionUsage.loadChatGptCredential',
-  )(function* (this: SubscriptionUsageService) {
-    const coordinator = codexCoordinator(this.secrets);
-    if ((yield* coordinator.loadSession()) === null) return null;
-    const session = yield* coordinator.getFreshSession();
-    return {
-      accessToken: session.accessToken,
-      ...(session.accountId ? { accountId: session.accountId } : {}),
-    };
-  });
-
-  /**
    * Drop a provider's cached and in-flight entries after its credentials or
    * account change. A reader already waiting on an in-flight lookup still
    * receives its result, but that result is not cached.
    */
-  invalidate(provider: SubscriptionUsageProvider): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  readonly invalidate = Effect.fn('SubscriptionUsageService.invalidate')(
+    { self: this },
+    function* (provider: SubscriptionUsageProvider): Effect.fn.Return<void> {
       const cache = yield* this.usageCache;
       for (const key of [...(yield* Cache.keys(cache))]) {
         if (key[0] === provider) yield* Cache.invalidate(cache, key);
       }
-    });
-  }
+    },
+  );
 
   getUsage(
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
-  ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     const adapter = this.adapters[provider];
     return Effect.matchCauseEffect(
       Effect.suspend(
@@ -238,17 +190,13 @@ export class SubscriptionUsageService {
           adapter.resolveVariant?.() ?? Effect.succeed(undefined),
       ),
       {
-        onFailure: (cause) =>
-          Effect.gen({ self: this }, function* () {
-            const error = Cause.squash(cause);
-            yield* Effect.logWarning(
-              `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
-            ).pipe(
-              Effect.annotateLogs({ data: error }),
-              withLogChannel(CHANNEL),
-            );
-            return yield* this.unavailable(provider, 'request_failed');
-          }),
+        onFailure: Effect.fn('onFailure')({ self: this }, function* (cause) {
+          const error = Cause.squash(cause);
+          yield* Effect.logWarning(
+            `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
+          ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+          return yield* this.unavailable(provider, 'request_failed');
+        }),
         onSuccess: (variant) => this.coalesced(provider, variant, options),
       },
     );
@@ -257,20 +205,18 @@ export class SubscriptionUsageService {
   /** One snapshot per subscription provider, for a settings-view refresh. */
   getAllUsage(
     options: { readonly forceRefresh?: boolean } = {},
-  ): Effect.Effect<SubscriptionUsageSnapshots, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshots,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     // Each snapshot key is the provider id itself, so key and provider can
-    // never drift apart the way a positional destructure would allow.
-    return Effect.map(
-      Effect.forEach(
-        SUBSCRIPTION_USAGE_PROVIDERS,
-        (provider) =>
-          Effect.map(
-            this.getUsage(provider, options),
-            (snapshot) => [provider, snapshot] as const,
-          ),
-        { concurrency: 'unbounded' },
+    // never drift apart.
+    return Effect.all(
+      EffectRecord.map(PLAN_BY_PROVIDER, (_plan, provider) =>
+        this.getUsage(provider, options),
       ),
-      (entries) => Object.fromEntries(entries) as SubscriptionUsageSnapshots,
+      { concurrency: 'unbounded' },
     );
   }
 
@@ -279,7 +225,11 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     variant: boolean | undefined,
     options: { readonly forceRefresh?: boolean },
-  ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     const key: UsageCacheKey = [provider, variant];
     return Effect.flatMap(this.usageCache, (cache) =>
       options.forceRefresh
@@ -294,8 +244,8 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'unavailable',
-      providerName: PROVIDER_NAMES[provider],
-      planName: DEFAULT_PLAN_NAMES[provider],
+      providerName: PLAN_BY_PROVIDER[provider].credentialName,
+      planName: PLAN_BY_PROVIDER[provider].displayName,
       windows: [],
       fetchedAt,
       reason,
@@ -308,8 +258,8 @@ export class SubscriptionUsageService {
   ): Effect.Effect<SubscriptionUsageSnapshot> {
     return Effect.map(Clock.currentTimeMillis, (fetchedAt) => ({
       state: 'available',
-      providerName: PROVIDER_NAMES[provider],
-      planName: parsed.planName ?? DEFAULT_PLAN_NAMES[provider],
+      providerName: PLAN_BY_PROVIDER[provider].credentialName,
+      planName: parsed.planName ?? PLAN_BY_PROVIDER[provider].displayName,
       windows: [...parsed.windows],
       fetchedAt,
     }));
@@ -318,7 +268,11 @@ export class SubscriptionUsageService {
   private fetchUsage(
     provider: SubscriptionUsageProvider,
     variant: boolean | undefined,
-  ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
+  ): Effect.Effect<
+    SubscriptionUsageSnapshot,
+    never,
+    HttpClient.HttpClient | Secrets
+  > {
     return Effect.suspend(() => this.adapters[provider].fetch(variant)).pipe(
       Effect.flatMap((parsed) => {
         if (parsed === null) {
@@ -329,15 +283,15 @@ export class SubscriptionUsageService {
         }
         return this.available(provider, parsed);
       }),
-      Effect.catchCause((cause) =>
-        Effect.gen({ self: this }, function* () {
+      Effect.catchCause(
+        Effect.fnUntraced({ self: this }, function* (cause) {
           // The reason a failed fetch maps to, most specific cause first. The
           // failure classes are disjoint, so at most one of these checks
           // holds. The reason alone cannot tell a routine refusal from an
           // unexpected fault, so the cause is named once here.
           const error = Cause.squash(cause);
           // An HttpClientError carries its request, headers included (the
-          // ChatGPT account id unredacted), so only its reason is logged.
+          // plan's API key unredacted), so only its reason is logged.
           const httpError = HttpClientError.isHttpClientError(error)
             ? error.reason
             : undefined;
@@ -353,11 +307,7 @@ export class SubscriptionUsageService {
             }),
             withLogChannel(CHANNEL),
           );
-          const invalidCredentials =
-            (error instanceof SubscriptionOAuthError && error.needsReauth) ||
-            status === 401 ||
-            status === 403;
-          if (invalidCredentials) {
+          if (status === 401 || status === 403) {
             return yield* this.unavailable(provider, 'invalid_credentials');
           }
           if (

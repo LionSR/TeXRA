@@ -5,50 +5,64 @@
  * billing. Also whether a model switch can take the run's route, and the one
  * move onto the user's own credential a failed attempt offers.
  */
-import { Effect } from 'effect';
+import { Context, Effect, Option } from 'effect';
 
 import {
   decideModelRoute,
   hasUsableApiKey,
-  OWN_KEY_ROUTE_FACTS,
-  type HostRouteFacts,
+  type Model,
+  type ModelConfig,
+  type ModelError,
+  type ModelOrigin,
   type ModelRoute,
+  OWN_KEY_ROUTE_FACTS,
+  PLAN_ROUTES,
+  type ReasoningMode,
+  type RouteFacts,
   type SelectedModel,
 } from '@texra-ai/llm';
 
-import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
-import {
-  decideReasoning,
-  reasoningRouteOf,
-  servingBackend,
-} from '@model/reasoningLevel';
-import type { PlatformSecrets } from '@platform/secrets';
-import {
-  getExhaustionReason,
-  type CredentialSwitch,
-  type DeclinableUsageRoute,
-  type ModelBackend,
-  type ProviderError,
+import { decideReasoning, servingBackend } from '@model/reasoningLevel';
+import { Secrets } from '@platform/secrets';
+import type {
+  CredentialSwitch,
+  DeclinableUsageRoute,
+  ModelBackend,
 } from '@shared/schemas';
-import type { ModelConfig, ReasoningMode } from 'llm-zoo';
 
-/** The routes a binding can take: the unserved one fails in the decision. */
-type BindableRoute = Exclude<ModelRoute, { kind: 'unserved' }>;
+/** The canned model a package-validation build provides beneath the process
+ *  layer, and whether a new run takes it. Absent, none does, and a run
+ *  recorded on the validation route fails to bind. */
+export class ValidationModel extends Context.Service<
+  ValidationModel,
+  {
+    readonly enabled: Effect.Effect<boolean>;
+    readonly bind: (config: ModelConfig) => {
+      readonly model: Model;
+      readonly origin: ModelOrigin;
+    };
+  }
+>()('@texra-ai/harness/ValidationModel') {}
+
+/** A run's route: llm's decision, or the canned validation model. */
+type RunRoute = ModelRoute | { readonly kind: 'validation' };
 
 /** What one route decision found. */
 export interface RouteDecision {
-  readonly route: BindableRoute;
-  /** The facts it was decided over; the binding reads endpoints and windows off them. */
-  readonly facts: HostRouteFacts;
+  /** The unserved route fails in the decision. */
+  readonly route: Exclude<RunRoute, { kind: 'unserved' }>;
+  /** The facts it was decided over; the binding reads endpoints off them. */
+  readonly facts: RouteFacts;
   /** The backend the route serves the model from. */
   readonly backend: ModelBackend;
 }
 
 /** What the decision is asked for besides the model. */
 export interface RouteAsk {
-  /** A resumed run's backend; it wins over today's default route. */
+  /** A resumed run's backend: the decision fails when today's route would
+   *  serve the model from another one. */
   readonly backend?: ModelBackend;
   /** The routes the run declined (its rows record them). */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
@@ -60,10 +74,11 @@ const unavailable = (message: string) =>
   new RouteUnavailable({ reason: 'unavailable', message });
 
 /**
- * Decide the route `config` binds under. A resumed conversation's backend
- * constrains the facts: its validation choice is the backend's, and a
- * subscription serves it only from its own provider. The routes nothing
- * can bind fail as the user's instruction.
+ * Decide the route `config` binds under: the validation model when the build
+ * provides it and turns it on (a resumed run: when its backend is that model),
+ * else llm's decision. A resumed conversation's backend constrains the
+ * facts: a subscription serves it only from its own provider. The routes
+ * nothing can bind fail as the user's instruction.
  */
 export const decideRoute = Effect.fn('decideRoute')(function* (
   config: ModelConfig,
@@ -72,30 +87,45 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
 ): Effect.fn.Return<RouteDecision, RouteUnavailable> {
   const host = routeFactsFor(settings, ask.declinedRoutes);
   const { backend, mode } = ask;
-  const decided = decideModelRoute(
-    config,
+  const canned = yield* Effect.serviceOption(ValidationModel);
+  const validation =
     backend === undefined
-      ? {
-          ...host,
-          validation: yield* shouldUseInternalValidationModel(),
-          mode,
-        }
-      : {
-          ...host,
-          validation: backend === 'validation',
-          chatgptSubscription: host.chatgptSubscription && backend === 'openai',
-          xaiSubscription: host.xaiSubscription && backend === 'xai',
-          mode,
-        },
-  );
+      ? Option.isSome(canned) && (yield* canned.value.enabled)
+      : backend === 'validation';
+  if (validation) {
+    return {
+      route: { kind: 'validation' },
+      facts: host,
+      backend: 'validation',
+    };
+  }
+  const decided = decideModelRoute(config, {
+    ...host,
+    plans:
+      backend === undefined
+        ? host.plans
+        : host.plans.filter(
+            (plan) =>
+              PLAN_ROUTES[plan].credential === 'key' ||
+              PLAN_ROUTES[plan].provider === backend,
+          ),
+    mode,
+  });
   if (decided.kind === 'unserved') {
     return yield* unavailable(
-      `${config.label} is served only through OpenRouter or GitHub Copilot, which TeXRA no longer supports. Choose another model.`,
+      config.retired === true
+        ? `${config.label} is retired and no longer available from its provider. Choose another model.`
+        : `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
     );
   }
-  const served = servingBackend(config, decided);
+  const served = servingBackend(config);
   if (served === undefined) {
     return yield* unavailable(`Unsupported model provider: ${config.provider}`);
+  }
+  if (backend !== undefined && served !== backend) {
+    return yield* unavailable(
+      'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
+    );
   }
   return { route: decided, facts: host, backend: served };
 });
@@ -106,55 +136,45 @@ export interface SwitchRefusal {
   readonly message: string;
 }
 
-const DIFFERENT_FORMAT: SwitchRefusal = {
-  reason: 'different conversation format; start new chat',
-  message:
-    'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
-};
-
 /**
  * Why `selected` cannot replace a run on `backend`, decided as the bind at
- * the run's next model boundary will decide it; null when it can. A
- * reasoning request the route cannot carry (`@none` on a model that always
- * thinks) is refused here, not by that bind inside the loop.
+ * the run's next model boundary will decide it; null when it can. A route
+ * that would serve the model from another backend, or a reasoning request
+ * the route cannot carry (`@none` on a model that always thinks), is refused
+ * here, not by that bind inside the loop.
  */
-export const admitSwitch = Effect.fn('admitSwitch')(function* (
-  selected: SelectedModel,
-  backend: ModelBackend,
-  settings: ModelSettings,
-  declinedRoutes: readonly DeclinableUsageRoute[],
-): Effect.fn.Return<SwitchRefusal | null, RouteUnavailable> {
-  const decision = yield* decideRoute(selected.config, settings, {
-    backend,
-    declinedRoutes,
-    mode: selected.request.mode,
-  });
-  if (decision.backend !== backend) return DIFFERENT_FORMAT;
-  return yield* decideReasoning(
-    selected.config,
-    selected.request,
-    settings.reasoningLevels[selected.config.ref],
-    reasoningRouteOf(decision.route, backend),
-  ).pipe(
-    Effect.as(null),
-    Effect.catch((error) =>
-      Effect.succeed({ reason: error.message, message: error.message }),
-    ),
-  );
-});
-
-/** The routes whose quota the retry owner falls back from without asking. */
-const CODING_PLAN_ROUTES: readonly DeclinableUsageRoute[] = [
-  'kimi-code-subscription',
-  'glm-coding-plan-subscription',
-];
+export const admitSwitch = Effect.fn('admitSwitch')(
+  function* (
+    selected: SelectedModel,
+    backend: ModelBackend,
+    settings: ModelSettings,
+    declinedRoutes: readonly DeclinableUsageRoute[],
+  ) {
+    const decision = yield* decideRoute(selected.config, settings, {
+      backend,
+      declinedRoutes,
+      mode: selected.request.mode,
+    });
+    yield* decideReasoning(
+      selected.config,
+      selected.request,
+      settings.reasoningLevels[selected.config.ref],
+      decision.route,
+    );
+    return null;
+  },
+  Effect.catch((error): Effect.Effect<SwitchRefusal | null> =>
+    Effect.succeed({ reason: error.message, message: error.message }),
+  ),
+);
 
 /**
- * The move onto the user's own credential a failed attempt offers, carried
- * on the retry request so no host re-derives it.
+ * The move onto the user's own credential a used-up `quota` (llm's verdict
+ * on the failed attempt) offers, carried on the retry request so no host
+ * re-derives it.
  *
- * - A subscription or coding-plan route falls back to the route the model
- *   takes with every preference off, unless that is the same kind of route.
+ * - A used-up plan falls back to the route the model takes with every
+ *   preference off, when that is a plain key route.
  * - A key whose upstream account ran out of credit needs a changed key.
  *
  * A coding-plan fallback is automatic when its key is already stored and the
@@ -162,39 +182,27 @@ const CODING_PLAN_ROUTES: readonly DeclinableUsageRoute[] = [
  * stay explicit, because moving them onto a key starts spending API credit.
  */
 export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
-  failed: { readonly config: ModelConfig; readonly route: ModelRoute },
-  recorded: Pick<ProviderError, 'classification'>,
+  failed: { readonly config: ModelConfig; readonly route: RunRoute },
+  quota: ModelError['quota'],
   declinedRoutes: readonly DeclinableUsageRoute[],
-  secrets: PlatformSecrets,
-): Effect.fn.Return<CredentialSwitch | null> {
-  const reason = getExhaustionReason(recorded);
-  if (reason === undefined) return null;
+): Effect.fn.Return<CredentialSwitch | null, never, Secrets> {
+  if (quota === undefined) return null;
   const { route } = failed;
-  let declined: DeclinableUsageRoute;
-  switch (route.kind) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      declined = route.kind;
-      break;
-    case 'api-key':
-      // The key the route bound is itself the broken credential.
-      if (reason === 'upstream-credit') {
-        return { kind: 'new-key', provider: route.provider };
-      }
-      if (route.usageRoute === 'api-key') return null;
-      declined = route.usageRoute;
-      break;
-    default:
-      return null;
-  }
+  // The account's own credit: the key the route bound is itself the broken
+  // credential, so only a new one helps.
+  if (quota.plan === null)
+    return route.kind === 'api-key'
+      ? { kind: 'new-key', provider: route.provider }
+      : null;
+  const declined = quota.plan;
   const fallback = decideModelRoute(failed.config, OWN_KEY_ROUTE_FACTS);
   if (fallback.kind !== 'api-key' || fallback.usageRoute !== 'api-key') {
     return null;
   }
   const automatic =
-    CODING_PLAN_ROUTES.includes(declined) &&
+    PLAN_ROUTES[declined].credential === 'key' &&
     !declinedRoutes.includes(declined) &&
-    (yield* hasUsableApiKey(secrets, fallback.provider).pipe(
+    (yield* hasUsableApiKey(yield* Secrets, fallback.provider).pipe(
       Effect.catchTag('SecretsFailed', (failure) =>
         Effect.logWarning(
           `Could not read the ${fallback.provider} API key; the quota fallback waits for a decision.`,

@@ -2,17 +2,17 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, type FileSystem, Option } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 // Local imports
+import { type RootedFileSystem, StorageFs } from '@texra-ai/harness/host';
+import { MEMORY_DISPLAY_ROOT } from '@agent/memory/memoryUtils';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
-import { StorageFs } from '@platform/rootedFs';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { MEMORY_DISPLAY_ROOT } from '@tools/memory/memoryUtils';
+import { SessionGraph } from '@test/support/testKernel';
 import { MemoryTool } from '@tools/memory/MemoryTool';
-import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 const TEST_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z');
 
@@ -44,7 +44,7 @@ function viewMemory(storageFs: RootedFileSystem, memoryPath?: string) {
   );
 }
 
-describe('MemoryTool view with an omitted path', () => {
+layer(SessionGraph.hosted)('MemoryTool view with an omitted path', (it) => {
   it.effect(
     'lists the empty memory root instead of erroring on a fresh session',
     () =>

@@ -1,22 +1,29 @@
 /**
  * Shared test-free support for the packed-tarball examples in `example/`.
  *
- * Builds a temporary workspace directory and wires `nodePlatform` with a
- * local loopback Anthropic Messages SSE server so every example runs
- * end-to-end through the real `Sessions` runtime, model route binding,
- * `@texra-ai/llm` wire decoder, tool loop, approval queue, SQLite store, and
- * view reducer without an external API key or internet access.
+ * Builds a temporary workspace directory and `nodePlatform`, and answers the
+ * model requests with an in-memory Anthropic Messages SSE fetch supplied as
+ * the harness's `ModelFetch`, so every example runs end-to-end through the
+ * real `Sessions` runtime, model route binding, `@texra-ai/llm` wire decoder,
+ * tool loop, approval queue, SQLite store, and view reducer without an
+ * external API key or internet access.
+ *
+ * `TEXRA_EXAMPLE_MODEL` (a `provider/model` string such as
+ * `anthropic/claude-sonnet-5-5`) selects a real route instead: no fetch is
+ * supplied, the harness's own transport carries the requests, and the
+ * provider's API key comes from its usual environment variable.
  */
 import { mkdir, mkdtemp } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { Effect } from 'effect';
-import type { AgentPlatform } from '@texra-ai/harness';
+import { Layer } from 'effect';
+import {
+  ModelFetch,
+  type AgentPlatform,
+  type ExportNode,
+} from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
-import { Client, type Dispatcher, EnvHttpProxyAgent } from 'undici';
 
 export interface ScriptedToolCall {
   readonly id?: string;
@@ -27,6 +34,9 @@ export interface ScriptedToolCall {
 export interface ScriptedTurn {
   readonly text?: string;
   readonly toolCalls?: readonly ScriptedToolCall[];
+  /** Text the request answered by this turn must contain: a request out of
+   *  the planned order is refused with a 400, which no retry resends. */
+  readonly expect?: string;
 }
 
 function formatAnthropicSse(step: ScriptedTurn, turnIndex: number): string {
@@ -111,106 +121,110 @@ function formatAnthropicSse(step: ScriptedTurn, turnIndex: number): string {
     .join('');
 }
 
-const dispatchSymbol = Object.getOwnPropertySymbols(
-  EnvHttpProxyAgent.prototype,
-).find((symbol) => symbol.description === 'dispatch');
-if (!dispatchSymbol) {
-  throw new Error('Could not locate undici EnvHttpProxyAgent dispatch symbol.');
+/** The scripted model: each request answered by the next turn, in order. */
+function scriptedFetch(
+  turns: readonly ScriptedTurn[],
+  requests: Readonly<Record<string, unknown>>[],
+): typeof fetch {
+  let cursor = 0;
+  const error = (status: number, type: string, message: string) =>
+    Response.json({ type: 'error', error: { type, message } }, { status });
+  const stream = (step: ScriptedTurn, turnIndex: number) =>
+    new Response(formatAnthropicSse(step, turnIndex), {
+      headers: { 'content-type': 'text/event-stream' },
+    });
+
+  return async (input, init) => {
+    const rawBody = await new Request(input, init).text();
+    requests.push(
+      (rawBody ? JSON.parse(rawBody) : {}) as Record<string, unknown>,
+    );
+    const turnIndex = cursor++;
+    const step = turns[turnIndex];
+    if (!step) {
+      return error(
+        500,
+        'api_error',
+        `Scripted model exhausted at turn ${turnIndex + 1}.`,
+      );
+    }
+    if (step.expect !== undefined && !rawBody.includes(step.expect)) {
+      const message = `Scripted turn ${turnIndex + 1} expected a request containing ${JSON.stringify(step.expect)}.`;
+      console.error(message);
+      return error(400, 'invalid_request_error', message);
+    }
+    return stream(step, turnIndex);
+  };
 }
 
-let activeOrigin = '';
-let activeClient: Dispatcher | undefined;
-(
-  EnvHttpProxyAgent.prototype as unknown as Record<
-    symbol,
-    Dispatcher['dispatch']
-  >
-)[dispatchSymbol] = function (options, handler) {
-  if (!activeClient) {
-    throw new Error(
-      'No loopback model server installed for example workspace.',
-    );
-  }
-  return activeClient.dispatch({ ...options, origin: activeOrigin }, handler);
-};
+/** The real route `TEXRA_EXAMPLE_MODEL` names, if any. */
+const realModel = process.env.TEXRA_EXAMPLE_MODEL?.trim() || undefined;
 
 export async function makeExampleWorkspace(
   turns: readonly ScriptedTurn[] = [],
+  /** An existing workspace to reuse, as a second process does. */
+  existing?: string,
+  /** The agent directory the platform serves, a plugin package's own;
+   *  absent, the workspace's `agents/`. */
+  agents?: string,
 ): Promise<{
   readonly workspace: string;
   readonly agentsDir: string;
   readonly platform: AgentPlatform;
+  /** The scripted model's requests, in order; empty on a real route. */
   readonly requests: Readonly<Record<string, unknown>>[];
+  /** The route the example's runs take: the model they start with, and
+   *  what to merge beneath `Sessions.layer` (the scripted model's
+   *  `ModelFetch`, or nothing on a real route). `Layer.empty` is no
+   *  `Layer<ModelFetch>`, so the type is the union of the two cases. */
+  readonly route: {
+    readonly model: string;
+    readonly transport: Layer.Layer<ModelFetch> | Layer.Layer<never>;
+  };
 }> {
-  process.env.ANTHROPIC_API_KEY = 'example-test-key';
   const requests: Readonly<Record<string, unknown>>[] = [];
-  let cursor = 0;
+  const scripted = realModel === undefined;
+  if (scripted) {
+    process.env.ANTHROPIC_API_KEY = 'example-test-key';
+  }
 
-  const server = createServer(async (req, res) => {
-    const chunks: Buffer[] = [];
-    for await (const chunk of req) {
-      chunks.push(Buffer.from(chunk));
-    }
-    const rawBody = Buffer.concat(chunks).toString('utf8');
-    const parsed = (rawBody ? JSON.parse(rawBody) : {}) as Record<
-      string,
-      unknown
-    >;
-
-    if (rawBody.includes('Generate a short TeXRA session label')) {
-      res.writeHead(200, { 'content-type': 'text/event-stream' });
-      res.end(formatAnthropicSse({ text: 'Reviewing manuscript section' }, 0));
-      return;
-    }
-
-    requests.push(parsed);
-    const turnIndex = cursor++;
-    const step = turns[turnIndex];
-    if (!step) {
-      res.writeHead(500, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          type: 'error',
-          error: {
-            type: 'api_error',
-            message: `Scripted model exhausted at turn ${turnIndex + 1}.`,
-          },
-        }),
-      );
-      return;
-    }
-
-    res.writeHead(200, { 'content-type': 'text/event-stream' });
-    res.end(formatAnthropicSse(step, turnIndex));
-  });
-
-  await new Promise<void>((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve());
-  });
-  server.unref();
-  const { port } = server.address() as AddressInfo;
-  activeOrigin = `http://127.0.0.1:${port}`;
-  activeClient = new Client(activeOrigin);
-
-  const workspace = await mkdtemp(join(tmpdir(), 'texra-harness-example-'));
-  const agentsDir = join(workspace, 'agents');
+  const workspace =
+    existing ?? (await mkdtemp(join(tmpdir(), 'texra-harness-example-')));
+  const agentsDir = agents ?? join(workspace, 'agents');
   await mkdir(agentsDir, { recursive: true });
   const platform = nodePlatform({
     agentsDir,
     storageDir: join(workspace, 'storage'),
     workspaceDir: workspace,
   });
-  await Effect.runPromise(
-    platform.roots.globalState.update(
-      'polishModel',
-      'anthropic/claude-sonnet-5-5',
-    ),
-  );
-
   return {
     workspace,
     agentsDir,
     requests,
     platform,
+    route: {
+      model: realModel ?? 'anthropic/claude-sonnet-5-5',
+      transport: scripted
+        ? Layer.succeed(ModelFetch)(scriptedFetch(turns, requests))
+        : Layer.empty,
+    },
   };
+}
+
+/** What each `script` call of a stored conversation returned, in order:
+ *  the structured `value` its result node carries
+ *  (`records(runId).readConversation()`); a call node is followed by its
+ *  result node. */
+export function scriptReturnsOf(
+  conversation: readonly ExportNode[],
+): unknown[] {
+  return conversation.flatMap((node, index) => {
+    const call = conversation[index - 1];
+    return node.kind === 'tool-result' &&
+      call?.kind === 'tool-call' &&
+      call.name === 'script' &&
+      node.value !== undefined
+      ? [node.value]
+      : [];
+  });
 }

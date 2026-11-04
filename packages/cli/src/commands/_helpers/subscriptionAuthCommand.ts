@@ -23,7 +23,7 @@ import { booleanArg, GLOBAL_ARGS } from './globalArgs';
 import { cliProgressWriter, emitCliResult } from './output';
 
 /**
- * Fold one network/auth call into a result the caller narrows with one
+ * Turn one network/auth call into a result the caller narrows with one
  * `if (!result.ok) return CliExitCode.ModelOrNetworkError;` line; a failure
  * (typed or defect) is already written to stderr. Scoped to just the call, so
  * success-path code such as payload emission still runs.
@@ -167,10 +167,8 @@ export function defineSubscriptionAuthCommand(
     },
     args: { ...GLOBAL_ARGS },
     run: Effect.fn('subscriptionAuthCommand.run')(function* (context) {
-      const services = yield* initCliPlatform(context);
-      const statusResult = yield* withCliAuthError(
-        provider.getStatus(services.secrets),
-      );
+      yield* initCliPlatform(context);
+      const statusResult = yield* withCliAuthError(provider.getStatus());
       if (!statusResult.ok) return CliExitCode.ModelOrNetworkError;
       const { label, ...status } = statusResult.value;
       emitCliResult(context, {

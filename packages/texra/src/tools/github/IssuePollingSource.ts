@@ -24,20 +24,17 @@ import {
   formatIssueSubscriptionError,
 } from './formatIssueEvent';
 import { issueRef, withSince } from './githubPaths';
-import { ghGet, type GitHubServices } from './githubClient';
+import { ghGet } from './githubClient';
 import {
   type BasePollSubscriptionState,
   createBasePollState,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
   type PollEventListener,
   PollingSourceBase,
   type PollingLifetime,
+  type PollServices,
 } from './PollingSourceBase';
 import { dedupeComments, type DedupedResource } from './pollingDedup';
-import {
-  MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
-  GITHUB_POLL_INTERVAL_MS,
-} from './prSubscriptionConstants';
+import { MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS } from './prSubscriptionConstants';
 import {
   GhIssueCommentArraySchema,
   GhIssueSchema,
@@ -89,9 +86,7 @@ export class IssuePollingSource extends PollingSourceBase<
     super(
       {
         name: 'IssuePollingSource',
-        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
         maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
-        ...DEFAULT_POLLING_BACKOFF_CONFIG,
       },
       lifetime,
     );
@@ -100,7 +95,7 @@ export class IssuePollingSource extends PollingSourceBase<
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, GitHubServices> {
+  ): Effect.Effect<Disposable, never, PollServices> {
     const key = issueKeyToString(issue);
     return this.register(key, (now) => createInitialState(issue, now), onEvent);
   }
@@ -113,15 +108,12 @@ export class IssuePollingSource extends PollingSourceBase<
     );
   }
 
-  protected pollOne(
-    _key: string,
-    state: SubscriptionState,
-  ): Effect.Effect<void, Error, GitHubServices> {
-    return this.pollIssue(state);
-  }
-
-  private readonly pollIssue = Effect.fn('IssuePollingSource.pollIssue')(
-    function* (this: IssuePollingSource, state: SubscriptionState) {
+  protected readonly pollOne = Effect.fn('IssuePollingSource.pollIssue')(
+    function* (
+      this: IssuePollingSource,
+      _key: string,
+      state: SubscriptionState,
+    ) {
       const { issue } = state;
       const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.issueNumber}`;
       const commentsUrl = withSince(
