@@ -163,7 +163,8 @@ layer(
         // `gone` vanished and `added` appeared since the run opened.
         const step = yield* Effect.gen(function* () {
           const state = yield* Context.get(session, RunHistory).load(runId);
-          return yield* stepFor(yield* AgentRun, state!, 'request', false);
+          assert(state !== null);
+          return yield* stepFor(yield* AgentRun, state, 'request', false);
         }).pipe(
           Effect.provide(runLayer(session, ctx, [tool('kept'), tool('added')])),
           Effect.orDie,

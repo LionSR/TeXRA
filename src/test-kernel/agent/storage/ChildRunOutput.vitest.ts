@@ -6,6 +6,7 @@ import { Effect, Layer, Schema, Context } from 'effect';
 import { expect } from 'vitest';
 
 import {
+  RunIdSchema,
   AgentConfigSchema,
   qualifyAggregateId,
   type RunId,
@@ -36,9 +37,9 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 import { toolTable } from '@tools/toolTable';
 
-const parentRunId = 'aaaaaa111111' as RunId;
-const childRunId = 'bbbbbb222222' as RunId;
-const otherParentRunId = 'cccccc333333' as RunId;
+const parentRunId = Schema.decodeUnknownSync(RunIdSchema)('aaaaaa111111');
+const childRunId = Schema.decodeUnknownSync(RunIdSchema)('bbbbbb222222');
+const otherParentRunId = Schema.decodeUnknownSync(RunIdSchema)('cccccc333333');
 const relativePath = 'r1/draft.tex';
 
 /** The test's session over the process roots, whose storage the child's

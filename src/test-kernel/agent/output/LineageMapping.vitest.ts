@@ -1,6 +1,10 @@
+import { Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import {
+  RunIdSchema,
+  fileLocationDisplayPath,
+} from '@texra-ai/harness/schemas';
 import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { traceFileLineage } from '@texra/agent/output/lineageMapping';
 import {
@@ -9,7 +13,7 @@ import {
 } from '@texra/agent/output/outputState';
 
 describe('workflow output lineage mapping', () => {
-  const runId = 'abc123' as RunId;
+  const runId = Schema.decodeUnknownSync(RunIdSchema)('abc123');
 
   function runStorageFile(relativePath: string) {
     return createRunStorageLocation(

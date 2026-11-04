@@ -6,12 +6,14 @@ import {
   Deferred,
   Effect,
   Exit,
+  Schema,
   Stream,
   SubscriptionRef,
 } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
@@ -21,7 +23,6 @@ import {
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runView } from '../../../packages/harness/src/effect/runHandle';
 import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 /** A session view run entry as the package's fold keys it. */
 interface FakeRunView {
@@ -34,7 +35,7 @@ type FakeSessionView = Omit<RuntimeSessionView, 'runs'> & {
   readonly runs: Map<string, FakeRunView>;
 };
 
-const RUN_ID = 'ae0001';
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ae0001');
 
 /**
  * The runtime session the package opens, as the process's session owner
@@ -107,15 +108,18 @@ class FakeSession {
  *  commits, as `session.start` gives it. */
 const startedRun = (fake: FakeSession) =>
   Effect.map(fake.open(), (activation) =>
-    runView(contextOf(fake), RUN_ID as RunId, activation),
+    runView(contextOf(fake), RUN_ID, activation),
   );
 
 /** `fake` as the session's owners a run's view reads. */
 const contextOf = (fake: FakeSession) =>
   // cast: the fake carries only what a run's view reads of each owner.
   Context.make(SessionLog, fake.log as never).pipe(
+    // cast: the fake view serves only the ref, changes and inputs a run reads.
     Context.add(SessionViewAccess, fake.view as never),
+    // cast: the fake registry serves only the `get` a run's view reads.
     Context.add(Runs, fake.runs as never),
+    // cast: the fake answers only the `request` a run's view sends.
     Context.add(SessionRequests, fake.requests as never),
   ) as never;
 
