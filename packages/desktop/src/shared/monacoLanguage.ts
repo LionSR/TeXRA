@@ -3,7 +3,7 @@
 //
 // This is a pure lookup that non-editor code legitimately needs (a panel that
 // only labels a diff, say), and it must stay importable without dragging Monaco
-// in. Vite emits a worker bundle for every `import('...?worker')` expression it
+// in. Vite emits a worker bundle for every `import('@ui/monaco/...?worker')` expression it
 // sees in the module graph, at transform time, *before* tree-shaking — so one
 // import of this table from monacoLoader.ts wrote all five Monaco language
 // workers (~12MB) into the extension build even though the tree-shaker then
@@ -11,7 +11,7 @@
 // importing it costs a switch statement, not a build artifact.
 //
 // `@utils/core` is the one exception: it pulls in only the small,
-// browser-safe `pathe` + `nanoid`, does no `import('...?worker')` of its
+// browser-safe `pathe` + `nanoid`, does no `import('@ui/monaco/...?worker')` of its
 // own, and is already on the browser-safe allowlist this module's webview
 // consumers are held to, so it carries none of the risk above.
 

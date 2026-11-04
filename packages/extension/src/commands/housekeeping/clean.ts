@@ -4,11 +4,11 @@ import { glob } from 'glob';
 
 // Internal imports
 import { withLogChannel, WorkspaceFs } from '@texra-ai/harness/host';
-import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
 
 // Local file imports
-import { CHANNEL } from './constants';
-import { GlobFailed } from './utils';
+import { CHANNEL } from '@housekeeping/constants';
+import { GlobFailed } from '@housekeeping/utils';
+import { EXCLUDED_DIRS } from '@texra/shared/constants/latexTiming';
 
 /**
  * Every `build/` directory under the session's workspace, relative to its
