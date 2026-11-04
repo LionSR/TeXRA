@@ -19,9 +19,6 @@ const FileSelectConfigSchema = Schema.Struct({
   addOpenedLabel: Schema.String,
   emptyListLabel: Schema.String,
   selectListLabel: Schema.String,
-  toolConfig: Schema.optional(
-    Schema.NullOr(Schema.Literals(['tool', 'autoExtract'])),
-  ),
 });
 export type FileSelectConfig = typeof FileSelectConfigSchema.Type;
 
@@ -33,7 +30,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as input',
     emptyListLabel: 'Clear all input files',
     selectListLabel: 'Add input files',
-    toolConfig: 'tool',
   },
   {
     type: 'context',
@@ -50,7 +46,6 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',
     selectListLabel: 'Add media files',
-    toolConfig: 'autoExtract',
   },
 ];
 

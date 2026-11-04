@@ -124,6 +124,10 @@ last; the next revision reads its critique. The revision count is unchanged:
 texra run polish --input paper.tex --output paper.polished.tex --reflect
 ```
 
+The launch form's other task switches are flags of the same names:
+`--attachTeXCount`, `--autoExtractFigure`, `--autoExtractTikzFigure` and
+`--autoCompileInputPdf`.
+
 Document tasks always write generated files into the run's run-storage
 directory first. In text mode, TeXRA prints a filesystem path: the copied path
 when `--output` or `--output-dir` is used, otherwise the final generated file in

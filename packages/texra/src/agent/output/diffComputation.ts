@@ -108,7 +108,7 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
 /** The diff stats and lineage of a round's outputs, against the
  *  snapshot-resolved `baseFiles` (the list `RunFileService.prepareRunWorkspace`
  *  returns): the live workspace path would collapse in-place diffs to 0/0. A
- *  task that does not rewrite its documents gets no lineage. */
+ *  task that writes new documents (it declares `outputs`) gets no lineage. */
 export const computeOutputDiffStats = Effect.fn(
   'documents.computeOutputDiffStats',
 )(function* (

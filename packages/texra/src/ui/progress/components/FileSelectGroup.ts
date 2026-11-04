@@ -1,6 +1,6 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { getBasename, normalizeFilePath } from '@texra-ai/harness/schemas';
-import { Schema, String as Str } from 'effect';
+import { Record as Rec, Schema, String as Str } from 'effect';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
@@ -12,6 +12,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import {
+  DOCUMENT_TASK_OPTIONS,
   DocumentTaskOptionsSchema,
   type DocumentTaskOptions,
 } from '@texra/shared/plugins/documents';
@@ -27,6 +28,23 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
+
+/** The header menu a file group carries, by the group's type: its trigger's
+ *  id, icon and tooltip. */
+const MENUS: Partial<
+  Record<DocumentFileType, { id: string; icon: IconName; label: string }>
+> = {
+  input: {
+    id: 'toggleToolConfig',
+    icon: 'screwdriver-wrench',
+    label: 'Tool configuration options',
+  },
+  media: {
+    id: 'toggleAutoExtract',
+    icon: 'wand-magic-sparkles',
+    label: 'Auto-extract options',
+  },
+};
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -146,100 +164,50 @@ export class FileSelectGroup extends LitElement {
     this.patchLaunch({ [item.value]: item.checked });
   };
 
-  /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */
-  private renderConfigDropdown(opts: {
-    id: string;
-    icon: IconName;
-    label: string;
-    hasOptions: boolean;
-    items: TemplateResult;
-  }): TemplateResult {
+  /** The group's header menu: the task switches its file group offers
+   *  (`DOCUMENT_TASK_OPTIONS`), none for a group that offers none. The
+   *  group renders only for a document task (ProgressApp's file section),
+   *  the one launch that reads these toggles. */
+  private renderConfigMenu(): TemplateResult | typeof nothing {
+    const menu = MENUS[this.config.type];
+    if (menu === undefined) return nothing;
+    const values = this.checkboxValues;
+    const rows = Rec.toEntries(DOCUMENT_TASK_OPTIONS).filter(
+      ([, row]) => row.menu === this.config.type,
+    );
     return html`
       <wa-dropdown placement="bottom-start" @wa-select=${this.handleMenuSelect}>
         <wa-button
           slot="trigger"
-          id=${opts.id}
+          id=${menu.id}
           class=${classMap({
             'action-icon-button': true,
-            'has-options': opts.hasOptions,
+            'has-options': rows.some(([key]) => values[key]),
           })}
           appearance="plain"
           variant="neutral"
           size="s"
           type="button"
-          aria-label=${opts.label}
+          aria-label=${menu.label}
         >
-          ${waIcon(opts.icon)}
+          ${waIcon(menu.icon)}
         </wa-button>
-        ${opts.items}
+        ${repeat(
+          rows,
+          ([key]) => key,
+          ([key, row]) => html`
+            <wa-dropdown-item
+              type="checkbox"
+              value=${key}
+              ?checked=${values[key]}
+            >
+              ${row.label}
+            </wa-dropdown-item>
+          `,
+        )}
       </wa-dropdown>
-      <wa-tooltip for=${opts.id}>${opts.label}</wa-tooltip>
+      <wa-tooltip for=${menu.id}>${menu.label}</wa-tooltip>
     `;
-  }
-
-  private renderToolConfigMenu(): TemplateResult {
-    const values = this.checkboxValues;
-    return this.renderConfigDropdown({
-      id: 'toggleToolConfig',
-      icon: 'screwdriver-wrench',
-      label: 'Tool configuration options',
-      hasOptions: Boolean(values.attachTeXCount),
-      items: html`
-        <wa-dropdown-item
-          type="checkbox"
-          value="attachTeXCount"
-          ?checked=${values.attachTeXCount}
-        >
-          Attach TeX Count
-        </wa-dropdown-item>
-      `,
-    });
-  }
-
-  private renderAutoExtractMenu(): TemplateResult {
-    const values = this.checkboxValues;
-    return this.renderConfigDropdown({
-      id: 'toggleAutoExtract',
-      icon: 'wand-magic-sparkles',
-      label: 'Auto-extract options',
-      hasOptions:
-        values.autoExtractFigure ||
-        values.autoExtractTikzFigure ||
-        values.autoCompileInputPdf,
-      items: html`
-        <wa-dropdown-item
-          type="checkbox"
-          value="autoExtractFigure"
-          ?checked=${values.autoExtractFigure}
-        >
-          Figures
-        </wa-dropdown-item>
-        <wa-dropdown-item
-          type="checkbox"
-          value="autoExtractTikzFigure"
-          ?checked=${values.autoExtractTikzFigure}
-        >
-          TikZ Figures
-        </wa-dropdown-item>
-        <wa-dropdown-item
-          type="checkbox"
-          value="autoCompileInputPdf"
-          ?checked=${values.autoCompileInputPdf}
-        >
-          Compile Input PDF
-        </wa-dropdown-item>
-      `,
-    });
-  }
-
-  /** The group renders only for a document task (ProgressApp's file
-   *  section), the one launch that reads these toggles. */
-  private renderConfigMenu(): TemplateResult | typeof nothing {
-    if (this.config.toolConfig === 'tool') return this.renderToolConfigMenu();
-    if (this.config.toolConfig === 'autoExtract') {
-      return this.renderAutoExtractMenu();
-    }
-    return nothing;
   }
 
   private renderFileList(): TemplateResult {
