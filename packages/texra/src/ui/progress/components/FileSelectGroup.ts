@@ -20,7 +20,6 @@ import type { SurfaceAction } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { SortableController } from '@ui/litControllers/SortableController';
 import type { FileSelectConfig } from '@ui/copy/fileSelectConfigs';
-import type { IconName } from '@ui/wa/iconNames';
 import { dropCueStyles } from '@ui/styles/commonViewStyles';
 import { designTokens } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -28,23 +27,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { FileDropController, postDroppedFiles } from '../fileDropHandler';
 import { fileSelectStyles } from '../fileSelectStyles';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
-
-/** The header menu a file group carries, by the group's type: its trigger's
- *  id, icon and tooltip. */
-const MENUS: Partial<
-  Record<DocumentFileType, { id: string; icon: IconName; label: string }>
-> = {
-  input: {
-    id: 'toggleToolConfig',
-    icon: 'screwdriver-wrench',
-    label: 'Tool configuration options',
-  },
-  media: {
-    id: 'toggleAutoExtract',
-    icon: 'wand-magic-sparkles',
-    label: 'Auto-extract options',
-  },
-};
 
 @customElement('file-select-group')
 export class FileSelectGroup extends LitElement {
@@ -169,7 +151,7 @@ export class FileSelectGroup extends LitElement {
    *  group renders only for a document task (ProgressApp's file section),
    *  the one launch that reads these toggles. */
   private renderConfigMenu(): TemplateResult | typeof nothing {
-    const menu = MENUS[this.config.type];
+    const { menu } = this.config;
     if (menu === undefined) return nothing;
     const values = this.checkboxValues;
     const rows = Rec.toEntries(DOCUMENT_TASK_OPTIONS).filter(

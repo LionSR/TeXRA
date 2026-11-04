@@ -17,10 +17,7 @@ import {
   fileList,
 } from '@texra-ai/harness/plugins';
 import { agentMatchesIdentifier, toJsonValue } from '@texra-ai/harness/schemas';
-import {
-  DOCUMENT_TASK_OPTIONS,
-  DocumentTaskOptionsSchema,
-} from '@texra/shared/plugins/documents';
+import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';
 import {
   documentTaskKey,
   documentTaskPatch,
@@ -103,13 +100,7 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
           ? { script: patch.script, outputFiles: patch.outputFiles }
           : null;
       },
-      // The switches the call set, under their own names.
-      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)(
-        Rec.filter(
-          Rec.map(DOCUMENT_TASK_OPTIONS, (_, key) => input[key]),
-          Predicate.isNotNullish,
-        ),
-      ),
+      options: Rec.map(DOCUMENT_TASK_OPTIONS, (_, key) => input[key] ?? false),
     },
   });
   return withDocuments(launched);

@@ -306,7 +306,8 @@ export const DocumentExtractTool = defineTool({
       docs.deps.roots.workspace,
       docs.baseFiles,
       revision,
-      // A task that names no outputs rewrites its inputs.
+      // A task that names no outputs rewrites its inputs: its outputs descend
+      // from them.
       docs.task.outputs.length === 0,
     );
     checkExpectedOutputs(docs.state, docs.deps, revision);
