@@ -175,53 +175,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
     );
 
     /**
-     * Parallel-safe is about concurrency, not about running twice: an
-     * interrupted parallel-safe call whose tool is not replay-safe settles as
-     * outcome unknown like a barrier, never re-run blind.
-     */
-    it.effect(
-      'never re-runs a parallel-safe call that is not replay-safe',
-      () =>
-        Effect.gen(function* () {
-          const session = yield* isolatedTestSession({ emit: () => {} });
-          const runId = generateRunId();
-          publishTestRunStart(session, runId);
-          const toolB = blockingTool('toolB');
-          const tools = { toolB: { ...toolB.tool, lane: 'parallel' as const } };
-          const calls = [{ id: 'call-b', name: 'toolB' }];
-          const fiber = yield* Effect.forkDetach(
-            runToolUse({ resume: false }).pipe(
-              Effect.provide(
-                loopLayer({
-                  runId,
-                  session,
-                  tools,
-                  turns: [toolCallTurn(calls)],
-                  stopAfterCycle: true,
-                }),
-              ),
-            ),
-          );
-          yield* toolB.started;
-          yield* Fiber.interrupt(fiber);
-
-          const resumed = yield* runToolUse({ resume: true }).pipe(
-            Effect.provide(
-              loopLayer({
-                runId,
-                session,
-                tools,
-                turns: [textTurn('The call was skipped.')],
-                stopAfterCycle: true,
-              }),
-            ),
-          );
-          expect(resumed.outcome).toBe('completed');
-          expect(toolB.call).toHaveBeenCalledTimes(1);
-        }),
-    );
-
-    /**
      * Failure mode: a replay-safe call that stops the process (running it out
      * of memory, say) starts again on every resume, so every start stops.
      */

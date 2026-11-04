@@ -15,6 +15,35 @@ import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { sha256 } from '@utils/core/idHash';
 
 type ToolDefinitions = NonNullable<TurnRequest['tools']>;
+type Parameters = ToolDefinitions[number]['parameters'];
+
+/** A JSON value frozen through every level. */
+const deepFrozen = <T>(value: T): T => {
+  if (Predicate.isObject(value) && !Object.isFrozen(value)) {
+    for (const child of Object.values(value)) deepFrozen(child);
+    Object.freeze(value);
+  }
+  return value;
+};
+
+/** Each input schema's wire parameters, frozen since every run shares them:
+ *  a tool's schema is one value for the life of the process, and converting
+ *  it is most of what building a step's request costs. */
+const parametersBySchema = new WeakMap<object, Parameters>();
+
+const parametersOf = (definition: ToolDefinition): Parameters => {
+  const convert = () =>
+    Schema.decodeUnknownSync(JsonObjectSchema)(
+      convertToolSchema(definition) ?? { type: 'object', properties: {} },
+    );
+  const { schema } = definition;
+  if (schema === undefined) return convert();
+  const known = parametersBySchema.get(schema);
+  if (known !== undefined) return known;
+  const parameters = deepFrozen(convert());
+  parametersBySchema.set(schema, parameters);
+  return parameters;
+};
 
 /** The package's uniform tool definitions for the run's resolved tool list. */
 export function toolDefinitionsFor(
@@ -23,16 +52,15 @@ export function toolDefinitionsFor(
   return definitions.map((definition) => ({
     name: definition.name,
     description: definition.description ?? '',
-    parameters: Schema.decodeUnknownSync(JsonObjectSchema)(
-      convertToolSchema(definition) ?? { type: 'object', properties: {} },
-    ),
+    parameters: parametersOf(definition),
   }));
 }
 
 /**
  * The tool definitions a step's requests send, in wire form: the offered
- * tools whose record marks them `sent` (every tool, or, under script-only
- * tools, `script` and the run's own alone). The step's record decides, so
+ * tools whose record marks them `sent` (every tool but a script's own
+ * function, or, under script-only tools, `script` and the run's own
+ * alone). The step's record decides, so
  * a resumed step sends what it recorded whatever the setting says now.
  */
 export const sentDefinitions = (tools: {

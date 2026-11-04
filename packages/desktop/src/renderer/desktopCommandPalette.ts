@@ -4,30 +4,29 @@
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type { IconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   formatDesktopAccelerator,
   type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
-import type { IconName } from '@ui/wa/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+} from '../shared/accelerators';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
+  type DesktopCommandId,
   type DesktopCommandMenuEntry,
 } from '../shared/desktopCommandSurface';
-import type WaDialog from '@awesome.me/webawesome/dist/components/dialog/dialog.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Single command row. `meta` is the trailing label (an accelerator hint, a
 // category, etc.). `category` is an optional, separate field included in the
 // search haystack without being displayed — useful when `meta` is reserved for
 // an accelerator but the row should still match category-name queries.
 interface CommandPaletteEntry {
-  readonly id: string;
+  readonly id: DesktopCommandId;
   readonly label: string;
   readonly icon: IconName;
   readonly meta?: string;
@@ -87,7 +86,7 @@ function getNextCommandPaletteIndex(
 
 function executeCommandPaletteEntry(
   entry: CommandPaletteEntry | undefined,
-  onExecute: (id: string) => boolean | Promise<boolean>,
+  onExecute: (id: DesktopCommandId) => boolean | Promise<boolean>,
 ): boolean {
   if (!entry) return false;
   // Sync handlers report their actual result; an async handler returns a
@@ -111,8 +110,8 @@ export function createDesktopCommandPalette({
       toPaletteEntry(entry, platform),
     );
 
-  const onExecute = (id: string): boolean | Promise<boolean> =>
-    dispatchDesktopCommand(id as DesktopCommandMenuEntry['id'], actions);
+  const onExecute = (id: DesktopCommandId): boolean | Promise<boolean> =>
+    dispatchDesktopCommand(id, actions);
 
   // Reactive state: every mutation calls renderTemplate() to keep the DOM in
   // sync. wa-dialog handles modal backdrop, focus trap, escape key, and focus
@@ -122,7 +121,7 @@ export function createDesktopCommandPalette({
   let activeIndex = -1;
   let query = '';
 
-  const dialog = document.createElement('wa-dialog') as WaDialog;
+  const dialog = document.createElement('wa-dialog');
   dialog.classList.add('desktop-command-palette');
   dialog.withoutHeader = true;
   dialog.lightDismiss = true;
@@ -141,8 +140,9 @@ export function createDesktopCommandPalette({
   };
 
   const handleFilterInput = (event: Event): void => {
-    const target = event.target as WaInput | null;
-    applyQuery(target?.value ?? '');
+    applyQuery(
+      event.target instanceof WaInput ? (event.target.value ?? '') : '',
+    );
   };
 
   const handleFilterKeydown = (event: KeyboardEvent): void => {

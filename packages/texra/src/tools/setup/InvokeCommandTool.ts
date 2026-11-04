@@ -4,39 +4,17 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import { defineTool } from '@texra-ai/harness';
 import { executed, ToolError } from '@texra-ai/harness/plugins';
-import type { CommandId } from '@texra/shared/commands/catalog';
+import { commandCatalog } from '@texra/shared/commands/catalog';
 
 // Local file imports
 import { assertInSetupAllowlist, SetupPlatform } from './platform';
 
-/**
- * Allowlist of VS Code commands the setup agent may invoke.
- * Grouped for readability; all commands share the same risk profile (each
- * one opens an existing, trusted UI flow). Do NOT add destructive commands
- * (delete, reset, clean) to this list.
- */
-const ALLOWED_COMMAND_IDS = [
-  // API keys
-  'texra.setApiKey',
-  'texra.removeApiKey',
-  // Settings dashboard tabs
-  'texra.showDashboard',
-  'texra.showMemory',
-  'texra.showModels',
-  'texra.showAgents',
-  'texra.showTeamSettings',
-  'texra.showTools',
-  'texra.showGitSettings',
-  // Workspace bootstrap
-  'texra.createSampleProject',
-  'texra.showMainView',
-  'texra.cloneOverleafProject',
-  'texra.downloadArXivSource',
-  // Walkthrough re-entry
-  'texra.openGettingStarted',
-] as const satisfies readonly CommandId[];
-
-const ALLOWED_COMMANDS: ReadonlySet<string> = new Set(ALLOWED_COMMAND_IDS);
+/** The commands the setup agent may invoke: the catalog's `setupInvokable` rows. */
+const ALLOWED_COMMANDS: ReadonlySet<string> = new Set(
+  commandCatalog.flatMap((entry) =>
+    'setupInvokable' in entry ? [entry.id] : [],
+  ),
+);
 
 const InvokeCommandInputSchema = Schema.Struct({
   command: Schema.String.check(Schema.isMinLength(1)).annotate({

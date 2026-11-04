@@ -19,6 +19,7 @@ import {
   Option,
   Result,
   Schedule,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -39,7 +40,6 @@ import {
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
-  type JsonValue,
   type RunId,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -181,42 +181,40 @@ const internal = Effect.fn('handlers.internal')(function* (
  * `run.end` (deleted) ends with the outcome its view shows, without output;
  * a store that cannot be read fails the answer, never reads as an empty end.
  */
-function runEnded(
+const runEnded = Effect.fn('runEnded')(function* (
   { session }: ServiceProject,
   runId: RunId,
-): Effect.Effect<RunEnd & { at: CommitOrdinal }, TaskFailed> {
-  return Effect.gen(function* () {
-    yield* session.held(runId)?.drained ?? Effect.void;
-    const ended = Option.getOrUndefined(
-      yield* session.view.changes.pipe(
-        Stream.filter((view) => {
-          const run = view.runs.get(runId);
-          return run === undefined || !isLiveRun(run);
-        }),
-        Stream.runHead,
+): Effect.fn.Return<RunEnd & { at: CommitOrdinal }, TaskFailed> {
+  yield* session.held(runId)?.drained ?? Effect.void;
+  const ended = Option.getOrUndefined(
+    yield* session.view.changes.pipe(
+      Stream.filter((view) => {
+        const run = view.runs.get(runId);
+        return run === undefined || !isLiveRun(run);
+      }),
+      Stream.runHead,
+    ),
+  );
+  const run = ended?.runs.get(runId);
+  const at = ended?.cursor ?? session.view.current().cursor;
+  const end = yield* session
+    .records(runId)
+    .readRunEnd()
+    .pipe(
+      Effect.mapError(
+        (error) =>
+          new TaskFailed({
+            message: `Task ${runId} ended; its result could not be read: ${error.message}`,
+          }),
       ),
     );
-    const run = ended?.runs.get(runId);
-    const at = ended?.cursor ?? session.view.current().cursor;
-    const end = yield* session
-      .records(runId)
-      .readRunEnd()
-      .pipe(
-        Effect.mapError(
-          (error) =>
-            new TaskFailed({
-              message: `Task ${runId} ended; its result could not be read: ${error.message}`,
-            }),
-        ),
-      );
-    if (end !== null) return { ...end, at };
-    return {
-      outcome: run?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
-      output: emptyRunEndOutput(),
-      at,
-    };
-  });
-}
+  if (end !== null) return { ...end, at };
+  return {
+    outcome: run?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
+    output: emptyRunEndOutput(),
+    at,
+  };
+});
 
 /**
  * Run `admission` (a start or a resume) in the service's fiber set, so a
@@ -368,14 +366,13 @@ export const serviceHandlers = TexraRpcs.toLayer(
         } satisfies ServiceInfo;
       }),
       'service.stop': ({ drain }) => control.stop(drain),
-      'tasks.list': ({ all }) =>
-        Effect.gen(function* () {
-          return yield* listTasks(
-            projects.storageRoot,
-            yield* projects.opened,
-            all,
-          );
-        }).pipe(Effect.orDie),
+      'tasks.list': Effect.fn('tasks.list')(function* ({ all }) {
+        return yield* listTasks(
+          projects.storageRoot,
+          yield* projects.opened,
+          all,
+        );
+      }, Effect.orDie),
       'task.watch': ({ workspace, subscribe }) =>
         Stream.unwrap(
           Effect.gen(function* () {
@@ -456,9 +453,14 @@ export const serviceHandlers = TexraRpcs.toLayer(
             session.roots.workspaceState.get(key),
           ).pipe(
             // The store answers what it holds, which is JSON.
-            Effect.map((value) => ({
-              ...(value !== undefined && { value: value as JsonValue }),
-            })),
+            Effect.flatMap((value) =>
+              value === undefined
+                ? Effect.succeed({})
+                : Effect.map(
+                    Schema.decodeUnknownEffect(Schema.Json)(value),
+                    (json) => ({ value: json }),
+                  ),
+            ),
             Effect.mapError(
               (error) => new ProjectStateFailed({ message: error.message }),
             ),

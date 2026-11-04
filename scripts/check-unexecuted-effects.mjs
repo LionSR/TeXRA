@@ -452,9 +452,10 @@ function scanSourceFile(checker, sourceFile) {
   const isEffectType = makeIsEffectType(checker);
   // Shape 5 is production-only: a test's background fiber that fails shows up
   // as that test's failure or timeout, not as silently lost work.
-  const forksScanned = !sourceFile.fileName.includes(
-    `${sep}src${sep}test-kernel${sep}`,
-  );
+  const forksScanned =
+    !/[\\/](?:src[\\/]test-kernel|packages[\\/][^\\/]+[\\/]test)[\\/]/.test(
+      sourceFile.fileName,
+    );
   const findings = [];
   const record = (kind, node, detail) => {
     const { line, character } = sourceFile.getLineAndCharacterOfPosition(

@@ -76,12 +76,18 @@ export function protectPatternsInto(
 ): string {
   let out = content;
   for (const pattern of patterns) {
-    out = out.replaceAll(pattern, (match, ...args: unknown[]) => {
-      if (preserveBlockquotePrefixes && match.includes('\n')) {
+    const source = out;
+    out = source.replaceAll(pattern, (match, ...args: unknown[]) => {
+      // The match offset is the replacer's one number argument (captures are
+      // strings, named groups an object).
+      const offset = args.find((arg): arg is number => typeof arg === 'number');
+      if (
+        preserveBlockquotePrefixes &&
+        match.includes('\n') &&
+        offset !== undefined
+      ) {
         // Keep Markdown blockquote prefixes visible to the parser instead of
         // collapsing an entire quoted display span into one placeholder line.
-        const offset = args.at(-2) as number;
-        const source = args.at(-1) as string;
         const firstLineStart = source.lastIndexOf('\n', offset - 1) + 1;
         const firstLinePrefix = source.slice(firstLineStart, offset);
         const firstContainerPrefix =

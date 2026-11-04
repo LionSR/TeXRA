@@ -982,7 +982,6 @@ function makeRetryApprovalPayload(): RetryPermission {
             kind: 'chatgpt-subscription',
             resetsInMs: 7_200_000,
           },
-          userRetryable: true,
           provider: 'openai',
           statusCode: 429,
         }
@@ -992,7 +991,6 @@ function makeRetryApprovalPayload(): RetryPermission {
           // an explicit user decision before changing credentials, so this
           // fixture remains interactive.
           classification: { kind: 'upstream-credit' },
-          userRetryable: true,
           provider: 'openai',
           statusCode: 429,
         },
@@ -1792,7 +1790,7 @@ registerBuiltinSlashCommands({
 // run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
 // does.
 if (canInterrupt) {
-  harnessSession.markRunPending(Effect.never);
+  harnessSession.markRunPending(Effect.never, Effect.void);
   harnessSession.runId = HARNESS_RUN_ID;
 }
 

@@ -29,21 +29,30 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { dispatchFactsFor } from '../run/tools';
 import { addressedMessages, type AppendedMessage } from '../storedTurn';
+import type { TurnResult } from '@texra-ai/llm';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-/** The row making `text` the response shown as final: a row of the run's
- *  history, awaited, never a detached trace row. */
+/** The row making `text` the response shown as final, with the limit that
+ *  ended it early when one did (`turn`, the turn that wrote it): a row of
+ *  the run's history, awaited, never a detached trace row. */
 export const finalizedRows = (
   runId: RunId,
   text: string,
-): RunHistoryDraft[] => [
-  {
-    type: 'response.finalized',
-    aggregateId: qualifyAggregateId('run', runId),
-    text,
-  },
-];
+  turn: TurnResult | null,
+): RunHistoryDraft[] => {
+  const finish = turn?.finishReason;
+  return [
+    {
+      type: 'response.finalized',
+      aggregateId: qualifyAggregateId('run', runId),
+      text,
+      ...((finish === 'length' || finish === 'content-filter') && {
+        cut: finish,
+      }),
+    },
+  ];
+};
 
 /** Where the loop stands; a run's first one opens it. A turn's end says
  *  how the turn ended. */
@@ -78,12 +87,10 @@ export function positionRow(
 
 /** The loop's halt where its newest position left it, with the run's
  *  outcome: written only with the run's `run.end`, so a stopped run never
- *  reads as interrupted. `closed`: a clean session close stopped the run,
- *  which the halt records as its reason. */
+ *  reads as interrupted. */
 export function haltedPositionRow(
   position: Extract<SessionEvent, { type: 'run.position' }>,
   outcome: RunOutcome,
-  closed: boolean,
 ): Extract<RunHistoryDraft, { type: 'run.position' }> {
   const { family, turn } = position.payload;
   return {
@@ -94,7 +101,6 @@ export function haltedPositionRow(
       at: 'halted',
       turn,
       outcome,
-      ...(closed && { reason: 'closed' }),
     },
   };
 }

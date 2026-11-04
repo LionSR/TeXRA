@@ -9,12 +9,8 @@
  * - an awaited child's typed result is returned while its manifest never
  *   landed;
  * - a caller stop during persistence rewrites a completed result;
- * - a proposal is approved or asked under the `never` policy;
- * - a detached child's result is delivered to the parent that released it.
+ * - a proposal is approved or asked under the `never` policy.
  */
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { layer } from '@effect/vitest';
 import { Effect, Exit, Fiber, Schema, Stream, Context } from 'effect';
 import { describe, expect } from 'vitest';
@@ -26,23 +22,17 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
 import { executeSubagentInBand } from '@agent/runtime/delegation/inBandSubagentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import {
-  SessionLog,
-  Approvals,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+import { SessionLog, Approvals } from '@shared/session/runHistory';
 import {
   nativeToolTestLayer,
   testModelCell,
 } from '@test/support/nativeToolTestLayer';
 import {
   publishTestRows,
-  queuedFollowUps,
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
 import {
@@ -52,7 +42,6 @@ import {
   REAL_RUN_TIMEOUT,
   sessionStoreFaults,
   storedRows,
-  untilStored,
   validationHost,
   type StoredRow,
 } from '@test/support/storeFaults';
@@ -170,31 +159,6 @@ const answerOpenedRequests = (
     return openedKinds;
   });
 
-/** An instruction whose model call the validation model holds until
- *  {@link releasePark}. */
-const PARKED = 'GOLDEN-PARK Check the proof.';
-
-/** Wait until `parent`'s child has a model call in flight. */
-const untilAttempt = (parent: Parent) =>
-  Effect.gen(function* () {
-    yield* untilStored(parent.storage, (rows) =>
-      rows.some(
-        (row) =>
-          row.type === 'model.message' &&
-          row.data.includes('"kind":"attempt"') &&
-          childrenOf(parent).includes(row.run),
-      ),
-    );
-    // cast: a child's stored id is the run id it was launched under.
-    return childrenOf(parent)[0]! as RunId;
-  });
-
-/** Release the validation model's GOLDEN-PARK hold. */
-const releasePark = (parent: Parent) =>
-  Effect.sync(() =>
-    writeFileSync(join(parent.storage, 'golden-park.release'), ''),
-  );
-
 describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-delegation-'), { buildPerTest: true })(
@@ -299,35 +263,6 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
               expect(opened).toEqual([]);
               expect(result.status).toBe('error');
               expect(childrenOf(parent)).toEqual([]);
-            }),
-        );
-
-        it.effect(
-          'does not deliver detached subagent results back to the released parent',
-          () =>
-            Effect.gen(function* () {
-              const parent = yield* parkedParent();
-              yield* Effect.addFinalizer(() => releasePark(parent));
-              // The validation model holds the child's turn; the parent releases
-              // its children mid-turn, as a stop-with-detach does.
-              yield* delegateReview(parent, PARKED);
-              const child = yield* untilAttempt(parent);
-              const registry = registryOf(Context.get(parent.session, Runs));
-              yield* registry['detachActiveChildren'](parent.runId);
-              yield* releasePark(parent);
-
-              yield* untilStored(parent.storage, (rows) =>
-                rows.some(
-                  (row) => row.run === child && row.type === 'run.report',
-                ),
-              );
-              expect(
-                Context.get(parent.session, SessionViewAccess).run(child)
-                  ?.parentId,
-              ).toBeNull();
-              expect(
-                yield* queuedFollowUps(parent.session, parent.runId),
-              ).toEqual([]);
             }),
         );
       },

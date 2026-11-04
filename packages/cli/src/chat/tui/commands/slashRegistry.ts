@@ -3,7 +3,7 @@
 import {
   editDistance,
   typoSuggestionThreshold,
-} from '@texra/utils/text/editDistance';
+} from '@cli/commands/_helpers/editDistance';
 
 import type {
   SlashCommandContext,

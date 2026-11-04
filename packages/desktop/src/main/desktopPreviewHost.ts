@@ -14,6 +14,7 @@ import {
   withProcessServices,
   withSessionFs,
 } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
@@ -122,7 +123,7 @@ export function createDesktopPreviewHost(
     return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
-          error.reason._tag === 'NotFound'
+          absentReason(error)
             ? `File not found: ${filePath}`
             : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
         ),
@@ -130,22 +131,20 @@ export function createDesktopPreviewHost(
     );
   }
 
-  function openPathProgram(
+  const openPathProgram = Effect.fn('openPathProgram')(function* (
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
-    return Effect.gen(function* () {
-      yield* ensurePathExists(filePath);
+  ): Effect.fn.Return<void, PreviewUnavailable, FileSystem.FileSystem> {
+    yield* ensurePathExists(filePath);
 
-      const shellError = yield* Effect.tryPromise({
-        try: () => options.shell.openPath(filePath),
-        catch: toErrorMessage,
-      }).pipe(Effect.catch((message) => Effect.succeed(message)));
+    const shellError = yield* Effect.tryPromise({
+      try: () => options.shell.openPath(filePath),
+      catch: toErrorMessage,
+    }).pipe(Effect.catch((message) => Effect.succeed(message)));
 
-      if (shellError) {
-        yield* fail(`Failed to open file ${filePath}: ${shellError}`);
-      }
-    });
-  }
+    if (shellError) {
+      yield* fail(`Failed to open file ${filePath}: ${shellError}`);
+    }
+  });
 
   /** The reported form is the default; only the unreported one carries the
    *  shell's rejection. */
@@ -200,71 +199,65 @@ export function createDesktopPreviewHost(
     );
   }
 
-  function buildDisplayProgram(
+  const buildDisplayProgram = Effect.fn('buildDisplayProgram')(function* (
     roots: WorkspaceRoots,
     fileLocation: FileLocation,
-  ): Effect.Effect<
+  ): Effect.fn.Return<
     void,
     PreviewUnavailable,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
-    return Effect.gen(function* () {
-      const sourcePath = fileLocation.absolutePath;
-      yield* ensurePathExists(sourcePath);
+    const sourcePath = fileLocation.absolutePath;
+    yield* ensurePathExists(sourcePath);
 
-      if (!isLatexFile(sourcePath)) {
-        yield* openPathProgram(sourcePath);
-        return;
-      }
+    if (!isLatexFile(sourcePath)) {
+      yield* openPathProgram(sourcePath);
+      return;
+    }
 
-      const outputDirectory = path.dirname(sourcePath);
-      const { compileLatex2Pdf } = yield* Effect.promise(
-        () => import('@latex/texTools'),
+    const outputDirectory = path.dirname(sourcePath);
+    const { compileLatex2Pdf } = yield* Effect.promise(
+      () => import('@latex/texTools'),
+    );
+    const built = yield* withSessionFs(
+      roots,
+      compileLatex2Pdf({ kind: 'external', absolutePath: sourcePath }, roots, {
+        outputDirectory,
+      }),
+    ).pipe(
+      // No compiler to drive: the message names it and how to install one.
+      Effect.catchTag('ToolMissing', (missing) =>
+        fail(`Cannot preview ${sourcePath}: ${missing.message}`),
+      ),
+    );
+    if (!built.ok) {
+      // The full engine log (up to 200 lines) goes to console.error, not the
+      // dialog message -- fail() surfaces the message via a blocking native
+      // `dialog.showMessageBox` modal (see desktopWindowHost.ts's showErrorMessage),
+      // which has no scrolling affordance and would render as an oversized,
+      // unreadable dialog for a multi-hundred-line raw compiler log.
+      console.error(
+        `[desktop] LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
       );
-      const built = yield* withSessionFs(
-        roots,
-        compileLatex2Pdf(
-          { kind: 'external', absolutePath: sourcePath },
-          roots,
-          {
-            outputDirectory,
-          },
-        ),
-      ).pipe(
-        // No compiler to drive: the message names it and how to install one.
-        Effect.catchTag('ToolMissing', (missing) =>
-          fail(`Cannot preview ${sourcePath}: ${missing.message}`),
-        ),
+      yield* fail(
+        `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
       );
-      if (!built.ok) {
-        // The full engine log (up to 200 lines) goes to console.error, not the
-        // dialog message -- fail() surfaces the message via a blocking native
-        // `dialog.showMessageBox` modal (see desktopWindowHost.ts's showErrorMessage),
-        // which has no scrolling affordance and would render as an oversized,
-        // unreadable dialog for a multi-hundred-line raw compiler log.
-        console.error(
-          `[desktop] LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
-        );
-        yield* fail(
-          `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
-        );
-        return;
-      }
+      return;
+    }
 
-      // Confirm the PDF is on disk before rendering it (the iframe will
-      // load nothing and present a blank surface otherwise). Every build
-      // gets its own number, so its tab reloads however close in time two
-      // builds land.
-      const { pdfPath } = built;
-      yield* ensurePathExists(pdfPath);
-      const build = ++builds;
+    // Confirm the PDF is on disk before rendering it (the iframe will
+    // load nothing and present a blank surface otherwise). Every build
+    // gets its own number, so its tab reloads however close in time two
+    // builds land.
+    const { pdfPath } = built;
+    yield* ensurePathExists(pdfPath);
+    const build = ++builds;
 
-      if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))
-        return;
+    if (tryShowPdfInRenderer(roots, pdfPath, path.basename(pdfPath), build))
+      return;
 
-      yield* openPathProgram(pdfPath);
-    });
-  }
+    yield* openPathProgram(pdfPath);
+  });
 
   return {
     openBuildDisplayIn: (roots) => (location) =>

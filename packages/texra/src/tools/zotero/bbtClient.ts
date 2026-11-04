@@ -12,7 +12,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Result, Schema, SchemaGetter } from 'effect';
+import { Cause, Effect, Predicate, Result, Schema, SchemaGetter } from 'effect';
 import { HttpBody, HttpClientError } from 'effect/http';
 import { StatusCodes } from 'http-status-codes';
 
@@ -419,16 +419,17 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         // body; it is read under the same deadline as the headers. Keep this
         // body-only recovery separate so request failures retain their own
         // reachability/timeout classification.
-        const data = yield* (
-          response.json as Effect.Effect<{ error?: string } | null, Error>
-        ).pipe(
+        const data = yield* response.json.pipe(
           // Body is not JSON or is empty; use the generic status message.
           Effect.catch(() => Effect.succeed(undefined)),
         );
+        const error = Predicate.hasProperty(data, 'error')
+          ? data.error
+          : undefined;
         return {
           status: 'error',
-          message: data?.error
-            ? String(data.error)
+          message: error
+            ? String(error)
             : `Unexpected response status: ${response.status}`,
         } satisfies ConnectorResult;
       }),

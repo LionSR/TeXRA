@@ -369,8 +369,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       ).pipe(Stream.ensuring(Deferred.succeed(foldedEnded, undefined))),
       deliver: (removed) =>
         events.all(anchor, delivered).pipe(
-          Stream.runForEach((event) =>
-            Effect.gen(function* () {
+          Stream.runForEach(
+            Effect.fnUntraced(function* (event) {
               const target = aggregateTarget(event.aggregateId);
               if (target.kind === 'run' && isRemoval(event)) removed(target.id);
               yield* trace.committed(event);

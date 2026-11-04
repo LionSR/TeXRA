@@ -25,7 +25,6 @@ export function asDocumentTask<
       persona: { prompt: '', tools: [], temperature: 1 },
       blocks: {
         task: {
-          rewrite: true,
           outputs: [],
           files: {},
           prefix: '',

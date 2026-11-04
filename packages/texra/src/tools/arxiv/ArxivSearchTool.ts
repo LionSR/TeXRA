@@ -66,8 +66,9 @@ const TIMEOUT_MS = 30_000;
  * order, and an interrupted waiter gives its place back.
  */
 const nextRequestAt = SynchronizedRef.makeUnsafe(0);
-const awaitArxivSlot = SynchronizedRef.updateEffect(nextRequestAt, (at) =>
-  Effect.gen(function* () {
+const awaitArxivSlot = SynchronizedRef.updateEffect(
+  nextRequestAt,
+  Effect.fnUntraced(function* (at) {
     const now = yield* Clock.currentTimeMillis;
     if (now < at) yield* Effect.sleep(Duration.millis(at - now));
     return (yield* Clock.currentTimeMillis) + RATE_LIMIT_DELAY_MS;
@@ -90,6 +91,7 @@ interface ArxivSearchResult {
 
 /** A fresh client: the default export is a shared, stateful builder. */
 function createArxivClient(): typeof arxivClient {
+  // cast: the package exports only an instance; its class takes no required arguments.
   const ClientCtor = arxivClient.constructor as {
     new (): typeof arxivClient;
   };

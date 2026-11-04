@@ -15,6 +15,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@texra-ai/harness/schemas';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import {
   codexAccountLabel,
   type SubscriptionAuthStatus,
@@ -42,8 +43,6 @@ import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /** Everything one provider contributes to the shared section. */
 interface SubscriptionSectionProvider {
@@ -85,7 +84,8 @@ export class SubscriptionSection extends SignalWatcher(LitElement) {
   @property({ attribute: false }) auth: SubscriptionAuthStatus | null = null;
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
-    const enabled = (event.target as WaSwitch).checked;
+    if (!(event.target instanceof WaSwitch)) return;
+    const enabled = event.target.checked;
     postMessage(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE, {
       provider: this.provider.providerId,
       enabled,
@@ -217,7 +217,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
       'Use OpenAI models through your ChatGPT Plus, Pro, or Team subscription. No OpenAI API key is needed.',
     contextWindowSetting: CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
     preferLabel: CHATGPT_AUTH.subscriptionLabel,
-    preferDescription: 'Use the subscription for eligible Codex models.',
+    preferDescription: 'Use the subscription for eligible OpenAI models.',
     accountTitle: 'ChatGPT account',
     connectDescription:
       'Connect the ChatGPT account that owns your subscription.',

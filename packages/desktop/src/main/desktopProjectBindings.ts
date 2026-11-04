@@ -52,7 +52,7 @@ import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -105,7 +105,7 @@ interface ProjectBindingsOptions {
   readonly resourcesPath: string;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
-  readonly onboarding: DesktopOnboardingIpc;
+  readonly onboarding: WindowOnboarding;
 }
 
 export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
@@ -285,6 +285,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           ui: {
             ...hosts.toolEditPreview,
             showErrorMessage: hosts.run.showErrorMessage,
+            showWarningMessage: hosts.run.showWarningMessage,
           },
           spawn,
           focused: () => shown() && host.window.isFocused(),
@@ -309,16 +310,15 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
               ),
           }),
       });
-      // The funnel is host state every open project's snapshot carries (8.1).
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          options.onboarding.onFunnelChange((state) =>
-            snapshot.setOnboarding(state),
-          ),
+      // The funnel is host state every open project's snapshot carries. The
+      // first snapshot sets the funnel as it stands now, before its refresh.
+      yield* SubscriptionRef.changes(options.onboarding.funnel).pipe(
+        Stream.runForEach((state) =>
+          state ? snapshot.setOnboarding(state) : Effect.void,
         ),
-        (unsubscribe) => Effect.sync(unsubscribe),
+        Effect.forkScoped,
       );
-      const funnel = options.onboarding.funnelState();
+      const funnel = yield* SubscriptionRef.get(options.onboarding.funnel);
       const initialSnapshot = funnel
         ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
         : snapshot.refresh;
@@ -348,15 +348,14 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       };
     });
 
-    const bind = (project: DesktopProject) =>
-      Effect.gen(function* () {
-        const scope = yield* Scope.fork(bindingsScope);
-        const binding = yield* bindProject(project).pipe(
-          Scope.provide(scope),
-          Effect.onError(() => Scope.close(scope, Exit.void)),
-        );
-        return { ...binding, scope };
-      });
+    const bind = Effect.fn('bind')(function* (project: DesktopProject) {
+      const scope = yield* Scope.fork(bindingsScope);
+      const binding = yield* bindProject(project).pipe(
+        Scope.provide(scope),
+        Effect.onError(() => Scope.close(scope, Exit.void)),
+      );
+      return { ...binding, scope };
+    });
     const release = (binding: ProjectBinding) =>
       Scope.close(binding.scope, Exit.void);
 

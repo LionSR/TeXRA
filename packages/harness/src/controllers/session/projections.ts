@@ -95,12 +95,19 @@ interface Projector {
 function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
-  if (event.type === 'model.message' && event.payload.kind === 'response')
-    priced = event.payload.usage;
+  if (
+    event.type === 'model.message' &&
+    (event.payload.kind === 'response' || event.payload.kind === 'failed')
+  )
+    priced = event.payload.usage ?? null;
   if (priced == null) return null;
   const { provider, responseTimeMs, ...usage } = priced;
   return usage;
 }
+
+/** The projections this build maintains; {@link PROJECTORS} has one each. */
+const PROJECTION_NAMES = ['listing', 'usage', 'model'] as const;
+type ProjectionName = (typeof PROJECTION_NAMES)[number];
 
 const PROJECTORS = {
   listing: {
@@ -187,10 +194,8 @@ const PROJECTORS = {
       ];
     },
   },
-} as const satisfies Record<string, Projector>;
+} as const satisfies Record<ProjectionName, Projector>;
 
-type ProjectionName = keyof typeof PROJECTORS;
-const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
 const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );
@@ -220,6 +225,9 @@ const isCurrent = (
     : state.version === PROJECTORS[name].version && state.through >= top;
 
 const RunUsageSchema = Schema.Struct({ usage: TokenUsageStatsSchema });
+const decodeStoredUsage = Schema.decodeUnknownSync(
+  Schema.fromJsonString(RunUsageSchema),
+);
 const RunModelSchema = Schema.Struct({
   model: Schema.String,
   commit: Schema.NullOr(Schema.Int),
@@ -298,8 +306,9 @@ export function projectionUpkeep<E>(
     names: readonly ProjectionName[],
   ) =>
     Effect.forEach(events, (event) =>
-      Effect.forEach(names, (name) =>
-        Effect.gen(function* () {
+      Effect.forEach(
+        names,
+        Effect.fnUntraced(function* (name) {
           if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
           const projector = PROJECTORS[name];
           const row =
@@ -311,9 +320,7 @@ export function projectionUpkeep<E>(
                 ))[0];
           let prior: ProjectionPrior = {};
           if (row !== undefined && projector.prior === 'run_usage')
-            prior = Schema.decodeUnknownSync(RunUsageSchema)(
-              JSON.parse(String(row.usage)),
-            );
+            prior = decodeStoredUsage(String(row.usage));
           if (row !== undefined && projector.prior === 'run_model')
             prior = { model: Schema.decodeUnknownSync(RunModelSchema)(row) };
           for (const op of projector.project(event, prior))

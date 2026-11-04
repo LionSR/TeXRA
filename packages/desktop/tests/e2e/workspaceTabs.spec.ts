@@ -422,6 +422,38 @@ test('moves live terminals and unsaved editors without recreating resources', as
   await expect(panel('terminal')).toHaveCount(1);
 });
 
+test('restarts an exited terminal in its own tab', async () => {
+  const { page } = launched;
+  // A terminal of this case's own, closed again at its end.
+  const before = await tab('terminal').count();
+  await menu(groupOf(tab('agent')), 'terminal');
+  await expect(tab('terminal')).toHaveCount(before + 1);
+  const ownTab = tab('terminal').nth(before);
+  const tabId = await ownTab.getAttribute('data-tab-id');
+  const surface = page.locator(
+    `.shell-dock-terminal[data-panel-id="${tabId}"] .desktop-terminal-surface`,
+  );
+  const restart = surface.getByRole('button', { name: 'Restart' });
+  await surface.locator('.xterm').click();
+  await page.keyboard.type('exit');
+  await page.keyboard.press('Enter');
+  await expect(restart).toBeVisible();
+  await page.screenshot({
+    path: test.info().outputPath('terminal-exited.png'),
+  });
+  await restart.click();
+  await expect(restart).toHaveCount(0);
+  // The new shell takes input: it writes its pid where the test can read it.
+  const pidPath = join(workspacePath, 'restarted.pid');
+  await page.keyboard.type(`printf '%s' "$$" > '${pidPath}'`);
+  await page.keyboard.press('Enter');
+  await expect
+    .poll(() => existsSync(pidPath) && readFileSync(pidPath, 'utf8').trim())
+    .toMatch(/^\d+$/);
+  await ownTab.locator('.shell-dock-tab-close wa-button').click();
+  await expect(tab('terminal')).toHaveCount(before);
+});
+
 test('keeps browser menus above native content and close controls inside tab bounds', async () => {
   const { page, app } = launched;
   const attachedViews = () =>

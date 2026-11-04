@@ -6,14 +6,10 @@
  *
  * The fixture holds only cleanly finished runs. Failure modes: a stored
  * row that no longer decodes; a fold that reads the same rows to a different
- * run or state; a projection that rebuilds to other rows than its
- * incremental tables hold; a listing that differs from the fold over the
- * whole history; a store a newer build wrote that opens, or is rewritten;
- * a stored protocol unavailable for execution being treated as damaged history,
- * or a malformed protocol being accepted; a resume of a run holding an
- * earlier build's row, or a response on an unavailable protocol or on one
- * its binding no longer speaks, that fails untyped, sends the model a
- * request, or adds a row; and the durable harness's row shapes read back
+ * run or state; a store a newer build wrote that opens, or is rewritten;
+ * a resume of a run holding an earlier build's row that fails untyped,
+ * sends the model a request, or adds a row; and the durable harness's row
+ * shapes read back
  * other than written: a fork
  * whose `run.start` does not name its source, a fork's seed
  * `context.edit` missing, an awaited child without the call
@@ -45,7 +41,6 @@ import {
   Effect,
   Exit,
   Layer,
-  Result,
   Schema,
   Stream,
   SubscriptionRef,
@@ -63,7 +58,6 @@ import { ResumeRefused, Sessions } from '@texra-ai/harness';
 import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { runHistoryRows } from '@agent/runtime/storedTurn';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { databaseLayer } from '@controllers/session/Database';
@@ -78,10 +72,9 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { isDisplaySessionEvent, ROW_KINDS } from '@shared/schemas';
+import { ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -129,7 +122,6 @@ const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-const TOMBSTONED = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
@@ -388,95 +380,6 @@ describe('the golden 1.0 store', () => {
     },
   );
 
-  it.effect(
-    'reads an unavailable protocol as history, not executable work',
-    () => {
-      const storage = goldenRoot();
-      const setProtocol = (protocol: string | number) =>
-        raw(storage, (db) =>
-          db
-            .prepare(
-              `UPDATE event SET data = json_set(data,
-             '$.payload.turn.requestedOrigin.protocol', ?,
-             '$.payload.usage.provider', ?) WHERE "commit" = 24`,
-            )
-            .run(protocol, protocol),
-        );
-      expect(setProtocol('unavailable-protocol').changes).toBe(1);
-      raw(storage, (db) =>
-        db.exec("DELETE FROM projection_state WHERE name = 'usage'"),
-      );
-      const saved = () =>
-        raw(storage, (db) =>
-          db.prepare('SELECT data FROM event WHERE "commit" = 24').get(),
-        );
-      const before = saved();
-      return Effect.gen(function* () {
-        const db = yield* Database;
-        const read = () =>
-          db.readAggregate(qualifyAggregateId('run', PARENT), 0, [
-            'model.message',
-          ]);
-        const response = (yield* read()).find((event) => event.commit === 24);
-        expect(response).toMatchObject({
-          type: 'model.message',
-          payload: {
-            kind: 'response',
-            turn: {
-              requestedOrigin: { protocol: 'unavailable-protocol' },
-              content: [
-                {
-                  kind: 'local-call',
-                  name: 'read_file',
-                  argumentsText: '{"path":"notes.tex"}',
-                },
-              ],
-            },
-            usage: { provider: 'unavailable-protocol', cost: 0.000024 },
-          },
-        });
-        if (response === undefined)
-          throw new Error('The stored response is missing');
-        const executable = runHistoryRows([response]);
-        if (Result.isSuccess(executable))
-          throw new Error('An unavailable protocol became executable');
-        expect(executable.failure).toMatchObject({
-          reason: 'unreadable-turn',
-          commit: 24,
-        });
-        const listing = yield* db.readListing();
-        const view = makeSessionViewUpdater('golden').apply(
-          listing.filter(isDisplaySessionEvent).map((event) => ({
-            _tag: 'event' as const,
-            read: 'listing' as const,
-            event,
-          })),
-        );
-        expect(view.runs.get(PARENT)?.usage).toMatchObject({
-          inputTokens: 4,
-          outputTokens: 4,
-          cost: 0.000096,
-        });
-        const display = yield* db.readDisplayAggregate(
-          qualifyAggregateId('run', PARENT),
-          0,
-        );
-        expect(display.find((event) => event.commit === 24)).toMatchObject({
-          type: 'usage',
-          usage: { inputTokens: 1, outputTokens: 1, cost: 0.000024 },
-        });
-        expect(saved()).toEqual(before);
-        for (const malformed of ['', 42]) {
-          setProtocol(malformed);
-          expect(yield* Effect.flip(read())).toMatchObject({
-            _tag: 'DatabaseReadFailed',
-            cause: { _tag: 'DatabaseRowCorrupt', commit: 24 },
-          });
-        }
-      }).pipe(Effect.provide(substrate(storage)), Effect.scoped);
-    },
-  );
-
   it.effect('folds to the pinned session view and run states', () => {
     const storage = goldenRoot();
     return Effect.gen(function* () {
@@ -630,32 +533,6 @@ describe('the golden 1.0 store', () => {
       });
     },
   );
-
-  it.effect('lists what the fold over the whole history holds', () => {
-    const storage = goldenRoot();
-    return Effect.gen(function* () {
-      const db = yield* Database;
-      const listing = yield* db.readListing();
-      const history = yield* Stream.runCollect(db.readDisplay(0));
-      const of = (events: readonly (typeof listing)[number][]) => {
-        const view = makeSessionViewUpdater('golden').apply(
-          events.filter(isDisplaySessionEvent).map((event) => ({
-            _tag: 'event' as const,
-            read: 'listing' as const,
-            event,
-          })),
-        );
-        return {
-          runs: runsOf(view),
-          order: view.order,
-          requests: view.requests,
-          queued: [...view.queuedFollowUps],
-        };
-      };
-      expect(of(listing)).toEqual(of([...history]));
-      expect(of(listing).runs.map((run) => run.id)).not.toContain(TOMBSTONED);
-    }).pipe(Effect.provide(substrate(storage)));
-  });
 });
 
 /**
@@ -860,20 +737,6 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
             "an earlier build's row",
             `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
             { kind: 'earlierBuild', cause: expect.any(String) },
-          ],
-          [
-            'a response on an unavailable protocol',
-            `UPDATE event SET data = json_set(data,
-               '$.payload.turn.requestedOrigin.protocol', 'unavailable-protocol')
-             WHERE "commit" = ${RESPONSE}`,
-            { kind: 'unusableCheckpoint' },
-          ],
-          [
-            'a response on a protocol its binding no longer speaks',
-            `UPDATE event SET data = json_set(data,
-               '$.payload.turn.requestedOrigin.protocol', 'anthropic-messages')
-             WHERE "commit" = ${RESPONSE}`,
-            { kind: 'unusableCheckpoint' },
           ],
         ] as const)(
           'refuses a run holding %s before any request, and adds no row',

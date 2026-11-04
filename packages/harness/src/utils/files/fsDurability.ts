@@ -61,13 +61,20 @@ function systemErrorFrom(
   target: string,
   cause: unknown,
 ): PlatformError.PlatformError {
-  const error = cause as NodeJS.ErrnoException;
+  const code =
+    Predicate.hasProperty(cause, 'code') && typeof cause.code === 'string'
+      ? cause.code
+      : undefined;
   return PlatformError.systemError({
-    _tag: (error.code && SYSTEM_ERROR_TAGS[error.code]) || 'Unknown',
+    _tag: (code && SYSTEM_ERROR_TAGS[code]) || 'Unknown',
     module: MODULE,
     method,
     pathOrDescriptor: target,
-    syscall: error.syscall,
+    syscall:
+      Predicate.hasProperty(cause, 'syscall') &&
+      typeof cause.syscall === 'string'
+        ? cause.syscall
+        : undefined,
     cause,
   });
 }

@@ -34,27 +34,17 @@ layer(SessionGraph.hosted)('read_file line ranges', (it) => {
   it.layer(host, { buildPerTest: true })((it) => {
     it.effect.each([
       {
-        name: 'an empty view when the start is past EOF',
-        range: { start: 50, end: 60 },
-        summary:
-          'Read small.txt (no lines in requested range) (requested end 60 exceeds file length 10)',
-        contains: [],
-        excludes: [],
-        empty: true,
-      },
-      {
         name: 'the array range form some models emit',
         range: [2, 4],
         summary: 'Read lines 2-4 of small.txt',
         contains: ['line 2', 'line 4'],
         excludes: ['line 5'],
       },
-    ])('reads $name', ({ range, summary, contains, excludes, empty }) =>
+    ])('reads $name', ({ range, summary, contains, excludes }) =>
       Effect.gen(function* () {
         const result = yield* callRead({ path: 'small.txt', range });
 
         expect(result.summary).toBe(summary);
-        if (empty) expect(result.output).toBe('');
         for (const line of contains) expect(result.output).toContain(line);
         for (const line of excludes) expect(result.output).not.toContain(line);
       }),

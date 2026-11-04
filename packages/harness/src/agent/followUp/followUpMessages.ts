@@ -28,8 +28,7 @@ import {
   RECEIPT_ROW_TYPES,
   type FollowUpRecord,
 } from '@shared/session/runRowReads';
-import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { runRelation } from '@shared/session/runRelation';
+import { SessionLog } from '@shared/session/runHistory';
 import {
   Conflict,
   NotOwner,
@@ -203,7 +202,7 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>,
-): Effect.fn.Return<boolean, Error, SessionLog | SessionViewAccess> {
+): Effect.fn.Return<boolean, Error, SessionLog> {
   const id = item.caller;
   if (id === undefined) return false;
   const log = yield* SessionLog;
@@ -214,9 +213,11 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   // None, or a deleted run, whose send the path past this refuses.
   if (typeof first === 'string') return false;
   const media = attach === undefined ? {} : yield* attach;
-  const view = yield* SessionViewAccess;
-  const asked = queuedRow({ ...item, ...media, deliveryId }, hold, (sender) =>
-    runRelation(sender, runId, (run) => view.run(run)?.parentId),
+  // The relation it was stamped with: a retry after a detach is the same
+  // request, not a new one.
+  const stamped = first.queued.content.from;
+  const asked = queuedRow({ ...item, ...media, deliveryId }, hold, () =>
+    stamped.kind === 'run' ? stamped.relation : 'peer',
   );
   if (!sameRequest(first.queued, asked))
     return yield* new Conflict({ runId, id });

@@ -3,18 +3,15 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { guard } from 'lit/directives/guard.js';
 import { live } from 'lit/directives/live.js';
 
-// Web Awesome switch + input (side-effect imports — the rows render them)
+// Web Awesome switch + input (the rows render them; the input is checked by class)
 import '@awesome.me/webawesome/dist/components/switch/switch.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - utils
 import type { IconName } from '@ui/wa/iconNames';
 
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
-
-// Web Awesome input element type (kept after local imports per import/order)
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 export interface SettingsSectionHeadingOptions {
   readonly title: string;
@@ -178,7 +175,8 @@ export function renderSettingsNumberRow(
   };
 
   const handleChange = (event: Event): void => {
-    const input = event.target as WaInput;
+    const input = event.target;
+    if (!(input instanceof WaInput)) return;
     const raw = input.value;
     if (typeof raw !== 'string' || raw.trim() === '') {
       // A number input reads empty for unparseable text too; only a field

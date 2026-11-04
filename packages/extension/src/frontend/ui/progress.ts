@@ -30,10 +30,8 @@ export const withVSCodeProgress = Effect.fn('progress.withVSCodeProgress')(
       token: vscode.CancellationToken,
     ) => Effect.Effect<A, E, R>,
   ): Effect.fn.Return<A, E, R> {
-    let taskSettled!: () => void;
-    const bodyDone = new Promise<void>((resolve) => {
-      taskSettled = resolve;
-    });
+    const { promise: bodyDone, resolve: taskSettled } =
+      Promise.withResolvers<void>();
 
     const started = yield* Deferred.make<{
       progress: ProgressReporter;

@@ -6,6 +6,7 @@ import {
   formatInstructionActionHint,
   instructionActions,
 } from '@ui/copy/instructionActions';
+import { modelFailureText } from '@ui/copy/modelAccess';
 
 // Local imports - CLI runtime
 import {
@@ -84,7 +85,7 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
     {
       requestShowError: (payload) => {
         runProgress?.preserve();
-        present('error', payload.message);
+        present('error', modelFailureText(payload));
         return true;
       },
       requestShowInstruction: (payload) => {

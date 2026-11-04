@@ -67,7 +67,7 @@ const staleNotices = (
  * run's current lifecycle has not ended (it waits on a child, or its
  * generation left without an end), any run's message wakes it, as the
  * user's does. Once it ended, only the user's message or a child's delivery
- * does, and after a user's Stop (that lifecycle's `run.end` is cancelled)
+ * does, and after a user's Stop (that lifecycle's `run.end` says `user`)
  * only the user's message committed after that end: a run's message never
  * revives a run that ended. A row for a running generation only (a progress
  * notice, a host notification) wakes nothing.
@@ -76,7 +76,7 @@ export function needsWake(input: RunRows, run: RunLookup): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
   // holds a message back.
   const end = input.end;
-  const stopped = end?.outcome === 'cancelled';
+  const stopped = end?.reason === 'user';
   return readableMessages(input.followUps, 'idle', run).some(
     ({ commit, holdUntil, content: { from } }) => {
       if (holdUntil === 'generation') return false;

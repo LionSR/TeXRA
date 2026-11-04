@@ -27,8 +27,8 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * damaged, or an earlier build's with no upcaster) never becomes readable,
  * so it offers delete beside inspection, the one way to clear it. A live
  * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
- * be stopped; while it works, an
- * agent's run takes approval grants, and a conversation (not a task's
+ * be stopped; while it is in flight (running or waiting, not interrupted)
+ * an agent's run takes approval grants, and a conversation (not a task's
  * recipe) its compaction. Nothing that rewrites or
  * removes a run's files or history is offered while it is live. Any run this
  * process can act on can be renamed, and a conversation whose first turn has
@@ -56,8 +56,8 @@ export function runActions(
   if (stranded) return ['delete', ...inspectActions()];
   if (run.readOnly) return inspectActions();
   if (isLiveRun(run)) {
-    const working = run.group === 'running' || run.group === 'waiting';
-    const agent = working && run.identity.kind === 'agent';
+    const inFlight = run.group === 'running' || run.group === 'waiting';
+    const agent = inFlight && run.identity.kind === 'agent';
     const compact =
       agent && !run.recipe && run.substate !== RUN_SUBSTATE.STARTING;
     return [

@@ -22,23 +22,23 @@ const CHANNEL = 'helperModel';
  * The one resolution of the chain: every surface that shows or uses the
  * helper model reads it here, from the setting slots the caller holds.
  */
-export function getHelperModelName(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    const configured = (yield* Settings.get<string | undefined>(
-      stores,
-      GlobalStateKey.HELPER_MODEL,
-    ))?.trim();
-    const fallback = Settings.defaultOf<string | undefined>(
-      stores.config.catalog,
-      GlobalStateKey.HELPER_MODEL,
-    );
-    if (configured === undefined || configured === fallback) return fallback;
-    const enabled = yield* getEnabledModels(stores.globalState);
-    return enabled.includes(modelRefOf(configured) ?? configured)
-      ? configured
-      : fallback;
-  });
-}
+export const getHelperModelName = Effect.fn('getHelperModelName')(function* (
+  stores: SettingsStores,
+) {
+  const configured = (yield* Settings.get<string | undefined>(
+    stores,
+    GlobalStateKey.HELPER_MODEL,
+  ))?.trim();
+  const fallback = Settings.defaultOf<string | undefined>(
+    stores.config.catalog,
+    GlobalStateKey.HELPER_MODEL,
+  );
+  if (configured === undefined || configured === fallback) return fallback;
+  const enabled = yield* getEnabledModels(stores.globalState);
+  return enabled.includes(modelRefOf(configured) ?? configured)
+    ? configured
+    : fallback;
+});
 
 /**
  * Helper-model preference for launches that opt in with

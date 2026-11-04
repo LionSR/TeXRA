@@ -23,7 +23,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
  * the effect itself, so this port's members compose into any caller's program.
  */
 export interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 
@@ -84,20 +84,19 @@ export class JsonConfigProvider implements ConfigProvider {
   get<T>(key: string): T {
     const storedKey = this.storedKey(key);
     const row = this.catalog.byKey(key);
-    const projectValue = this.workspaceStore.get<T>(storedKey);
-    if (projectValue !== undefined && !projectValueIgnored(row, projectValue)) {
-      return projectValue;
-    }
+    const projectValue = this.workspaceStore.get(storedKey);
     const layers =
       row?.configTarget === 'local'
         ? [this.localStore, this.globalStore]
         : [this.globalStore];
-    for (const store of layers) {
-      const value = store.get<T>(storedKey);
-      if (value !== undefined) return value;
-    }
+    const stored = [
+      ...(projectValueIgnored(row, projectValue) ? [] : [projectValue]),
+      ...layers.map((store) => store.get(storedKey)),
+    ].find((value) => value !== undefined);
     // cast: the caller names the value type of the key it reads.
-    return this.catalog.configDefault(key) as T;
+    return (
+      stored === undefined ? this.catalog.configDefault(key) : stored
+    ) as T;
   }
 
   update<T>(
@@ -127,9 +126,11 @@ export class JsonConfigProvider implements ConfigProvider {
 
   inspect<T = unknown>(key: string): ConfigInspection<T> {
     const storedKey = this.storedKey(key);
-    return {
-      globalValue: this.globalStore.get<T>(storedKey),
-      workspaceValue: this.workspaceStore.get<T>(storedKey),
+    const inspection: ConfigInspection = {
+      globalValue: this.globalStore.get(storedKey),
+      workspaceValue: this.workspaceStore.get(storedKey),
     };
+    // cast: the caller names the value type of the key it inspects.
+    return inspection as ConfigInspection<T>;
   }
 }

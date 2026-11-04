@@ -73,69 +73,55 @@ const DEFAULT_ANNOTATION_LEVEL_DESCRIPTION =
 const SUBSCRIPTION_PATH_DESCRIPTION =
   'Subscription target, mirroring GitHub\'s REST URL shape: "owner/repo" (repo-wide, coarse), "owner/repo/pulls/N" (per-PR, nuanced), or "owner/repo/issues/N" (per-issue).';
 
-// Branches stay open (`StructWithRest`): provider schema flattening
-// advertises one object across commands, and OpenAI-compatible providers
-// null-fill the other branches' fields.
+// Provider schema flattening advertises one object across commands, and
+// OpenAI-compatible providers null-fill the other branches' fields; a plain
+// `Struct` branch ignores those keys.
 const GitHubSubscriptionInputSchema = Schema.Union([
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('subscribe').annotate({
-        description: 'Start watching the path.',
-      }),
-      path: Schema.String.annotate({
-        description: SUBSCRIPTION_PATH_DESCRIPTION,
-      }),
-      /**
-       * Lowest inline check-annotation level to send for PR subscriptions.
-       * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
-       * warnings, or "notice" to include every annotation GitHub reports.
-       */
-      min_annotation_level: nullishWithDefault(
-        Schema.Literals(['failure', 'warning', 'notice']),
-        DEFAULT_CHECK_ANNOTATION_LEVEL,
-        `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
-      ),
+  Schema.Struct({
+    command: Schema.Literal('subscribe').annotate({
+      description: 'Start watching the path.',
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('unsubscribe').annotate({
-        description: 'Stop watching the path.',
-      }),
-      path: Schema.String.annotate({
-        description: SUBSCRIPTION_PATH_DESCRIPTION,
-      }),
+    path: Schema.String.annotate({
+      description: SUBSCRIPTION_PATH_DESCRIPTION,
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('list').annotate({
-        description: 'List active subscriptions on this run.',
-      }),
+    /**
+     * Lowest inline check-annotation level to send for PR subscriptions.
+     * Defaults to `DEFAULT_CHECK_ANNOTATION_LEVEL`; use "warning" to include
+     * warnings, or "notice" to include every annotation GitHub reports.
+     */
+    min_annotation_level: nullishWithDefault(
+      Schema.Literals(['failure', 'warning', 'notice']),
+      DEFAULT_CHECK_ANNOTATION_LEVEL,
+      `Lowest inline check-annotation level for PR subscriptions. Defaults to ${DEFAULT_ANNOTATION_LEVEL_DESCRIPTION}; "warning" includes warnings, "notice" includes every annotation.`,
+    ),
+  }),
+  Schema.Struct({
+    command: Schema.Literal('unsubscribe').annotate({
+      description: 'Stop watching the path.',
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('find_current').annotate({
-        description:
-          'Resolve the current git branch to its PR path ("owner/repo/pulls/N").',
-      }),
-      /**
-       * Working directory for `find_current` to resolve the current branch's PR.
-       * Defaults to the agent's working directory.
-       */
-      working_directory: Schema.optional(Schema.NullOr(Schema.String)).annotate(
-        {
-          description:
-            "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
-        },
-      ),
+    path: Schema.String.annotate({
+      description: SUBSCRIPTION_PATH_DESCRIPTION,
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
+  }),
+  Schema.Struct({
+    command: Schema.Literal('list').annotate({
+      description: 'List active subscriptions on this run.',
+    }),
+  }),
+  Schema.Struct({
+    command: Schema.Literal('find_current').annotate({
+      description:
+        'Resolve the current git branch to its PR path ("owner/repo/pulls/N").',
+    }),
+    /**
+     * Working directory for `find_current` to resolve the current branch's PR.
+     * Defaults to the agent's working directory.
+     */
+    working_directory: Schema.optional(Schema.NullOr(Schema.String)).annotate({
+      description:
+        "Working directory to resolve the current branch's PR. Defaults to the agent's working directory.",
+    }),
+  }),
 ]);
 
 type GitHubSubscriptionInput = typeof GitHubSubscriptionInputSchema.Type;

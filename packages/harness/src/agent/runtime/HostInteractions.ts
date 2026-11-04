@@ -199,9 +199,9 @@ export class SessionHostInteractions implements HostInteractions {
         );
       }
       // The replay loop warn-logs a replay that fails.
-      return options.replayWhenAttached && !this.disposed
-        ? this.queuePresentationReplay(present)
-        : Effect.void;
+      return this.disposed
+        ? Effect.void
+        : this.queuePresentationReplay(present);
     });
   }
 
@@ -254,10 +254,11 @@ export class SessionHostInteractions implements HostInteractions {
       : Effect.void;
   }
 
-  private replayPendingPresentations(
-    interactions: HostInteractions,
-  ): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly replayPendingPresentations = Effect.fn(
+    'SessionHostInteractions.replayPendingPresentations',
+  )(
+    { self: this },
+    function* (interactions: HostInteractions): Effect.fn.Return<void> {
       while (
         this.attached === interactions &&
         this.pendingPresentationReplays.length > 0
@@ -275,26 +276,23 @@ export class SessionHostInteractions implements HostInteractions {
           ),
         );
       }
-    });
-  }
+    },
+  );
 }
 
 /**
  * Present a classified failure on a host: its instruction (a missing API key)
- * or its error toast. An abort presents nothing. Replayed to a surface that
- * attaches later, so no guidance is lost for want of an attached host.
+ * or its error toast. Replayed to a surface that attaches later, so no
+ * guidance is lost for want of an attached host.
  */
 function presentAgentFailure(
   interactions: Pick<SessionHostInteractions, 'emit'>,
   error: Parameters<typeof agentErrorPresentation>[0],
 ): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
-  const options = { replayWhenAttached: true };
-  if (toast?.type === 'instruction')
-    return interactions.emit('requestShowInstruction', toast.payload, options);
-  if (toast?.type === 'error')
-    return interactions.emit('requestShowError', toast.payload, options);
-  return Effect.void;
+  return toast.type === 'instruction'
+    ? interactions.emit('requestShowInstruction', toast.payload)
+    : interactions.emit('requestShowError', toast.payload);
 }
 
 /**
@@ -304,18 +302,19 @@ function presentAgentFailure(
  * attached parent is the view's, which has the run's `run.start` once it
  * ended) is its parent's to report; any other row presents nothing.
  */
-export const presentTerminalResult = (
-  row: SessionEvent,
-  self: LocalRuntimeState['self'],
-): Effect.Effect<void, never, SessionViewAccess | Interactions> =>
-  Effect.gen(function* () {
+export const presentTerminalResult = Effect.fn('presentTerminalResult')(
+  function* (
+    row: SessionEvent,
+    self: LocalRuntimeState['self'],
+  ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     const { end } = recordOf(row);
     if (target.kind !== 'run' || end === null || !end.error) return;
     if (end.origin == null || !self.includes(end.origin)) return;
     if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
     yield* presentAgentFailure(yield* Interactions, end.error);
-  });
+  },
+);
 
 /** The session's presentation host ({@link SessionHostInteractions}): the
  *  one its runs, requests and host commands present through. */
@@ -358,12 +357,14 @@ export function launchNoticeOf(error: unknown): LaunchNotice | undefined {
 /**
  * Present a failed run from its raw error, replayed to a surface that
  * attaches later: a refused launch's notice ({@link launchNoticeOf}), or
- * else the primary failure, classified and worded as `prefix` plus its text
- * (a `Rejected` request's reason). A host that throws on the notice shows
- * that text as an error instead. It presents whatever it is given, so each
- * failure has one presenter: a launch that failed before its run opened is
- * its caller's, and a run's end is the session's
- * ({@link presentTerminalResult}).
+ * else the primary failure as `prefix` plus its text (a `Rejected`
+ * request's reason). With no prefix, a model failure is shown as its run
+ * would record it, its classification beside, which a host may word in its
+ * place; a prefixed text says more than the failure, so it is shown as
+ * written. A host that throws on the notice shows that text as an error
+ * instead. It presents whatever it is given, so each failure has one
+ * presenter: a launch that failed before its run opened is its caller's,
+ * and a run's end is the session's ({@link presentTerminalResult}).
  */
 export function presentRunFailure(
   interactions: Pick<SessionHostInteractions, 'emit'>,
@@ -377,11 +378,13 @@ export function presentRunFailure(
   const notice = launchNoticeOf(primary);
   if (notice !== undefined)
     return interactions.emit(notice.event, notice.payload, {
-      replayWhenAttached: true,
       fallbackMessage: text,
     });
-  return presentAgentFailure(interactions, {
-    kind: classifyAgentError(primary),
-    message: text,
-  });
+  const classified = prefix === '' ? classifyAgentError(primary) : undefined;
+  return presentAgentFailure(
+    interactions,
+    classified?.kind === 'model'
+      ? classified
+      : { kind: 'unexpected', message: text },
+  );
 }

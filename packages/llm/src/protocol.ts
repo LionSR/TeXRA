@@ -45,7 +45,18 @@ export const TurnProtocolSchema = Schema.Literals([
 export const ModelOriginSchema = BindingSchema.mapFields(
   Struct.assign({
     protocol: TurnProtocolSchema,
-    codecVersion: Schema.Literal(1),
+    /**
+     * What the provider-specific state a turn stores means (reasoning
+     * signatures, encrypted reasoning, provider evidence). It changes only
+     * when a codec would read that stored state differently; adding a field
+     * or changing how a request is built keeps it. A stored turn of another
+     * version decodes, and is not the same origin (`sameModelOrigin`), so it
+     * is sent as plain content without its reasoning and evidence, as after
+     * a model switch. This build writes the version `originOf` stamps. A
+     * change to the stored shape of that state, one an older build could
+     * not decode, bumps the store's row version instead.
+     */
+    codecVersion: Schema.Int.check(Schema.isGreaterThan(0)),
   }),
 );
 /** The binding a turn was requested on: model, deployment and protocol. */
@@ -181,3 +192,38 @@ export function checkPreparedHistory(
   }
   return issues;
 }
+
+/** A non-negative integer: a token or item count. */
+export const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+
+/** A turn's token counts as reported; an unknown count stays null. Only what
+ *  no neutral count holds is `providerUsage`: an xAI receipt's cost, and
+ *  Anthropic's uncached input count and 5m/1h split of its cache writes. */
+export const TurnUsageSchema = Schema.Struct({
+  inputTokens: Schema.NullOr(CountSchema),
+  outputTokens: Schema.NullOr(CountSchema),
+  totalTokens: Schema.NullOr(CountSchema),
+  /** Prompt tokens read from the provider's cache. */
+  cachedInputTokens: Schema.NullOr(CountSchema),
+  /** Prompt tokens written to the provider's cache (Anthropic). */
+  cacheWriteTokens: Schema.NullOr(CountSchema),
+  reasoningTokens: Schema.NullOr(CountSchema),
+  /** Prompt tokens a provider-run tool added (Google). */
+  toolUsePromptTokens: Schema.NullOr(CountSchema),
+  providerUsage: Schema.optional(
+    Schema.Union([
+      Schema.Struct({
+        kind: Schema.Literal('xai'),
+        costInUsdTicks: Schema.NullOr(CountSchema),
+      }),
+      Schema.Struct({
+        kind: Schema.Literal('anthropic'),
+        uncachedInputTokens: Schema.NullOr(CountSchema),
+        cacheCreation5mTokens: Schema.NullOr(CountSchema),
+        cacheCreation1hTokens: Schema.NullOr(CountSchema),
+      }),
+    ]),
+  ),
+});
+/** {@link TurnUsageSchema}'s value. */
+export type TurnUsage = typeof TurnUsageSchema.Type;

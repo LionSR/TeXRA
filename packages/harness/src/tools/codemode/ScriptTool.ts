@@ -8,7 +8,7 @@
  * no row.
  */
 import * as NodeWorker from '@effect/platform-node/NodeWorker';
-import { Duration, Effect, Layer, Result, Schema } from 'effect';
+import { Duration, Effect, Layer, Predicate, Result, Schema } from 'effect';
 
 import {
   CodeSandbox,
@@ -148,7 +148,9 @@ const settlementOf = (
       _tag: 'Value',
       value:
         op.name === `${SEARCH_TOOLS}()`
-          ? (JSON.parse(result.output ?? '[]') as unknown)
+          ? Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(
+              result.output ?? '[]',
+            )
           : result.output,
     });
   if (result.endTurn === true) return Effect.fail(new EndedTurn({ result }));
@@ -245,7 +247,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           // `name(first, opts)` is `tools.name({ ...opts, [positional]: first })`:
           // the call is the tool's, recorded as the tool's.
           const [first, rest] = Array.isArray(op.input) ? op.input : [];
-          if (rest != null && (typeof rest !== 'object' || Array.isArray(rest)))
+          if (rest != null && !Predicate.isObject(rest))
             return Effect.succeed<ScriptSettlement>({
               _tag: 'Failure',
               name: 'TypeError',

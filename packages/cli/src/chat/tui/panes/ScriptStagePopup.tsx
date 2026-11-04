@@ -7,6 +7,7 @@
 // call's agent, which the script sees as `Skipped`.
 
 // Third-party imports
+import { Predicate } from 'effect';
 import { Box, Text, useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI primitives
@@ -208,7 +209,7 @@ export function ScriptStagePopup({
     stages.length > 1 ? `${stageIndex + 1}/${stages.length}` : undefined,
     (stage && scriptStageSummary(stage)) || `${stage?.calls.length ?? 0} calls`,
   ]
-    .filter((part) => part !== undefined)
+    .filter(Predicate.isNotUndefined)
     .join(' · ');
   const layout = readerLayout({
     availableRows,

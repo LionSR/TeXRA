@@ -14,12 +14,6 @@
 import { DESKTOP_THEME_KIND, type Theme } from '@texra/shared/ipc';
 
 export type MonacoModule = typeof import('monaco-editor/editor/editor.api.js');
-type MonacoWorkerModule = { default: new () => Worker };
-type MonacoEnvironmentHost = typeof self & {
-  MonacoEnvironment?: {
-    getWorker(workerId: string, label: string): Worker;
-  };
-};
 
 interface MonacoWorkerConstructors {
   editor: new () => Worker;
@@ -34,7 +28,7 @@ let workersConfigured = false;
 
 function setupMonacoWorkers(workers: MonacoWorkerConstructors): void {
   if (workersConfigured) return;
-  (self as MonacoEnvironmentHost).MonacoEnvironment = {
+  self.MonacoEnvironment = {
     getWorker(_workerId: string, label: string): Worker {
       switch (label) {
         case 'json':
@@ -98,11 +92,11 @@ export async function loadMonaco(): Promise<MonacoModule> {
         import('monaco-editor/language/typescript/ts.worker?worker'),
       ]);
       setupMonacoWorkers({
-        editor: (editorWorker as MonacoWorkerModule).default,
-        json: (jsonWorker as MonacoWorkerModule).default,
-        css: (cssWorker as MonacoWorkerModule).default,
-        html: (htmlWorker as MonacoWorkerModule).default,
-        ts: (tsWorker as MonacoWorkerModule).default,
+        editor: editorWorker.default,
+        json: jsonWorker.default,
+        css: cssWorker.default,
+        html: htmlWorker.default,
+        ts: tsWorker.default,
       });
       registerTexLanguages(monaco);
       return monaco;

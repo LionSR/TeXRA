@@ -308,12 +308,15 @@ export class RunHeader extends LitElement {
         aria-label="Task title"
         .value=${run.title}
         @keydown=${(event: KeyboardEvent) => {
-          const input = event.target as HTMLInputElement;
+          const input = event.target;
+          if (!(input instanceof HTMLInputElement)) return;
           if (event.key === 'Enter') this.finishRename(run, input, true);
           else if (event.key === 'Escape') this.finishRename(run, input, false);
         }}
-        @blur=${(event: FocusEvent) =>
-          this.finishRename(run, event.target as HTMLInputElement, true)}
+        @blur=${(event: FocusEvent) => {
+          if (event.target instanceof HTMLInputElement)
+            this.finishRename(run, event.target, true);
+        }}
       />`;
     return html`<h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
         ${run.title}
@@ -555,14 +558,8 @@ export class RunHeader extends LitElement {
   }
 
   private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {
-    // A run parked on the user's answer is not working: no live clock.
-    if (
-      run.runStartedAt === null ||
-      run.group === 'recent' ||
-      run.group === 'waiting'
-    ) {
-      return nothing;
-    }
+    // The fold keeps a start only while the run works: no clock otherwise.
+    if (run.runStartedAt === null) return nothing;
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
 

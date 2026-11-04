@@ -169,7 +169,8 @@ Leaving the harness: presets, teams, icons and quota routes
 move to `packages/texra/src/host/`, and the canned validation model moves to
 `packages/cli`. Harness-internal aliases are declared only for the harness build
 and the test kernel, so a deep import from the app or a host fails to compile.
-`@common/webview` leaves the harness alias family.
+`@common/webview` leaves the harness alias family (done: the alias is gone and
+the two extension providers import `BundledViewContentProvider` relatively).
 
 ### Ports
 
@@ -294,7 +295,7 @@ the 1.0 PRD takes it.
 | #   | Lane                                                                                                                                                                                         | Effort | Files moved |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
 | 1   | Doors: the root to ~30 names, `./host`, the `./schemas` manifest, the `./plugins` closure, `effect/` → `sdk/`, alias scoping, the `Run` methods                                              | L      | 8           |
-| 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                         | M      | 11          |
+| 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed (done)                                  | M      | 11          |
 | 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
 | 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
 | 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                  | —      | 0           |
