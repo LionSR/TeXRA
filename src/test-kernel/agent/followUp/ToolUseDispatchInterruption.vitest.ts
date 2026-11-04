@@ -59,18 +59,16 @@ function blockingTool(name: string) {
     Deferred.succeed(started, undefined).pipe(Effect.andThen(Effect.never)),
   );
 
-  return {
-    call,
-    started: Deferred.await(started),
-    tool: { call, definition: { name } } as ITool,
-  };
+  const tool: ITool = { call, definition: { name } };
+  return { call, started: Deferred.await(started), tool };
 }
 
 function executedTool(name: string) {
   const call = vi.fn(() =>
     Effect.succeed({ status: 'executed' as const, output: `${name} done` }),
   );
-  return { call, tool: { call, definition: { name } } as ITool };
+  const tool: ITool = { call, definition: { name } };
+  return { call, tool };
 }
 
 /**
@@ -192,12 +190,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ? Queue.offer(starts, undefined).pipe(Effect.andThen(Effect.never))
             : Effect.succeed({ status: 'executed' as const, output: 'ran' });
         });
-        const tools = {
+        const tools: Record<string, ITool> = {
           toolB: {
             call,
             definition: { name: 'toolB' },
             replay: 'safe',
-          } as ITool,
+          },
         };
         const run = (resume: boolean, turns: readonly TurnResult[]) =>
           runToolUse({ resume }).pipe(

@@ -33,13 +33,13 @@ import {
 
 // Local imports
 import {
+  RunIdSchema,
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
   type RunId,
   type ToolDefinition,
 } from '@texra-ai/harness/schemas';
-import { type PluginContext } from '@texra-ai/harness/host';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
@@ -126,7 +126,7 @@ function probeTool(
         endTurn: options.endTurn,
       };
     }),
-  } as StepTool;
+  };
 }
 
 interface Call {
@@ -188,7 +188,9 @@ function boundModel(): BoundModel {
 
 let dispatchRunCounter = 0;
 const dispatchRunId = (): RunId =>
-  `dd${(dispatchRunCounter++).toString(16).padStart(4, '0')}` as RunId;
+  Schema.decodeUnknownSync(RunIdSchema)(
+    `dd${(dispatchRunCounter++).toString(16).padStart(4, '0')}`,
+  );
 
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
@@ -321,7 +323,7 @@ const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
       definitions,
       registry: kit.tools,
       offered: [],
-      services: Context.empty() as PluginContext,
+      services: Context.empty(),
       stepRoots: [],
       hooks: [],
       modules: {},

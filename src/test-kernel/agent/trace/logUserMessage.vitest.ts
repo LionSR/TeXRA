@@ -1,8 +1,9 @@
+import { Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { logUserMessage } from '@agent/trace';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import type { RunId } from '@texra-ai/harness/schemas';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 
 // #7508: the userMessage row's attachment-kind/count payload — logUserMessage
@@ -14,7 +15,9 @@ describe('logUserMessage', () => {
   let runTrace: ReturnType<typeof createTestRunTrace>;
 
   beforeEach(() => {
-    runTrace = createTestRunTrace('TestUserMessageLogger' as RunId);
+    runTrace = createTestRunTrace(
+      Schema.decodeUnknownSync(RunIdSchema)('a5e0e5'),
+    );
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });
