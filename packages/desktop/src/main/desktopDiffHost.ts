@@ -15,7 +15,7 @@ import {
   type DiffSource,
   type DiffViewHost,
 } from '@texra/hosts/uiHosts';
-import { monacoLanguageForPath } from '@ui/monaco/monacoLanguage';
+import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -53,15 +53,15 @@ export const removeExternalDiffPatchDirs: Effect.Effect<
   yield* Effect.forEach(
     tempDirs,
     (tempDir) =>
-      fs.remove(tempDir, { recursive: true, force: true }).pipe(
-        Effect.catch((error: PlatformError.PlatformError) =>
-          Effect.sync(() => {
-            console.warn(
-              `[desktop] Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(error.reason.cause ?? error)}`,
-            );
-          }),
+      fs
+        .remove(tempDir, { recursive: true, force: true })
+        .pipe(
+          Effect.catch((error: PlatformError.PlatformError) =>
+            Effect.logWarning(
+              `Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(error.reason.cause ?? error)}`,
+            ).pipe(withLogChannel('desktop')),
+          ),
         ),
-      ),
     { concurrency: 'unbounded', discard: true },
   );
 });
@@ -209,17 +209,17 @@ export function createDesktopDiffHost(
           // retried by the process-level removal, and it is logged instead of
           // swallowed.
           Effect.onError(() =>
-            fs.remove(tempDir, { recursive: true, force: true }).pipe(
-              Effect.catchCause((cause) =>
-                Effect.sync(() => {
-                  console.warn(
+            fs
+              .remove(tempDir, { recursive: true, force: true })
+              .pipe(
+                Effect.catchCause((cause) =>
+                  Effect.logWarning(
                     `Failed to remove the temporary diff directory; the process-level removal at quit retries it: ${toErrorMessage(
                       Cause.squash(cause),
                     )}`,
-                  );
-                }),
+                  ).pipe(withLogChannel('desktop')),
+                ),
               ),
-            ),
           ),
         );
       }),

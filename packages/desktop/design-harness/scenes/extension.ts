@@ -153,14 +153,12 @@ function sidebar(
 /** A first open: no sessions yet, the host's notices as the funnel and
  *  the folder leave them. */
 const LATEXINDENT: MissingTool = {
-  id: 'latexindent',
   label: 'latexindent',
   interchangeable: false,
   usedFor: 'format .tex files',
 };
 const IMAGE_TOOLS: MissingTool[] = ['GraphicsMagick', 'ImageMagick'].map(
   (label) => ({
-    id: label === 'GraphicsMagick' ? 'gm' : 'magick',
     label,
     interchangeable: true,
     usedFor: 'turn PDF figures into images',

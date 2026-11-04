@@ -66,8 +66,8 @@ export const selectCliRunModel = Effect.fn('selectCliRunModel')(function* (
     Effect.flatMap((candidates) =>
       selectCliRunnableModel(candidates, { stores }),
     ),
-    Effect.catch((error) =>
-      Effect.fail(new CliUsageError({ message: toErrorMessage(error) })),
+    Effect.mapError(
+      (error) => new CliUsageError({ message: toErrorMessage(error) }),
     ),
   );
   if (resolution.notice && context.quietLogs !== true) {

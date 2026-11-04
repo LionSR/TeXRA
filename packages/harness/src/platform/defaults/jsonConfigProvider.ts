@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 
 import type {
   SettingsCatalog,
@@ -92,7 +92,7 @@ export class JsonConfigProvider implements ConfigProvider {
     const stored = [
       ...(projectValueIgnored(row, projectValue) ? [] : [projectValue]),
       ...layers.map((store) => store.get(storedKey)),
-    ].find((value) => value !== undefined);
+    ].find(Predicate.isNotUndefined);
     // cast: the caller names the value type of the key it reads.
     return (
       stored === undefined ? this.catalog.configDefault(key) : stored

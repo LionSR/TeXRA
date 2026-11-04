@@ -26,7 +26,7 @@ export function scriptCallsView(
     call.status === 'unsettled' ? unsettled : call.status;
   const rank = (call: ScriptCallCard) => {
     if (call.status === 'unsettled') return 0;
-    if (call.status === 'failed' || call.status === 'cancelled') return 1;
+    if (call.status === 'failed') return 1;
     return 2;
   };
   const phases = [
