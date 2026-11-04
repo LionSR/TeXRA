@@ -212,8 +212,7 @@ export function decideModelRoute(
   config: ModelConfig,
   facts: RouteDecisionFacts,
 ): ModelRoute {
-  // Only OpenRouter serves this model, and TeXRA does not call OpenRouter.
-  if (config.openRouterOnly) return { kind: 'unserved' };
+  if (isUnservedModel(config)) return { kind: 'unserved' };
   const { plans } = facts;
   // The subscriptions are preferences: signed out, the model takes its key.
   // The Codex backend serves no provider reasoning mode (OpenAI `pro`).

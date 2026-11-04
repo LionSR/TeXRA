@@ -259,18 +259,14 @@ const answered = Effect.fn('answered')(function* <R>(
       if ('ownedBy' in result) return Effect.flatten(wakeRun(result.ownedBy));
       if (gone() || ('started' in result && result.delivered))
         return Effect.void;
-      return interactions.emit(
-        'requestShowInstruction',
-        {
-          key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
-          message:
-            'failed' in result
-              ? describeFollowUpFailure(result.failed.kind)
-              : FOLLOW_UP_WAKE_FAILED_MESSAGE,
-          showSuppress: false,
-        },
-        { replayWhenAttached: true },
-      );
+      return interactions.emit('requestShowInstruction', {
+        key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
+        message:
+          'failed' in result
+            ? describeFollowUpFailure(result.failed.kind)
+            : FOLLOW_UP_WAKE_FAILED_MESSAGE,
+        showSuppress: false,
+      });
     }),
     Effect.tapCause((cause) => {
       if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())

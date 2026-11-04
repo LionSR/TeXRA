@@ -527,7 +527,7 @@ export const BashTool = defineTool({
   // The command this call runs; the loop gets it approved before the body.
   guard: {
     command: {
-      text: (input: BashInput) => Effect.succeed(input.command),
+      text: (input: BashInput) => input.command,
       grant: 'bash',
     },
   },

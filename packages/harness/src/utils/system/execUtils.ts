@@ -23,11 +23,20 @@ const CHANNEL = 'execUtils';
 /** SIGTERM to SIGKILL escalation for every teardown the scope runs. */
 const FORCE_KILL_AFTER = Duration.seconds(5);
 const DEFAULT_MAX_BUFFER = 100_000_000;
-/** The sentinel prefixed to a POSIX shell's script, reading the lifeline on
- *  fd 3. On its own line, so the shell's error messages quote only the
- *  command. */
-const LIFELINE_SENTINEL =
-  '( (read x <&3; kill -s KILL 0) >/dev/null 2>&1 & ); exec 3<&-\n';
+/**
+ * A POSIX shell's script around `command`: a sentinel reading the lifeline
+ * on fd 3, then the command in a subshell, so a `wait` in it does not wait
+ * on the sentinel. Once the command ends the shell stops the sentinel and
+ * reaps it itself: an orphaned sentinel would stay in the process group as
+ * a zombie until init reaps it, and the spawner's teardown waits for the
+ * group to empty (seconds per command under a slow-reaping init). The
+ * command starts on line 2, so the shell's error messages number its lines
+ * as before.
+ */
+const withLifeline = (command: string): string =>
+  '(read x <&3; kill -s KILL 0) >/dev/null 2>&1 & texra_lifeline=$!; exec 3<&-; (\n' +
+  `${command}\n)\n` +
+  'texra_status=$?; kill $texra_lifeline 2>/dev/null; wait $texra_lifeline 2>/dev/null; exit $texra_status\n';
 
 function normalizeOutput(text: string | null | undefined): string {
   return text?.trim() ?? '';
@@ -224,15 +233,14 @@ function buildCommand(
   if (IS_WINDOWS) return ChildProcess.make(command, { ...common, shell: true });
   // A POSIX shell runs as its own process group, so a stop reaches piped
   // children and backgrounded jobs, and carries a lifeline: fd 3 is a pipe
-  // only this process holds the write end of. The sentinel below, forked into
-  // the group and out of the shell's job table (so a `wait` in the command
-  // does not wait on it), blocks reading it; when this process dies by any
-  // means, a SIGKILL or a crash included, the kernel closes the write end and
-  // the sentinel kills the whole group. The shell closes its own copy before
-  // the command runs, so nothing the command starts inherits it. A stop is
-  // still the scope's release (SIGTERM to the group, SIGKILL after five
-  // seconds), which ends the sentinel with the rest of the group.
-  return ChildProcess.make(`${LIFELINE_SENTINEL}${command}`, {
+  // only this process holds the write end of. The sentinel (`withLifeline`)
+  // blocks reading it; when this process dies by any means, a SIGKILL or a
+  // crash included, the kernel closes the write end and the sentinel kills
+  // the whole group. The shell closes its own copy before the command runs,
+  // so nothing the command starts inherits it. A stop is still the scope's
+  // release (SIGTERM to the group, SIGKILL after five seconds), which ends
+  // the sentinel with the rest of the group.
+  return ChildProcess.make(withLifeline(command), {
     ...common,
     shell: true,
     detached: true,

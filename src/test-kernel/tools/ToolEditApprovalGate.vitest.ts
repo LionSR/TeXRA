@@ -141,17 +141,15 @@ function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
 }
 
 /**
- * Every case's start, for the test's scope: a host over the workspace with
- * `config`, a session over its roots whose policy host counts denials, the
+ * Every case's start, for the test's scope: a host over the workspace, a
+ * session over its roots whose policy host counts denials, the
  * policy at `ask`, and a freshly started run whose requests a surface
  * answers with `nextDecision`.
  */
-const setUp = (config: Record<string, unknown> = {}) =>
+const setUp = () =>
   Effect.gen(function* () {
     nextDecision = () => ({ action: 'approve' });
-    yield* Layer.build(
-      FakeHost.layer({ workspacePath: WORKSPACE_PATH, config }),
-    );
+    yield* Layer.build(FakeHost.layer({ workspacePath: WORKSPACE_PATH }));
     session = yield* Effect.flatMap(
       TestSession.open(undefined, { host: {} }),
       sessionHandleOf,
@@ -204,9 +202,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       }),
     );
 
-    it.effect('lets never override a disabled approval setting', () =>
+    it.effect('denies an edit under never, and tells the host', () =>
       Effect.gen(function* () {
-        yield* setUp({ 'toolUse.requireEditApproval': false });
+        yield* setUp();
         setTestApprovalPolicy('never', Context.get(session, SessionRoots));
 
         const write = stubWorkspaceFile('denied.txt', {

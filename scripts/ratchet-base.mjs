@@ -1,9 +1,8 @@
 // The commit a ratchet judges the working tree against: its merge base with
 // the target branch, named by `--base <ref>` or TEXRA_RATCHET_BASE
 // (origin/main by default; CI passes the pull request's target).
-// check-ratchet-baselines.mjs compares the committed allowlists with the
-// base's copies; check-core-quality.mjs and check-fact-spread.mjs measure
-// the base's tree (`withBaseTree`).
+// check-core-quality.mjs and check-fact-spread.mjs measure the base's tree
+// (`withBaseTree`); check-row-kinds-ever.mjs reads the base's row-kind list.
 
 // Node imports
 import { execFileSync } from 'node:child_process';

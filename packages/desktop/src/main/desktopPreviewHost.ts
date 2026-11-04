@@ -11,9 +11,11 @@ import {
 
 import {
   type ProcessRuntime,
+  withLogChannel,
   withProcessServices,
   withSessionFs,
 } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { ExternalOpenFailed, type MessageHost } from '@texra/hosts/uiHosts';
@@ -122,7 +124,7 @@ export function createDesktopPreviewHost(
     return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
       Effect.catch((error: PlatformError.PlatformError) =>
         fail(
-          error.reason._tag === 'NotFound'
+          absentReason(error)
             ? `File not found: ${filePath}`
             : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
         ),
@@ -230,14 +232,16 @@ export function createDesktopPreviewHost(
       ),
     );
     if (!built.ok) {
-      // The full engine log (up to 200 lines) goes to console.error, not the
+      // The full engine log (up to 200 lines) goes to the app log, not the
       // dialog message -- fail() surfaces the message via a blocking native
       // `dialog.showMessageBox` modal (see desktopWindowHost.ts's showErrorMessage),
       // which has no scrolling affordance and would render as an oversized,
       // unreadable dialog for a multi-hundred-line raw compiler log.
-      console.error(
-        `[desktop] LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
-      );
+      // In the message, not a `data` annotation: the sink bounds an
+      // annotation to 2000 characters, and the tail runs to 200 lines.
+      yield* Effect.logError(
+        `LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
+      ).pipe(withLogChannel('desktop'));
       yield* fail(
         `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
       );

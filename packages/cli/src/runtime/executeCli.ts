@@ -314,7 +314,6 @@ export const executeCliConfig: (
       .request({
         kind: 'run.stop',
         runId: launchRunId,
-        detachActiveChildren: false,
         reason: 'shutdown',
       })
       .pipe(
@@ -351,8 +350,8 @@ export const executeCliConfig: (
         ),
       ),
     );
-    const shutdownStatus = Effect.suspend(() =>
-      Effect.gen(function* () {
+    const shutdownStatus = Effect.suspend(
+      Effect.fnUntraced(function* () {
         // The run's finalization is done: nothing is left to stop or wait for.
         if (Deferred.isDoneUnsafe(shutdownFinalizationDone)) return;
         shutdown = true;

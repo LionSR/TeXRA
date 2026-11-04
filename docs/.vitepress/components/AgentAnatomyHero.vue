@@ -12,7 +12,7 @@ import MockCard from './MockCard.vue';
 // Standalone (no MockupFrame). The root carries `.mockup` so the shared `--mk-*`
 // colour + dimensional tokens (theme/mockup.css) resolve here and the card flips
 // cleanly between the docs light / dark themes. Keys mirror the YAML on the page
-// (name, description, prompt, temperature, task: rewrite / prefix / requests).
+// (name, description, prompt, temperature, task: prefix / requests).
 
 // The three parts of the file, each captioned by its role.
 const bands = [
@@ -27,7 +27,7 @@ const bands = [
   {
     key: 'task:',
     role: 'the document task',
-    fields: ['rewrite: true', 'prefix:', 'requests:'],
+    fields: ['prefix:', 'requests:'],
     // requests is the field that wires into the revision map on the right.
     mapsToRevisions: true,
   },

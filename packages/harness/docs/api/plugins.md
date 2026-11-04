@@ -322,40 +322,47 @@ type CellError =
 ## ChildLaunch
 
 One child launch as the shared core runs it: the agent and its prompt,
-the files a task works over (empty for a chat), and the recipe a task's
-run opens on. `tool` names the launching tool in its reuse key and its
-copy.
+and what the child is. A chat (`task: null`) may ask for a value of
+`schema` and attaches `mediaFiles` to its prompt. A task opens on what
+the launching plugin builds for the approved agent (`configFor`: its
+recipe and outputs, null for an agent with no task block) and works over
+`files` with `options`, as its proposal says. `tool` names the launching
+tool in its reuse key and its copy.
 
 ```ts
-interface ChildLaunch {
+type ChildLaunch = {
   readonly tool: string;
   readonly agentName: string;
   /** An agent the call defines, named `agentName`: no catalog entry. */
   readonly persona?: AgentProposal['persona'];
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly schema: Record<string, unknown> | null | undefined;
   readonly memories: readonly string[];
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
   readonly timeoutMs: number | null | undefined;
   readonly background: boolean | null | undefined;
-  readonly files: {
-    readonly inputFiles: readonly string[];
-    readonly contextFiles: readonly string[];
-    readonly mediaFiles: readonly string[];
-    readonly outputFiles: readonly string[];
-  };
-  /** A task: the child opens on what the launching plugin builds for the
-   *  approved agent (its recipe and outputs; null for an agent with no task
-   *  block); the proposal says it works over `files` with `options`. */
-  readonly task: {
-    readonly configFor: (
-      chosen: AgentProposal,
-    ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-    readonly options: NonNullable<AgentProposal['options']>;
-  } | null;
-}
+} & (
+  | {
+      readonly task: null;
+      readonly schema: Record<string, unknown> | null | undefined;
+      readonly mediaFiles: readonly string[];
+    }
+  | {
+      readonly task: {
+        readonly configFor: (
+          chosen: AgentProposal,
+        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
+        readonly options: NonNullable<AgentProposal['options']>;
+      };
+      readonly files: {
+        readonly inputFiles: readonly string[];
+        readonly contextFiles: readonly string[];
+        readonly mediaFiles: readonly string[];
+        readonly outputFiles: readonly string[];
+      };
+    }
+);
 ```
 
 ## ChildRunDelivery
@@ -461,6 +468,11 @@ interface ChildRunsShape {
       readonly schema: Schema.Codec<A, unknown>;
     },
   ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the launching run's work runs unasked (the Auto-approve policy,
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
+  readonly autoApproved: Effect.Effect<boolean, Error>;
   /** Whether the run holds the request `requestId`, open or decided: what
    *  a tool that posted one reads after a failed post. */
   readonly requested: (
@@ -570,7 +582,7 @@ type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -1208,7 +1220,7 @@ against whichever roots its fiber happens to carry. The child-launch
 door (`ChildRuns`) and the call's place in its run (`RunCall`) are
 references with defaults, never requirements; a plugin's tool reads the
 door and never the session's `Runs`, which only the engine door carries
-(`RunCallShape.runs`).
+(`RunCallShape.session`).
 
 ```ts
 type PluginToolServices =
@@ -1239,34 +1251,43 @@ interface ProcessChildLaunch<TTurn> {
 ## ProcessChildStrategy
 
 An external process's strategy (agent CLI, background bash): each turn's
-result commits in the loop, which then waits for the child's next batch.
+result commits in the loop, which then waits for the child's next batch:
+a one-turn command whose killed process still has a result, or a coding
+agent's CLI session (`cli`), a turn per batch of follow-ups.
 
 ```ts
-interface ProcessChildStrategy<
+type ProcessChildStrategy<TTurn, R = never> = ChildStrategyBase<
   TTurn,
-  R = never,
-> extends ChildStrategyBase<TTurn, R> {
+  R
+> & {
   /** A stop interrupts the turn's fiber: a foreign call takes its signal
    *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
   launch(): Effect.Effect<TTurn, Error, R>;
-  /** The next turn, from the queued follow-ups. Absent: the first turn is
-   *  the only one (a background shell). */
-  runTurn?(
-    followUps: readonly FollowUpContent[],
-  ): Effect.Effect<TTurn, Error, R>;
-  /** The turn a stop cut short, rebuilt from what the child buffered, and
-   *  delivered: only a killed OS process, whose exit code and output are a
-   *  complete result. */
-  interruptedTurn?(): TTurn;
-  /** A stop pauses this child rather than cancelling it: what it had done
-   *  and how the parent's model continues it; undefined cancels it. */
-  pauseNotice?(): ChildRunPause | undefined;
-  /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
-  /** Release provider-owned registry entries; called once, before a failed
-   *  or interrupted delivery or at the end. */
-  releaseSessionOwnership?(): void;
-}
+} & (
+    | {
+        /** The turn a stop cut short, rebuilt from what the child buffered
+         *  and delivered: a killed OS process's exit code and output. */
+        interruptedTurn(): TTurn;
+        readonly cli?: undefined;
+      }
+    | {
+        readonly cli: {
+          /** The next turn, from the queued follow-ups. */
+          runTurn(
+            followUps: readonly FollowUpContent[],
+          ): Effect.Effect<TTurn, Error, R>;
+          /** What the paused child had done and how the parent's model
+           *  continues it; undefined cancels it instead. */
+          pauseNotice(): ChildRunPause | undefined;
+          /** After a successful turn: register the session/thread id, etc. */
+          onTurnSuccess(turn: TTurn): void;
+          /** Release provider-owned registry entries; called once, before a
+           *  failed or interrupted delivery or at the end. */
+          releaseSessionOwnership(): void;
+        };
+        readonly interruptedTurn?: undefined;
+      }
+  );
 ```
 
 ## ProcessPluginLayer
@@ -1944,7 +1965,7 @@ either is asked for, so no tool body opens its own approval prompt or
 re-checks its own roots.
 
 ```ts
-interface ToolGuard<T, R = never> {
+interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -1956,12 +1977,8 @@ interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the

@@ -13,7 +13,6 @@ import {
   FileSystem,
   Path,
   type PlatformError,
-  Schema,
   type Scope,
 } from 'effect';
 
@@ -34,7 +33,6 @@ import {
   type Database,
   type DeletionMode,
 } from '@shared/session/database';
-import { recordOf } from '@shared/session/runRowReads';
 import {
   NotOwner,
   Rejected,
@@ -53,14 +51,6 @@ import { isPathWithin } from '@utils/core/pathCore';
 
 const CHANNEL = 'DeletionCleanup';
 
-/** The runs directory does not resolve to itself, so cleanup is refused. */
-class GeneratedRootRedirected extends Schema.TaggedError<GeneratedRootRedirected>()(
-  'GeneratedRootRedirected',
-  {
-    message: Schema.String,
-  },
-) {}
-
 /**
  * Remove each run's run directory under the storage root it was
  * admitted against.
@@ -71,9 +61,9 @@ class GeneratedRootRedirected extends Schema.TaggedError<GeneratedRootRedirected
  * storage directory can never redirect deletion outside admitted storage.
  * Each target is then checked to fall inside the resolved runs directory.
  *
- * A refusal fails with `GeneratedRootRedirected`, which leaves the deletion
- * record closed and pending instead of collected, so the same deletion marker
- * retries once the root is sane.
+ * A refusal fails, which leaves the deletion record closed and pending
+ * instead of collected, so the same deletion marker retries once the root is
+ * sane.
  *
  * This is resolve-then-check, not the handle-confined deletion the retired
  * native addon performed: a root replaced in the window *between* the resolve
@@ -83,10 +73,9 @@ const removeRunDirectories: (
   fs: FileSystem.FileSystem,
   storage: string,
   runIds: readonly RunId[],
-) => Effect.Effect<
-  void,
-  PlatformError.PlatformError | GeneratedRootRedirected
-> = Effect.fn('removeRunDirectories')(
+) => Effect.Effect<void, PlatformError.PlatformError | Error> = Effect.fn(
+  'removeRunDirectories',
+)(
   function* (
     fs: FileSystem.FileSystem,
     storage: string,
@@ -99,9 +88,11 @@ const removeRunDirectories: (
     // Fails NotFound when the runs directory is absent, which the catch
     // below reads as "nothing generated to remove".
     if ((yield* fs.realPath(runs)) !== runs) {
-      return yield* new GeneratedRootRedirected({
-        message: `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
-      });
+      return yield* Effect.fail(
+        new Error(
+          `Refusing generated-file cleanup: ${runs} does not resolve to itself`,
+        ),
+      );
     }
     yield* Effect.forEach(
       runIds,
@@ -141,9 +132,8 @@ export const deletionCollector = Effect.fn('deletionCleanup.deletionCollector')(
     const fs = yield* FileSystem.FileSystem;
     const scope = yield* Effect.scope;
     const pass = Effect.gen(function* () {
-      for (const event of yield* database.deletions.pending()) {
-        const marker = recordOf(event).removed;
-        if (marker === null) continue;
+      for (const marker of yield* database.deletions.pending()) {
+        if (marker.type !== 'run.removed') continue;
         yield* database.deletions
           .collect(marker, (ids) => removeRunDirectories(fs, storage, ids))
           .pipe(

@@ -31,8 +31,8 @@ What follows is the inventory, strongest first. Each item names its producers
 and consumers so an implementing PR can follow the trail. The settings removed
 here are not persisted beyond `config.json`, which is additive-only: a deleted
 key is simply no longer read (`AGENTS.md` "Compatibility and format
-retirement"), with a `warn` on first read of an unknown key the catalog once
-had.
+retirement"). Nothing warns about a stale key: the two keys #14642 deleted went
+without one, and the catalog keeps no list of retired keys.
 
 ## 1. Model wire knobs that the route can decide
 
@@ -142,7 +142,9 @@ Smaller instances of the same shape:
   `supportsNativePdf: false` (`packages/llm/src/models/modelRoute.ts:304`) and
   read back as `supportsDocumentInput` (`responsesConfiguration.ts:101`).
 - `isUnservedModel` (`modelRoute.ts:118-122`) and `decideModelRoute`'s
-  `'unserved'` (`:216`) disagree on retired models.
+  `'unserved'` (`:215`) disagree on retired models. _Done 2026-11-04:
+  `decideModelRoute` gates on `isUnservedModel`, so a retired model is
+  refused at bind._
 
 **Proposal.** Delete the four constant or derived columns and their dead
 branches; replace the two id-prefix tests with llm-zoo capability flags
@@ -195,6 +197,18 @@ launched it. That was never a coherent state.
 **Acceptance.** The settings catalog has one approval row per host-visible
 decision; `rg "codexApprovalPolicy|codexSandboxMode|claudeAgentPermissionMode" packages` is empty.
 
+_Landed 2026-11-04: the two `toolUse.*` toggles, `codexSandboxMode`,
+`codexApprovalPolicy`, `claudeAgentPermissionMode` and the two per-call inputs
+are gone. `ChildRuns.autoApproved` answers the policy's one reading
+(`executableDecision`) when a plugin asks, and the agent-CLI tools derive their
+sandbox and permission mode from it: workspace-write / acceptEdits when a person approved
+the launch, danger-full-access / bypassPermissions when the run's work is
+auto-approved; Codex launches with `approvalPolicy: never`.
+`RunStopOptions.detachActiveChildren` and the wire field are gone: a shutdown
+cascades, a user stop reads "Keep agents running" (`stop(runId, reason)`,
+protocol 52). `allowOrchestratorKill` stays: a capability switch on an
+unguarded tool, not an approval._
+
 ## 4. Launch option bags whose fields travel together
 
 Each of these is a bag of independent optionals with exactly one producer
@@ -212,10 +226,12 @@ pattern, so the "options" are one choice spelled as several.
   `schema`; `document_task` (`packages/texra/src/tools/documents/DocumentTaskTool.ts:79`)
   always passes a task, files and `schema: null`. A tagged union
   `{kind:'agent'} | {kind:'task'}` makes the invalid mixes unrepresentable.
-- **`CompactionInput.force: 'request' | null`** (`packages/harness/src/agent/runtime/run/compaction.ts:106`):
-  the one caller (`:390`) always passes `'request'`, so the `null` branch at
-  `:295` never runs; the threshold path is already separate (`:397-420`).
-  Delete the field.
+- **`CompactionInput.force: 'request' | 'overflow' | null`** (`packages/harness/src/agent/runtime/run/compaction.ts:72`):
+  its one caller (`forced`, `:412-430`) passes `'request'` (a `/compact`) or
+  `'overflow'` (#14639), never `null`, so the `null` branch and its threshold
+  read at `:273-275` never run; the threshold path is already separate
+  (`atBoundary`). Narrow the field to `'request' | 'overflow'` and delete the
+  `null` branch.
 - **Strategy hooks with one implementer each**: `runTurn`, `pauseNotice`,
   `onTurnSuccess`, `releaseSessionOwnership` (only
   `packages/texra/src/tools/agentCli/agentCliShared.ts:482-503`),
@@ -224,8 +240,8 @@ pattern, so the "options" are one choice spelled as several.
   A closed union of the concrete strategies instead of a bag of optionals.
 - **`RegisterRunOptions.provenance` + `descriptionBy`**
   (`packages/harness/src/shared/session/runFacts.ts:246-248`) are set only by
-  `packages/harness/src/agent/runtime/forkRun.ts:240-243`, always together: one
-  `fork` field.
+  `packages/harness/src/agent/runtime/forkRun.ts:240-244` (`provenance` always,
+  `descriptionBy` when the source has a title): one `fork` field.
 - **`ProcessLayerOptions.labelRuns` and `seedToolSwitches`**
   (`packages/harness/src/effect/processLayer.ts:64,68`): each set once, by
   `packages/texra/src/controllers/texraProcessLayer.ts:140,146`, the second
@@ -239,6 +255,33 @@ pattern, so the "options" are one choice spelled as several.
 **Acceptance.** Each listed field is gone or its type admits only the
 combinations a producer builds; the `nativeSubagentStrategy` and
 `childRunLoop` interfaces name concrete strategies.
+
+_Landed 2026-11-04: the members that travel together
+are one bag each, so a strategy with only some of them no longer type-checks:
+`NativeChildStrategy.script` (`deliveryId` + `stopNotice`, the script run's)
+with `isTurnInterrupted` required, and `ProcessChildStrategy` a union of the
+one-turn command (`interruptedTurn`) and the agent CLI's `cli` (`runTurn`,
+`pauseNotice`, `onTurnSuccess`, `releaseSessionOwnership`); named strategy
+interfaces were tried and refused by `childRunLoop.ts`'s size cap and the
+layer-names baseline, which pins `ProcessChildStrategy` to that module.
+`ChildLaunch` followed in its own PR: a chat (`task: null`, `schema`,
+`mediaFiles`) or a task (`task`, `files`), normalized once in `agentCall`;
+`AgentTool.ts` made room by dropping the header prose that restated the
+tool's description and by reading the two resolvers' typed failures with
+`Effect.result` (an `Effect.exit` had reported an interruption as an error
+result).
+`inBand` and `deliveryMode: 'persistOnly'` are gone, the loop reads its own
+`awaited`; `CompactionInput.force` is gone (the reason is `forced`'s
+argument; `compactIfNeeded` folded into it); `RegisterRunOptions.descriptionBy`
+is gone (the fork appends its copied title row to its registration rows);
+`ProcessLayerOptions.seedToolSwitches` and `labelRuns` are gone (a store the
+process builds is seeded, a handed-in one left alone, `Sessions.layer` seeds
+the embedder's; `processLayer` provides `RunLabels` to every host);
+`AgentRuntimeEmitOptions.replayWhenAttached` is gone (replay is the
+behaviour). Kept: `resume.stopAfterCycle` (a host resume is a second
+producer with a varying value). Split off: the `ChildLaunch` union on `task`
+(chat: `schema` + `mediaFiles`; task: `files`): `AgentTool.ts` sits two lines
+under its size cap, so it lands with a trim of that file._
 
 ## 5. The document task's options: one table, one name, every surface
 
@@ -260,7 +303,10 @@ show three. The YAML `task.rewrite` field is set by one bundled agent
 (`packages/extension/resources/agents/write/paper2poster.yaml:13`) and read
 once (`packages/texra/src/tools/documents/documentTools.ts:309`), while
 `paper2slide`, `ocr` and `transcribe_audio` declare their own `outputs:` and
-keep the default; `rewrite` is `outputs.length === 0`.
+keep the default (`true`), so `rewrite` is not `outputs.length === 0` today:
+deriving it turns lineage off for those three (`suppressLineage = !rewrite`,
+`packages/texra/src/agent/output/diffComputation.ts:124`), a behaviour change
+the owner confirms first.
 
 **Proposal.** One table `{key, label, description}` owned by the documents
 plugin, from which the tool's input schema, the CLI flags, the launch form's
@@ -274,6 +320,20 @@ contract the approval shows.
 **Acceptance.** `rg "extractFigures|extractTikz" packages` is empty;
 `FileSelectGroup.ts` renders its items from the table; `task.rewrite` is gone
 from `documentTask.ts` and the YAMLs.
+
+_Landed 2026-11-04: `DOCUMENT_TASK_OPTIONS`
+(`packages/texra/src/shared/plugins/documents.ts`) is the table, a `label`,
+`description` and `menu` per stored key; `DocumentTaskOptionsSchema`, the
+`document_task` tool's fields, `texra run`'s flags, the launch form's menu
+items and the approval badges render from it, so every surface offers every
+switch under the stored name (the tool's `extractFigures` and `extractTikz`
+are gone, the form gained Critic review, `FileSelectConfig.toolConfig` is
+gone). `task.rewrite` is gone: `outputs.length === 0` at its one reader, so a
+task that declares `outputs` gets no diff lineage (before, a single-input one
+was diffed against its unrelated input). The harness card's dead badge block
+went with it; the `badges` section kind stays, since the Codex card states
+one (the claim above that the block was its only producer was wrong). No row
+or protocol bumps._
 
 The storage layer, error definitions and catch sites, interruption and stop,
 and the model-call failure path are inventoried under the same rule in
@@ -303,20 +363,48 @@ above.
   each.
 - `goal.strategy` admits any `builtIn:*` but only `builtIn:goal` exports
   `goal()` (`packages/harness/src/tools/plan/goalScript.ts:55`).
-- `latexdiff.tempFileLocation`, `latexdiff.changesOnly` and
-  `latex.wrapCritiqueInAlign` are one-reader two-path toggles with no UI row.
+- `latexdiff.tempFileLocation` and `latex.wrapCritiqueInAlign` are one-reader
+  two-path toggles with no UI row. (`latexdiff.changesOnly` has one, in the
+  LaTeX tab: `packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts:490`.)
 - `git.markCommits` gates `git.authorName` and `git.authorEmail`
   (`packages/harness/src/utils/system/execUtils.ts:53-64`): a present name is
   the switch.
 - `followUp.receipt` (`packages/harness/src/shared/session/runtimeRequest.ts:122`)
   has producers only in `packages/harness/example/`; keep it only as public SDK.
-- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:153-191`);
+- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:155-193`);
   `config agents` has eight flags for three choices
   (`packages/cli/src/commands/config.ts:111-131,201-232`); `--input`,
   `--context`, `--instruction-file` and `--model` are declared in two to four
   command files and collected once (`packages/cli/src/commands/_helpers/globalArgs.ts:261`).
 - `RegexRuleSet.flags?` (`packages/texra/src/replacement/types.ts:31`) is set
   by all nine rule sets: required.
+
+_Landed 2026-11-04 (first batch): `pickFiles.fileType` is a document file
+type (the extension's unreachable `output` picker and
+`isMultipleDocumentFileType` are gone; `useCurrentFile` keeps the diff view's
+pseudo-types, which it alone sends); `openInstallGuide` carries no `tool`;
+`latex.wrapCritiqueInAlign` and `latexdiff.tempFileLocation` are gone with
+their one reader each; `RegexRuleSet.flags` is required. Checked and kept:
+`latexdiff.changesOnly` has a LaTeX-tab row; `goal.strategy` is the SDK's
+strategy hook, exercised by `packages/harness/example/09-goal-strategies.ts`;
+`followUp.receipt` stays as public SDK. Waiting on the owner: `acceptEditedFile`'s
+`copyMeta` (deleting it removes the VS Code "Save as copy" choice, a working
+control the desktop never had), the four replacement presets with their key
+pairs (a feature reachable from `config.json` by hand), and `git.markCommits`._
+
+_Landed 2026-11-04 (CLI): `clone`'s destination is its second argument and
+`--cwd` keeps its one global meaning (the directory the command works in,
+which the positional resolves against; `clone` and `init` no longer re-describe
+it); `config agents` takes `--agents <inherit|all|team:<team>|list>`,
+`--default-team <team|none>` and `--default-agent <agent|none>`, the grammar
+the command already printed and the forms used, so five flags and four usage
+errors are gone (three in `config agents`, `clone`'s "not both"); each value
+is trimmed once, a keyword reads in any case, and a team is looked up one way
+for both flags.
+Checked and kept: `--input`, `--context`, `--instruction` and `--model` are
+declared per command because their help differs per command (the team
+orchestrator, `run`'s media and document-task notes), `--model` was never
+collected once, and `--instruction-file` is the one identical pair._
 
 ## Rejected
 

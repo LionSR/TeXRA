@@ -118,6 +118,7 @@ Two icon buttons sit in the file-group header rows of the file selector: one nex
 
 1. Select the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count**: include document word-count statistics so the agent knows the document's size and structure
+   - **Critic review**: have the bundled `critic` agent review each revision but the last; the next revision reads its critique
 2. Select the <wa-icon library="texra" name="wand"></wa-icon> **Auto-extract options** button to enable, for this run:
    - **Figures**: pull figures out of the document automatically
    - **TikZ Figures**: extract TikZ figures

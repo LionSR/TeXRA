@@ -33,7 +33,6 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -268,25 +267,6 @@ export const launchAgentCliSession = Effect.fn(
 });
 
 /**
- * The command an agent-CLI call gets approved, built the one way both
- * providers build it: the child's effective mode — read from the call's own
- * settings, so the prompt names the mode the launch will use — and the prompt
- * it would be launched with. Each tool declares this as its loop-side guard,
- * so the run loop opens the prompt and neither tool body does.
- */
-export const agentCliApprovalCommand = Effect.fn(
-  'agentCliShared.agentCliApprovalCommand',
-)(function* (
-  agentName: string,
-  prompt: string,
-  mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
-): Effect.fn.Return<string, Error, ToolContext> {
-  const { roots } = (yield* ToolContext).env;
-  const resolved = yield* mode(roots);
-  return `[${agentName} ${resolved}] ${prompt}`;
-});
-
-/**
  * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
  * boilerplate-identical chain both providers (codex, claudeAgent) run: refuse
  * a call that has no run to launch under or cannot collect the result, choose
@@ -480,30 +460,32 @@ export const buildAgentCliLaunch = Effect.fn('buildAgentCliLaunch')(function* <
   return {
     stageLabel,
     launch: () => providerTurn(initialPrompt),
-    runTurn,
     isTurnError,
     turnErrorMessage,
-    onTurnSuccess: (turn) => {
-      for (const id of resolveSessionIds(turn)) {
-        if (id) registerSessionId(id);
-      }
-    },
     formatDelivery: (turn, wallTimeMs) =>
       Effect.try({
         try: () => formatDelivery(turn, wallTimeMs, lastPrompt),
         catch: ensureError,
       }),
     formatError: (turn, err) => formatError(turn, err, lastPrompt),
-    pauseNotice: () =>
-      continueId === undefined
-        ? undefined
-        : {
-            text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
-            resumeId: continueId,
-          },
-    releaseSessionOwnership: () => {
-      releaseFallbackClaim?.();
-      registry.releaseByRunId(runId);
+    cli: {
+      runTurn,
+      onTurnSuccess: (turn) => {
+        for (const id of resolveSessionIds(turn)) {
+          if (id) registerSessionId(id);
+        }
+      },
+      pauseNotice: () =>
+        continueId === undefined
+          ? undefined
+          : {
+              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
+              resumeId: continueId,
+            },
+      releaseSessionOwnership: () => {
+        releaseFallbackClaim?.();
+        registry.releaseByRunId(runId);
+      },
     },
   };
 });

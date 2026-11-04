@@ -219,7 +219,7 @@ export const revealProgressView = Effect.fn('revealProgressView')(function* (
  * `PresentationEventHandlers<RuntimePresentationEventPayloads, HostPresentation>`:
  * omitting one here is a compile error rather than a silently dropped event.
  * `SessionHostInteractions` (the runtime) owns replaying an event emitted
- * before this host attaches, via `AgentRuntimeEmitOptions.replayWhenAttached`.
+ * before this host attaches.
  */
 export function createAgentPresentationHost(
   progressViewProvider: ProgressViewProvider,

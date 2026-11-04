@@ -8,8 +8,6 @@
  * import for dispatch and palette rendering.
  */
 
-import type { DesktopPlatform } from '@texra/shared/commands/accelerators';
-
 import {
   DESKTOP_HELP_COMMANDS,
   DESKTOP_LOCAL_COMMANDS,
@@ -18,6 +16,8 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface.js';
+import type { DesktopPlatform } from '../shared/accelerators';
+
 import type { MenuItemConstructorOptions } from 'electron';
 
 /** The one place Electron's wider platform id is narrowed into the union the

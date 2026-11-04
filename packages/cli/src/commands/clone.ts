@@ -75,10 +75,12 @@ function buildOverleafClonePorts(
     listWorkspaceEntries: (dir) =>
       FileSystem.FileSystem.use((fs) => fs.readDirectory(dir)).pipe(
         // A destination that does not exist yet is an empty destination, not
-        // an unreadable one: `runClone` creates it.
-        Effect.catchIf(
-          (error) => error.reason._tag === 'NotFound',
-          () => Effect.succeed<string[]>([]),
+        // an unreadable one: `runClone` creates it. Only `NotFound` counts,
+        // not all of `absentReason`: a path under a regular file (ENOTDIR)
+        // cannot be created, so it stays unreadable and stops the clone
+        // before the token prompt.
+        Effect.catchReason('PlatformError', 'NotFound', () =>
+          Effect.succeed<string[]>([]),
         ),
         Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
       ),
@@ -150,11 +152,6 @@ export const cloneCommand = withUsageSections(
     },
     args: {
       ...GLOBAL_ARGS,
-      cwd: {
-        ...GLOBAL_ARGS.cwd,
-        description:
-          'Empty directory to clone into (defaults to the current directory)',
-      },
       project: {
         type: 'positional',
         required: true,
@@ -163,7 +160,8 @@ export const cloneCommand = withUsageSections(
       destination: {
         type: 'positional',
         required: false,
-        description: 'Directory to create or clone into (defaults to --cwd)',
+        description:
+          'Directory to create or clone into (defaults to the working directory)',
       },
     },
     // `clone` runs without a platform, but its token ports are the
@@ -186,12 +184,6 @@ export const cloneCommand = withUsageSections(
         });
       }
 
-      if (ctx.args.destination && ctx.args.cwd) {
-        throw new CliUsageError({
-          message:
-            'Pass the clone destination either as the second argument or with --cwd, not both.',
-        });
-      }
       const workspacePath = ctx.args.destination
         ? resolve(context.cwd, ctx.args.destination)
         : context.cwd;

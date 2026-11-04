@@ -117,7 +117,10 @@ GitHub's Copilot terms before relying on any of them.
      model calls return.
    - Check whether GitHub offers a supported HTTP route for third-party tools
      before rebuilding the editor bridge. An HTTP route would serve all three
-     hosts the same way.
+     hosts the same way. The undocumented `api.githubcopilot.com` backend is
+     not one: the
+     [rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md)
+     parks it ("Cross-host Copilot OAuth is not approved").
 
 ## If this is reopened
 

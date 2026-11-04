@@ -228,6 +228,16 @@ type _EveryEndpointProviderNamesAProtocol = AssertNever<
 >;
 
 /**
+ * Every llm-zoo provider but `copilot` and `others` (whose models TeXRA does
+ * not serve) takes an API key, which makes it a Models-tab source
+ * (`API_KEY_PROVIDER_IDS`); a provider added without one fails here until
+ * that is decided, instead of vanishing from the picker.
+ */
+type _EveryServedProviderTakesAKey = AssertNever<
+  Exclude<`${ModelProvider}`, ApiKeyProviderId | 'copilot' | 'others'>
+>;
+
+/**
  * Every llm-zoo provider states its default endpoint, `null` when it has no
  * HTTP route; the error names the provider ids that state none.
  */

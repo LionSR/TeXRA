@@ -48,15 +48,15 @@ rows go. No new test file is needed.
 
 ### Behind pi-durable
 
-| Gap                           | Today                                                                                                                                             | pi-durable 1.3.0                                            |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| Storage                       | `controllers/session/Database.ts:18` imports `SqliteClient` and builds it at `:241`, `:246`, `:1032`; `:68-69` import the plugin table            | `Storage` port, five backends, `registerStorageConformance` |
-| Execution                     | `ChildProcessSpawner` is process-wide (`platform/processRuntime.ts:103`)                                                                          | `ExecutionEnv` per conversation, `registerEnvConformance`   |
-| Edge                          | Effect only. A follow-up is `session.request({ kind: 'followUp.send' })`, and streaming text means pairing `stream.start` ids with `stream.chunk` | `await Harness.open()`, `submission.wait()`, `watchEvents`  |
-| Quickstart                    | 30 lines, two directories, five peers in patch lockstep                                                                                           | 12 lines, `MemoryStorage`, no peers                         |
-| Spec, examples                | design spread over internal notes; two packed examples that call no model                                                                         | one `docs/spec.md`, 32 numbered examples                    |
-| Publication                   | not on npm                                                                                                                                        | released 2026-10-01                                         |
-| Deferred tools, durable sleep | none                                                                                                                                              | `/tool-search`; `sleeping` with host wake                   |
+| Gap                           | Today                                                                                                                                   | pi-durable 1.3.0                                            |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Storage                       | `controllers/session/Database.ts:18` imports `SqliteClient` and builds it at `:241`, `:246`, `:1032`; `:68-69` import the plugin table  | `Storage` port, five backends, `registerStorageConformance` |
+| Execution                     | `ChildProcessSpawner` is process-wide (`platform/processRuntime.ts:103`)                                                                | `ExecutionEnv` per conversation, `registerEnvConformance`   |
+| Edge                          | Effect only. A follow-up is `session.request({ kind: 'followUp.send' })`, and `run.events.pipe(responseText)` streams the answer's text | `await Harness.open()`, `submission.wait()`, `watchEvents`  |
+| Quickstart                    | 30 lines, two directories, four peers (three Effect packages in patch lockstep, and `@texra-ai/llm`)                                    | 12 lines, `MemoryStorage`, no peers                         |
+| Spec, examples                | `packages/harness/docs/spec.md`; a ten-step `example/` ladder that CI runs from the packed tarballs                                     | one `docs/spec.md`, 32 numbered examples                    |
+| Publication                   | not on npm                                                                                                                              | released 2026-10-01                                         |
+| Deferred tools, durable sleep | none                                                                                                                                    | `/tool-search`; `sleeping` with host wake                   |
 
 ### Behind our own design
 
@@ -136,10 +136,10 @@ cannot.
 ### Concepts
 
 The thirteen nouns of the core-concepts note keep their owners. The process
-owner is `effect/processLayer.ts:116`, which becomes `sdk/processLayer.ts`. The
+owner is `processLayer` in `effect/processLayer.ts`, which stays there (the 1.0 PRD's layout recommendation A keeps the ten directories). The
 foundation order the code follows is declared in `packages/harness/AGENTS.md`
 ("Layer order") and ratcheted by `src/test-kernel/architecture/subsystemEdgeRatchet.vitest.ts`:
-`logger < utils < shared < common < platform < …`, with `session` and `sdk`
+`logger < utils < shared < common < platform < …`, with `controllers` and `effect`
 on top.
 
 ### Layout
@@ -154,7 +154,7 @@ on top.
 | `shared/`   | schemas (a named manifest), transcript, runs, tools, state, config                                                                                                                                  | ~86   |
 | `platform/` | ports, `logger/`, `eventBus/`, `types/`                                                                                                                                                             | 22    |
 
-The six pairs resolve as follows: `database`/`Database` become a log and a
+The 1.0 PRD's layout comparison (2026-10-30) keeps the ten directories: no `sdk/` and no `session/` for 1.0, and `builtins/` waits for a named embedder. The six pairs resolve as follows: `database`/`Database` become a log and a
 store; `sessionEvents`/`SessionEvents` become an inbox and a publisher;
 `runHistory`/`RunHistory` merge into one file; each `sessionInputs` and
 `sessionView` pair splits into a fold and its layer; `WorkspaceRoots` merges
@@ -169,7 +169,8 @@ Leaving the harness: presets, teams, icons and quota routes
 move to `packages/texra/src/host/`, and the canned validation model moves to
 `packages/cli`. Harness-internal aliases are declared only for the harness build
 and the test kernel, so a deep import from the app or a host fails to compile.
-`@common/webview` leaves the harness alias family.
+`@common/webview` leaves the harness alias family (done: the alias is gone and
+the two extension providers import `BundledViewContentProvider` relatively).
 
 ### Ports
 
@@ -178,7 +179,7 @@ and the test kernel, so a deep import from the app or a host fails to compile.
 | Storage   | Deferred past 1.0 (re-check below): `openStore` is bound to a file, so a client from context cannot replace it                                                                                                                                                      | the Node SQLite file                | the golden store and crash suites as they are                                                         |
 | Execution | the existing `FileSystem \| ChildProcessSpawner` pair, named on `AgentPlatform`; the settings reads in `utils/system/execUtils.ts` become arguments                                                                                                                 | the Node pair                       | the crash suite's command and file cases                                                              |
 | Clock     | Effect `Clock`, `sleep` and `Schedule` only (R8); a timed wake is a follow-up held until its time (`followup.queued` gains `notBefore`), not a `run.position` field (re-check below); one scoped `Effect.sleep` per session to the earliest `notBefore` in the view | Effect's default                    | queue a timed follow-up, advance `TestClock`, assert the turn; then close, reopen, advance, assert it |
-| Host      | `SessionHost` with neutral names (`openFile`, `showNotice`, `showError`, `focusSession`)                                                                                                                                                                            | no-op                               | none; it decides no recorded fact                                                                     |
+| Host      | `SessionHost`; its presentation keys are `openFile`, `requestShowInstruction`, `agentNotFound` and `requestShowError` (#14463 renamed two to fact names and kept two)                                                                                               | no-op                               | none; it decides no recorded fact                                                                     |
 | Settings  | `settingsCatalog(rows, { namespace })`, prefixed at the store boundary, so stored keys are unchanged and nothing migrates                                                                                                                                           | `'harness'`; TeXRA passes `'texra'` | the existing catalog suites                                                                           |
 
 The durable doc dropped "a storage contract suite parameterised by backend".
@@ -213,7 +214,7 @@ the note below).
 
 ```ts
 import { Effect, Stream } from 'effect';
-import { Sessions } from '@texra-ai/harness';
+import { responseText, Sessions } from '@texra-ai/harness';
 import { nodePlatform } from '@texra-ai/harness/node';
 import { harnessBuiltins } from '@texra-ai/harness/plugins';
 const platform = nodePlatform({
@@ -228,7 +229,7 @@ const program = Effect.gen(function* () {
     agent: 'polish',
     instruction: 'Tighten notes.md.',
   });
-  yield* Stream.runForEach(run.text, (t) =>
+  yield* Stream.runForEach(run.events.pipe(responseText), (t) =>
     Effect.sync(() => process.stdout.write(t)),
   );
   return yield* run.result;
@@ -257,53 +258,55 @@ lanes table below keep it as the refused option.
 
 - The fields stay as they are. `availability` becomes optional, and
   `ALWAYS_AVAILABLE` is exported.
-- `recipeOf(block)` becomes public, so TeXRA's documents plugin is written
+- The block reader is public (`agentBlockOf` in `./plugins`), so TeXRA's documents plugin is written
   the way an embedder's would be.
 - `defineBuiltinPlugin` is deleted: every built-in is a `definePlugin` value
   on the one tool contract, `ITool<Error, PluginToolServices>`, and the
   engine tools stay in `tools/`, reading the session's runs off the engine
-  door (`RunCallShape.runs`). A `builtins/` directory behind a lint fence
+  door (`RunCallShape.session`, the session's services). A `builtins/` directory behind a lint fence
   waits for a named embedder that cannot write a built-in on the public
   surface; the app's own count is already zero
-  ([the tool layer](./2026-11-01-tool-layer-one-catalog-one-step.md),
+  ([the tool layer](../../implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md),
   decision 4).
 - `defineTool({ deferred: true })` builds on codemode's existing discovery.
-- Request kinds stay closed (ledger D11) until a named plugin cannot be MCP plus
-  hooks plus data.
+- The built-in request kinds stay closed (ledger D11); a plugin opens requests
+  in its own vocabulary through the generic `plugin` case
+  (`shared/schemas/request.ts:119`).
 
 ## Deletion ledger
 
-| What goes                                         | Count                  |
-| ------------------------------------------------- | ---------------------- |
-| Root exports                                      | 246 → ~30              |
-| `export *` in `shared/schemas/index.ts`           | kept (re-check below)  |
-| `harness-deep-import-baseline.json` and its suite | deleted                |
-| `architecture-edges` rows                         | 67 → ~45, harness only |
-| `forgotten-exports` rows                          | 277 → ~180             |
-| Same-basename pairs                               | 6 → 0                  |
-| TeXRA code leaving the harness                    | ~1,650 lines           |
-| Duplicated host code                              | ~1,400 lines           |
-| OAuth `.catch` in llm                             | 12 → 0                 |
+| What goes                                         | Count                                       |
+| ------------------------------------------------- | ------------------------------------------- |
+| Root exports                                      | 246 → 59 (what public signatures need)      |
+| `export *` in `shared/schemas/index.ts`           | kept (re-check below)                       |
+| `harness-deep-import-baseline.json` and its suite | kept as a guard; every host list is empty   |
+| `architecture-edges` rows                         | 67 → ~45, harness only                      |
+| `forgotten-exports` rows                          | 277 → 0, held at zero with no baseline file |
+| Same-basename pairs                               | 6 → 0                                       |
+| TeXRA code leaving the harness                    | ~1,650 lines                                |
+| Duplicated host code                              | ~1,400 lines                                |
+| OAuth `.catch` in llm                             | 12 → 0 (done)                               |
 
 ## Lanes
 
 Each lane leaves `npm run gate` and `test:pure` green. The only row change is
-the timed follow-up's `notBefore`, in lane 5, which lands before the freeze if
-the 1.0 PRD takes it.
+the timed follow-up's `notBefore`, in lane 5, which the 1.0 PRD left out of the
+format batch (decided 2026-10-30): a `remind` tool adds it as
+`followup.queued` v+1.
 
-| #   | Lane                                                                                                                                                                                         | Effort | Files moved |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
-| 1   | Doors: the root to ~30 names, `./host`, the `./schemas` manifest, the `./plugins` closure, `effect/` → `sdk/`, alias scoping, the `Run` methods                                              | L      | 8           |
-| 2   | Foundation order: `logger`, `eventBus` and `types` into `platform/`; the run-storage utils into `agent/storage`; the `@common/webview` alias removed                                         | M      | 11          |
-| 2b  | Session merge, with the history lint zone                                                                                                                                                    | M      | ~55         |
-| 3   | Vocabulary as data: namespace, `SettingHost` → probe, branding, the prompt section, data files to texra, the validation model to cli, llm branding as bind facts, the OAuth `.catch` removal | M      | 9           |
-| 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                  | —      | 0           |
-| 4b  | Built-ins fence, measured and redesigned as one tool contract in [the tool layer note](./2026-11-01-tool-layer-one-catalog-one-step.md) (the fence itself is its decision 4)                 | S      | 0           |
-| 5   | The timed follow-up with its first consumer tool; `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                 | M      | 0           |
-| 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                               | S      | 0           |
-| 7   | Host dedup: `createGuiHostRequests`, one service reach, the agent-directories layer from options, the CLI notices through `LocalSession.emit`                                                | L      | 0           |
-| 8   | `./promise`                                                                                                                                                                                  | S      | 0           |
-| 9   | Publish, `docs/spec.md`, a numbered examples ladder                                                                                                                                          | M      | 0           |
+| #   | Lane                                                                                                                                                                                                                                                                         | Effort | Files moved |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
+| 1   | Doors: the root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; left: alias scoping. `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                     | L      | 8           |
+| 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); the `@common/webview` alias removed (done, #14682)                     | M      | 11          |
+| 2b  | Session merge, with the history lint zone: not for 1.0 (the release PRD's layout comparison: a `session/` directory removes no layer edge)                                                                                                                                   | M      | ~55         |
+| 3   | Vocabulary as data: done (#14364, #14369), except llm branding as bind facts (the xAI referrer, the ChatGPT agent name and the Responses tool namespace)                                                                                                                     | M      | 9           |
+| 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                                                                                  | —      | 0           |
+| 4b  | Built-ins fence, measured and redesigned as one tool contract in [the tool layer note](../../implemented/architecture/2026-11-01-tool-layer-one-catalog-one-step.md) (the fence itself is its decision 4)                                                                    | S      | 0           |
+| 5   | The timed follow-up with its first consumer tool (not in the 1.0 format batch, decided 2026-10-30); `defineTool({ deferred: true })` when tool counts need it; the storage port only for a named second driver                                                               | M      | 0           |
+| 6   | Freeze: `storage:freeze` at the first release (a `releasing` step, not a lane)                                                                                                                                                                                               | S      | 0           |
+| 7   | Host dedup: the GUI hosts share one request body over `SharedHostRequestBindings` (`packages/texra/src/controllers/session/openGuiWindow.ts`), and `processLayer` builds the agent-directories layer from options; the CLI notices through `LocalSession.emit` are not built | L      | 0           |
+| 8   | `./promise`: not built; the 2026-09-21 ruling holds                                                                                                                                                                                                                          | S      | 0           |
+| 9   | Publish (the owner's `releasing` step); `docs/spec.md` and the numbered examples ladder are done (`packages/harness/docs/spec.md`, `packages/harness/example/`)                                                                                                              | M      | 0           |
 
 ### Lane 4 re-check (2026-10-21, at `6e5b262`)
 
@@ -384,7 +387,7 @@ re-read the surface and the ports. Where it changes this design:
   `WorkspaceRoots`, `SettingsStores` and the probes: the app reads a host's
   capabilities instead, and the setup probe its `SetupHost`.
   `defineBuiltinPlugin` went with lane 4b's one tool contract: the built-ins
-  read the session's runs off the engine door, `RunCallShape.runs`.
+  read the session's runs off the engine door, `RunCallShape.session` (#14546).
 - **Lane 5, the clock.** A `run.position.wakeAt` field fits poorly: the loop
   rewrites positions at every boundary, so a user message drops the timer
   unless the loop restates it; a wake still needs input the parked run can
@@ -412,7 +415,7 @@ On 2026-10-21 the owner set this order:
 
 1. `fix/race-conditions-one-owner`. It edits session open and close, the inbox
    and `runRegistry`, so it lands before lane 2b. Merged (#14210).
-2. `feat/script-launched-goal` (#14201, open). It edits the goal plugin, which
+2. `feat/script-launched-goal` (#14201, merged). It edits the goal plugin, which
    lane 4b moves.
 3. The debt-cleanup branches (`claude/debt-*`), all merged or closed by
    2026-10-22. Item 2 (#14193) folded the llm OAuth files ahead of lane 3's
@@ -423,7 +426,7 @@ On 2026-10-21 the owner set this order:
 4. This design's lanes.
 
 One later PR is not in the owner's order but also precedes the lanes whose files
-it edits: #14199 (open; fallback chains: `agent/runtime`, the llm OAuth files,
+it edits: #14199 (merged; fallback chains: `agent/runtime`, the llm OAuth files,
 `claudeAgent.ts`) before lanes 2b and 3.
 
 The "Pre-water night launch priorities" review (2026-10-21) ranked two items
@@ -439,16 +442,16 @@ the same two primitives (`requestToolEditApproval`, `approvedWriteConflict`)
 directly. The `presentToolEdit` port stays: it carries the original and proposed
 content that the durable `request.opened` deliberately omits.
 
-Lane 4b therefore starts with the fence itself. The three `tools/approval/`
+Lane 4b therefore starts with the fence itself. The two `tools/approval/`
 modules stay in `tools/`, which the layout above makes the engine, and none
-moves to `builtins/`: `bashApproval.ts` and `toolEditApproval.ts` read
-`session.approvals` and the interactions, and `approvedWrite.ts` imports
-`@agent/runtime/RunCall` and `@platform/rootedFs`, which the fence's
+moves to `builtins/`: `toolEditApproval.ts` reads the session's `Approvals` and imports
+`@agent/runtime/RunCall`, and `approvedWrite.ts` imports `@platform/rootedFs`,
+which the fence's
 public-imports rule forbids a built-in. `requestToolEditApproval` stays the one
 request path for edits, which `applyApprovedFileEdit` and AcceptRunFilesTool
-both call. The two request modules share one policy preamble (settings key,
-bypass, policy, `decideApproval`, the denial and its message), which lane 4b can
-fold. Putting the other built-ins on `ToolContext` stays part of the fence.
+both call. No shared preamble is left to fold: the bash guard decides in the loop
+(`agent/runtime/loop/toolGuard.ts`), and the edit path asks
+`approvals.permission` (`toolEditApproval.ts:91`). Putting the other built-ins on `ToolContext` stays part of the fence.
 
 ## Risks and non-goals
 
@@ -462,13 +465,15 @@ fold. Putting the other built-ins on `ToolContext` stays part of the fence.
   extends the root `tsconfig.json`.
 - **`./host`** is smaller but nothing forces it to shrink. Its api-report diff
   is the only check.
-- **The timed follow-up's `notBefore`** is free only before the freeze.
+- **The timed follow-up's `notBefore`** needs a `followup.queued` version bump
+  either way; after the freeze it costs one identity upcaster more (1.0 PRD,
+  decided 2026-10-30).
 - Non-goals: a second dialect, third-party code in process, a daemon, request or
   task kinds, in-process hooks, and cross-protocol history conversion. A model
   switch across protocols is refused early.
 
 Still open after this design: about 350 lines of duplicated lowering across the
-llm adapters; `sessionViewUpdate.ts` at 1,166
+llm adapters; `sessionViewUpdate.ts` at 1,169
 lines; the CLI approval stack versus the webview request panels; and four
 CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 `Date.now()`, and silent degradation outside the harness and llm).
@@ -477,16 +482,19 @@ CLAUDE.md rules with no check (the barrel ban, the single-caller ban, renderer
 
 1. **The Promise entry.** Ship it as the argued exception to the 2026-09-21
    ruling, or keep the Effect-only surface? _Recommend: ship it last; deleting
-   it costs one file._
+   it costs one file._ Answered: the Effect-only surface holds and `./promise`
+   is not built (see the note under Public surface).
 2. **`./host`.** Keep about 37 host-composition names on a subpath with no
    stability promise, or move them into `packages/texra`? _Recommend: the
    subpath now, and move them as the hosts' imports shrink._ Answered by the
    2026-10-28 re-check: the subpath stays; only the team launch code and the
    picker wire types are app vocabulary to move.
 3. **History as a package.** Keep it as a lint zone in `session/` until a second
-   embedder is named? _Recommend: yes; the rename stays cheap._
+   embedder is named? _Recommend: yes; the rename stays cheap._ Not for 1.0: the release PRD's
+   layout comparison keeps `controllers/` and builds no `session/` directory.
 4. **The `texra.` namespace.** Prefix at the store boundary, with stored keys
-   unchanged? _Recommend: yes; nothing migrates._
+   unchanged? _Recommend: yes; nothing migrates._ Answered by #14364: `settingsCatalog`
+   takes a `namespace`, which the stores add (`shared/state/stateSettings.ts:665`).
 
 ## Verified
 
