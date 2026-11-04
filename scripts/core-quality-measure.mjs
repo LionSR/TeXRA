@@ -148,7 +148,7 @@ const OUTSIDE_CORE_RULES = {
 };
 
 /** Every package's source; the part outside the core takes the depth rules. */
-export const SOURCE_DIRS = [
+export const SOURCE_DIRS = Object.freeze([
   'packages/harness/src',
   'packages/llm/src',
   'packages/texra/src',
@@ -156,7 +156,7 @@ export const SOURCE_DIRS = [
   'packages/desktop/src',
   'packages/cli/src',
   'packages/trace-viewer/src',
-];
+]);
 
 const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
 const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
