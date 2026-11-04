@@ -49,7 +49,6 @@ import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspace
 import { getCodexConfig, openCodexClient } from './codexImport';
 import { CodexThreads } from './agentCliSessionStores';
 import {
-  agentCliApprovalCommand,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -100,11 +99,6 @@ const CodexInputSchema = Schema.Struct({
 });
 
 type CodexInput = typeof CodexInputSchema.Type;
-
-/** The sandbox a launch runs Codex under: the workspace when a person
- *  approved the launch, everything when the run's work is auto-approved. */
-const sandboxModeFor = (autoApproved: boolean): SandboxMode =>
-  autoApproved ? 'danger-full-access' : 'workspace-write';
 
 /**
  * Log a completed codex thread item that has no tool card, straight to the
@@ -418,7 +412,11 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolError,
   ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const sandboxMode = sandboxModeFor(yield* (yield* ChildRuns).autoApproved);
+  // The workspace when a person approved the launch; everything when the
+  // run's work is auto-approved.
+  const sandboxMode: SandboxMode = (yield* (yield* ChildRuns).autoApproved)
+    ? 'danger-full-access'
+    : 'workspace-write';
 
   return yield* dispatchAgentCliTool({
     agentName: CODEX_AGENT_NAME,
@@ -455,8 +453,7 @@ export const CodexTool = defineTool({
   },
   guard: {
     command: {
-      text: (input: CodexInput) =>
-        agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, sandboxModeFor),
+      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
       // A resumed thread keeps its stored workspace: name none, not the wrong one.
       cwd: 'unknown',
     },

@@ -36,7 +36,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { Runs } from './runRegistry';
 import { Interactions } from './HostInteractions';
 import { ProjectTools } from './loop/step';
-import { executableDecision, SessionRequests } from './requestPolicy';
+import { SessionRequests, workAutoApproved } from './requestPolicy';
 import type { RunCallShape } from './RunCall';
 import type { RouteRetries } from './run/invocation';
 import type { SessionServices } from './rootLaunch';
@@ -106,9 +106,9 @@ export interface ChildRunsShape {
     },
   ) => Effect.Effect<A | undefined, Error>;
   /** Whether the launching run's work runs unasked (the Auto-approve policy,
-   *  or an all-agent-work grant on it or an ancestor), read as asked, since
-   *  a grant may land mid-run: what a child's own sandbox or permissions
-   *  follow. */
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
   readonly autoApproved: Effect.Effect<boolean, Error>;
   /** Whether the run holds the request `requestId`, open or decided: what
    *  a tool that posted one reads after a failed post. */
@@ -194,9 +194,7 @@ export const childRuns = (call: RunCallShape): ChildRunsShape => {
           ? undefined
           : Schema.decodeUnknownSync(arm.schema)(row.value);
       }),
-    autoApproved: inSession(
-      Effect.map(executableDecision(runId), (decision) => decision === 'allow'),
-    ),
+    autoApproved: inSession(workAutoApproved(runId)),
     requested: (id, requestId) =>
       Effect.map(
         log.runRows(qualifyAggregateId('run', id), 'requests'),

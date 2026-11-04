@@ -267,24 +267,6 @@ export const launchAgentCliSession = Effect.fn(
 });
 
 /**
- * The command an agent-CLI call gets approved, built the one way both
- * providers build it: the mode the launch will run the child under, derived
- * from whether the run's work is auto-approved, and the prompt it would be
- * launched with. Each tool declares this as its loop-side guard, so the run
- * loop opens the prompt and neither tool body does.
- */
-export const agentCliApprovalCommand = Effect.fn(
-  'agentCliShared.agentCliApprovalCommand',
-)(function* (
-  agentName: string,
-  prompt: string,
-  mode: (autoApproved: boolean) => string,
-): Effect.fn.Return<string, Error> {
-  const autoApproved = yield* (yield* ChildRuns).autoApproved;
-  return `[${agentName} ${mode(autoApproved)}] ${prompt}`;
-});
-
-/**
  * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
  * boilerplate-identical chain both providers (codex, claudeAgent) run: refuse
  * a call that has no run to launch under or cannot collect the result, choose

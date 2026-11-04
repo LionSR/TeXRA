@@ -56,7 +56,6 @@ import {
 } from './claudeAgentImport';
 import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
-  agentCliApprovalCommand,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -76,6 +75,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type {
   EffortLevel,
   Options as ClaudeAgentSdkOptions,
+  PermissionMode,
   SDKAssistantMessage,
   SDKMessage,
   SDKUserMessage,
@@ -120,14 +120,9 @@ type ClaudeAgentInput = typeof ClaudeAgentInputSchema.Type;
 
 /** The two of the SDK's permission modes a launch runs under. */
 type ClaudePermissionMode = Extract<
-  NonNullable<ClaudeAgentSdkOptions['permissionMode']>,
+  PermissionMode,
   'acceptEdits' | 'bypassPermissions'
 >;
-
-/** File edits auto-accepted when a person approved the launch; every
- *  permission bypassed when the run's work is auto-approved. */
-const permissionModeFor = (autoApproved: boolean): ClaudePermissionMode =>
-  autoApproved ? 'bypassPermissions' : 'acceptEdits';
 
 // ============================================================================
 // Result formatting
@@ -492,9 +487,12 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | FileSystem.FileSystem
 > {
   const { roots } = (yield* ToolContext).env;
-  const permissionMode = permissionModeFor(
-    yield* (yield* ChildRuns).autoApproved,
-  );
+  // File edits auto-accepted when a person approved the launch; every
+  // permission bypassed when the run's work is auto-approved.
+  const permissionMode: ClaudePermissionMode = (yield* (yield* ChildRuns)
+    .autoApproved)
+    ? 'bypassPermissions'
+    : 'acceptEdits';
   const claudeRun = yield* readClaudeCodeRun(roots, input);
   const sessionId = input.session_id ?? undefined;
   const isFork = input.fork_session === true;
@@ -537,11 +535,7 @@ export const ClaudeAgentTool = defineTool({
   guard: {
     command: {
       text: (input: ClaudeAgentInput) =>
-        agentCliApprovalCommand(
-          CLAUDE_AGENT_NAME,
-          input.prompt,
-          permissionModeFor,
-        ),
+        `[${CLAUDE_AGENT_NAME}] ${input.prompt}`,
     },
   },
   execute: run,

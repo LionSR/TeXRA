@@ -212,7 +212,7 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   // The call as the prompt shows it: the guard's spelling, else the tool's
   // name and its final input.
   const command = guard?.command
-    ? yield* guard.command.text(decoded)
+    ? guard.command.text(decoded)
     : `${definition.name} ${JSON.stringify(decoded)}`;
   // The directory the approved command runs in, as the tool declared it.
   // `'unknown'`: the executor can name none, so the prompt names none rather

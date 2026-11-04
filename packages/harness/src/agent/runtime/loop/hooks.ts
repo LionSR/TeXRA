@@ -42,7 +42,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import { type RunCell, SessionViewAccess } from '@shared/session/runHistory';
-import { executableDecision } from '../requestPolicy';
+import { workAutoApproved } from '../requestPolicy';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
@@ -265,10 +265,9 @@ const inputBase = Effect.fn('inputBase')(function* (run: AgentRunShape) {
   return {
     session_id: root,
     cwd: run.workingDirectory ?? (yield* SessionRoots).workspace ?? '',
-    permission_mode:
-      (yield* executableDecision(run.runId)) === 'allow'
-        ? ('bypassPermissions' as const)
-        : ('default' as const),
+    permission_mode: (yield* workAutoApproved(run.runId))
+      ? ('bypassPermissions' as const)
+      : ('default' as const),
     ...(root === run.runId
       ? {}
       : { agent_id: run.runId, agent_type: run.config.agent }),

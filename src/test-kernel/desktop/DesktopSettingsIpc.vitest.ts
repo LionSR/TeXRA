@@ -145,12 +145,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ).toBe(true);
           yield* Effect.promise(flushAsyncWork);
 
-          expect(config.get('approvalPolicy')).toBe('yolo');
+          expect(config.get(APPROVAL_POLICY_CONFIG_KEY)).toBe('yolo');
           // Security-adjacent scope pin: a per-workspace approval bypass must
           // never be written to the global config target (see issue #7085),
           // nor to the project file a cloned repository controls.
           expect(update).toHaveBeenCalledWith(
-            'approvalPolicy',
+            APPROVAL_POLICY_CONFIG_KEY,
             'yolo',
             'local',
           );

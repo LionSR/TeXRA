@@ -121,8 +121,9 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         // which is the window the stop below has to land in.
         yield* Deferred.await(parked.started);
 
-        // A shutdown: its stop reads no setting, which this fixture's roots
-        // do not serve, and ends the hold at once.
+        // A shutdown: the sweep alone, the path this case took before the
+        // per-stop override went; a user stop's settlement also reads "Keep
+        // agents running" and may owe an end row behind the parked persist.
         const stop = Context.get(session, Runs).stop(runId, 'shutdown');
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement.pipe(Effect.provide(session));

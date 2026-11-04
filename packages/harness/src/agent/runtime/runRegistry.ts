@@ -464,14 +464,13 @@ export class RunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run, deciding here what happens to its children: the caller's
-   * policy, else the session's "Keep subagents running", read as the stop
-   * runs. A run this process drives is stopped where it stands, children
-   * first; a detaching stop only after the children's `run.detach` commits,
-   * or a child completing meanwhile would route its result to the stopped
-   * parent. A run nothing here owns is stopped under its claim, taken before
-   * its children are touched, and given the end the stop owes it
-   * ({@link stopEnd}); a refused claim or row fails it.
+   * Stop a run (`RunsShape.stop` says what each reason does to its
+   * children). A run this process drives is stopped where it stands,
+   * children first; a detaching stop only after the children's `run.detach`
+   * commits, or a child completing meanwhile would route its result to the
+   * stopped parent. A run nothing here owns is stopped under its claim,
+   * taken before its children are touched, and given the end the stop owes
+   * it ({@link stopEnd}); a refused claim or row fails it.
    */
   stop(runId: RunId, reason: RunStopReason): RunStop {
     const activation = this.activations.get(runId);
@@ -488,14 +487,14 @@ export class RunRegistry implements RunsShape {
       reached = this.terminate(runId, new Set(), cascade, reason);
       return reached;
     };
-    // A shutdown ends this process's hold, and its children's holds with
-    // it; it owes no end row (`stopEnd`), so the sweep is the whole stop.
-    if (reason === 'shutdown') {
+    // No end owed (a shutdown, which ends this process's hold and its
+    // children's holds with it): the sweep is the whole stop.
+    const end = this.stopEnd(runId, reason);
+    if (end === undefined) {
       stopHere(true);
       return { accepted: () => reached, settlement: Effect.void };
     }
     // A user's stop: its children follow "Keep agents running".
-    const end = this.stopEnd(runId, reason);
     const key = GlobalStateKey.DETACH_SUBAGENTS_ON_STOP;
     const apply = Effect.flatMap(
       Effect.suspend(() => Settings.get<boolean>(this.init.roots, key)),
@@ -506,7 +505,7 @@ export class RunRegistry implements RunsShape {
               // A reached target ends itself; an end owed otherwise is
               // written as an inactive-run step, which a generation admitted
               // meanwhile refuses (`RunLive`) and becomes the target instead.
-              stopHere(!detach) || end === undefined
+              stopHere(!detach)
                 ? Effect.void
                 : this.withInactiveRunStep(runId, end).pipe(
                     Effect.catchIf(isRunLive, () =>

@@ -58,7 +58,7 @@ export function approvalPolicyDenialMessage(
     : APPROVAL_UNPRESENTABLE_MESSAGE;
 }
 
-/** Decide one Bash or tool-edit permission from request-time policy facts. */
+/** Decide one guarded operation under the policy from request-time facts. */
 export function decideApproval(input: {
   readonly policy: ApprovalPolicy;
   readonly scopedBypass: boolean;

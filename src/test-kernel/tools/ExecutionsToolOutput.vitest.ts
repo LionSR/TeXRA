@@ -10,7 +10,11 @@ import { afterEach, vi } from 'vitest';
 
 // Local imports
 
-import { type RunId, RunIdSchema } from '@texra-ai/harness/schemas';
+import {
+  APPROVAL_POLICY_CONFIG_KEY,
+  type RunId,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import * as toolUseFollowUp from '@agent/followUp/ToolUseFollowUp';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -134,7 +138,7 @@ const perTest = Layer.provideMerge(
   TestSession.layer(undefined, { host: {} }),
   FakeHost.layer({
     workspacePath: '/workspace',
-    config: { approvalPolicy: 'yolo' },
+    config: { [APPROVAL_POLICY_CONFIG_KEY]: 'yolo' },
   }),
 );
 

@@ -141,17 +141,15 @@ function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
 }
 
 /**
- * Every case's start, for the test's scope: a host over the workspace with
- * `config`, a session over its roots whose policy host counts denials, the
+ * Every case's start, for the test's scope: a host over the workspace, a
+ * session over its roots whose policy host counts denials, the
  * policy at `ask`, and a freshly started run whose requests a surface
  * answers with `nextDecision`.
  */
-const setUp = (config: Record<string, unknown> = {}) =>
+const setUp = () =>
   Effect.gen(function* () {
     nextDecision = () => ({ action: 'approve' });
-    yield* Layer.build(
-      FakeHost.layer({ workspacePath: WORKSPACE_PATH, config }),
-    );
+    yield* Layer.build(FakeHost.layer({ workspacePath: WORKSPACE_PATH }));
     session = yield* Effect.flatMap(
       TestSession.open(undefined, { host: {} }),
       sessionHandleOf,
