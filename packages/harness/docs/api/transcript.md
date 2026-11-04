@@ -168,30 +168,6 @@ interface ContextManagementRow extends TranscriptRowBase {
 function decodeXmlEntities(text: string): string
 ```
 
-## deliveryBodyEscaped
-
-Whether the envelope body is XML-entity-escaped (via `escapeText()` in
-the producer) and needs `decodeXmlEntities()` before display. An activity
-report (a plugin's bare `<family>-activity>` open on its own line)
-neutralizes embedded tag names rather than escaping, so it is the one
-kind that is not.
-
-```ts
-function deliveryBodyEscaped(tag: string): boolean
-```
-
-## deliveryTagOf
-
-The delivery-envelope tag `text` opens with, or undefined when the text is
-not one of these blocks. The single recognizer for "is this a child-run
-delivery envelope", shared by the CLI transcript, the queued follow-ups
-panel, and the progress-view message bubble. Leading whitespace is allowed
-because producers hand blocks to the render surfaces untrimmed.
-
-```ts
-function deliveryTagOf(text: string): string | undefined
-```
-
 ## dispatchedChildren
 
 The runs `run` launched that are not a script's calls: what its dispatch
@@ -372,18 +348,6 @@ function formatResultCount(
   count: number,
   singular: string,
   plural?: string,
-): string
-```
-
-## formatScriptDeliverySummary
-
-Collapse a parsed workflow delivery summary to its transcript lines. The
-tick is earned only by a run whose every call succeeded; a completed run
-with a failed, stopped, or unreached call says so in its marker too.
-
-```ts
-function formatScriptDeliverySummary(
-  summary: ScriptDeliverySummary,
 ): string
 ```
 
@@ -685,17 +649,6 @@ interface StreamingTextRow extends TranscriptRowBase {
 
 ```ts
 function summarizeEmbeddedSubagentFollowups(text: string): string
-```
-
-## summarizeSubagentFollowup
-
-Collapse a subagent follow-up XML block into a one-line (or, for results,
-status + response) human-readable summary. Returns `text` unchanged when it
-is not a subagent block. Malformed non-string payloads render as a visible
-placeholder instead of crashing status surfaces.
-
-```ts
-function summarizeSubagentFollowup(text: unknown): string
 ```
 
 ## taskGroupDisplayStatus
@@ -1090,11 +1043,10 @@ interface TranscriptText {
 ```ts
 interface UserRow extends TranscriptRowBase {
   readonly kind: 'user';
-  /** The message exactly as delivered, including any delivery envelope. */
+  /** The message as its follow-up shows it: a child's delivery is its
+   *  summary (`FollowUpContent.displayText`), not its envelope. */
   readonly text: TranscriptText;
-  /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
-   *  truncation of `text`: hosts choose which of the two to paint. */
-  readonly summary: TranscriptText;
+  /** A workflow delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];

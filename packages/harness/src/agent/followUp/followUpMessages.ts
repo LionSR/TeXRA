@@ -3,9 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { Effect, Option, Schema, Stream } from 'effect';
 
 import {
-  deliveryTagOf,
-  SUMMARIZED_TAGS,
-  formatScriptDeliverySummary,
   parseScriptDeliverySummary,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
@@ -46,30 +43,29 @@ interface FollowUpDisplay {
   readonly scriptSummary?: ScriptDeliverySummary;
 }
 
+/** A follow-up as its transcript row shows it: its `displayText`, else its
+ *  text; a child's workflow delivery also carries its summary typed, so
+ *  renderers never re-extract it from the text. */
 export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
-  if (followUp.displayText != null) {
-    return { text: followUp.displayText };
-  }
-  const { from } = followUp;
-  if (from.kind !== 'run' || from.relation !== 'child') {
-    return { text: followUp.text };
-  }
-  // This is where a delivery envelope becomes a transcript row: parse the
-  // workflow summary once here and carry it structured, so renderers never
-  // re-extract it from the rendered text. Only the script envelopes own a
-  // `<script-summary>` element — other tags' bodies are entity-escaped.
-  const tag = deliveryTagOf(followUp.text);
-  const scriptSummary =
-    tag !== undefined && SUMMARIZED_TAGS.has(tag)
-      ? parseScriptDeliverySummary(followUp.text)
-      : undefined;
-  if (scriptSummary) {
-    return {
-      text: formatScriptDeliverySummary(scriptSummary),
-      scriptSummary,
-    };
-  }
-  return { text: summarizeSubagentFollowup(followUp.text) };
+  const text = followUp.displayText ?? followUp.text;
+  const scriptSummary = isChild(followUp.from)
+    ? parseScriptDeliverySummary(followUp.text)
+    : undefined;
+  return scriptSummary ? { text, scriptSummary } : { text };
+}
+
+const isChild = (from: FollowUpSender): boolean =>
+  from.kind === 'run' && from.relation === 'child';
+
+/** What a child's delivery shows instead of its envelope: the envelope's
+ *  summary, decided once as the row is queued. */
+function deliveryDisplayText(
+  text: string,
+  from: FollowUpSender,
+): string | undefined {
+  if (!isChild(from)) return undefined;
+  const summary = summarizeSubagentFollowup(text);
+  return summary === text ? undefined : summary;
 }
 
 /** What the run was asked to do, joined from its instructing input. */
@@ -85,26 +81,30 @@ export function userFollowUpInstruction(
 }
 
 /** The `followup.queued` row one send writes, with the blobs its media
- *  brings: its id is the delivery id when the producer gave one, and a run
- *  sender gets its relation to the recipient. */
+ *  brings: its id is the delivery id when the producer gave one, a run
+ *  sender gets its relation to the recipient, and a child's delivery its
+ *  `displayText`. */
 export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
   relationOf: (sender: RunId) => RunRelation,
 ): WithBlobs<Omit<QueuedFollowUp, 'commit'>> {
-  const { from, deliveryId, media, blobs, control, caller, ...content } = item;
+  const { from: input, deliveryId, media, blobs, control, text } = item;
+  const from: FollowUpSender =
+    input.kind === 'run'
+      ? { kind: 'run', runId: input.runId, relation: relationOf(input.runId) }
+      : input;
+  const displayText = item.displayText ?? deliveryDisplayText(text, from);
   return {
     followUpId: deliveryId ?? randomUUID(),
     ...(hold ? { holdUntil: hold } : {}),
     ...(control ? { control } : {}),
     ...(blobs !== undefined && { blobs }),
     content: {
-      ...content,
+      text,
+      ...(displayText !== undefined && { displayText }),
       ...(media !== undefined && { media: [...media] }),
-      from:
-        from.kind === 'run'
-          ? { kind: 'run', runId: from.runId, relation: relationOf(from.runId) }
-          : from,
+      from,
     },
   };
 }

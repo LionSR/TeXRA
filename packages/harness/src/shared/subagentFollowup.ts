@@ -4,13 +4,12 @@
 // These blocks are queued follow-up messages addressed to the orchestrator
 // *model*, injected into the conversation as user turns.
 //
-// Both hosts render them: the CLI transcript collapses each block to a terse
-// status line (summarizeSubagentFollowup), and the extension ProgressView
-// bubble decodes the entity-escaped body for markdown display. This module is
+// A child's delivery is collapsed to a terse status line
+// (summarizeSubagentFollowup) once, when its parent queues it, and stored as
+// the follow-up's `displayText`, which every surface shows. This module is
 // the single source of truth for the block parsing, entity decoding, and
-// progress-detail logic so the two surfaces never drift. It intentionally has
-// NO host imports (no vscode, no Ink/React) so both @shared (webview) and the
-// CLI can consume it.
+// progress-detail logic. It intentionally has NO host imports (no vscode, no
+// Ink/React) so the browser-safe transcript entry can carry it.
 
 import escapeRegExp from 'escape-string-regexp';
 import { Result, Schema } from 'effect';
@@ -67,9 +66,8 @@ const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
 /**
  * The delivery-envelope tag `text` opens with, or undefined when the text is
  * not one of these blocks. The single recognizer for "is this a child-run
- * delivery envelope", shared by the CLI transcript, the queued follow-ups
- * panel, and the progress-view message bubble. Leading whitespace is allowed
- * because producers hand blocks to the render surfaces untrimmed.
+ * delivery envelope". Leading whitespace is allowed because producers hand
+ * blocks over untrimmed.
  */
 export function deliveryTagOf(text: string): string | undefined {
   return DELIVERY_TAG_RE.exec(text.trim())?.[1];
@@ -155,16 +153,26 @@ function truncatedResultResponsePreview(response: string): string {
   return `${preview}\n… ${hidden}; open the subagent transcript for the full response`;
 }
 
+/** The envelopes that carry a `<script-summary>` element; every other tag's
+ *  body is entity-escaped, so the element cannot appear in it. */
+const SUMMARIZED_TAGS: ReadonlySet<string> = new Set([
+  DELIVERY_TAG.scriptResult,
+  DELIVERY_TAG.scriptError,
+]);
+
 /**
- * Read the presentation-only facts attached to a workflow delivery. The raw
+ * Read the presentation-only facts attached to a workflow delivery, or
+ * undefined for text that is not a script envelope carrying them. The raw
  * response remains intact for the invoking model and diagnostic inspection.
- * This string parse lives at the delivery boundary — the transcript row
- * producer and the CLI summarizer — never at render time: renderers receive
- * the parsed summary carried beside the row text.
+ * This string parse lives at the delivery boundary (the queued row's
+ * `displayText` and the transcript row's typed summary), never at render
+ * time: renderers receive the parsed summary carried beside the row text.
  */
 export function parseScriptDeliverySummary(
   xml: string,
 ): ScriptDeliverySummary | undefined {
+  const tag = deliveryTagOf(xml);
+  if (tag === undefined || !SUMMARIZED_TAGS.has(tag)) return undefined;
   const rawSummary = innerTag(xml, 'script-summary');
   if (!rawSummary) return undefined;
   return Result.getOrUndefined(
@@ -174,18 +182,10 @@ export function parseScriptDeliverySummary(
   );
 }
 
-/** The envelopes that carry a `<script-summary>` element. */
-export const SUMMARIZED_TAGS: ReadonlySet<string> = new Set([
-  DELIVERY_TAG.scriptResult,
-  DELIVERY_TAG.scriptError,
-]);
-
 /** Collapse a parsed workflow delivery summary to its transcript lines. The
  *  tick is earned only by a run whose every call succeeded; a completed run
  *  with a failed, stopped, or unreached call says so in its marker too. */
-export function formatScriptDeliverySummary(
-  summary: ScriptDeliverySummary,
-): string {
+function formatScriptDeliverySummary(summary: ScriptDeliverySummary): string {
   const { tally } = summary;
   const clean = tally.ok === tally.total;
   let marker = '✗';
@@ -296,10 +296,8 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return detail === undefined ? normalized : `⟳ ${agent} · ${detail}`;
   }
 
-  if (SUMMARIZED_TAGS.has(tag)) {
-    const summary = parseScriptDeliverySummary(trimmed);
-    if (summary) return formatScriptDeliverySummary(summary);
-  }
+  const summary = parseScriptDeliverySummary(trimmed);
+  if (summary) return formatScriptDeliverySummary(summary);
 
   // A background shell command (bashDelivery.ts) is named by the model's
   // description, else its command, and judged by its exit code: it carries

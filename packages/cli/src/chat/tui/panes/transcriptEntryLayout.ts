@@ -317,7 +317,7 @@ function entryLines(
  *  that next entry a second time. */
 export function transcriptEntryMarginBottomRows(row: TranscriptRow): number {
   if (row.kind === 'tool') return toolUseMarginBottomRows(row);
-  if (row.kind === 'user' && isInquiryContinuationText(row.summary.full)) {
+  if (row.kind === 'user' && isInquiryContinuationText(row.text.full)) {
     return 0;
   }
   return ROW_GEOMETRY[row.kind].marginBottomRows;
@@ -342,7 +342,7 @@ export function transcriptEntryLayout(
   const base = ROW_GEOMETRY[row.kind];
   const inset = base.inset;
   const isInquiryContinuation =
-    row.kind === 'user' && isInquiryContinuationText(row.summary.full);
+    row.kind === 'user' && isInquiryContinuationText(row.text.full);
   const declaredTopRows = isInquiryContinuation ? 0 : base.marginTopRows;
   const marginTopRows =
     previousEntry === undefined
