@@ -177,27 +177,29 @@ export function makeRunTrace({
     committed: (row) => {
       const target = aggregateTarget(row.aggregateId);
       if (target.kind !== 'run') return Effect.void;
-      // The row id whose text is done with, or every row of the run.
-      let closes: string | 'all' | null = null;
-      if (row.type === 'stream.end') closes = row.id;
+      // The row whose text is done with (null: every row of the run), or
+      // nothing to drop.
+      let closes: { readonly row: string | null } | undefined;
+      if (row.type === 'stream.end') closes = { row: row.id };
       else if (
         row.type === 'tool.end' &&
         row.status !== TOOL_CALL_STATUS.IN_PROGRESS
       )
-        closes = row.logId;
+        closes = { row: row.logId };
       else if (row.type === 'run.removed' || closesRunWindow(row))
-        closes = 'all';
+        closes = { row: null };
       const dropping = closes;
-      if (dropping === null) return Effect.void;
+      if (dropping === undefined) return Effect.void;
       return SubscriptionRef.update(text, (held) => {
         const rows = held.get(target.id);
-        if (rows === undefined || (dropping !== 'all' && !rows.has(dropping)))
+        const { row: dropped } = dropping;
+        if (rows === undefined || (dropped !== null && !rows.has(dropped)))
           return held;
         const next = new Map(held);
-        if (dropping === 'all' || rows.size === 1) next.delete(target.id);
+        if (dropped === null || rows.size === 1) next.delete(target.id);
         else {
           const remaining = new Map(rows);
-          remaining.delete(dropping);
+          remaining.delete(dropped);
           next.set(target.id, remaining);
         }
         return next;

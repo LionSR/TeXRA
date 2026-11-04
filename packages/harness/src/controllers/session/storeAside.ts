@@ -26,17 +26,17 @@ import type * as SqlClient from 'effect/sql/SqlClient';
 export type Sql = SqlClient.SqlClient;
 
 /** A store's file and the two SQLite keeps beside it in WAL mode. */
-export const STORE_FILE_SUFFIXES = ['', '-wal', '-shm'] as const;
+export const STORE_FILE_SUFFIXES = Object.freeze(['', '-wal', '-shm'] as const);
 
 /** The names an open leaves beside a store: a pre-1.0 store moved aside
  *  whole, a damaged file, and the staged copy `underCopy` makes before it
  *  takes a name. `ASIDE` below matches each, and what goes with it. */
-export const asideName = {
+export const asideName = Object.freeze({
   pre1: (filename: string): string => `${filename}.pre1`,
   corrupt: (filename: string, at: number): string =>
     `${filename}.corrupt-${at}`,
   staged: (base: string): string => `${base}.${randomUUID()}.partial`,
-};
+});
 
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
 
@@ -213,10 +213,10 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   return moved;
 });
 
-/** An `asideName` suffix, the `.<n>` of a taken name, a moved WAL or
- *  shared-memory file, or a staged copy a kill left behind. */
-const ASIDE =
-  /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm|\.[0-9a-f-]{36}\.partial)?$/;
+/** An `asideName` suffix, the `.<n>` of a taken name, and a moved WAL or
+ *  shared-memory file. Never a staged copy: its name cannot tell one a kill
+ *  left behind from one an open holds between its copy and its rename. */
+const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
 
 /** The aside copies beside the store at `filename`, with their sizes. */
 export const asideCopies = Effect.fnUntraced(function* (filename: string) {
