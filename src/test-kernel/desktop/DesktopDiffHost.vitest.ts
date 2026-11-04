@@ -58,16 +58,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             filePath: path.join(tempDir, name),
           }));
           yield* Effect.promise(() =>
-            writeFile(original!.filePath, 'a\n', 'utf8'),
+            writeFile(original.filePath, 'a\n', 'utf8'),
           );
           yield* Effect.promise(() =>
-            writeFile(proposed!.filePath, 'b\n', 'utf8'),
+            writeFile(proposed.filePath, 'b\n', 'utf8'),
           );
 
           // The open failure reaches the caller, carrying the host's own
           // rejection, and not a cleanup artifact.
           const error = yield* Effect.flip(
-            host.openDiff(original!, proposed!, 'Compare'),
+            host.openDiff(original, proposed, 'Compare'),
           );
           expect(error).toMatchObject({
             _tag: 'ExternalOpenFailed',

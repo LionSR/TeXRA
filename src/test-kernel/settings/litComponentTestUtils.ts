@@ -62,14 +62,8 @@ function installAttachInternalsFallback(window: JSDOM['window']): void {
   // `this.internals.setValidity(...)` during willUpdate, which crashes the test.
   // Override attachInternals to return a fully-stubbed shape that satisfies
   // every method WA touches.
-  const HTMLElementCtor = window.HTMLElement as typeof HTMLElement | undefined;
-  if (!HTMLElementCtor) {
-    return;
-  }
-  const proto = HTMLElementCtor.prototype as unknown as HTMLElement & {
-    attachInternals?: () => ElementInternals;
-  };
-  proto.attachInternals = function attachInternals() {
+  window.HTMLElement.prototype.attachInternals = function attachInternals() {
+    // cast: a stub of only the members Web Awesome calls.
     return {
       setValidity: () => {},
       setFormValue: () => {},
@@ -139,14 +133,10 @@ export function useLitComponentTestDom(
       // wa-dialog's animateWithClass and other Web Awesome components use raf
       // for "next paint" callbacks — a 0ms timeout is functionally equivalent
       // for unit-test timing.
-      requestAnimationFrame: ((cb: FrameRequestCallback) =>
-        setTimeout(() => cb(performance.now()), 0) as unknown as number) as (
-        cb: FrameRequestCallback,
-      ) => number,
-      cancelAnimationFrame: ((handle: number) =>
-        clearTimeout(handle as unknown as ReturnType<typeof setTimeout>)) as (
-        handle: number,
-      ) => void,
+      // Node's timer converts to its numeric id, which `clearTimeout` takes.
+      requestAnimationFrame: (cb: FrameRequestCallback): number =>
+        Number(setTimeout(() => cb(performance.now()), 0)),
+      cancelAnimationFrame: (handle: number) => clearTimeout(handle),
       // jsdom lacks ResizeObserver; Web Awesome's wa-textarea constructs one.
       ResizeObserver: ResizeObserverStub,
       // jsdom implements MutationObserver on its own `window`, but the plain
@@ -159,7 +149,7 @@ export function useLitComponentTestDom(
     for (const key of domGlobalKeys) {
       previousGlobals.set(key, {
         hadValue: Object.hasOwn(globalThis, key),
-        value: globalThis[key as keyof typeof globalThis],
+        value: Reflect.get(globalThis, key),
       });
       Object.defineProperty(globalThis, key, {
         configurable: true,
@@ -188,7 +178,7 @@ export function useLitComponentTestDom(
           value: previous.value,
         });
       } else {
-        delete (globalThis as Record<string, unknown>)[key];
+        Reflect.deleteProperty(globalThis, key);
       }
     }
   });
@@ -202,9 +192,11 @@ export function useLitComponentTestDom(
 export async function mountComponent<
   T extends { updateComplete: Promise<unknown> },
 >(tag: string, props: Partial<T> = {}): Promise<T> {
-  const element = document.createElement(tag) as unknown as T;
+  const node = document.createElement(tag);
+  // cast: the caller names the element class registered for `tag`.
+  const element = node as unknown as T;
   Object.assign(element, props);
-  document.body.append(element as unknown as HTMLElement);
+  document.body.append(node);
   await element.updateComplete;
   return element;
 }

@@ -26,6 +26,7 @@ describe('acceptEditedFileReplace', () => {
         // Every path reads back the edited content and nothing exists until
         // written; removals are recorded for the stale-diff cleanup.
         const removed: string[] = [];
+        // cast: the accept path calls only these operations of the file system.
         const fs = {
           readFileString: () => Effect.succeed('edited content'),
           writeFileString: () => Effect.void,
