@@ -252,7 +252,7 @@ pattern, so the "options" are one choice spelled as several.
 combinations a producer builds; the `nativeSubagentStrategy` and
 `childRunLoop` interfaces name concrete strategies.
 
-_Landed 2026-11-04 (all but `ChildLaunch`): the members that travel together
+_Landed 2026-11-04: the members that travel together
 are one bag each, so a strategy with only some of them no longer type-checks:
 `NativeChildStrategy.script` (`deliveryId` + `stopNotice`, the script run's)
 with `isTurnInterrupted` required, and `ProcessChildStrategy` a union of the
@@ -260,6 +260,12 @@ one-turn command (`interruptedTurn`) and the agent CLI's `cli` (`runTurn`,
 `pauseNotice`, `onTurnSuccess`, `releaseSessionOwnership`); named strategy
 interfaces were tried and refused by `childRunLoop.ts`'s size cap and the
 layer-names baseline, which pins `ProcessChildStrategy` to that module.
+`ChildLaunch` followed in its own PR: a chat (`task: null`, `schema`,
+`mediaFiles`) or a task (`task`, `files`), normalized once in `agentCall`;
+`AgentTool.ts` made room by dropping the header prose that restated the
+tool's description and by reading the two resolvers' typed failures with
+`Effect.result` (an `Effect.exit` had reported an interruption as an error
+result).
 `inBand` and `deliveryMode: 'persistOnly'` are gone, the loop reads its own
 `awaited`; `CompactionInput.force` is gone (the reason is `forced`'s
 argument; `compactIfNeeded` folded into it); `RegisterRunOptions.descriptionBy`
