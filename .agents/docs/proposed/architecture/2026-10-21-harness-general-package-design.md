@@ -169,7 +169,8 @@ Leaving the harness: presets, teams, icons and quota routes
 move to `packages/texra/src/host/`, and the canned validation model moves to
 `packages/cli`. Harness-internal aliases are declared only for the harness build
 and the test kernel, so a deep import from the app or a host fails to compile.
-`@common/webview` leaves the harness alias family.
+`@common/webview` leaves the harness alias family (done: the alias is gone and
+the two extension providers import `BundledViewContentProvider` relatively).
 
 ### Ports
 
@@ -296,7 +297,7 @@ format batch (decided 2026-10-30): a `remind` tool adds it as
 | #   | Lane                                                                                                                                                                                                                                                                         | Effort | Files moved |
 | --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------- |
 | 1   | Doors: the root holds what public signatures need (59 names), and `./host`, the `./schemas` manifest and the `./plugins` closure are done; left: alias scoping. `effect/` keeps its name and `Run` gains no forwarding methods (1.0 PRD)                                     | L      | 8           |
-| 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); left: the `@common/webview` alias removed                              | M      | 11          |
+| 2   | Foundation order, done another way: `logger/` and `types/` stay layer 1 of the harness AGENTS.md layer order, there is no `eventBus/`, and the run-storage leaves went to `common/storage/` (#14550); the `@common/webview` alias removed (done, #14682)                     | M      | 11          |
 | 2b  | Session merge, with the history lint zone: not for 1.0 (the release PRD's layout comparison: a `session/` directory removes no layer edge)                                                                                                                                   | M      | ~55         |
 | 3   | Vocabulary as data: done (#14364, #14369), except llm branding as bind facts (the xAI referrer, the ChatGPT agent name and the Responses tool namespace)                                                                                                                     | M      | 9           |
 | 4   | Done (#14211): `satisfies never` after `transcriptUpdate.ts`'s `record` switch; the writer items closed on re-check (below)                                                                                                                                                  | —      | 0           |

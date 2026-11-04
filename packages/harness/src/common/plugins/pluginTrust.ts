@@ -22,6 +22,7 @@ import type { InstalledPlugin, PluginTrust } from '@shared/schemas';
 
 // Local imports - plugin record, reading and digest
 import type { SettingsStores } from '@shared/config/settings';
+import { CommandDirs } from '@utils/system/platformPaths';
 import {
   findInstalled,
   readInstalled,
@@ -80,8 +81,12 @@ const codeRefusal = (name: string, plugin: ResolvedPlugin) =>
   `Plugin ${name} ships ${plugin.code.join(', ')}, which this build does not run yet, so it cannot be enabled.`;
 
 /** A hook's event, matcher and command, as the prompt and a listing show it. */
-export const describeHook = (hook: ConfiguredHook) =>
-  `${hook.event}${hook.matcher ? ` [${hook.matcher}]` : ''}: runs \`${[hook.command, ...(hook.args ?? [])].join(' ')}\` (timeout ${hook.timeoutSeconds}s)${hook.args === undefined && hookShell() === null ? `; ${NO_SHELL}` : ''}`;
+export const describeHook = (hook: ConfiguredHook): Effect.Effect<string> =>
+  Effect.map(
+    CommandDirs,
+    (appDirs) =>
+      `${hook.event}${hook.matcher ? ` [${hook.matcher}]` : ''}: runs \`${[hook.command, ...(hook.args ?? [])].join(' ')}\` (timeout ${hook.timeoutSeconds}s)${hook.args === undefined && hookShell(appDirs()) === null ? `; ${NO_SHELL}` : ''}`,
+  );
 
 const describeServer = (server: McpServerConfig) =>
   `${server.name.replace(/^plugin_[^_]+_/, '')}: runs \`${[server.command, ...server.args].join(' ')}\`${
@@ -132,7 +137,7 @@ const reviewLines = Effect.fn('pluginTrust.reviewLines')(function* (
       'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call, rewrite its input, answer the approval the call would ask for or ask a person instead, add text the model reads, and keep a run going past the end of a turn once; it cannot approve what the approval policy denies):',
     );
     for (const hook of hooks) {
-      lines.push(`  ${describeHook(hook)}`);
+      lines.push(`  ${yield* describeHook(hook)}`);
       const pin = yield* pinHook(record.path, hook);
       if (pin.kind === 'dynamic') {
         lines.push(

@@ -12,7 +12,9 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
+import { render } from 'lit';
 
+import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { resolveXtermTheme } from '@ui/wa/xtermTheme';
 
 /** xterm takes a numeric font size: the desktop chrome's computed size, so
@@ -43,8 +45,11 @@ interface TerminalPane {
   ): void;
   /** Feeds pty output into the matching terminal. */
   write(sessionId: string, data: string): void;
-  /** Reports process exit in-band so the pane doesn't look merely idle. */
+  /** Reports process exit in-band so the pane doesn't look merely idle,
+   *  and offers a restart that starts a new shell in the same tab. */
   reportExit(sessionId: string, exitCode: number): void;
+  /** Reports a shell that failed to start, and offers Restart as an exit
+   *  does. */
   reportError(sessionId: string, message: string): void;
   /** Re-fits the active terminal; call after the pane becomes visible. */
   layout(): void;
@@ -59,6 +64,8 @@ interface TerminalSession {
   readonly terminal: Terminal;
   readonly fitAddon: FitAddon;
   readonly host: HTMLElement;
+  /** Holds the Restart button while the shell has exited; empty otherwise. */
+  readonly exitActions: HTMLElement;
   started: boolean;
   exited: boolean;
 }
@@ -113,10 +120,15 @@ export function createTerminalPane(
       callbacks.resize(sessionId, cols, rows),
     );
 
+    const exitActions = document.createElement('div');
+    exitActions.className = 'desktop-terminal-exit-actions';
+    host.append(exitActions);
+
     const session: TerminalSession = {
       terminal,
       fitAddon,
       host,
+      exitActions,
       started: false,
       exited: false,
     };
@@ -131,6 +143,31 @@ export function createTerminalPane(
       // fit() throws when the container has no layout box yet (hidden tab).
       // Harmless: layout() runs again once the pane is visible.
     }
+  }
+
+  /** Mark a session's shell gone (it exited, or never started) and offer
+   *  to start a new one in the same tab. */
+  function offerRestart(sessionId: string, session: TerminalSession): void {
+    session.exited = true;
+    render(
+      renderLabeledActionButton({
+        icon: 'rotate-right',
+        text: 'Restart',
+        kind: 'secondary',
+        onClick: () => restart(sessionId, session),
+      }),
+      session.exitActions,
+    );
+  }
+
+  /** Start a new shell for an exited session, below its old output. */
+  function restart(sessionId: string, session: TerminalSession): void {
+    session.exited = false;
+    render(null, session.exitActions);
+    fit(session);
+    const { cols, rows } = session.terminal;
+    callbacks.start(sessionId, Math.max(cols, 20), Math.max(rows, 5));
+    session.terminal.focus();
   }
 
   function disposeSession(sessionId: string): void {
@@ -178,20 +215,22 @@ export function createTerminalPane(
     reportExit(sessionId, exitCode) {
       const session = sessions.get(sessionId);
       if (!session || session.exited) return;
-      session.exited = true;
       // Written into the buffer rather than shown as a toast: it belongs with
       // the output it terminates.
       session.terminal.write(
         `\r\n\u001b[90m[process exited with code ${exitCode}]\u001b[0m\r\n`,
       );
+      offerRestart(sessionId, session);
     },
 
     reportError(sessionId, message) {
       // A start that fails after the tab closed reports into nothing: the
       // tab is gone, and a terminal created here would never be disposed.
-      sessions
-        .get(sessionId)
-        ?.terminal.write(`\r\n\u001b[31m${message}\u001b[0m\r\n`);
+      const session = sessions.get(sessionId);
+      if (!session) return;
+      session.terminal.write(`\r\n\u001b[31m${message}\u001b[0m\r\n`);
+      // The error is a start that failed, so no shell runs: offer another.
+      offerRestart(sessionId, session);
     },
 
     layout() {

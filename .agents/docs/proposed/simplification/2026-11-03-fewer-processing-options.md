@@ -142,7 +142,9 @@ Smaller instances of the same shape:
   `supportsNativePdf: false` (`packages/llm/src/models/modelRoute.ts:304`) and
   read back as `supportsDocumentInput` (`responsesConfiguration.ts:101`).
 - `isUnservedModel` (`modelRoute.ts:118-122`) and `decideModelRoute`'s
-  `'unserved'` (`:216`) disagree on retired models.
+  `'unserved'` (`:215`) disagree on retired models. _Done 2026-11-04:
+  `decideModelRoute` gates on `isUnservedModel`, so a retired model is
+  refused at bind._
 
 **Proposal.** Delete the four constant or derived columns and their dead
 branches; replace the two id-prefix tests with llm-zoo capability flags
@@ -369,7 +371,7 @@ above.
   the switch.
 - `followUp.receipt` (`packages/harness/src/shared/session/runtimeRequest.ts:122`)
   has producers only in `packages/harness/example/`; keep it only as public SDK.
-- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:153-191`);
+- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:155-193`);
   `config agents` has eight flags for three choices
   (`packages/cli/src/commands/config.ts:111-131,201-232`); `--input`,
   `--context`, `--instruction-file` and `--model` are declared in two to four

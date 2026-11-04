@@ -144,22 +144,21 @@ ratchet shrinks by the deleted classes.
 
 ## 4. Errors: one classifier per question
 
-| Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `isCredentialRetryFailure` (`packages/harness/src/shared/schemas/errors.ts:131-139`, re-reading the status after llm set the kind), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`) |
-| Is this retryable        | `ModelError.retryable`, `notRetryable` (`verdict.ts:269`), `offersRetry` (`packages/harness/src/common/errors/sdkError/providerErrorFormat.ts:150`), `userRetryable`; `unsent` forces "no offer" twice (`failureInfo.ts:37`, `invocation.ts:288`)                                                                                                                                                                                                                                                                        |
-| Transient HTTP status    | `isRetryableStatus` (`packages/llm/src/errors.ts:142`), `isTransientHttpStatus` (`packages/harness/src/utils/core/httpStatus.ts:14`, the 409 split documented), an inline `status >= 500` (`packages/llm/src/oauth/chatgpt/chatgptProvider.ts:287`), a hand-rolled loop with its own error pair (`packages/texra/src/latex/arxivProcessor.ts:206-245`) beside `retryTransientFetch` (`packages/harness/src/tools/timeouts.ts:53`)                                                                                        |
-| Is this an abort         | none in the harness since #14641 deleted `isUserAbort` (a stop is fiber interruption); the boundary signatures, inline `name === 'AbortError'` at `packages/llm/src/api/googleInteractions.ts:232` and `arxivProcessor.ts:419`                                                                                                                                                                                                                                                                                           |
-| Is nothing there         | `absentReason`, plus twelve inline `reason._tag === 'NotFound'` (seven in texra, four in the CLI, one in the desktop); EACCES-as-absent decided at `packages/harness/src/platform/defaults/workspaceStorage.ts:37` and `packages/harness/src/utils/system/nodeWorkspace.ts:28`                                                                                                                                                                                                                                           |
-| Walk a cause chain       | `causeChain` in `packages/harness/src/utils/errors/errorMessage.ts:7` and `verdict.ts:211`; `toErrorMessage` in the harness and `packages/llm/src/oauth/support.ts:4`                                                                                                                                                                                                                                                                                                                                                    |
-| Unwrap a `PlatformError` | fifteen hand-written `reason.cause` unwraps (`jsonStore.ts:25`, `nodeProcesses.ts:58`, `execUtils.ts:277`, `arxivProcessor.ts:92,573`, `clone.ts:83,104`, `doctor.ts:196`, …)                                                                                                                                                                                                                                                                                                                                            |
-| Word a used-up plan      | `usedUpPlanMessage` and `quotaFallbackMessage` (`providerErrorFormat.ts:89,116`) and again `modelFailureText` and `quotaFallbackNoticeText` (`packages/texra/src/ui/copy/modelAccess.ts:71,98`); the harness wording is `ProviderError.message` (`providerErrorOf`), stored on the run's error rows and read wherever no app copy words the classification (an embedder, a child's result to its parent)                                                                                                                 |
+| Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `isCredentialRetryFailure` (`packages/harness/src/shared/schemas/errors.ts:131-139`, re-reading the status after llm set the kind), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`)                                                                                                                                                                                                                    |
+| Is this retryable        | `ModelError.retryable`, `notRetryable` (`verdict.ts:269`), `offersRetry` (`packages/harness/src/common/errors/sdkError/providerErrorFormat.ts:150`), `userRetryable`; `unsent` forces "no offer" twice (`failureInfo.ts:37`, `invocation.ts:288`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Transient HTTP status    | `isRetryableStatus` (`packages/llm/src/errors.ts:142`), `isTransientHttpStatus` (`packages/harness/src/utils/core/httpStatus.ts:14`, the 409 split documented), an inline `status >= 500` (`packages/llm/src/oauth/chatgpt/chatgptProvider.ts:287`), a hand-rolled loop with its own error pair (`packages/texra/src/latex/arxivProcessor.ts:206-245`) beside `retryTransientFetch` (`packages/harness/src/tools/timeouts.ts:53`)                                                                                                                                                                                                                                                                                                           |
+| Is this an abort         | none in the harness since #14641 deleted `isUserAbort` (a stop is fiber interruption); the boundary signatures, inline `name === 'AbortError'` at `packages/llm/src/api/googleInteractions.ts:232` and `arxivProcessor.ts:419`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Is nothing there         | `absentReason` (eleven of the twelve inline `NotFound` checks now call it: done; `packages/cli/src/commands/clone.ts:82` keeps NotFound-only on purpose, since its destination under a regular file cannot be created and stays unreadable); still inline: NotFound-only `Effect.catchReason` at `packages/cli/src/runtime/initConfig.ts:50,103` and `packages/cli/src/runtime/workflowOutput.ts:112`, and `Effect.catchReasons` at `packages/texra/src/housekeeping/utils.ts:119-122`, which counts every `BadResource` as absent (`ELOOP` included), broader than `absentReason`; EACCES-as-absent decided at `packages/harness/src/platform/defaults/workspaceStorage.ts:37` and `packages/harness/src/utils/system/nodeWorkspace.ts:28` |
+| Walk a cause chain       | `causeChain` in `packages/harness/src/utils/errors/errorMessage.ts:7` and `verdict.ts:211`; `toErrorMessage` in the harness and `packages/llm/src/oauth/support.ts:4`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Unwrap a `PlatformError` | fifteen hand-written `reason.cause` unwraps (`jsonStore.ts:25`, `nodeProcesses.ts:58`, `execUtils.ts:277`, `arxivProcessor.ts:92,573`, `clone.ts:85,106`, `doctor.ts:196`, …)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Word a used-up plan      | `usedUpPlanMessage` and `quotaFallbackMessage` (`providerErrorFormat.ts:89,116`) and again `modelFailureText` and `quotaFallbackNoticeText` (`packages/texra/src/ui/copy/modelAccess.ts:71,98`); the harness wording is `ProviderError.message` (`providerErrorOf`), stored on the run's error rows and read wherever no app copy words the classification (an embedder, a child's result to its parent)                                                                                                                                                                                                                                                                                                                                    |
 
 **Proposal.** One decider per row: `ModelError.kind` is the auth fact and
 `isCredentialRetryFailure` reads it; `offered` is computed once in
 `failureInfo`; the arXiv loop and the ChatGPT revoke use the existing
-transient helpers; the twelve inline `NotFound` checks call `absentReason`
-(the rule in review-checklist §15 already forbids them); `toErrorMessage`
+transient helpers; `toErrorMessage`
 unwraps `PlatformError` once and the fifteen sites delete their copy; the harness
 imports llm's `toErrorMessage` and `causeChain` once llm has a browser-safe
 entry (the harness depends on `@texra-ai/llm`, so llm cannot import the
@@ -205,9 +204,8 @@ UI's, and the harness copies go.
   `{ kind: classifyAgentError(e), message: getSdkErrorMessage(e) }` at
   `runLaunchGuard.ts:80-85` and `childRunLoop.ts:724-730`, and `failedEnd`
   (`AgentRunLifecycle.ts:207-231`) through `normalizeProviderError`.
-- **`halted` means two things**: a `run.position` row that changes no phase,
-  and the loop phase `turn.end` maps to (`runStatus.ts:98,105`); readers of
-  `phase === 'halted'` and `at === 'halted'` see different facts.
+- **`halted` means two things** (done 2026-11-04: the loop phase `turn.end`
+  maps to is now `turn.ended`; `halted` is only the `run.position` row).
 - **The stopped vocabulary**: `RUN_OUTCOME.CANCELLED`, `RunGroup 'interrupted'`,
   `RunNotice` (six values), `ScriptCallStatus` (`interrupted`, `cancelled`,
   `skipped`), `ScriptDeliverySummary.outcome 'stopped'` (one producer,
@@ -230,23 +228,19 @@ decider; `endRun`, `endChildLoop`, `runLaunchGuard` and the CLI call it;
 `released` callers say which. Every stop goes through `RunRegistry.interrupt`
 so a stop record always exists; `stopEnd` has one caller; `accepted` folds
 into the result. `detachActiveChildren` leaves the wire; `shutdown` implies
-cascade inside the registry. One `runEndError(cause)`. The loop phase is
-renamed so `halted` has one meaning. The script delivery summary says
-`cancelled`. Ownership and build are decided once, in `runRejection`, and the
-earlier checks go. `trigger` is read by the run-state fold (landed, #14639).
+cascade inside the registry. One `runEndError(cause)`. The script delivery
+summary says `cancelled`. Ownership and build are decided once, in
+`runRejection`, and the earlier checks go. `trigger` is read by the run-state
+fold (landed, #14639).
 
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
 
 ## 6. The model-call failure path
 
-- **Dead outcomes.** `FailedNextSchema` (`packages/harness/src/shared/schemas/runHistoryEvent.ts:67-76`)
-  admits `cancel`; `failedNext` (`packages/harness/src/shared/session/inFlight.ts:269-286`)
-  and `afterFailure` (`invocation.ts:332`) never produce it, and its two
-  consumers (`inFlight.ts:236-237`, `invocation.ts:376`) are dead. A person's
-  cancel already travels `ask` → `request.decided`.
-  `ToolResultPayload.disposition: 'cancelled'` (`runHistoryEvent.ts:404-410`)
-  has no producer; `dispositionOf` returns `executed` or `failed`.
+- **Dead outcomes.** Done: `FailedNext` `cancel` and the `tool.result`
+  disposition `cancelled` are deleted with their dead readers (a person's
+  cancel travels `ask` → `request.decided`).
 - **A truncated turn was a silent success (landed).** #14638 stamps
   `response.finalized` with `cut` (`length` or `content-filter`,
   `packages/harness/src/agent/runtime/loop/rows.ts:38-54`) and the hosts end
@@ -281,10 +275,9 @@ behaviour, which is the documented one.
   model-visible error with no log. `diagnostics.code` values (`hook_denied`,
   `tool_unavailable`) and `diagnostics.name` have no reader; "skipped" is
   signalled both as a disposition and as `name: 'Skipped'`, and
-  `scriptRun.ts:55` checks both.
+  `scriptRun.ts:53` checks both.
 
-**Proposal.** Delete `cancel` from `FailedNextSchema` and `cancelled` from the
-disposition. The loop reads `finishReason` (landed: #14638, #14639). One `terminalStatusFailure(status)` in `assembleTurn` and one
+**Proposal.** The loop reads `finishReason` (landed: #14638, #14639). One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
 two. The gate owns every wait: `pauseBefore`'s sleep goes and `retryAfterMs`
 is honoured. One thrown-to-result converter; a non-`ToolError` defect is

@@ -29,29 +29,15 @@ recovering. Not done in the sweep: each changes which failures surface, and
 the hook runner's verdicts are pinned by
 `src/test-kernel/common/HookProtocol.vitest.ts`.
 
-## 2. Hooks and MCP servers resolve a program on different PATHs
+## 2. Hooks and MCP servers resolve a program on different PATHs (done)
 
-`pluginDigest.ts` (`externalFiles`) resolves an MCP server command with
-`whichOnExtendedPath`. `pluginHooks.ts` (`pinHook`) resolves a hook program
-with `which.sync(program, { path: process.env.PATH })`. If a binary is only
-on the extended PATH, it pins for a server, while a hook is left unpinned (trusted by its exact
-text) and then is not found when it runs, since `runHook` spawns on the
-unextended PATH. A binary on the process PATH resolves the same for both:
-the extended PATH appends the `CommandDirs` after it.
-
-The server side is settled: its spawn gets the extended PATH its pin
-resolves over, so a server runs the binary it pinned without moving any
-persisted trust digest. The hooks are consistent with themselves: `runHook`
-spawns with `extendEnv: false` and `PATH: process.env.PATH ?? '/usr/bin:/bin'`,
-and `pinHook` resolves over `process.env.PATH ?? ''`, so with PATH unset the
-hook is left dynamic rather than pinned against that fallback. The extension
-host writes the extended PATH into `process.env.PATH` once it activates, so
-there hooks see it too. The desktop app on macOS repairs `process.env.PATH`
-at launch (`repairLaunchPath`: the login shell's PATH plus fixed TeX and
-Homebrew directories) but adds no `CommandDirs`; the CLI does neither.
-
-Still open: one resolver for hooks and servers. Not done because it changes
-which hooks load, and with that the hook trust digests.
+Done: `pinHook`, `hookShell` and `runHook` (`pluginHooks.ts`) resolve and
+spawn on the PATH extended with `CommandDirs`, as `externalFiles` and an MCP
+server's spawn do. A hook whose program is found only on the extended PATH
+now pins, so its plugin's digest changes and enabling asks for trust again.
+With PATH unset, `runHook` spawns on `/usr/bin:/bin` extended while the
+lookup would search the `CommandDirs` alone, so `pinHook` leaves the hook
+dynamic rather than pin a binary the spawn may not run.
 
 ## Rejected
 
