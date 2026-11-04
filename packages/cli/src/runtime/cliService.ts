@@ -14,6 +14,7 @@ import {
   Exit,
   FileSystem,
   Path,
+  Predicate,
   Scope,
 } from 'effect';
 
@@ -252,7 +253,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           (root) => closeIfIdle(root, Duration.toMillis(idleFor)),
           { concurrency: 'unbounded' },
         ),
-        (closed) => closed.filter((session) => session !== undefined),
+        (closed) => closed.filter(Predicate.isNotUndefined),
       ),
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
@@ -322,17 +323,15 @@ function withCliService<A>(
  * asked (wedged, or its record unreadable) fails: the caller says why
  * instead of naming the holder as some other process.
  */
-export function heldByService(
+export const heldByService = Effect.fn('heldByService')(function* (
   owner: OwnerId,
-): Effect.Effect<boolean, ServiceUnavailable, GlobalValues> {
-  return Effect.gen(function* () {
-    if (yield* envFlag(NO_SERVICE)) return false;
-    const info = yield* probeCliService;
-    if (info === null) return false;
-    // It answered on this machine's socket; a recorded hostname may be stale.
-    return ownerIdentity(owner).pid === info.pid;
-  });
-}
+): Effect.fn.Return<boolean, ServiceUnavailable, GlobalValues> {
+  if (yield* envFlag(NO_SERVICE)) return false;
+  const info = yield* probeCliService;
+  if (info === null) return false;
+  // It answered on this machine's socket; a recorded hostname may be stale.
+  return ownerIdentity(owner).pid === info.pid;
+});
 
 /** {@link reachCliService} for a client command, whose process prints only
  *  its own result. */

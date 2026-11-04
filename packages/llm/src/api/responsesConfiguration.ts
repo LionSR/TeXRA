@@ -17,9 +17,6 @@ import type { ConfigurationOf, Facts } from './configuration.js';
 
 type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
 
-/** The one namespace a ChatGPT plan's route groups every function tool in. */
-const CHATGPT_TOOL_NAMESPACE = 'texra';
-
 /** The request fields a vendor route sets for itself. */
 interface VendorFields extends Pick<
   ResponsesConfiguration,
@@ -43,21 +40,16 @@ function vendorRoute(
     ...base,
     protocol: 'openai-responses',
     background: 'unsupported',
-    supportsStorage: fields.stores,
     supportsDocumentInput: false,
-    webSocketStreamParameter: 'implicit',
     allowedReasoningEfforts: fields.allowedReasoningEfforts,
-    instructions: { kind: 'optional' },
     continuationInheritsInstructions: false,
     supportsForcedToolChoice: fields.supportsForcedToolChoice,
-    toolNamespace: null,
     openaiEndpoint: false,
     requestDialect: 'compatible',
     defaults: {
       maxOutputTokens: controls.maxOutputTokens,
       temperature: fields.temperature,
       store: fields.stores,
-      parallelToolCalls: controls.parallelToolCalls,
       reasoning: fields.reasoning,
       serviceTier: null,
     },
@@ -78,14 +70,10 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   const { credential, options } = spec;
   const choice = options.reasoning;
   const effort = wireEffort(config, choice);
-  // GPT-5 asks for a reasoning summary only when the user turned it on;
-  // every other reasoning Responses model asks. `null` omits the field.
-  const summary: 'auto' | null =
-    !config.id.startsWith('gpt-5') || options.reasoningSummary ? 'auto' : null;
   const reasoning =
     config.reasoning === undefined
       ? null
-      : { effort, mode: choice.mode, summary };
+      : { effort, mode: choice.mode, summary: 'auto' as const };
   if (credential.kind === 'chatgpt') {
     // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
     // rules. A request is stateless and streamed (`store: false`, no
@@ -97,22 +85,17 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       requestedModel: codexBackendModelId(config),
       protocol: 'openai-responses',
       background: 'unsupported',
-      supportsStorage: false,
       supportsDocumentInput: config.capabilities.supportsNativePdf,
-      webSocketStreamParameter: 'implicit',
       allowedReasoningEfforts: facts.acceptedEfforts,
-      instructions: { kind: 'optional' },
       continuationInheritsInstructions: false,
       // OpenAI documents no `tool_choice` for a namespaced function.
       supportsForcedToolChoice: false,
-      toolNamespace: CHATGPT_TOOL_NAMESPACE,
       openaiEndpoint: true,
-      requestDialect: 'openai',
+      requestDialect: 'chatgpt',
       defaults: {
         maxOutputTokens: null,
         temperature: null,
         store: false,
-        parallelToolCalls: controls.parallelToolCalls,
         reasoning,
         serviceTier: null,
       },
@@ -121,9 +104,8 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   // xAI stores and chains too, but has no background mode or summary
   // control; a chained request reuses the stored instructions.
   const xai = config.provider === ModelProvider.XAI;
-  // Background responses serve the GPT family only, as the
-  // `useBackgroundResponses` setting describes; another model on this case
-  // (an o-series deep-research model, Meta's) streams in the foreground.
+  // Background responses serve the GPT family only; another model on this
+  // case (an o-series deep-research model, Meta's) streams in the foreground.
   const background =
     !xai && config.id.toLowerCase().startsWith('gpt')
       ? 'supported'
@@ -132,14 +114,10 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
     ...base,
     protocol: 'openai-responses',
     background,
-    supportsStorage: true,
     supportsDocumentInput: config.capabilities.supportsNativePdf,
-    webSocketStreamParameter: 'implicit',
     allowedReasoningEfforts: facts.acceptedEfforts,
-    instructions: { kind: 'optional' },
     continuationInheritsInstructions: xai,
     supportsForcedToolChoice: true,
-    toolNamespace: null,
     openaiEndpoint: spec.endpoint === OPENAI_DEFAULT_ENDPOINT,
     requestDialect: 'openai',
     defaults: {
@@ -148,7 +126,6 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
       // Stored server-side, which `previous_response_id` chaining and
       // background submission read; the Codex case above is stateless.
       store: true,
-      parallelToolCalls: controls.parallelToolCalls,
       reasoning:
         reasoning === null || !xai
           ? reasoning

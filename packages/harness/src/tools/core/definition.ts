@@ -65,6 +65,13 @@ export type DefineToolOptions<T, R = never> = Required<
  * Define a tool: validate the model's input against `schema`, run `execute`,
  * and turn ordinary failures into `{ status: 'error' }` feedback.
  * Interruption, run history refusals and database write failures propagate.
+ *
+ * A tool whose `execute` succeeds with a `ToolResult` carrying a `value`
+ * hands a script that value in place of `{ output, summary }`. Declare its
+ * TypeScript type in `scriptReturns`, which is what a script is told the
+ * call resolves to. Nothing derives one from the other: a tool that returns
+ * a `value` without `scriptReturns` is declared to scripts as resolving to
+ * `ToolOutput`, so change the two together.
  */
 export function defineTool<T, R = never, const Name extends string = string>(
   def: DefineToolOptions<T, R> & { readonly name: Name },

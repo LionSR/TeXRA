@@ -171,77 +171,79 @@ export const sessionInputsLayer = Layer.effect(
               // of the same state after a burst of text chunks.
               Stream.buffer({ capacity: 1, strategy: 'dropping' }),
               Stream.mapAccumEffect(
-                () => ({
-                  cursor: anchor,
-                  // The wake level the last durable read saw; none yet, so
-                  // the first drain reads.
-                  level: -1,
-                  text: new Map() as InflightText,
-                  local: initialLocal,
-                  // Every change the record holds: an aggregate that started
-                  // or moved its claim during the cold read is checked again
-                  // once its rows are in the view, not only by the replay.
-                  change: 0,
+                () => {
+                  const text: InflightText = new Map();
+                  return {
+                    cursor: anchor,
+                    // The wake level the last durable read saw; none yet, so
+                    // the first drain reads.
+                    level: -1,
+                    text,
+                    local: initialLocal,
+                    // Every change the record holds: an aggregate that started
+                    // or moved its claim during the cold read is checked again
+                    // once its rows are in the view, not only by the replay.
+                    change: 0,
+                  };
+                },
+                Effect.fnUntraced(function* (previous) {
+                  // Text first, then the level: a row committed before a
+                  // chunk moved the level this read sees.
+                  const nextText = yield* SubscriptionRef.get(text.ref);
+                  const snapshot = yield* SubscriptionRef.get(local.ref);
+                  const level = yield* SubscriptionRef.get(log.level);
+                  // A burst of text, or a local change, moved no durable
+                  // state: only a new level is worth a database read.
+                  const { cursor, change, rows, existence } =
+                    level === previous.level
+                      ? {
+                          cursor: previous.cursor,
+                          change: previous.change,
+                          rows: [],
+                          existence: { checkedAggregateIds: [], claims: [] },
+                        }
+                      : yield* readDurable(previous.cursor, previous.change);
+                  const inputs: SessionViewInput[] = textChunks(
+                    previous.text,
+                    nextText,
+                  );
+                  if (!isDeepStrictEqual(previous.local, snapshot)) {
+                    inputs.push({ _tag: 'local', local: snapshot });
+                  }
+                  if (
+                    inputs.length > 0 ||
+                    rows.length > 0 ||
+                    cursor !== previous.cursor ||
+                    existence.checkedAggregateIds.length > 0 ||
+                    // The first drain must publish the anchor: replay.complete
+                    // reconciles existence but does not advance the view cursor.
+                    previous.level === -1
+                  ) {
+                    // Every nonempty batch needs its closing marker so the
+                    // webview decoder can release it as one complete read.
+                    inputs.push({ _tag: 'drained', cursor, existence });
+                  }
+                  const batch: SessionViewInput[] = [
+                    ...rows
+                      .filter(isDisplaySessionEvent)
+                      .map((event): SessionViewInput => ({
+                        _tag: 'event',
+                        read: 'all',
+                        event,
+                      })),
+                    ...inputs,
+                  ];
+                  return [
+                    {
+                      cursor,
+                      level,
+                      text: nextText,
+                      local: snapshot,
+                      change,
+                    },
+                    batch.length === 0 ? [] : [batch],
+                  ] as const;
                 }),
-                (previous) =>
-                  Effect.gen(function* () {
-                    // Text first, then the level: a row committed before a
-                    // chunk moved the level this read sees.
-                    const nextText = yield* SubscriptionRef.get(text.ref);
-                    const snapshot = yield* SubscriptionRef.get(local.ref);
-                    const level = yield* SubscriptionRef.get(log.level);
-                    // A burst of text, or a local change, moved no durable
-                    // state: only a new level is worth a database read.
-                    const { cursor, change, rows, existence } =
-                      level === previous.level
-                        ? {
-                            cursor: previous.cursor,
-                            change: previous.change,
-                            rows: [],
-                            existence: { checkedAggregateIds: [], claims: [] },
-                          }
-                        : yield* readDurable(previous.cursor, previous.change);
-                    const inputs: SessionViewInput[] = textChunks(
-                      previous.text,
-                      nextText,
-                    );
-                    if (!isDeepStrictEqual(previous.local, snapshot)) {
-                      inputs.push({ _tag: 'local', local: snapshot });
-                    }
-                    if (
-                      inputs.length > 0 ||
-                      rows.length > 0 ||
-                      cursor !== previous.cursor ||
-                      existence.checkedAggregateIds.length > 0 ||
-                      // The first drain must publish the anchor: replay.complete
-                      // reconciles existence but does not advance the view cursor.
-                      previous.level === -1
-                    ) {
-                      // Every nonempty batch needs its closing marker so the
-                      // webview decoder can release it as one complete read.
-                      inputs.push({ _tag: 'drained', cursor, existence });
-                    }
-                    const batch: SessionViewInput[] = [
-                      ...rows
-                        .filter(isDisplaySessionEvent)
-                        .map((event): SessionViewInput => ({
-                          _tag: 'event',
-                          read: 'all',
-                          event,
-                        })),
-                      ...inputs,
-                    ];
-                    return [
-                      {
-                        cursor,
-                        level,
-                        text: nextText,
-                        local: snapshot,
-                        change,
-                      },
-                      batch.length === 0 ? [] : [batch],
-                    ] as const;
-                  }),
               ),
             );
             return Stream.concat(Stream.make(replay), tail);

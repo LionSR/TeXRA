@@ -146,7 +146,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // build's error without one would fail as damaged).
   // v5: the error's classification as `model.message` v10 (no upcaster: an
   // earlier build would fail a subscription's failure as damaged).
-  'run.end': { version: 5, upcast: [], listing: 'own' },
+  // v6: a cancelled end carries `reason` (`user` or `shutdown`), which the
+  // halt row carried as `closed` before, and the error kind `abort` is gone
+  // (no upcaster: an earlier build's shutdown end would read as a user's
+  // stop, holding a child's delivery back).
+  'run.end': { version: 6, upcast: [], listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   'run.description': { ...V1, listing: 'own' },
@@ -184,7 +188,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'approval.policy': { ...V1, listing: 'own' },
   // v2: a `turn.end` carries the turn's `outcome` (no upcaster, as
   // `run.config`: a v1 `turn.end` would fail its check).
-  'run.position': { version: 2, upcast: [], listing: 'own' },
+  // v3: a halt carries no `reason`; the end's `reason` says what stopped
+  // the run (no upcaster: an earlier build's closed halt would read as a
+  // crash and spend a retry).
+  'run.position': { version: 3, upcast: [], listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both (no upcaster, as `run.config`).
   // v3: a user message names its attached media by blob address (`media`),
@@ -214,7 +221,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'context.state': { ...V1, listing: 'own' },
   'stream.start': { ...V1, listing: 'none' },
   'stream.end': { ...V1, listing: 'none' },
-  'response.finalized': { ...V1, listing: 'none' },
+  // v2: `cut` names the limit that ended the answer early (no upcaster: an
+  // earlier build would show a cut answer as complete).
+  'response.finalized': { version: 2, upcast: [], listing: 'none' },
   'run.report': { ...V1, listing: 'own' },
   // v2: no `cliWorkflow` producer and no delivery-time diffs (no upcaster,
   // as `run.config`).
@@ -244,7 +253,12 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // `subscription-session`, with its route, whether it needs a sign-in, and
   // the session's own failure (no upcaster: an earlier build would fail the
   // classification as damaged).
-  'model.message': { version: 10, upcast: [], listing: 'none' },
+  // v11: no `context-window-exceeded` finish reason: an overflow is the
+  // `context-overflow` failure on every protocol, and a `failed` row carries
+  // the priced `usage` of a response the provider billed before refusing it
+  // (no upcaster: an earlier build's overflowed turn would read as a
+  // completed one).
+  'model.message': { version: 11, upcast: [], listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its
   // run as damaged rather than read as that build's).
@@ -253,7 +267,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v5: no `vscode-lm` origin, as `model.message` v7.
   // v6: the priced usage's cache writes are `cacheWriteTokens`, as
   // `model.message` v8.
-  'context.edit': { version: 6, upcast: [], listing: 'none' },
+  // v7: a compaction may be triggered by an `overflow`, the request the
+  // model's window could not hold (no upcaster: an earlier build would
+  // refuse the trigger as damaged).
+  'context.edit': { version: 7, upcast: [], listing: 'none' },
   'tool.intent': { ...V1, listing: 'none' },
   'script.call': { ...V1, listing: 'none' },
   // v2: a captured attachment holds its bytes by blob address, never inline.

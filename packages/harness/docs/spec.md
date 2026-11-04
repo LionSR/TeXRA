@@ -64,7 +64,7 @@ its kind is its `type` column.
 - **Fold**: `applyRunRows`, the pure function from a run's rows to the
   `RunState` the loop continues from (`shared/session/runState.ts:504-517`).
 - **Publisher**: `SessionEvents`, the one inbox through which a session writes
-  (`agent/runtime/SessionEvents.ts:165-302`).
+  (`agent/runtime/SessionEvents.ts:165-301`).
 - **Commit, seq**: `commit` orders rows across the store; `seq` orders rows
   within an aggregate (`controllers/session/storeSchema.ts:70-80`).
 
@@ -495,10 +495,10 @@ position MUST fail the load as `inconsistent`
 The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
 `results.ready` to `results.ready`, and `turn.end` to `halted`
-(`shared/runs/runStatus.ts:92-105`).
+(`shared/runs/runStatus.ts:79-92`).
 
 A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/runs/runStatus.ts:105`).
+from there (`shared/runs/runStatus.ts:92`).
 
 ### 5.4 The commit path
 
@@ -602,7 +602,7 @@ route, and a failure scoped to the route cools the wire route itself, which
 every model on that route shares. The wire key is the binding's own tuple:
 provider, credential route, endpoint and key fingerprint for a credential-backed
 HTTP route; provider for the validation model
-(`agent/runtime/modelAccess/binding.ts:203-215`, `:141`)
+(`agent/runtime/modelAccess/binding.ts:193-205`, `:141`)
 (`agent/runtime/modelAccess/failureInfo.ts:42-74`). An observation
 runs outside it (`agent/runtime/run/invocation.ts:211`). The loop pauses 1,000
 ms before a `retry` or `unchain` that follows a recorded failure
@@ -868,7 +868,7 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts:856-857`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/runs/runStatus.ts:92-100`).
+  `results.ready` (`shared/runs/runStatus.ts:83-91`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,

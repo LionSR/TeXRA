@@ -373,6 +373,18 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
 - **Exports are contracts.** Default to file-local; a new export needs a
   consumer in the same PR (`npm run check:dead-code-ratchet` against
   `config/ratchets/knip-baseline.json`).
+- **No option for a special case.** An option is a decision the code refused
+  to make. When the right value follows from a fact the code holds (a model's
+  capabilities, a credential kind, what a launch names), compute it there and
+  add no knob, flag, mode or per-call override. When a special path is a
+  subset of the general one, run the general one. A declarative table is still
+  an option: a column that is constant or derivable across its rows is a
+  special case written as data, and is deleted the same way. Several keys for
+  one decision have one owner. The same holds for an error kind, a reason
+  literal or a stop cause nothing branches on: it is a message, not a kind.
+  Inventory and the standing cuts:
+  `.agents/docs/proposed/simplification/2026-11-03-fewer-processing-options.md`
+  and `.agents/docs/proposed/simplification/2026-11-03-storage-errors-and-stop-paths.md`.
 - **Silent degradation is a defect.** A fallback that masks a failure logs the
   cause at `warn` and surfaces it, or does not exist. `catch {}`, `??` over a
   failed read, `catchDecoding` on persisted data and a `default: return` that

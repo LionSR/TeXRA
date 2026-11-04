@@ -11,7 +11,6 @@ import {
   type RunId,
   type TokenUsageStats,
   type UsageRoute,
-  isActivePhase,
 } from '@texra-ai/harness/schemas';
 import { KEY_HINT_SEPARATOR, keyHintText } from '@cli/tui/ui/KeyHints';
 import { STATUS_DIAMOND } from '@cli/tui/ui/glyphs';
@@ -38,7 +37,7 @@ import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
 
 import { formatResumeCommand } from '../state/resumeHint';
 import { type TransientNotice } from '../state/cliState';
-import { runPhaseOf, runViewOf } from '../state/sessionView';
+import { runViewOf } from '../state/sessionView';
 import type {
   ApprovalPolicy,
   RunView,
@@ -716,7 +715,7 @@ export function statusBarRunTarget({
 }): StatusBarRunTarget {
   const active = runViewOf(view, activeRunId);
   const isLive = (runId: RunId): boolean =>
-    isActivePhase(runPhaseOf(runViewOf(view, runId)));
+    runViewOf(view, runId)?.working === true;
   const hasLiveRun = ownedRunIds.some(isLive);
   const canStopVisibleRun =
     canStopActiveRun && (canStopPendingRun || hasLiveRun);
@@ -798,8 +797,7 @@ export function buildStatusBarDisplay(
     { text: STATUS_DIAMOND, color: COLOR_HINT, decorative: true },
   ];
   const turn = input.turn;
-  const status = runPhaseOf(run);
-  const active = isActivePhase(status);
+  const active = run?.working === true;
   const queuedCount =
     run === undefined ? 0 : (view.queuedFollowUps.get(run.id)?.length ?? 0);
 

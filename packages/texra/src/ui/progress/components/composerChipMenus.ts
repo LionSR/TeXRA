@@ -287,7 +287,9 @@ function approvalMenu(
     onSelect: (value) => {
       if (value === 'approval:policy' || value === 'approval:autoApprove') {
         if (value === 'approval:autoApprove' && policy === 'never') return;
-        actions.setLaunch({ approval: value.slice(9) as Launch['approval'] });
+        actions.setLaunch({
+          approval: value === 'approval:policy' ? 'policy' : 'autoApprove',
+        });
       } else if (value === 'settings:general') {
         actions.openSettings('general/approval');
       }

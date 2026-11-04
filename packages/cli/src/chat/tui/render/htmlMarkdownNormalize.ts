@@ -195,7 +195,8 @@ function lineStartAt(lineStarts: readonly number[], offset: number): number {
   let high = lineStarts.length;
   while (low < high) {
     const mid = (low + high) >> 1;
-    if (lineStarts[mid]! <= offset) low = mid + 1;
+    const start = lineStarts[mid];
+    if (start !== undefined && start <= offset) low = mid + 1;
     else high = mid;
   }
   return lineStarts[low - 1] ?? 0;

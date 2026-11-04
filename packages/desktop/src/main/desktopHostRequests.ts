@@ -6,7 +6,7 @@
 // `Rejected` with its reason, never dropped.
 
 import { Effect } from 'effect';
-import { Cancelled, Rejected, type Run, type RunEnd } from '@texra-ai/harness';
+import { Cancelled, Rejected, type RunEnd } from '@texra-ai/harness';
 import {
   AgentDirectories,
   AppSignals,
@@ -35,7 +35,6 @@ import type {
   OwnHostRequest,
   SharedHostRequestBindings,
 } from '@texra/controllers/session/openGuiWindow';
-import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import { findLabelInWorkspace } from '@texra/controllers/session/workspaceFileOptions';
 import { selectAutoOpenFinalOutput } from '@texra/agent/output/selectAutoOpenFinalOutput';
 import { instructionActions } from '@ui/copy/instructionActions';
@@ -59,8 +58,7 @@ interface DesktopHostRequestsOptions {
   /** The project this window serves: its runs run in its session, here or
    *  in the service. */
   project: DesktopProject;
-  /** The window's bridge and snapshot. */
-  bridge: SessionBridge;
+  /** The window's host snapshot. */
   snapshot: HostSnapshotSource;
   host: DesktopAgentRunHost;
   files: DesktopFileSelection;
@@ -85,7 +83,7 @@ const CHANNEL = 'DesktopHostRequests';
 /** The desktop's half of a project's window, for the window's scope. */
 export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
   function* (options: DesktopHostRequestsOptions) {
-    const { project, host, runtime, bridge, snapshot } = options;
+    const { project, host, runtime, snapshot } = options;
     const { roots } = project;
     const signals = yield* AppSignals;
     // A shared controller's notice IS the refusal the request answers with.
@@ -139,12 +137,12 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
      * tab through the build display, as a run's outputs do. The math markup
      * is left to `diffCommandExecutor`, which reads `LATEXDIFF_MATH_MARKUP`.
      */
-    const latexdiffAgainstCommit = (
-      action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
-      baseFile: string,
-      commit: string,
-    ) =>
-      Effect.gen(function* () {
+    const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
+      function* (
+        action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
+        baseFile: string,
+        commit: string,
+      ) {
         if (!baseFile) {
           return yield* Effect.fail(
             new Rejected({ reason: 'Choose a base file first.' }),
@@ -178,7 +176,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         );
         const message = latexdiffPackMessage(packed);
         if (message) yield* host.showInfoMessage(message);
-      });
+      },
+    );
 
     /** This window's half of the shared body's binding table: every verb
      *  mapped onto the window's dialogs, its preview host, its settings
@@ -244,40 +243,35 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
     /** The arms this window performs its own way. A capability's failure is
      *  named through `hostFailure`, so the failure channel is the value the
      *  arm failed with. */
-    const own = (request: OwnHostRequest) =>
-      Effect.gen(function* () {
-        switch (request.kind) {
-          case 'popOut':
-          case 'popBack':
-            return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
-          case 'pickFiles': {
-            const { fileType } = request;
-            if (fileType === 'base' || fileType === 'edited') {
-              return yield* Effect.fail(
-                notOnDesktop(`A picker for ${fileType} files`),
-              );
-            }
-            const paths = yield* options.files
-              .pickFiles(fileType)
-              .pipe(
-                Effect.mapError((cause) =>
-                  hostFailure('files.pickFiles', cause),
-                ),
-              );
-            if (paths === null) return yield* Effect.fail(new Cancelled());
-            return { kind: 'files' as const, paths };
-          }
-          case 'useCurrentFile':
-          case 'addOpenedFiles':
+    const own = Effect.fn('own')(function* (request: OwnHostRequest) {
+      switch (request.kind) {
+        case 'popOut':
+        case 'popBack':
+          return yield* Effect.fail(notOnDesktop('Pop-out to editor'));
+        case 'pickFiles': {
+          const { fileType } = request;
+          if (fileType === 'base' || fileType === 'edited') {
             return yield* Effect.fail(
-              notOnDesktop("The editor's current file"),
+              notOnDesktop(`A picker for ${fileType} files`),
             );
-          case 'gettingStarted':
-            return yield* Effect.fail(notOnDesktop('Starting a project'));
-          case 'workspaceFile':
-            return yield* options.workspaceFile(request.action);
+          }
+          const paths = yield* options.files
+            .pickFiles(fileType)
+            .pipe(
+              Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
+            );
+          if (paths === null) return yield* Effect.fail(new Cancelled());
+          return { kind: 'files' as const, paths };
         }
-      });
+        case 'useCurrentFile':
+        case 'addOpenedFiles':
+          return yield* Effect.fail(notOnDesktop("The editor's current file"));
+        case 'gettingStarted':
+          return yield* Effect.fail(notOnDesktop('Starting a project'));
+        case 'workspaceFile':
+          return yield* options.workspaceFile(request.action);
+      }
+    });
 
     return {
       bindings,
@@ -297,12 +291,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       showInfoMessage: host.showInfoMessage,
       showWarningMessage: host.showWarningMessage,
       runs: {
-        // Select the run and retire the missing-agent warning its agent
-        // resolved.
-        launched: (run: Run) =>
-          Effect.sync(() =>
-            bridge.surfaceAction({ kind: 'select', runId: run.runId }),
-          ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
         // Desktop has no editor integration to preview through, so the
         // output goes to the preview-with-fallback host directly.
         openFinalOutput: (config: AgentConfig, result: RunEnd) =>

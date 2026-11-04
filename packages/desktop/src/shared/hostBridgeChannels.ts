@@ -29,10 +29,18 @@ export interface DesktopPushesApi {
   listening(): void;
 }
 
-function resolvePreloadApi<T>(key: string, name: string): T {
-  const api = (globalThis as Record<string, unknown>)[key];
+// What the preload exposes on the page's global (`contextBridge`).
+declare global {
+  var __texraDesktopSessionWire: SessionWireApi | undefined;
+  var __texraDesktopPushes: DesktopPushesApi | undefined;
+}
+
+function resolvePreloadApi<
+  K extends typeof SESSION_WIRE_API_KEY | typeof DESKTOP_PUSHES_API_KEY,
+>(key: K, name: string): NonNullable<(typeof globalThis)[K]> {
+  const api = globalThis[key];
   if (!api) throw new Error(`The desktop ${name} is unavailable.`);
-  return api as T;
+  return api;
 }
 
 /** The preload's session channel, as the renderer finds it. */

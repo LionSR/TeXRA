@@ -124,12 +124,11 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       const context = await Effect.runPromise(
         contextFromArgs(ctx.args, ctx.rawArgs),
       );
-      const runCtx = ctx as CliCommandRunContext<A>;
       // Built before the run below, not inside it: a `CliUsageError` the
       // builder throws is the command refusing its arguments, which `runCli`
       // reports as a usage error, and `catchExitCode` speaks only for the
       // work. Building it here keeps that true for a command that does both.
-      const program = options.run(context, runCtx);
+      const program = options.run(context, ctx);
       // The sink that covers the runtime build below, chosen now that the
       // context has answered `--quiet`. `installCliProcessRuntime` logs
       // while its layers build (`UsageLogService started …`), and for a

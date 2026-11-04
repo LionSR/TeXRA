@@ -55,6 +55,10 @@ export interface BoundModel extends Binding {
   readonly modelId: string;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
+  /** The subscription routes the run had declined when this binding was
+   *  decided; its `run.config` records them, and the fold unions them with
+   *  every route a retry declines after. */
+  readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /** The route decision this binding carries out, or the validation model. */
   readonly route: ModelRoute | { readonly kind: 'validation' };
   /** Automatic retries after a failed attempt, read with the binding. */
@@ -175,14 +179,7 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
     mode: ask.mode,
   });
   return yield* bindRoute(
-    {
-      request,
-      requested,
-      ask,
-      settings,
-      decision,
-      backend: request.backend ?? decision.backend,
-    },
+    { request, requested, ask, settings, decision },
     stores,
   );
 });

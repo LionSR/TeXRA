@@ -339,48 +339,43 @@ function createBackgroundBashStrategy(params: {
   };
 }
 
-function executeBashTool(input: BashInput) {
-  return Effect.gen(function* () {
-    const toolCall = yield* ToolContext;
-    if (
-      !input.run_in_background &&
-      SHELL_BACKGROUNDING_PATTERN.test(input.command)
-    ) {
-      return yield* Effect.fail(new ToolError(SHELL_BACKGROUNDING_MESSAGE));
-    }
+const executeBashTool = Effect.fn('executeBashTool')(function* (
+  input: BashInput,
+) {
+  const toolCall = yield* ToolContext;
+  if (
+    !input.run_in_background &&
+    SHELL_BACKGROUNDING_PATTERN.test(input.command)
+  ) {
+    return yield* Effect.fail(new ToolError(SHELL_BACKGROUNDING_MESSAGE));
+  }
 
-    const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
+  const cwd = toolCall.env.workingDirectory ?? toolCall.env.roots.workspace;
 
-    if (input.run_in_background) {
-      const call = yield* requireToolRun('bash run_in_background');
-      // A background shell delivers its result as a follow-up message; a
-      // one-shot run ends after the current cycle, so nothing is left to collect
-      // it. Every other child type already answers this case — agent-CLI
-      // refuses, native subagents degrade to the parent trace, a script runs in
-      // the foreground — and a background shell cannot degrade, because the follow-up
-      // IS its delivery. The approval the loop already took is spent by the
-      // time this refuses: in the SDK path (`packages/harness/src/effect/sessionPrograms.ts`)
-      // the `finally` kills the process group, so launching here would run the
-      // user's command and then discard its result with nothing reported.
-      if (call.run.toolPolicy.stopAfterCycle)
-        return yield* Effect.fail(
-          new ToolError(
-            'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
-          ),
-        );
-      return yield* executeBackground(call, input, input.timeout, cwd).pipe(
-        Effect.provide(call.session),
+  if (input.run_in_background) {
+    const call = yield* requireToolRun('bash run_in_background');
+    // A background shell delivers its result as a follow-up message; a
+    // one-shot run ends after the current cycle, so nothing is left to collect
+    // it. Every other child type already answers this case — agent-CLI
+    // refuses, native subagents degrade to the parent trace, a script runs in
+    // the foreground — and a background shell cannot degrade, because the follow-up
+    // IS its delivery. The approval the loop already took is spent by the
+    // time this refuses: in the SDK path (`packages/harness/src/effect/sessionPrograms.ts`)
+    // the `finally` kills the process group, so launching here would run the
+    // user's command and then discard its result with nothing reported.
+    if (call.run.toolPolicy.stopAfterCycle)
+      return yield* Effect.fail(
+        new ToolError(
+          'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
+        ),
       );
-    }
-
-    return yield* executeForeground(
-      input.command,
-      input.timeout,
-      toolCall,
-      cwd,
+    return yield* executeBackground(call, input, input.timeout, cwd).pipe(
+      Effect.provide(call.session),
     );
-  });
-}
+  }
+
+  return yield* executeForeground(input.command, input.timeout, toolCall, cwd);
+});
 
 const executeForeground = Effect.fn('BashTool.executeForeground')(function* (
   command: string,
@@ -464,8 +459,8 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   const { runId: parentRunId } = call.run;
   const log = yield* SessionLog;
   const roots = yield* SessionRoots;
-  return yield* Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+  return yield* Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
       const runId = generateRunId();
       const { command } = input;
       const preview = previewLabel(command);

@@ -100,13 +100,16 @@ export class RunFileService {
    * against for the whole run; a resumed run re-prepares and gets the
    * snapshots its first attempt captured.
    */
-  public prepareRunWorkspace(
-    baseFiles: FileLocation[],
-    options: {
-      linkFiles?: FileLocation[];
-    } = {},
-  ): Effect.Effect<FileLocation[], Error, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  public readonly prepareRunWorkspace = Effect.fn(
+    'RunFileService.prepareRunWorkspace',
+  )(
+    { self: this },
+    function* (
+      baseFiles: FileLocation[],
+      options: {
+        linkFiles?: FileLocation[];
+      } = {},
+    ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {
       if (this.preparedBaseFiles) return this.preparedBaseFiles;
 
       yield* ensureRunDirUnder(this.roots.storage, this.runId);
@@ -144,8 +147,8 @@ export class RunFileService {
 
       this.preparedBaseFiles = prepared;
       return prepared;
-    });
-  }
+    },
+  );
 
   /**
    * Copy a workspace file into `original/<relativePath>` if not already
@@ -211,18 +214,19 @@ export class RunFileService {
   }
 
   /** Whether this run has a directory under its storage root. */
-  public hasDirectory(): Effect.Effect<
-    boolean,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  > {
-    return Effect.gen({ self: this }, function* () {
+  public readonly hasDirectory = Effect.fn('RunFileService.hasDirectory')(
+    { self: this },
+    function* (): Effect.fn.Return<
+      boolean,
+      PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > {
       return yield* entryExists(
         yield* FileSystem.FileSystem,
         this.runDirectory,
       );
-    });
-  }
+    },
+  );
 
   /** Where a workspace file's pre-run snapshot lives in this run. */
   public originalSnapshotPath(workspaceRelativePath: string): string {
@@ -237,14 +241,15 @@ export class RunFileService {
    * Inspect one run-relative entry of this run's storage without following
    * a workspace-mirror symlink, the entry's own or an ancestor directory's.
    */
-  public inspectEntry(
-    relativePath: string,
-  ): Effect.Effect<
-    RunStorageEntry,
-    PlatformError.PlatformError,
-    FileSystem.FileSystem
-  > {
-    return Effect.gen({ self: this }, function* () {
+  public readonly inspectEntry = Effect.fn('RunFileService.inspectEntry')(
+    { self: this },
+    function* (
+      relativePath: string,
+    ): Effect.fn.Return<
+      RunStorageEntry,
+      PlatformError.PlatformError,
+      FileSystem.FileSystem
+    > {
       const fs = yield* FileSystem.FileSystem;
       const posixPath = normalizeFilePath(relativePath);
       const pathSegments = getPathSegments(posixPath);
@@ -302,8 +307,8 @@ export class RunFileService {
         return { kind: 'directory', absolutePath } as const;
       }
       return { kind: 'unsupported', absolutePath } as const;
-    });
-  }
+    },
+  );
 
   /** Create a FileLocation for a workflow output file. */
   public createLocation(inputPath: string): FileLocation {
@@ -347,11 +352,14 @@ export class RunFileService {
    * `original/<relPath>`; round-dir symlinks then point there rather than
    * chaining back to the live workspace.
    */
-  public mirrorWorkspaceFile(
-    location: FileLocation,
-    options: { snapshot?: boolean } = {},
-  ): Effect.Effect<FileLocation, Error, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  public readonly mirrorWorkspaceFile = Effect.fn(
+    'RunFileService.mirrorWorkspaceFile',
+  )(
+    { self: this },
+    function* (
+      location: FileLocation,
+      options: { snapshot?: boolean } = {},
+    ): Effect.fn.Return<FileLocation, Error, FileSystem.FileSystem> {
       if (
         location.kind !== 'workspace' ||
         shouldSkipRelocation(location.relativePath)
@@ -391,8 +399,8 @@ export class RunFileService {
         location.relativePath,
         this.runId,
       );
-    });
-  }
+    },
+  );
 
   /**
    * For every mirrored top-level dependency, ensure a symlink also exists at
@@ -407,91 +415,88 @@ export class RunFileService {
    *   - any existing real file at the destination, which a symlink to the
    *     original workspace source would silently destroy.
    */
-  public ensureMirroredInRunSubdir(
-    relativeDirectory: string,
-    options: { readonly protectedStem?: string } = {},
-  ): Effect.Effect<void, never, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  public readonly ensureMirroredInRunSubdir = Effect.fn(
+    'RunFileService.ensureMirroredInRunSubdir',
+  )(
+    { self: this },
+    function* (
+      relativeDirectory: string,
+      options: { readonly protectedStem?: string } = {},
+    ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
       if (this.mirroredDependencies.size === 0) return;
 
       const fs = yield* FileSystem.FileSystem;
       yield* Effect.forEach(
         [...this.mirroredDependencies],
-        (relativePath) =>
-          Effect.gen({ self: this }, function* () {
-            // A root dep named as the directory's own artifact would take its
-            // path before the artifact is written there. Skip these; the
-            // dependency is still reachable at
-            // `<relativeDirectory>/../<relativePath>`.
-            const { dir: depDir, name: depName } = path.parse(relativePath);
-            if (depDir === '' && depName === options.protectedStem) {
-              yield* Effect.logDebug(
-                `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
-              ).pipe(withLogChannel(CHANNEL));
-              return;
-            }
+        Effect.fnUntraced({ self: this }, function* (relativePath) {
+          // A root dep named as the directory's own artifact would take its
+          // path before the artifact is written there. Skip these; the
+          // dependency is still reachable at
+          // `<relativeDirectory>/../<relativePath>`.
+          const { dir: depDir, name: depName } = path.parse(relativePath);
+          if (depDir === '' && depName === options.protectedStem) {
+            yield* Effect.logDebug(
+              `Skipping run-dir mirror of ${relativePath}: would clobber primary output in ${relativeDirectory}`,
+            ).pipe(withLogChannel(CHANNEL));
+            return;
+          }
 
-            // Prefer the immutable `original/` snapshot as the symlink source
-            // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
-            // never reaches the live workspace. Read-only build assets
-            // (cls/sty/bib/figures) have no snapshot and fall through to the
-            // workspace mirror at `runDir/<rel>`, which is correct — those
-            // are never written to.
-            const snapshotAbsolute = this.originalSnapshotPath(relativePath);
-            const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
-              this.roots.storage,
-              this.runId,
-              relativePath,
-            );
-            // No snapshot is the ordinary case for a read-only build asset.
-            // Any other failure leaves unknown whether one exists, and
-            // linking the workspace mirror then could hand an agent write at
-            // `r<N>/<rel>` the user's working copy, so this dependency is
-            // left unlinked, as the destination guard below does.
-            const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
-              Effect.as('present' as const),
-              Effect.catchIf(absentReason, () =>
-                Effect.succeed('absent' as const),
-              ),
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,
-                ).pipe(
-                  withLogChannel(CHANNEL),
-                  Effect.as('unreadable' as const),
-                ),
-              ),
-            );
-            if (snapshot === 'unreadable') return;
-            const sourceAbsolute =
-              snapshot === 'present'
-                ? snapshotAbsolute
-                : workspaceMirrorAbsolute;
-            const destinationAbsolute = runStorageAbsolutePathUnder(
-              this.roots.storage,
-              this.runId,
-              path.join(relativeDirectory, relativePath),
-            );
+          // Prefer the immutable `original/` snapshot as the symlink source
+          // for editable inputs, so the chain `r<N>/<rel> → original/<rel>`
+          // never reaches the live workspace. Read-only build assets
+          // (cls/sty/bib/figures) have no snapshot and fall through to the
+          // workspace mirror at `runDir/<rel>`, which is correct — those
+          // are never written to.
+          const snapshotAbsolute = this.originalSnapshotPath(relativePath);
+          const workspaceMirrorAbsolute = runStorageAbsolutePathUnder(
+            this.roots.storage,
+            this.runId,
+            relativePath,
+          );
+          // No snapshot is the ordinary case for a read-only build asset.
+          // Any other failure leaves unknown whether one exists, and
+          // linking the workspace mirror then could hand an agent write at
+          // `r<N>/<rel>` the user's working copy, so this dependency is
+          // left unlinked, as the destination guard below does.
+          const snapshot = yield* fs.stat(snapshotAbsolute).pipe(
+            Effect.as('present' as const),
+            Effect.catchIf(absentReason, () =>
+              Effect.succeed('absent' as const),
+            ),
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `Skipping run-dir mirror of ${relativePath}: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL), Effect.as('unreadable' as const)),
+            ),
+          );
+          if (snapshot === 'unreadable') return;
+          const sourceAbsolute =
+            snapshot === 'present' ? snapshotAbsolute : workspaceMirrorAbsolute;
+          const destinationAbsolute = runStorageAbsolutePathUnder(
+            this.roots.storage,
+            this.runId,
+            path.join(relativeDirectory, relativePath),
+          );
 
-            // A stale link from a previous call is replaced (idempotent); a
-            // real file already written to the round dir (a multi-document
-            // output at `r{round}/chapters/ch1.md` when `chapters/ch1.md` is
-            // also an include dependency) stands: `createSymlink` refuses it.
-            yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
-              Effect.catch((error) =>
-                isStanding(error)
-                  ? Effect.logDebug(
-                      `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
-                    )
-                  : Effect.logWarning(
-                      `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
-                    ),
-              ),
-              withLogChannel(CHANNEL),
-            );
-          }),
+          // A stale link from a previous call is replaced (idempotent); a
+          // real file already written to the round dir (a multi-document
+          // output at `r{round}/chapters/ch1.md` when `chapters/ch1.md` is
+          // also an include dependency) stands: `createSymlink` refuses it.
+          yield* createSymlink(sourceAbsolute, destinationAbsolute).pipe(
+            Effect.catch((error) =>
+              isStanding(error)
+                ? Effect.logDebug(
+                    `Skipping run-dir mirror of ${relativePath}: destination in ${relativeDirectory} is an existing real file`,
+                  )
+                : Effect.logWarning(
+                    `Unable to mirror ${relativePath} into ${relativeDirectory}: ${toErrorMessage(error)}`,
+                  ),
+            ),
+            withLogChannel(CHANNEL),
+          );
+        }),
         { concurrency: 'unbounded', discard: true },
       );
-    });
-  }
+    },
+  );
 }

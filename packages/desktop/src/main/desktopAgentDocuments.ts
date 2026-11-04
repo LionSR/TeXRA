@@ -19,8 +19,8 @@ export class AgentDocumentUnavailable extends Schema.TaggedError<AgentDocumentUn
 
 /** Resolve each read/save afresh, including after a renderer or app restart.
  * A removed definition cannot keep an old file grant alive. */
-export function resolveAgentDocument(target: string, write: boolean) {
-  return Effect.gen(function* () {
+export const resolveAgentDocument = Effect.fn('resolveAgentDocument')(
+  function* (target: string, write: boolean) {
     const identity = agentDocumentIdentity(target);
     const entry =
       identity &&
@@ -42,8 +42,8 @@ export function resolveAgentDocument(target: string, write: boolean) {
       );
     }
     return entry.path;
-  });
-}
+  },
+);
 
 /** The settings controller already resolved this file. Include shadowed
  * packaged definitions so “View built-in” still opens the original. */

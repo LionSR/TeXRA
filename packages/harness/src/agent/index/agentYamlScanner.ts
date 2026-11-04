@@ -172,33 +172,31 @@ export function scanDirectory(
   });
 }
 
-function entriesWithUniqueNames(
+const entriesWithUniqueNames = Effect.fn('entriesWithUniqueNames')(function* (
   entries: readonly ParsedAgentYaml[],
   issues: AgentScanIssue[],
-): Effect.Effect<ParsedAgentYaml[]> {
-  return Effect.gen(function* () {
-    const byName = Map.groupBy(entries, (entry) => entry.name);
+): Effect.fn.Return<ParsedAgentYaml[]> {
+  const byName = Map.groupBy(entries, (entry) => entry.name);
 
-    const unique: ParsedAgentYaml[] = [];
-    for (const [name, matches] of byName) {
-      if (matches.length > 1) {
-        const paths = matches.map((entry) => entry.path).join(', ');
-        yield* Effect.logWarning(
-          `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
-        ).pipe(withLogChannel(CHANNEL));
-        for (const match of matches) {
-          issues.push({
-            path: path.relative(match.root, match.path),
-            message: `Duplicate agent name "${name}".`,
-          });
-        }
-        continue;
+  const unique: ParsedAgentYaml[] = [];
+  for (const [name, matches] of byName) {
+    if (matches.length > 1) {
+      const paths = matches.map((entry) => entry.path).join(', ');
+      yield* Effect.logWarning(
+        `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
+      ).pipe(withLogChannel(CHANNEL));
+      for (const match of matches) {
+        issues.push({
+          path: path.relative(match.root, match.path),
+          message: `Duplicate agent name "${name}".`,
+        });
       }
-      unique.push(matches[0]);
+      continue;
     }
-    return unique;
-  });
-}
+    unique.push(matches[0]);
+  }
+  return unique;
+});
 
 function readYamlDefinition(
   yamlPath: string,

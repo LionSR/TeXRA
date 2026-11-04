@@ -34,7 +34,7 @@ jobs:
       # below skips the review.
       - name: Remove re-review label
         if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             try {
@@ -86,7 +86,7 @@ jobs:
 
       - name: Checkout pull request
         if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
@@ -94,7 +94,7 @@ jobs:
 
       - name: Checkout trusted review prompt
         if: steps.keys.outputs.present == 'true' && steps.merge-ref.outputs.available == 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .trusted-review-prompt

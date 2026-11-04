@@ -89,7 +89,8 @@ const readJsonRecord = Effect.fn('JsonStore.readJsonRecord')(function* (
   if (content === undefined) return { ...missingFallback };
   const parsed: unknown = yield* Effect.try({
     try: () => JSON.parse(content),
-    catch: (cause) => cause as SyntaxError,
+    // JSON.parse throws a SyntaxError, which passes through unchanged.
+    catch: ensureError,
   });
   if (Predicate.isObject(parsed)) return parsed;
   return yield* Effect.fail(
@@ -234,8 +235,8 @@ export class JsonStore {
     return new JsonStore(storePath, data, options.follow === true);
   });
 
-  get<T>(key: string): T | undefined {
-    return this.current()[key] as T | undefined;
+  get(key: string): unknown {
+    return this.current()[key];
   }
 
   /**

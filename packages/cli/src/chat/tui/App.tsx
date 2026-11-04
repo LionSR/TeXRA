@@ -1,7 +1,10 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
+// Node imports
+import { EventEmitter } from 'node:events';
+
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { useInput, useStdin, useWindowSize, type Key } from 'ink';
 import {
   Fragment,
@@ -84,7 +87,6 @@ import {
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
-import type { EventEmitter } from 'node:events';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime, SettingsStores } from '@texra-ai/harness/host';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
@@ -211,10 +213,12 @@ export function App(props: AppProps): React.JSX.Element {
   useEffect(() => {
     // Ink's stdin context carries its input emitter at runtime (Ink's own
     // `Props` type declares it), but `useStdin` types only the public subset.
-    const emitter = (
-      stdin as typeof stdin & { internal_eventEmitter?: EventEmitter }
-    ).internal_eventEmitter;
-    if (!emitter) return;
+    if (
+      !Predicate.hasProperty(stdin, 'internal_eventEmitter') ||
+      !(stdin.internal_eventEmitter instanceof EventEmitter)
+    )
+      return;
+    const emitter = stdin.internal_eventEmitter;
     const onInput = (data: string): void => {
       const rewritten = rewriteKittyEnterInput(data, {
         shiftEnter: inputDisabled ? 'preserve' : 'newline',
@@ -463,10 +467,15 @@ export function App(props: AppProps): React.JSX.Element {
     appOwnsEscape() && parentIdOf(runId) !== undefined;
 
   const handleBareEscape = (runId: RunId): boolean => {
-    if (selectedRunIdSignal.get() !== runId || !bareEscapeActive(runId)) {
+    const parentId = parentIdOf(runId);
+    if (
+      selectedRunIdSignal.get() !== runId ||
+      !appOwnsEscape() ||
+      parentId === undefined
+    ) {
       return false;
     }
-    focusRunAndPromoteApprovals(parentIdOf(runId)!);
+    focusRunAndPromoteApprovals(parentId);
     return true;
   };
 

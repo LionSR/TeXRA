@@ -16,14 +16,13 @@ import {
   type FileSystem,
   type Path,
   Schema,
+  Semaphore,
 } from 'effect';
 import {
   AgentDirectories,
   getEnabledModels,
   readModelOptions,
-  type PerKeyLane,
   Settings,
-  withPerKeyLane,
 } from '@texra-ai/harness/host';
 import {
   APPROVAL_POLICY_CONFIG_KEY,
@@ -283,7 +282,7 @@ export function createHostSnapshotSource(
    *  refresh) would let the slower, older read publish last and leave the
    *  shell showing a state no later event corrects. In lane order the last
    *  refresh asked for is the last to publish. */
-  const refreshLanes = new Map<'refresh', PerKeyLane>();
+  const refreshLane = Semaphore.makeUnsafe(1);
 
   /** Each producer finishes on its own: one that fails is reported and keeps
    *  its last value, and the snapshot still publishes what the others read,
@@ -303,7 +302,7 @@ export function createHostSnapshotSource(
           options.onError(Cause.squash(exit.cause));
       }
       yield* publish;
-    }).pipe(withPerKeyLane(refreshLanes, 'refresh'));
+    }).pipe(refreshLane.withPermit);
 
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 

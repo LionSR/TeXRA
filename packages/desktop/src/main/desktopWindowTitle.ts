@@ -37,13 +37,13 @@ export function getDesktopWindowTitle(
  * forks the old scope's close, so until that close runs, only this check
  * keeps the old session's stream from writing over the new project's title.
  */
-export function installDesktopWindowTitle(
-  window: DesktopTitleWindow,
-  session: DesktopTitleSession,
-  projectName: string | undefined,
-  isCurrent: () => boolean,
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.gen(function* () {
+export const installDesktopWindowTitle = Effect.fn('installDesktopWindowTitle')(
+  function* (
+    window: DesktopTitleWindow,
+    session: DesktopTitleSession,
+    projectName: string | undefined,
+    isCurrent: () => boolean,
+  ): Effect.fn.Return<void, never, Scope.Scope> {
     let currentTitle = window.getTitle();
     let disposed = false;
     const update = (): void => {
@@ -91,5 +91,5 @@ export function installDesktopWindowTitle(
         }),
     );
     update();
-  });
-}
+  },
+);

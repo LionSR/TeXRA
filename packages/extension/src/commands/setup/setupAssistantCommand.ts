@@ -27,20 +27,14 @@ const CHANNEL = SETUP_ASSISTANT_CHANNEL;
  * cause is re-raised so a runtime disposal stays a cancellation instead of a
  * launch-failure notice.
  */
-export function launchSetupAssistant(
-  roots: WorkspaceRoots,
-  /** Where the setup conversation runs: here, or in the service. */
-  runSession: Pick<Session, 'view'>,
-  /** The window's launcher: the run is the window's to reveal and select,
-   *  and a failure before it opens is presented there. */
-  start: HostRunActions['runValidated'],
-  /** Bring the panel's "Connect a model" card into view: the one credential
-   *  prompt, which the setup card follows once a credential lands. */
-  connectModel: Effect.Effect<void, Error, ProcessServices>,
-  /** Reveal the task list, where a setup conversation already running is. */
-  showTasks: Effect.Effect<void, Error>,
-) {
-  return Effect.gen(function* () {
+export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
+  function* (
+    roots: WorkspaceRoots,
+    runSession: Pick<Session, 'view'>,
+    start: HostRunActions['runValidated'],
+    connectModel: Effect.Effect<void, Error, ProcessServices>,
+    showTasks: Effect.Effect<void, Error>,
+  ) {
     // Every setup entry point funnels through here (command, status pill,
     // walkthrough, onboarding setup card). The launcher's manual Execute
     // path is deliberately not gated: an explicit user action wins.
@@ -63,32 +57,31 @@ export function launchSetupAssistant(
       return 'not-started' as const;
     }
     return outcome;
-  }).pipe(
-    Effect.catchCause((cause) => {
-      // Shutdown interrupts this fiber while it waits on a host prompt.
-      // That is a cancellation, not a launch failure: re-raise it so no
-      // error notification appears during teardown.
-      if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      const error = Cause.squash(cause);
-      // A failure before the launch (no model, a request refused): the
-      // window's launcher shows its own refusal, which `launchSetup`
-      // answers as `not-started`.
-      return Effect.logError('Setup assistant failed to launch.').pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          Effect.forkDetach(
-            announce(
-              CHANNEL,
-              vscodeUi.showErrorMessage(
-                `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-              ),
-              undefined,
+  },
+  Effect.catchCause((cause) => {
+    // Shutdown interrupts this fiber while it waits on a host prompt.
+    // That is a cancellation, not a launch failure: re-raise it so no
+    // error notification appears during teardown.
+    if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+    const error = Cause.squash(cause);
+    // A failure before the launch (no model, a request refused): the
+    // window's launcher shows its own refusal, which `launchSetup`
+    // answers as `not-started`.
+    return Effect.logError('Setup assistant failed to launch.').pipe(
+      Effect.annotateLogs({ data: error }),
+      withLogChannel(CHANNEL),
+      Effect.andThen(
+        Effect.forkDetach(
+          announce(
+            CHANNEL,
+            vscodeUi.showErrorMessage(
+              `Failed to launch setup assistant: ${toErrorMessage(error)}`,
             ),
+            undefined,
           ),
         ),
-        Effect.as('not-started' as const),
-      );
-    }),
-  );
-}
+      ),
+      Effect.as('not-started' as const),
+    );
+  }),
+);

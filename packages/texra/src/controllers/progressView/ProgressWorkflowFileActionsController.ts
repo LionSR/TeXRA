@@ -93,8 +93,11 @@ export class ProgressWorkflowFileActionsController {
     }
   }
 
-  openRunStorage(runId: RunId): FileAction<void> {
-    return Effect.gen({ self: this }, function* () {
+  readonly openRunStorage: (runId: RunId) => FileAction<void> = Effect.fn(
+    'ProgressWorkflowFileActionsController.openRunStorage',
+  )(
+    { self: this },
+    function* (runId: RunId) {
       const { runDirectory } = new RunFileService(runId, {
         storage: this.deps.storageRoot,
         workspace: undefined,
@@ -104,21 +107,20 @@ export class ProgressWorkflowFileActionsController {
         yield* fs.makeDirectory(runDirectory, { recursive: true });
       }
       yield* this.deps.host.openDirectory(runDirectory);
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.logError('Failed to open run folder', error).pipe(
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            Effect.fail(
-              new Rejected({
-                reason: `Failed to open run folder: ${toErrorMessage(error)}`,
-              }),
-            ),
+    },
+    Effect.catch((error) =>
+      Effect.logError('Failed to open run folder', error).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.fail(
+            new Rejected({
+              reason: `Failed to open run folder: ${toErrorMessage(error)}`,
+            }),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 
   /** `stream` is the run the file belongs to: it keys the compare-time
    *  backup that a later Accept reads. */
@@ -131,11 +133,10 @@ export class ProgressWorkflowFileActionsController {
       file,
       base,
       'Compare original',
-      (targetFile, baseFile) =>
-        Effect.gen({ self: this }, function* () {
-          if (stream !== undefined) yield* this.backupModelOutput(stream, file);
-          yield* this.deps.host.compareFiles(baseFile, targetFile);
-        }),
+      Effect.fnUntraced({ self: this }, function* (targetFile, baseFile) {
+        if (stream !== undefined) yield* this.backupModelOutput(stream, file);
+        yield* this.deps.host.compareFiles(baseFile, targetFile);
+      }),
     ).pipe(Effect.asVoid);
   }
 
@@ -147,13 +148,21 @@ export class ProgressWorkflowFileActionsController {
     return this.deps.host.compareFiles(previous, file);
   }
 
-  acceptFile(
+  readonly acceptFile: (
     file: string,
     base?: string,
     activeRun?: RunId,
     config?: AgentConfig,
-  ): FileAction<void> {
-    return Effect.gen({ self: this }, function* () {
+  ) => FileAction<void> = Effect.fn(
+    'ProgressWorkflowFileActionsController.acceptFile',
+  )(
+    { self: this },
+    function* (
+      file: string,
+      base?: string,
+      activeRun?: RunId,
+      config?: AgentConfig,
+    ) {
       const backup =
         file && activeRun
           ? this.modelOutputBackups.get(activeRun, file)
@@ -193,8 +202,8 @@ export class ProgressWorkflowFileActionsController {
       if (backup !== undefined && activeRun) {
         this.modelOutputBackups.delete(activeRun, file);
       }
-    });
-  }
+    },
+  );
 
   mergeFile(file: string, base?: string): FileAction<void> {
     return this.executeWithBaseFile(

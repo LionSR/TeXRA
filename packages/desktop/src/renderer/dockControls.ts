@@ -15,6 +15,18 @@ import type {
   ITabRenderer,
 } from 'dockview';
 
+/** The kinds a group's menu opens beside its tabs. */
+const GROUP_OPEN_KINDS = [
+  'agent',
+  'files',
+  'terminal',
+  'browser',
+  'logs',
+] as const satisfies readonly WorkbenchKind[];
+
+/** Where a tab's menu moves it into a new group. */
+const TAB_MOVE_POSITIONS = ['left', 'right', 'top', 'bottom'] as const;
+
 interface DockActions {
   api(): DockviewApi;
   tab(id: string): WorkbenchTab | undefined;
@@ -59,8 +71,9 @@ export function dockGroupActions(
                 group.panels.length === 0
               )
                 actions.api().removeGroup(group);
-            } else if (value in WORKBENCH_KIND_META) {
-              actions.open(value as WorkbenchKind, group);
+            } else {
+              const kind = GROUP_OPEN_KINDS.find((entry) => entry === value);
+              if (kind) actions.open(kind, group);
             }
           }}
         >
@@ -73,7 +86,7 @@ export function dockGroupActions(
           >
             ${waIcon('plus')}
           </wa-button>
-          ${(['agent', 'files', 'terminal', 'browser', 'logs'] as const).map(
+          ${GROUP_OPEN_KINDS.map(
             (kind) => html`
               <wa-dropdown-item value=${kind}>
                 ${waIcon(WORKBENCH_KIND_META[kind].icon, { slot: 'icon' })}
@@ -170,8 +183,11 @@ export function dockTab(id: string, actions: DockActions): ITabRenderer {
                 .groups.find((entry) => entry.id === value.slice(5));
               if (group) panel?.api.moveTo({ group });
             } else {
-              const position = value as 'left' | 'right' | 'top' | 'bottom';
-              if (panel) panel.api.moveTo({ group: panel.group, position });
+              const position = TAB_MOVE_POSITIONS.find(
+                (entry) => entry === value,
+              );
+              if (panel && position)
+                panel.api.moveTo({ group: panel.group, position });
             }
           }}
         >

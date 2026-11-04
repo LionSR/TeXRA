@@ -1792,7 +1792,7 @@ registerBuiltinSlashCommands({
 // run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
 // does.
 if (canInterrupt) {
-  harnessSession.markRunPending(Effect.never);
+  harnessSession.markRunPending(Effect.never, Effect.void);
   harnessSession.runId = HARNESS_RUN_ID;
 }
 

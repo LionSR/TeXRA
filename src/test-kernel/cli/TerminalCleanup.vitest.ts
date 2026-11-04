@@ -50,7 +50,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
         '/tmp/evil\x07\x1b]0;pwned\x07',
       );
       const session = new TuiSession();
-      session.markRunPending(Effect.never);
+      session.markRunPending(Effect.never, Effect.void);
       await Promise.resolve();
       updates.dispose();
       expect(writeSync).not.toHaveBeenCalled();

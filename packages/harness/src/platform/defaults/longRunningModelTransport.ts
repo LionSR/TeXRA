@@ -57,23 +57,24 @@ interface ProxyPolicy {
 const projectDispatchers = new Map<string, EnvHttpProxyAgent>();
 
 /**
- * undici's `fetch` under the `Fetch` signature the rest of the codebase
- * speaks: undici's `RequestInit`/`Response` are structurally close to the
- * DOM's but not assignable, so the cast lives here once, for every caller.
+ * undici's `fetch` under the DOM signature the rest of the codebase speaks,
+ * plus undici's `dispatcher` option.
  */
+// undici implements the DOM fetch, but its `RequestInfo`, `RequestInit` and
+// `Response` typings lag the DOM lib's (a `Headers` iterator without
+// `Symbol.dispose`, other `BodyInit` view types), so they are not assignable.
+// cast: the same function, under the DOM typings it implements.
+const domUndiciFetch = undiciFetch as unknown as (
+  input: Parameters<typeof fetch>[0],
+  init: RequestInit & { readonly dispatcher: Dispatcher },
+) => Promise<Response>;
+
+/** undici's `fetch` through `dispatcher`, as the DOM `fetch` types it. */
 export const undiciFetchThrough = (
   dispatcher: Dispatcher,
   input: Parameters<typeof fetch>[0],
   init?: RequestInit,
-): Promise<Response> =>
-  undiciFetch(
-    // cast: undici's input type is the DOM's `Request` by another name.
-    input as Parameters<typeof undiciFetch>[0],
-    {
-      ...init,
-      dispatcher,
-    } as Parameters<typeof undiciFetch>[1],
-  ) as unknown as Promise<Response>;
+): Promise<Response> => domUndiciFetch(input, { ...init, dispatcher });
 
 /**
  * The fetch every model factory is constructed with. It is undici's own
@@ -93,24 +94,18 @@ export const undiciFetchThrough = (
 const fetchThrough =
   (dispatch: () => EnvHttpProxyAgent): typeof fetch =>
   (input, init) => {
-    const request =
-      typeof input === 'string' || input instanceof URL ? undefined : input;
-    const response = undiciFetchThrough(
-      dispatch(),
-      request?.url ?? (input as string | URL),
-      {
-        ...(request && {
-          method: request.method,
-          headers: request.headers,
-          body: request.body,
-          signal: request.signal,
-          redirect: request.redirect,
-          ...(request.body !== null && { duplex: 'half' }),
-        }),
-        ...init,
-      },
-    );
-    return request === undefined ? response : response.finally(() => request);
+    if (typeof input === 'string' || input instanceof URL)
+      return undiciFetchThrough(dispatch(), input, init);
+    const request = input;
+    return undiciFetchThrough(dispatch(), request.url, {
+      method: request.method,
+      headers: request.headers,
+      body: request.body,
+      signal: request.signal,
+      redirect: request.redirect,
+      ...(request.body !== null && { duplex: 'half' }),
+      ...init,
+    }).finally(() => request);
   };
 
 const longRunningModelFetch = fetchThrough(modelDispatcher);

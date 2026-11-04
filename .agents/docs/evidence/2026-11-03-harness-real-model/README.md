@@ -22,8 +22,8 @@ the worktree was on; the runs after the first packed that commit with #14623's
 changes on top, uncommitted. Runs on intermediate versions of the fix are not
 kept.
 
-| Run                                                                       | Harness                | codemode | plugin | crash-resume  | Spend (USD) |
-| ------------------------------------------------------------------------- | ---------------------- | -------- | ------ | ------------- | ----------- |
+| Run                            | Harness                | codemode | plugin | crash-resume  | Spend (USD) |
+| ------------------------------ | ---------------------- | -------- | ------ | ------------- | ----------- |
 | `deepseek-deepseek-flash-1931` | `171aa36b38`           | fail     | pass   | fail          | 0.0144      |
 | `deepseek-deepseek-flash-2016` | #14623, earlier runner | pass     | pass   | pass          | 0.0124      |
 | `deepseek-deepseek-flash-2018` | #14623, earlier runner | pass     | pass   | fail (runner) | 0.0134      |

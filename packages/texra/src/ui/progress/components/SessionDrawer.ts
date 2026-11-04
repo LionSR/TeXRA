@@ -14,7 +14,7 @@ import { live } from 'lit/directives/live.js';
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -111,7 +111,9 @@ export class SessionDrawer extends LitElement {
   };
 
   private handleSearchInput = (event: Event): void => {
-    const value = (event.target as HTMLInputElement).value;
+    if (!(event.target instanceof WaInput)) return;
+    // An input event always follows a typed value, so `value` is set.
+    const value = event.target.value ?? '';
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'search', value }));
   };
 

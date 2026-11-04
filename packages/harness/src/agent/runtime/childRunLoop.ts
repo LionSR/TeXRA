@@ -53,11 +53,10 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { RunHistoryRefused, SessionLog } from '@shared/session/runHistory';
+import { SessionLog } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Alongside } from '@shared/session/sessionEvents';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
-import { outcomeFromCause } from '@shared/runs/runStatus';
 import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -705,11 +704,14 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   const { params } = loop;
   const { runId } = params;
   const { end, failure } = loop;
-  // Re-read: a stop landing after the body's exit is still its verdict.
-  const outcome = outcomeFromCause(undefined, {
-    stopped: stopped || loop.runs.stopCause(runId) !== undefined,
-    failed: failure !== undefined,
-  });
+  // Re-read: a stop landing after the body's exit is still its verdict,
+  // and outranks a failure.
+  const failed =
+    failure !== undefined ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED;
+  const outcome =
+    stopped || loop.runs.stopCause(runId) !== undefined
+      ? RUN_OUTCOME.CANCELLED
+      : failed;
   const lastTurn =
     end.kind === 'finished' && !end.handedOff
       ? turnResultPart(end.result, loop.trace)
@@ -774,16 +776,9 @@ const endChildLoop = <TTurn, R>(
 ): Effect.Effect<void, Error, R | AgentRunServices> =>
   Effect.uninterruptible(
     Effect.gen(function* () {
-      let stopped = Exit.isFailure(body) && Cause.hasInterrupts(body.cause);
-      if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause)) {
-        const error = Cause.squash(body.cause);
-        loop.failure ??= { cause: error };
-        // A lost aggregate claim: this process no longer owns the run, so
-        // the loop (and its process) stops rather than continue under it.
-        stopped ||=
-          error instanceof DatabaseNotOwner ||
-          (error instanceof RunHistoryRefused && error.reason === 'not-owner');
-      }
+      const stopped = Exit.isFailure(body) && Cause.hasInterrupts(body.cause);
+      if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause))
+        loop.failure ??= { cause: Cause.squash(body.cause) };
       // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
         runId: loop.params.runId,

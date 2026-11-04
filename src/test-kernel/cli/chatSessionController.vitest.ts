@@ -123,16 +123,15 @@ interface SessionFixture {
   readonly runId?: RunId;
   readonly runSettled?: RootRunSettled;
   readonly runCompleted?: boolean;
-  readonly stopRequested?: boolean;
 }
 
 function makeSession(overrides: SessionFixture = {}): TuiSession {
   const session = new TuiSession();
-  if (overrides.runSettled) session.markRunPending(overrides.runSettled);
+  if (overrides.runSettled)
+    session.markRunPending(overrides.runSettled, Effect.void);
   if (overrides.runCompleted && overrides.runSettled)
     session.markRunCompleted(overrides.runSettled);
   if (overrides.runId) session.runId = overrides.runId;
-  if (overrides.stopRequested) session.askStop('user');
   return session;
 }
 
@@ -386,8 +385,52 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           yield* Fiber.join(resumed);
           yield* awaitRunSettled(session);
 
-          expect(session.runExitCode).toBe(CliExitCode.Interrupted);
+          expect(session.exitCode).toBe(CliExitCode.Interrupted);
           expect(session.runCompleted).toBe(true);
+        }),
+    );
+
+    it.effect(
+      'a run that fails while the chat is leaving exits as a failure',
+      () =>
+        Effect.gen(function* () {
+          // The quit does not make a failure a success: the exit code is the
+          // claim's, written before anything asks whether the chat is leaving.
+          const session = makeSession({ runCompleted: true });
+          mocks.request.mockImplementation(() =>
+            Effect.sync((): Outcome => ({ kind: 'done' })),
+          );
+          const failing = createDeferred<void>();
+          mocks.resumeRun.mockImplementationOnce((id: RunId) =>
+            Effect.succeed({
+              runId: id,
+              result: Effect.andThen(
+                Effect.promise(() => failing.promise),
+                Effect.fail(new Error('the model call failed')),
+              ),
+            }),
+          );
+          const ctrl = createChatSessionController(
+            yield* makeInit({ session }),
+          );
+          seedView(viewWith([makeRunView({ id: 'aaaaaa' as RunId })]));
+          const resumed = yield* Effect.forkChild(
+            ctrl.resume('aaaaaa' as RunId),
+            { startImmediately: true },
+          );
+          yield* Effect.promise(() =>
+            vi.waitFor(() => expect(session.runId).toBe('aaaaaa')),
+          );
+          // The user quits while the run still works; its failure lands after.
+          Deferred.doneUnsafe(
+            session.exit,
+            Effect.succeed({ kind: 'graceful' }),
+          );
+          failing.resolve();
+          yield* Fiber.join(resumed);
+          yield* Effect.exit(awaitRunSettled(session));
+
+          expect(session.exitCode).toBe(CliExitCode.AgentError);
         }),
     );
 
@@ -407,7 +450,6 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           const session = makeSession({
             runId: 'a11111' as RunId,
             runSettled: teardown.settled,
-            stopRequested: true,
           });
           const ctrl = createChatSessionController(
             yield* makeInit({

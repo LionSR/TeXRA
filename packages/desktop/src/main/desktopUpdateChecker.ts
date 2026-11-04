@@ -60,12 +60,12 @@ interface CheckForDesktopUpdateOptions {
 
 /** One check. The window that runs it owns it: it stops when that window
  * closes, and the next window checks again. */
-export const checkForDesktopUpdate = ({
-  currentVersion,
-  isPackaged,
-  notify,
-}: CheckForDesktopUpdateOptions) =>
-  Effect.gen(function* () {
+export const checkForDesktopUpdate = Effect.fn('checkForDesktopUpdate')(
+  function* ({
+    currentVersion,
+    isPackaged,
+    notify,
+  }: CheckForDesktopUpdateOptions) {
     if (!isPackaged || (yield* envFlag(UPDATE_CHECK_SKIP_ENV))) return;
     yield* runDailyUpdateCheck({
       currentVersion,
@@ -79,4 +79,5 @@ export const checkForDesktopUpdate = ({
       ),
       notify: (version) => notify({ version }),
     }).pipe(Effect.provide(updateCheckRecordsLayer));
-  });
+  },
+);

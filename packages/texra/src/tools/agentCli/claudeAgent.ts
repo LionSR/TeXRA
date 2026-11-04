@@ -153,7 +153,7 @@ function claudeCostLines(turn: TurnResult): string[] | undefined {
 // TurnResult for follow-up delivery.
 // ============================================================================
 
-function runStreamedTurn(params: {
+const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   prompt: string;
   logger: AgentTrace;
   /** The API model ID. */
@@ -167,140 +167,134 @@ function runStreamedTurn(params: {
   resumeSessionId: string | undefined;
   forkSession?: boolean;
   pathToClaudeCodeExecutable: string | undefined;
-}): Effect.Effect<TurnResult, Error> {
-  // Draining `query()` is this module's foreign edge: its iterator is
-  // consumed as a Stream whose finalizer ends every tool card still open.
-  // Loading the SDK is the importer's own edge. A stop interrupts the turn,
-  // which aborts the SDK's request.
-  return Effect.gen(function* () {
-    const { logger, prompt } = params;
-    logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
+}): Effect.fn.Return<TurnResult, Error> {
+  const { logger, prompt } = params;
+  logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
 
-    const query = yield* importClaudeAgentSdk();
+  const query = yield* importClaudeAgentSdk();
 
-    // The SDK takes a controller, not a signal: this one exists only at that
-    // boundary, aborted when the turn is interrupted.
-    const abortController = new AbortController();
-    const sdkOptions: ClaudeAgentSdkOptions = {
-      abortController,
-      model: params.model,
-      permissionMode: params.permissionMode,
-      env: params.env,
-      systemPrompt: { type: 'preset', preset: 'claude_code' },
-      settingSources: ['user', 'project', 'local'],
-    };
-    if (params.effort) sdkOptions.effort = params.effort;
-    if (params.thinking) sdkOptions.thinking = params.thinking;
-    if (params.permissionMode === 'bypassPermissions') {
-      sdkOptions.allowDangerouslySkipPermissions = true;
+  // The SDK takes a controller, not a signal: this one exists only at that
+  // boundary, aborted when the turn is interrupted.
+  const abortController = new AbortController();
+  const sdkOptions: ClaudeAgentSdkOptions = {
+    abortController,
+    model: params.model,
+    permissionMode: params.permissionMode,
+    env: params.env,
+    systemPrompt: { type: 'preset', preset: 'claude_code' },
+    settingSources: ['user', 'project', 'local'],
+  };
+  if (params.effort) sdkOptions.effort = params.effort;
+  if (params.thinking) sdkOptions.thinking = params.thinking;
+  if (params.permissionMode === 'bypassPermissions') {
+    sdkOptions.allowDangerouslySkipPermissions = true;
+  }
+  if (params.cwd) sdkOptions.cwd = params.cwd;
+  if (params.additionalDirectories?.length) {
+    sdkOptions.additionalDirectories = params.additionalDirectories;
+  }
+  if (params.resumeSessionId) sdkOptions.resume = params.resumeSessionId;
+  if (params.forkSession) sdkOptions.forkSession = true;
+  if (params.pathToClaudeCodeExecutable) {
+    sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
+  }
+
+  const responseParts: string[] = [];
+  const toolCards = new StreamedToolCards(logger);
+  const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
+  let usage: TurnResult['usage'] = null;
+  let sessionId: string | undefined;
+  let totalCostUsd: number | undefined;
+  let isError = false;
+  let errorMessage: string | undefined;
+
+  const onMessage = (raw: SDKMessage): void => {
+    if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
+    switch (raw.type) {
+      case 'assistant':
+        handleAssistantBlocks(
+          raw.message.content,
+          logger,
+          toolCards,
+          responseParts,
+        );
+        break;
+      case 'user':
+        if (Array.isArray(raw.message.content)) {
+          handleToolResults(raw.message.content, toolCards);
+        }
+        break;
+      case 'result':
+        usage = claudeResultUsage(raw);
+        totalCostUsd = raw.total_cost_usd;
+        if (raw.subtype === 'success') {
+          if (typeof raw.result === 'string' && raw.result.trim() !== '')
+            responseParts.push(raw.result);
+        } else {
+          isError = true;
+          errorMessage =
+            raw.errors?.join('\n') || raw.subtype || 'Claude Code error';
+        }
+        break;
+      case 'system':
+        switch (raw.subtype) {
+          case 'init':
+            logger.info(`Claude session ${raw.session_id} started`);
+            break;
+          case 'background_tasks_changed':
+            backgroundTasks.replace(raw.tasks);
+            break;
+        }
+        break;
     }
-    if (params.cwd) sdkOptions.cwd = params.cwd;
-    if (params.additionalDirectories?.length) {
-      sdkOptions.additionalDirectories = params.additionalDirectories;
-    }
-    if (params.resumeSessionId) sdkOptions.resume = params.resumeSessionId;
-    if (params.forkSession) sdkOptions.forkSession = true;
-    if (params.pathToClaudeCodeExecutable) {
-      sdkOptions.pathToClaudeCodeExecutable = params.pathToClaudeCodeExecutable;
-    }
-
-    const responseParts: string[] = [];
-    const toolCards = new StreamedToolCards(logger);
-    const backgroundTasks = new ClaudeBackgroundTaskTracker(logger);
-    let usage: TurnResult['usage'] = null;
-    let sessionId: string | undefined;
-    let totalCostUsd: number | undefined;
-    let isError = false;
-    let errorMessage: string | undefined;
-
-    const onMessage = (raw: SDKMessage): void => {
-      if ('session_id' in raw && raw.session_id) sessionId = raw.session_id;
-      switch (raw.type) {
-        case 'assistant':
-          handleAssistantBlocks(
-            raw.message.content,
-            logger,
-            toolCards,
-            responseParts,
-          );
-          break;
-        case 'user':
-          if (Array.isArray(raw.message.content)) {
-            handleToolResults(raw.message.content, toolCards);
-          }
-          break;
-        case 'result':
-          usage = claudeResultUsage(raw);
-          totalCostUsd = raw.total_cost_usd;
-          if (raw.subtype === 'success') {
-            if (typeof raw.result === 'string' && raw.result.trim() !== '')
-              responseParts.push(raw.result);
-          } else {
-            isError = true;
-            errorMessage =
-              raw.errors?.join('\n') || raw.subtype || 'Claude Code error';
-          }
-          break;
-        case 'system':
-          switch (raw.subtype) {
-            case 'init':
-              logger.info(`Claude session ${raw.session_id} started`);
-              break;
-            case 'background_tasks_changed':
-              backgroundTasks.replace(raw.tasks);
-              break;
-          }
-          break;
-      }
-    };
-    yield* Stream.unwrap(
-      Effect.try({
-        try: () =>
-          Stream.fromAsyncIterable(
-            query({ prompt, options: sdkOptions }),
-            ensureError,
-          ),
-        catch: ensureError,
+  };
+  yield* Stream.unwrap(
+    Effect.try({
+      try: () =>
+        Stream.fromAsyncIterable(
+          query({ prompt, options: sdkOptions }),
+          ensureError,
+        ),
+      catch: ensureError,
+    }),
+  ).pipe(
+    Stream.runForEach((raw) =>
+      Effect.try({ try: () => onMessage(raw), catch: ensureError }),
+    ),
+    Effect.onInterrupt(() => Effect.sync(() => abortController.abort())),
+    Effect.ensuring(
+      Effect.sync(() => {
+        backgroundTasks.finish();
+        toolCards.failOpen();
       }),
-    ).pipe(
-      Stream.runForEach((raw) =>
-        Effect.try({ try: () => onMessage(raw), catch: ensureError }),
-      ),
-      Effect.onInterrupt(() => Effect.sync(() => abortController.abort())),
-      Effect.ensuring(
-        Effect.sync(() => {
-          backgroundTasks.finish();
-          toolCards.failOpen();
-        }),
-      ),
-    );
+    ),
+  );
 
-    if (
-      params.forkSession &&
-      (!sessionId || sessionId === params.resumeSessionId)
-    ) {
-      isError = true;
-      errorMessage = [
-        errorMessage,
-        'Claude Code fork did not create a distinct session',
-      ]
-        .filter(
-          (part): part is string =>
-            typeof part === 'string' && part.trim() !== '',
-        )
-        .join('\n');
-    }
-
-    return {
-      finalResponse: responseParts.join('\n\n'),
-      usage,
-      sessionId,
-      totalCostUsd,
-      isError,
+  if (
+    params.forkSession &&
+    (!sessionId || sessionId === params.resumeSessionId)
+  ) {
+    isError = true;
+    errorMessage = [
       errorMessage,
-    };
-  });
-}
+      'Claude Code fork did not create a distinct session',
+    ]
+      .filter(
+        (part): part is string =>
+          typeof part === 'string' && part.trim() !== '',
+      )
+      .join('\n');
+  }
+
+  return {
+    finalResponse: responseParts.join('\n\n'),
+    usage,
+    sessionId,
+    totalCostUsd,
+    isError,
+    errorMessage,
+  };
+});
 
 function handleAssistantBlocks(
   blocks: SDKAssistantMessage['message']['content'],
@@ -355,9 +349,7 @@ function handleToolResults(
 
     const isError = block.is_error === true;
     const update: Partial<ToolUseLog> = {
-      ...(block.content !== undefined && {
-        output: block.content as ToolUseLog['output'],
-      }),
+      ...(block.content !== undefined && { output: block.content }),
       ...(isError && {
         error: extractToolErrorMessage(block.content) ?? 'Tool error',
       }),

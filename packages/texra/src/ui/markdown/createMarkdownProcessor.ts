@@ -69,10 +69,6 @@ interface MarkdownProcessorConfig {
 
 export type MarkdownProcessor = (content: string) => string;
 
-export interface MarkdownProcessorRenderEnv {
-  readonly restoreProtectedLatex?: (content: string) => string;
-}
-
 interface ProtectedRef {
   readonly refType: string;
   readonly label: string;

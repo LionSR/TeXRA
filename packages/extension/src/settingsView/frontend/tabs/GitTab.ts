@@ -8,6 +8,7 @@ import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared styles
 import { WorkspaceStateKey } from '@texra-ai/harness/schemas';
+import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
@@ -20,7 +21,6 @@ import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
 
 // Local imports - shared constants
 import { commonViewStyles, designTokens } from '@ui/styles';
@@ -31,7 +31,6 @@ import {
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 import { settingSignal } from '../settingsState';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 /** The identity agent commits use while a field is blank: its row's default. */
 function defaultIdentity(key: WorkspaceStateKey): string {
@@ -187,7 +186,8 @@ export class GitTab extends SignalWatcher(LitElement) {
   ): void {
     // An emptied field resets to the default identity its placeholder shows;
     // `null` clears the key (the catalog rejects a blank name or email).
-    const value = (event.target as WaInput | null)?.value?.trim();
+    const value =
+      event.target instanceof WaInput ? event.target.value?.trim() : undefined;
     postStateSetting(key, value || null);
   }
 

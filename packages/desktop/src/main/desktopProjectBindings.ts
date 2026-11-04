@@ -285,6 +285,7 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
           ui: {
             ...hosts.toolEditPreview,
             showErrorMessage: hosts.run.showErrorMessage,
+            showWarningMessage: hosts.run.showWarningMessage,
           },
           spawn,
           focused: () => shown() && host.window.isFocused(),
@@ -348,15 +349,14 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
       };
     });
 
-    const bind = (project: DesktopProject) =>
-      Effect.gen(function* () {
-        const scope = yield* Scope.fork(bindingsScope);
-        const binding = yield* bindProject(project).pipe(
-          Scope.provide(scope),
-          Effect.onError(() => Scope.close(scope, Exit.void)),
-        );
-        return { ...binding, scope };
-      });
+    const bind = Effect.fn('bind')(function* (project: DesktopProject) {
+      const scope = yield* Scope.fork(bindingsScope);
+      const binding = yield* bindProject(project).pipe(
+        Scope.provide(scope),
+        Effect.onError(() => Scope.close(scope, Exit.void)),
+      );
+      return { ...binding, scope };
+    });
     const release = (binding: ProjectBinding) =>
       Scope.close(binding.scope, Exit.void);
 

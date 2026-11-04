@@ -202,7 +202,7 @@ function callView(
     ended !== undefined && ended.treeUsage.cost > 0
       ? formatCostUsd(ended.treeUsage.cost)
       : undefined,
-  ].filter((part): part is string => part !== undefined);
+  ].filter(Predicate.isNotUndefined);
   const label = agent
     ? (stringOf(input.label) ?? nameOf(input.agentName) ?? row.toolUse.toolName)
     : [row.model.headerLabel, row.model.headerPreview]
@@ -310,10 +310,12 @@ export function scriptStages(
   if (stages.length === 0) return [];
   const byStage = Map.groupBy(
     rows.filter(
-      (row: ReadonlyDeep<TranscriptRow>): row is ToolRow =>
+      (
+        row: ReadonlyDeep<TranscriptRow>,
+      ): row is ToolRow & { readonly groupId: string } =>
         row.kind === 'tool' && row.groupId !== undefined,
     ),
-    (row) => row.groupId!,
+    (row) => row.groupId,
   );
   return stages.map((stage) => {
     const calls = (byStage.get(stage.id) ?? [])

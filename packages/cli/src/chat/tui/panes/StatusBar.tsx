@@ -3,11 +3,7 @@ import { Cause, Effect, Exit, type Fiber } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { readModelOptions } from '@texra-ai/harness/host';
-import {
-  isActivePhase,
-  isEmptyUsage,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
@@ -21,8 +17,7 @@ import {
   rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
-import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
-import { activeStartedAt } from '../state/childControls';
+import { sessionView, runViewOf } from '../state/sessionView';
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
@@ -158,7 +153,6 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   });
   const displayRunId = target.displayRunId;
   const displayRun = runViewOf(view, displayRunId);
-  const displayStatus = runPhaseOf(displayRun);
   // The run's cumulative usage: the same figure the subagent rows and the
   // exit summary present.
   const displayUsage =
@@ -228,9 +222,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? quotaRead.value
       : undefined;
 
-  const runStartedAt = isActivePhase(displayStatus)
-    ? activeStartedAt(displayRun)
-    : undefined;
+  const runStartedAt = displayRun?.runStartedAt ?? undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
   // Every request awaiting the user: the session view's pending approvals, the
@@ -280,7 +272,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
-      holdAvailable: props.chatInputAvailable && isActivePhase(displayStatus),
+      holdAvailable: props.chatInputAvailable && displayRun?.working === true,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable: props.transcriptAvailable,

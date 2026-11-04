@@ -390,6 +390,10 @@ field tells `closers` (M7) that owned work was stopped, not lost.
 Deletes: nothing. Adds one optional payload field (`reason`) to an existing
 kind.
 
+_Amended 2026-11-04 (the one-fact note, O2): the stop's reason is
+`run.end.reason` (`user` or `shutdown`), and the halt row carries none; the
+fold reads the end row, so an attempt a shutdown cut still spends no retry._
+
 Risk: a close that overruns its deadline is interrupted and leaves no `halted`
 row, which then reads as a crash. That is the correct reading.
 

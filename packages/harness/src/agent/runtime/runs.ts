@@ -4,8 +4,7 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { RunId } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
+import type { RunId, RunStopReason } from '@shared/schemas';
 import type { Effect } from 'effect';
 import type { SessionServices } from './rootLaunch';
 
@@ -35,10 +34,6 @@ export interface LiveRun {
   readonly runId: RunId;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
-  /** Its attached parent: the view's edge, or for a child whose `run.start`
-   *  the view has not folded yet, the parent its activation launched under;
-   *  null for a root. */
-  readonly parent: RunId | null;
   /** Whether the generation live here reads a message: a one-shot loop
    *  (headless, or an in-band child) ends after its turn and reads none,
    *  and a run with no loop of its own (a background command) reads what

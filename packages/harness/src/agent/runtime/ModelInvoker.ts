@@ -61,6 +61,7 @@ import {
   type FailedNext,
   type InvocationRef,
   type RetryErrorInfo,
+  type NormalizedUsage,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
@@ -82,7 +83,7 @@ import { AgentRun } from './run/AgentRun';
 import { runInvocation, RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
-import { contextTokens } from './run/contextTokens';
+import { contextTokens, outputBudget } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
 import {
   admittedTurn,
@@ -102,22 +103,6 @@ const PERSONAL_RETRY = {
   type: 'request.decided',
   decision: { action: 'retry', credentials: 'personal' },
 } as const;
-
-/**
- * The output-budget preflight's constants, as the retired handler
- * preflight used them: the buffer covers tokenization differences and API
- * framing, and a reduction below the floor is not worth taking.
- */
-const TOKEN_SAFETY_BUFFER = 10;
-const TOOL_USE_SAFETY_BUFFER = 2000;
-const MIN_COMPLETION_TOKENS = 100;
-
-/** The output budget that fits in what the input leaves of the window. */
-function reducedOutputBudget(available: number, buffer: number): number {
-  if (available <= 0) return 1;
-  const buffered = available - buffer;
-  return buffered >= MIN_COMPLETION_TOKENS ? buffered : available;
-}
 
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
@@ -196,6 +181,9 @@ export const modelInvokerLayer = (): Layer.Layer<
       const requests = yield* SessionRequests;
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
+      /** When each attempt was sent, by its reference, for pricing a failure
+       *  the provider billed by the time it took. */
+      const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
@@ -410,47 +398,37 @@ export const modelInvokerLayer = (): Layer.Layer<
         const state = yield* cell.current;
         const mode = yield* bound.delivery;
         yield* saveDebug(state.messages, 'messages', invocation, bound);
-        // The run's context size (`contextTokens`: the last response's
-        // provider-counted usage plus an estimate of what was added since).
-        // An input that alone exceeds the window is refused before it is
-        // billed; one leaving too little room for the binding's output limit
-        // asks for a smaller output rather than letting the provider reject it.
+        // What the window leaves a foreground request (`outputBudget`); a
+        // background one is the provider's to size.
         const { contextWindow } = bound.config;
-        let maxOutputTokens: number | undefined;
-        if (mode !== 'background' && contextWindow > 0) {
-          const inputTokens = contextTokens(state);
-          if (inputTokens > contextWindow) {
-            return yield* Effect.fail(
-              new ModelError({
-                kind: 'context-overflow',
-                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
-              }),
-            );
-          }
-          const limit = bound.maxOutputTokens;
-          if (limit !== null && inputTokens + limit > contextWindow) {
-            maxOutputTokens = reducedOutputBudget(
-              contextWindow - inputTokens,
-              bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
-            );
-            logContextManagementEvent(
-              logger,
-              `Token count (${inputTokens}) + max output tokens (${limit}) exceeds context window (${contextWindow}). Reducing to ${maxOutputTokens}.`,
-              {
-                action: 'max_tokens_reduced',
-                tokensBefore: inputTokens,
+        const budget =
+          mode === 'background' ? null : outputBudget(state, bound);
+        if (budget?.kind === 'overflow')
+          return yield* Effect.fail(
+            new ModelError({
+              kind: 'context-overflow',
+              message: `Input is ${budget.inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
+            }),
+          );
+        const maxOutputTokens =
+          budget?.kind === 'reduced' ? budget.maxOutputTokens : undefined;
+        if (budget?.kind === 'reduced')
+          logContextManagementEvent(
+            logger,
+            `Token count (${budget.inputTokens}) + max output tokens (${budget.limit}) exceeds context window (${contextWindow}). Reducing to ${maxOutputTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: budget.inputTokens,
+              contextWindow,
+              utilizationBefore: roundedUtilizationPercent(
+                budget.inputTokens,
                 contextWindow,
-                utilizationBefore: roundedUtilizationPercent(
-                  inputTokens,
-                  contextWindow,
-                ),
-                originalMaxTokens: limit,
-                reducedMaxTokens: maxOutputTokens,
-                details: 'tooluse',
-              },
-            );
-          }
-        }
+              ),
+              originalMaxTokens: budget.limit,
+              reducedMaxTokens: budget.maxOutputTokens,
+              details: 'tooluse',
+            },
+          );
         // The request an attempt admits: the folded history with its media
         // resolved (the one read of media bytes), the caller's system and
         // tools, the run as its cache key, and the last response's
@@ -476,6 +454,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         yield* checkRecordedRequest(run, resolved);
         const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;
+        attemptStarts.set(invocation, started);
         const completed: AttemptOutcome = { value: null, streamedText: '' };
         const onEvent = eventSink(invocation, cell, trace, completed);
         const streamed = yield* Effect.exit(
@@ -604,6 +583,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         error: RetryErrorInfo,
         next: FailedNext,
         bound: BoundModel,
+        usage: NormalizedUsage | null,
       ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
         const failed: RunHistoryDraft = {
           type: 'model.message',
@@ -614,6 +594,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             purpose: 'turn',
             error,
             next,
+            ...(usage === null ? {} : { usage }),
           },
         };
         if (next.kind !== 'ask') return [failed];
@@ -691,7 +672,23 @@ export const modelInvokerLayer = (): Layer.Layer<
                   : 'Model request failed (no retry available)',
                 { ...info, rawErrorBody: error.cause },
               );
-            yield* cell.append(yield* failedRows(cell, ref, info, next, bound));
+            // A response the provider billed before refusing it is priced
+            // and reported like a turn's, on its `failed` row.
+            const started = attemptStarts.get(ref);
+            const usage =
+              error instanceof ModelError &&
+              error.usage !== undefined &&
+              started !== undefined
+                ? priceTurnUsage(
+                    bound,
+                    error.usage,
+                    (yield* Clock.currentTimeMillis) - started,
+                  )
+                : null;
+            yield* reportUsage(usageLog, bound, usage, attribution, roots);
+            yield* cell.append(
+              yield* failedRows(cell, ref, info, next, bound, usage),
+            );
             return info;
           }),
           asker: {
@@ -729,6 +726,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                   },
                   { kind: 'ask', requestId: `retry-${randomUUID()}` },
                   bound,
+                  null,
                 ),
               );
             }),

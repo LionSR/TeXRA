@@ -27,13 +27,13 @@ import {
 } from '@ui/copy/scriptStage';
 import { designTokens } from '@ui/styles';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
   ScriptCallView,
   ScriptStageView,
 } from '@texra-ai/harness/transcript';
 import type { SessionView, RunId } from '@texra-ai/harness/schemas';
-import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 // Side-effect imports - register Web Awesome components
@@ -253,8 +253,7 @@ export class ScriptStage extends LitElement {
       placement="bottom-end"
       @click=${(event: Event) => event.stopPropagation()}
       @wa-select=${(event: WaSelectEvent) => {
-        if ((event.detail.item as WaDropdownItem).value === STOP_AGENT)
-          this.stop(child.id);
+        if (selectedItemValue(event) === STOP_AGENT) this.stop(child.id);
       }}
       ><wa-button
         slot="trigger"

@@ -11,6 +11,7 @@ import {
   FiberSet,
   Schema,
   Scope,
+  Semaphore,
   Stream,
 } from 'effect';
 
@@ -24,10 +25,8 @@ import {
   launchNoticeOf,
   normalizeProviderError,
   presentFollowUpResult,
-  type PerKeyLane,
   type ProcessRuntime,
   type ProcessServices,
-  withPerKeyLane,
 } from '@texra-ai/harness/host';
 import {
   type RuntimeRequest,
@@ -43,7 +42,6 @@ import {
   acceptsFollowUp,
   RUN_PHASE,
   isLiveRun,
-  isTerminalOutcomePhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
@@ -356,49 +354,32 @@ export function createChatSessionController(
     );
 
   /** Publish the configuration of the conversation the TUI adopts. */
-  const adoptRunConfig = (
+  const adoptRunConfig = Effect.fn('adoptRunConfig')(function* (
     config: Pick<
       AgentConfig,
       'agent' | 'agentSource' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
-  ) =>
-    Effect.gen(function* () {
-      const cliTeamId = config.cli?.teamId ?? undefined;
-      const teamName = yield* readCliTeamName(
-        runSession.roots.repoState,
-        cliTeamId,
-      );
-      patchSessionMeta({
-        agent: config.agent,
-        agentSource: config.agentSource ?? undefined,
-        model: config.model,
-        ...(modelSource ? { modelSource } : {}),
-        teamName,
-        cliTeamId,
-        delegationAgentScope: config.delegationAgentScope ?? undefined,
-      });
+  ) {
+    const cliTeamId = config.cli?.teamId ?? undefined;
+    const teamName = yield* readCliTeamName(
+      runSession.roots.repoState,
+      cliTeamId,
+    );
+    patchSessionMeta({
+      agent: config.agent,
+      agentSource: config.agentSource ?? undefined,
+      model: config.model,
+      ...(modelSource ? { modelSource } : {}),
+      teamName,
+      cliTeamId,
+      delegationAgentScope: config.delegationAgentScope ?? undefined,
     });
+  });
 
   // -----------------------------------------------------------------------
   // Internal helpers
   // -----------------------------------------------------------------------
-
-  /** Stop the chat's run. A stop lands only on a run the session holds:
-   *  one the view shows, or `admitted`, which the session has just admitted
-   *  whether or not the view has folded it yet (admission re-reads
-   *  `stopRequested` for a stop asked in the launch gap). The stop is a
-   *  shutdown while the chat is leaving and a user stop otherwise; why the
-   *  run then stops is the run registry's fact. */
-  const interruptActiveRun = (admitted?: RunId): void => {
-    const runId = session.runId;
-    if (!runId) return;
-    if (runId !== admitted && !runViewOf(currentView(), runId)) return;
-    // Ctrl-C leaves the child policy unset, so the stop itself (`Runs.stop`)
-    // applies the configured "Keep agents running".
-    const reason: RunStopReason = session.leaving ? 'shutdown' : 'user';
-    runtime.runFork(request({ kind: 'run.stop', runId, reason }));
-  };
 
   // A failure the chat shows: a refused launch by the notice it carries (an
   // unknown model's instruction, an unknown agent) where the chat's runtime
@@ -411,22 +392,19 @@ export function createChatSessionController(
     else appendLocalErrorTranscript(text);
   };
 
-  // Shared tail of the run/resume failure recovery: surface the error
-  // unless the run was stopped intentionally, and set the exit code
-  // accordingly. A run whose claim the slot no longer holds (a fork or a
-  // new task replaced it) says nothing to the chat.
+  // Shared tail of the run/resume failure recovery: the failure is the
+  // claim's exit code, and it is shown unless the chat is gone or the run's
+  // own end says the user stopped it. A run whose claim the slot no longer
+  // holds (a fork or a new task replaced it) says nothing to the chat.
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
-    if (session.stopRequested) {
-      session.runExitCode = CliExitCode.Success;
-      return;
-    }
+    session.settleExitCode(claim, CliExitCode.AgentError);
+    if (session.leaving || session.status() === RUN_PHASE.CANCELLED) return;
     const { classification } = normalizeProviderError(error);
     showFailure(
       error,
       modelFailureText({ message: toErrorMessage(error), classification }),
     );
-    session.runExitCode = CliExitCode.AgentError;
   };
 
   // One interaction host for the chat session's lifetime, as the extension
@@ -485,15 +463,16 @@ export function createChatSessionController(
         // node leaves the slot pending exactly as before.
         const claimedRun = Deferred.makeUnsafe<void, Error>();
         const claim = Deferred.await(claimedRun);
-        // Native launch may resolve its stream on this turn. Claim first so
-        // marking the run pending cannot erase that run or a reentrant stop.
-        session.markRunPending(claim, runId);
-        // Done once the session holds the run (or the launch failed): a message
-        // typed meanwhile waits for it, so it reaches a run that exists.
+        // Done once the session holds the run (or the launch failed): a
+        // message typed meanwhile, or a stop asked meanwhile, waits for it,
+        // so it reaches a run that exists.
         const launched = Deferred.makeUnsafe<void>();
         const markLaunched = Effect.sync(() =>
           Deferred.doneUnsafe(launched, Effect.void),
         );
+        // Native launch may resolve its stream on this turn. Claim first so
+        // marking the run pending cannot erase that run.
+        session.markRunPending(claim, Deferred.await(launched), runId);
         // Owned by the process's shutdown scope, as the chat's sends are.
         return recoverRun(
           Effect.gen(function* () {
@@ -516,7 +495,6 @@ export function createChatSessionController(
             rootRunId.set(run.runId);
             moveLocalTranscriptToRun(run.runId);
             focusRun(run.runId);
-            if (session.stopRequested) interruptActiveRun(run.runId);
             yield* markLaunched;
             const { outcome } = yield* run.result;
             session.settleExitCode(claim, runOutcomeExitCode(outcome));
@@ -554,7 +532,13 @@ export function createChatSessionController(
     Effect.suspend(() => {
       const claimedRun = Deferred.makeUnsafe<void, Error>();
       const claim = Deferred.await(claimedRun);
-      if (!session.tryClaimRootRunSlot(claim)) {
+      // Done once the chat adopted the resumed run, or the resume ended
+      // without one: a stop asked meanwhile waits for it.
+      const adopted = Deferred.makeUnsafe<void>();
+      const markAdopted = (): void => {
+        Deferred.doneUnsafe(adopted, Effect.void);
+      };
+      if (!session.tryClaimRootRunSlot(claim, Deferred.await(adopted))) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
         appendLocalNotice(
@@ -567,6 +551,7 @@ export function createChatSessionController(
        *  settle. */
       const endResumeUnstarted = (announce: () => void): void => {
         announce();
+        markAdopted();
         session.markRunCompleted(claim);
         Deferred.doneUnsafe(claimedRun, Effect.void);
       };
@@ -634,16 +619,12 @@ export function createChatSessionController(
           clearLocalTranscript();
           session.runId = resumed;
           rootRunId.set(resumed);
-          // The pre-resume stream was dropped by the synchronous slot claim
-          // above, so a Ctrl-C before adoption had nothing to interrupt;
-          // re-read the request here and let it land on the run the user
-          // asked to continue.
-          if (session.stopRequested) interruptActiveRun(resumed);
-
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
           // an open `/plan` reader reads the same `RunView`.
           focusRun(resumed);
+          // A stop asked before this point lands on the run adopted here.
+          markAdopted();
         });
 
         // A defect reaches the transcript as a failure does: nothing else
@@ -660,16 +641,12 @@ export function createChatSessionController(
                 ),
               );
               if (run === 'waiting' || isRequestRefusal(run)) {
-                if (session.stopRequested) {
-                  session.settleExitCode(claim, CliExitCode.Interrupted);
-                } else {
-                  if (run === 'waiting')
-                    appendLocalErrorTranscript(
-                      describeFollowUpFailure('blocked'),
-                    );
-                  else appendLocalRequestRefusal(run);
-                  session.settleExitCode(claim, CliExitCode.Usage);
-                }
+                if (run === 'waiting')
+                  appendLocalErrorTranscript(
+                    describeFollowUpFailure('blocked'),
+                  );
+                else appendLocalRequestRefusal(run);
+                session.settleExitCode(claim, CliExitCode.Usage);
                 return;
               }
               yield* adoptResumedRun(run.runId);
@@ -680,7 +657,12 @@ export function createChatSessionController(
             }),
             (error) => reportRunFailure(error, claim),
           ).pipe(
-            Effect.ensuring(Effect.sync(() => session.markRunCompleted(claim))),
+            Effect.ensuring(
+              Effect.sync(() => {
+                markAdopted();
+                session.markRunCompleted(claim);
+              }),
+            ),
             // The slot was claimed synchronously above; it settles with this
             // chain, so the exit drain blocks until the continued run actually
             // finishes (or is interrupted), not just until rehydration
@@ -736,7 +718,8 @@ export function createChatSessionController(
   ): void => {
     const adopted = Deferred.makeUnsafe<void, Error>();
     const claim = Deferred.await(adopted);
-    if (!session.tryClaimRootRunSlot(claim, runId)) return;
+    // The session holds the run already: a stop lands at once.
+    if (!session.tryClaimRootRunSlot(claim, Effect.void, runId)) return;
     rootRunId.set(runId);
     focusRun(runId);
     runtime.runSync(
@@ -744,12 +727,11 @@ export function createChatSessionController(
         yield* adoptRunRecord(runId);
         yield* resumed;
         yield* settledHere(runId);
-        const status = runSession.view.current().runs.get(runId)?.status;
+        const outcome =
+          runSession.view.current().runs.get(runId)?.durableOutcome ?? null;
         session.settleExitCode(
           claim,
-          isTerminalOutcomePhase(status)
-            ? runOutcomeExitCode(status)
-            : CliExitCode.Success,
+          outcome === null ? CliExitCode.Success : runOutcomeExitCode(outcome),
         );
       }).pipe(
         Effect.ensuring(Effect.sync(() => session.markRunCompleted(claim))),
@@ -787,12 +769,33 @@ export function createChatSessionController(
   // stop
   // -----------------------------------------------------------------------
 
+  /** A stop lands on a run the session holds. One asked while the claim's
+   *  launch is still entering the session waits for it, then lands on the
+   *  run the chat holds then: the claim's, or the one a launch replaced it
+   *  with for the same `runId`. Ctrl-C leaves the child policy unset, so the
+   *  stop itself (`Runs.stop`) applies the configured "Keep agents running";
+   *  why the run then stops is the run registry's fact. */
   const stop = (reason: RunStopReason): void => {
     // A chat of the background service leaves its task running when the
     // terminal goes: only the user's own stop reaches it.
     if (reason === 'shutdown' && served) return;
-    session.askStop(reason);
-    interruptActiveRun();
+    const asked = session.claim;
+    if (asked.runSettled === undefined) return;
+    runtime.runFork(
+      asked.launched.pipe(
+        Effect.andThen(
+          Effect.suspend(() => {
+            const claim = session.claim;
+            const runId = claim.runId;
+            if (runId === undefined || !chatTuiRunPending(claim))
+              return Effect.void;
+            if (claim.runSettled !== asked.runSettled && runId !== asked.runId)
+              return Effect.void;
+            return request({ kind: 'run.stop', runId, reason });
+          }),
+        ),
+      ),
+    );
   };
 
   const startSession = (
@@ -809,7 +812,9 @@ export function createChatSessionController(
       const runId = generateRunId();
       const startSettled = Deferred.makeUnsafe<void, Error>();
       const claim = Deferred.await(startSettled);
-      session.markRunPending(claim, runId);
+      // Done once the launch handed over to the run's own claim, which
+      // names the same `runId`: a stop asked meanwhile lands on that run.
+      session.markRunPending(claim, Effect.ignoreCause(claim), runId);
       return recoverRun(
         Effect.gen(function* () {
           const meta = sessionMetaSignal.get();
@@ -835,10 +840,6 @@ export function createChatSessionController(
             ),
           );
           yield* setCliHelperModel(stores.globalState, selection.model);
-          if (session.stopRequested) {
-            session.markRunCompleted(claim);
-            return;
-          }
           yield* startRootRun(
             {
               agent: meta.agent,
@@ -860,9 +861,7 @@ export function createChatSessionController(
           started = true;
         }),
         (error) => {
-          if (!session.stopRequested) {
-            appendLocalUserTranscript(displayInstruction ?? instruction);
-          }
+          appendLocalUserTranscript(displayInstruction ?? instruction);
           reportRunFailure(error, claim);
           session.markRunCompleted(claim);
         },
@@ -876,8 +875,7 @@ export function createChatSessionController(
   // so a message typed while the chat starts its run waits until the
   // session holds that run. The send itself runs outside: the session keeps
   // a run's messages in order.
-  const submissionLanes = new Map<'chat', PerKeyLane>();
-  const inOrder = withPerKeyLane(submissionLanes, 'chat');
+  const inOrder = Semaphore.makeUnsafe(1).withPermit;
   // The sends in flight, which a graceful exit waits for.
   const sending = runtime.runSync(
     FiberSet.make<void>().pipe(Scope.provide(shutdownScope)),
@@ -887,8 +885,10 @@ export function createChatSessionController(
    * Send `prepared` to `target`. The session decides everything about the
    * message: whether the run takes it, waiting for a run that is stopping
    * to finish, and resuming a run that is not running. `continuing`: the
-   * chat holds no running claim on `target`, its root, so once the session
-   * answered the chat adopts the run.
+   * message may continue `target`, the root, outside the chat's running
+   * claim: a root the chat does not hold, or the held root once the session
+   * answers that it queued the message (the run was stopping, so the
+   * session resumes it); the chat then adopts the run.
    */
   const sendMessage = Effect.fn('sendMessage')(function* (
     target: RunId,
@@ -927,8 +927,8 @@ export function createChatSessionController(
             }),
             // `match` recovers only the typed refusal; a defect is read the
             // way `SessionBridge` answers `Internal`: logged and worded.
-            Effect.catchCause((cause) =>
-              Effect.gen(function* () {
+            Effect.catchCause(
+              Effect.fnUntraced(function* (cause) {
                 if (Cause.hasInterruptsOnly(cause)) {
                   return { kind: 'interrupted' as const };
                 }
@@ -949,7 +949,11 @@ export function createChatSessionController(
         // The session resumed the stopped conversation: the slot passes to
         // it once the stopped run's claim lets go, so the next message goes
         // to it rather than starting a second root beside it.
-        if (continuing && outcome.value.wake == null)
+        if (
+          continuing &&
+          (stoppedClaim === undefined || outcome.value.status === 'queued') &&
+          outcome.value.wake == null
+        )
           yield* Effect.forkIn(
             Effect.ignoreCause(stoppedClaim ?? Effect.void).pipe(
               Effect.andThen(
@@ -1021,7 +1025,7 @@ export function createChatSessionController(
           return message.undelivered(
             'The conversation is still being resumed.',
           );
-        return yield* send(held, session.stopRequested);
+        return yield* send(held, true);
       }
       // The conversation's root while it runs without the chat holding it
       // (the session resumed it), or one the user stopped, which the session

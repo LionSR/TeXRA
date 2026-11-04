@@ -30,18 +30,7 @@ export * from './output';
 export * from './progressEvents';
 export * from './scriptDelivery';
 
-export {
-  emptyRunEndOutput,
-  NonAgentRunRecordSchema,
-  RunRecordFieldsSchema,
-  RunEndSchema,
-  RunWorkspaceFilesSchema,
-  isTaskConfig,
-  recipeBlockOf,
-  type ResultMeta,
-  type RunEnd,
-  type RunEndOutput,
-} from './runRecords';
+export * from './runRecords';
 
 // Layer 3: Depends on layer 2
 export * from './log';

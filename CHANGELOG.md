@@ -6,6 +6,61 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A run's model route is decided over one set of facts.** The binding a
+  `run.config` records now carries the subscription routes it was decided
+  over, and a model switch is admitted over the routes the run's history
+  holds, the same set the next binding reads, so a switch after a quota
+  fallback is answered as the binding will answer it. A model that would be
+  served from a different conversation format is refused by the route
+  decision itself, for a switch and for a resume alike (a resumed run no
+  longer binds under its stored backend when the model moved). SDK:
+  `RunModelCandidate.fallbackMode` is gone: each candidate's reason decides
+  its fallback (a named or credential-chosen model is refused, a configured
+  or remembered one falls back with a notice, a default silently), in one
+  table.
+- **The view says whether a run is working.** `RunView.working` is true
+  while the run is inside a turn: live, not paused, not interrupted and not
+  waiting for its user. `runStartedAt` is set only while the run is busy on
+  a turn (not while it waits on a person's answer, nor when interrupted or
+  paused), so a clock reads it and nothing else, and `durableOutcome` is the
+  one reading of "ended, and how". Hosts read these three instead of deriving them from
+  the status word, so an interrupted run no longer shows as active in the
+  terminal (its status bar, the live-assistant row, `/clear`'s refusal) and
+  the header clock stops with it. SDK: `isWorkingRun` and `isActivePhase`
+  are gone (read `working`), `RunView.runStartedAt` is null unless the run
+  is busy (`turnStartedAt` carries the turn's start as the rows record it),
+  and a run listing entry's `status` is `outcome`: the run's durable
+  outcome, null until it ends.
+- **A message's sender is placed by the rows, not the view.** The inbox
+  stamps a run sender's relation (parent, child, sibling, …) from the parent
+  edges the rows record, in the job that writes the message, and a retry of
+  a message compares against the relation it was stamped with, so a retry
+  after a detach is the same request instead of a spurious conflict, and a
+  detached child keeps the grants its ancestors' rows give it. SDK:
+  `ChildRuns.parent` answers the rows' edge (null for a root, or a run that
+  is not there; never `undefined`), and `LiveRun.parent` is gone.
+- **The route decides three wire knobs.** `model.useBackgroundResponses` is
+  gone: a text-only turn goes out as background work whenever its route can
+  carry it, which the setting's default already did.
+  `model.openaiParallelToolCalls` is gone: a model may always call tools in
+  parallel. `model.gpt5ReasoningSummary` is gone: a GPT-5 reasoning request
+  asks for a summary as every other reasoning model's does, so its thinking
+  shows as it streams. SDK: `BindSpec.options.parallelToolCalls` and
+  `reasoningSummary`, `TurnRequest.store` and `ChooseReasoningOptions.strict`
+  are gone; a
+  Responses configuration loses `supportsStorage`, `instructions`,
+  `webSocketStreamParameter` and `toolNamespace`, and its `requestDialect`
+  gains `chatgpt` (the plan's namespaced function tools); a reasoning
+  request's `summary` is `'auto'` or null.
+- **A cancelled run says who stopped it.** The `run.end` row carries
+  `reason`: `user` for a person's stop, `shutdown` for the process's exit,
+  neither for a holder's release. A run the process closed mid-request
+  resumes without spending a retry, as before, and a child's delivery wakes
+  it, as after a crash; only a person's stop holds that delivery back. SDK:
+  `RunEnd.reason` and `RunStopReason` (from `@texra-ai/harness`); the halt
+  position carries no `reason`; the `abort` error kind, `isUserAbort` and
+  `AGENT_ERROR_OUTCOME` are gone, as a stop is the run fiber's interruption
+  and nothing else, and `outcomeFromCause` reads a cause alone.
 - **ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source
   agents.** The ChatGPT plan now pays for calls to the public Responses API
   (`api.openai.com/v1`) through a client OpenAI registers for you at the
@@ -1387,6 +1442,32 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A request the model's context window cannot hold is compacted and sent
+  again.** When the provider refused a request as too long, or the run's
+  own estimate did, the run ended failed. The run now compacts its history
+  once in that turn and sends the request again; a history too short to
+  compact, or a single attachment larger than the window, still fails with
+  the provider's message. Anthropic reports an overflowed request as a
+  finished turn, which counted as a completed answer; it is now the same
+  `context-overflow` failure every other provider raises, and what Anthropic
+  billed for it still counts toward the run's usage. SDK: the
+  `context-window-exceeded` finish reason is gone from `TurnResult` and the
+  stored turn, a compaction's `trigger` may be `overflow`, `ModelError`
+  carries the `usage` of a response the provider billed before refusing it,
+  and a `failed` row carries that usage priced.
+- **An answer the model could not finish says so.** When a reply stopped at
+  the model's output limit or at the provider's content filter, it was shown
+  as a complete answer. The assistant row in the progress view and the
+  terminal chat now ends with a note naming the limit. SDK: the
+  `response.finalized` row carries `cut` (`'length' | 'content-filter'`),
+  and `StreamingTextRow.cut` is its projection; `WebSearchRow.label` is
+  gone, as `rowHeadline` already words the query.
+- **SDK: a stored turn of another codec version replays as plain content.**
+  `ModelOrigin.codecVersion` (`@texra-ai/llm`) is any positive integer, not
+  only `1`. A run holding a turn whose provider state another build encoded
+  continues without that turn's reasoning and evidence, as after a model
+  switch, instead of failing as an invalid turn request. This build still
+  writes version 1.
 - **A used-up plan or a lapsed subscription reads in TeXRA's words again
   wherever a run's failure shows.** The end-of-run notice (the desktop and
   VS Code message, `texra run`'s `ERROR` line), a launch that fails before
@@ -1441,7 +1522,13 @@ show` print the same notice, and the new `texra agents customize`,
   and shows the same diff. Before, both lived only in the process that
   opened the request, and a resume applied the tool's own proposal. A
   window that closes mid-review takes its unsent edits with it, as an
-  editor does.
+  editor does. Every window of the project shows the same proposal, and
+  changes made in one window go only with an approval from that window:
+  an approval sent after another window answered is refused. When the
+  request closes without the changes made in a window (another window or
+  the terminal answered it, or the task stopped), that window keeps them,
+  VS Code in a new editor and the desktop app in the file its editor
+  saved, and says they were not applied.
 - **A task interrupted by a crash is no longer held forever after the
   network changes.** On macOS the computer's name follows the network (a
   router-assigned name at home, `name.local` elsewhere), and a task whose
@@ -2705,6 +2792,15 @@ view` on a sub-agent the parent waited for shows its report instead of
 
 #### Bug Fixes
 
+- **One owner for how the terminal client leaves.** A run that fails while
+  you quit the chat now exits 1 instead of 0, and the chat reads its exit code
+  from one place. Ctrl-C while the chat is still choosing a model stops the
+  run it starts instead of dropping your message, and a resume refused while
+  a stop was asked says why and exits 2. `texra chat` ends through its own
+  exit code after a self-update. Every CLI signal listener goes through one
+  registry (`holdSignals`): the platform, a foreground pager or installer,
+  `texra serve` and the chat each hold their policy and the newest answers,
+  so a second Ctrl-C during a graceful exit still leaves at once.
 - **`/agent` shows workflows again.** Once teams joined the picker its list
   overflowed at every terminal height, and the Workflows section with its
   `texra run <name>` hint was dropped. The picker now scrolls its agents and

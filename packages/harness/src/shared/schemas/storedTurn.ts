@@ -129,7 +129,6 @@ export const StoredTurnSchema = Schema.Struct({
     'tool-calls',
     'stop-sequence',
     'refusal',
-    'context-window-exceeded',
   ]),
   stopSequence: Schema.optional(Schema.String),
   finishEvidence: Schema.optional(ProviderEvidenceSchema),
