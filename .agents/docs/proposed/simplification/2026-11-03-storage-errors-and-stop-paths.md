@@ -294,6 +294,14 @@ values get a reader or go.
 
 **Give up.** A silent success on truncation, which is the defect.
 
+_Landed 2026-11-04: `cancel` is gone from `FailedNextSchema` with its two dead
+readers (a person's cancel travels through `ask` and the request's decision),
+and `cancelled` from the tool result's `disposition` with its reader in the
+script call status (a call a stop cuts short has no result row; the transcript's
+own `cancelled` status comes from `cutByRunEnd` and stays). Open: the unread
+`finishReason`, the three stream-end kinds, the two retry-wait owners, the
+three tool failure shapes._
+
 ## Rejected
 
 - **The `Symbol.for` error marks, SDK-internal retries, the launch
