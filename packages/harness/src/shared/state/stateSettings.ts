@@ -221,17 +221,9 @@ const HARNESS_CONFIG_ROWS: Record<
     false,
     'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
   ),
-  'model.useBackgroundResponses': configToggle(
-    true,
-    'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running a text-only agent (one without tools); ignored otherwise. Disable to fall back to synchronous streaming requests.',
-  ),
   'model.openaiFastTier': configToggle(
     false,
     "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
-  ),
-  'model.openaiParallelToolCalls': configToggle(
-    true,
-    'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   ),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `Settings.get`, so narrowing the row to the global scope would

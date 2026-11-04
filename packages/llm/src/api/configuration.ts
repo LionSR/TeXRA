@@ -52,7 +52,6 @@ export interface Facts {
     readonly maxOutputTokens: number;
     /** Null where the request takes no temperature: the route then sends none. */
     readonly temperature: number | null;
-    readonly parallelToolCalls: boolean;
   };
   /** The effort values the route accepts on the wire (see {@link acceptedEfforts}). */
   readonly acceptedEfforts: readonly ReasoningEffort[];
@@ -90,7 +89,6 @@ const CONFIGURE: {
       supportsSystemMessages: config.capabilities.supportsIntermDevMsgs,
       defaults: {
         maxOutputTokens: controls.maxOutputTokens,
-        parallelToolCalls: true,
         thinking: anthropicThinking(config, choice, controls.maxOutputTokens),
         // Anthropic has no `none` or `minimal`: off is the thinking switch.
         effort:
@@ -156,7 +154,6 @@ export function configurationFor(spec: BindSpec): {
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
     reasoning: chooseReasoning(config, {}, { route }),
-    parallelToolCalls: false,
     reasoningSummary: false,
     serverState: false,
     fastTier: false,
@@ -190,8 +187,6 @@ export function configurationFor(spec: BindSpec): {
     controls: {
       maxOutputTokens: options.maxOutputTokens,
       temperature: sampled ? (options.temperature ?? null) : null,
-      // Every OpenAI-descended route honors this; Anthropic uses its default.
-      parallelToolCalls: options.parallelToolCalls,
     },
     acceptedEfforts: acceptedEfforts(config, route),
   });

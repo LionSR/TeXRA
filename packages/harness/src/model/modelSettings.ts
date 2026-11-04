@@ -80,11 +80,10 @@ export interface ModelSettings {
   readonly preferShortModelNames: boolean;
   /** Automatic retries after a failed attempt. */
   readonly automaticRetries: number;
-  /** The providers' background-delivery toggles. */
-  readonly background: BackgroundToggles;
+  /** Google text-only turns go out as background Interactions. */
+  readonly googleBackground: boolean;
   /** The vendor knobs a binding sends. */
   readonly wire: {
-    readonly parallelToolCalls: boolean;
     readonly reasoningSummary: boolean;
     readonly serverState: boolean;
     readonly fastTier: boolean;
@@ -92,23 +91,12 @@ export interface ModelSettings {
   };
 }
 
-/** The providers' background-delivery toggles, which a run reads again each turn. */
-export interface BackgroundToggles {
-  readonly responses: boolean;
-  readonly googleInteractions: boolean;
-}
-
-/** Read the background-delivery toggles alone. */
-export function readBackgroundToggles(
+/** Whether Google text-only turns go out as background Interactions, read
+ *  again each turn; a Responses turn goes out so whenever its route can. */
+export function readGoogleBackground(
   stores: SettingsStores,
-): Effect.Effect<BackgroundToggles, StateReadFailed> {
-  return Effect.all({
-    responses: Settings.get<boolean>(stores, 'model.useBackgroundResponses'),
-    googleInteractions: Settings.get<boolean>(
-      stores,
-      'model.useGoogleBackgroundResponses',
-    ),
-  });
+): Effect.Effect<boolean, StateReadFailed> {
+  return Settings.get<boolean>(stores, 'model.useGoogleBackgroundResponses');
 }
 
 /**
@@ -268,14 +256,13 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
       Effect.all({
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
         preferShortModelNames: flag(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
-        background: readBackgroundToggles(stores),
+        googleBackground: readGoogleBackground(stores),
         automaticRetries: Settings.get<number>(
           stores,
           MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey,
         ),
       }),
       Effect.all({
-        parallelToolCalls: flag('model.openaiParallelToolCalls'),
         reasoningSummary: flag('model.gpt5ReasoningSummary'),
         serverState: flag('model.useGoogleInteractionsServerState'),
         fastTier: flag('model.openaiFastTier'),

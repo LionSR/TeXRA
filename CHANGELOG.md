@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The route decides two wire knobs.** `model.useBackgroundResponses` is
+  gone: a text-only turn goes out as background work whenever its route can
+  carry it, which the setting's default already did.
+  `model.openaiParallelToolCalls` is gone: a model may always call tools in
+  parallel. SDK: `BindSpec.options.parallelToolCalls`,
+  `TurnRequest.store` and `ChooseReasoningOptions.strict` are gone; a
+  Responses configuration loses `supportsStorage`, `instructions`,
+  `webSocketStreamParameter` and `toolNamespace`, and its `requestDialect`
+  gains `chatgpt` (the plan's namespaced function tools); a reasoning
+  request's `summary` is `'auto'` or null.
 - **A cancelled run says who stopped it.** The `run.end` row carries
   `reason`: `user` for a person's stop, `shutdown` for the process's exit,
   neither for a holder's release. A run the process closed mid-request

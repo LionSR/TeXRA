@@ -575,7 +575,7 @@ export function googleInteractionsModel(
       origin,
       background,
       (input) => {
-        const store = input.store ?? config.defaults.store;
+        const store = config.defaults.store;
         return input.mode === 'background' && !store
           ? Effect.fail(
               new ModelError({

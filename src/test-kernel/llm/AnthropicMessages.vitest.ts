@@ -19,7 +19,6 @@ const CONFIG: AnthropicMessagesConfiguration = {
   supportsSystemMessages: false,
   defaults: {
     maxOutputTokens: 8192,
-    parallelToolCalls: false,
     thinking: { mode: 'adaptive', display: 'summarized' },
     effort: 'high',
     cache: '5m',
@@ -300,7 +299,6 @@ describe('canonical Anthropic Messages protocol', () => {
           cache_control: { type: 'ephemeral', ttl: '5m' },
           tool_choice: {
             type: 'auto',
-            disable_parallel_tool_use: true,
           },
         });
         const next = yield* configured.prepareTurn(

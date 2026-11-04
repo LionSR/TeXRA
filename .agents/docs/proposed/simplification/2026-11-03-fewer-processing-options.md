@@ -93,6 +93,18 @@ row for one today.
 
 **Acceptance.** `rg "useBackgroundResponses|useGoogleBackgroundResponses|gpt5ReasoningSummary|openaiFastTier|openaiParallelToolCalls|codeMode.scriptOnly" packages` is empty; `BindSpec.options` holds `maxOutputTokens`, `temperature`, `reasoning`, `webSocket` and `fetch`; `readBackgroundToggles` is gone.
 
+_Landed 2026-11-04 (first part): `model.useBackgroundResponses` (its default
+was already the rule) and `model.openaiParallelToolCalls` are gone, with
+`BindSpec.options.parallelToolCalls`; `readBackgroundToggles` is
+`readGoogleBackground`. `codeMode.scriptOnly` is its own slice: the canned
+validation model (CI's `validate` job, the golden store) calls `plan` and
+`bash` directly, so flipping to script-only first rewrites that conversation
+to call them from scripts, then runs the GLM and `agent()` journeys. Three
+keys wait for the owner's word, each a product-visible default: `model.useGoogleBackgroundResponses` (off: Google
+text-only turns would stop streaming), `model.gpt5ReasoningSummary` (off:
+its description says the summary needs an account with access) and
+`model.openaiFastTier` (off: a documented, dearer tier)._
+
 ## 2. Declarative columns that are constants or restatements
 
 `ResponsesConfiguration` (`packages/llm/src/turn.ts:162-200`) has three
@@ -142,6 +154,15 @@ and `strict`; keep one route-kind discriminator from which `requestDialect` and
 **Acceptance.** `ResponsesConfiguration` loses `webSocketStreamParameter`,
 `instructions`, `supportsStorage` and `requestDialect`;
 `rg "startsWith\('gpt" packages/llm` is empty.
+
+_Landed 2026-11-04: `webSocketStreamParameter`, `instructions`,
+`supportsStorage` and `toolNamespace` are gone; `requestDialect` is the one
+route-kind discriminator (`openai`, `compatible`, `chatgpt`); `TurnRequest.store`
+and `ChooseReasoningOptions.strict` are gone; `summary` is `'auto'` alone.
+Corrections: `routeEfforts` has a producer (the installed Codex CLI's
+levels, `packages/texra/src/tools/agentCli/codexConfig.ts`) and stays; the
+two id-prefix tests stay until llm-zoo carries a background capability, and
+the GPT-5 summary test with its key above._
 
 ## 3. One approval decision
 

@@ -60,7 +60,6 @@ export interface BindSpec {
     readonly temperature?: number;
     /** The model's default reasoning (`chooseReasoning`) unless given. */
     readonly reasoning?: ReasoningChoice;
-    readonly parallelToolCalls?: boolean;
     /** GPT-5 sends a reasoning summary only when asked. */
     readonly reasoningSummary?: boolean;
     /** Google keeps the conversation server-side. */

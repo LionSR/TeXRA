@@ -15,7 +15,7 @@ import {
 import { resolveTurn } from './turnInput.js';
 import { sameModelOrigin } from '../protocol.js';
 import { ModelError } from '../errors.js';
-import { responseInput } from './openaiResponsesLower.js';
+import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
 import type { UploadCache } from './uploadCache.js';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
@@ -45,10 +45,7 @@ export const prepareResponsesTurn = (
         ...origin,
         mode: author.mode ?? 'foreground',
         transport,
-        system:
-          config.instructions.kind === 'required'
-            ? author.system?.trim() || config.instructions.fallback
-            : author.system,
+        system: author.system,
         messages: author.messages,
         tools: author.tools ?? [],
         continuation: author.continuation,
@@ -58,8 +55,7 @@ export const prepareResponsesTurn = (
             config.defaults.maxOutputTokens === null
               ? null
               : (author.maxOutputTokens ?? config.defaults.maxOutputTokens),
-          store: author.store ?? config.defaults.store,
-          parallelToolCalls: config.defaults.parallelToolCalls,
+          store: config.defaults.store,
           toolChoice: author.toolChoice ?? 'auto',
           reasoning: config.defaults.reasoning,
           serviceTier: config.defaults.serviceTier,
@@ -99,9 +95,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         turn.controls.temperature !== null) ||
       (config.defaults.maxOutputTokens === null &&
         turn.controls.maxOutputTokens !== null) ||
-      (!config.supportsStorage &&
-        (turn.controls.store || turn.continuation !== undefined)) ||
-      (config.instructions.kind === 'required' && !turn.system?.trim()) ||
+      (!turn.controls.store && turn.continuation !== undefined) ||
       (turn.controls.reasoning?.effort != null &&
         !config.allowedReasoningEfforts.includes(
           turn.controls.reasoning.effort,
@@ -116,7 +110,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     const reasoning = turn.controls.reasoning;
     // A compatible route sends `store` only to ask for storage it defaults off.
     let storage: Pick<ResponseCreateParamsBase, 'store' | 'include'> = {};
-    if (config.requestDialect === 'openai') {
+    if (config.requestDialect !== 'compatible') {
       storage = {
         store: turn.controls.store,
         include: ['reasoning.encrypted_content'],
@@ -163,9 +157,9 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       ...(turn.tools.length > 0
         ? {
             tools: groupedTools(
-              config.toolNamespace,
+              toolNamespaceOf(config),
               turn.tools.map((tool): OpenAI.Responses.FunctionTool => {
-                if (config.requestDialect === 'openai')
+                if (config.requestDialect !== 'compatible')
                   return { type: 'function', ...tool, strict: false };
                 const vendorTool: Omit<
                   OpenAI.Responses.FunctionTool,
@@ -177,7 +171,8 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
                 return vendorTool as OpenAI.Responses.FunctionTool;
               }),
             ),
-            parallel_tool_calls: turn.controls.parallelToolCalls,
+            // OpenAI's default, stated so a compatible endpoint takes it too.
+            parallel_tool_calls: true,
             tool_choice:
               turn.controls.toolChoice === 'auto'
                 ? ('auto' as const)

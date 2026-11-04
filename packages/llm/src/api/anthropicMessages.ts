@@ -296,10 +296,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       ? {}
       : {
           tools,
-          tool_choice: {
-            type: 'auto',
-            disable_parallel_tool_use: !controls.parallelToolCalls,
-          },
+          tool_choice: { type: 'auto' },
         }),
   };
   if (turn.system && body.cache_control) {
@@ -639,29 +636,20 @@ export function anthropicMessagesModel(
       origin,
       undefined,
       (input) =>
-        // Anthropic keeps no response state a later turn could chain on.
-        input.store !== undefined
-          ? Effect.fail(
-              new ModelError({
-                kind: 'unsupported',
-                message: 'Anthropic does not store responses.',
-              }),
-            )
-          : Effect.succeed({
-              ...origin,
-              mode: 'foreground',
-              system: input.system,
-              messages: input.messages,
-              tools: input.tools ?? [],
-              controls: {
-                ...fitLimit(config.defaults, input.maxOutputTokens),
-                parallelToolCalls: config.defaults.parallelToolCalls,
-                toolChoice: input.toolChoice ?? 'auto',
-                effort: config.defaults.effort,
-                cache: config.defaults.cache,
-                stopSequences: config.defaults.stopSequences,
-              },
-            }),
+        Effect.succeed({
+          ...origin,
+          mode: 'foreground',
+          system: input.system,
+          messages: input.messages,
+          tools: input.tools ?? [],
+          controls: {
+            ...fitLimit(config.defaults, input.maxOutputTokens),
+            toolChoice: input.toolChoice ?? 'auto',
+            effort: config.defaults.effort,
+            cache: config.defaults.cache,
+            stopSequences: config.defaults.stopSequences,
+          },
+        }),
       (turn) => invocationBody(turn, origin, config, uploads),
     );
 
