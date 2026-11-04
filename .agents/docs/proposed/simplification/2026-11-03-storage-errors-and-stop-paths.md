@@ -205,9 +205,8 @@ UI's, and the harness copies go.
   `{ kind: classifyAgentError(e), message: getSdkErrorMessage(e) }` at
   `runLaunchGuard.ts:80-85` and `childRunLoop.ts:724-730`, and `failedEnd`
   (`AgentRunLifecycle.ts:207-231`) through `normalizeProviderError`.
-- **`halted` means two things**: a `run.position` row that changes no phase,
-  and the loop phase `turn.end` maps to (`runStatus.ts:98,105`); readers of
-  `phase === 'halted'` and `at === 'halted'` see different facts.
+- **`halted` means two things** (done 2026-11-04: the loop phase `turn.end`
+  maps to is now `turn.ended`; `halted` is only the `run.position` row).
 - **The stopped vocabulary**: `RUN_OUTCOME.CANCELLED`, `RunGroup 'interrupted'`,
   `RunNotice` (six values), `ScriptCallStatus` (`interrupted`, `cancelled`,
   `skipped`), `ScriptDeliverySummary.outcome 'stopped'` (one producer,
@@ -229,10 +228,10 @@ decider; `endRun`, `endChildLoop`, `runLaunchGuard` and the CLI call it;
 `released` callers say which. Every stop goes through `RunRegistry.interrupt`
 so a stop record always exists; `stopEnd` has one caller; `accepted` folds
 into the result. `detachActiveChildren` leaves the wire; `shutdown` implies
-cascade inside the registry. One `runEndError(cause)`. The loop phase is
-renamed so `halted` has one meaning. The script delivery summary says
-`cancelled`. Ownership and build are decided once, in `runRejection`, and the
-earlier checks go. `trigger` is read by a projection or deleted.
+cascade inside the registry. One `runEndError(cause)`. The script delivery
+summary says `cancelled`. Ownership and build are decided once, in
+`runRejection`, and the earlier checks go. `trigger` is read by a projection or
+deleted.
 
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.

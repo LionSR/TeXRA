@@ -494,11 +494,11 @@ position MUST fail the load as `inconsistent`
 
 The fold maps a position to a loop phase: `turn.ready` and `waiting` to
 `waiting`, `turn.begin` to `model.ready`, `response.ready` to `model.submitted`,
-`results.ready` to `results.ready`, and `turn.end` to `halted`
-(`shared/runs/runStatus.ts:79-92`).
+`results.ready` to `results.ready`, and `turn.end` to `turn.ended`
+(`shared/runs/runStatus.ts:84-97`).
 
 A `halted` position keeps the phase the loop stopped in, so a resume continues
-from there (`shared/runs/runStatus.ts:92`).
+from there (`shared/runs/runStatus.ts:97`).
 
 ### 5.4 The commit path
 
@@ -868,7 +868,7 @@ What survives at each commit point follows from sections 2 to 8:
 - `tool.result`: The settlement is reused; the call is not run again
   (`agent/runtime/loop/toolUseDispatch.ts:856-857`).
 - **delivery `append`**: The loop continues to the next step from
-  `results.ready` (`shared/runs/runStatus.ts:83-91`).
+  `results.ready` (`shared/runs/runStatus.ts:88-96`).
 - `request.opened`: The request stays pending under the same id, or is cancelled
   if unbound (section 7.2).
 - `run.end` with `halted`: The lifecycle is over. A recipe task stays finished,
