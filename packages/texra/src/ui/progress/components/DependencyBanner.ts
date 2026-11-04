@@ -51,10 +51,8 @@ export class DependencyBanner extends LitElement {
       visible: false,
     };
 
-  private install(tool: string): void {
-    this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openInstallGuide', tool }),
-    );
+  private install(): void {
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openInstallGuide' }));
   }
 
   override render(): TemplateResult {
@@ -91,7 +89,7 @@ export class DependencyBanner extends LitElement {
                 type="button"
                 class="tool-link focus-ring"
                 aria-label=${`Open the ${group.name} install guide`}
-                @click=${() => this.install(group.id)}
+                @click=${() => this.install()}
               >
                 <bdi dir="auto">${group.name}</bdi>
               </button>`,
@@ -110,7 +108,7 @@ export class DependencyBanner extends LitElement {
               ? html`<wa-button
                   appearance="plain"
                   size="s"
-                  @click=${() => this.install(single.id)}
+                  @click=${() => this.install()}
                   >${waIcon('book', { slot: 'start' })}Install guide</wa-button
                 >`
               : nothing

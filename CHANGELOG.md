@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Two LaTeX config keys are gone.** `latex.wrapCritiqueInAlign` is gone:
+  a bare criticism command is always wrapped in an `align` environment with
+  `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
+  file is always written beside the file it stands in for, where its
+  relative inputs resolve. A stored value of either is ignored.
 - **A document task's switches have one name on every surface.** The
   `document_task` tool's `extractFigures` and `extractTikz` inputs are
   `autoExtractFigure` and `autoExtractTikzFigure`, the names a run stores
