@@ -245,6 +245,7 @@ const MESSAGE_HANDLERS: {
         messages: appended(copies, state, ...p.messages),
         invocation: null,
         lastError: null,
+        overflowCompacted: false,
         input: withInput(state.input, p.input),
         ...(p.reason === 'final-tool' && {
           finalToolTurn: state.turn,

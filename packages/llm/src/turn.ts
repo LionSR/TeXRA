@@ -328,7 +328,6 @@ export const TurnResultSchema = Schema.Struct({
     'tool-calls',
     'stop-sequence',
     'refusal',
-    'context-window-exceeded',
   ]),
   stopSequence: Schema.optional(Schema.String),
   finishEvidence: Schema.optional(
@@ -416,7 +415,6 @@ export const TurnResultSchema = Schema.Struct({
     if (
       result.finishReason !== 'length' &&
       result.finishReason !== 'content-filter' &&
-      result.finishReason !== 'context-window-exceeded' &&
       result.content.some(
         (part) =>
           part.evidence != null &&

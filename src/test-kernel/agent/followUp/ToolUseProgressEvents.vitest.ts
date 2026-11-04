@@ -4,15 +4,16 @@ import { Effect, Layer, Context } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
-import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
+import { qualifyAggregateId, RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
-import { RunHistory } from '@shared/session/runHistory';
+import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
   agentRunTestLayer,
   scriptedInvokerLayer,
   startedRun,
+  textTurn,
   toolCallTurn,
   type ScriptedRunInit,
   type ScriptedTurn,
@@ -105,6 +106,55 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               failure: { message: 'Later provider failure' },
             });
           }),
+      );
+
+      // Failure mode (#14259): a request the model's window could not hold
+      // failed the run; the history is compacted once and the request sent
+      // again.
+      it.effect('compacts and asks again after the window overflowed', () =>
+        Effect.gen(function* () {
+          const session = yield* quietSession();
+          const runId = startedRun(session);
+          const { result } = yield* runScript({
+            runId,
+            session,
+            tools: {
+              probe: {
+                definition: { name: 'probe' },
+                call: () =>
+                  Effect.succeed({
+                    status: 'executed' as const,
+                    output: 'done',
+                  }),
+              } as ITool,
+            },
+            script: [
+              toolCallTurn([{ id: 'call-1', name: 'probe' }], 'Checking.'),
+              {
+                failWith: {
+                  message:
+                    "Input is 300000 tokens, which exceeds the model's context window of 200000 tokens.",
+                  userRetryable: false,
+                  classification: { kind: 'context-window' },
+                },
+              },
+              { summary: 'The user asked for a check; the probe ran.' },
+              textTurn('The check passed.'),
+            ],
+          });
+          expect(result).toMatchObject({
+            outcome: RUN_OUTCOME.COMPLETED,
+            output: { response: 'The check passed.' },
+          });
+          const edits = yield* Context.get(session, SessionLog).history(
+            qualifyAggregateId('run', runId),
+            undefined,
+            ['context.edit'],
+          );
+          expect(edits).toMatchObject([
+            { type: 'context.edit', payload: { trigger: 'overflow' } },
+          ]);
+        }),
       );
     });
   },

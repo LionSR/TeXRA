@@ -57,40 +57,6 @@ Write a structured summary with enough context to continue the task. Output only
 const COMPACTION_USER_PROMPT =
   'Summarize the conversation history above now. Follow the compaction instructions exactly and output only the summary.';
 
-interface LogCompactionEventOptions {
-  readonly logger: AgentTrace;
-  readonly tokensBefore: number;
-  readonly tokensAfter: number;
-  readonly contextWindow: number;
-  readonly details: string;
-}
-
-function logCompactionEvent({
-  logger,
-  tokensBefore,
-  tokensAfter,
-  contextWindow,
-  details,
-}: LogCompactionEventOptions): void {
-  const reduction = tokensBefore - tokensAfter;
-  const reductionPercent =
-    tokensBefore > 0 ? ((reduction / tokensBefore) * 100).toFixed(1) : '0';
-
-  logContextManagementEvent(
-    logger,
-    `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
-    {
-      action: 'compaction',
-      tokensBefore,
-      tokensAfter,
-      contextWindow,
-      utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
-      utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
-      details,
-    },
-  );
-}
-
 interface CompactionInput {
   readonly runId: RunId;
   readonly logger: AgentTrace;
@@ -101,9 +67,9 @@ interface CompactionInput {
   readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
-  /** Compact regardless of the threshold: a `/compact` request. `null`
-   *  leaves the decision to the threshold. */
-  readonly force: 'request' | null;
+  /** Compact regardless of the threshold: a `/compact`, or a request the
+   *  window could not hold (`overflow`); `null` leaves it to the threshold. */
+  readonly force: 'request' | 'overflow' | null;
   /** The `/compact` requests it answers, consumed with its edit. */
   readonly answers?: readonly RunHistoryDraft[];
 }
@@ -113,6 +79,7 @@ interface CompactionInput {
 const COMPACTION_REASONS = {
   request: { trigger: 'user', debug: 'manually requested' },
   threshold: { trigger: 'context-limit', debug: 'token threshold exceeded' },
+  overflow: { trigger: 'overflow', debug: 'context window exceeded' },
 } as const;
 
 type Reason = keyof typeof COMPACTION_REASONS;
@@ -267,14 +234,27 @@ const land = Effect.fn('compaction.land')(function* (
       },
     },
   ]);
-  logCompactionEvent({
-    logger: input.logger,
-    // The history it replaces now, what the loop appended since included.
-    tokensBefore: contextTokens(state),
-    tokensAfter: Math.max(1, estimateMessageTokens(compacted.messages)),
-    contextWindow: summary.contextWindow,
-    details: `${summary.to} messages summarized`,
-  });
+  // Before: the history it replaces now, what the loop appended since included.
+  const tokensBefore = contextTokens(state);
+  const tokensAfter = Math.max(1, estimateMessageTokens(compacted.messages));
+  const { contextWindow } = summary;
+  const reductionPercent =
+    tokensBefore > 0
+      ? (((tokensBefore - tokensAfter) / tokensBefore) * 100).toFixed(1)
+      : '0';
+  logContextManagementEvent(
+    input.logger,
+    `Compacted conversation: ${tokensBefore.toLocaleString()} → ~${tokensAfter.toLocaleString()} tokens (${reductionPercent}% reduction)`,
+    {
+      action: 'compaction',
+      tokensBefore,
+      tokensAfter,
+      contextWindow,
+      utilizationBefore: roundedUtilizationPercent(tokensBefore, contextWindow),
+      utilizationAfter: roundedUtilizationPercent(tokensAfter, contextWindow),
+      details: `${summary.to} messages summarized`,
+    },
+  );
   summary.activity.finish('completed');
   return compacted;
 });
@@ -330,6 +310,12 @@ export interface BackgroundCompaction {
     cell: RunCell,
     why: string,
   ) => Effect.Effect<RunState, CellError>;
+  /** After a request the window could not hold: compact once per turn and
+   *  answer with the state to send again, or null (the turn fails). */
+  readonly afterOverflow: (
+    cell: RunCell,
+    bound: BoundModel,
+  ) => Effect.Effect<RunState | null, CellError | StateReadFailed>;
 }
 
 export const backgroundCompaction = Effect.fn('compaction.background')(
@@ -385,16 +371,8 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       bound: BoundModel,
       requests: readonly RunHistoryDraft[],
     ) {
-      if (requests.length > 0) {
-        const settled = yield* settle(cell, 'a /compact replaces it');
-        return yield* compactIfNeeded(settled, {
-          ...input,
-          cell,
-          bound,
-          force: 'request',
-          answers: requests,
-        });
-      }
+      if (requests.length > 0)
+        return yield* forced(cell, bound, 'request', requests);
       let state = yield* cell.current;
       // A history past the window cannot go out: it waits for the summary.
       const { contextWindow } = bound.config;
@@ -429,6 +407,43 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
       return yield* landPending(cell, yield* Fiber.await(pending.fiber));
     });
 
-    return { atBoundary, settle, finish };
+    /** Compact now, after the summary being made (if any) has landed: a
+     *  `/compact`'s answers ride the edit; an overflow's edit closes the
+     *  failed request. */
+    const forced = Effect.fn('compaction.forced')(function* (
+      cell: RunCell,
+      bound: BoundModel,
+      force: 'request' | 'overflow',
+      answers: readonly RunHistoryDraft[],
+    ) {
+      const settled = yield* settle(
+        cell,
+        `${force === 'request' ? 'a /compact' : 'an overflow'} replaces it`,
+      );
+      return yield* compactIfNeeded(settled, {
+        ...input,
+        cell,
+        bound,
+        force,
+        answers,
+      });
+    });
+
+    const afterOverflow = Effect.fn('compaction.afterOverflow')(function* (
+      cell: RunCell,
+      bound: BoundModel,
+    ) {
+      const state = yield* cell.current;
+      const failed = state.invocation?.current.failed;
+      if (
+        state.overflowCompacted ||
+        failed?.error.classification?.kind !== 'context-window'
+      )
+        return null;
+      const compacted = yield* forced(cell, bound, 'overflow', []);
+      return compacted.lastEdit === state.lastEdit ? null : compacted;
+    });
+
+    return { atBoundary, settle, finish, afterOverflow };
   },
 );

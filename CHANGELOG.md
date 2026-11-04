@@ -1387,6 +1387,16 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A request the model's context window cannot hold is compacted and sent
+  again.** When the provider refused a request as too long, or the run's
+  own estimate did, the run ended failed. The run now compacts its history
+  once in that turn and sends the request again; a history too short to
+  compact, or a single attachment larger than the window, still fails with
+  the provider's message. Anthropic reports an overflowed request as a
+  finished turn, which counted as a completed answer; it is now the same
+  `context-overflow` failure every other provider raises. SDK: the
+  `context-window-exceeded` finish reason is gone from `TurnResult` and the
+  stored turn, and a compaction's `trigger` may be `overflow`.
 - **SDK: a stored turn of another codec version replays as plain content.**
   `ModelOrigin.codecVersion` (`@texra-ai/llm`) is any positive integer, not
   only `1`. A run holding a turn whose provider state another build encoded
