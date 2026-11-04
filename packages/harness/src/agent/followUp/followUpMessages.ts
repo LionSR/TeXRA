@@ -56,18 +56,6 @@ export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   return scriptSummary ? { text, scriptSummary } : { text };
 }
 
-/** What a delivery or notice shows instead of its envelope: the envelope's
- *  summary, decided once as the row is queued. A person's own message is
- *  shown as typed. */
-function deliveryDisplayText(
-  text: string,
-  from: FollowUpSender,
-): string | undefined {
-  if (from.kind === 'user') return undefined;
-  const summary = summarizeSubagentFollowup(text);
-  return summary === text ? undefined : summary;
-}
-
 /** What the run was asked to do, joined from its instructing input. */
 export function userFollowUpInstruction(
   followUps: readonly FollowUpContent[],
@@ -94,7 +82,11 @@ export function queuedRow(
     input.kind === 'run'
       ? { kind: 'run', runId: input.runId, relation: relationOf(input.runId) }
       : input;
-  const displayText = item.displayText ?? deliveryDisplayText(text, from);
+  // A delivery or notice shows its envelope's summary, decided once here; a
+  // person's own message is shown as typed.
+  const summary = from.kind === 'user' ? text : summarizeSubagentFollowup(text);
+  const displayText =
+    item.displayText ?? (summary === text ? undefined : summary);
   return {
     followUpId: deliveryId ?? randomUUID(),
     ...(hold ? { holdUntil: hold } : {}),
