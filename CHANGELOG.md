@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
   `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
   file is always written beside the file it stands in for, where its
   relative inputs resolve. A stored value of either is ignored.
-- **"Use short model names" is gone.** A request always carries the
+- **"Prefer short model names" is gone.** A request always carries the
   model's catalog id. The switch never changed what a picker shows: it
   replaced the date-pinned id sent to the provider with its unpinned alias,
   and toggling it during a run broke that run's continuations. A stored
