@@ -142,6 +142,15 @@ ratchet shrinks by the deleted classes.
 
 **Give up.** Catching a failure by a name nobody catches it by.
 
+_Landed 2026-11-04 (#14641, #14646, #14655): the `abort` kind, `isUserAbort`
+and `AGENT_ERROR_OUTCOME` are gone, and `agentErrorPresentation` returns a
+presentation from every branch; a run's failure is one value from the model
+call to its end (`classifyAgentError` returns the `run.end` error value, the
+error-object cache is gone), and `userRetryable` left every row (`model.message`
+v12, `request.opened` v8, `run.end` v7, `log` v6): whether a person is offered a
+retry is the `failed` row's `next` alone. Open: the `ModelError` kinds nothing
+branches on, the reason unions, and the tagged classes with no discriminator._
+
 ## 4. Errors: one classifier per question
 
 | Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -167,7 +176,16 @@ UI's, and the harness copies go.
 
 **Give up.** Nothing observable.
 
-## 5. Stop and interruption: one answer to "did it stop or fail"
+_Landed 2026-11-04 (#14655): `isCredentialRetryFailure` and
+`getExhaustionReason` are gone; the credential move is decided over llm's
+`quota` before it is recorded, and a subscription token is renewed once on any
+authentication failure, so "is this 401/403" has one decider fewer. Open: the
+retryable notions, the inline `NotFound` checks, the `PlatformError` unwraps,
+the abort and cause-chain copies, the plan wording._
+
+## 5.
+
+Stop and interruption: one answer to "did it stop or fail"
 
 - **Eleven deciders.** `outcomeFromCause`
   (`packages/harness/src/shared/runs/runStatus.ts:27`) is the named owner;
@@ -237,6 +255,20 @@ earlier checks go. `trigger` is read by a projection or deleted.
 
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
+
+_Landed 2026-11-04 (#14641, #14650, #14651, #14660): `run.end.reason`
+(`user` or `shutdown`) is the one stored representation of why a run stopped;
+the halt row's `closed`, `outcomeFromCause`'s second parameter and the
+lost-claim-as-stop branch are gone, and a stop is fiber interruption.
+`RunStopOptions.detachActiveChildren` and its wire field are gone: a shutdown
+cascades and owes no end row, a user stop reads the one setting. The session
+fold computes `RunView.working` once (`isWorkingRun` and `isActivePhase`
+deleted). The CLI's exit is one `Deferred<ChatExit>`: `claim.stop`,
+`stopRequested`, `askStop` and the teardown memo are gone, `process.exit` has
+one home, and headless the six shutdown flags are the launch fiber's `Exit`
+plus one boolean. Open: `StopCause 'released'`, the remaining stop-or-failure
+deciders, the two meanings of `halted`, the unread compaction `trigger`, the
+resume refusals decided three times._
 
 ## 6. The model-call failure path
 
