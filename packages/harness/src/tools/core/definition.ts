@@ -3,6 +3,7 @@ import { Cause, Effect, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
+import { withLogChannel } from '@logger/effectLog';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatIssuesForDiagnostics,
@@ -13,6 +14,8 @@ import {
 import { findStorageRefusal } from '@shared/session/runHistory';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'tools';
 
 /**
  * A defined tool: plain data plus a `call` that validates and normalizes
@@ -124,7 +127,7 @@ export function defineTool<T, R = never, const Name extends string = string>(
                 },
               });
             }
-            return Effect.succeed<ToolResult>({
+            const result = Effect.succeed<ToolResult>({
               status: 'error',
               error: toErrorMessage(error).trim() || 'Tool execution failed.',
               ...(error instanceof ToolError &&
@@ -133,6 +136,18 @@ export function defineTool<T, R = never, const Name extends string = string>(
                 diagnostics: { name: error.name },
               }),
             });
+            // A defect that is not the tool's own failure is a bug in the
+            // tool: the model reads it as a failed call, so the log keeps
+            // its cause, or nothing would.
+            return Cause.hasDies(cause) && !(error instanceof ToolError)
+              ? Effect.logWarning(
+                  `Tool ${name} crashed: ${toErrorMessage(error)}`,
+                ).pipe(
+                  Effect.annotateLogs({ data: error }),
+                  withLogChannel(CHANNEL),
+                  Effect.andThen(result),
+                )
+              : result;
           }),
         ),
       ),
