@@ -50,15 +50,12 @@ const AGENT_IMPORT_PATTERNS = [
   /\bimport\s*\(\s*['"]@agent\//,
 ];
 
-const HOST_LAYER_IMPORT_SPECIFIERS = ['@common/webview'] as const;
-
 const HOST_LAYER_IMPORT_PREFIXES = [
   '@commands/',
   '@progressView/',
   '@settingsView/',
   '@frontend/',
   '@resources/',
-  '@common/webview/',
   '@cli/',
   '@desktop/',
 ] as const;
@@ -168,12 +165,8 @@ function importSpecifiers(file: string): string[] {
 }
 
 function importsHostLayer(file: string): boolean {
-  return importSpecifiers(file).some(
-    (specifier) =>
-      HOST_LAYER_IMPORT_SPECIFIERS.includes(
-        specifier as (typeof HOST_LAYER_IMPORT_SPECIFIERS)[number],
-      ) ||
-      HOST_LAYER_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix)),
+  return importSpecifiers(file).some((specifier) =>
+    HOST_LAYER_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix)),
   );
 }
 

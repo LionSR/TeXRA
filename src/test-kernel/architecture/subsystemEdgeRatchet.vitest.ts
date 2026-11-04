@@ -119,9 +119,9 @@ function resolveImportPath(file: string, specifier: string): string | null {
     return repoRelative(resolve(dirname(file), specifier));
   }
 
-  // Match the most specific (longest) alias so a carve-out like
-  // `@common/webview` wins over the broader `@common` alias regardless of
-  // map insertion order.
+  // Match the most specific (longest) alias so a subpath like
+  // `@texra-ai/harness/node` wins over the broader `@texra-ai/harness` alias
+  // regardless of map insertion order.
   let bestMatch: { alias: string; target: string } | null = null;
   for (const [alias, target] of ALIAS_TARGETS) {
     if (

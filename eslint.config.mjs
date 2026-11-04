@@ -171,14 +171,6 @@ const CORE_QUALITY_GLOBS = CORE_QUALITY_DIRS.map((entry) =>
   entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
 );
 
-const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
-  {
-    name: '@common/webview',
-    message:
-      'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
-  },
-];
-
 const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
   {
     group: [
@@ -885,7 +877,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
@@ -900,7 +891,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
             ...HARNESS_NO_APP_IMPORT_PATTERNS,
@@ -918,7 +908,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: AGENT_CORE_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
@@ -985,7 +974,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
             ...BROWSER_RUNTIME_IMPORT_PATTERNS,
