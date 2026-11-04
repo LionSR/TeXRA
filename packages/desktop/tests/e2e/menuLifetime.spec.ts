@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
@@ -145,13 +145,15 @@ test('a closed project is offered in the empty rail and reopens from it', async 
   const { page, app, workspacePath } = launched;
   await dismissOnboarding(page);
   const name = basename(workspacePath);
+  // The app stores the folder canonicalized (macOS: /tmp is /private/tmp).
+  const root = realpathSync(workspacePath);
   const rail = page.getByRole('region', { name: 'Open projects' });
 
   await page.getByRole('button', { name: `Actions for ${name}` }).click();
   await page.getByRole('menuitem', { name: 'Close project' }).click();
   const reopen = rail.getByRole('button', { name, exact: true });
   await expect(reopen).toBeVisible();
-  await expect(reopen).toHaveAttribute('title', `Reopen ${workspacePath}`);
+  await expect(reopen).toHaveAttribute('title', `Reopen ${root}`);
   // The rail offers what File > Open Recent holds.
   const menuRecent = await app.evaluate(({ Menu }) =>
     Menu.getApplicationMenu()
@@ -159,7 +161,7 @@ test('a closed project is offered in the empty rail and reopens from it', async 
       ?.submenu?.items.find((item) => item.label === 'Open Recent')
       ?.submenu?.items.map((item) => item.label),
   );
-  expect(menuRecent).toContain(workspacePath);
+  expect(menuRecent).toContain(root);
   await page.screenshot({
     path: test.info().outputPath('empty-rail-recent.png'),
   });
