@@ -72,6 +72,7 @@ import {
   resolveSessionWire,
 } from '../shared/hostBridgeChannels';
 import { createDesktopPromptOverlay } from './promptOverlay';
+import { createDiscardChangesDialog } from './discardDialog';
 import {
   createDesktopSettingsDialog,
   DesktopThemePreferenceSchema,
@@ -387,6 +388,7 @@ const logsPane = logsController.element;
 const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
   hostBridge.postMessage(message),
 );
+const confirmDiscard = createDiscardChangesDialog(appRoot);
 applyTheme();
 
 function shellWorkspaceToolbarTemplate(): TemplateResult {
@@ -813,6 +815,7 @@ const routeMessage = createMessageRoutes({
           isActive: () => shell.active === key,
           isBrowserCovered: () =>
             settingsDialog.isOpen() || nativeViewOverlays.isCovered(),
+          confirmDiscard,
           onLayoutChanged: layoutChanged,
         });
         projectWorkbenches.set(key, project);

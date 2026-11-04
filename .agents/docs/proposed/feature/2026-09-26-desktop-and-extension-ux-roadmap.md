@@ -78,5 +78,7 @@ Each item is independent and small enough for one PR.
    - Restart button on an exited terminal (`terminalPane.ts` prints only
      the exit code).
    - PDF error state and "Open externally" (`pdfPane.ts`).
-   - Styled dialogs instead of `window.confirm` (`main.ts`,
-     `workbenchController.ts`).
+   - Styled dialogs instead of `window.confirm`. Done for closing an
+     unsaved tab (`discardDialog.ts`). `reportRuntimeFailure` in `main.ts`
+     keeps the native confirm on purpose: it runs when the renderer itself
+     may be broken.
