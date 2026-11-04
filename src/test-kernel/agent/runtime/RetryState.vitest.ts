@@ -131,7 +131,6 @@ const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
     temperature: null,
     maxOutputTokens: 1024,
     store: false,
-    parallelToolCalls: false,
     toolChoice: 'auto',
     reasoning: null,
     serviceTier: null,

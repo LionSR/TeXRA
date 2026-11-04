@@ -407,7 +407,6 @@ const receiptModel = () => {
               maxOutputTokens:
                 request.maxOutputTokens ?? config.maxOutputTokens,
               store: false,
-              parallelToolCalls: true,
               toolChoice: request.toolChoice ?? 'auto',
               reasoning: null,
               serviceTier: null,
