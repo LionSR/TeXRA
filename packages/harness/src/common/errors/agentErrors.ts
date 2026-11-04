@@ -7,8 +7,8 @@ import {
 } from '@shared/schemas';
 
 /**
- * A runtime failure of the agent layer: a launch it refuses or a run that
- * ended failed.
+ * A runtime failure of the agent layer: a launch it refuses, a run that
+ * ended failed, or a model call that failed as its rows record it.
  *
  * Host-neutral, so any host can reference it.
  * A more specific error should be added only when a concrete thrower and
@@ -21,8 +21,9 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   /** A refused launch's notice (an unknown model, an unknown agent), which
    *  the launch's caller shows in place of the generic error. */
   notice: Schema.optional(LaunchNoticeSchema),
-  /** A run that ended on a model failure: the failure as its rows record
-   *  it, which a host reads in place of this message's words. */
+  /** A model failure as the run's rows record it (the run ended on it, or a
+   *  helper call raised it), which a host reads in place of this message's
+   *  words. */
   failure: Schema.optional(RetryErrorInfoSchema),
 }) {}
 

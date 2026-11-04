@@ -194,10 +194,10 @@ const reportedFailure = (
 };
 
 /**
- * The single owner of provider/runtime failure exits: a flow carrying its
- * failure as a value (`carried.failure`), or an exception that escaped it.
- * A stop that met the failure (`stopped`) outranks it: the failure rides
- * the cancelled row as its error.
+ * The single owner of provider/runtime failure exits: a flow's reported
+ * failure (an `AgentError` carrying it as recorded) or an exception that
+ * escaped the flow. A stop that met the failure (`stopped`) outranks it:
+ * the failure rides the cancelled row as its error.
  */
 const failedEnd = Effect.fn('failedEnd')(function* <R>(
   ctx: RunLaunch,
@@ -214,10 +214,7 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   // terminal: it falls back to an unexpected failure.
   const prologue = yield* Effect.exit(
     Effect.gen(function* () {
-      const classified =
-        carried?.failure === undefined
-          ? classifyAgentError(err)
-          : { kind: 'model' as const, ...carried.failure };
+      const classified = classifyAgentError(err);
       // An unexpected failure is named by the agent it stopped; a model
       // failure names its own cause, as the other kinds do, and a host may
       // word it from its classification in place of this message.
@@ -299,9 +296,12 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
   if (Exit.isSuccess(exit)) {
     const result = exit.value;
     if (result.failure) {
-      // The carried failure takes the one failure path as a value; the
-      // `Error` is what that path logs and the root's `AgentError` carries.
-      const failure = new Error(result.failure.message);
+      // The reported failure takes the one failure path on an `AgentError`,
+      // which that path's log row and the root's error read it from.
+      const failure = new AgentError({
+        message: result.failure.message,
+        failure: result.failure,
+      });
       return yield* failedEnd(ctx, finish, failure, result);
     }
     // A completed flow supplies its outcome; an interrupted flow arrives

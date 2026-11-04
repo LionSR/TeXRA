@@ -20,6 +20,7 @@ import {
   type CallFailure,
 } from '@agent/runtime/modelAccess/failureInfo';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
+import { AgentError } from '@common/errors/agentErrors';
 import type {
   FailedNext,
   InvocationRef,
@@ -188,8 +189,12 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     return yield* Effect.fail(
       new Error(`The ${call.purpose} call was cancelled.`),
     );
-  // The failure as recorded, over the verdict every formatter words it from.
+  // The failure as recorded, which every formatter reads off the error.
   return yield* Effect.fail(
-    new Error(ended.error.message, { cause: ended.cause }),
+    new AgentError({
+      message: ended.error.message,
+      cause: ended.cause ?? undefined,
+      failure: ended.error,
+    }),
   );
 });
