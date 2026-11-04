@@ -149,14 +149,6 @@ export interface AgentRunShape extends RunLaunch {
     next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
   ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
   /**
-   * Subscription routes this run's launch declined (its own-API-key
-   * fallback). Its `run.config` binding records them, and the fold adds
-   * every retry the user answered with their own key, so a resume rebinds
-   * under the same choice and the user's stored preferences are never
-   * rewritten to express it.
-   */
-  readonly declinedRoutes: readonly DeclinableUsageRoute[];
-  /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
    * the run's layer is released. What the run holds for its whole life (its
    * plugins, its step, the binding in force) is a child of it, so they close
@@ -329,7 +321,6 @@ export const agentRunLayer = (
         finalToolName,
         model,
         swapModel,
-        declinedRoutes,
         scope,
         callbacks: input.callbacks,
       };

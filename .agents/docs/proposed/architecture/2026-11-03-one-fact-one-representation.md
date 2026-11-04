@@ -326,6 +326,21 @@ the used-up plan and declined routes do not.
 Acceptance: after a quota fallback, `admitSwitch` and the bind decide over
 the same set; `grep -rn 'statusCode === 401' packages/harness/src` is empty.
 
+_Landed 2026-11-04 (the route rows, three to five): `BoundModel` carries the
+`declinedRoutes` it was decided over and its `run.config` records them, the
+switch is admitted over the cell's state (the controls stand from the
+run's start and read it once the cell is open), and
+`AgentRunShape.declinedRoutes` is gone. The
+backend is a constraint `decideRoute` checks (a different format fails the
+decision with the sentence `admitSwitch` used to invent), so `BindPlan.
+backend` and the `request.backend ?? decision.backend` fallback are gone;
+the fold's `binding?.backend ?? state.backend` stays, since a `run.config`
+without a binding names only what it changes. The fallback mode lives in
+`runModelDecision.ts`'s one reasons table (rank and fallback per reason);
+the CLI table, `RunModelCandidate.fallbackMode` and the two caller
+overrides are gone. The error rows (one, two and six) follow in their own
+slice: they change four row shapes together._
+
 ### E. The parent edge
 
 Audit verdict: partial. Rows and view are both read as the attached parent in

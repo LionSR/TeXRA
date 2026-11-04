@@ -62,7 +62,8 @@ export interface RouteDecision {
 
 /** What the decision is asked for besides the model. */
 export interface RouteAsk {
-  /** A resumed run's backend; it wins over today's default route. */
+  /** A resumed run's backend: the decision fails when today's route would
+   *  serve the model from another one. */
   readonly backend?: ModelBackend;
   /** The routes the run declined (its rows record them). */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
@@ -120,6 +121,11 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   if (served === undefined) {
     return yield* unavailable(`Unsupported model provider: ${config.provider}`);
   }
+  if (backend !== undefined && served !== backend) {
+    return yield* unavailable(
+      'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
+    );
+  }
   return { route: decided, facts: host, backend: served };
 });
 
@@ -129,42 +135,37 @@ export interface SwitchRefusal {
   readonly message: string;
 }
 
-const DIFFERENT_FORMAT: SwitchRefusal = {
-  reason: 'different conversation format; start new chat',
-  message:
-    'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
-};
-
 /**
  * Why `selected` cannot replace a run on `backend`, decided as the bind at
- * the run's next model boundary will decide it; null when it can. A
- * reasoning request the route cannot carry (`@none` on a model that always
- * thinks) is refused here, not by that bind inside the loop.
+ * the run's next model boundary will decide it; null when it can. A route
+ * that would serve the model from another backend, or a reasoning request
+ * the route cannot carry (`@none` on a model that always thinks), is refused
+ * here, not by that bind inside the loop.
  */
-export const admitSwitch = Effect.fn('admitSwitch')(function* (
-  selected: SelectedModel,
-  backend: ModelBackend,
-  settings: ModelSettings,
-  declinedRoutes: readonly DeclinableUsageRoute[],
-): Effect.fn.Return<SwitchRefusal | null, RouteUnavailable> {
-  const decision = yield* decideRoute(selected.config, settings, {
-    backend,
-    declinedRoutes,
-    mode: selected.request.mode,
-  });
-  if (decision.backend !== backend) return DIFFERENT_FORMAT;
-  return yield* decideReasoning(
-    selected.config,
-    selected.request,
-    settings.reasoningLevels[selected.config.ref],
-    decision.route,
-  ).pipe(
-    Effect.as(null),
-    Effect.catch((error) =>
-      Effect.succeed({ reason: error.message, message: error.message }),
-    ),
-  );
-});
+export const admitSwitch = Effect.fn('admitSwitch')(
+  function* (
+    selected: SelectedModel,
+    backend: ModelBackend,
+    settings: ModelSettings,
+    declinedRoutes: readonly DeclinableUsageRoute[],
+  ) {
+    const decision = yield* decideRoute(selected.config, settings, {
+      backend,
+      declinedRoutes,
+      mode: selected.request.mode,
+    });
+    yield* decideReasoning(
+      selected.config,
+      selected.request,
+      settings.reasoningLevels[selected.config.ref],
+      decision.route,
+    );
+    return null;
+  },
+  Effect.catch((error): Effect.Effect<SwitchRefusal | null> =>
+    Effect.succeed({ reason: error.message, message: error.message }),
+  ),
+);
 
 /**
  * The move onto the user's own credential a failed attempt offers, carried
