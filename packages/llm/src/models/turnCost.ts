@@ -6,7 +6,7 @@
  */
 import { ModelProvider, requestRates, type ModelConfig } from 'llm-zoo';
 
-import type { TurnUsage } from '../protocol.js';
+import type { TurnUsage } from '../turn.js';
 
 /** The per-million rates one turn bills at, and its cache-read rebate. */
 interface TurnRates {

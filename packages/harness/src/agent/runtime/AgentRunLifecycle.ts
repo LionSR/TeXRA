@@ -11,10 +11,8 @@ import {
   finalizeRun,
   type FinalizeRunInput,
 } from '@agent/storage/runLifecycle';
-import {
-  AGENT_ERROR_OUTCOME,
-  classifyAgentError,
-} from '@common/errors/agentErrorClassification';
+import { Runs } from '@agent/runtime/runRegistry';
+import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
@@ -102,9 +100,13 @@ export const endActivation = Effect.fn('endActivation')(
       ...(error ? { error } : {}),
       output,
     };
+    // Why the run stopped, as the registry marked its activation; a holder's
+    // release names no reason.
+    const cause = (yield* Runs).stopCause(runId);
     const finalization = yield* finalizeRun({
       runId,
       outcome,
+      reason: cause === 'released' ? undefined : cause,
       error,
       output,
       lastTurn: params.lastTurn,
@@ -219,15 +221,15 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
           : sdkMsg;
       // Root failures are logged here; a subagent's is delivered to its
       // orchestrator, so a second wrapper error would blame the parent.
-      if (kind !== 'abort' && parentRunId === null) {
+      if (parentRunId === null) {
         yield* logSdkError(ctx.logger, message, err, {
           operation: `execute ${agentIdentifier}`,
         });
       }
-      // `abort`/`disk-full` never carry provider or credential fields:
-      // narrow them so runRecords' union stays honest.
+      // `disk-full` never carries provider or credential fields: narrow it
+      // so runRecords' union stays honest.
       const error: NonNullable<ResultEvent['error']> =
-        kind === 'abort' || kind === 'disk-full'
+        kind === 'disk-full'
           ? {
               kind,
               message,
@@ -235,24 +237,23 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
               partialText: providerErrorInfo.partialText,
             }
           : { kind, message, ...providerErrorInfo };
-      return { kind, message, error, info };
+      return { message, error, info };
     }),
   );
   const fallbackMsg = `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`;
-  const { kind, message, error, info } = Exit.isSuccess(prologue)
+  const { message, error, info } = Exit.isSuccess(prologue)
     ? prologue.value
     : yield* logLifecycleWarning('Run failure prologue failed', {
         runId,
         error: Cause.squash(prologue.cause),
       }).pipe(
         Effect.as({
-          kind: 'unexpected' as const,
           message: fallbackMsg,
           error: { kind: 'unexpected' as const, message: fallbackMsg },
           info: { message: fallbackMsg, userRetryable: false },
         }),
       );
-  const outcome = stopped ? RUN_OUTCOME.CANCELLED : AGENT_ERROR_OUTCOME[kind];
+  const outcome = stopped ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
   // A child's failure rides its result, the error its delivery reports.
   const subagentResult: RunReport | undefined =
     parentRunId !== null
@@ -270,7 +271,6 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   if (subagentResult) {
     return withResolvedOutcome(subagentResult, resolvedOutcome);
   }
-  if (kind === 'abort') return emptyReport(ctx, resolvedOutcome);
 
   // A root run's failure. Once its `run.end` row committed, the session's
   // presenter shows that row (`presentTerminalResult`), and a launch that

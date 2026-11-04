@@ -94,12 +94,10 @@ export function positionRow(
 
 /** The loop's halt where its newest position left it, with the run's
  *  outcome: written only with the run's `run.end`, so a stopped run never
- *  reads as interrupted. `closed`: a clean session close stopped the run,
- *  which the halt records as its reason. */
+ *  reads as interrupted. */
 export function haltedPositionRow(
   position: Extract<SessionEvent, { type: 'run.position' }>,
   outcome: RunOutcome,
-  closed: boolean,
 ): Extract<RunHistoryDraft, { type: 'run.position' }> {
   const { family, turn } = position.payload;
   return {
@@ -110,7 +108,6 @@ export function haltedPositionRow(
       at: 'halted',
       turn,
       outcome,
-      ...(closed && { reason: 'closed' }),
     },
   };
 }

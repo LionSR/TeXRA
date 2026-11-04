@@ -35,9 +35,9 @@ import {
   RUN_PHASE,
   type RunId,
   USER_FOLLOW_UP_SUPPORT,
+  type RunStopReason,
 } from '@shared/schemas';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -539,7 +539,7 @@ export class RunRegistry implements RunsShape {
   ): Effect.Effect<void, Error, SessionServices> | undefined {
     if (cause !== 'user') return undefined;
     const { CANCELLED: outcome } = RUN_OUTCOME;
-    const end = { runId, outcome, ownerless: true };
+    const end = { runId, outcome, ownerless: true, reason: cause };
     return Effect.asVoid(this.programs.finalize(end));
   }
 
@@ -558,10 +558,13 @@ export class RunRegistry implements RunsShape {
   }
 
   /** Record why `runId` stops, before it is interrupted, on its activation;
-   *  only a run this process launched has one. */
+   *  only a run this process launched has one. A person's stop outranks
+   *  every other cause, and a reason outranks a release. */
   private markStopped(runId: RunId, cause: StopCause): void {
     const activation = this.activations.get(runId);
-    if (activation && activation.stop !== 'user') activation.stop = cause;
+    if (activation === undefined || activation.stop === 'user') return;
+    if (cause !== 'released' || activation.stop === undefined)
+      activation.stop = cause;
   }
 
   /** Stop `runId` here, its children first when `cascadeChildren`: each run

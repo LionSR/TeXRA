@@ -4,8 +4,7 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { RunId } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
+import type { RunId, RunStopReason } from '@shared/schemas';
 import type { Effect } from 'effect';
 import type { SessionServices } from './rootLaunch';
 

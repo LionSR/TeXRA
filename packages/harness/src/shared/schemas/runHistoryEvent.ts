@@ -108,8 +108,6 @@ export const RunPositionPayloadSchema = Schema.Struct({
    *  starts). A `turn.end`'s: how the turn ended, `completed` with its
    *  answer or `failed` without one, which a follow-up's receipt reads. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
-  /** `closed`: a clean session close forced the halt (`haltedPositionRow`). */
-  reason: Schema.optional(Schema.Literal('closed')),
 }).check(
   Schema.makeFilter(
     (p) => (p.at === 'halted' || p.at === 'turn.end') === (p.outcome != null),
@@ -168,9 +166,6 @@ export const ModelMessagePayloadSchema = Schema.Union([
     purpose: InvocationPurposeSchema,
     error: RetryErrorInfoSchema,
     next: FailedNextSchema,
-    /** The priced usage of a response the provider billed before refusing
-     *  it (Anthropic's overflowed turn), counted like a response's. */
-    usage: Schema.optional(NormalizedUsageSchema),
   }),
   /** The commit barrier: the accepted remote operation, committed before
    *  `observe` is called. `deadlineAtMs` is the limit admitted with the
@@ -300,8 +295,8 @@ export const ModelMessagePayloadSchema = Schema.Union([
  * applies to) are replaced by `messages`. An edit drops the provider-side
  * continuation, which was over the old view, and the offered system text.
  * `trigger` says what asked for a compaction: the threshold
- * (`context-limit`), the user's `/compact` (`user`), or a request the
- * model's window could not hold (`overflow`); null for the other causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
+ * (`context-limit`) or the user's `/compact` (`user`); null for the other
+ * causes. A fork's seed carries the source's `input` with its messages. `base` is the `seq` of the edit the view stood at when this one
  * was computed (`null`: none), and the fold refuses an edit whose base is no
  * longer the latest. `usage` is a summary call's priced usage, folded as a
  * response's (`null` when no model was called). Compaction (`run/compaction.ts`)
@@ -311,9 +306,7 @@ export const ModelMessagePayloadSchema = Schema.Union([
  */
 export const ContextEditPayloadSchema = Schema.Struct({
   cause: Schema.Literals(['compaction', 'fork']),
-  trigger: Schema.NullOr(
-    Schema.Literals(['context-limit', 'user', 'overflow']),
-  ),
+  trigger: Schema.NullOr(Schema.Literals(['context-limit', 'user'])),
   base: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
   range: Schema.Struct({
     from: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),

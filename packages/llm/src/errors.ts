@@ -2,7 +2,7 @@
 import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
-import { ModelOriginSchema, TurnUsageSchema } from './protocol.js';
+import { ModelOriginSchema } from './protocol.js';
 import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
 // Local imports - canonical messages
@@ -99,9 +99,6 @@ const ModelErrorFieldsSchema = Schema.Struct({
   message: Schema.String,
   /** Text emitted before this attempt failed, when the caller observed it. */
   partialText: Schema.optional(Schema.String),
-  /** What the provider billed for a response it refused to finish, when it
-   *  reported it (Anthropic's overflowed turn). */
-  usage: Schema.optional(TurnUsageSchema),
   requestId: Schema.optional(Schema.String),
   responseId: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),

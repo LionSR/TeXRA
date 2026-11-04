@@ -10,6 +10,7 @@ import {
   Result,
   Schema,
   type Scope,
+  Struct,
 } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
@@ -28,6 +29,7 @@ import {
   type RunEndOutput,
   type RunId,
   type RunOutcome,
+  type RunStopReason,
 } from '@shared/schemas';
 import {
   Approvals,
@@ -70,11 +72,6 @@ const defectAsFailure = Effect.catchDefect((d) => Effect.fail(ensureError(d)));
 
 /** What opening a run's rows reads of its session. */
 type OpenServices = SessionLog | SessionRoots | Approvals;
-
-/** A stop ending the run is the session's own clean close: its halt says so. */
-const closedBySession = (runs: Runs['Service'], input: Ending): boolean =>
-  input.outcome === RUN_OUTCOME.CANCELLED &&
-  runs.stopCause(input.runId) === 'shutdown';
 
 /** A resume's activation: its `run.activate`, the grants it ends, and a
  *  `run.config` if its configuration changed (its model kept: only a
@@ -157,6 +154,9 @@ export interface FinalizeRunInput<R = never> {
   /** An end no driver here writes (a stop that reached no live target, a
    *  failed hand-off, a backstop), under a claim it takes itself. */
   readonly ownerless?: boolean;
+  /** Why the run stopped, when a person's stop or a shutdown did (a release
+   *  names none): recorded on a cancelled end. */
+  readonly reason?: RunStopReason;
   /** The classified error behind a FAILED outcome, when the run has one. */
   readonly error?: RunEnd['error'];
   /** What the run produced; absent (empty) for a backstop or a child. */
@@ -174,16 +174,15 @@ export interface FinalizedRun {
   readonly wrote: boolean;
 }
 
-const endOf = ({ outcome, error, output }: Omit<RunEnd, 'usage'>) =>
-  error ? { outcome, error, output } : { outcome, output };
+const endOf = <E extends Omit<RunEnd, 'usage'>>(end: E) =>
+  Struct.pick(end, ['outcome', 'reason', 'error', 'output']);
 
 type Ending = Omit<FinalizeRunInput, 'lastTurn'>;
 
 /** What a run's end reads of its session. */
 export type EndServices = SessionLog | Inbox | Runs | RunHistory;
 
-/** The caller's {@link EndServices}, for the publisher job an end runs in:
- *  a job runs on the session's publisher, outside its caller's context. */
+/** The caller's {@link EndServices} for the publisher job an end runs in. */
 export const endServices = Effect.map(
   Effect.context<EndServices>(),
   Context.pick(SessionLog, Inbox, Runs, RunHistory),
@@ -211,8 +210,7 @@ const cancelledRequests = (
 /** A run's end in `tx`'s job (the requests it leaves open, its halt, unread
  *  input, closure, `run.end`, last turn); an unloadable run's, all but the
  *  halt, with a warning. A last turn held for a parent another process has
- *  open lets the run's claim go with it, so whoever delivers it ends the
- *  run under a claim nobody holds. */
+ *  open lets the run's claim go with it; its deliverer ends it claim-free. */
 export const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append' | 'release'>,
   input: Ending,
@@ -241,16 +239,16 @@ export const endIn = Effect.fn('endIn')(function* (
   if (ended === undefined && lastTurn.held !== true) {
     const end = runEndDraft(runId, {
       outcome: persisted,
+      reason: input.reason,
       error,
       note: lastTurn.note,
       output: input.output,
     });
     written = endOf(end);
-    const closed = closedBySession(yield* Runs, input);
     halt =
       facts.position === null
         ? []
-        : [haltedPositionRow(facts.position, persisted, closed)];
+        : [haltedPositionRow(facts.position, persisted)];
     const unapplied = (yield* (yield* Inbox).read(runId)).followUps;
     closing = [
       ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),

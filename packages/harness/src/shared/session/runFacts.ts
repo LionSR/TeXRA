@@ -38,6 +38,7 @@ import {
   type ToolResultPayload,
   USER_FOLLOW_UP_SUPPORT,
   type UserFollowUpSupport,
+  type RunStopReason,
 } from '@shared/schemas';
 
 import { byId, isSharedRunRow } from './runRows';
@@ -221,8 +222,8 @@ export function runEndFromEvents(
   return recordsOf(rows, runId).end;
 }
 
-/** `invocation` once a clean close stopped its open attempt (a `run.position`
- *  halt, reason `closed`): none, or one with a recorded outcome, is as it was. */
+/** `invocation` once a shutdown stopped its open attempt (a `run.end` whose
+ *  `reason` is `shutdown`): none, or one with a recorded outcome, is as it was. */
 export function closedBy(invocation: Invocation | null): Invocation | null {
   if (invocation === null || invocation.current.failed !== null)
     return invocation;
@@ -322,23 +323,26 @@ export function activationDrafts(
   return [{ type: 'run.activate', aggregateId: target }, ...ended, ...changed];
 }
 
-/** The `run.end` row: the run's outcome, its error with the note of a last
- *  turn whose delivery failed (`note`), and what it produced, or nothing. */
+/** The `run.end` row: the run's outcome, why a cancelled one stopped, its
+ *  error with the note of a last turn whose delivery failed (`note`), and
+ *  what it produced, or nothing. */
 export function runEndDraft(
   runId: RunId,
   end: {
     readonly outcome: RunOutcome;
+    readonly reason?: RunStopReason;
     readonly error?: RunEnd['error'];
     readonly note?: string;
     readonly output?: RunEndOutput;
   },
 ): Extract<RunInputDraft, { readonly type: 'run.end' }> {
-  const { outcome, error, note } = end;
+  const { outcome, reason, error, note } = end;
   const message = [error?.message, note].filter(Boolean).join('; ');
   return {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
+    ...(reason && outcome === 'cancelled' && { reason }),
     ...(error && { error: { ...error, message } }),
     output: end.output ?? emptyRunEndOutput(),
   };

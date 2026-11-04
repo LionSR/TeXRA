@@ -192,38 +192,3 @@ export function checkPreparedHistory(
   }
   return issues;
 }
-
-/** A non-negative integer: a token or item count. */
-export const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-
-/** A turn's token counts as reported; an unknown count stays null. Only what
- *  no neutral count holds is `providerUsage`: an xAI receipt's cost, and
- *  Anthropic's uncached input count and 5m/1h split of its cache writes. */
-export const TurnUsageSchema = Schema.Struct({
-  inputTokens: Schema.NullOr(CountSchema),
-  outputTokens: Schema.NullOr(CountSchema),
-  totalTokens: Schema.NullOr(CountSchema),
-  /** Prompt tokens read from the provider's cache. */
-  cachedInputTokens: Schema.NullOr(CountSchema),
-  /** Prompt tokens written to the provider's cache (Anthropic). */
-  cacheWriteTokens: Schema.NullOr(CountSchema),
-  reasoningTokens: Schema.NullOr(CountSchema),
-  /** Prompt tokens a provider-run tool added (Google). */
-  toolUsePromptTokens: Schema.NullOr(CountSchema),
-  providerUsage: Schema.optional(
-    Schema.Union([
-      Schema.Struct({
-        kind: Schema.Literal('xai'),
-        costInUsdTicks: Schema.NullOr(CountSchema),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('anthropic'),
-        uncachedInputTokens: Schema.NullOr(CountSchema),
-        cacheCreation5mTokens: Schema.NullOr(CountSchema),
-        cacheCreation1hTokens: Schema.NullOr(CountSchema),
-      }),
-    ]),
-  ),
-});
-/** {@link TurnUsageSchema}'s value. */
-export type TurnUsage = typeof TurnUsageSchema.Type;

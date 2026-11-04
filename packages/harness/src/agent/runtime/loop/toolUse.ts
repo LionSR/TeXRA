@@ -379,10 +379,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = outcome.state;
         if (outcome.kind === 'cancelled')
           return { state, outcome: 'cancelled' } as const;
-        if (outcome.kind !== 'failed') continue;
-        const compacted = yield* compaction.afterOverflow(cell, bound);
-        if (compacted === null) return { state, outcome: 'failed' } as const;
-        state = compacted;
+        if (outcome.kind === 'failed')
+          return { state, outcome: 'failed' } as const;
       }
     });
     return yield* stagedBy(

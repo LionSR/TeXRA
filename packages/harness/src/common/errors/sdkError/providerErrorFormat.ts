@@ -17,11 +17,7 @@ import {
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
 import { RouteUnavailable } from '../agentErrors';
-import {
-  findInCauseChain,
-  isDiskFullError,
-  isUserAbort,
-} from '../errorPredicates';
+import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 import { attachProviderError, detectProviderError } from './errorMetadata';
 
 /** A used-up plan as the failure records it. */
@@ -184,10 +180,8 @@ export function providerErrorOf(
   };
 }
 
-/** A failure formatted fresh: an abort, a full disk, a model failure, or any error's message. */
+/** A failure formatted fresh: a full disk, a model failure, or any error's message. */
 function formatFailure(err: unknown): ProviderError {
-  if (isUserAbort(err))
-    return { message: 'Request aborted', userRetryable: false };
   if (isDiskFullError(err)) {
     return {
       message: 'No space left on device. Free up disk space and try again.',

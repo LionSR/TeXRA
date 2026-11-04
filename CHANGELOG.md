@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A cancelled run says who stopped it.** The `run.end` row carries
+  `reason`: `user` for a person's stop, `shutdown` for the process's exit,
+  neither for a holder's release. A run the process closed mid-request
+  resumes without spending a retry, as before, and a child's delivery wakes
+  it, as after a crash; only a person's stop holds that delivery back. SDK:
+  `RunEnd.reason` and `RunStopReason` (from `@texra-ai/harness`); the halt
+  position carries no `reason`; the `abort` error kind, `isUserAbort` and
+  `AGENT_ERROR_OUTCOME` are gone, as a stop is the run fiber's interruption
+  and nothing else, and `outcomeFromCause` reads a cause alone.
 - **ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source
   agents.** The ChatGPT plan now pays for calls to the public Responses API
   (`api.openai.com/v1`) through a client OpenAI registers for you at the
@@ -1387,19 +1396,6 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
-- **A request the model's context window cannot hold is compacted and sent
-  again.** When the provider refused a request as too long, or the run's
-  own estimate did, the run ended failed. The run now compacts its history
-  once in that turn and sends the request again; a history too short to
-  compact, or a single attachment larger than the window, still fails with
-  the provider's message. Anthropic reports an overflowed request as a
-  finished turn, which counted as a completed answer; it is now the same
-  `context-overflow` failure every other provider raises, and what Anthropic
-  billed for it still counts toward the run's usage. SDK: the
-  `context-window-exceeded` finish reason is gone from `TurnResult` and the
-  stored turn, a compaction's `trigger` may be `overflow`, `ModelError`
-  carries the `usage` of a response the provider billed before refusing it,
-  and a `failed` row carries that usage priced.
 - **An answer the model could not finish says so.** When a reply stopped at
   the model's output limit or at the provider's content filter, it was shown
   as a complete answer. The assistant row in the progress view and the

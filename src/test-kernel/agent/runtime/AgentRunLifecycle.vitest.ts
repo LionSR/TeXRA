@@ -23,7 +23,6 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 
-import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 /** The run's committed `run.end` rows, once the session's writes settled:
@@ -133,36 +132,6 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         yield* Fiber.await(running);
         expect(yield* runEnds(session, runId)).toMatchObject([
           { outcome: RUN_OUTCOME.COMPLETED },
-        ]);
-      }),
-  );
-
-  // A run that aborts before its first turn is this run's outcome: the run
-  // never runs a turn, and the only fact it leaves is the cancelled terminal
-  // row with the abort's own error facts on it.
-  it.effect(
-    'writes the cancelled terminal fact when the run aborts before its first turn',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx, session } = yield* lifecycleFixture();
-        const recorded = recordSessionEvents(session, {
-          aggregateId: qualifyAggregateId('run', runId),
-        });
-
-        yield* endRun(
-          ctx,
-          Exit.fail(new DOMException('Request aborted', 'AbortError')),
-        ).pipe(Effect.provide(session));
-        yield* Context.get(session, SessionLog).settled;
-        // A run that never ran a turn writes no step of its own: `run.end` is
-        // the whole of what it says.
-        expect(eventsOfType(yield* recorded.read, 'run.position')).toEqual([]);
-        expect(yield* runEnds(session, runId)).toMatchObject([
-          {
-            outcome: RUN_OUTCOME.CANCELLED,
-            error: { kind: 'abort', userRetryable: false },
-            output: { response: '', files: [] },
-          },
         ]);
       }),
   );

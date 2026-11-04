@@ -27,21 +27,11 @@ import {
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
+  RunStopReasonSchema,
   ToolEditContentSchema,
 } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
-
-/**
- * Why a run stops. `user` is an explicit stop of the work (a stop button,
- * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
- * background operation it is observing. `shutdown` only ends this process's
- * hold on the run (an exit, a signal, a session close), leaving that
- * operation for a resume to observe.
- */
-const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
-/** Why a run stops: a `user` stop or this process's `shutdown`. */
-export type RunStopReason = typeof RunStopReasonSchema.Type;
 
 /** Every request a surface issues to its session's runtime, one arm per
  *  `group.action` tag. */
