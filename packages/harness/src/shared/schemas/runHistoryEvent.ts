@@ -420,7 +420,7 @@ export const ToolResultPayloadSchema = Schema.Struct({
     }
     // Both directions. The provider-facing status of the delivered tool group
     // is derived from `result.status` alone, so a call the run recorded as
-    // failed, cancelled or skipped carrying an executed result is delivered to
+    // failed or skipped carrying an executed result is delivered to
     // the model as a success. A duplicate is the one disposition that copies
     // its primary's status, whichever that was.
     if (
