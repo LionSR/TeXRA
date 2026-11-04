@@ -237,10 +237,11 @@ export function createDesktopPreviewHost(
       // `dialog.showMessageBox` modal (see desktopWindowHost.ts's showErrorMessage),
       // which has no scrolling affordance and would render as an oversized,
       // unreadable dialog for a multi-hundred-line raw compiler log.
-      yield* Effect.logError(`LaTeX build failed for ${sourcePath}`).pipe(
-        Effect.annotateLogs({ data: built.logTail }),
-        withLogChannel('desktop'),
-      );
+      // In the message, not a `data` annotation: the sink bounds an
+      // annotation to 2000 characters, and the tail runs to 200 lines.
+      yield* Effect.logError(
+        `LaTeX build failed for ${sourcePath}:\n${built.logTail}`,
+      ).pipe(withLogChannel('desktop'));
       yield* fail(
         `LaTeX build failed for ${sourcePath}. See the LaTeX log next to the source for details.`,
       );
