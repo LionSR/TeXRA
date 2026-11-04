@@ -104,11 +104,12 @@ const defectsAsErrors = <A, R>(
  * Once the run reaches its own terminal persistence, later caller
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
- * The last turn's `run.result` commits in the transaction that writes this
- * activation's `run.end` (`endIn`), so the end is the one read: no end, or
- * no finished turn, fails with the loop's failure as the cause; an end that
- * says failed fails with the child's error; any other end is returned with
- * the turn's output.
+ * No end, or no finished turn, fails with the loop's failure as the cause;
+ * an end that says failed fails with the child's error. Any other end is
+ * returned with the turn's output once its `run.result` manifest is read
+ * back: the end can commit without it (a refused last turn leaves a
+ * `result-lost` end alone, `finalizeRun`), and recovery reads the manifest
+ * (`standingOf`), so a completion without one is refused here as there.
  *
  * A loop failure after the turn finished does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
@@ -190,6 +191,13 @@ const executeInBand = Effect.fn('executeInBand')(
               runEnd.error?.message ??
                 `Subagent ${runId} ended with failed outcome.`,
             ),
+        ),
+      );
+
+    if ((yield* getRunRecords(runId).readResultMeta())?.producer !== 'subagent')
+      return yield* Effect.fail(
+        new Error(
+          `Subagent ${runId} ended, but its result was not recorded. Its work may be done: check before calling it again.`,
         ),
       );
 
