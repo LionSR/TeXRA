@@ -295,7 +295,7 @@ jobs:
       # set the shard's wall-clock. Each run saves its own results; a run
       # restores the newest a shard saved, a PR's from its base branch.
       - name: Restore test durations
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: node_modules/.vite/vitest
           key: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-${{ github.run_id }}
