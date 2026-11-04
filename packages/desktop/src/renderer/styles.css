@@ -1011,10 +1011,22 @@ wa-input.desktop-command-palette-input::part(input) {
 
 /* Each docked terminal owns its surface and retains its running shell. */
 .desktop-terminal-surface {
+  position: relative;
   grid-area: 1 / 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.desktop-terminal-exit-actions {
+  position: absolute;
+  z-index: 1;
+  right: var(--wa-space-m);
+  bottom: var(--wa-space-m);
+}
+
+.desktop-terminal-exit-actions:empty {
+  display: none;
 }
 
 .desktop-terminal-surface[hidden] {
