@@ -13,7 +13,7 @@ Browser-safe Effect Schemas, derived types, and pure read helpers for
   [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
-  [`isLiveRun`](#isliverun), [`isWorkingRun`](#isworkingrun),
+  [`isLiveRun`](#isliverun),
   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
 - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
@@ -974,12 +974,6 @@ class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
 })
 ```
 
-## isActivePhase
-
-```ts
-function isActivePhase(phase: RunLifecycleStatus | undefined): boolean
-```
-
 ## isEmptyUsage
 
 Whether usage stats are all zeros (effectively empty).
@@ -998,11 +992,9 @@ function isInFlightPhase(
 
 ## isLiveRun
 
-The one reading of "live" every host shares: a run somebody holds that has
-not ended. An interrupted run's durable phase may still say in flight, but
-nothing is working on it, so no run list, rollup, or status bar counts it.
-Not `group` alone: a spawned child that has not activated yet is `ready`
-and sorts under `recent`, yet it is live.
+The one reading of "live" every host shares: a run somebody holds that
+has not ended (an interrupted run's phase may still say in flight). Not
+`group` alone: a spawned child not yet activated is `ready`, yet live.
 
 ```ts
 function isLiveRun(
@@ -1083,14 +1075,6 @@ Whether transcript content is settled for the current turn.
 function isTranscriptSettlementPhase(
   phase: RunLifecycleStatus | undefined,
 ): boolean
-```
-
-## isWorkingRun
-
-A live run working right now: not a conversation waiting on its user.
-
-```ts
-function isWorkingRun(run: ReadRunView): boolean
 ```
 
 ## JsonValue
@@ -1793,8 +1777,8 @@ const RUN_OUTCOME: { readonly COMPLETED: "completed"; readonly CANCELLED: "cance
 ## RUN_PHASE
 
 The live phase vocabulary. Membership questions are answered by the
-predicates `isActivePhase`, `isInFlightPhase` and
-`isTerminalOutcomePhase`.
+predicates `isInFlightPhase` and `isTerminalOutcomePhase`; whether a run
+is working right now is the session view's `working`.
 
 ```ts
 const RUN_PHASE: { readonly RUNNING: "running"; readonly WAITING: "waiting"; readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }

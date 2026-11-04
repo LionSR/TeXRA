@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The view says whether a run is working.** `RunView.working` is true
+  while the run is inside a turn: live, not paused, not interrupted and not
+  waiting for its user. `runStartedAt` is set only while the run is busy on
+  a turn (not while it waits on a person's answer, nor when interrupted or
+  paused), so a clock reads it and nothing else, and `durableOutcome` is the
+  one reading of "ended, and how". Hosts read these three instead of deriving them from
+  the status word, so an interrupted run no longer shows as active in the
+  terminal (its status bar, the live-assistant row, `/clear`'s refusal) and
+  the header clock stops with it. SDK: `isWorkingRun` and `isActivePhase`
+  are gone (read `working`), `RunView.runStartedAt` is null unless the run
+  is busy (`turnStartedAt` carries the turn's start as the rows record it),
+  and a run listing entry's `status` is `outcome`: the run's durable
+  outcome, null until it ends.
 - **A message's sender is placed by the rows, not the view.** The inbox
   stamps a run sender's relation (parent, child, sibling, …) from the parent
   edges the rows record, in the job that writes the message, and a retry of

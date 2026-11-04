@@ -53,10 +53,6 @@ export function isTranscriptSettlementPhase(
   return phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
-export function isActivePhase(phase: RunLifecycleStatus | undefined): boolean {
-  return phase === RUN_PHASE.RUNNING;
-}
-
 export function isInFlightPhase(
   phase: RunLifecycleStatus | undefined,
 ): boolean {

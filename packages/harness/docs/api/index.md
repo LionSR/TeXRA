@@ -91,9 +91,8 @@ listed; a lookup by explicit id reads the run's records instead.
 interface AgentRunListingEntry {
   id: RunId;
   timestamp: string;
-  /** The run's folded status; a terminal outcome phase is its durable
-   *  outcome. */
-  status: RunLifecycleStatus;
+  /** The run's durable outcome (its `run.end`), null while none has landed. */
+  outcome: RunOutcome | null;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */

@@ -558,14 +558,8 @@ export class RunHeader extends LitElement {
   }
 
   private renderRunElapsed(run: RunView): TemplateResult | typeof nothing {
-    // A run parked on the user's answer is not working: no live clock.
-    if (
-      run.runStartedAt === null ||
-      run.group === 'recent' ||
-      run.group === 'waiting'
-    ) {
-      return nothing;
-    }
+    // The fold keeps a start only while the run works: no clock otherwise.
+    if (run.runStartedAt === null) return nothing;
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
 

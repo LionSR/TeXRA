@@ -17,9 +17,7 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
-  isInFlightPhase,
   type RunOutcome,
-  type RunLifecycleStatus,
   type RunId,
   type TaskGroup,
 } from '@texra-ai/harness/schemas';
@@ -192,10 +190,6 @@ export class TaskGroupList extends LitElement {
 
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
-
-  /** Status for the active stream, used while a run exists before logs arrive. */
-  @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
-    undefined;
 
   /** The session view's final outcome once no producer can close another group. */
   @property({ attribute: false }) durableOutcome: RunOutcome | null = null;
@@ -583,7 +577,7 @@ export class TaskGroupList extends LitElement {
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Task is starting" / idle text instead.
     if (this.rows.length === 0 && this.groups.length === 0) {
-      const active = isInFlightPhase(this.runStatus);
+      const active = this.run?.working === true;
       const noun = this.run?.parentId ? 'agent' : 'task';
       return html`
         <div class="log-placeholder">

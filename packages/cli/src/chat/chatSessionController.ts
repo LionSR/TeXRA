@@ -42,7 +42,6 @@ import {
   acceptsFollowUp,
   RUN_PHASE,
   isLiveRun,
-  isTerminalOutcomePhase,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
@@ -742,12 +741,11 @@ export function createChatSessionController(
         yield* adoptRunRecord(runId);
         yield* resumed;
         yield* settledHere(runId);
-        const status = runSession.view.current().runs.get(runId)?.status;
+        const outcome =
+          runSession.view.current().runs.get(runId)?.durableOutcome ?? null;
         session.settleExitCode(
           claim,
-          isTerminalOutcomePhase(status)
-            ? runOutcomeExitCode(status)
-            : CliExitCode.Success,
+          outcome === null ? CliExitCode.Success : runOutcomeExitCode(outcome),
         );
       }).pipe(
         Effect.ensuring(Effect.sync(() => session.markRunCompleted(claim))),

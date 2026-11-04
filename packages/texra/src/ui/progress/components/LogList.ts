@@ -101,7 +101,6 @@ export class LogList extends LitElement {
             .surface=${this.surface}
             .tools=${this.tools}
             .transcript=${run.transcript}
-            .runStatus=${run.status}
             .durableOutcome=${run.durableOutcome}
             .expanded=${this.surface?.groups.get(id)}
             ?terminal=${terminal}
