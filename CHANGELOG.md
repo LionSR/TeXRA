@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One flag per choice in `texra config agents`.** `--agents` takes the
+  workspace agents as one value (`inherit`, `all`, `team:<team>` by id,
+  name or slug, or a comma-separated agent list), `--default-team` takes a
+  team or `none`, and `--default-agent` an agent or `none`; `--inherit`,
+  `--all`, `--team`, `--clear-default` and `--clear-default-agent` are
+  gone, with the three "not both" errors. `texra clone` takes its
+  destination as the second argument, resolved against `--cwd` (the
+  directory every command works in) and defaulting to it; passing both no
+  longer errors.
 - **A child launch is a chat or a task.** SDK: `ChildLaunch`
   (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
   and the `mediaFiles` on its prompt) or a task (`task` with its `files`:

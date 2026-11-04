@@ -51,12 +51,11 @@ The whole loop is a round trip: pull your project down from Overleaf, edit it lo
 
 #### Option B: use the TeXRA CLI
 
-Create an empty destination directory, then pass either the Overleaf project
-URL or its 24-character project ID:
+Pass either the Overleaf project URL or its 24-character project ID, and the
+directory to create or clone into:
 
 ```bash
-mkdir project
-texra clone 0123456789abcdef01234567 --cwd ./project
+texra clone 0123456789abcdef01234567 ./project
 ```
 
 The CLI requests the Git token without displaying it and saves the token in

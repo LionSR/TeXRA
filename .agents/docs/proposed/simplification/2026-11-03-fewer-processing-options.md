@@ -371,6 +371,18 @@ above.
 - `RegexRuleSet.flags?` (`packages/texra/src/replacement/types.ts:31`) is set
   by all nine rule sets: required.
 
+_Landed 2026-11-04 (CLI): `clone`'s destination is its second argument and
+`--cwd` keeps its one global meaning (the directory the command works in,
+which the positional resolves against; `clone` and `init` no longer re-describe
+it); `config agents` takes `--agents <inherit|all|team:<team>|list>`,
+`--default-team <team|none>` and `--default-agent <agent|none>`, the grammar
+the command already printed and the forms used, so five flags and three
+"not both" errors are gone and a team is looked up one way for both flags.
+Checked and kept: `--input`, `--context`, `--instruction` and `--model` are
+declared per command because their help differs per command (the team
+orchestrator, `run`'s media and document-task notes), `--model` was never
+collected once, and `--instruction-file` is the one identical pair._
+
 ## Rejected
 
 - **`websocket.openai`.** The owner ruled to keep the experimental WebSocket
