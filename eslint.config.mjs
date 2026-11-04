@@ -656,6 +656,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.{ts,mts}',
+      'packages/*/test/**/*.{ts,mts}',
       'packages/harness/src/**/*.{ts,mts}',
       'packages/texra/src/**/*.{ts,mts}',
       'packages/llm/src/**/*.{ts,mts}',
@@ -808,7 +809,7 @@ export default tseslint.config(
   // Tests run separately so their application-wide program is not retained
   // alongside the production programs. Both passes keep the same rules.
   {
-    files: ['src/test-kernel/**/*.{ts,mts}'],
+    files: ['src/test-kernel/**/*.{ts,mts}', 'packages/*/test/**/*.{ts,mts}'],
     languageOptions: {
       parserOptions: { project: ['./tsconfig.test-kernel.json'] },
     },

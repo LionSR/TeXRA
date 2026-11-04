@@ -103,8 +103,9 @@ A pnpm workspace in three layers (design:
 - `packages/llm`: model access.
 - `packages/extension`, `packages/desktop`, `packages/cli`,
   `packages/trace-viewer`: hosts and apps over them.
-- Repo-root `src/` holds only the test suite (`src/test-kernel/`);
-  `src/README.md` maps the tree.
+- A suite that tests one package lives in that package's `test/`; repo-root
+  `src/` holds the suites that compose several packages and the shared
+  support (`src/test-kernel/`); `src/README.md` maps the tree.
 
 Use the path aliases in `tsconfig.json` instead of relative chains. Harness
 aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
