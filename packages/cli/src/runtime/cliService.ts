@@ -184,11 +184,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           if (moved) {
             const message = sessionStoreMovedAsideMessage(moved);
             yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
-            yield* session.emit(
-              'requestShowInstruction',
-              { key: `store-moved-aside-${moved.aside}`, message },
-              { replayWhenAttached: true },
-            );
+            yield* session.emit('requestShowInstruction', {
+              key: `store-moved-aside-${moved.aside}`,
+              message,
+            });
           }
           return { session };
         }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));

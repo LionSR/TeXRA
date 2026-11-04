@@ -460,30 +460,32 @@ export const buildAgentCliLaunch = Effect.fn('buildAgentCliLaunch')(function* <
   return {
     stageLabel,
     launch: () => providerTurn(initialPrompt),
-    runTurn,
     isTurnError,
     turnErrorMessage,
-    onTurnSuccess: (turn) => {
-      for (const id of resolveSessionIds(turn)) {
-        if (id) registerSessionId(id);
-      }
-    },
     formatDelivery: (turn, wallTimeMs) =>
       Effect.try({
         try: () => formatDelivery(turn, wallTimeMs, lastPrompt),
         catch: ensureError,
       }),
     formatError: (turn, err) => formatError(turn, err, lastPrompt),
-    pauseNotice: () =>
-      continueId === undefined
-        ? undefined
-        : {
-            text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
-            resumeId: continueId,
-          },
-    releaseSessionOwnership: () => {
-      releaseFallbackClaim?.();
-      registry.releaseByRunId(runId);
+    cli: {
+      runTurn,
+      onTurnSuccess: (turn) => {
+        for (const id of resolveSessionIds(turn)) {
+          if (id) registerSessionId(id);
+        }
+      },
+      pauseNotice: () =>
+        continueId === undefined
+          ? undefined
+          : {
+              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
+              resumeId: continueId,
+            },
+      releaseSessionOwnership: () => {
+        releaseFallbackClaim?.();
+        registry.releaseByRunId(runId);
+      },
     },
   };
 });

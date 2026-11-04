@@ -6,6 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Launch options that travel together are one shape.** SDK: a
+  `ProcessChildStrategy` is a one-turn command (`interruptedTurn`, the result
+  a killed process still has) or a coding agent's CLI session, whose
+  `runTurn`, `pauseNotice`, `onTurnSuccess` and `releaseSessionOwnership`
+  are one required `cli` bag; a strategy with only some of them no longer
+  type-checks. `ProcessLayerOptions.labelRuns` and
+  `seedToolSwitches` are gone: a process built with `processLayer` labels
+  its root runs, and the first-install tool switches are seeded into the
+  store the process builds itself (`Sessions.layer` seeds the embedder's
+  global state; a store handed to `processLayer` is left as it is).
+  `AgentRuntimeEmitOptions.replayWhenAttached` is gone: a notice raised
+  while no host is attached always waits for the next one. A forked run's
+  copied title rides its registration rows (`RegisterRunOptions` has no
+  `descriptionBy`), and a compaction's reason is the one argument it takes
+  (`CompactionInput` has no `force`). No stored row or service message
+  changes.
 - **One approval decision.** A run's `approvalPolicy` (Block, Ask,
   Auto-approve) is the one setting that says whether its shell commands,
   file edits, delegations and coding-agent launches ask first. Under Ask

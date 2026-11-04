@@ -146,47 +146,53 @@ export interface NativeChildStrategy<
     notify: (update: SubagentProgressUpdate) => void,
     turns: ChildRunTurns<TTurn, R | FollowUpServices>,
   ): Effect.Effect<TTurn, Error, R>;
-  /** Record the report without routing it to a parent: a headless caller
-   *  awaits and reads it itself. */
-  readonly deliveryMode?: 'persistOnly';
-  /** An interrupted interactive turn has no new result to record. */
-  isTurnInterrupted?(turn: TTurn): boolean;
-  /** For a child a user stopped (directly or through its parent): what it
-   *  had done and which run to resume, queued for the parent without
-   *  waking it. */
-  stopNotice?(): Effect.Effect<string, Error, R>;
-  /** The one id a once-delivering child's result is admitted under, so a
-   *  resumed child's delivery is a replay. Absent: each turn's own. */
-  readonly deliveryId?: string;
+  /** An interrupted turn has no new result to record. */
+  isTurnInterrupted(turn: TTurn): boolean;
+  /** A script run reports once, under one delivery id (a resumed script's
+   *  delivery is a replay), and stopped by a user tells its parent what it
+   *  had done; a subagent delivers each turn under its own id, tells nothing. */
+  readonly script?: {
+    readonly deliveryId: string;
+    stopNotice(): Effect.Effect<string, Error, R>;
+  };
 }
 
 /** An external process's strategy (agent CLI, background bash): each turn's
- *  result commits in the loop, which then waits for the child's next batch. */
-export interface ProcessChildStrategy<
+ *  result commits in the loop, which then waits for the child's next batch:
+ *  a one-turn command whose killed process still has a result, or a coding
+ *  agent's CLI session (`cli`), a turn per batch of follow-ups. */
+export type ProcessChildStrategy<TTurn, R = never> = ChildStrategyBase<
   TTurn,
-  R = never,
-> extends ChildStrategyBase<TTurn, R> {
+  R
+> & {
   /** A stop interrupts the turn's fiber: a foreign call takes its signal
    *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
   launch(): Effect.Effect<TTurn, Error, R>;
-  /** The next turn, from the queued follow-ups. Absent: the first turn is
-   *  the only one (a background shell). */
-  runTurn?(
-    followUps: readonly FollowUpContent[],
-  ): Effect.Effect<TTurn, Error, R>;
-  /** The turn a stop cut short, rebuilt from what the child buffered, and
-   *  delivered: only a killed OS process, whose exit code and output are a
-   *  complete result. */
-  interruptedTurn?(): TTurn;
-  /** A stop pauses this child rather than cancelling it: what it had done
-   *  and how the parent's model continues it; undefined cancels it. */
-  pauseNotice?(): ChildRunPause | undefined;
-  /** After a successful turn: register the session/thread id, etc. */
-  onTurnSuccess?(turn: TTurn): void;
-  /** Release provider-owned registry entries; called once, before a failed
-   *  or interrupted delivery or at the end. */
-  releaseSessionOwnership?(): void;
-}
+} & (
+    | {
+        /** The turn a stop cut short, rebuilt from what the child buffered
+         *  and delivered: a killed OS process's exit code and output. */
+        interruptedTurn(): TTurn;
+        readonly cli?: undefined;
+      }
+    | {
+        readonly cli: {
+          /** The next turn, from the queued follow-ups. */
+          runTurn(
+            followUps: readonly FollowUpContent[],
+          ): Effect.Effect<TTurn, Error, R>;
+          /** What the paused child had done and how the parent's model
+           *  continues it; undefined cancels it instead. */
+          pauseNotice(): ChildRunPause | undefined;
+          /** After a successful turn: register the session/thread id, etc. */
+          onTurnSuccess(turn: TTurn): void;
+          /** Release provider-owned registry entries; called once, before a
+           *  failed or interrupted delivery or at the end. */
+          releaseSessionOwnership(): void;
+        };
+        readonly interruptedTurn?: undefined;
+      }
+  );
 
 /** The fields every child loop takes. */
 interface ChildRunLoopShared {
@@ -200,8 +206,10 @@ interface ChildRunLoopShared {
 }
 
 /**
- * One child loop's parameters, by family: a native child (no port), in the session's child-run budget
- * unless `awaited` (it rides its caller's slot), or a process child with the port that presents and ends it.
+ * One child loop's parameters, by family: a native child (no port), in the
+ * session's child-run budget unless `awaited` (its caller joins the loop and
+ * reads its last turn: no slot, no delivery or notice to the parent, and a
+ * cancelled turn is still its last), or a process child with its port.
  */
 export type ChildRunLoopParams<TTurn, R = never> = ChildRunLoopShared &
   (
@@ -260,6 +268,10 @@ class ChildLoop<TTurn, R> {
   turnStart = 0;
   /** The follow-ups the current turn's prompt took. */
   consumed: readonly QueuedFollowUp[] = [];
+  /** A native child its caller joins and reads the last turn of. */
+  get awaited(): boolean {
+    return this.params.childRun === undefined && this.params.awaited === true;
+  }
   /** Why the child failed; the cause may itself be `undefined`. */
   failure: { readonly cause: unknown } | undefined;
   end: ChildEnd = { kind: 'open' };
@@ -285,7 +297,7 @@ class ChildLoop<TTurn, R> {
   releaseOwnership(): void {
     if (this.ownershipReleased) return;
     this.ownershipReleased = true;
-    this.process?.releaseSessionOwnership?.();
+    this.process?.cli?.releaseSessionOwnership();
   }
 
   /** One loop diagnostic ({@link traceLog}). */
@@ -386,7 +398,7 @@ const progressNotify =
   (update: SubagentProgressUpdate): void => {
     const { notify, runId, agentName, parentRunId } = loop.params;
     if (notify) return notify(update);
-    if (strategy.deliveryMode === 'persistOnly') return;
+    if (loop.awaited) return;
     const to = parentEdgeIn(runId, parentRunId).pipe(Effect.provide(services));
     Context.get(services, Inbox).sendNotice(to, {
       text: formatSubagentProgress(runId, agentName, update),
@@ -428,11 +440,7 @@ const deliveryTarget = <TTurn, R>(
 ): RunId | null => {
   const { params } = loop;
   const { parentRunId: target } = params;
-  if (
-    params.childRun === undefined &&
-    params.strategy.deliveryMode === 'persistOnly'
-  )
-    return null;
+  if (loop.awaited) return null;
   if (isError) loop.releaseOwnership();
   return target;
 };
@@ -475,7 +483,9 @@ const buildTurnResult = Effect.fn('childRunLoop.buildTurnResult')(function* <
     resultMeta,
     consumed: loop.consumed,
     deliveryId:
-      params.childRun === undefined ? params.strategy.deliveryId : undefined,
+      params.childRun === undefined
+        ? params.strategy.script?.deliveryId
+        : undefined,
     to: deliveryTarget(loop, isError),
     ...(last && { end: isError ? 'failed' : 'completed' }),
   });
@@ -549,7 +559,7 @@ function nativeTurns<TTurn, R>(
     }),
     // The native run's own `run.end` commits these.
     finishLastTurn: Effect.fn('childRunLoop.finishLastTurn')(function* (turn) {
-      if (strategy.isTurnInterrupted?.(turn) === true) return undefined;
+      if (!loop.awaited && strategy.isTurnInterrupted(turn)) return undefined;
       const turnIsError = strategy.isTurnError?.(turn) === true;
       const turned = { turn, err: null, turnIsError };
       const end = yield* recordLastTurn(loop, turned, true);
@@ -577,7 +587,7 @@ const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
     yield* commitPart(
       turnResultPart(result, loop.trace, waitingRow(runId, 'parked')),
     );
-    if (turned.turn !== null) loop.process?.onTurnSuccess?.(turned.turn);
+    if (turned.turn !== null) loop.process?.cli?.onTurnSuccess(turned.turn);
     yield* wakeParent(result.delivery, loop.trace);
   },
 );
@@ -600,7 +610,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   );
   const { turn } = turned;
   // A turn that reports itself stopped stops the child.
-  if (turn !== null && strategy.isTurnInterrupted?.(turn))
+  if (turn !== null && !loop.awaited && strategy.isTurnInterrupted(turn))
     return yield* Effect.interrupt;
   noteFailure(loop, turned);
   // A launch that failed before its run's birth: there is no run to end,
@@ -636,8 +646,8 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
     const { turn } = turned;
     if (turn !== null) result = turn;
     noteFailure(loop, turned);
-    const runTurn = strategy.runTurn;
-    if (loop.failure !== undefined || turn === null || !runTurn) {
+    const { cli } = strategy;
+    if (loop.failure !== undefined || turn === null || cli === undefined) {
       yield* endTurns(loop, turned);
       break;
     }
@@ -651,7 +661,7 @@ const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
       batch.kind === 'synthetic'
         ? [{ text: batch.text, from: { kind: 'user' } }]
         : loop.consumed.map((followUp) => followUp.content);
-    next = () => runTurn(prompts);
+    next = () => cli.runTurn(prompts);
   }
   return result;
 });
@@ -666,14 +676,14 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
 >(loop: ChildLoop<TTurn, R>, strategy: NativeChildStrategy<TTurn, R>) {
   const { runId, parentRunId } = loop.params;
   if (
-    strategy.stopNotice === undefined ||
-    strategy.deliveryMode === 'persistOnly' ||
+    strategy.script === undefined ||
+    loop.awaited ||
     loop.runs.stopCause(runId) !== 'user'
   )
     return;
   const held = (yield* (yield* SessionLog).facts(runId))?.end?.outcome;
   if (held !== undefined && held !== RUN_OUTCOME.CANCELLED) return;
-  const text = yield* strategy
+  const text = yield* strategy.script
     .stopNotice()
     .pipe(
       Effect.catch((error) =>
@@ -742,7 +752,7 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
     const port = params.childRun;
     const pause =
       outcome === RUN_OUTCOME.CANCELLED
-        ? params.strategy.pauseNotice?.()
+        ? params.strategy.cli?.pauseNotice()
         : undefined;
     if (
       pause &&
@@ -808,7 +818,7 @@ const runChildLoop = <TTurn, R>(
   Effect.gen(function* () {
     const { params } = loop;
     const { runId } = params;
-    if (params.childRun === undefined && params.awaited !== true)
+    if (!loop.awaited)
       loop.budget = yield* loop.runs.childRunBudget(
         yield* resolveChildRunConcurrencyBudget(yield* SessionRoots),
       );

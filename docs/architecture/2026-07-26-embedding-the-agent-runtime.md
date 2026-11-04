@@ -449,10 +449,12 @@ when it opens.
   Given a resources tree, the process also reads each of its plugins'
   bundled skills under `<resourcesPath>/plugins/<id>/skills` (today `lean4`
   and `multi-agent`).
-- **`seedToolSwitches: false` (`ProcessLayerOptions`):** No first-install tool
-  defaults are written, so no plugin whose switch starts `off` is
-  default-disabled. More tools are available, not fewer
-  (`seedDisabledToolDefaults` in `packages/harness/src/tools/toolAvailability.ts`).
+- **A store handed to `processLayer` (`ProcessLayerOptions.appState`):** It is
+  left as it is: no first-install tool defaults are written, so no plugin
+  whose switch starts `off` is default-disabled. More tools are available,
+  not fewer. A store the process builds itself, and the embedder's global
+  state under `Sessions.layer`, are seeded (`seedDisabledToolDefaults` in
+  `packages/harness/src/tools/toolAvailability.ts`).
 - **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
   whatever port the embedder passed. The `memory`/`plan` injections do not

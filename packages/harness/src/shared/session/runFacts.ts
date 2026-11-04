@@ -244,8 +244,6 @@ export interface RegisterRunOptions {
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;
-  /** Who wrote it: the model, unless a fork copies its user's title. */
-  readonly descriptionBy?: 'model' | 'user';
   readonly provenance?: RunProvenance; // a fork's source and cut
   readonly grants?: ApprovalGrants; // the grants it starts with
   /** A fork's history, which its opening commits in place of a prompt
@@ -303,7 +301,7 @@ export function registrationDrafts(
       type: 'run.description',
       aggregateId: target,
       description: options.description,
-      by: options.descriptionBy ?? 'model',
+      by: 'model',
     });
   return { rows, start: born ? start : null };
 }

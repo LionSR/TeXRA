@@ -59,13 +59,6 @@ export interface ProcessLayerOptions extends Omit<
   /** The global store: absent, the global root's (`globalAppStateLayer`);
    *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
   readonly appState?: ProcessServicesOptions['appState'];
-  /** Seed the first-install tool switches (opt-in plugins off) unless the
-   *  user's list exists; `false` for a store that refuses every write. */
-  readonly seedToolSwitches?: boolean;
-  /** Label each root run with a short title from the helper model (its
-   *  `run.description`), for an app that shows one: an extra model request
-   *  per root run, outside the run's usage. Absent, no run is labelled. */
-  readonly labelRuns?: boolean;
 }
 
 /** The runtime a composition root makes over `processLayer`: the process
@@ -148,7 +141,7 @@ export class Sessions extends Context.Service<
       plugins,
       skills,
       secrets: Secrets.layer(platform.secrets),
-      appState: AppState.layer(platform.roots.globalState),
+      appState: seeded(AppState.layer(platform.roots.globalState), plugins),
       agentDirectories: Layer.succeed(AgentDirectories)(
         platform.agentDirectories,
       ),
@@ -177,40 +170,50 @@ export class Sessions extends Context.Service<
  * recording one request kind's decisions, a switch on a plugin with no
  * availability probe) fails the build with {@link PluginsRefused} before
  * anything is built, so the refusal names the plugin rather than failing
- * the first session open. The global store is seeded with the first-install
- * tool switches as it is built, unless `seedToolSwitches` is `false`.
+ * the first session open. A global store the process builds itself is
+ * seeded with the first-install tool switches; a store handed in is left as
+ * it is. Every root run is labelled with a short title from the helper model
+ * (its `run.description`): an extra model request per root run, outside the
+ * run's usage, which every host's run list shows.
  */
 export function processLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
   return Layer.merge(
-    sessionsLayer(options),
+    sessionsLayer(options).pipe(Layer.provide(Layer.succeed(RunLabels)(true))),
     Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
   );
 }
 
+/** The store, seeded with the first-install tool switches (opt-in plugins
+ *  off) unless the user's list exists: as it is built, so before the tool
+ *  catalog first reads the switches (an embedder's store has no change feed
+ *  and is read once). A store that cannot be read or written is a platform
+ *  defect. */
+const seeded = (
+  appState: NonNullable<ProcessServicesOptions['appState']>,
+  plugins: ProcessLayerOptions['plugins'],
+) =>
+  appState.pipe(
+    Layer.tap((context) =>
+      seedDisabledToolDefaults(Context.get(context, AppState), plugins).pipe(
+        Effect.orDie,
+      ),
+    ),
+  );
+
 function sessionsLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
-  // Seeded as the store is built, so before the tool catalog first reads
-  // the switches: an embedder's store has no change feed and is read once.
-  // A store that cannot be read or written is a platform defect.
-  const appState = (
+  const appState =
     options.appState ??
-    globalAppStateLayer(
-      resolveGlobalStoragePath(options.storageRoot),
-      options.settings,
-    )
-  ).pipe(
-    Layer.tap((context) =>
-      options.seedToolSwitches === false
-        ? Effect.void
-        : seedDisabledToolDefaults(
-            Context.get(context, AppState),
-            options.plugins,
-          ).pipe(Effect.orDie),
-    ),
-  );
+    seeded(
+      globalAppStateLayer(
+        resolveGlobalStoragePath(options.storageRoot),
+        options.settings,
+      ),
+      options.plugins,
+    );
   const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
@@ -239,9 +242,6 @@ function sessionsLayer(
       options.commandDirs === undefined
         ? Layer.empty
         : Layer.succeed(CommandDirs)(options.commandDirs),
-    ),
-    Layer.provideMerge(
-      options.labelRuns === true ? Layer.succeed(RunLabels)(true) : Layer.empty,
     ),
   );
   return Layer.unwrap(

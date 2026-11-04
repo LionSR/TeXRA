@@ -341,8 +341,6 @@ type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 
 ```ts
 interface AgentRuntimeEmitOptions {
-  /** Retain a presentation event until a temporarily detached UI returns. */
-  readonly replayWhenAttached?: boolean;
   /**
    * Shown through `requestShowError` on the same host when presenting this
    * event throws, live or on replay: for a notice that is a failure's only
@@ -1708,8 +1706,11 @@ tool name listed twice, a second plugin continuing waiting runs or
 recording one request kind's decisions, a switch on a plugin with no
 availability probe) fails the build with {@link PluginsRefused} before
 anything is built, so the refusal names the plugin rather than failing
-the first session open. The global store is seeded with the first-install
-tool switches as it is built, unless `seedToolSwitches` is `false`.
+the first session open. A global store the process builds itself is
+seeded with the first-install tool switches; a store handed in is left as
+it is. Every root run is labelled with a short title from the helper model
+(its `run.description`): an extra model request per root run, outside the
+run's usage, which every host's run list shows.
 
 ```ts
 function processLayer(
@@ -1732,13 +1733,6 @@ interface ProcessLayerOptions extends Omit<
   /** The global store: absent, the global root's (`globalAppStateLayer`);
    *  else the SDK's embedder store, or a platform-less CLI entry's refusal. */
   readonly appState?: ProcessServicesOptions['appState'];
-  /** Seed the first-install tool switches (opt-in plugins off) unless the
-   *  user's list exists; `false` for a store that refuses every write. */
-  readonly seedToolSwitches?: boolean;
-  /** Label each root run with a short title from the helper model (its
-   *  `run.description`), for an app that shows one: an extra model request
-   *  per root run, outside the run's usage. Absent, no run is labelled. */
-  readonly labelRuns?: boolean;
 }
 ```
 

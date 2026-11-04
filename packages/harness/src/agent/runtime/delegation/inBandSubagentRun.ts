@@ -176,7 +176,6 @@ const executeInBand = Effect.fn('executeInBand')(
         runId,
         startedAt,
         workingDirectory,
-        inBand: true,
       }),
     });
 
