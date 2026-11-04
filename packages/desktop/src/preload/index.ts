@@ -1,9 +1,11 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
-import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin.js';
+import { resolvePostMessageTargetOrigin } from '../shared/postMessageOrigin.js';
 import { installElectronHostBridge } from './hostBridge.js';
 
-const rendererWindow = globalThis as typeof globalThis & {
+// The preload runs in the page's window; this Node-typed build has no DOM
+// library, so the binding names the members it uses.
+const rendererWindow: {
   addEventListener?: (
     type: 'unload',
     listener: () => void,
@@ -11,7 +13,7 @@ const rendererWindow = globalThis as typeof globalThis & {
   ) => void;
   location?: { origin?: string };
   postMessage?: (message: unknown, targetOrigin: string) => void;
-};
+} = globalThis;
 
 installElectronHostBridge({
   exposeInMainWorld: (name, api) => contextBridge.exposeInMainWorld(name, api),

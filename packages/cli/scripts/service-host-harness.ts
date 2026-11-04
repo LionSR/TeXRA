@@ -4,28 +4,45 @@
 // `hang` never answers, so the validator can detach it mid-call. It prints
 // `ATTACHED` once its attachment is up, `LINKED` each time its link
 // reaches a service (a restart prints it again), and `CALLED <path>` per
-// read, and runs until it is killed.
+// read, and runs until it is killed. `approve` approves one pending request
+// instead, as another window's Approve does (with `content`, the proposed
+// file as that window left it), prints `DECIDED` or `REFUSED <tag>:
+// <reason>`, and exits.
 //
 //   node service-host-harness.js <storageRoot> <workspace> <answer|hang>
+//   node service-host-harness.js <storageRoot> <workspace> approve <runId> <requestId> [content]
 
 import path from 'node:path';
 
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Schema,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { GlobalValues } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { linkService } from '@texra/controllers/server/client';
+import {
+  linkService,
+  requestOnService,
+  type ServiceLink,
+} from '@texra/controllers/server/client';
 import { attachWindowHost } from '@texra/controllers/server/windowHost';
 
-const [storageRoot, workspace, mode] = process.argv.slice(2);
+const [storageRoot, workspace, mode, ...rest] = process.argv.slice(2);
 if (storageRoot === undefined || workspace === undefined)
   throw new Error(
-    'usage: service-host-harness <storageRoot> <workspace> <answer|hang>',
+    'usage: service-host-harness <storageRoot> <workspace> <answer|hang|approve>',
   );
 
 /** The storage root's global values, where the service's record is. */
@@ -42,6 +59,36 @@ const globalValues = Layer.effect(
 const say = (line: string) =>
   Effect.sync(() => process.stdout.write(`${line}\n`));
 
+/** The approval `rest` names, sent once the link reaches the service. */
+const approve = (link: ServiceLink) => {
+  const [runId, requestId, content] = rest;
+  if (runId === undefined || requestId === undefined)
+    throw new Error('usage: approve <runId> <requestId> [content]');
+  return SubscriptionRef.changes(link.client).pipe(
+    Stream.filter(Predicate.isNotNull),
+    Stream.runHead,
+    Effect.map(Option.getOrThrow),
+    Effect.flatMap((client) =>
+      requestOnService(client, workspace, {
+        kind: 'request.decide',
+        runId: Schema.decodeUnknownSync(RunIdSchema)(runId),
+        requestId,
+        decision: {
+          action: 'approve',
+          ...(content !== undefined && { content }),
+        },
+      }),
+    ),
+    Effect.matchEffect({
+      onFailure: (error) =>
+        say(
+          `REFUSED ${error._tag}: ${'reason' in error ? error.reason : error.message}`,
+        ),
+      onSuccess: () => say('DECIDED'),
+    }),
+  );
+};
+
 await Effect.runPromise(
   Effect.scoped(
     Effect.gen(function* () {
@@ -51,6 +98,7 @@ await Effect.runPromise(
           new Error('The harness attaches to a running service only.'),
         ),
       );
+      if (mode === 'approve') return yield* approve(link);
       yield* Effect.forkScoped(
         Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
           client === null ? Effect.void : say('LINKED'),

@@ -50,19 +50,22 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.DEFAULT]: Schema.optional(Schema.Unknown),
 } satisfies Record<MessageType, Schema.Top>;
 
+/** The decoded `log` row payload for message type `K`. */
+type LogPayloadOf<K extends MessageType> = {
+  readonly messageType: K;
+  readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Type'];
+};
+
 /** A decoded `log` row payload, discriminated by its message type. */
-export type LogPayload = {
-  [K in MessageType]: {
-    readonly messageType: K;
-    readonly data: (typeof LOG_PAYLOAD_SCHEMAS)[K]['Type'];
-  };
-}[MessageType];
+export type LogPayload = { [K in MessageType]: LogPayloadOf<K> }[MessageType];
 
 /** Decode one `log` row payload, or name the schema's objection. */
-export function decodeLogPayload(
-  messageType: MessageType,
+export function decodeLogPayload<K extends MessageType>(
+  messageType: K,
   data: unknown,
-): { readonly payload: LogPayload } | { readonly issue: string } {
+):
+  | { readonly payload: { [P in K]: LogPayloadOf<P> }[K] }
+  | { readonly issue: string } {
   // An error row is read strictly; see ErrorLogDataSchema.
   const parsed = Schema.decodeUnknownResult(LOG_PAYLOAD_SCHEMAS[messageType])(
     data,
@@ -70,9 +73,7 @@ export function decodeLogPayload(
       ? { onExcessProperty: 'error' }
       : undefined,
   );
-  return Result.isSuccess(parsed)
-    ? // cast: the indexed schema's decoded type is `LogPayload`'s arm for
-      // `messageType`, which TypeScript cannot correlate across the lookup.
-      { payload: { messageType, data: parsed.success } as LogPayload }
-    : { issue: parsed.failure.message };
+  if (Result.isFailure(parsed)) return { issue: parsed.failure.message };
+  const payload: LogPayloadOf<K> = { messageType, data: parsed.success };
+  return { payload };
 }

@@ -87,7 +87,8 @@ export const pendingMessages = (
 export function byId<T>(
   entries: Iterable<readonly [string, T]>,
 ): Record<string, T> {
-  const record = Object.create(null) as Record<string, T>;
+  const record: Record<string, T> = {};
+  Reflect.setPrototypeOf(record, null);
   for (const [key, value] of entries) record[key] = value;
   return record;
 }
@@ -114,7 +115,7 @@ export function ownCopy<T extends object, W extends T>(
   value: T,
   copy: (value: T) => W,
 ): W {
-  // Only `copy` put a value in the set, so an owned value is a `W`.
+  // cast: only `copy` put a value in the set, so an owned value is a `W`.
   if (copies?.has(value) === true) return value as W;
   const fresh = copy(value);
   copies?.add(fresh);
@@ -169,6 +170,12 @@ type FollowUpRow = Extract<
   { type: 'followup.queued' | 'followup.consumed' }
 >;
 
+/** A follow-up row handed to a reader that keeps only the position. */
+const positionOnly = (row: FollowUpRow): RunRowVerdict => ({
+  kind: 'contradiction',
+  detail: `${row.type} reached a reader that keeps only the run's position`,
+});
+
 const copyMap = <V>(entries: ReadonlyMap<string, V>) => new Map(entries);
 
 /**
@@ -191,12 +198,14 @@ export function applyRunRow(
   copies?: BatchCopies,
 ): RunRowVerdict;
 export function applyRunRow(
-  current: RunPosition | null,
+  current: RunRows | RunPosition | null,
   row: SharedRunRow,
   copies?: BatchCopies,
 ): RunRowVerdict {
-  // A follow-up row enters only through the `RunRows` overload.
-  const slice = current as RunRows | null;
+  // A follow-up row enters only through the `RunRows` overload, so it meets
+  // a `RunRows` or nothing; `undefined` is a position-only reader's state.
+  const slice =
+    current === null || 'followUps' in current ? current : undefined;
   switch (row.type) {
     case 'run.position': {
       const p = row.payload;
@@ -240,6 +249,7 @@ export function applyRunRow(
     case 'followup.queued': {
       // Queued input may come before everything else a run writes, so it
       // starts the reader's state; a replayed delivery id is queued once.
+      if (slice === undefined) return positionOnly(row);
       const rows = slice ?? freshRunRows();
       const seen = rows.followUps.some((f) => f.followUpId === row.followUpId);
       if (seen || rows.taken.has(row.followUpId)) return { kind: 'unchanged' };
@@ -259,6 +269,7 @@ export function applyRunRow(
       // while the loop ran, or not carried by the read that delivered this
       // row) consumes nothing and is recorded, so the queuing cannot land twice.
       const { followUpId, disposition, commit } = row;
+      if (slice === undefined) return positionOnly(row);
       if (slice === null || slice.taken.has(followUpId))
         return { kind: 'unchanged' };
       const followUps = slice.followUps.filter(

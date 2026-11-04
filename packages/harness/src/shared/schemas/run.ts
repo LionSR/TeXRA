@@ -30,8 +30,8 @@ export type UserFollowUpSupport = typeof UserFollowUpSupportSchema.Type;
 
 /**
  * The live phase vocabulary. Membership questions are answered by the
- * predicates `isActivePhase`, `isInFlightPhase` and
- * `isTerminalOutcomePhase`.
+ * predicates `isInFlightPhase` and `isTerminalOutcomePhase`; whether a run
+ * is working right now is the session view's `working`.
  */
 export const RUN_PHASE = {
   RUNNING: 'running',

@@ -15,14 +15,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
+import { descriptionRow } from '@shared/session/runFacts';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { RouteRetries } from './run/invocation';
 import type { HttpClient } from 'effect/http';
@@ -84,7 +80,8 @@ export function getDisplayedInstruction(
  * Whether the session labels its root runs: one extra helper-model request
  * per root run, counted in the run's usage through its `run.description`.
  * The label is the app's (a session's title in its run list and history),
- * so it is off unless the composition asks for it (`labelRuns`); a child
+ * so it is off unless the process layer provides it (`processLayer`
+ * does; `Sessions.layer` does not); a child
  * run is never labelled and keeps its agent name.
  */
 export const RunLabels = Context.Reference<boolean>(
@@ -188,10 +185,7 @@ export const generateSessionDescription = Effect.fn(
     // path's own failure and the one thing the warning is for.
     yield* log.transact([
       {
-        type: 'run.description',
-        aggregateId: qualifyAggregateId('run', runId),
-        description,
-        by: 'model',
+        ...descriptionRow(runId, description, 'model'),
         ...(usage === null ? {} : { usage }),
       },
     ]);

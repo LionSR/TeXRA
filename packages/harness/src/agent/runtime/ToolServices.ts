@@ -36,7 +36,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { Runs } from './runRegistry';
 import { Interactions } from './HostInteractions';
 import { ProjectTools } from './loop/step';
-import { SessionRequests } from './requestPolicy';
+import { SessionRequests, workAutoApproved } from './requestPolicy';
 import type { RunCallShape } from './RunCall';
 import type { RouteRetries } from './run/invocation';
 import type { SessionServices } from './rootLaunch';
@@ -63,7 +63,7 @@ export type RunServices =
  *  door (`ChildRuns`) and the call's place in its run (`RunCall`) are
  *  references with defaults, never requirements; a plugin's tool reads the
  *  door and never the session's `Runs`, which only the engine door carries
- *  (`RunCallShape.runs`). */
+ *  (`RunCallShape.session`). */
 export type PluginToolServices =
   RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
 
@@ -86,11 +86,9 @@ export interface ChildRunsShape {
   ) => Effect.Effect<RunId, Error>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
-  /** Its parent while it is live in this process: null for a root run,
-   *  undefined when it is not live here. */
-  readonly parent: (
-    runId: RunId,
-  ) => Effect.Effect<RunId | null | undefined, Error>;
+  /** Its attached parent as the rows record it (`run.start`, then a
+   *  `run.detach`): null for a root, or a run that is not there. */
+  readonly parent: (runId: RunId) => Effect.Effect<RunId | null, Error>;
   /** Its records: whether the store still lists it, and its terminal
    *  result (null before it ends). */
   readonly records: (runId: RunId) => {
@@ -107,6 +105,11 @@ export interface ChildRunsShape {
       readonly schema: Schema.Codec<A, unknown>;
     },
   ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the launching run's work runs unasked (the Auto-approve policy,
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
+  readonly autoApproved: Effect.Effect<boolean, Error>;
   /** Whether the run holds the request `requestId`, open or decided: what
    *  a tool that posted one reads after a failed post. */
   readonly requested: (
@@ -128,6 +131,7 @@ const noRunChildRuns: ChildRunsShape = Object.freeze({
   parent: () => noRun,
   records: () => ({ exists: noRun, end: noRun }),
   fact: () => noRun,
+  autoApproved: noRun,
   requested: () => noRun,
 });
 
@@ -174,7 +178,11 @@ export const childRuns = (call: RunCallShape): ChildRunsShape => {
     launch: (launch) => inSession(launchChildAgent(launch)),
     launchProcess: (launch) => inSession(launchProcessChild(runId, launch)),
     inbox: (id) => Effect.succeed(runInbox(id, session)),
-    parent: (id) => Effect.succeed(Context.get(session, Runs).get(id)?.parent),
+    parent: (id) =>
+      Effect.map(
+        log.runRows(qualifyAggregateId('run', id), 'input'),
+        (rows) => rows.parent?.id ?? null,
+      ),
     records: (id) => ({
       exists: inSession(getRunRecords(id).exists()),
       end: inSession(getRunRecords(id).readRunEnd()),
@@ -186,6 +194,7 @@ export const childRuns = (call: RunCallShape): ChildRunsShape => {
           ? undefined
           : Schema.decodeUnknownSync(arm.schema)(row.value);
       }),
+    autoApproved: inSession(workAutoApproved(runId)),
     requested: (id, requestId) =>
       Effect.map(
         log.runRows(qualifyAggregateId('run', id), 'requests'),

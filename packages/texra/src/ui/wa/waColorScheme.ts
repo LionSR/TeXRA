@@ -76,7 +76,8 @@ function isDarkTheme(): boolean {
       const bare = kind.startsWith('vscode-')
         ? kind.slice('vscode-'.length)
         : kind;
-      return themeIsDark(bare as Theme);
+      const theme = THEME_KINDS.find((known) => known === bare);
+      return theme !== undefined && themeIsDark(theme);
     }
   }
   return window.matchMedia('(prefers-color-scheme: dark)').matches;

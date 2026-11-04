@@ -17,23 +17,20 @@ import { pickGlobalArgs, type ParsedGlobalArgs } from './globalArgs';
  * (`defineCliCommand`, and `texra doctor` inside its own program); pinned in
  * `BARE_EFFECT_RUN_SITES`.
  */
-export function contextFromArgs(
+export const contextFromArgs = Effect.fn('contextFromArgs')(function* (
   args: ParsedGlobalArgs,
   rawArgs: readonly string[] = [],
-  /** `texra doctor` reports the config warnings in its own Config row. */
   options: { readonly printConfigWarnings?: boolean } = {},
 ) {
-  return Effect.gen(function* () {
-    const context = yield* buildCliContext({
-      globalArgs: pickGlobalArgs(args, rawArgs),
-    });
-    // Degradation reaches stderr even under `--quiet` (#11080).
-    const printed = context.quietLogs
-      ? context.configDegradations
-      : [...context.configDegradations, ...context.configWarnings];
-    if (options.printConfigWarnings !== false) {
-      for (const warning of printed) writeTextStderr(`WARN ${warning}`);
-    }
-    return context;
-  }).pipe(Effect.provide(nodeFileServices));
-}
+  const context = yield* buildCliContext({
+    globalArgs: pickGlobalArgs(args, rawArgs),
+  });
+  // Degradation reaches stderr even under `--quiet` (#11080).
+  const printed = context.quietLogs
+    ? context.configDegradations
+    : [...context.configDegradations, ...context.configWarnings];
+  if (options.printConfigWarnings !== false) {
+    for (const warning of printed) writeTextStderr(`WARN ${warning}`);
+  }
+  return context;
+}, Effect.provide(nodeFileServices));

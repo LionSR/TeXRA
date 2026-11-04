@@ -3,11 +3,11 @@ import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { BundledViewContentProvider } from '@common/webview';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
+import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 // Local file imports
 import {
@@ -65,45 +65,47 @@ export class SettingsViewProvider {
    * Create and show the webview panel (for command palette activation)
    * @param tab Optional page, or `page/section`, to switch to after showing
    */
-  public showSettingsView(
-    tab?: SettingsTarget,
-  ): Effect.Effect<void, Error, ProcessServices> {
-    return Effect.gen({ self: this }, function* () {
-      if (this._view) {
-        const panel = this._view;
-        panel.reveal(vscode.ViewColumn.One);
-        yield* this.messageHandler.body.postAll;
-      } else {
-        const panel = vscode.window.createWebviewPanel(
-          SettingsViewProvider.viewType,
-          'TeXRA Settings',
-          vscode.ViewColumn.One,
-          {
-            enableScripts: true,
-            retainContextWhenHidden: true,
-            localResourceRoots: this.contentProvider.localResourceRoots,
-          },
-        );
-        panel.iconPath = new vscode.ThemeIcon('gear');
+  public readonly showSettingsView = Effect.fn(
+    'SettingsViewProvider.showSettingsView',
+  )({ self: this }, function* (tab?: SettingsTarget): Effect.fn.Return<
+    void,
+    Error,
+    ProcessServices
+  > {
+    if (this._view) {
+      const panel = this._view;
+      panel.reveal(vscode.ViewColumn.One);
+      yield* this.messageHandler.body.postAll;
+    } else {
+      const panel = vscode.window.createWebviewPanel(
+        SettingsViewProvider.viewType,
+        'TeXRA Settings',
+        vscode.ViewColumn.One,
+        {
+          enableScripts: true,
+          retainContextWhenHidden: true,
+          localResourceRoots: this.contentProvider.localResourceRoots,
+        },
+      );
+      panel.iconPath = new vscode.ThemeIcon('gear');
 
-        this.cleanupView();
-        this._view = panel;
-        this.viewListeners = vscode.Disposable.from(
-          this.setupWebviewContent(panel),
-          panel.onDidDispose(this.cleanupView.bind(this)),
-        );
-      }
+      this.cleanupView();
+      this._view = panel;
+      this.viewListeners = vscode.Disposable.from(
+        this.setupWebviewContent(panel),
+        panel.onDidDispose(this.cleanupView.bind(this)),
+      );
+    }
 
-      // this._view can be undefined here: the postAll above yields, and
-      // disposing the dashboard panel meanwhile runs cleanupView.
-      if (tab == null || !this._view) return;
-      if (this.viewReady) {
-        yield* this.postTab(this._view.webview, tab);
-      } else {
-        this.pendingTab = tab;
-      }
-    });
-  }
+    // this._view can be undefined here: the postAll above yields, and
+    // disposing the dashboard panel meanwhile runs cleanupView.
+    if (tab == null || !this._view) return;
+    if (this.viewReady) {
+      yield* this.postTab(this._view.webview, tab);
+    } else {
+      this.pendingTab = tab;
+    }
+  });
 
   /**
    * Render this provider's HTML into `panel` and route the panel's inbound

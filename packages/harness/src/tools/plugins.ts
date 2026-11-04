@@ -339,22 +339,19 @@ export function factRows(
         parent: null,
       });
     else own.push(ownFactRow({ ...fact, aggregate }, runId));
-  const current = (draft: OwnFactRow) =>
-    Effect.gen(function* () {
-      const factKind = plugin?.factKinds?.find(
-        (one) => one.kind === draft.kind,
-      );
-      if (factKind?.supersedes === undefined) return true;
-      const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
-        `${draft.plugin}/${draft.kind}`
-      ];
-      if (latest === undefined || !factKind.supersedes(latest, draft))
-        return true;
-      yield* Effect.logDebug(
-        `${factKind.plugin}/${factKind.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
-      );
-      return false;
-    });
+  const current = Effect.fn('current')(function* (draft: OwnFactRow) {
+    const factKind = plugin?.factKinds?.find((one) => one.kind === draft.kind);
+    if (factKind?.supersedes === undefined) return true;
+    const latest = (yield* log.runRows(draft.aggregateId, 'facts')).facts[
+      `${draft.plugin}/${draft.kind}`
+    ];
+    if (latest === undefined || !factKind.supersedes(latest, draft))
+      return true;
+    yield* Effect.logDebug(
+      `${factKind.plugin}/${factKind.kind}: a later row of ${draft.aggregateId} supersedes the call's`,
+    );
+    return false;
+  });
   return {
     run,
     alongside: Effect.filter(own, current).pipe(

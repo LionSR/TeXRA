@@ -43,7 +43,6 @@ export type {
   TurnEvent,
   TurnRequest,
   TurnResult,
-  TurnUsage,
   UnreleasedUpload,
 } from './turn.js';
 export {
@@ -54,7 +53,11 @@ export {
   sameModelOrigin,
   TurnProtocolSchema,
 } from './protocol.js';
-export type { ModelOrigin, PreparedHistoryEntry } from './protocol.js';
+export type {
+  ModelOrigin,
+  PreparedHistoryEntry,
+  TurnUsage,
+} from './protocol.js';
 export { AssistantMessageSchema, MessageSchema } from './message.js';
 export type { AssistantMessage, Continuation } from './message.js';
 export {
@@ -91,6 +94,7 @@ export type {
   SecretsOperation,
 } from './providers/credentials.js';
 export {
+  API_KEY_PROVIDER_IDS,
   BACKEND_PROTOCOLS,
   findModelProviderPlugin,
   MODEL_PROVIDER_PLUGINS,
@@ -105,7 +109,6 @@ export type {
 } from './providers/providerPlugins.js';
 export {
   API_KEY_ENV_NAMES,
-  API_KEY_PROVIDER_IDS,
   apiKeyEnvName,
   providerDisplayName,
 } from './providers/providers.js';

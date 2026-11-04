@@ -242,10 +242,15 @@ const icons = {
   FontAwesomeIconDefinition
 >;
 
+/** The resolver's lookup: a name it is handed is any string. */
+const ICON_BY_NAME: ReadonlyMap<string, FontAwesomeIconDefinition> = new Map(
+  Object.entries(icons),
+);
+
 let isRegistered = false;
 
 function texraIconResolver(name: string): string {
-  const icon = icons[name as keyof typeof icons];
+  const icon = ICON_BY_NAME.get(name);
   return icon ? `data:image/svg+xml,${encodeURIComponent(iconSvg(icon))}` : '';
 }
 

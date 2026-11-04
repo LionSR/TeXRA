@@ -4,11 +4,15 @@
  * calls `document_task` as the script would, so each task is the same
  * child run, card and approval as a direct call.
  */
+import { Record as Rec } from 'effect';
+
+import { DOCUMENT_TASK_OPTIONS } from '@texra/shared/plugins/documents';
+
 export const DOCUMENTS_MODULE = `
 /** Run agentName's document task; resolves to its result, whose
  *  documents.outputs are the files it revised. args takes document_task's
  *  fields: prompt, inputFiles, contextFiles, mediaFiles, outputFiles, model,
- *  reflect, extractFigures, extractTikz. */
+ *  ${Rec.keys(DOCUMENT_TASK_OPTIONS).join(', ')}. */
 export const revise = (agentName, args = {}) => {
   if (typeof tools.document_task !== 'function')
     throw new Error('revise() calls document_task, which this script is not offered.');

@@ -12,7 +12,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, Layer, Stream } from 'effect';
+import { Effect, Layer, Schedule, Stream } from 'effect';
 import {
   type Model,
   type ModelConfig,
@@ -105,11 +105,13 @@ function goldenTurn(
   flagPath: string,
   call: (name: string, input: unknown) => TurnResult['content'][number],
 ): Effect.Effect<TurnResult['content'] | null> {
-  const gate = (name: string) =>
-    Effect.gen(function* () {
-      const file = path.join(path.dirname(flagPath), name);
-      while (!existsSync(file)) yield* Effect.sleep('20 millis');
-    });
+  const gate = (name: string) => {
+    const file = path.join(path.dirname(flagPath), name);
+    return Effect.sync(() => existsSync(file)).pipe(
+      Effect.repeat({ until: Boolean, schedule: Schedule.spaced('20 millis') }),
+      Effect.asVoid,
+    );
+  };
   const system = turn.system ?? '';
   const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);
@@ -125,15 +127,18 @@ function goldenTurn(
   // A call naming GOLDEN-PARK (a label's too) waits for its release file.
   if ((system + said).includes('GOLDEN-PARK'))
     return Effect.as(gate('golden-park.release'), text('Parked run released.'));
-  // A call awaiting approval: the tool and command after the marker.
+  // A call awaiting approval: the tool after the marker, and its command,
+  // or its whole input when a JSON object follows the tool.
   const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
     /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
-  if (marker !== undefined)
+  if (marker !== undefined) {
+    const input: unknown = command.startsWith('{')
+      ? JSON.parse(command)
+      : { command };
     return Effect.succeed(
-      results.length
-        ? text('The approved command ran.')
-        : [call(asked, { command })],
+      results.length ? text('The approved command ran.') : [call(asked, input)],
     );
+  }
   // A diagnostics read the service forwards to an attached window.
   if (system.includes('GOLDEN-DIAGNOSTICS'))
     return Effect.succeed(
@@ -519,7 +524,6 @@ function validationModel(config: ModelConfig): {
         temperature: 0,
         maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
         store: false,
-        parallelToolCalls: true,
         toolChoice: request.toolChoice ?? 'auto',
         reasoning: null,
         serviceTier: null,

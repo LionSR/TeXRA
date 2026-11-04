@@ -200,98 +200,98 @@ export type RunResult =
  * request (a recipe's with its children's then); none with no end. An
  * unreadable fold is logged and reads as no usage.
  */
-const runEndOf = (
+const runEndOf = Effect.fn('runEndOf')(function* (
   runId: RunId,
   held: RunRows,
   lifecycles: readonly SessionEvent[],
   history: readonly SessionEvent[],
-): RecordRead<RunEnd | null, SessionLog | SessionViewAccess> =>
-  Effect.gen(function* () {
-    const end = runEndFromEvents(lifecycles, runId);
-    if (!end) return null;
-    // The activation's own rows begin at the lifecycle row before its end
-    // (its `run.activate`), or with the run.
-    const start = lastLifecycleRow(
-      lifecycles.filter((row) => row.seq < end.seq),
-      runId,
-    );
-    const from = start?.seq ?? -1;
-    const during = (commit: CommitOrdinal) =>
-      commit > (start?.commit ?? -1) && commit <= end.commit;
-    // One read of the rows, so a resume never pairs the end with another
-    // activation's totals: the state before the activation, its usage
-    // zeroed, then the activation's rows.
-    const folded = Result.flatMap(
-      runHistoryRows(history.filter((row) => row.seq <= end.seq)),
-      (live) =>
-        Result.flatMap(
-          applyRunRows(
-            null,
-            live.filter((row) => row.seq < from),
-          ),
-          (prior) =>
-            applyRunRows(
-              prior && { ...prior, usage: EMPTY_RUN_USAGE_TOTALS },
-              live.filter((row) => row.seq >= from),
-            ),
+): Effect.fn.Return<
+  RunEnd | null,
+  DatabaseReadFailed,
+  SessionLog | SessionViewAccess
+> {
+  const end = runEndFromEvents(lifecycles, runId);
+  if (!end) return null;
+  // The activation's own rows begin at the lifecycle row before its end
+  // (its `run.activate`), or with the run.
+  const start = lastLifecycleRow(
+    lifecycles.filter((row) => row.seq < end.seq),
+    runId,
+  );
+  const from = start?.seq ?? -1;
+  const during = (commit: CommitOrdinal) =>
+    commit > (start?.commit ?? -1) && commit <= end.commit;
+  // One read of the rows, so a resume never pairs the end with another
+  // activation's totals: the state before the activation, its usage
+  // zeroed, then the activation's rows.
+  const folded = Result.flatMap(
+    runHistoryRows(history.filter((row) => row.seq <= end.seq)),
+    (live) =>
+      Result.flatMap(
+        applyRunRows(
+          null,
+          live.filter((row) => row.seq < from),
         ),
-    );
-    if (Result.isFailure(folded)) {
-      yield* Effect.logWarning(
-        'Failed to fold the run usage from its run history rows',
-      ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
-    }
-    const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
-    // The label's request, priced on the row its description fiber wrote.
-    const withLabel = (label: RunRows['label']) =>
-      Result.isFailure(folded) ||
-      label?.usage === undefined ||
-      !during(label.commit)
-        ? turns
-        : addTurnUsage(turns ?? EMPTY_RUN_USAGE_TOTALS, label.usage);
-    const own = withLabel(held.label);
-    // A document task's revisions are its children's runs, which hold
-    // what it cost: those this activation started, each as it had ended
-    // by this end, whatever a later resume of it spent.
-    const children =
-      held.config && isTaskConfig(held.config)
-        ? yield* Effect.forEach(
-            (yield* SessionViewAccess).run(runId)?.childIds ?? [],
-            (child) =>
-              Effect.flatMap(
-                SessionLog.use((log) => log.facts(child)),
-                (facts) => {
-                  if (facts === null || !during(facts.start?.commit ?? -1))
-                    return Effect.succeed(null);
-                  const asOf = (row: SessionEvent) => row.commit <= end.commit;
-                  return Effect.flatMap(rowsOf(child), (rows) =>
-                    runEndOf(
-                      child,
-                      facts,
-                      rows.lifecycles.filter(asOf),
-                      rows.history.filter(asOf),
-                    ),
-                  );
-                },
-              ),
-          )
-        : null;
-    const usage =
-      children === null
-        ? own
-        : sumRunUsageTotals(
-            [own, ...children.map((child) => child?.usage)].filter(
-              (u) => u !== undefined,
+        (prior) =>
+          applyRunRows(
+            prior && { ...prior, usage: EMPTY_RUN_USAGE_TOTALS },
+            live.filter((row) => row.seq >= from),
+          ),
+      ),
+  );
+  if (Result.isFailure(folded)) {
+    yield* Effect.logWarning(
+      'Failed to fold the run usage from its run history rows',
+    ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
+  }
+  const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
+  const withLabel = ({ label }: RunRows) =>
+    Result.isSuccess(folded) && during(label?.commit ?? -1) && label?.usage
+      ? addTurnUsage(turns ?? EMPTY_RUN_USAGE_TOTALS, label.usage)
+      : turns;
+  const own = withLabel(held);
+  // A document task's revisions are its children's runs, which hold
+  // what it cost: those this activation started, each as it had ended
+  // by this end, whatever a later resume of it spent.
+  const children =
+    held.config && isTaskConfig(held.config)
+      ? yield* Effect.forEach(
+          (yield* SessionViewAccess).run(runId)?.childIds ?? [],
+          (child) =>
+            Effect.flatMap(
+              SessionLog.use((log) => log.facts(child)),
+              (facts) => {
+                if (facts === null || !during(facts.start?.commit ?? -1))
+                  return Effect.succeed(null);
+                const asOf = (row: SessionEvent) => row.commit <= end.commit;
+                return Effect.flatMap(rowsOf(child), (rows) =>
+                  runEndOf(
+                    child,
+                    facts,
+                    rows.lifecycles.filter(asOf),
+                    rows.history.filter(asOf),
+                  ),
+                );
+              },
             ),
-          );
-    const { outcome, error, output } = end;
-    return {
-      outcome,
-      ...(error !== undefined ? { error } : {}),
-      ...(usage !== undefined ? { usage } : {}),
-      output,
-    } satisfies RunEnd;
-  });
+        )
+      : null;
+  const usage =
+    children === null
+      ? own
+      : sumRunUsageTotals(
+          [own, ...children.map((child) => child?.usage)].filter(
+            (u) => u !== undefined,
+          ),
+        );
+  const { outcome, error, output } = end;
+  return {
+    outcome,
+    ...(error !== undefined ? { error } : {}),
+    ...(usage !== undefined ? { usage } : {}),
+    output,
+  } satisfies RunEnd;
+});
 
 /** Reads of a run's named records from the session database. */
 export function getRunRecords(runId: RunId) {

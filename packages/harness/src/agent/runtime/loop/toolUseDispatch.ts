@@ -497,29 +497,28 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   } else {
     // From here the call may have run: its intent commits now, with a slow
     // tool's card, unless this attempt's body already started (a re-entry).
-    const bodyStarts = (on: unknown) =>
-      Effect.gen(function* () {
-        ran = on;
-        if (!bodyStarted)
-          yield* commit(call, [
-            {
-              type: 'tool.intent',
-              aggregateId: dispatch.aggregateId,
-              payload: {
-                origin:
-                  script === null
-                    ? { kind: 'response', responseId }
-                    : { kind: 'script', scriptCallId: script.scriptCallId },
-                callId: fact.callId,
-                attempt,
-              },
+    const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
+      ran = on;
+      if (!bodyStarted)
+        yield* commit(call, [
+          {
+            type: 'tool.intent',
+            aggregateId: dispatch.aggregateId,
+            payload: {
+              origin:
+                script === null
+                  ? { kind: 'response', responseId }
+                  : { kind: 'script', scriptCallId: script.scriptCallId },
+              callId: fact.callId,
+              attempt,
             },
-            ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
-          ]);
-        bodyStarted = true;
-        accepting = tool.slow === true;
-        yield* pre.bodyStarts;
-      });
+          },
+          ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
+        ]);
+      bodyStarted = true;
+      accepting = tool.slow === true;
+      yield* pre.bodyStarts;
+    });
     // This call's place in its run, and the child door over exactly it.
     const runCall: RunCallShape = {
       run,
@@ -707,34 +706,32 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   let since: Deferred.Deferred<void>[] = [];
   const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
   /** Run `body` in `seq`'s place and `lane`, or only take the place (no lane). */
-  const inLane = <E, R>(
+  const inLane = Effect.fn('inLane')(function* <E, R>(
     seq: number,
     lane: DispatchFacts['lane'] | null,
     body: Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, E, R> =>
-    Effect.gen(function* () {
-      if (seq > 0) yield* Deferred.await(slot(places, seq - 1));
-      const after = lane === 'barrier' ? [barrier, ...since] : [barrier];
-      const done = lane === null ? null : Deferred.makeUnsafe<void>();
-      if (done !== null && lane === 'barrier') [barrier, since] = [done, []];
-      else if (done !== null) since.push(done);
-      yield* Deferred.succeed(slot(places, seq), undefined);
-      if (done !== null)
-        for (const call of after)
-          if (call !== null) yield* Deferred.await(call);
-      // Nothing runs again until the guest holds all that settled.
-      yield* handedBack(seq);
-      if (done === null) return;
-      // A call that did not finish (a stop, a durable write that failed)
-      // lets nothing after it run: what follows it is interrupted too.
-      yield* (lane === 'parallel' ? window.withPermits(1)(body) : body).pipe(
-        Effect.onExit((exit) =>
-          Exit.isSuccess(exit)
-            ? Deferred.succeed(done, undefined)
-            : Deferred.interrupt(done),
-        ),
-      );
-    });
+  ): Effect.fn.Return<void, E, R> {
+    if (seq > 0) yield* Deferred.await(slot(places, seq - 1));
+    const after = lane === 'barrier' ? [barrier, ...since] : [barrier];
+    const done = lane === null ? null : Deferred.makeUnsafe<void>();
+    if (done !== null && lane === 'barrier') [barrier, since] = [done, []];
+    else if (done !== null) since.push(done);
+    yield* Deferred.succeed(slot(places, seq), undefined);
+    if (done !== null)
+      for (const call of after) if (call !== null) yield* Deferred.await(call);
+    // Nothing runs again until the guest holds all that settled.
+    yield* handedBack(seq);
+    if (done === null) return;
+    // A call that did not finish (a stop, a durable write that failed)
+    // lets nothing after it run: what follows it is interrupted too.
+    yield* (lane === 'parallel' ? window.withPermits(1)(body) : body).pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit)
+          ? Deferred.succeed(done, undefined)
+          : Deferred.interrupt(done),
+      ),
+    );
+  });
   yield* Effect.addFinalizer((exit) =>
     Exit.hasInterrupts(exit)
       ? Effect.void

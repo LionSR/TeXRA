@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as os from 'node:os';
-import { Config, Effect, Option, Schema } from 'effect';
+import { Config, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import {
@@ -297,7 +297,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       'usable credential',
     credentials.storedSecrets === 'unavailable' &&
       'credential store unreadable',
-  ].filter((cred): cred is string => typeof cred === 'string');
+  ].filter(Predicate.isString);
   parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
   const headline = parts.join('; ');
 

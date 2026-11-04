@@ -8,6 +8,7 @@
  * the transcript's to render, not a per-run output channel's.
  */
 // Third-party imports
+import { Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -29,7 +30,7 @@ function detail(entry: LogEntry): string {
   const parts = [
     entry.cause,
     extra.length === 0 ? undefined : JSON.stringify(Object.fromEntries(extra)),
-  ].filter((part): part is string => part !== undefined);
+  ].filter(Predicate.isNotUndefined);
   return parts.length === 0 ? '' : `\n${parts.join('\n')}`;
 }
 

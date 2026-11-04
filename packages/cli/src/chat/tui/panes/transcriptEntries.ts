@@ -1,6 +1,5 @@
 import stripAnsi from 'strip-ansi';
 
-import { isActivePhase, type RunPhase } from '@texra-ai/harness/schemas';
 import {
   rowHeadline,
   type TranscriptRowKind,
@@ -158,13 +157,13 @@ function isFinalizedTranscriptRow(index: number, settledRows: number): boolean {
 function userPromptAwaitsLiveContinuation(
   rows: readonly TranscriptRow[],
   index: number,
-  status: RunPhase | undefined,
+  working: boolean,
 ): boolean {
   const row = rows[index];
   if (
     row?.kind !== 'user' ||
     isInquiryContinuationText(transcriptRowHeadline(row)) ||
-    !isActivePhase(status)
+    !working
   ) {
     return false;
   }
@@ -201,10 +200,13 @@ function inSettlementOrder<
     readonly key: readonly [number, number];
   },
 >(items: readonly T[]): readonly T[] {
-  return items.every(
-    (c, i) =>
-      i === 0 || compareTranscriptOrderKeys(items[i - 1]!.key, c.key) <= 0,
-  )
+  return items.every((c, i) => {
+    const previous = items[i - 1];
+    return (
+      previous === undefined ||
+      compareTranscriptOrderKeys(previous.key, c.key) <= 0
+    );
+  })
     ? items
     : items.toSorted(
         (l, r) => compareTranscriptOrderKeys(l.key, r.key) || l.index - r.index,
@@ -227,7 +229,7 @@ function inSettlementOrder<
 export function orderedStaticTranscriptEntries(
   entries: readonly TranscriptRow[],
   settledRows: number,
-  status: RunPhase | undefined,
+  working: boolean,
 ): readonly TranscriptRow[] {
   const candidates: Array<{
     entry: TranscriptRow;
@@ -239,7 +241,7 @@ export function orderedStaticTranscriptEntries(
     // continuation: the three conditions for append-only scrollback.
     if (!isFinalizedTranscriptRow(index, settledRows)) break;
     if (!isRenderableTranscriptEntry(entry)) continue;
-    if (userPromptAwaitsLiveContinuation(entries, index, status)) continue;
+    if (userPromptAwaitsLiveContinuation(entries, index, working)) continue;
     candidates.push({ entry, index, key: transcriptOrderKey(entry, index) });
   }
 
@@ -259,13 +261,13 @@ export function orderedStaticTranscriptEntries(
 export function pendingTranscriptEntries(
   entries: readonly TranscriptRow[],
   settledRows: number,
-  status: RunPhase | undefined,
+  working: boolean,
 ): TranscriptRow[] {
-  const showLiveAssistant = isActivePhase(status);
+  const showLiveAssistant = working;
   const pending: TranscriptRow[] = [];
   for (const [index, entry] of entries.entries()) {
     if (!isRenderableTranscriptEntry(entry)) continue;
-    if (userPromptAwaitsLiveContinuation(entries, index, status)) {
+    if (userPromptAwaitsLiveContinuation(entries, index, working)) {
       pending.push(entry);
       continue;
     }
@@ -298,8 +300,9 @@ export interface StaticTranscriptScanCursor {
   /** Reference to `entriesRef[scannedIndex - 1]`, used to detect append-only
    *  extensions without rescanning the whole history. */
   readonly lastScannedEntry: TranscriptRow | undefined;
-  /** Stream phase at scan time; a phase change forces a rescan of the tail. */
-  readonly status: RunPhase | undefined;
+  /** Whether the run was working at scan time; a change forces a rescan
+   *  of the tail. */
+  readonly working: boolean;
   /** Order key of the last row this cursor's scans appended to scrollback.
    *  A later suffix that sorts before it cannot be appended in place. */
   readonly lastAppendedKey: readonly [number, number] | undefined;
@@ -316,7 +319,7 @@ interface StaticTranscriptScanResult {
 function makeStaticTranscriptScanCursor(
   entriesRef: readonly TranscriptRow[] | undefined,
   scannedIndex: number,
-  status: RunPhase | undefined,
+  working: boolean,
   lastAppendedKey: readonly [number, number] | undefined,
 ): StaticTranscriptScanCursor {
   return {
@@ -326,7 +329,7 @@ function makeStaticTranscriptScanCursor(
       entriesRef !== undefined && scannedIndex > 0
         ? entriesRef[scannedIndex - 1]
         : undefined,
-    status,
+    working,
     lastAppendedKey,
   };
 }
@@ -340,7 +343,7 @@ function makeStaticTranscriptScanCursor(
 export function incrementalStaticTranscriptEntries(
   entries: readonly TranscriptRow[] | undefined,
   settledRows: number,
-  status: RunPhase | undefined,
+  working: boolean,
   previous: StaticTranscriptScanCursor | undefined,
 ): StaticTranscriptScanResult {
   const source = entries ?? EMPTY_TRANSCRIPT_ENTRIES;
@@ -351,7 +354,7 @@ export function incrementalStaticTranscriptEntries(
   function restartScan(): StaticTranscriptScanResult {
     return {
       appended: [],
-      cursor: makeStaticTranscriptScanCursor(source, 0, status, undefined),
+      cursor: makeStaticTranscriptScanCursor(source, 0, working, undefined),
       rebuild: true,
     };
   }
@@ -362,7 +365,7 @@ export function incrementalStaticTranscriptEntries(
   const sameEntries = previous.entriesRef === source;
   if (
     sameEntries &&
-    previous.status === status &&
+    previous.working === working &&
     previous.scannedIndex >= source.length
   ) {
     return { appended: [], cursor: previous, rebuild: false };
@@ -394,7 +397,7 @@ export function incrementalStaticTranscriptEntries(
       scannedIndex = start + index + 1;
       continue;
     }
-    if (userPromptAwaitsLiveContinuation(suffix, index, status)) {
+    if (userPromptAwaitsLiveContinuation(suffix, index, working)) {
       break;
     }
     scannedIndex = start + index + 1;
@@ -426,7 +429,7 @@ export function incrementalStaticTranscriptEntries(
     cursor: makeStaticTranscriptScanCursor(
       source,
       scannedIndex,
-      status,
+      working,
       ordered.at(-1)?.key ?? previous.lastAppendedKey,
     ),
     rebuild: false,

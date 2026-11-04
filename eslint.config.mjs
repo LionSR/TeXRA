@@ -171,14 +171,6 @@ const CORE_QUALITY_GLOBS = CORE_QUALITY_DIRS.map((entry) =>
   entry.endsWith('.ts') ? entry : `${entry}/**/*.{ts,tsx,mts}`,
 );
 
-const HOST_LAYER_RESTRICTED_IMPORT_PATHS = [
-  {
-    name: '@common/webview',
-    message:
-      'Production src code must not import host-owned webview helpers; route host access through platform or host adapters.',
-  },
-];
-
 const HOST_LAYER_RESTRICTED_IMPORT_PATTERNS = [
   {
     group: [
@@ -664,6 +656,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/*.{ts,mts}',
+      'packages/*/test/**/*.{ts,mts}',
       'packages/harness/src/**/*.{ts,mts}',
       'packages/texra/src/**/*.{ts,mts}',
       'packages/llm/src/**/*.{ts,mts}',
@@ -742,7 +735,7 @@ export default tseslint.config(
         },
       ],
 
-      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-explicit-any': 'error',
       'no-useless-escape': 'off',
       'no-useless-assignment': 'error',
       'preserve-caught-error': 'off',
@@ -787,20 +780,36 @@ export default tseslint.config(
     },
   },
 
-  // The core holds no `any` (count 0 at 2026-10-03), so it is a lint error
-  // rather than a ratchet row. No disable comment reaches past the core's
-  // lint errors, so a site cannot hide behind one.
+  // No package's source asserts a value present with `!`: a lookup that may
+  // miss says what happens when it does.
+  {
+    files: ['packages/*/src/**/*.{ts,mts}', 'packages/*/src/**/*.tsx'],
+    ignores: ['**/*.vitest.ts'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'error' },
+  },
+
+  // The core holds no `any`, no `!` and no asserted object literal, so they
+  // are lint errors rather than ratchet rows; an unexplained `as` is held at
+  // zero by scripts/check-core-quality.mjs. No disable comment reaches past
+  // the core's lint errors, so a site cannot hide behind one.
   {
     files: CORE_QUALITY_GLOBS,
     ignores: ['**/*.vitest.ts'],
     linterOptions: { noInlineConfig: true },
-    rules: { '@typescript-eslint/no-explicit-any': 'error' },
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
+      '@typescript-eslint/consistent-type-assertions': [
+        'error',
+        { assertionStyle: 'as', objectLiteralTypeAssertions: 'never' },
+      ],
+    },
   },
 
   // Tests run separately so their application-wide program is not retained
   // alongside the production programs. Both passes keep the same rules.
   {
-    files: ['src/test-kernel/**/*.{ts,mts}'],
+    files: ['src/test-kernel/**/*.{ts,mts}', 'packages/*/test/**/*.{ts,mts}'],
     languageOptions: {
       parserOptions: { project: ['./tsconfig.test-kernel.json'] },
     },
@@ -869,7 +878,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
@@ -884,7 +892,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
             ...HARNESS_NO_APP_IMPORT_PATTERNS,
@@ -902,7 +909,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: AGENT_CORE_RESTRICTED_IMPORT_PATTERNS,
         },
       ],
@@ -969,7 +975,6 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: HOST_LAYER_RESTRICTED_IMPORT_PATHS,
           patterns: [
             ...HOST_LAYER_RESTRICTED_IMPORT_PATTERNS,
             ...BROWSER_RUNTIME_IMPORT_PATTERNS,

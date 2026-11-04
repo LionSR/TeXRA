@@ -302,17 +302,12 @@ function turnReceipt(
   turn: number,
 ): FollowUpReceipt {
   let end: RowOf<'run.end'> | null = null;
-  let closed = false;
   for (const row of after) {
-    if (row.type === 'run.activate') {
-      end = null;
-      closed = false;
-    }
+    if (row.type === 'run.activate') end = null;
     if (row.type === 'run.end') end = row;
     if (row.type !== 'run.position') continue;
-    const { at, outcome, reason } = row.payload;
+    const { at, outcome } = row.payload;
     const rowTurn = row.payload.turn ?? 0;
-    if (at === 'halted') closed = reason === 'closed';
     if (at === 'turn.end' && rowTurn === turn)
       return outcome === 'completed'
         ? { state: 'answered', turn, answer: row.seq }
@@ -320,7 +315,8 @@ function turnReceipt(
     // Past the turn with no end of it: the end that cut it short says why.
     if (rowTurn > turn) return unansweredBy(turn, end);
   }
-  return end === null || closed
+  // A shutdown cut the turn, which the resume continues.
+  return end === null || end.reason === 'shutdown'
     ? { state: 'incorporated', turn }
     : unansweredBy(turn, end);
 }

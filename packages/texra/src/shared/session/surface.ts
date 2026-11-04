@@ -34,6 +34,7 @@ import {
 } from '@texra/shared/plugins/externalInquiry';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import { markShownRunSeen } from './unseenRuns';
+import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 import type { HostSnapshot } from './hostSnapshot';
 
 /** Who runs a main-view request: a single agent or a team. */
@@ -167,6 +168,15 @@ export interface Surface {
    * New-task state on a project surface; a chat's rule maps it to its root.
    */
   readonly selected: RunId | null;
+  /** A run the host selected before this surface's view holds it (one its
+   *  window just started), and `cursor`, a commit by which the session held
+   *  it. `pruneSurface` selects it once the view holds it, and drops it
+   *  once the view has reached `cursor` without it: the run was deleted.
+   *  Any selection made first replaces it. Never persisted. */
+  readonly pendingSelection: {
+    readonly runId: RunId;
+    readonly cursor: CommitOrdinal;
+  } | null;
   readonly drafts: ReadonlyMap<RunId, Draft>;
   /** Foreground polish operations, keyed by stream id or `launch`. Never persisted. */
   readonly polishing: ReadonlySet<string>;
@@ -257,6 +267,7 @@ export function loadSurface(
     session,
     requestError: null,
     selected: persisted.selected,
+    pendingSelection: null,
     drafts: new Map(
       persisted.drafts.map(([id, text]) => [id, { ...EMPTY_DRAFT, text }]),
     ),
@@ -316,22 +327,6 @@ type RunKeyedMapField = {
 }[keyof Surface];
 
 /**
- * The list `pruneSurface` reads, a `Record` so `satisfies` checks both
- * directions: a new stream-keyed `Surface` map is a compile error here until
- * it is listed, rather than a silent leak of deleted streams' entries.
- */
-const PER_STREAM_MAP_FIELDS = {
-  drafts: true,
-  expanded: true,
-  groups: true,
-  rejected: true,
-  seen: true,
-} as const satisfies Record<RunKeyedMapField, true>;
-const PER_STREAM_MAPS = Object.keys(
-  PER_STREAM_MAP_FIELDS,
-) as readonly RunKeyedMapField[];
-
-/**
  * Where a selection lands against the view, applied by `pruneSurface`. The
  * default browses the whole project: a run that left the view moves to the
  * first top-level run, else `null`; an explicit `null` (New task) stays.
@@ -352,38 +347,56 @@ function projectSelection(
  * an id is never reused, so the entry can never become valid
  * again, and without the prune the maps and the persisted form grow without
  * bound. The selection is decided here once, by `select` (a chat passes its
- * tree scope). Returns the same record when nothing moved.
+ * tree scope), after a pending selection whose run the view now holds.
+ * Returns the same record when nothing moved.
  */
 export function pruneSurface(
-  surface: Surface,
+  current: Surface,
   view: SessionView,
   select: SelectionRule = projectSelection(view),
 ): Surface {
-  // `retain` only ever drops entries, never changes a value, so each pruned
-  // map keeps its field's element type; the maps are read through the common
-  // read-only supertype and the once-narrowed patch is cast back at the end.
-  const patch: Partial<
-    Record<(typeof PER_STREAM_MAPS)[number], ReadonlyMap<RunId, unknown>>
-  > & { selected?: RunId | null; editing?: null } = {};
-  for (const key of PER_STREAM_MAPS) {
-    const current: ReadonlyMap<RunId, unknown> = surface[key];
-    const next = retain(current, view);
-    if (next !== current) patch[key] = next;
+  let surface = current;
+  const pending = current.pendingSelection;
+  if (pending !== null && view.runs.has(pending.runId)) {
+    surface = applySurfaceAction(current, {
+      kind: 'select',
+      runId: pending.runId,
+    });
+  } else if (pending !== null && view.cursor >= pending.cursor) {
+    // The view has passed the commit that held the run: it was deleted.
+    surface = { ...current, pendingSelection: null };
   }
+  // The annotation lists every stream-keyed map: a new one is a compile
+  // error here until it is pruned, rather than a silent leak of deleted
+  // streams' entries.
+  const maps: Pick<Surface, RunKeyedMapField> = {
+    drafts: retain(surface.drafts, view),
+    expanded: retain(surface.expanded, view),
+    groups: retain(surface.groups, view),
+    rejected: retain(surface.rejected, view),
+    seen: retain(surface.seen, view),
+  };
   const selected = select(surface.selected);
-  if (selected !== surface.selected) patch.selected = selected;
   const { editing } = surface;
-  if (
+  const editingGone =
     editing !== null &&
     !view.requests.some(
       (request) =>
         request.runId === editing.runId &&
         request.requestId === editing.requestId,
-    )
+    );
+  if (
+    selected === surface.selected &&
+    !editingGone &&
+    Struct.keys(maps).every((key) => maps[key] === surface[key])
   )
-    patch.editing = null;
-  if (Object.keys(patch).length === 0) return surface;
-  return { ...surface, ...patch } as Surface;
+    return surface;
+  return {
+    ...surface,
+    ...maps,
+    selected,
+    ...(editingGone && { editing: null }),
+  };
 }
 
 /**
@@ -442,10 +455,17 @@ export function canSendFollowUp(run: RunView, draft: Draft): boolean {
 /**
  * Every change a component may ask of the surface. The root applies it;
  * a component never mutates the record. `selectNew` and `select` are also
- * host-initiated arms of `surface.action`.
+ * host-initiated arms of `surface.action`, and `selectOnArrival` is the
+ * host's alone.
  */
 export type SurfaceAction =
   | { readonly kind: 'select'; readonly runId: RunId | null }
+  /** Select a run once the view holds it (`Surface.pendingSelection`). */
+  | {
+      readonly kind: 'selectOnArrival';
+      readonly runId: RunId;
+      readonly cursor: CommitOrdinal;
+    }
   | { readonly kind: 'selectNew' }
   | { readonly kind: 'dismissRequestError' }
   /** A failure in the component itself, before any request went out (a
@@ -512,13 +532,20 @@ export function applySurfaceAction(
       return {
         ...surface,
         selected: action.runId,
+        pendingSelection: null,
         drawerOpen: false,
         editing: null,
+      };
+    case 'selectOnArrival':
+      return {
+        ...surface,
+        pendingSelection: { runId: action.runId, cursor: action.cursor },
       };
     case 'selectNew':
       return {
         ...surface,
         selected: null,
+        pendingSelection: null,
         drawerOpen: false,
         requestError: null,
         editing: null,
@@ -528,6 +555,7 @@ export function applySurfaceAction(
       return {
         ...surface,
         selected: null,
+        pendingSelection: null,
         drawerOpen: false,
         requestError: null,
         editing: action.proposal,

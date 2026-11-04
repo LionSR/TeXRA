@@ -80,18 +80,19 @@ const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
  * can ever reach would silently render its default forever.
  */
 export function settingSignal<T>(key: string): Signal.State<T> {
-  const existing = CATALOG_SIGNALS.get(key);
-  if (existing) return existing as Signal.State<T>;
-  const entry = TEXRA_SETTINGS.settingsViewByKey(key);
-  if (!entry) {
-    throw new Error(`No settings-view catalog row for setting "${key}"`);
+  let state = CATALOG_SIGNALS.get(key);
+  if (!state) {
+    const entry = TEXRA_SETTINGS.settingsViewByKey(key);
+    if (!entry) {
+      throw new Error(`No settings-view catalog row for setting "${key}"`);
+    }
+    state = trackedSignal<unknown>(() =>
+      Schema.decodeUnknownSync(entry.schema)(undefined),
+    );
+    CATALOG_SIGNALS.set(key, state);
   }
-  const state = trackedSignal<T>(
-    // cast: the catalog row types its own default; the caller names T for it.
-    () => Schema.decodeUnknownSync(entry.schema)(undefined) as T,
-  );
-  CATALOG_SIGNALS.set(key, state as Signal.State<unknown>);
-  return state;
+  // cast: the key's catalog row types the signal's value; the caller names T for it.
+  return state as Signal.State<T>;
 }
 
 /**

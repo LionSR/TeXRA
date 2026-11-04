@@ -8,8 +8,8 @@ import { JsonConfigProvider, type ConfigStore } from './jsonConfigProvider';
 class MemoryConfigStore implements ConfigStore {
   private readonly values = new Map<string, unknown>();
 
-  get<T>(key: string): T | undefined {
-    return this.values.get(key) as T | undefined;
+  get(key: string): unknown {
+    return this.values.get(key);
   }
 
   set(key: string, value: unknown): Effect.Effect<void, Error> {

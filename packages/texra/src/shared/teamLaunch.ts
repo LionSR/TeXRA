@@ -34,8 +34,10 @@ function teamPlanHasGaps(plan: TeamRunPlan): boolean {
   );
 }
 
+const NO_TEAM_ROOT = 'no runnable team root';
+
 export function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined {
-  if (!plan.rootAgent) return 'no runnable team root';
+  if (!plan.rootAgent) return NO_TEAM_ROOT;
   if (!plan.rootAgent.tools?.includes(AGENT_TOOL_NAME)) {
     return `team root ${plan.rootAgent.name} is not a delegating agent`;
   }
@@ -164,12 +166,14 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(
   if (!preset) return { status: 'unknown-team' };
 
   const plan = planTeamRun(preset, args);
-  if (!canLaunchTeam(plan)) {
-    return { status: 'blocked', reason: teamLaunchBlockReason(plan)! };
+  const reason = teamLaunchBlockReason(plan);
+  const { rootAgent } = plan;
+  if (reason !== undefined || !rootAgent) {
+    return { status: 'blocked', reason: reason ?? NO_TEAM_ROOT };
   }
   return {
     status: 'ready',
-    fields: teamExecutionFields(plan),
+    fields: teamExecutionFields({ ...plan, rootAgent }),
     missingNames: plan.missingAgents,
   };
 }

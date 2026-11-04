@@ -71,7 +71,7 @@ This is the part that matters for generating multiple distinct files:
 Output filenames come from one of two lists:
 
 - **Editing agents (no `task.outputs`)**: reuse the selected `INPUT_FILES`.
-- **Generator agents (with `task.outputs`)**: emit the fixed filenames listed in `task.outputs`, exposed to prompts as `OUTPUT_FILES`. Set `rewrite: false` only to skip diff lineage for newly written files.
+- **Generator agents (with `task.outputs`)**: emit the fixed filenames listed in `task.outputs`, exposed to prompts as `OUTPUT_FILES`; newly written files get no diff lineage.
 
 <MultiOutputModesHero />
 
@@ -82,7 +82,6 @@ Output filenames come from one of two lists:
 ```yaml
 name: my_agent
 task:
-  rewrite: false
   outputs:
     - paper_section.tex
     - appendix.tex

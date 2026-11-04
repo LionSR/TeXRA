@@ -91,9 +91,8 @@ listed; a lookup by explicit id reads the run's records instead.
 interface AgentRunListingEntry {
   id: RunId;
   timestamp: string;
-  /** The run's folded status; a terminal outcome phase is its durable
-   *  outcome. */
-  status: RunLifecycleStatus;
+  /** The run's durable outcome (its `run.end`), null while none has landed. */
+  outcome: RunOutcome | null;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -132,7 +131,9 @@ type ApprovalHandler = (
 
 ## Cancelled
 
-The user cancelled the operation. No refusal notice is needed.
+Nothing is left to tell the user: they cancelled the operation, or the
+host has already told them why it did not go through. No refusal notice
+is needed.
 
 ```ts
 class Cancelled extends Schema.TaggedError<Cancelled>()(
@@ -209,7 +210,7 @@ type DefinedTool<T, R = never, Name extends string = string> = Omit<
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T, R>;
+  readonly guard?: ToolGuard<T>;
 };
 ```
 
@@ -218,6 +219,13 @@ type DefinedTool<T, R = never, Name extends string = string> = Omit<
 Define a tool: validate the model's input against `schema`, run `execute`,
 and turn ordinary failures into `{ status: 'error' }` feedback.
 Interruption, run history refusals and database write failures propagate.
+
+A tool whose `execute` succeeds with a `ToolResult` carrying a `value`
+hands a script that value in place of `{ output, summary }`. Declare its
+TypeScript type in `scriptReturns`, which is what a script is told the
+call resolves to. Nothing derives one from the other: a tool that returns
+a `value` without `scriptReturns` is declared to scripts as resolving to
+`ToolOutput`, so change the two together.
 
 ```ts
 function defineTool<T, R = never, const Name extends string = string>(
@@ -381,7 +389,7 @@ interface ITool<E = Error, R = never> {
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
    * A description rendered from the other tools the run declares, in place
    * of `definition.description`: rendered at the step that freezes the
@@ -470,9 +478,8 @@ interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been

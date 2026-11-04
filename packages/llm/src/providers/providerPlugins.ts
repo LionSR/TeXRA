@@ -163,6 +163,15 @@ export type ApiKeyProviderId = Extract<
   { readonly apiKey: true }
 >['id'];
 
+/**
+ * Provider IDs where users can configure direct API keys — the single source
+ * for direct key-provider enumeration, derived from the plugin manifest.
+ * Order = display order in the settings key rows.
+ */
+export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
+  MANIFEST.flatMap((plugin) => ('apiKey' in plugin ? [plugin.id] : [])),
+);
+
 /** Providers with an HTTP endpoint of their own, which a host may override. */
 export type EndpointProviderId = Extract<
   (typeof MANIFEST)[number],
@@ -216,6 +225,16 @@ type _EveryEndpointProviderNamesAProtocol = AssertNever<
     | BackendProviderId
     | Extract<(typeof MANIFEST)[number], { readonly baseUrl: null }>['id']
   >
+>;
+
+/**
+ * Every llm-zoo provider but `copilot` and `others` (whose models TeXRA does
+ * not serve) takes an API key, which makes it a Models-tab source
+ * (`API_KEY_PROVIDER_IDS`); a provider added without one fails here until
+ * that is decided, instead of vanishing from the picker.
+ */
+type _EveryServedProviderTakesAKey = AssertNever<
+  Exclude<`${ModelProvider}`, ApiKeyProviderId | 'copilot' | 'others'>
 >;
 
 /**

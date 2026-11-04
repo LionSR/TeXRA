@@ -49,8 +49,9 @@ const extractFigures = Effect.fn('ExtractLatexFiguresTool.execute')(function* ({
       describe: () => `Figure referenced by ${display}`,
     });
 
-  const formattedList = yield* Effect.forEach(limitedPaths, (figurePath) =>
-    Effect.gen(function* () {
+  const formattedList = yield* Effect.forEach(
+    limitedPaths,
+    Effect.fnUntraced(function* (figurePath) {
       const { display: figureDisplay } = yield* resolveToolPath(
         call.env,
         figurePath,

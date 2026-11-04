@@ -44,53 +44,44 @@ const DiagnosticsPathSchema = Schema.Trim.check(Schema.isMinLength(1)).annotate(
 );
 
 const DiagnosticsInputSchema = Schema.Union([
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('list').annotate({
-        description: 'Retrieve full linter diagnostics for a file.',
-      }),
-      path: DiagnosticsPathSchema,
+  Schema.Struct({
+    command: Schema.Literal('list').annotate({
+      description: 'Retrieve full linter diagnostics for a file.',
     }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('count').annotate({
+    path: DiagnosticsPathSchema,
+  }),
+  Schema.Struct({
+    command: Schema.Literal('count').annotate({
+      description:
+        'Retrieve a severity-count summary of linter diagnostics for a file.',
+    }),
+    path: DiagnosticsPathSchema,
+  }),
+  Schema.Struct({
+    command: Schema.Literal('add').annotate({
+      description:
+        'Push a critique annotation as a diagnostic (squiggle + Problems panel entry) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
+    }),
+    path: DiagnosticsPathSchema,
+    line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
+      description: '1-based line number where the issue occurs.',
+    }),
+    message: Schema.String.check(Schema.isMinLength(1)).annotate({
+      description: 'Description of the issue.',
+    }),
+    severity: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
+      .check(Schema.isLessThanOrEqualTo(5))
+      .annotate({
         description:
-          'Retrieve a severity-count summary of linter diagnostics for a file.',
+          'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
       }),
-      path: DiagnosticsPathSchema,
-    }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
-  Schema.StructWithRest(
-    Schema.Struct({
-      command: Schema.Literal('add').annotate({
+    confidence: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
+      .check(Schema.isLessThanOrEqualTo(5))
+      .annotate({
         description:
-          'Push a critique annotation as a diagnostic (squiggle + Problems panel entry) without inserting a literal \\criticize{...}{...}{...} macro into the document.',
+          'Confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
       }),
-      path: DiagnosticsPathSchema,
-      line: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)).annotate({
-        description: '1-based line number where the issue occurs.',
-      }),
-      message: Schema.String.check(Schema.isMinLength(1)).annotate({
-        description: 'Description of the issue.',
-      }),
-      severity: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))
-        .check(Schema.isLessThanOrEqualTo(5))
-        .annotate({
-          description:
-            'Severity 0–5: 5=desk-rejection risk, 4=significantly weakens, 3=worth addressing, 2=minor polish, 1=cosmetic, 0=verified/correct.',
-        }),
-      confidence: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1))
-        .check(Schema.isLessThanOrEqualTo(5))
-        .annotate({
-          description:
-            'Confidence 1–5: 5=certain, 4=high certainty with minor subjectivity, 3=reasonable but field-dependent, 2=subjective, 1=speculative.',
-        }),
-    }),
-    [Schema.Record(Schema.String, Schema.Unknown)],
-  ),
+  }),
 ]);
 
 type DiagnosticsInput = typeof DiagnosticsInputSchema.Type;

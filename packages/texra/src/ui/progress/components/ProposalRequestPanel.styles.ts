@@ -59,7 +59,7 @@ export const proposalRequestPanelStyles: CSSResult = css`
     overflow-wrap: anywhere;
   }
 
-  .workflow-proposal__extract-flags {
+  .workflow-proposal__option-badges {
     display: flex;
     gap: ${sp.small};
     flex-wrap: wrap;

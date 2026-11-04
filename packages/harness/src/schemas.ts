@@ -10,7 +10,7 @@
  *   [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
  *   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
  *   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
- *   [`isLiveRun`](#isliverun), [`isWorkingRun`](#isworkingrun),
+ *   [`isLiveRun`](#isliverun),
  *   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
  * - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
  *   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
@@ -44,7 +44,6 @@ export {
   attentionOf,
   descendantRuns,
   isLiveRun,
-  isWorkingRun,
   requestAnswerability,
   rollupOf,
   sessionActivity,
@@ -94,7 +93,6 @@ export type {
   DispatchFacts,
   DisplaySessionEvent,
   ErrorLogData,
-  ExhaustionReason,
   ExternalFileLocation,
   FileListEntry,
   FileLocation,
@@ -122,6 +120,7 @@ export type {
   OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
+  ResponseCut,
   ResultMeta,
   ResumeRefusal,
   RunAction,
@@ -148,13 +147,13 @@ export type {
   WorkspaceFileLocation,
 } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
-// its next input), active, ended, or settled enough for its transcript.
+// its next input), ended, or settled enough for its transcript. Whether a
+// run is working right now is the view's `working`, never read off the phase.
 export {
   RUN_STATUS_KEYS,
   type RunStatusKey,
 } from '@shared/runs/runStatusDisplay';
 export {
-  isActivePhase,
   isInFlightPhase,
   isTerminalOutcomePhase,
   isTranscriptSettlementPhase,
@@ -274,7 +273,6 @@ export {
   type AgentScanIssue,
   AgentScanIssueSchema,
   AgentSourceSchema,
-  BASH_APPROVAL_CONFIG_KEY,
   type BashPermission,
   blocksCaller,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -355,7 +353,6 @@ export {
   toJsonValue,
   type TokenUsageStats,
   TOOL_CALL_STATUS,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
   type UserQuestionPermission,

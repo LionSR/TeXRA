@@ -245,19 +245,18 @@ const pinStep = Effect.fn('sessionTools.pinStep')(function* <E>(
         plugins.filter(({ id }) => used.has(id)),
         // cast: the empty context serves no plugin's tag.
         () => Context.empty() as PluginContext,
-        (services, { id, processLayer, sessionLayer }) =>
-          Effect.gen(function* () {
-            const forProcess = processLayer
-              ? yield* RcMap.get(shared.processLayers, id)
-              : Context.empty();
-            const forSession = sessionLayer
-              ? yield* RcMap.get(session.layers, id)
-              : Context.empty();
-            return Context.merge(
-              Context.merge(services, forProcess),
-              forSession,
-            );
-          }),
+        Effect.fnUntraced(function* (
+          services,
+          { id, processLayer, sessionLayer },
+        ) {
+          const forProcess = processLayer
+            ? yield* RcMap.get(shared.processLayers, id)
+            : Context.empty();
+          const forSession = sessionLayer
+            ? yield* RcMap.get(session.layers, id)
+            : Context.empty();
+          return Context.merge(Context.merge(services, forProcess), forSession);
+        }),
       ),
   };
 });

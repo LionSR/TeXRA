@@ -149,7 +149,7 @@ const searchZotero = Effect.fn('ZoteroSearchTool.execute')(function* (
           ...(author ? [['creator', 'contains', author]] : []),
           ...(year ? [['date', 'is', String(year)]] : []),
         ]
-      : query!;
+      : query;
 
   const params: unknown[] = library ? [searchTerms, library] : [searchTerms];
 

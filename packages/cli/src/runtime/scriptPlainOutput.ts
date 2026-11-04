@@ -7,7 +7,6 @@
 import { Effect, Scope, ScopedRef, Stream } from 'effect';
 
 import {
-  isTerminalOutcomePhase,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
@@ -57,7 +56,7 @@ function scriptPlainLines(
         `Script total: ${formatCostUsd(stage.costUsd)}`,
       );
   }
-  if (isTerminalOutcomePhase(run.status) && run.identity.kind === 'script')
+  if (run.durableOutcome !== null && run.identity.kind === 'script')
     lines.set(
       'outcome',
       `${runStatusLabel(run.statusKey)}: ${run.identity.title}`,
@@ -72,11 +71,11 @@ function scriptPlainLines(
  * A line prints when its entry is new or reads differently than at the
  * previous level; nothing here reduces, gates, or relabels.
  */
-export function attachScriptPlainOutput(
-  session: ScriptPlainSession,
-  options: ScriptPlainOutputOptions,
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.gen(function* () {
+export const attachScriptPlainOutput = Effect.fn('attachScriptPlainOutput')(
+  function* (
+    session: ScriptPlainSession,
+    options: ScriptPlainOutputOptions,
+  ): Effect.fn.Return<void, never, Scope.Scope> {
     const previous = new Map<RunId, ReadonlyMap<string, string>>();
     let subscribed = '';
     let rootRunId: RunId | undefined;
@@ -95,8 +94,9 @@ export function attachScriptPlainOutput(
     /** Holds the current subscription's interest; released with this scope. */
     const interest = yield* ScopedRef.make<void>(() => undefined);
     yield* Effect.forkScoped(
-      Stream.runForEach(session.view.changes, (view) =>
-        Effect.gen(function* () {
+      Stream.runForEach(
+        session.view.changes,
+        Effect.fnUntraced(function* (view) {
           for (const runId of [...previous.keys()]) {
             if (!view.runs.has(runId)) previous.delete(runId);
           }
@@ -139,5 +139,5 @@ export function attachScriptPlainOutput(
       ),
       { startImmediately: true },
     );
-  });
-}
+  },
+);

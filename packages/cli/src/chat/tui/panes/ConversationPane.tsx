@@ -6,7 +6,7 @@ import {
 } from '@texra/shared/plugins/documents';
 
 import { selectedRunId as selectedRunIdSignal } from '../state/cliState';
-import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
+import { sessionView, runViewOf } from '../state/sessionView';
 import {
   mergeLocalNotices,
   notices as noticesSignal,
@@ -48,7 +48,7 @@ export function ConversationPane(
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
     merged.settledRows,
-    runPhaseOf(stream),
+    stream?.working === true,
   );
   const maxRows = props.maxRows ?? DEFAULT_TRANSCRIPT_ROWS;
   const metadataWidth =

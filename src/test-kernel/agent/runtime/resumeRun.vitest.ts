@@ -273,10 +273,7 @@ describe(
                 yield* claim.release;
                 yield* input.reached;
 
-                const stop = Context.get(session, Runs).stop(runId, {
-                  reason: 'user',
-                  detachActiveChildren: false,
-                });
+                const stop = Context.get(session, Runs).stop(runId, 'user');
                 expect(Context.get(session, Runs).stopCause(runId)).toBe(
                   'user',
                 );
@@ -407,7 +404,6 @@ const receiptModel = () => {
               maxOutputTokens:
                 request.maxOutputTokens ?? config.maxOutputTokens,
               store: false,
-              parallelToolCalls: true,
               toolChoice: request.toolChoice ?? 'auto',
               reasoning: null,
               serviceTier: null,

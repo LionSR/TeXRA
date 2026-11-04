@@ -1,7 +1,8 @@
 // Third-party imports
 import { Number as Num } from 'effect';
 import { LitElement, css, html, unsafeCSS, type TemplateResult } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property } from 'lit/decorators.js';
+import { createRef, ref } from 'lit/directives/ref.js';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal } from '@xterm/xterm';
 import xtermStyles from '@xterm/xterm/css/xterm.css?inline';
@@ -109,8 +110,7 @@ export class TerminalOutput extends LitElement {
    */
   @property({ type: Boolean, reflect: true }) fill = false;
 
-  @query('.terminal-container')
-  private terminalContainer!: HTMLDivElement;
+  private readonly terminalContainer = createRef<HTMLDivElement>();
 
   private terminal: Terminal | null = null;
   private fitAddon: FitAddon | null = null;
@@ -131,6 +131,8 @@ export class TerminalOutput extends LitElement {
   };
 
   override firstUpdated(): void {
+    const container = this.terminalContainer.value;
+    if (!container) throw new Error('TerminalOutput rendered no container');
     const { theme, fontFamily } = resolveXtermTheme(this);
     const editorFontSize = Number.parseFloat(
       getComputedStyle(this).getPropertyValue('--wa-editor-font-size'),
@@ -149,7 +151,7 @@ export class TerminalOutput extends LitElement {
 
     this.fitAddon = new FitAddon();
     this.terminal.loadAddon(this.fitAddon);
-    this.terminal.open(this.terminalContainer);
+    this.terminal.open(container);
     this.terminal.textarea?.setAttribute('aria-label', 'Terminal output');
     this.terminal.element
       ?.querySelector<HTMLElement>('.live-region')
@@ -309,6 +311,9 @@ export class TerminalOutput extends LitElement {
   }
 
   override render(): TemplateResult {
-    return html`<div class="terminal-container"></div>`;
+    return html`<div
+      class="terminal-container"
+      ${ref(this.terminalContainer)}
+    ></div>`;
   }
 }

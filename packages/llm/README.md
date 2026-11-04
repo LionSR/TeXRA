@@ -182,6 +182,22 @@ the protocols with remote execution. `observe` takes the accepted turn back
 because a completion's continuation anchors to the exact history prefix it
 covers, which the operation handle deliberately does not copy.
 
+Every turn stores the origin it was requested on (`ModelOrigin`: protocol,
+requested model, deployment and `codecVersion`). A later request replays a
+stored turn's provider-specific state (reasoning signatures, encrypted
+reasoning, provider evidence) only when that origin matches its own exactly
+(`sameModelOrigin`). A turn of the same protocol from another origin is sent
+as plain content, without its reasoning and evidence, as after a model
+switch (`replayableHistory`); another protocol's evidence fails explicitly in
+the codec. `codecVersion` changes only when the meaning of that stored state
+changes, so a turn a newer codec would read differently is resent as plain
+content instead of misread. Adding a field or changing how a request is
+built keeps the version. A turn of another version must still decode, so
+`codecVersion` covers a change of meaning only. A change to the stored
+shape of that state, one an older build could not decode, also bumps the
+harness's `model.message` row version, and an older build then refuses the
+store rather than the turn (`ROW_KINDS`, `packages/harness/src/shared/schemas/rowVersions.ts`).
+
 ## The tree
 
 | File                              | What it owns                                                                                                                                                            |

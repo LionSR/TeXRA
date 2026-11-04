@@ -3,9 +3,10 @@
  * result.
  *
  * The child runs under the same `childRunLoop` every detached delegation
- * drives, with the same single-cycle native strategy and persist-only
- * delivery; "in-band" is only this caller blocking on the loop's completion,
- * and XML presentation remains a delivery adapter. The child's own run
+ * drives, awaited: no delivery or notice reaches the parent, and this
+ * caller reads its last turn; "in-band" is only this caller blocking on the
+ * loop's completion, and XML presentation remains a delivery adapter. The
+ * child's own run
  * aggregate is the durable record of what happened, so whether an earlier
  * child already answered a logical call belongs to whoever owns that call
  * identity (the `agent` tool derives the attempt's run id and probes it);
@@ -113,9 +114,9 @@ const defectsAsErrors = <A, R>(
 
 /**
  * Execute one child through the one shared driver and read its typed result
- * back from the durable record. The child runs under the same detached
- * child-run loop every native child uses (single-cycle strategy, persist-only
- * delivery); "in-band" is only this caller awaiting the loop's completion.
+ * back from the durable record. The child runs under the same child-run
+ * loop every native child uses, awaited (no delivery or notice reaches the
+ * parent); "in-band" is only this caller awaiting the loop's completion.
  * Once the run reaches its own terminal persistence, later caller
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
@@ -176,7 +177,6 @@ const executeInBand = Effect.fn('executeInBand')(
         runId,
         startedAt,
         workingDirectory,
-        inBand: true,
       }),
     });
 
@@ -360,7 +360,13 @@ const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   return yield* Fiber.join(child).pipe(
     Effect.onInterrupt(() =>
       Effect.suspend(() => {
-        if (runs.get(runId)?.parent === null) return Effect.void;
+        // A child the registry holds with no parent edge was detached: it
+        // runs on as a root. One it does not hold yet is stopped below.
+        if (
+          runs.get(runId) !== undefined &&
+          runs.attachedParent(runId) === null
+        )
+          return Effect.void;
         if (runs.interrupt(runId)) return Fiber.await(child);
         // No run to stop yet: a loop the launch's hand-off started meanwhile
         // is stopped once it returns, and awaited to the end.
