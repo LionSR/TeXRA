@@ -128,34 +128,32 @@ function paint(
  * nothing. The item stays hidden until that first paint, so no tooltip is
  * set before it. An approval-policy change repaints the policy line.
  */
-export function taskStatusBar(
+export const taskStatusBar = Effect.fn('taskStatusBar')(function* (
   context: vscode.ExtensionContext,
   session: Pick<Session, 'view'>,
   config: WorkspaceRoots['config'],
-): Effect.Effect<void, never, Scope.Scope | AppSignals> {
-  return Effect.gen(function* () {
-    const item = vscode.window.createStatusBarItem(
-      'texra.taskStatus',
-      vscode.StatusBarAlignment.Left,
-    );
-    item.name = 'TeXRA Tasks';
-    item.command = 'texra.showProgressView';
-    context.subscriptions.push(item);
-    yield* Effect.forkScoped(
-      Stream.merge(
-        session.view.changes.pipe(
-          Stream.map(taskStatus),
-          Stream.changesWith(sameTaskStatus),
-        ),
-        appSignalStream('approvalPolicyChanged').pipe(
-          Stream.map(() => taskStatus(session.view.current())),
-        ),
-      ).pipe(
-        Stream.runForEach((status) =>
-          Effect.sync(() => paint(item, config, status)),
-        ),
+): Effect.fn.Return<void, never, Scope.Scope | AppSignals> {
+  const item = vscode.window.createStatusBarItem(
+    'texra.taskStatus',
+    vscode.StatusBarAlignment.Left,
+  );
+  item.name = 'TeXRA Tasks';
+  item.command = 'texra.showProgressView';
+  context.subscriptions.push(item);
+  yield* Effect.forkScoped(
+    Stream.merge(
+      session.view.changes.pipe(
+        Stream.map(taskStatus),
+        Stream.changesWith(sameTaskStatus),
       ),
-      { startImmediately: true },
-    );
-  });
-}
+      appSignalStream('approvalPolicyChanged').pipe(
+        Stream.map(() => taskStatus(session.view.current())),
+      ),
+    ).pipe(
+      Stream.runForEach((status) =>
+        Effect.sync(() => paint(item, config, status)),
+      ),
+    ),
+    { startImmediately: true },
+  );
+});

@@ -24,6 +24,7 @@ import {
   type ProcessServices,
   ToolAvailability,
   type SessionHostInteractions,
+  withLogChannel,
 } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
@@ -414,11 +415,9 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         (message) => {
           const binding = bindings.get(message.session);
           if (!binding) {
-            return Effect.sync(() =>
-              console.warn(
-                `Dropped a workspace request for closed project ${message.session}`,
-              ),
-            );
+            return Effect.logWarning(
+              `Dropped a workspace request for closed project ${message.session}`,
+            ).pipe(withLogChannel('desktop'));
           }
           // Hidden projects retain their resources, but cannot cover the
           // visible project with a late browser-bounds notification.

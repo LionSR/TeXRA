@@ -15,6 +15,7 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
+import { withLogChannel } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
@@ -280,11 +281,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       const settings = surface.settings();
       return settings
         ? settings.route(message)
-        : Effect.sync(() =>
-            console.warn(
-              `Dropped ${message.command}: no project shows settings`,
-            ),
-          );
+        : Effect.logWarning(
+            `Dropped ${message.command}: no project shows settings`,
+          ).pipe(withLogChannel('desktop'));
     }),
     claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, (message) =>
       routing(Effect.suspend(() => bindings.workspaceRoute(message))),
@@ -357,11 +356,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         const binding = bindings.get(session);
         return binding
           ? binding.port.receive(message)
-          : Effect.sync(() =>
-              console.warn(
-                `Dropped a renderer message for session ${session}: not open`,
-              ),
-            );
+          : Effect.logWarning(
+              `Dropped a renderer message for session ${session}: not open`,
+            ).pipe(withLogChannel('desktop'));
       });
       spawn(routing(receive), { startImmediately: true });
     },
