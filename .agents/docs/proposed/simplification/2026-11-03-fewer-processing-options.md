@@ -195,6 +195,18 @@ launched it. That was never a coherent state.
 **Acceptance.** The settings catalog has one approval row per host-visible
 decision; `rg "codexApprovalPolicy|codexSandboxMode|claudeAgentPermissionMode" packages` is empty.
 
+_Landed 2026-11-04: the two `toolUse.*` toggles, `codexSandboxMode`,
+`codexApprovalPolicy`, `claudeAgentPermissionMode` and the two per-call inputs
+are gone. `ChildRuns.autoApproved` answers the policy's one reading
+(`executableDecision`) when a plugin asks, and the agent-CLI tools derive their
+sandbox and permission mode from it: workspace-write / acceptEdits when a person approved
+the launch, danger-full-access / bypassPermissions when the run's work is
+auto-approved; Codex launches with `approvalPolicy: never`.
+`RunStopOptions.detachActiveChildren` and the wire field are gone: a shutdown
+cascades, a user stop reads "Keep agents running" (`stop(runId, reason)`,
+protocol 52). `allowOrchestratorKill` stays: a capability switch on an
+unguarded tool, not an approval._
+
 ## 4. Launch option bags whose fields travel together
 
 Each of these is a bag of independent optionals with exactly one producer

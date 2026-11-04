@@ -87,8 +87,8 @@ const canPresent = ({ interactions }: PolicyOwners): boolean =>
   !interactions.approvalPromptsUnavailable;
 
 /** The policy's answer for a run's approval-gated tools under what the
- *  host can answer: whether a step withholds them, and the `permission_mode`
- *  a plugin hook is told. */
+ *  host can answer: whether a step withholds them, and whether the run's
+ *  work runs unasked ({@link workAutoApproved}). */
 const decideExecutable = (
   owners: PolicyOwners,
   runId: RunId,
@@ -99,16 +99,20 @@ const decideExecutable = (
 ): ApprovalPolicyDecision =>
   decideApproval({
     policy,
-    promptRequired: true,
     scopedBypass,
     canPresent: canPresent(owners),
   });
 
-/** {@link decideExecutable} for `runId` under the session's own policy. */
-export const executableDecision = (
+/** Whether `runId`'s work runs unasked under the session's own policy
+ *  ({@link decideExecutable} allows): what a plugin hook's `permission_mode`
+ *  and a coding agent's own sandbox or permissions follow. */
+export const workAutoApproved = (
   runId: RunId,
-): Effect.Effect<ApprovalPolicyDecision, never, Approvals | Interactions> =>
-  Effect.map(policyOwners, (owners) => decideExecutable(owners, runId));
+): Effect.Effect<boolean, never, Approvals | Interactions> =>
+  Effect.map(
+    policyOwners,
+    (owners) => decideExecutable(owners, runId) === 'allow',
+  );
 
 /** The policy's answer for one request: a plan follows the executable rule
  *  (`never` denies, `yolo` approves, `ask` presents or, with nobody to ask,

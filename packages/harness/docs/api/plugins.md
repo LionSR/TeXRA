@@ -461,6 +461,11 @@ interface ChildRunsShape {
       readonly schema: Schema.Codec<A, unknown>;
     },
   ) => Effect.Effect<A | undefined, Error>;
+  /** Whether the launching run's work runs unasked (the Auto-approve policy,
+   *  or an all-agent-work grant on it or an ancestor), read on each call,
+   *  since a grant may land mid-run: what a child's own sandbox or
+   *  permissions follow. */
+  readonly autoApproved: Effect.Effect<boolean, Error>;
   /** Whether the run holds the request `requestId`, open or decided: what
    *  a tool that posted one reads after a failed post. */
   readonly requested: (
@@ -570,7 +575,7 @@ type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */
@@ -1944,7 +1949,7 @@ either is asked for, so no tool body opens its own approval prompt or
 re-checks its own roots.
 
 ```ts
-interface ToolGuard<T, R = never> {
+interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -1956,12 +1961,8 @@ interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the

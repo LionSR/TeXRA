@@ -314,7 +314,6 @@ export const executeCliConfig: (
       .request({
         kind: 'run.stop',
         runId: launchRunId,
-        detachActiveChildren: false,
         reason: 'shutdown',
       })
       .pipe(

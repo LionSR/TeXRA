@@ -210,7 +210,7 @@ type DefinedTool<T, R = never, Name extends string = string> = Omit<
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T, R>;
+  readonly guard?: ToolGuard<T>;
 };
 ```
 
@@ -389,7 +389,7 @@ interface ITool<E = Error, R = never> {
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
    * A description rendered from the other tools the run declares, in place
    * of `definition.description`: rendered at the step that freezes the

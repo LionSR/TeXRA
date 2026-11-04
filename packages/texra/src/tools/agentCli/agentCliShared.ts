@@ -33,7 +33,6 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
-import type { SettingsStores } from '@texra-ai/harness/host';
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -265,25 +264,6 @@ export const launchAgentCliSession = Effect.fn(
     ].join('\n'),
     `Launched ${params.summaryLabel}: ${previewLabel(params.prompt)}`,
   );
-});
-
-/**
- * The command an agent-CLI call gets approved, built the one way both
- * providers build it: the child's effective mode — read from the call's own
- * settings, so the prompt names the mode the launch will use — and the prompt
- * it would be launched with. Each tool declares this as its loop-side guard,
- * so the run loop opens the prompt and neither tool body does.
- */
-export const agentCliApprovalCommand = Effect.fn(
-  'agentCliShared.agentCliApprovalCommand',
-)(function* (
-  agentName: string,
-  prompt: string,
-  mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
-): Effect.fn.Return<string, Error, ToolContext> {
-  const { roots } = (yield* ToolContext).env;
-  const resolved = yield* mode(roots);
-  return `[${agentName} ${resolved}] ${prompt}`;
 });
 
 /**

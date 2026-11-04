@@ -89,7 +89,7 @@ true` runs it as its own background run that delivers one result and a
 ## External coding agents
 
 - `codex` — spin off an OpenAI Codex coding agent in its own sandbox
-  (separate CLI process, `sandbox_mode`-controlled). Async and multi-turn
+  (separate CLI process; its access follows the run's approval policy). Async and multi-turn
   like an `agent` call; requires the Codex CLI and `codex login` (or
   `OPENAI_API_KEY`).
 - `claude_code` — spin off a separate Claude Code agent via the Claude Agent
