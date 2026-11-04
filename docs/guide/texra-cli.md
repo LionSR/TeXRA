@@ -56,7 +56,7 @@ Working from an Overleaf or ShareLaTeX project? Clone it into a directory
 first, by URL, git URL, or 24-character project id:
 
 ```bash
-texra clone <project> --cwd ./project
+texra clone <project> ./project
 ```
 
 ## Running agents
@@ -570,13 +570,13 @@ configuration view. Its **Agents** section has three distinct choices:
 The corresponding non-interactive interface is `texra config agents`:
 
 ```bash
-texra config agents                         # inspect the effective agents
-texra config agents --all                   # make every agent visible in this folder
-texra config agents --team lean-project     # use a named team
-texra config agents --inherit               # follow the user default
-texra config agents --default-team physicist
+texra config agents                               # inspect the effective agents
+texra config agents --agents all                  # make every agent visible in this folder
+texra config agents --agents team:lean-project    # use a named team
+texra config agents --agents inherit              # follow the user default
 texra config agents --agents correct,polish,assistant,review
-texra config agents --default-agent builtIn:assistant
+texra config agents --default-team physicist      # or `none` to clear it
+texra config agents --default-agent builtIn:assistant   # or `none` for the automatic default
 ```
 
 `texra agents list` and `texra team list|show|run` keep narrower
