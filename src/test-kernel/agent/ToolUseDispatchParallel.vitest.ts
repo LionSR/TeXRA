@@ -10,11 +10,9 @@
 // Third-party imports
 
 import {
-  Cause,
   Context,
   Deferred,
   Effect,
-  Exit,
   Fiber,
   Layer,
   Schema,
@@ -41,10 +39,7 @@ import {
   type RunId,
   type ToolDefinition,
 } from '@texra-ai/harness/schemas';
-import {
-  DatabaseWriteFailed,
-  type PluginContext,
-} from '@texra-ai/harness/host';
+import { type PluginContext } from '@texra-ai/harness/host';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
@@ -175,6 +170,7 @@ function boundModel(): BoundModel {
     modelId: GPT54,
     config: MODEL_CONFIGS[GPT54],
     backend: 'openai',
+    declinedRoutes: [],
     model,
     origin: ORIGIN,
     route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
@@ -413,38 +409,6 @@ return { columns: page.columns, count: page.rows.length,
             'More rows exist past these 200',
           );
         }),
-      );
-
-      it.effect(
-        'leaves a durable tool write unsettled when it fails under an interrupt',
-        () =>
-          Effect.gen(function* () {
-            const failure = new DatabaseWriteFailed({
-              path: '/unavailable/state.sqlite',
-              cause: new Error('disk write failed'),
-            });
-            const cause = Cause.combine(Cause.interrupt(), Cause.die(failure));
-            const kit = yield* openDispatch({
-              tools: {
-                write_state: {
-                  definition: { name: 'write_state' },
-                  call: () => Effect.failCause(cause),
-                },
-              },
-              calls: [makeCall('failed-write', 'write_state', {})],
-            });
-            const exit = yield* Effect.exit(dispatch(kit));
-            expect(Exit.isFailure(exit)).toBe(true);
-            if (Exit.isFailure(exit)) {
-              expect(Cause.squash(exit.cause)).toBe(failure);
-              expect(Cause.hasInterrupts(exit.cause)).toBe(true);
-            }
-            const saved = yield* Context.get(kit.session, RunHistory).load(
-              kit.runId,
-            );
-            expect(settledIds(saved)).toEqual([]);
-            expect(saved?.pendingResponse).not.toBeNull();
-          }),
       );
 
       // Failure mode: the guest ends (here it throws) while a call it issued is

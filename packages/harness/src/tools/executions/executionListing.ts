@@ -10,7 +10,7 @@
  */
 
 // Third-party imports
-import { Effect, SubscriptionRef } from 'effect';
+import { Effect, Predicate, SubscriptionRef } from 'effect';
 
 // Local imports
 import type { RunId, RunRelation } from '@shared/schemas';
@@ -66,7 +66,7 @@ export const listExecutions = Effect.fn('listExecutions')(function* (
   const marks = (run: RunView): string => {
     const unread = queuedFollowUps.get(run.id)?.length ?? 0;
     return [relationTo(run), unread > 0 ? `unread=${unread}` : undefined]
-      .filter((mark) => mark !== undefined)
+      .filter(Predicate.isNotUndefined)
       .join('  ');
   };
 

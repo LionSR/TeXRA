@@ -82,18 +82,16 @@ function formatListingRow(
 /**
  * Memory tool for managing persistent context files under /memories.
  */
-function executeMemoryTool(
+const executeMemoryTool = Effect.fn('executeMemoryTool')(function* (
   input: MemoryToolInput,
-): Effect.Effect<ToolResult, Error, PluginToolServices> {
-  return Effect.gen(function* () {
-    const caller = yield* callerRun;
-    const invocation = {
-      runId: caller?.runId,
-      agentName: caller?.config.agent,
-    } satisfies MemoryInvocation;
-    return yield* run(input, invocation).pipe(onMemoryTreeLane);
-  });
-}
+): Effect.fn.Return<ToolResult, Error, PluginToolServices> {
+  const caller = yield* callerRun;
+  const invocation = {
+    runId: caller?.runId,
+    agentName: caller?.config.agent,
+  } satisfies MemoryInvocation;
+  return yield* run(input, invocation).pipe(onMemoryTreeLane);
+});
 
 const run = Effect.fn('MemoryTool.run')(function* (
   input: MemoryToolInput,
@@ -131,9 +129,14 @@ const run = Effect.fn('MemoryTool.run')(function* (
         invocation,
       );
     case 'insert': {
-      // Schema-enforced: the branch's check rejects insert_text and
-      // new_str both being absent before execute() is ever reached.
-      const insertText = (input.insert_text ?? input.new_str)!;
+      // The branch's schema check rejects insert_text and new_str both
+      // being absent, so the error below is unreachable from decoded input.
+      const insertText = input.insert_text ?? input.new_str;
+      if (insertText == null) {
+        return yield* Effect.fail(
+          new ToolError('insert_text is required for command="insert".'),
+        );
+      }
       return yield* insert(
         yield* locate(input.path),
         input.insert_line,

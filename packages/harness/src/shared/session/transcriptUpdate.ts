@@ -237,7 +237,10 @@ function record(d: Draft, event: TranscriptEvent): void {
       if (correlatorId) {
         ix.streams.delete(correlatorId);
         const slot = ix.slots.get(correlatorId);
-        if (slot?.kind === 'text') closeText(d, slot, event.text);
+        if (slot?.kind === 'text') {
+          if (event.cut !== undefined) slot.cut = event.cut;
+          closeText(d, slot, event.text);
+        }
         return;
       }
       write(d, {
@@ -252,6 +255,7 @@ function record(d: Draft, event: TranscriptEvent): void {
         rowKind: 'assistant',
         text: event.text,
         running: false,
+        ...(event.cut === undefined ? {} : { cut: event.cut }),
       });
       return;
     }

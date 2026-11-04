@@ -115,12 +115,15 @@ export class LatexMediaManager {
     });
   }
 
-  private mirrorFigureDependencies(
-    latexFile: FileLocation,
-    figures: readonly string[],
-    baseDir?: string,
-  ): Effect.Effect<void, never, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly mirrorFigureDependencies = Effect.fn(
+    'LatexMediaManager.mirrorFigureDependencies',
+  )(
+    { self: this },
+    function* (
+      latexFile: FileLocation,
+      figures: readonly string[],
+      baseDir?: string,
+    ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
       if (figures.length === 0) {
         return;
       }
@@ -154,17 +157,18 @@ export class LatexMediaManager {
             pathToLocationIn(this.roots.workspace, absolutePath),
           ),
       );
-    });
-  }
+    },
+  );
 
   /**
    * Compile one LaTeX file to PDF, returning the PDF's location or `undefined`
    * when the compile, the write, or the size check disqualifies it.
    */
-  private compileOnePdf(
-    file: FileLocation,
-  ): Effect.Effect<FileLocation | undefined, Error, MediaServices> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly compileOnePdf = Effect.fn('LatexMediaManager.compileOnePdf')(
+    { self: this },
+    function* (
+      file: FileLocation,
+    ): Effect.fn.Return<FileLocation | undefined, Error, MediaServices> {
       const fs = yield* FileSystem.FileSystem;
       // One build directory per input (the shape TikZ compiles use): up to
       // LATEX_CONCURRENCY engines run at once, and two inputs in one folder
@@ -238,14 +242,15 @@ export class LatexMediaManager {
         },
       });
       return pdfLocation;
-    });
-  }
+    },
+  );
 
   /** Compile LaTeX files to PDF, returning the PDFs that came out. */
-  private compilePdfs(
-    files: readonly FileLocation[],
-  ): Effect.Effect<FileLocation[], never, MediaServices> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly compilePdfs = Effect.fn('LatexMediaManager.compilePdfs')(
+    { self: this },
+    function* (
+      files: readonly FileLocation[],
+    ): Effect.fn.Return<FileLocation[], never, MediaServices> {
       const texFiles = files.filter((file) =>
         hasExtension(file.absolutePath, '.tex'),
       );
@@ -271,8 +276,8 @@ export class LatexMediaManager {
       );
 
       return compileResults.filter(Predicate.isNotNullish);
-    });
-  }
+    },
+  );
 
   /**
    * Mirror \input, \include, \bibliography, \usepackage targets, and common
@@ -283,10 +288,13 @@ export class LatexMediaManager {
    * that transitive includes (e.g. main.tex → chapters/ch1.tex →
    * chapters/figures/fig1.tex) are all brought along.
    */
-  private mirrorLatexFileDependencies(
-    files: readonly FileLocation[],
-  ): Effect.Effect<void, never, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly mirrorLatexFileDependencies = Effect.fn(
+    'LatexMediaManager.mirrorLatexFileDependencies',
+  )(
+    { self: this },
+    function* (
+      files: readonly FileLocation[],
+    ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
       const fileService = this.fileService;
       const texFiles = files.filter((file) =>
         hasExtension(file.absolutePath, '.tex'),
@@ -312,8 +320,11 @@ export class LatexMediaManager {
         { concurrency: LATEX_CONCURRENCY, discard: true },
       );
 
-      while (worklist.length > 0) {
-        const file = worklist.shift()!;
+      for (
+        let file = worklist.shift();
+        file !== undefined;
+        file = worklist.shift()
+      ) {
         if (visited.has(file.absolutePath)) continue;
         visited.add(file.absolutePath);
 
@@ -336,85 +347,84 @@ export class LatexMediaManager {
           deps,
           (absolutePath) => absolutePath,
           'Unable to mirror LaTeX dependency',
-          (absolutePath) =>
-            Effect.gen(function* () {
-              const depLocation = pathToLocationIn(workspaceRoot, absolutePath);
-              const isTex = hasExtension(absolutePath, '.tex');
-              yield* fileService.mirrorWorkspaceFile(depLocation, {
-                snapshot: isTex,
-              });
-              if (isTex) {
-                worklist.push(depLocation);
-              }
-            }),
+          Effect.fnUntraced(function* (absolutePath) {
+            const depLocation = pathToLocationIn(workspaceRoot, absolutePath);
+            const isTex = hasExtension(absolutePath, '.tex');
+            yield* fileService.mirrorWorkspaceFile(depLocation, {
+              snapshot: isTex,
+            });
+            if (isTex) {
+              worklist.push(depLocation);
+            }
+          }),
         );
         this.logger.debug('Mirrored LaTeX dependencies', {
           data: { count: deps.length, from: file.absolutePath },
         });
       }
-    });
-  }
+    },
+  );
 
   /**
    * Shallow scan of a LaTeX project directory for common sibling files
    * (*.cls, *.sty, *.bst, latexmkrc, .latexindentrc) and mirror them into
    * run storage so the compiled document can find its project-local style.
    */
-  private mirrorProjectSiblings(
-    projectDir: string,
-  ): Effect.Effect<void, never, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
-      const fileService = this.fileService;
-      const fs = yield* FileSystem.FileSystem;
-      const entries = yield* fs.readDirectory(projectDir).pipe(
-        Effect.catch((error) =>
-          Effect.sync((): readonly string[] | undefined => {
-            this.logSkipped(
-              'Unable to scan project siblings',
-              projectDir,
-              error,
-            );
-            return undefined;
-          }),
-        ),
-      );
-      if (!entries) return;
+  private readonly mirrorProjectSiblings = Effect.fn(
+    'LatexMediaManager.mirrorProjectSiblings',
+  )({ self: this }, function* (projectDir: string): Effect.fn.Return<
+    void,
+    never,
+    FileSystem.FileSystem
+  > {
+    const fileService = this.fileService;
+    const fs = yield* FileSystem.FileSystem;
+    const entries = yield* fs.readDirectory(projectDir).pipe(
+      Effect.catch((error) =>
+        Effect.sync((): readonly string[] | undefined => {
+          this.logSkipped('Unable to scan project siblings', projectDir, error);
+          return undefined;
+        }),
+      ),
+    );
+    if (!entries) return;
 
-      const candidates = entries
-        .filter(
-          (name) =>
-            PROJECT_SIBLING_EXTENSIONS.has(path.extname(name).toLowerCase()) ||
-            PROJECT_SIBLING_NAMES.has(name),
-        )
-        .map((name) => path.join(projectDir, name));
+    const candidates = entries
+      .filter(
+        (name) =>
+          PROJECT_SIBLING_EXTENSIONS.has(path.extname(name).toLowerCase()) ||
+          PROJECT_SIBLING_NAMES.has(name),
+      )
+      .map((name) => path.join(projectDir, name));
 
-      if (candidates.length === 0) return;
+    if (candidates.length === 0) return;
 
-      const workspaceRoot = this.roots.workspace;
-      yield* this.forEachFile(
-        candidates,
-        (absolutePath) => absolutePath,
-        'Unable to mirror project sibling',
-        (absolutePath) =>
-          Effect.gen(function* () {
-            const stats = yield* fs.stat(absolutePath);
-            if (stats.type !== 'File') return;
-            yield* fileService.mirrorWorkspaceFile(
-              pathToLocationIn(workspaceRoot, absolutePath),
-            );
-          }),
-      );
-    });
-  }
+    const workspaceRoot = this.roots.workspace;
+    yield* this.forEachFile(
+      candidates,
+      (absolutePath) => absolutePath,
+      'Unable to mirror project sibling',
+      Effect.fnUntraced(function* (absolutePath) {
+        const stats = yield* fs.stat(absolutePath);
+        if (stats.type !== 'File') return;
+        yield* fileService.mirrorWorkspaceFile(
+          pathToLocationIn(workspaceRoot, absolutePath),
+        );
+      }),
+    );
+  });
 
   /**
    * The existing figures the files include, as media, each also mirrored
    * into run storage.
    */
-  private extractFiguresFromFiles(
-    files: readonly FileLocation[],
-  ): Effect.Effect<FileLocation[], Error, FileSystem.FileSystem> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly extractFiguresFromFiles = Effect.fn(
+    'LatexMediaManager.extractFiguresFromFiles',
+  )(
+    { self: this },
+    function* (
+      files: readonly FileLocation[],
+    ): Effect.fn.Return<FileLocation[], Error, FileSystem.FileSystem> {
       const fs = yield* FileSystem.FileSystem;
       const workspace = this.roots.workspace;
       // Each file's extraction, base directory and existence probes run
@@ -434,8 +444,8 @@ export class LatexMediaManager {
                 return [];
               }),
             ),
-            Effect.flatMap((figures) =>
-              Effect.gen(function* () {
+            Effect.flatMap(
+              Effect.fnUntraced(function* (figures) {
                 if (figures.length === 0)
                   return { file, figures, baseDir: '', probed: [] };
                 // Match the resolution in extractFigurePathsFromLatex so the
@@ -501,13 +511,16 @@ export class LatexMediaManager {
         discard: true,
       });
       return media;
-    });
-  }
+    },
+  );
 
-  private compileTikzFigures(
-    files: readonly FileLocation[],
-  ): Effect.Effect<FileLocation[], never, MediaServices> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly compileTikzFigures = Effect.fn(
+    'LatexMediaManager.compileTikzFigures',
+  )(
+    { self: this },
+    function* (
+      files: readonly FileLocation[],
+    ): Effect.fn.Return<FileLocation[], never, MediaServices> {
       const tikzResults = yield* Effect.forEach(
         files,
         (file) =>
@@ -531,8 +544,8 @@ export class LatexMediaManager {
       const compiledFigures = tikzResults.flat();
       this.logger.debug(`Extracted ${compiledFigures.length} TikZ figures`);
       return compiledFigures;
-    });
-  }
+    },
+  );
 
   /**
    * Process input files to extract figures, compile TikZ pictures and PDFs,
@@ -542,12 +555,13 @@ export class LatexMediaManager {
    * @param extraMediaFiles - Additional media files to include, typically the
    *   user-provided `mediaFiles` from the agent config.
    */
-  processInputFiles(
-    inputFiles: readonly FileLocation[],
-    cfg: DocumentTaskOptions,
-    extraMediaFiles: readonly FileLocation[] = [],
-  ): Effect.Effect<FileLocation[], Error, MediaServices> {
-    return Effect.gen({ self: this }, function* () {
+  readonly processInputFiles = Effect.fn('LatexMediaManager.processInputFiles')(
+    { self: this },
+    function* (
+      inputFiles: readonly FileLocation[],
+      cfg: DocumentTaskOptions,
+      extraMediaFiles: readonly FileLocation[] = [],
+    ): Effect.fn.Return<FileLocation[], Error, MediaServices> {
       if (inputFiles.length === 0) {
         return [];
       }
@@ -584,6 +598,6 @@ export class LatexMediaManager {
         media.push(...(yield* this.compilePdfs(existingFiles)));
       }
       return media;
-    });
-  }
+    },
+  );
 }

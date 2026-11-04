@@ -3,9 +3,8 @@ import { APIError, BadRequestError as OpenAIBadRequestError } from 'openai';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { RouteUnavailable } from '@texra-ai/harness/host';
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
-import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 import { ModelError } from '../../../packages/llm/src/errors.js';
@@ -74,13 +73,22 @@ describe('a ChatGPT plan limit', () => {
   });
 });
 
-describe('attachProviderError end-to-end', () => {
-  // A frozen error cannot take a symbol property: marking it must neither
-  // throw nor lose the mark.
-  it('marks a frozen error without throwing', () => {
-    const frozen = Object.freeze(new Error('overloaded'));
-    attachProviderError(frozen, { message: 'overloaded', userRetryable: true });
+describe('a subscription that cannot bill', () => {
+  // A host words a lapsed session (which switch, which sign-in) from what
+  // the run records with the failure; composed into the harness's plain
+  // message, the facts were lost to every stored row and notice.
+  it('is recorded with its route, its sign-in need and the session failure', () => {
+    const lapsed = new RouteUnavailable({
+      reason: 'unavailable',
+      message: 'The refresh token was revoked.',
+      session: { route: 'chatgpt-subscription', needsReauth: true },
+    });
 
-    expect(normalizeProviderError(frozen).userRetryable).toBe(true);
+    expect(failureInfo(lapsed, 'openai').classification).toStrictEqual({
+      kind: 'subscription-session',
+      route: 'chatgpt-subscription',
+      needsReauth: true,
+      sessionError: 'The refresh token was revoked.',
+    });
   });
 });

@@ -18,24 +18,15 @@ import {
 // flows and hosts must not hand-roll their own.
 
 /**
- * The one verdict of how a run ended, from its failure cause (none when it
- * returned) and what its driver saw besides: a stop outranks a failure, and
- * any interrupt in the cause is a stop, even when a finalizer then failed
- * (`Interrupt` + `Die`), so every terminal row agrees; a failure the run
- * reported without throwing is `failed`.
+ * The one verdict of how a run that did not return ended, from its failure
+ * cause: a stop outranks a failure, and any interrupt in the cause is a
+ * stop, even when a finalizer then failed (`Interrupt` + `Die`), so every
+ * terminal row agrees.
  */
-export function outcomeFromCause(
-  cause: Cause.Cause<unknown> | undefined,
-  seen: { readonly stopped?: boolean; readonly failed?: boolean } = {},
-): RunOutcome {
-  if (
-    seen.stopped === true ||
-    (cause !== undefined && Cause.hasInterrupts(cause))
-  )
-    return RUN_OUTCOME.CANCELLED;
-  return cause !== undefined || seen.failed === true
-    ? RUN_OUTCOME.FAILED
-    : RUN_OUTCOME.COMPLETED;
+export function outcomeFromCause(cause: Cause.Cause<unknown>): RunOutcome {
+  return Cause.hasInterrupts(cause)
+    ? RUN_OUTCOME.CANCELLED
+    : RUN_OUTCOME.FAILED;
 }
 
 // ============================================================================
@@ -62,10 +53,6 @@ export function isTranscriptSettlementPhase(
   return phase === RUN_PHASE.WAITING || isTerminalOutcomePhase(phase);
 }
 
-export function isActivePhase(phase: RunLifecycleStatus | undefined): boolean {
-  return phase === RUN_PHASE.RUNNING;
-}
-
 export function isInFlightPhase(
   phase: RunLifecycleStatus | undefined,
 ): boolean {
@@ -74,11 +61,16 @@ export function isInFlightPhase(
 
 /**
  * Where the loop stands, as its own branches read it: between turns
- * (`waiting`, `halted`) or somewhere inside a turn. Never written: derived
- * from the run's `run.position` rows.
+ * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
+ * from the run's `run.position` rows, so it is not the stored `halted`
+ * position, which changes no phase.
  */
 export type RunLoopPhase =
-  'model.ready' | 'model.submitted' | 'results.ready' | 'waiting' | 'halted';
+  | 'model.ready'
+  | 'model.submitted'
+  | 'results.ready'
+  | 'waiting'
+  | 'turn.ended';
 
 /**
  * The phase a position leaves an opened loop in. A `halted` position changes
@@ -95,7 +87,7 @@ const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
     'turn.begin': 'model.ready',
     'response.ready': 'model.submitted',
     'results.ready': 'results.ready',
-    'turn.end': 'halted',
+    'turn.end': 'turn.ended',
     waiting: 'waiting',
   };
 export const phaseAfter = (

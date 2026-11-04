@@ -8,7 +8,6 @@ import { terminalCapabilities } from '@cli/chat/tui/state/terminalCapabilities';
 
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { acquireTuiTerminal } from '@cli/tui/terminalCleanup';
 import { installTerminalTitleUpdates } from '@cli/chat/tui/terminalTitle';
 import { SessionGraph } from '@test/support/testKernel';
 import {
@@ -51,7 +50,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
         '/tmp/evil\x07\x1b]0;pwned\x07',
       );
       const session = new TuiSession();
-      session.markRunPending(Effect.never);
+      session.markRunPending(Effect.never, Effect.void);
       await Promise.resolve();
       updates.dispose();
       expect(writeSync).not.toHaveBeenCalled();
@@ -70,17 +69,6 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
         '\x1b]0;{T}·evil]0;pwned\x07',
       );
       capableUpdates.dispose();
-    });
-  });
-
-  describe('acquireTuiTerminal resume', () => {
-    it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
-      const title = { suspend: vi.fn(), resume: vi.fn(), dispose: vi.fn() };
-      const terminal = acquireTuiTerminal({ kittyKeyboard: true, title });
-      terminal.resume();
-      terminal.release();
-
-      expect(writeSync).toHaveBeenCalledWith(1, '\x1b[>1u\x1b[?2004h\x1b[?25l');
     });
   });
 });

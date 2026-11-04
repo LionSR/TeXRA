@@ -129,18 +129,17 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
   const picker = useAsyncPickerForm<AgentGroups, AgentPickerValue>({
     title: '/agent',
     loadingLabel: 'Loading agents...',
-    load: () =>
-      Effect.gen(function* () {
-        const catalog = yield* AgentCatalog;
-        const agents = (yield* agentOptionsData(props.stores)).map((agent) => ({
-          ...agent,
-          description: catalog.get(agent.value)?.description,
-        }));
-        const teams = loadTeamOptions(
-          yield* createTeamCatalogPorts(props.stores.repoState),
-        );
-        return { agents, teams };
-      }),
+    load: Effect.fn('load')(function* () {
+      const catalog = yield* AgentCatalog;
+      const agents = (yield* agentOptionsData(props.stores)).map((agent) => ({
+        ...agent,
+        description: catalog.get(agent.value)?.description,
+      }));
+      const teams = loadTeamOptions(
+        yield* createTeamCatalogPorts(props.stores.repoState),
+      );
+      return { agents, teams };
+    }),
     runtime: props.runtime,
     isEmpty: (groups) => groups.agents.length === 0,
     closeEmptyOnEnter: true,

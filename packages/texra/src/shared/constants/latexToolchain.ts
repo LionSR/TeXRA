@@ -448,6 +448,7 @@ type CatalogEntry = (typeof LATEX_TOOLS)[number];
 export type LatexToolName = CatalogEntry['name'];
 
 /** Each catalog entry by its name: how the runner probes and installs it. */
+// cast: the entries are keyed by every catalog name, one each.
 export const LATEX_TOOL_ENTRIES = Object.freeze(
   Object.fromEntries(
     // Frozen copies through: the entries cross module boundaries, and an
@@ -467,7 +468,6 @@ export const LATEX_TOOL_ENTRIES = Object.freeze(
       }),
     ]),
   ),
-  // cast: the entries are keyed by every catalog name, one each.
 ) as Readonly<Record<LatexToolName, LatexToolEntry>>;
 
 type EntryWith<Role extends ProbeRole> = Extract<CatalogEntry, { probe: Role }>;

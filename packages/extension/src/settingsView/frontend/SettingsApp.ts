@@ -93,7 +93,7 @@ export class SettingsApp extends SignalWatcher(LitElement) {
       if (this.isDesktopHost && isUnrecognizedCommand(error)) return;
       const command =
         raw && typeof raw === 'object' && 'command' in raw
-          ? String((raw as { command: unknown }).command)
+          ? String(raw.command)
           : 'unknown';
       console.warn(
         `[SettingsApp] Message validation failed for command "${command}".`,
@@ -136,9 +136,12 @@ export class SettingsApp extends SignalWatcher(LitElement) {
    * Up/Down. Home/End jump to the ends, and moving selects the tab.
    */
   private async handleTablistKeydown(event: KeyboardEvent): Promise<void> {
-    const tablist = event.currentTarget as HTMLElement;
+    const tablist = event.currentTarget;
+    const { target } = event;
+    if (!(tablist instanceof HTMLElement) || !(target instanceof HTMLElement))
+      return;
     const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
-    const current = tabs.indexOf(event.target as HTMLElement);
+    const current = tabs.indexOf(target);
     if (current < 0) return;
     let key = event.key;
     if (tablist.getAttribute('aria-orientation') === 'vertical') {

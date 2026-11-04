@@ -79,6 +79,7 @@ function testBoundModel({
       capabilities: { supportsVision },
     }),
     backend: 'deepseek',
+    declinedRoutes: [],
     model: unusedModel,
     origin: TEST_ORIGIN,
     route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
@@ -99,7 +100,7 @@ type HttpContent = Extract<TurnResult, { kind: 'http' }>['content'];
 
 const httpTurn = (
   content: HttpContent,
-  finishReason: 'stop' | 'length' | 'context-window-exceeded' | 'tool-calls',
+  finishReason: 'stop' | 'length' | 'tool-calls',
   providerResponseId: string = randomUUID(),
 ): TurnResult => ({
   kind: 'http',
@@ -119,7 +120,7 @@ const textContent = (text: string): HttpContent =>
 /** A turn that ends with `text`. */
 export const textTurn = (
   text: string,
-  finishReason: 'stop' | 'length' | 'context-window-exceeded' = 'stop',
+  finishReason: 'stop' | 'length' = 'stop',
 ): TurnResult => httpTurn(textContent(text), finishReason);
 
 /** A turn that calls tools, after the text the model wrote alongside them. */
@@ -149,6 +150,8 @@ export const toolCallTurn = (
 export type ScriptedTurn =
   | TurnResult
   | { readonly compactTo: readonly HistoryMessage[]; readonly turn: TurnResult }
+  /** A compaction's own summary call answered with this text. */
+  | { readonly summary: string }
   | { readonly failWith: RetryErrorInfo }
   | { readonly cancelled: true };
 
@@ -177,16 +180,34 @@ function scriptedInvoker(
     Effect.gen(function* () {
       const run = yield* AgentRun;
       const aggregateId = qualifyAggregateId('run', run.runId);
+      // The next scripted item, whichever call takes it.
+      let cursor = 0;
       return {
-        call: () => Effect.die(new Error('No compaction in this scenario.')),
+        call: () =>
+          Effect.suspend(() => {
+            const scripted = script[cursor];
+            if (scripted === undefined || !('summary' in scripted))
+              return Effect.die(new Error('No compaction in this scenario.'));
+            cursor += 1;
+            return Effect.succeed({
+              turn: textTurn(scripted.summary),
+              usage: null,
+            });
+          }),
         invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
             const state = yield* cell.current;
-            const scripted = script[seen.length];
+            const scripted = script[cursor];
+            cursor += 1;
             seen.push(request);
             if (scripted === undefined) {
               return yield* Effect.die(
                 new Error('The scenario ran out of model turns.'),
+              );
+            }
+            if ('summary' in scripted) {
+              return yield* Effect.die(
+                new Error('A summary was scripted where a turn was asked.'),
               );
             }
             if ('cancelled' in scripted) {
@@ -315,7 +336,6 @@ export function testAgentRun(
       SynchronizedRef.updateAndGetEffect(model, (current) =>
         Effect.scoped(next(current)),
       ),
-    declinedRoutes: [],
     callbacks: {},
     ...run,
     ...over,

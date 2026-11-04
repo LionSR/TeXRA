@@ -29,9 +29,8 @@ import { renderEmptyState } from '@ui/wa/emptyState';
 import { layoutStyles } from '../styles/logStyles';
 import { runTabsContainerStyles } from './RunTabsContainer.styles';
 import { getComposedPathElement } from '../utils';
+import { RunTab } from './RunTab';
 import type { SessionView, RunView, RunId } from '@texra-ai/harness/schemas';
-import type { RunTab } from './RunTab';
-import './RunTab';
 
 // =============================================================================
 // RunTabs: the list
@@ -226,7 +225,7 @@ export class RunTabs extends LitElement {
           <div
             @click=${this.handleTabClick}
             @run-row-delete=${(event: Event) => {
-              const tab = getComposedPathElement<RunTab>(event, 'run-tab');
+              const tab = getComposedPathElement(event, 'run-tab', RunTab);
               if (tab && this.removable && tab.run.actions.includes('delete'))
                 this.deleteRun(tab, tab.run.id);
             }}
@@ -248,15 +247,16 @@ export class RunTabs extends LitElement {
   }
 
   private handleTabClick(event: MouseEvent): void {
-    const actionElement = getComposedPathElement<HTMLElement>(
+    const actionElement = getComposedPathElement(
       event,
       '[data-run][data-action]',
+      HTMLElement,
     );
-    if (!(actionElement instanceof HTMLElement)) return;
+    if (!actionElement) return;
 
     // The action element lives in the row's own `run-tab`, whose `run`
     // is the typed view: the id is read from it, never re-parsed from the DOM.
-    const tab = getComposedPathElement<RunTab>(event, 'run-tab');
+    const tab = getComposedPathElement(event, 'run-tab', RunTab);
     const run = tab?.run;
     if (!tab || !run) return;
     const runId = run.id;

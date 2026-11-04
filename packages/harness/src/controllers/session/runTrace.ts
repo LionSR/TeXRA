@@ -176,7 +176,7 @@ export function makeRunTrace({
         return refusal === undefined
           ? undefined
           : {
-              kind: classifyAgentError(refusal),
+              ...classifyAgentError(refusal),
               message: `Rows this run published were not written: ${refusal.message}`,
             };
       }),

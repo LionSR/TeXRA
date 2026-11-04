@@ -41,29 +41,29 @@ export interface CliEnabledModelRow {
  * Full catalog for enable/disable UIs: every CLI-supported model TeXRA can
  * still serve, marked with whether it is currently enabled.
  */
-export function listCliEnabledModelCatalog(state: StateStore) {
-  return Effect.gen(function* () {
-    const enabled = new Set(yield* getEnabledModels(state));
-    return MODELS.filter((id) => {
+export const listCliEnabledModelCatalog = Effect.fn(
+  'listCliEnabledModelCatalog',
+)(function* (state: StateStore) {
+  const enabled = new Set(yield* getEnabledModels(state));
+  return MODELS.filter((id) => {
+    const config = modelConfig(id);
+    return config === undefined || !isUnservedModel(config);
+  })
+    .map((id) => {
       const config = modelConfig(id);
-      return config === undefined || !isUnservedModel(config);
+      return {
+        id,
+        label: getModelLabel(id),
+        provider: config?.provider ?? 'unknown',
+        enabled: enabled.has(id),
+        deprecated: config?.deprecated ?? false,
+      };
     })
-      .map((id) => {
-        const config = modelConfig(id);
-        return {
-          id,
-          label: getModelLabel(id),
-          provider: config?.provider ?? 'unknown',
-          enabled: enabled.has(id),
-          deprecated: config?.deprecated ?? false,
-        };
-      })
-      .toSorted((a, b) => {
-        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
-        return a.label.localeCompare(b.label);
-      });
-  });
-}
+    .toSorted((a, b) => {
+      if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+      return a.label.localeCompare(b.label);
+    });
+});
 
 /**
  * Enable or disable one model from a CLI argument, resolving common spellings

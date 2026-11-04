@@ -209,37 +209,39 @@ const RESPONSES_IMAGE_MIME_TYPES: ReadonlySet<string> = new Set([
  */
 function gifFrameCount(bytes: Uint8Array): number | null {
   const header = String.fromCharCode(...bytes.subarray(0, 6));
-  if (bytes.length < 13 || (header !== 'GIF87a' && header !== 'GIF89a'))
-    return null;
+  const screenFlags = bytes.at(10);
+  const gif = header === 'GIF87a' || header === 'GIF89a';
+  if (bytes.length < 13 || screenFlags === undefined || !gif) return null;
   const tableSize = (flags: number): number =>
     flags & 0x80 ? 3 * 2 ** ((flags & 0x07) + 1) : 0;
-  let offset = 13 + tableSize(bytes[10]!);
+  let offset = 13 + tableSize(screenFlags);
   const skipSubBlocks = (): boolean => {
-    while (offset < bytes.length) {
-      const size = bytes[offset]!;
+    for (;;) {
+      const size = bytes.at(offset);
+      if (size === undefined) return false;
       offset += 1;
       if (size === 0) return true;
       offset += size;
     }
-    return false;
   };
   let frames = 0;
-  while (offset < bytes.length) {
-    const block = bytes[offset]!;
+  for (;;) {
+    const block = bytes.at(offset);
+    if (block === undefined) return null;
     if (block === 0x3b) return frames;
     if (block === 0x21) {
       offset += 2;
       if (!skipSubBlocks()) return null;
     } else if (block === 0x2c) {
-      if (offset + 10 > bytes.length) return null;
+      const imageFlags = bytes.at(offset + 9);
+      if (imageFlags === undefined) return null;
       frames += 1;
-      offset += 10 + tableSize(bytes[offset + 9]!) + 1;
+      offset += 10 + tableSize(imageFlags) + 1;
       if (!skipSubBlocks()) return null;
     } else {
       return null;
     }
   }
-  return null;
 }
 
 /**

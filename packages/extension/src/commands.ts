@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Struct } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -124,9 +124,7 @@ export function registerCommands(
         : agentRunExecuteCommand(input, progressViewProvider.runValidated),
   };
 
-  for (const id of Object.keys(EXTENSION_COMMAND_HANDLERS) as ReadonlyArray<
-    keyof typeof EXTENSION_COMMAND_HANDLERS
-  >) {
+  for (const id of Struct.keys(EXTENSION_COMMAND_HANDLERS)) {
     context.subscriptions.push(
       vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
         const program = dispatchCommandFromRegistry(

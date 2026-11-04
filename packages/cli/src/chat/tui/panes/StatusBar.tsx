@@ -3,11 +3,7 @@ import { Cause, Effect, Exit, type Fiber } from 'effect';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { readModelOptions } from '@texra-ai/harness/host';
-import {
-  isActivePhase,
-  isEmptyUsage,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { isEmptyUsage, toErrorMessage } from '@texra-ai/harness/schemas';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
@@ -18,13 +14,10 @@ import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
-  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
-import { sessionView, runPhaseOf, runViewOf } from '../state/sessionView';
-import { activeStartedAt } from '../state/childControls';
+import { sessionView, runViewOf } from '../state/sessionView';
 import {
-  chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
   runStopFacts as runStopFactsSignal,
 } from '../state/sessionRunState';
@@ -145,20 +138,13 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // closure's identity, which froze the hint at its boot-time value for the
   // whole run (#8273).
   const runStopFacts = useSignal(runStopFactsSignal);
-  const ownedRunIds = useSignal(rootRunIdsSignal);
   const target = statusBarRunTarget({
     activeRunId,
-    canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
-    // The whole pending-run window, not just its launch gap: a restored
-    // stream's phase is derived, so a run whose stream has not reported one
-    // yet must still read "stop" — Ctrl-C would stop it.
-    canStopPendingRun: chatTuiCanStopActiveRun(runStopFacts),
-    ownedRunIds,
+    canStop: chatTuiCanStopVisibleRun(runStopFacts),
     view,
   });
   const displayRunId = target.displayRunId;
   const displayRun = runViewOf(view, displayRunId);
-  const displayStatus = runPhaseOf(displayRun);
   // The run's cumulative usage: the same figure the subagent rows and the
   // exit summary present.
   const displayUsage =
@@ -228,9 +214,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? quotaRead.value
       : undefined;
 
-  const runStartedAt = isActivePhase(displayStatus)
-    ? activeStartedAt(displayRun)
-    : undefined;
+  const runStartedAt = displayRun?.runStartedAt ?? undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
   // Every request awaiting the user: the session view's pending approvals, the
@@ -280,7 +264,7 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     },
     shortcuts: {
       chatInputAvailable: props.chatInputAvailable,
-      holdAvailable: props.chatInputAvailable && isActivePhase(displayStatus),
+      holdAvailable: props.chatInputAvailable && displayRun?.working === true,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
       transcriptAvailable: props.transcriptAvailable,

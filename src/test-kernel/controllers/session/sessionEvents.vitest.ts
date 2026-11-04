@@ -35,7 +35,6 @@ import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
   Clock,
-  Deferred,
   Effect,
   Exit,
   Fiber,
@@ -43,7 +42,6 @@ import {
   Layer,
   type Path,
   Schema,
-  Scope,
   Stream,
   SubscriptionRef,
   Context,
@@ -60,7 +58,6 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 }));
 
 import {
-  emptyRunEndOutput,
   GlobalStateKey,
   qualifyAggregateId,
   RUN_PHASE,
@@ -71,9 +68,7 @@ import {
   type SessionView,
 } from '@texra-ai/harness/schemas';
 import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
-import * as toast from '@agent/runtime/HostInteractions';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import { deriveResumability } from '@agent/storage/resumability';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
@@ -104,7 +99,6 @@ import {
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import { Database } from '@shared/session/database';
-import { runActions } from '@shared/session/runActions';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -112,7 +106,6 @@ import {
   nodeSpawnerLayer,
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
-import { seedRows } from '@test/support/sessionTestUtils';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   storePluginsLayer,
@@ -120,11 +113,6 @@ import {
 } from '@test/support/setupPlatform';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
-import {
-  SessionGraph,
-  sessionHandleOf,
-  TestSession,
-} from '@test/support/testKernel';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { toolTable } from '@tools/toolTable';
@@ -366,15 +354,6 @@ beforeAll(() => {
   }
 });
 
-/** Enqueue rows on a session's publisher and return at once, as a
- *  detached producer does; a reader waits on `session.log.settled`. */
-const publishTestRows = (
-  session: Context.Context<SessionServices>,
-  rows: readonly SessionEventDraft[],
-): void => {
-  Effect.runFork(seedRows(Context.get(session, SessionLog))(rows));
-};
-
 /** The view access a request handler reads: the fold's level and one run
  *  of it. */
 const viewAccess = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
@@ -383,103 +362,6 @@ const viewAccess = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
 });
 
 describe('session events and view', () => {
-  it.effect(
-    'commits a detached publication before a batch awaited after it',
-    () =>
-      Effect.gen(function* () {
-        // The tool card's start row is detached by the trace subscriber; the
-        // loop's settlement batch, awaited on its own fiber, follows it in
-        // program order. The one inbox makes that the commit order too, so
-        // a fast tool's card never closes before it opens (the inversion of
-        // 2026-09-12: 24 of 89 cards in one session).
-        const events = yield* SessionEvents;
-        const aggregateId = qualifyAggregateId('run', RUN);
-        events.detach((append) =>
-          append([
-            {
-              type: 'tool.start',
-              aggregateId,
-              logId: 'card-1',
-              toolName: 'bash',
-              input: { command: 'ls' },
-            },
-          ]).pipe(Effect.orDie),
-        );
-        const settled = yield* events.transact((append) =>
-          append([
-            {
-              type: 'tool.end',
-              aggregateId,
-              logId: 'card-1',
-              status: 'completed',
-              result: { toolName: 'bash', output: { output: '' } },
-            },
-          ]),
-        );
-        const rows = yield* (yield* Database).readDisplayAggregate(
-          aggregateId,
-          2,
-        );
-        expect([...rows].map((row) => [row.type, row.seq])).toEqual([
-          ['tool.start', 2],
-          ['tool.end', 3],
-        ]);
-        expect(settled.map((row) => row.seq)).toEqual([3]);
-      }).pipe(Effect.provide(graph([runStart]))),
-  );
-
-  it.effect('hears a claim that writes no row: a release, then a take', () =>
-    Effect.gen(function* () {
-      // The view checks existence only of aggregates that changed since its
-      // last read. A claim moves without a row (an ownerless run taken by
-      // whoever resumes it), so no row of the batch names it.
-      const db = yield* Database;
-      const view = yield* SessionViewService;
-      const id = qualifyAggregateId('run', RUN);
-      const owner = (v: SessionView) => v.runs.get(RUN)?.ownerId;
-      yield* settle(view.ref, (v) => owner(v) === SELF);
-      yield* db.releaseClaims([id]);
-      yield* settle(view.ref, (v) => owner(v) === null);
-      yield* db.acquireClaims([id]);
-      yield* settle(view.ref, (v) => owner(v) === SELF);
-    }).pipe(Effect.provide(graph([runStart]))),
-  );
-
-  it.effect('owns a run started between the listing and the claim read', () => {
-    // A run another writer starts after the cold read's listing and before
-    // its claim read: its change is older than that read, and the view
-    // first holds it from the tail, so the tail must still check it.
-    const store = databaseLayer('ephemeral').pipe(
-      Layer.orDie,
-      Layer.provide(storePluginsLayer),
-    );
-    const startsDuringListing = Layer.effect(
-      Database,
-      Effect.map(Database, (db) => {
-        let started = false;
-        const start = Effect.suspend(() => {
-          if (started) return Effect.void;
-          started = true;
-          return db.appendAll([
-            { ...runStart, aggregateId: qualifyAggregateId('run', NEWER) },
-          ]);
-        });
-        return {
-          ...db,
-          readListing: () =>
-            db.readListing().pipe(Effect.tap(() => Effect.orDie(start))),
-        };
-      }),
-    ).pipe(Layer.provide(store));
-    return Effect.gen(function* () {
-      const view = yield* SessionViewService;
-      yield* settle(
-        view.ref,
-        (v) => v.runs.get(NEWER)?.ownerId === SELF && v.runs.has(RUN),
-      );
-    }).pipe(Effect.provide(graph([runStart], startsDuringListing)));
-  });
-
   it.effect('publishes complete replay and finite live batches in order', () =>
     Effect.gen(function* () {
       const events = yield* SessionEvents;
@@ -628,178 +510,9 @@ describe('Sessions owner', () => {
         expect(
           yield* requests.request(request).pipe(Effect.provide(session)),
         ).toEqual({ kind: 'done' });
-        // A stop that leaves the child policy unset leaves it to the stop,
-        // which reads the session's "Keep subagents running".
-        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
-          detachActiveChildren: undefined,
-          reason: 'user',
-        });
+        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, 'user');
       }).pipe(withRequestServices),
   );
-
-  it.effect(
-    'refuses a delete rendered before the run started, and a second concurrent resume',
-    () =>
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const view = yield* SessionViewService;
-        const events = yield* SessionEvents;
-        const removeRun = vi.fn(events.removeRun);
-        // cast: the delete's admission reads only the session's view.
-        const session = Context.make(
-          SessionViewAccess,
-          viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
-        ).pipe(
-          Context.add(Runs, {} as Runs['Service']),
-        ) as Context.Context<SessionServices>;
-        const requests = sessionRequests({
-          log: { ...db, removeRun },
-          // cast: no request here asks, decides or holds a claim.
-          asks: {} as Parameters<typeof sessionRequests>[0]['asks'],
-          sessionLog: {} as SessionLog['Service'],
-          view: Context.get(session, SessionViewAccess),
-          local: yield* SubscriptionRef.make(
-            Schema.decodeUnknownSync(LocalRuntimeStateSchema)({
-              self: [SELF],
-              dead: [],
-              unreadable: [],
-              resumeBlocked: [],
-            }),
-          ),
-          plugins: toolTable([]),
-          services: yield* Effect.context<
-            | GlobalValues
-            | FileSystem.FileSystem
-            | Path.Path
-            | ChildProcessSpawner
-          >(),
-        });
-        yield* settle(view.ref, (v) => v.runs.has(RUN));
-        // The host rendered Delete session from this view; by the time the
-        // click is handled the run has started in this process.
-        yield* SubscriptionRef.update(view.ref, (v) => ({
-          ...v,
-          runs: new Map(
-            [...v.runs].map(([id, run]) => {
-              const started = {
-                ...run,
-                status: RUN_PHASE.RUNNING,
-                group: 'running' as const,
-                readOnly: false,
-              };
-              return [id, { ...started, actions: runActions(started, false) }];
-            }),
-          ),
-        }));
-        const refused = yield* requests
-          .request({ kind: 'run.delete', runId: RUN })
-          .pipe(Effect.flip, Effect.provide(session));
-        expect(refused).toMatchObject({
-          _tag: 'Rejected',
-          reason: expect.stringContaining('stop it first'),
-        });
-        expect(removeRun).not.toHaveBeenCalled();
-      }).pipe(withRequestServices),
-  );
-
-  /** The session over `storagePath`, open while the test's scope lives. */
-  const open = (storagePath: string) =>
-    Effect.flatMap(
-      TestSession.open(createFakeWorkspaceRoots({ storagePath }), { host: {} }),
-      sessionHandleOf,
-    );
-
-  // Real polling loops (`vi.waitFor`) on the session graph's live work: a
-  // live clock, so nothing the session does waits on a test clock.
-  it.layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-    it.effect(
-      'delivers committed runtime facts and never announces a rejected write',
-      () =>
-        Effect.gen(function* () {
-          const session = yield* open('/workspace/owner/committed-status');
-          // The folded tail presents each `run.end` this process committed:
-          // the presenter's calls say which rows the tail delivered.
-          const presented = vi.spyOn(toast, 'presentTerminalResult');
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => presented.mockRestore()),
-          );
-
-          publishTestRows(session, [
-            runStart,
-            { ...runStart, aggregateId: qualifyAggregateId('run', OLDER) },
-            {
-              type: 'run.removed',
-              aggregateId: qualifyAggregateId('run', RUN),
-            },
-          ]);
-          yield* Context.get(session, SessionLog).settled;
-          expect(Context.get(session, SessionLog).now()).toBe(3);
-          publishTestRows(session, [
-            {
-              type: 'run.position',
-              aggregateId: qualifyAggregateId('run', RUN),
-              payload: { family: 'toolUse', at: 'waiting' },
-            },
-          ]);
-          publishTestRows(session, [
-            {
-              type: 'run.position',
-              aggregateId: qualifyAggregateId('run', OLDER),
-              payload: { family: 'toolUse', at: 'waiting' },
-            },
-          ]);
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(
-                SubscriptionRef.getUnsafe(
-                  Context.get(session, SessionViewAccess).ref,
-                ).runs.get(OLDER)?.status,
-              ).toBe(RUN_PHASE.WAITING),
-            ),
-          );
-          const received = yield* Effect.all(
-            [RUN, OLDER].map((id) =>
-              Context.get(session, SessionLog).display(id),
-            ),
-          );
-          expect(
-            received.flat().filter((event) => event.type === 'run.position'),
-          ).toEqual([
-            expect.objectContaining({
-              type: 'run.position',
-              aggregateId: qualifyAggregateId('run', OLDER),
-              payload: { family: 'toolUse', at: 'waiting' },
-              seq: 2,
-              commit: 4,
-            }),
-          ]);
-          const runEnd = {
-            type: 'run.end',
-            outcome: 'completed',
-            output: emptyRunEndOutput(),
-          } as const;
-          publishTestRows(session, [
-            { ...runEnd, aggregateId: qualifyAggregateId('run', RUN) },
-          ]);
-          publishTestRows(session, [
-            { ...runEnd, aggregateId: qualifyAggregateId('run', OLDER) },
-          ]);
-          yield* Context.get(session, SessionLog).settled;
-          // The live run's `run.end` reaches the folded tail once the view
-          // has folded it, and a `waiting` step never does: of the rows the
-          // presenter saw, one is an end, the live run's.
-          yield* Effect.promise(() =>
-            vi.waitFor(() =>
-              expect(
-                presented.mock.calls.flatMap(([row]) =>
-                  row.type === 'run.end' ? [row.aggregateId] : [],
-                ),
-              ).toEqual([qualifyAggregateId('run', OLDER)]),
-            ),
-          );
-        }),
-    );
-  });
 });
 
 /**
@@ -1099,127 +812,6 @@ describe('the session event table and its one publisher', () => {
     },
   );
 
-  // `model.message` v1 has no upcaster to this build's version, and a
-  // retired kind that fed execution state has no reader at all.
-  it.effect.each([
-    [
-      'model.message',
-      `UPDATE event SET version = 1 WHERE type = 'model.message'`,
-    ],
-    [
-      'run.snapshot',
-      `UPDATE event SET type = 'run.snapshot' WHERE type = 'model.message'`,
-    ],
-  ])(
-    "lists a run with an earlier build's %s row as that build's, not as damaged",
-    ([type, rewrite]) => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((db) =>
-            db.appendAll([
-              runStart,
-              {
-                type: 'model.message',
-                aggregateId: runStart.aggregateId,
-                payload: {
-                  kind: 'append',
-                  sourceResponse: null,
-                  messages: [
-                    { role: 'user', content: [{ kind: 'text', text: 'hi' }] },
-                  ],
-                },
-              },
-            ]),
-          ),
-          Effect.provide(substrate(storage)),
-        );
-        const raw = reader(storage);
-        raw.exec(rewrite);
-        raw.close();
-        const read = yield* Effect.flip(
-          Effect.flatMap(Database, (db) =>
-            db.readAggregate(runStart.aggregateId, 0),
-          ).pipe(Effect.provide(substrate(storage))),
-        );
-        expect(read.cause).toMatchObject({ _tag: 'DatabaseRowEarlier', type });
-        // A record read (history, resume, follow-up) refuses it the same way,
-        // though the records never select that row.
-        const records = yield* Effect.flip(
-          Effect.flatMap(Database, (db) =>
-            db.readRunRecords(runStart.aggregateId),
-          ).pipe(Effect.provide(substrate(storage))),
-        );
-        expect(records.cause).toMatchObject({ _tag: 'DatabaseRowEarlier' });
-        yield* Effect.gen(function* () {
-          const view = yield* SessionViewService;
-          yield* settle(view.ref, (v) => v.runs.get(RUN)?.readOnly === true);
-          expect(
-            (yield* SubscriptionRef.get(view.ref)).runs.get(RUN)?.statusNotice,
-          ).toStrictEqual({ kind: 'earlierBuild' });
-        }).pipe(
-          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
-          Effect.scoped,
-        );
-      });
-    },
-  );
-
-  it.effect(
-    'skips a retired display-only row and keeps its run resumable',
-    () => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        yield* Database.pipe(
-          Effect.flatMap((db) =>
-            db.appendAll([
-              runStart,
-              {
-                type: 'model.message',
-                aggregateId: runStart.aggregateId,
-                payload: {
-                  kind: 'append',
-                  sourceResponse: null,
-                  messages: [
-                    { role: 'user', content: [{ kind: 'text', text: 'hi' }] },
-                  ],
-                },
-              },
-            ]),
-          ),
-          Effect.provide(substrate(storage)),
-        );
-        const raw = reader(storage);
-        raw.exec(
-          `UPDATE event SET type = 'conversation.progress' WHERE type = 'model.message'`,
-        );
-        raw.close();
-        const rows = yield* Effect.flatMap(Database, (db) =>
-          db.readAggregate(runStart.aggregateId, 0),
-        ).pipe(Effect.provide(substrate(storage)));
-        expect(rows.map((row) => row.type)).toStrictEqual(['run.start']);
-        yield* Effect.gen(function* () {
-          const view = yield* SessionViewService;
-          yield* settle(view.ref, (v) => v.runs.has(RUN));
-          const run = (yield* SubscriptionRef.get(view.ref)).runs.get(RUN);
-          expect(run?.readOnly).toBe(false);
-          expect(run?.statusNotice).toBeNull();
-          const store = yield* makeSessionStore(storage).pipe(
-            Effect.provide(ProcessIdentity.layer(SELF)),
-          );
-          expect(
-            yield* deriveResumability(RUN).pipe(
-              Effect.provideService(SessionLog, store.log),
-            ),
-          ).toStrictEqual({ kind: 'checkpoint' });
-        }).pipe(
-          Effect.provide(graph([], substrate(storage).pipe(Layer.orDie))),
-          Effect.scoped,
-        );
-      });
-    },
-  );
-
   it.effect('refuses a store of a newer schema and changes nothing', () => {
     const storage = workspace();
     const format = 102;
@@ -1282,116 +874,6 @@ describe('the session event table and its one publisher', () => {
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
-
-  it.effect(
-    'captures the parent incarnation in the creation transaction',
-    () => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        const db = yield* Database;
-        const child: SessionEventDraft = {
-          ...olderStart,
-          parent: { id: RUN, call: null },
-          provenance: null,
-        };
-        // A missing parent rejects the complete batch, including the earlier
-        // creation and the child's sequence reservation.
-        const rejected = yield* Effect.flip(
-          db.appendAll([
-            runStart,
-            {
-              ...child,
-              parent: {
-                id: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
-                call: null,
-              },
-            },
-          ]),
-        );
-        expect(rejected._tag).toBe('DatabaseWriteFailed');
-        expect(yield* db.currentCommit).toBe(0);
-        expect(yield* SubscriptionRef.get(db.level)).toBe(0);
-
-        // The parent can be created earlier in this same transaction. The
-        // database stamps its actual incarnation uid; the launcher names
-        // only the parent's id.
-        const created = yield* db.appendAll([runStart, child]);
-        const [parentState] = yield* db.aggregateState([
-          qualifyAggregateId('run', RUN),
-        ]);
-        expect(created[1]).toMatchObject({
-          parent: { id: RUN, uid: parentState?.uid },
-        });
-        expect(
-          yield* rowsOf(db, runStart.aggregateId, child.aggregateId),
-        ).toEqual(created);
-        expect(created[0]).toMatchObject({ parent: null });
-
-        yield* db.appendAll([
-          {
-            type: 'run.removed',
-            aggregateId: qualifyAggregateId('run', RUN),
-          },
-        ]);
-        const beforeRejectedChild = yield* db.currentCommit;
-        const closedParent = yield* Effect.flip(
-          db.appendAll([
-            {
-              ...child,
-              aggregateId: qualifyAggregateId(
-                'run',
-                Schema.decodeUnknownSync(RunIdSchema)('ab12d0'),
-              ),
-            },
-          ]),
-        );
-        expect(closedParent._tag).toBe('DatabaseWriteFailed');
-        expect(yield* db.currentCommit).toBe(beforeRejectedChild);
-        // The independent child survives its parent's closure, retaining the
-        // declared incarnation for the runtime's effective-parent check.
-        expect(yield* db.readAggregate(child.aggregateId, 0)).toEqual([
-          created[1],
-        ]);
-      }).pipe(Effect.provide(substrate(storage)));
-    },
-  );
-
-  it.effect('rolls a rejected batch back whole, leaving nothing behind', () => {
-    const storage = workspace();
-    return Effect.gen(function* () {
-      const db = yield* Database;
-      yield* db.appendAll([runStart]);
-      // Reject the second insert after the first member changed its sequence.
-      // This exercises rollback, independently of pre-transaction validation.
-      yield* Effect.sync(() => {
-        const raw = reader(storage);
-        try {
-          raw.exec(`CREATE TRIGGER reject_run_position BEFORE INSERT ON event
-            WHEN NEW.type = 'run.position'
-            BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
-        } finally {
-          raw.close();
-        }
-      });
-      // The trigger is another connection's commit: let the poll take its
-      // wake first, so the level below counts this process's batches.
-      yield* TestClock.adjust('300 millis');
-      const level = yield* SubscriptionRef.get(db.level);
-      const failure = yield* Effect.flip(db.appendAll([olderStart, waiting]));
-
-      expect(failure._tag).toBe('DatabaseWriteFailed');
-      const rows = yield* Effect.sync(() => {
-        const raw = reader(storage);
-        try {
-          return raw.prepare('SELECT seq FROM event').all();
-        } finally {
-          raw.close();
-        }
-      });
-      expect(rows).toEqual([{ seq: 1 }]);
-      expect(yield* SubscriptionRef.get(db.level)).toBe(level);
-    }).pipe(Effect.provide(substrate(storage)));
-  });
 
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();
@@ -2047,74 +1529,6 @@ describe('the session event table and its one publisher', () => {
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
-  it.live(
-    "an old activation's claim release that lands late leaves the run with the activation holding it now (R23)",
-    () => {
-      const storage = workspace();
-      const run = qualifyAggregateId('run', RUN);
-      return Effect.gen(function* () {
-        const db = yield* Database;
-        yield* db.releaseClaims([run]);
-        const ownerOf = Effect.map(
-          db.aggregateState([run]),
-          ([state]) => state?.ownerId ?? null,
-        );
-        // The first release, the old activation's, waits at this gate until
-        // the new activation holds the run; every later one runs at once.
-        const releasing = yield* Deferred.make<void>();
-        const gate = yield* Deferred.make<void>();
-        const { log } = yield* makeSessionStore(storage).pipe(
-          Effect.provideService(Database, {
-            ...db,
-            releaseClaims: (ids, heldAgain) =>
-              Effect.andThen(
-                Deferred.isDone(releasing).pipe(
-                  Effect.flatMap((late) =>
-                    late
-                      ? Effect.void
-                      : Deferred.succeed(releasing, undefined).pipe(
-                          Effect.andThen(Deferred.await(gate)),
-                        ),
-                  ),
-                ),
-                db.releaseClaims(ids, heldAgain),
-              ),
-          }),
-          Effect.provide(ProcessIdentity.layer(SELF)),
-        );
-        /** Hold the run for a scope of its own, which the caller closes. */
-        const holder = (options?: { readonly ends: true }) =>
-          Effect.tap(Scope.make(), (scope) =>
-            log.hold(RUN, options).pipe(Scope.provide(scope)),
-          );
-        // The old activation ends; its release waits.
-        const old = yield* holder({ ends: true });
-        expect(yield* ownerOf).toBe(SELF);
-        const ending = yield* Effect.forkChild(Scope.close(old, Exit.void));
-        yield* Deferred.await(releasing);
-        // A message's delivery holds the run and lets it go; then the new
-        // activation holds it.
-        yield* Scope.close(yield* holder(), Exit.void);
-        const renewed = yield* holder();
-        expect(yield* ownerOf).toBe(SELF);
-        yield* Deferred.succeed(gate, undefined);
-        yield* Fiber.join(ending);
-
-        // The new activation still holds the run: in the store, and against
-        // another process.
-        expect(yield* ownerOf).toBe(SELF);
-        const refused = yield* Effect.flip(
-          Effect.flatMap(Database, (second) => second.acquireClaims([run])),
-        ).pipe(Effect.provide(substrate(storage, OTHER)));
-        expect(refused._tag).toBe('DatabaseClaimRefused');
-        yield* Scope.close(renewed, Exit.void);
-        expect(yield* ownerOf).toBeNull();
-      }).pipe(
-        Effect.scoped,
-        Effect.provide(graph([runStart], substrate(storage).pipe(Layer.orDie))),
-      );
-    },
-  );
 });
 
 // ---------------------------------------------------------------------------
@@ -2326,43 +1740,6 @@ describe('RunHistory', () => {
         },
       ]);
     });
-
-  it.effect('live state equals reloaded state', () =>
-    Effect.gen(function* () {
-      const events = yield* SessionEvents;
-      const run = yield* RunHistory;
-      yield* events.transact((append) => append([runStart]));
-      const cell = yield* run.open(RUN, {
-        activation: () => Effect.succeed([]),
-      });
-      yield* openTurn(cell);
-      yield* cell.append([settled('call-a'), toolEnd('call-a')]);
-      yield* cell.append([
-        settled('call-b', { disposition: 'duplicate', duplicateOf: 'call-a' }),
-        toolEnd('call-b'),
-      ]);
-      const state = yield* cell.append([
-        group,
-        snapshot(),
-        {
-          type: 'run.position',
-          aggregateId: AGGREGATE,
-          payload: {
-            family: 'toolUse',
-            at: 'turn.end',
-            turn: 1,
-            outcome: 'completed',
-          },
-        },
-      ]);
-      expect(state.messages.map((m) => m.role)).toEqual([
-        'user',
-        'assistant',
-        'tool',
-      ]);
-      expect(yield* run.load(RUN)).toEqual(state);
-    }).pipe(Effect.provide(runHistory())),
-  );
 
   it.effect(
     'holds the batch contract: a mismatched delivery dies, a loose-keyed attachment is accepted',

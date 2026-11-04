@@ -22,7 +22,7 @@ import { Effect, FileSystem, type Path, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness/host';
-import { executeCommand } from '@texra-ai/harness/node';
+import { absentReason, executeCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import {
@@ -74,21 +74,22 @@ type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
 /** The PNG a platform reader wrote, or the size refusal. A failure here is
  *  the probe's failure, not "no image": it reaches the caller's error hook,
  *  worded by the errno text. */
-function readPngFileWithinLimit(
+const readPngFileWithinLimit: (
   outFile: string,
-): Effect.Effect<
+) => Effect.Effect<
   ClipboardRead,
   ClipboardImageProbeFailed,
   FileSystem.FileSystem
-> {
-  return Effect.gen(function* () {
+> = Effect.fn('readPngFileWithinLimit')(
+  function* (outFile: string) {
     const fs = yield* FileSystem.FileSystem;
     const { size } = yield* fs.stat(outFile);
     if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
     const bytes = yield* fs.readFile(outFile);
     return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  }).pipe(Effect.mapError((error) => probeFailed(error.reason.cause ?? error)));
-}
+  },
+  Effect.mapError((error) => probeFailed(error.reason.cause ?? error)),
+);
 
 /** Whether a platform reader ran to success and left no 'NO_IMAGE' mark. */
 function readerWrote(
@@ -136,30 +137,32 @@ function readClipboardPngMac(
 
 /** One Linux clipboard tool's PNG bytes, stopped past the size limit. The
  *  scope's release kills a tool stopped early. */
-const readToolBytes = (cmd: string, args: readonly string[]) =>
-  Effect.gen(function* () {
-    const handle = yield* ChildProcess.make(cmd, args, {
-      stdin: 'ignore',
-      stderr: 'ignore',
-      detached: false,
-      forceKillAfter: '5 seconds',
-    });
-    const chunks = yield* handle.stdout.pipe(
-      Stream.runFoldEffect(
-        () => ({ chunks: [] as Uint8Array[], size: 0 }),
-        (acc, chunk) => {
-          const size = acc.size + chunk.length;
-          if (size > MAX_IMAGE_BYTES) {
-            return Effect.fail(new ClipboardImageTooLarge());
-          }
-          acc.chunks.push(chunk);
-          return Effect.succeed({ chunks: acc.chunks, size });
-        },
-      ),
-    );
-    const code = yield* handle.exitCode;
-    return code === 0 ? Buffer.concat(chunks.chunks) : Buffer.alloc(0);
-  }).pipe(Effect.scoped);
+const readToolBytes = Effect.fn('readToolBytes')(function* (
+  cmd: string,
+  args: readonly string[],
+) {
+  const handle = yield* ChildProcess.make(cmd, args, {
+    stdin: 'ignore',
+    stderr: 'ignore',
+    detached: false,
+    forceKillAfter: '5 seconds',
+  });
+  const chunks = yield* handle.stdout.pipe(
+    Stream.runFoldEffect(
+      (): { chunks: Uint8Array[]; size: number } => ({ chunks: [], size: 0 }),
+      (acc, chunk) => {
+        const size = acc.size + chunk.length;
+        if (size > MAX_IMAGE_BYTES) {
+          return Effect.fail(new ClipboardImageTooLarge());
+        }
+        acc.chunks.push(chunk);
+        return Effect.succeed({ chunks: acc.chunks, size });
+      },
+    ),
+  );
+  const code = yield* handle.exitCode;
+  return code === 0 ? Buffer.concat(chunks.chunks) : Buffer.alloc(0);
+}, Effect.scoped);
 
 function readClipboardPngLinux(): Effect.Effect<
   ClipboardRead,
@@ -183,7 +186,7 @@ function readClipboardPngLinux(): Effect.Effect<
       }
       const failure: ClipboardImageTooLarge | PlatformError = outcome.failure;
       if (failure._tag === 'ClipboardImageTooLarge') return 'too-large';
-      if (failure.reason._tag === 'NotFound') continue; // tool not installed → try next
+      if (absentReason(failure)) continue; // tool not installed → try next
       toolFound = true; // tool ran but the clipboard had no image
     }
     return toolFound ? 'none' : 'unsupported';

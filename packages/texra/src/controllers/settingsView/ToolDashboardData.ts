@@ -47,6 +47,7 @@ type ToolTerminalAction =
 /** The card a plugin of TeXRA's list carries (`texraPlugins`), which the
  *  table holds as listed; none for a plugin another list adds. */
 const cardOf = (plugin: Plugin | undefined): PluginCard | undefined =>
+  // cast: the registry holds TeXRA's plugin list as listed, each a `TexraPlugin`.
   (plugin as TexraPlugin | undefined)?.card;
 
 /**

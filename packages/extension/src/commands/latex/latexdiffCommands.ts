@@ -173,8 +173,8 @@ const prepareLatexdiffResultsAndScheduleViewer = Effect.fnUntraced(function* (
       }
     }
   }).pipe(
-    Effect.onExit((exit) =>
-      Effect.gen(function* () {
+    Effect.onExit(
+      Effect.fnUntraced(function* (exit) {
         if (!lastViewerLocation) return;
         let viewerTargetReady = true;
         if (

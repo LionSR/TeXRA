@@ -24,7 +24,7 @@ jobs:
     if: ${{ github.event.release.prerelease == false && startsWith(github.event.release.tag_name, 'v') && !contains(github.event.release.tag_name, '-') }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: main

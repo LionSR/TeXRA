@@ -67,8 +67,6 @@ running a full agent turn against the API.
 **Fast processing.** Set `"texra.model.openaiFastTier": true` in `.texra/config.json` to send OpenAI requests on OpenAI's fast service tier, for models that offer it. Responses come back faster at a higher per-token price (for example $4 / $20 per 1M tokens for GPT-6.1 Sol), and run costs use the fast-tier prices. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
 full capabilities.
 
-GPT-5 reasoning summaries require account verification. Enable them with `texra.model.gpt5ReasoningSummary`.
-
 ## Google models
 
 | Model                           | Use Case                       | Cost | Speed  |

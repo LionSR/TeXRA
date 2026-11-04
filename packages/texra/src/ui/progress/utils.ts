@@ -5,17 +5,17 @@ import { isOwnDetailsToggle } from '@ui/litControllers/detailsToggle';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 /**
- * Find the first matching element in a composed event path.
+ * Find the first element of `type` matching `selector` in a composed event
+ * path.
  */
 export function getComposedPathElement<T extends Element>(
   event: Event,
   selector: string,
+  type: abstract new (...args: never[]) => T,
 ): T | null {
   const path = event.composedPath?.() ?? [];
   for (const entry of path) {
-    if (entry instanceof Element && entry.matches(selector)) {
-      return entry as T;
-    }
+    if (entry instanceof type && entry.matches(selector)) return entry;
   }
   return null;
 }

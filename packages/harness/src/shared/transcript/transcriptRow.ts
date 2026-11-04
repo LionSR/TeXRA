@@ -21,6 +21,7 @@ import {
   type MediaAttachmentKind,
   type MessageType,
   type NormalizedToolUse,
+  type ResponseCut,
   type ToolUseLog,
   type ScriptDeliverySummary,
   type StoredMedia,
@@ -82,6 +83,9 @@ export interface StreamingTextRow extends TranscriptRowBase {
   /** True while the text hides an embedded subagent block that has opened but
    *  not closed. Blocks settlement: the visible text is still going to move. */
   readonly pendingEmbeddedFollowup?: boolean;
+  /** The limit that ended an assistant's answer early, from its
+   *  `response.finalized` row; each reader words it. */
+  readonly cut?: ResponseCut;
 }
 
 export interface UserRow extends TranscriptRowBase {
@@ -115,11 +119,16 @@ export interface ErrorRow extends TranscriptRowBase {
   readonly kind: 'error';
   /** The failure headline. */
   readonly summary: TranscriptText;
-  /** Canonical detail field set, in display order. */
+  /** Canonical detail field set, in display order: a host shows each as a
+   *  `key: value` line. */
   readonly details: readonly ErrorRowDetail[];
-  /** The detail block as one text, for copy affordances and full-output
-   *  readers. */
-  readonly detailText: TranscriptText;
+  /** The classified failure the row records: an app with words of its own
+   *  for the classification shows them where the row shows `message` (the
+   *  summary, or the `message` detail). */
+  readonly failure?: {
+    readonly message: string;
+    readonly classification: NonNullable<ErrorLogData['classification']>;
+  };
 }
 
 export interface ToolRow extends TranscriptRowBase {
@@ -140,10 +149,9 @@ export interface ToolRow extends TranscriptRowBase {
   readonly cutByRunEnd?: true;
 }
 
+/** A web search the model ran; its headline is the query ({@link rowHeadline}). */
 export interface WebSearchRow extends TranscriptRowBase {
   readonly kind: 'webSearch';
-  /** `Web Search: "quantum error correction"` */
-  readonly label: string;
   readonly query?: string;
 }
 
@@ -314,6 +322,7 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
     case 'scratchpad':
       return 'Scratchpad';
     case 'webSearch':
+      return `Web Search${row.query ? `: "${row.query}"` : ''}`;
     case 'contextManagement':
     case 'compactionActivity':
       return row.label;

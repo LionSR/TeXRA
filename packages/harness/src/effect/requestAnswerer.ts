@@ -90,12 +90,12 @@ const decisionOf = (
  * `Effect.never` and releases it in a finalizer, which runs once the view
  * drops the request, however it was decided.
  */
-export const followPendingRequests = <P extends PendingRequest, R>(
-  view: { readonly changes: Stream.Stream<SessionView> },
-  select: (view: SessionView) => readonly P[],
-  program: (request: P) => Effect.Effect<void, never, R>,
-): Effect.Effect<void, never, R | Scope.Scope> =>
-  Effect.gen(function* () {
+export const followPendingRequests = Effect.fn('followPendingRequests')(
+  function* <P extends PendingRequest, R>(
+    view: { readonly changes: Stream.Stream<SessionView> },
+    select: (view: SessionView) => readonly P[],
+    program: (request: P) => Effect.Effect<void, never, R>,
+  ): Effect.fn.Return<void, never, R | Scope.Scope> {
     // Keyed by run and request, as the fold keys a pending request.
     const keyOf = (request: PendingRequest): string =>
       `${request.runId}\0${request.requestId}`;
@@ -120,7 +120,8 @@ export const followPendingRequests = <P extends PendingRequest, R>(
         ),
       );
     });
-  });
+  },
+);
 
 /**
  * Answer the runs' requests of `session` with the host's `approve`, until
@@ -179,29 +180,27 @@ const answerRequests = (
  * or the session closes. A host with a handler can answer whatever its
  * surface says.
  */
-export function attachHost(
+export const attachHost = Effect.fn('attachHost')(function* (
   session: Context.Context<SessionServices>,
   host: SessionHost,
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.gen(function* () {
-    // The session disposes its host as it closes: the answerer ends then.
-    const ended = yield* Deferred.make<void>();
-    yield* Effect.acquireRelease(
-      Context.get(session, Interactions).use(
-        overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
-      ),
-      (detach) => Effect.sync(detach),
-    );
-    if (!answers(host)) return;
-    // The session ended: closing the answerer's scope interrupts every
-    // prompt still out, so none decides against it.
-    yield* Effect.forkScoped(
-      Effect.scoped(answerRequests(session, host)).pipe(
-        Effect.raceFirst(Deferred.await(ended)),
-      ),
-    );
-  });
-}
+): Effect.fn.Return<void, never, Scope.Scope> {
+  // The session disposes its host as it closes: the answerer ends then.
+  const ended = yield* Deferred.make<void>();
+  yield* Effect.acquireRelease(
+    Context.get(session, Interactions).use(
+      overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
+    ),
+    (detach) => Effect.sync(detach),
+  );
+  if (!answers(host)) return;
+  // The session ended: closing the answerer's scope interrupts every
+  // prompt still out, so none decides against it.
+  yield* Effect.forkScoped(
+    Effect.scoped(answerRequests(session, host)).pipe(
+      Effect.raceFirst(Deferred.await(ended)),
+    ),
+  );
+});
 
 /** A host that answers the runs' requests. */
 type AnsweringHost = SessionHost & { readonly approve: ApprovalHandler };

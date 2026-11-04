@@ -108,7 +108,7 @@ const SINGLE_FILE_FIELDS = { base: 'baseFile', edited: 'editedFile' } as const;
 /** Where a picked path list lands on the launch surface. */
 function withPickedPaths(
   launch: Surface['launch'],
-  fileType: Extract<HostRequest, { kind: 'pickFiles' }>['fileType'],
+  fileType: Extract<HostRequest, { kind: 'useCurrentFile' }>['fileType'],
   paths: readonly string[],
 ): Partial<Surface['launch']> {
   if (fileType === 'base' || fileType === 'edited') {
@@ -546,8 +546,12 @@ export function createSessionSurfaces(options: {
         patch: { text: action.text, images: action.images },
       });
     else if (action.kind !== 'showSessions') act(entry, action);
-    // Show Sessions opens the newest session only from the New-task state.
-    else if (entry.surface$.get().selected === null) {
+    // Show Sessions opens the newest session only from the New-task state,
+    // and not over a run the window just started that is still on its way.
+    else if (
+      entry.surface$.get().selected === null &&
+      entry.surface$.get().pendingSelection === null
+    ) {
       act(entry, { kind: 'select', runId: action.runId });
     }
   });

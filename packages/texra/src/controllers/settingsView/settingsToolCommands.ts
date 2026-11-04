@@ -4,7 +4,7 @@
  * the LaTeX toolchain status with its install commands. Installing a VS Code
  * extension and writing VS Code's own settings stay with the host that can.
  */
-import { Effect, Semaphore, Stream, SubscriptionRef } from 'effect';
+import { Effect, Predicate, Semaphore, Stream, SubscriptionRef } from 'effect';
 
 import {
   ToolAvailability,
@@ -131,7 +131,7 @@ export function settingsToolCommands(ports: {
       SubscriptionRef.changes(availability.results).pipe(
         Stream.map((held) => held.get(roots.workspace)),
         Stream.changes,
-        Stream.filter((results) => results !== undefined),
+        Stream.filter(Predicate.isNotUndefined),
         Stream.runForEach(() => repaint(postPlugins)),
       ),
     );

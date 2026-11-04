@@ -142,20 +142,21 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
       runId,
       resume
         ? {
-            activation: (state: RunState | null) =>
-              Effect.gen(function* () {
-                if (state?.phase == null)
-                  return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
-                const refused = foreignProtocol(
-                  runId,
-                  state,
-                  yield* SynchronizedRef.get(run.model),
-                );
-                if (refused !== null) return yield* refused;
-                return yield* activationRows(runId, run.config).pipe(
-                  Effect.provide(owners),
-                );
-              }),
+            activation: Effect.fn('activation')(function* (
+              state: RunState | null,
+            ) {
+              if (state?.phase == null)
+                return yield* Effect.fail(new Error(NOT_RESUMABLE_MESSAGE));
+              const refused = foreignProtocol(
+                runId,
+                state,
+                yield* SynchronizedRef.get(run.model),
+              );
+              if (refused !== null) return yield* refused;
+              return yield* activationRows(runId, run.config).pipe(
+                Effect.provide(owners),
+              );
+            }),
           }
         : { registration: Effect.sync(() => birthRows(run, runs, view)) },
     )

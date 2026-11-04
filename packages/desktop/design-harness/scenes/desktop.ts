@@ -14,6 +14,7 @@ import {
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
 import type { WorkbenchTab } from '@desktop/shared/desktopShellState.js';
+import type { Shell } from '@desktop/renderer/shell';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
 import {
   emptySessionView,
@@ -31,7 +32,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import { emptySurface, type Surface } from '@texra/shared/session/surface';
-import type { Shell } from '@texra/shared/session/shell';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type { RunView } from '@texra-ai/harness/schemas';
 

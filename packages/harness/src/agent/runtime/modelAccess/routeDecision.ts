@@ -12,6 +12,7 @@ import {
   hasUsableApiKey,
   type Model,
   type ModelConfig,
+  type ModelError,
   type ModelOrigin,
   type ModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -25,12 +26,10 @@ import { RouteUnavailable } from '@common/errors/agentErrors';
 import { routeFactsFor, type ModelSettings } from '@model/modelSettings';
 import { decideReasoning, servingBackend } from '@model/reasoningLevel';
 import { Secrets } from '@platform/secrets';
-import {
-  getExhaustionReason,
-  type CredentialSwitch,
-  type DeclinableUsageRoute,
-  type ModelBackend,
-  type ProviderError,
+import type {
+  CredentialSwitch,
+  DeclinableUsageRoute,
+  ModelBackend,
 } from '@shared/schemas';
 
 /** The canned model a package-validation build provides beneath the process
@@ -62,7 +61,8 @@ export interface RouteDecision {
 
 /** What the decision is asked for besides the model. */
 export interface RouteAsk {
-  /** A resumed run's backend; it wins over today's default route. */
+  /** A resumed run's backend: the decision fails when today's route would
+   *  serve the model from another one. */
   readonly backend?: ModelBackend;
   /** The routes the run declined (its rows record them). */
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
@@ -113,12 +113,19 @@ export const decideRoute = Effect.fn('decideRoute')(function* (
   });
   if (decided.kind === 'unserved') {
     return yield* unavailable(
-      `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
+      config.retired === true
+        ? `${config.label} is retired and no longer available from its provider. Choose another model.`
+        : `${config.label} is served only through OpenRouter or GitHub Copilot, which this build no longer supports. Choose another model.`,
     );
   }
   const served = servingBackend(config);
   if (served === undefined) {
     return yield* unavailable(`Unsupported model provider: ${config.provider}`);
+  }
+  if (backend !== undefined && served !== backend) {
+    return yield* unavailable(
+      'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
+    );
   }
   return { route: decided, facts: host, backend: served };
 });
@@ -129,49 +136,45 @@ export interface SwitchRefusal {
   readonly message: string;
 }
 
-const DIFFERENT_FORMAT: SwitchRefusal = {
-  reason: 'different conversation format; start new chat',
-  message:
-    'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.',
-};
-
 /**
  * Why `selected` cannot replace a run on `backend`, decided as the bind at
- * the run's next model boundary will decide it; null when it can. A
- * reasoning request the route cannot carry (`@none` on a model that always
- * thinks) is refused here, not by that bind inside the loop.
+ * the run's next model boundary will decide it; null when it can. A route
+ * that would serve the model from another backend, or a reasoning request
+ * the route cannot carry (`@none` on a model that always thinks), is refused
+ * here, not by that bind inside the loop.
  */
-export const admitSwitch = Effect.fn('admitSwitch')(function* (
-  selected: SelectedModel,
-  backend: ModelBackend,
-  settings: ModelSettings,
-  declinedRoutes: readonly DeclinableUsageRoute[],
-): Effect.fn.Return<SwitchRefusal | null, RouteUnavailable> {
-  const decision = yield* decideRoute(selected.config, settings, {
-    backend,
-    declinedRoutes,
-    mode: selected.request.mode,
-  });
-  if (decision.backend !== backend) return DIFFERENT_FORMAT;
-  return yield* decideReasoning(
-    selected.config,
-    selected.request,
-    settings.reasoningLevels[selected.config.ref],
-    decision.route,
-  ).pipe(
-    Effect.as(null),
-    Effect.catch((error) =>
-      Effect.succeed({ reason: error.message, message: error.message }),
-    ),
-  );
-});
+export const admitSwitch = Effect.fn('admitSwitch')(
+  function* (
+    selected: SelectedModel,
+    backend: ModelBackend,
+    settings: ModelSettings,
+    declinedRoutes: readonly DeclinableUsageRoute[],
+  ) {
+    const decision = yield* decideRoute(selected.config, settings, {
+      backend,
+      declinedRoutes,
+      mode: selected.request.mode,
+    });
+    yield* decideReasoning(
+      selected.config,
+      selected.request,
+      settings.reasoningLevels[selected.config.ref],
+      decision.route,
+    );
+    return null;
+  },
+  Effect.catch((error): Effect.Effect<SwitchRefusal | null> =>
+    Effect.succeed({ reason: error.message, message: error.message }),
+  ),
+);
 
 /**
- * The move onto the user's own credential a failed attempt offers, carried
- * on the retry request so no host re-derives it.
+ * The move onto the user's own credential a used-up `quota` (llm's verdict
+ * on the failed attempt) offers, carried on the retry request so no host
+ * re-derives it.
  *
- * - A subscription or coding-plan route falls back to the route the model
- *   takes with every preference off, unless that is the same kind of route.
+ * - A used-up plan falls back to the route the model takes with every
+ *   preference off, when that is a plain key route.
  * - A key whose upstream account ran out of credit needs a changed key.
  *
  * A coding-plan fallback is automatic when its key is already stored and the
@@ -180,29 +183,18 @@ export const admitSwitch = Effect.fn('admitSwitch')(function* (
  */
 export const credentialSwitch = Effect.fn('credentialSwitch')(function* (
   failed: { readonly config: ModelConfig; readonly route: RunRoute },
-  recorded: Pick<ProviderError, 'classification'>,
+  quota: ModelError['quota'],
   declinedRoutes: readonly DeclinableUsageRoute[],
 ): Effect.fn.Return<CredentialSwitch | null, never, Secrets> {
-  const reason = getExhaustionReason(recorded);
-  if (reason === undefined) return null;
+  if (quota === undefined) return null;
   const { route } = failed;
-  let declined: DeclinableUsageRoute;
-  switch (route.kind) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-      declined = route.kind;
-      break;
-    case 'api-key':
-      // The key the route bound is itself the broken credential.
-      if (reason === 'upstream-credit') {
-        return { kind: 'new-key', provider: route.provider };
-      }
-      if (route.usageRoute === 'api-key') return null;
-      declined = route.usageRoute;
-      break;
-    default:
-      return null;
-  }
+  // The account's own credit: the key the route bound is itself the broken
+  // credential, so only a new one helps.
+  if (quota.plan === null)
+    return route.kind === 'api-key'
+      ? { kind: 'new-key', provider: route.provider }
+      : null;
+  const declined = quota.plan;
   const fallback = decideModelRoute(failed.config, OWN_KEY_ROUTE_FACTS);
   if (fallback.kind !== 'api-key' || fallback.usageRoute !== 'api-key') {
     return null;

@@ -1,6 +1,7 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 
 import {
+  Cancelled,
   DatabaseReadFailed,
   isRequestRefusal,
   Rejected,
@@ -8,6 +9,7 @@ import {
   type RequestRefusal,
   type Run,
   type RunEnd,
+  type RunFailure,
   type Session,
   type StartInput,
   Unavailable,
@@ -79,18 +81,6 @@ interface WorkflowFileOperationResult {
   readonly inputFile: string;
 }
 
-/**
- * The host's launcher could not start the run, or the run it started
- * failed: a bare `Error`, lifted here with that error as `cause`.
- */
-class RunLaunchFailed extends Schema.TaggedError<RunLaunchFailed>()(
-  'RunLaunchFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
 /** The run's saved setup could not be read: the database would not answer
  *  or refused the committed `run.config` row, or the service holding the
  *  run could not answer for it (`cause`). */
@@ -131,8 +121,9 @@ export interface HostRunActionPorts {
   /** The host's scope: what an action does when its run ends lives as long
    *  as the host. */
   readonly scope: Scope.Scope;
-  /** The host's follow-up for a run this window started, once admitted:
-   *  select it, and retire the missing-agent banner its agent resolved. */
+  /** The window's follow-up for a run it started, once admitted: show the
+   *  run once its surfaces hold it, and retire the missing-agent banner its
+   *  agent resolved. */
   launched(run: Run): Effect.Effect<void>;
   /** Open a settled run's final output, when its agent names one. */
   openFinalOutput(
@@ -165,9 +156,10 @@ export interface HostRunActions {
    * The window's launcher: start a fresh run of an already decoded
    * configuration (`decodeLaunchConfig`) on its session, answering once it
    * is admitted; it decodes nothing itself. A failure before the run opens is
-   * presented here, once, and fails with the launch's own error; the
-   * launched run is the host's to select, and its final output opens when
-   * it ends.
+   * logged and presented here, once, and fails with the launch's own error,
+   * which the caller does not present again (a request answers `Cancelled`);
+   * the launched run is the window's to show (`launched`), and its final
+   * output opens when it ends.
    */
   runValidated(
     config: AgentConfig,
@@ -178,7 +170,7 @@ export interface HostRunActions {
   merge(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed | StateReadFailed>;
+  ): Effect.Effect<void, RequestRefusal | StateReadFailed>;
   resume(
     runId: RunId,
   ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
@@ -196,7 +188,7 @@ export interface HostRunActions {
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
-    | RunLaunchFailed
+    | RunFailure
   >;
   readConfig(
     runId: RunId,
@@ -228,7 +220,6 @@ export interface HostRunActions {
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
-    | RunLaunchFailed
     | SecretsFailed
     | StateReadFailed,
     AppState | Secrets
@@ -277,16 +268,18 @@ export const createHostRunActions = Effect.fn(
         ? Effect.void
         : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
     });
-  const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
-    isRequestRefusal(cause)
-      ? cause
-      : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
-
   const runValidated: HostRunActions['runValidated'] = (config, options) =>
     session.start({ config, ...options, interactive: true }).pipe(
-      // A failure before the run opens has no row to show it: it shows
-      // here, in this window, by the notice a refused launch carries.
-      Effect.tapError((error) => presentRunFailure(ports.present, error)),
+      // A failure before the run opens has no row to show it: it is logged
+      // and shows here, in this window, by the notice a refused launch
+      // carries.
+      Effect.tapError((error) =>
+        Effect.logWarning(`The ${config.agent} run did not start`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(presentRunFailure(ports.present, error)),
+        ),
+      ),
       // The reveal, and the toast it falls back to, outlive the launch
       // request: nothing waits on a person dismissing a notice, and a failed
       // reveal is a diagnostic for a run already started.
@@ -315,26 +308,27 @@ export const createHostRunActions = Effect.fn(
       ),
     );
   /** Start the configuration an action built: one that does not decode is
-   *  rejected before anything starts, a refusal the launcher worded travels
-   *  as itself, anything else is RunLaunchFailed. */
+   *  rejected before anything starts, and one that does not start is
+   *  `Cancelled`, the answer no surface shows, since the launcher has
+   *  already told why. */
   const startAgentRequest = (
     config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> =>
+  ): Effect.Effect<Run, Rejected | Cancelled> =>
     decodeLaunchConfig(config).pipe(
       Effect.flatMap((decoded) =>
-        runValidated(decoded, options).pipe(Effect.mapError(launchFailed)),
+        runValidated(decoded, options).pipe(
+          Effect.mapError(() => new Cancelled()),
+        ),
       ),
     );
   /** Start a configuration an action built and wait for its run to end. */
   const runAgentRequest = (
     config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
+  ): Effect.Effect<void, Rejected | Cancelled | RunFailure> =>
     startAgentRequest(config, options).pipe(
-      Effect.flatMap((run) =>
-        run.result.pipe(Effect.asVoid, Effect.mapError(launchFailed)),
-      ),
+      Effect.flatMap((run) => Effect.asVoid(run.result)),
     );
 
   const documentsOfRun = (runId: RunId) => {

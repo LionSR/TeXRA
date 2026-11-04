@@ -26,12 +26,12 @@ import {
 } from '@texra-ai/harness';
 import {
   launchNoticeOf,
+  normalizeProviderError,
   withProcessServices,
   type ProcessRuntime,
   type ProcessServices,
   SESSION_CLOSE_DEADLINE_MS,
   AgentError,
-  isUserAbort,
 } from '@texra-ai/harness/host';
 import type { CliRunResult } from '@cli/schemas/cliOutput';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
@@ -106,16 +106,16 @@ export type CliConfigExecuteResult =
 
 /** A tool-use run (`texra run` on an agent with no task, `texra team run`):
  *  one model/tool cycle, with the session resume hint on an interrupt. */
-export function executeCliToolUseConfig(
-  config: AgentConfigPayload,
-  runContext: CliContext,
-  options: {
-    readonly services: CliExecuteOptions['services'];
-    /** False when invocation-owned temporary inputs will not survive exit. */
-    readonly recoveryInputIsDurable: boolean;
-  },
-) {
-  return Effect.gen(function* () {
+export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
+  function* (
+    config: AgentConfigPayload,
+    runContext: CliContext,
+    options: {
+      readonly services: CliExecuteOptions['services'];
+      /** False when invocation-owned temporary inputs will not survive exit. */
+      readonly recoveryInputIsDurable: boolean;
+    },
+  ) {
     const recoveryProcessCwd = tryReadCliCwd();
     const workingDirectory = config.workingDirectory || runContext.cwd;
     const run = yield* executeCliConfig(config, runContext, {
@@ -145,8 +145,8 @@ export function executeCliToolUseConfig(
       },
       exitCode: runOutcomeExitCode(result.outcome),
     };
-  });
-}
+  },
+);
 
 /** How a headless run enters its session: `texra resume`'s resume of the
  *  persisted run (a refusal is the caller's usage exit), or a fresh start
@@ -191,12 +191,18 @@ function launchOn(
  * failures) is genuinely unexpected and is rethrown so the crash handler
  * still reports it.
  */
-export function executeCliConfig(
+export const executeCliConfig: (
   config: AgentConfigPayload,
   runContext: CliContext,
   options: CliExecuteOptions,
-): Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> {
-  return Effect.gen(function* () {
+) => Effect.Effect<CliConfigExecuteResult, Error, ProcessServices> = Effect.fn(
+  'executeCliConfig',
+)(
+  function* (
+    config: AgentConfigPayload,
+    runContext: CliContext,
+    options: CliExecuteOptions,
+  ) {
     const parsed = yield* Effect.result(decodeLaunchConfig(config));
     if (Result.isFailure(parsed)) {
       writeTextStderr(parsed.failure.reason);
@@ -266,12 +272,9 @@ export function executeCliConfig(
       userQuiet
         ? Effect.void
         : writeTextStderrAndWait(`[warn] [cli.shutdown] ${what}: ${cause}`);
-    // What a shutdown found: nothing yet, the launch still entering the
-    // session (its fiber is interrupted, which aborts it), or the run
-    // admitted (stopped through the session, its end committed by the run).
-    let shutdownRequested = false;
-    let admitted = false;
-    let ended = false;
+    // Whether a shutdown reached this run: its finalization then drains the
+    // rows for the recovery notice, which a launch that failed has none of.
+    let shutdown = false;
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
     /** The run's end as the view shows it: a level that holds the run (its
      *  committed opening always appears) and shows it no longer live here, or
@@ -307,66 +310,66 @@ export function executeCliConfig(
         );
       });
     const recoveryNoticeStarted = Deferred.makeUnsafe<void>();
-    /** The run's admission and its committed end, on a fiber a shutdown
-     *  that comes before admission interrupts. */
+    const stopThroughSession = session
+      .request({
+        kind: 'run.stop',
+        runId: launchRunId,
+        reason: 'shutdown',
+      })
+      .pipe(
+        Effect.as(true),
+        Effect.catch((error) =>
+          sayShutdownFailure(
+            `Run ${launchRunId} was not stopped for the shutdown`,
+            toErrorMessage(error),
+          ).pipe(Effect.as(false)),
+        ),
+      );
+    // Set as the session's acceptance opens the wait for the run's end,
+    // inside that wait's uninterruptible region: an interrupt that landed
+    // before it aborted the launch, one after it is answered by the
+    // session's stop.
+    let accepted = false;
+    /** The run's acceptance and its committed end. Once accepted, the end is
+     *  the session's to deliver: a shutdown reaches it as a stop, never as an
+     *  abandoned wait. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
         launchOn(session, request, runContext, options),
       ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            admitted = true;
-          }),
-        ),
         Effect.flatMap((run) =>
-          Effect.map(run.result, (end) => ({ ...end, runId: run.runId })),
+          Effect.uninterruptible(
+            Effect.suspend(() => {
+              accepted = true;
+              return Effect.map(run.result, (end) => ({
+                ...end,
+                runId: run.runId,
+              }));
+            }),
+          ),
         ),
       ),
     );
     const shutdownStatus = Effect.suspend(() =>
       Effect.gen(function* () {
-        shutdownRequested = true;
+        // The run's finalization is done: nothing is left to stop or wait for.
+        if (Deferred.isDoneUnsafe(shutdownFinalizationDone)) return;
+        shutdown = true;
         // Headless shutdown cascades into active children: a detached child
         // cannot outlive the exiting CLI process, so the detach-on-stop
         // toggle is not consulted here.
         yield* withProcessServices(
           options.services.runtime,
           Effect.gen(function* () {
-            // The run has ended: what is left is its finalization (the
-            // recovery notice, a document task's output copy), which the
-            // handler waits for whole, so a copy is never cut short.
-            if (ended) {
-              yield* Effect.uninterruptible(
-                Deferred.await(shutdownFinalizationDone),
-              );
-              return;
-            }
-            // Before admission the launch is aborted; one born all the same
-            // is drained by the finalization, which the handler waits for
-            // so its recovery notice lands before the sessions close.
-            if (!admitted) {
-              yield* Fiber.interrupt(launched);
-              yield* Effect.uninterruptible(
-                Deferred.await(shutdownFinalizationDone),
-              );
-              return;
-            }
-            const stopped = yield* session
-              .request({
-                kind: 'run.stop',
-                runId: launchRunId,
-                detachActiveChildren: false,
-                reason: 'shutdown',
-              })
-              .pipe(
-                Effect.as(true),
-                Effect.catch((error) =>
-                  sayShutdownFailure(
-                    `Run ${launchRunId} was not stopped for the shutdown`,
-                    toErrorMessage(error),
-                  ).pipe(Effect.as(false)),
-                ),
-              );
+            // The launch is interrupted where it still can be, before the
+            // session accepted the run; one accepted by then, or while the
+            // interrupt was on its way, is stopped through the session, which
+            // its own end answers (an ended run's stop is the registry's
+            // quiet no-op). A launch aborted before acceptance may have borne
+            // the run all the same: the finalization drains its rows, and the
+            // race below waits whole once that drain starts a recovery notice.
+            if (!accepted) yield* Effect.forkDetach(Fiber.interrupt(launched));
+            const stopped = accepted ? yield* stopThroughSession : false;
             // A stop that reached no live run (it had ended) promises no
             // recovery: the run's own end is what the handler waits for.
             // Decided here, from the rows before the run's end, and again by
@@ -433,12 +436,9 @@ export function executeCliConfig(
     const shutdownStatusScope = yield* Scope.fork(
       options.services.shutdownScope,
     );
-    let shutdownStatusArmed = true;
     yield* Scope.addFinalizer(
       shutdownStatusScope,
-      Effect.suspend(() =>
-        shutdownStatusArmed ? shutdownStatus : Effect.void,
-      ).pipe(
+      shutdownStatus.pipe(
         // The step's one deadline: the same budget a session close spends,
         // so a run that never unwinds cannot hold SIGTERM open. Its
         // uninterruptible wait for a promised recovery notice still finishes.
@@ -456,25 +456,23 @@ export function executeCliConfig(
       | { readonly ok: true; readonly result: CliRunResult }
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
-    let shutdownLaunchAborted = false;
     let refusal: CliUsageError | undefined;
     // Closing a closed scope is a no-op: the early close below is taken only
     // on a path that then throws or returns before the success tail that
     // `ensuring`s it.
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
-    ended = true;
-    // A run the shutdown stopped after admission stores its cancelled end,
-    // which is its result (exit 130, from its outcome); an interrupts-only
-    // exit is a launch the shutdown interrupted, and a user abort below is a
-    // stop too.
-    let interrupted = false;
+    // A run the shutdown stopped after the session accepted it stores its
+    // cancelled end, which is its result (exit 130, from its outcome). An
+    // interrupts-only exit is the shutdown's interrupt: of the launch, which
+    // it aborted, or, landing as the accepted wait opened, of the fiber once
+    // the stopped run's end let it go (exit 130 as well).
+    const interrupted =
+      shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
+    const launchAborted = interrupted && !accepted;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
-    } else if (shutdownRequested && Cause.hasInterruptsOnly(exit.cause)) {
-      interrupted = true;
-      shutdownLaunchAborted = !admitted;
-    } else {
+    } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
       // The session words a launch's failure as a `RunFailure`; what it
       // failed with is its cause.
@@ -483,25 +481,26 @@ export function executeCliConfig(
       // exit code here; anything else (e.g. registerRun disk I/O,
       // workspaceState.update failures) is unexpected and must keep
       // propagating to bin/texra.ts's crash handler.
-      if (shutdownRequested && isUserAbort(err)) {
-        interrupted = true;
-        shutdownLaunchAborted = !admitted;
-      } else if (err instanceof CliUsageError) {
+      if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
         // A launch that failed before its run opened is the caller's to
         // present (the session presents none): a refused launch by the
-        // notice it carries, any other by its message. A run that opened
-        // never fails its launch: its end is its `run.end` row's.
+        // notice it carries, any other by its message and classification,
+        // which the host words. A run that opened never fails its launch:
+        // its end is its `run.end` row's.
         if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
         else if (!failurePresented) {
           const notice = launchNoticeOf(err);
           if (notice !== undefined)
             presentationHost.emit(notice.event, notice.payload);
-          else
+          else {
+            const { classification } = normalizeProviderError(err);
             presentationHost.emit('requestShowError', {
               message: toErrorMessage(err),
+              ...(classification && { classification }),
             });
+          }
         }
       }
     }
@@ -513,17 +512,16 @@ export function executeCliConfig(
         // resumed: read once its end is committed, and the recovery notice
         // written from them. A drain that fails fails the run's
         // finalization, after its end.
-        // A launch the shutdown interrupted may have been admitted all the
-        // same (the interrupt landed in the admission's tail, which stops
-        // the run): its rows decide, once its end is committed.
+        // A launch the shutdown aborted may have borne the run all the same
+        // (the interrupt landed in the acceptance's tail, which stops the
+        // run): its rows decide, once its end is committed.
         const born =
-          shutdownLaunchAborted &&
-          (yield* session.records(launchRunId).exists());
+          launchAborted && (yield* session.records(launchRunId).exists());
         if (born) yield* settledHere(launchRunId);
         const stopped =
-          shutdownRequested &&
+          shutdown &&
           (born ||
-            (!shutdownLaunchAborted &&
+            (!launchAborted &&
               (!runResult.ok ||
                 runResult.result.outcome === RUN_OUTCOME.CANCELLED)));
         if (stopped) {
@@ -554,9 +552,9 @@ export function executeCliConfig(
           yield* options.afterRun(runResult.result);
       }),
     );
+    // Done only now: a signal during the finalization waits for it, and the
+    // step the close below runs finds nothing left to do.
     Deferred.doneUnsafe(shutdownFinalizationDone, Effect.void);
-    // Disarmed only now: a signal during the finalization waits for it.
-    shutdownStatusArmed = false;
     yield* Scope.close(shutdownStatusScope, Exit.void);
     if (!runResult.ok || Result.isFailure(finalization)) {
       yield* detachPresentation;
@@ -584,7 +582,6 @@ export function executeCliConfig(
 
     yield* detachPresentation;
     return { ok: true as const, result: { ...runResult.result, plugins } };
-  }).pipe(
-    Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
-  );
-}
+  },
+  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+);

@@ -63,7 +63,7 @@ export const sweepStaleFiles = Effect.fn('sweepStaleFiles')(function* (
       Effect.catch((error) =>
         Effect.logWarning(
           `Skipped cleanup of ${directory}: ${toErrorMessage(error)}`,
-        ).pipe(Effect.as([] as string[])),
+        ).pipe(Effect.as<readonly string[]>([])),
       ),
     );
   yield* Effect.forEach(

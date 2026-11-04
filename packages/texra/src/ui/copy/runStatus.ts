@@ -35,7 +35,9 @@ export const RUN_GROUP_LABELS: Readonly<Record<RunGroup, string>> =
 
 /** Section order, in the group union's own order. */
 export const RUN_GROUP_ORDER: readonly RunGroup[] = Object.freeze(
-  Object.keys(RUN_GROUP_LABELS) as RunGroup[],
+  Object.keys(RUN_GROUP_LABELS).filter((key): key is RunGroup =>
+    Object.hasOwn(RUN_GROUP_LABELS, key),
+  ),
 );
 
 /**

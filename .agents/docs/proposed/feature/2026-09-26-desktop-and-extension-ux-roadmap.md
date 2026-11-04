@@ -77,8 +77,6 @@ Each item is independent and small enough for one PR.
    (`packages/extension/src/common/webview/BundledViewContentProvider.ts`)
    has no retry or log link.
 6. **Desktop pane polish.**
-   - Restart button on an exited terminal (`terminalPane.ts` prints only
-     the exit code).
    - PDF error state and "Open externally" (`pdfPane.ts`).
    - Styled dialogs instead of `window.confirm` (`main.ts`,
      `workbenchController.ts`).

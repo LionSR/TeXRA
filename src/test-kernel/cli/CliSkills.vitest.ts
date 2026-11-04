@@ -12,7 +12,7 @@ import {
   enablePlugin,
   readInstalledPluginLoad,
 } from '@common/plugins/pluginTrust';
-import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
+import { hostSkillContributions } from '@skills/skillSources';
 import {
   HostSkillSources,
   loadRuntimeSkillCatalog,
@@ -38,34 +38,6 @@ async function writeSkill(
 }
 
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
-  it('deduplicates repeated source paths while preserving required custom roots', () => {
-    const projectSkillsPath = path.resolve(
-      path.sep,
-      'tmp',
-      'project',
-      '.texra',
-      'skills',
-    );
-    const sources = foldSkillSources(hostSkillContributions([], '.texra'), {
-      cwd: path.resolve(path.sep, 'tmp', 'project'),
-      home: path.resolve(path.sep, 'tmp', 'home'),
-      storageRoot: path.resolve(path.sep, 'tmp', 'home', '.texra'),
-      resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
-      options: { additionalPaths: ['.texra/skills'] },
-      plugins: [],
-    }).flatMap((tier) => tier.sources);
-
-    expect(
-      sources.filter((source) => source.path === projectSkillsPath),
-    ).toEqual([
-      expect.objectContaining({
-        scope: 'custom',
-        label: 'custom',
-        required: true,
-      }),
-    ]);
-  });
-
   it.effect(
     'installs a Claude Code plugin from a local directory, loads its skills as <plugin>:<name> once trusted, and removes it',
     () =>

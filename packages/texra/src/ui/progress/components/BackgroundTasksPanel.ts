@@ -461,8 +461,7 @@ function renderClock(
   if (pendingApproval) {
     return html`<span class="task-elapsed is-approval">approval</span>`;
   }
-  const running = child.group === 'running' || child.group === 'waiting';
-  if (running && child.runStartedAt !== null) {
+  if (child.runStartedAt !== null) {
     return html`<span class="task-elapsed"
       >${formatCompactDuration(nowMs - child.runStartedAt)}</span
     >`;

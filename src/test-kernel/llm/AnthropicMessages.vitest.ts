@@ -19,7 +19,6 @@ const CONFIG: AnthropicMessagesConfiguration = {
   supportsSystemMessages: false,
   defaults: {
     maxOutputTokens: 8192,
-    parallelToolCalls: false,
     thinking: { mode: 'adaptive', display: 'summarized' },
     effort: 'high',
     cache: '5m',
@@ -191,55 +190,6 @@ describe('canonical Anthropic Messages protocol', () => {
   afterEach(() => vi.unstubAllEnvs());
 
   it.effect(
-    "sends no switched-from model's thinking and no empty assistant turn",
-    () =>
-      Effect.gen(function* () {
-        const bound = model();
-        // An earlier Claude model's turn that ended while thinking: once its
-        // thinking is left out, the turn has nothing left to send.
-        const turn = yield* bound.prepareTurn({
-          messages: [
-            { role: 'user', content: [{ kind: 'text', text: 'first' }] },
-            {
-              role: 'assistant',
-              origin: {
-                protocol: 'anthropic-messages',
-                codecVersion: 1,
-                requestedModel: 'earlier-claude',
-                deployment: CONFIG.deployment,
-              },
-              content: [
-                {
-                  kind: 'reasoning',
-                  summary: [],
-                  content: [{ kind: 'text', text: 'thinking' }],
-                  evidence: {
-                    kind: 'anthropic-thinking-signature',
-                    signature: 'sig',
-                  },
-                },
-              ],
-            },
-            { role: 'user', content: [{ kind: 'text', text: 'second' }] },
-          ],
-        });
-        assert(turn.mode === 'foreground');
-        yield* completedTurn(bound.streamTurn(turn));
-        expect(
-          JSON.parse(fetchModel.mock.calls[0]![1]!.body as string).messages,
-        ).toEqual([
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'first' },
-              { type: 'text', text: 'second' },
-            ],
-          },
-        ]);
-      }),
-  );
-
-  it.effect(
     'round-trips signed and redacted blocks with two ordered local settlements and exact materialized media',
     () =>
       Effect.gen(function* () {
@@ -349,7 +299,6 @@ describe('canonical Anthropic Messages protocol', () => {
           cache_control: { type: 'ephemeral', ttl: '5m' },
           tool_choice: {
             type: 'auto',
-            disable_parallel_tool_use: true,
           },
         });
         const next = yield* configured.prepareTurn(
@@ -462,6 +411,52 @@ describe('canonical Anthropic Messages protocol', () => {
             ],
           },
         ]);
+      }),
+  );
+
+  // Failure mode: a stored turn whose codec version is not this build's
+  // failed to decode, so a run holding one could not continue. It is not
+  // the same origin, so it replays as plain content, without its reasoning.
+  it.effect(
+    'replays a turn of another codec version without its reasoning',
+    () =>
+      Effect.gen(function* () {
+        const configured = model();
+        const prepared = yield* configured.prepareTurn(REQUEST);
+        assert(prepared.mode === 'foreground');
+        const result = yield* completedTurn(configured.streamTurn(prepared));
+        const next = yield* configured.prepareTurn(
+          JSON.parse(
+            JSON.stringify({
+              ...REQUEST,
+              messages: [
+                ...REQUEST.messages,
+                {
+                  role: 'assistant',
+                  origin: { ...result.requestedOrigin, codecVersion: 2 },
+                  content: result.content,
+                },
+                {
+                  role: 'tool',
+                  results: [0, 1].map((callOrdinal) => ({
+                    callOrdinal,
+                    status: 'success',
+                    content: [{ kind: 'text', text: 'ok' }],
+                  })),
+                },
+              ],
+            }),
+          ),
+        );
+        assert(next.mode === 'foreground');
+        fetchModel.mockImplementationOnce(async () =>
+          response([initial(), ...terminal()]),
+        );
+        yield* completedTurn(configured.streamTurn(next));
+        const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
+        expect(
+          sent.messages[1].content.map(({ type }: { type: string }) => type),
+        ).toEqual(['text', 'tool_use', 'tool_use']);
       }),
   );
 

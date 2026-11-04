@@ -10,11 +10,7 @@ import {
  * desktop uses `installElectronHostBridge`, and the exported trace viewer
  * uses `installTraceHostBridge`.
  */
-const installed = (
-  globalThis as typeof globalThis & {
-    [HOST_BRIDGE_API_KEY]?: HostBridgeApi;
-  }
-)[HOST_BRIDGE_API_KEY];
+const installed = globalThis[HOST_BRIDGE_API_KEY];
 if (!installed) {
   throw new Error(
     'TeXRA host bridge is unavailable. Webview code must run inside a TeXRA host.',

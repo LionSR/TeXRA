@@ -138,20 +138,63 @@ export class VscodeDiffViewHost implements DiffViewHost {
     session: DiffSession,
   ): Effect.Effect<string, EditorCallFailed, FileSystem.FileSystem> {
     return Effect.suspend(() => {
-      const proposedUri = this.toUri(session.proposed);
-      const openDocument = vscode.workspace.textDocuments.find(
-        (doc) => doc.uri.toString() === proposedUri.toString(),
-      );
+      const openDocument = this.proposedDocument(session);
       return openDocument
         ? Effect.succeed(openDocument.getText())
         : FileSystem.FileSystem.use((fs) =>
-            fs.readFileString(proposedUri.fsPath),
+            fs.readFileString(this.toUri(session.proposed).fsPath),
           ).pipe(
             Effect.mapError((cause) =>
               hostFailure('readProposedContent', cause),
             ),
           );
     });
+  }
+
+  /**
+   * Open `text`, the proposed side as the user left it, in an untitled
+   * editor of its own, where it outlives the diff. The proposed side's
+   * buffer is then saved, so closing the diff does not ask about a file
+   * that is about to be removed.
+   */
+  keepProposedText(
+    session: DiffSession,
+    text: string,
+  ): Effect.Effect<void, EditorCallFailed> {
+    return Effect.suspend(() => {
+      const proposed = this.proposedDocument(session);
+      return fromHost('openTextDocument', () =>
+        vscode.workspace.openTextDocument({
+          content: text,
+          language: proposed?.languageId,
+        }),
+      ).pipe(
+        Effect.flatMap((copy) =>
+          fromHost('showTextDocument', () =>
+            vscode.window.showTextDocument(copy, {
+              preview: false,
+              preserveFocus: true,
+            }),
+          ),
+        ),
+        Effect.andThen(
+          proposed?.isDirty === true
+            ? fromHost('saveProposed', () => proposed.save())
+            : Effect.void,
+        ),
+        Effect.asVoid,
+      );
+    });
+  }
+
+  /** The proposed side's open document, if the editor holds one. */
+  private proposedDocument(
+    session: DiffSession,
+  ): vscode.TextDocument | undefined {
+    const proposedUri = this.toUri(session.proposed).toString();
+    return vscode.workspace.textDocuments.find(
+      (doc) => doc.uri.toString() === proposedUri,
+    );
   }
 
   private toUri(source: DiffSource): vscode.Uri {

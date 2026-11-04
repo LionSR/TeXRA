@@ -16,13 +16,8 @@ import {
 } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
-import { RouteUnavailable } from '../agentErrors';
-import {
-  findInCauseChain,
-  isDiskFullError,
-  isUserAbort,
-} from '../errorPredicates';
-import { attachProviderError, detectProviderError } from './errorMetadata';
+import { AgentError, RouteUnavailable } from '../agentErrors';
+import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 
 /** A used-up plan as the failure records it. */
 type UsedUpPlan = Extract<
@@ -62,11 +57,18 @@ function usedUpPlan({ quota }: ModelError): UsedUpPlan | undefined {
   };
 }
 
-/** The retry panel's classification: an overflowed window, a used-up credential, a missing key. */
+/** A failure's classification: an overflowed window, a used-up credential,
+ *  a missing key, or a subscription session that could not bill. */
 function classificationOf(
   error: ModelError | RouteUnavailable,
 ): ProviderErrorClassification | undefined {
   if (!(error instanceof ModelError)) {
+    if (error.session !== undefined)
+      return {
+        kind: 'subscription-session',
+        ...error.session,
+        sessionError: error.message,
+      };
     return error.reason === 'missing-api-key'
       ? { kind: 'missing-api-key' }
       : undefined;
@@ -142,17 +144,6 @@ function failureMessage(error: ModelError): string {
 }
 
 /**
- * Whether a person is offered a retry after `error`: whenever llm says the
- * same request can succeed, and after a used-up plan, whose retry carries
- * the switch onto the user's own credential. A missing route is fixed
- * outside the run, so its retry is never offered.
- */
-export function offersRetry(error: ModelError | RouteUnavailable): boolean {
-  if (!(error instanceof ModelError)) return false;
-  return error.retryable || error.kind === 'quota-exhausted';
-}
-
-/**
  * A model call's failure as the person reads it, worded once for the retry a
  * run records (`failureInfo`) and for a failure formatted fresh: a helper
  * call, which records nothing, or a run that ended before recording one.
@@ -168,7 +159,6 @@ export function providerErrorOf(
   return {
     message:
       error instanceof ModelError ? failureMessage(error) : routeMessage(error),
-    userRetryable: offersRetry(error),
     ...(status !== undefined && { statusCode: status }),
     ...(statusText !== undefined && { statusText }),
     ...(classification !== undefined && { classification }),
@@ -177,41 +167,32 @@ export function providerErrorOf(
   };
 }
 
-/** A failure formatted fresh: an abort, a full disk, a model failure, or any error's message. */
-function formatFailure(err: unknown): ProviderError {
-  if (isUserAbort(err))
-    return { message: 'Request aborted', userRetryable: false };
-  if (isDiskFullError(err)) {
-    return {
-      message: 'No space left on device. Free up disk space and try again.',
-      userRetryable: false,
-    };
-  }
-  const known = findInCauseChain(err, (cause) =>
-    cause instanceof ModelError || cause instanceof RouteUnavailable
-      ? cause
-      : undefined,
-  );
-  if (known !== undefined) return providerErrorOf(known);
-  return {
-    message: extractErrorMessage(err) ?? 'Provider request failed',
-    // No status: likely a network-level failure; offer the retry.
-    userRetryable: true,
-  };
-}
+/** The words of a full disk, wherever one is met. */
+export const DISK_FULL_MESSAGE =
+  'No space left on device. Free up disk space and try again.';
+
+/** Any error's own words, for a failure no verdict names. */
+export const unexpectedMessage = (err: unknown): string =>
+  extractErrorMessage(err) ?? 'Provider request failed';
 
 /**
- * Normalize a failure for display and logs. A `ProviderError` a run recorded
- * and carried back (attached on its error, possibly on a deeper `cause`) is
- * recovered as recorded; anything else is formatted fresh, uncached.
+ * The model failure in `err`'s cause chain: as the run that ended on it
+ * recorded it (`AgentError.failure`), else llm's verdict or the missing
+ * route worded fresh.
  */
+export function modelFailureIn(err: unknown): ProviderError | undefined {
+  return findInCauseChain(err, (cause) => {
+    if (cause instanceof AgentError) return cause.failure;
+    return cause instanceof ModelError || cause instanceof RouteUnavailable
+      ? providerErrorOf(cause)
+      : undefined;
+  });
+}
+
+/** A failure as a host reads it: a full disk, a model failure, or the error's words. */
 export function normalizeProviderError(err: unknown): ProviderError {
-  const cached = findInCauseChain(err, detectProviderError);
-  if (cached) {
-    attachProviderError(err, cached);
-    return cached;
-  }
-  return formatFailure(err);
+  if (isDiskFullError(err)) return { message: DISK_FULL_MESSAGE };
+  return modelFailureIn(err) ?? { message: unexpectedMessage(err) };
 }
 
 /** The user-facing message of any failure. */

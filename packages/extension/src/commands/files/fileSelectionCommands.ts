@@ -9,7 +9,7 @@ import {
   showLoggedInfoMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { selectFiles } from '@frontend/ui/dialogs';
-import type { MultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
+import type { DocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getFilterExtensions } from '@texra/common/files/fileTypeUtils';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
@@ -66,7 +66,7 @@ function createMultiPicker(
  */
 export function createFileSelectionPickers(
   roots: WorkspaceRoots,
-): Record<MultipleDocumentFileType, () => Effect.Effect<string[] | null>> {
+): Record<DocumentFileType, () => Effect.Effect<string[] | null>> {
   return {
     input: createMultiPicker(roots, {
       openLabel: 'Select Files',
@@ -85,10 +85,6 @@ export function createFileSelectionPickers(
       filters: () => ({
         'Image files': getFilterExtensions('media'),
       }),
-    }),
-    output: createMultiPicker(roots, {
-      openLabel: 'Select Output Files',
-      filters: () => ({ 'Text files': ['tex', 'txt', 'md'] }),
     }),
   };
 }

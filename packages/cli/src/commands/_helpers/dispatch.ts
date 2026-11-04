@@ -15,10 +15,7 @@ import {
   flagFromArg,
   type AnyCommand,
 } from '@cli/runtime/completionCommandTree';
-import {
-  editDistance,
-  typoSuggestionThreshold,
-} from '@texra/utils/text/editDistance';
+import { editDistance, typoSuggestionThreshold } from './editDistance';
 import {
   GLOBAL_ARGS,
   GLOBAL_BOOL_FLAGS,
@@ -35,7 +32,8 @@ export function isCliError(error: unknown): error is Error {
   return (
     error instanceof Error &&
     error.name === 'CLIError' &&
-    typeof (error as { code?: unknown }).code === 'string'
+    'code' in error &&
+    typeof error.code === 'string'
   );
 }
 
@@ -279,7 +277,7 @@ function isPureSubCommandContainer(
 ): boolean {
   return (
     Object.keys(subCommands).length > 0 &&
-    typeof (cmd as { run?: unknown }).run !== 'function'
+    !('run' in cmd && typeof cmd.run === 'function')
   );
 }
 

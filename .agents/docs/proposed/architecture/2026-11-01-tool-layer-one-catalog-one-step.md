@@ -383,8 +383,7 @@ untouched (no runtime entry changes); no row kind or version changes.
 Gate: `npm run typecheck`; `npm run test:pure` (the ratchets:
 `pluginBoundaryRatchet`, `subsystemEdgeRatchet` with its four-name shrink
 through `-u`, `refutedCandidatesRatchet`, `sharedSchemasDeepImportRatchet`);
-`npm run test:changed` (the five suites above and
-`tools/NativeSubagentProductionPath.vitest.ts`);
+`npm run test:changed` (the five suites above);
 `npm run check:core-quality -- --update` (the `undocumented-exports` row, the
 API reports, `packages/harness/docs/api/plugins.md`);
 `npm run check:dead-code-ratchet`; `npm run gate`. Zero new tests.

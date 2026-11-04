@@ -51,32 +51,25 @@ export class DependencyBanner extends LitElement {
       visible: false,
     };
 
-  private install(tool: string): void {
-    this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'openInstallGuide', tool }),
-    );
+  private install(): void {
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'openInstallGuide' }));
   }
 
   override render(): TemplateResult {
     const tools = this.state.missingTools ?? [];
     const either = tools.filter((tool) => tool.interchangeable);
-    const [firstEither] = either;
+    // The names to list: each required tool, and the interchangeable ones as one.
     const groups = [
       ...tools
         .filter((tool) => !tool.interchangeable)
-        .map((tool) => ({ id: tool.id, name: tool.label })),
-      ...(firstEither
-        ? [
-            {
-              id: firstEither.id,
-              name: either.map((tool) => tool.label).join(' or '),
-            },
-          ]
+        .map((tool) => tool.label),
+      ...(either.length > 0
+        ? [either.map((tool) => tool.label).join(' or ')]
         : []),
     ];
     const uses = [...new Set(tools.map((tool) => tool.usedFor))];
     const single = groups.length === 1 ? groups[0] : undefined;
-    // One tool: its name is plain text and Install guide opens its page.
+    // One tool: its name is plain text and Install guide opens the guide.
     // Several: each name is its own install-guide link, joined "a, b and c".
     const last = groups.length - 1;
     const joiner = (index: number): string => {
@@ -84,16 +77,16 @@ export class DependencyBanner extends LitElement {
       return index === last ? ' and ' : ', ';
     };
     const names = single
-      ? html`<bdi dir="auto">${single.name}</bdi>`
+      ? html`<bdi dir="auto">${single}</bdi>`
       : groups.map(
           (group, index) =>
             html`${joiner(index)}<button
                 type="button"
                 class="tool-link focus-ring"
-                aria-label=${`Open the ${group.name} install guide`}
-                @click=${() => this.install(group.id)}
+                aria-label=${`Open the ${group} install guide`}
+                @click=${() => this.install()}
               >
-                <bdi dir="auto">${group.name}</bdi>
+                <bdi dir="auto">${group}</bdi>
               </button>`,
         );
     return renderWarningBanner({
@@ -110,7 +103,7 @@ export class DependencyBanner extends LitElement {
               ? html`<wa-button
                   appearance="plain"
                   size="s"
-                  @click=${() => this.install(single.id)}
+                  @click=${() => this.install()}
                   >${waIcon('book', { slot: 'start' })}Install guide</wa-button
                 >`
               : nothing

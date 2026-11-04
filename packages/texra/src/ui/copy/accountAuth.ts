@@ -24,7 +24,7 @@ import type { SUBSCRIPTION_AUTH_PROVIDERS } from '@texra-ai/harness/schemas';
 export const DEVICE_CODE_DESCRIPTION =
   'One-time code; works over SSH or in any browser' as const;
 
-/** ChatGPT subscription account — Codex models via Plus/Pro/Team. */
+/** ChatGPT subscription account — OpenAI models via Plus/Pro/Team. */
 export const CHATGPT_AUTH = {
   label: 'ChatGPT',
   subscriptionLabel: 'ChatGPT subscription',
@@ -36,7 +36,7 @@ export const CHATGPT_AUTH = {
   startingNoBrowser: 'Starting ChatGPT sign-in.',
   startingBrowser: 'Opening browser for ChatGPT sign-in...',
   signedInEnabled: (accountLabel: string): string =>
-    `Signed in with ChatGPT as ${accountLabel} (Codex models enabled).`,
+    `Signed in with ChatGPT as ${accountLabel} (OpenAI models enabled).`,
 } as const;
 
 /** Grok / xAI subscription account. */

@@ -45,7 +45,7 @@ jobs:
       # skip because provider credentials are unavailable.
       - name: Remove re-review label
         if: github.event.action == 'labeled' && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             try {
@@ -94,13 +94,13 @@ jobs:
 
       - name: Checkout repository under review
         if: steps.provider-token.outputs.skip != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 1
 
       - name: Checkout trusted automation
         if: steps.provider-token.outputs.skip != 'true'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.ref }}
           path: .trusted-actions
@@ -184,7 +184,7 @@ jobs:
         if: |
           steps.provider-token.outputs.skip != 'true' &&
           steps.claude-review.outcome != 'success'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const outcomeText = '${{ steps.claude-review.outcome }}';

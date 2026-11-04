@@ -234,11 +234,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   const decision = decideRunModel(
     [
       { model: input.requestedModel, reason: 'explicit-override' },
-      {
-        model: input.parentModel,
-        reason: 'parent-run',
-        fallbackMode: 'silent',
-      },
+      { model: input.parentModel, reason: 'parent-run' },
       { model: availableModels[0], reason: 'access-list-default' },
     ],
     // Availability belongs to the model; an `@effort` suffix does not change it.

@@ -26,7 +26,6 @@ import {
   type Cause,
   Deferred,
   Effect,
-  Predicate,
   Queue,
   Ref,
   Schema,
@@ -68,10 +67,10 @@ class JsonRpcFrameError extends Schema.TaggedError<JsonRpcFrameError>()(
 ) {}
 
 export interface JsonRpcConnection {
-  readonly request: <T>(
+  readonly request: (
     method: string,
     params?: unknown,
-  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  ) => Effect.Effect<unknown, JsonRpcRequestError | JsonRpcConnectionDisposed>;
   /** Send a notification; after `close` it is dropped. */
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
@@ -116,13 +115,24 @@ interface PendingRequest {
   readonly deferred: Deferred.Deferred<unknown, PendingError>;
 }
 
-interface JsonRpcMessage {
-  readonly id?: number | string | null;
-  readonly method?: string;
-  readonly params?: unknown;
-  readonly result?: unknown;
-  readonly error?: { code?: number; message?: string; data?: unknown };
-}
+const JsonRpcBodySchema = Schema.fromJsonString(
+  Schema.Struct({
+    id: Schema.optional(
+      Schema.NullOr(Schema.Union([Schema.Number, Schema.String])),
+    ),
+    method: Schema.optional(Schema.String),
+    params: Schema.optional(Schema.Unknown),
+    result: Schema.optional(Schema.Unknown),
+    error: Schema.optional(
+      Schema.Struct({
+        code: Schema.optional(Schema.Number),
+        message: Schema.optional(Schema.String),
+        data: Schema.optional(Schema.Unknown),
+      }),
+    ),
+  }),
+);
+type JsonRpcMessage = typeof JsonRpcBodySchema.Type;
 
 const CONTENT_LENGTH = /Content-Length:\s*(\d+)/i;
 const HEADER_END = '\r\n\r\n';
@@ -152,14 +162,14 @@ const takeFrames = (buffer: Buffer): Decoded =>
       const headerEnd = rest.indexOf(HEADER_END);
       if (headerEnd < 0) break;
       const header = rest.subarray(0, headerEnd).toString('ascii');
-      const match = CONTENT_LENGTH.exec(header);
-      if (!match) {
+      const length = CONTENT_LENGTH.exec(header)?.[1];
+      if (length === undefined) {
         return yield* new JsonRpcFrameError({
           message: `Frame header without Content-Length: ${header}`,
         });
       }
       const bodyStart = headerEnd + HEADER_END.length;
-      const bodyEnd = bodyStart + Number.parseInt(match[1]!, 10);
+      const bodyEnd = bodyStart + Number.parseInt(length, 10);
       if (rest.length < bodyEnd) break;
       messages.push(
         yield* parseBody(rest.subarray(bodyStart, bodyEnd).toString('utf8')),
@@ -177,21 +187,12 @@ function encodeLine(message: object): Uint8Array {
 const parseBody = (
   body: string,
 ): Effect.Effect<JsonRpcMessage, JsonRpcFrameError> =>
-  Effect.try({
-    try: (): unknown => JSON.parse(body),
-    catch: (error) =>
-      new JsonRpcFrameError({
-        message: `Frame body is not JSON: ${toErrorMessage(error)}`,
-      }),
-  }).pipe(
-    Effect.flatMap((value) =>
-      Predicate.isObject(value)
-        ? Effect.succeed(value as JsonRpcMessage)
-        : Effect.fail(
-            new JsonRpcFrameError({
-              message: `Frame body is not a JSON-RPC object: ${body.slice(0, 200)}`,
-            }),
-          ),
+  Schema.decodeEffect(JsonRpcBodySchema)(body).pipe(
+    Effect.mapError(
+      (error) =>
+        new JsonRpcFrameError({
+          message: `Frame body is not a JSON-RPC message: ${body.slice(0, 200)}\n${error.message}`,
+        }),
     ),
   );
 
@@ -311,8 +312,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   yield* Effect.forkScoped(
     Stream.fromQueue(outbound).pipe(
       Stream.run(options.output),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
+      Effect.catch(
+        Effect.fnUntraced(function* (error) {
           if ((yield* Ref.get(closedReason)) === undefined) {
             yield* Effect.logDebug(
               `stdin write failed: ${toErrorMessage(error)}`,
@@ -331,8 +332,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
         (buffer, chunk) => decode(Buffer.concat([buffer, chunk])),
       ),
       Stream.runForEach(dispatch),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
+      Effect.catch(
+        Effect.fnUntraced(function* (error) {
           if ((yield* Ref.get(closedReason)) === undefined) {
             yield* Effect.logDebug(
               `connection error: ${toErrorMessage(error)}`,
@@ -361,7 +362,7 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
     });
   });
 
-  const request = Effect.fn('JsonRpc.request')(function* <T>(
+  const request = Effect.fn('JsonRpc.request')(function* (
     method: string,
     params?: unknown,
   ) {
@@ -384,14 +385,13 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       ...(params !== undefined && { params }),
     });
     const notice = options.cancel?.(id, method);
-    const result = yield* Deferred.await(deferred).pipe(
+    return yield* Deferred.await(deferred).pipe(
       Effect.onInterrupt(() =>
         Effect.flatMap(takePending(id), (entry) =>
           entry && notice ? notify(...notice) : Effect.void,
         ),
       ),
     );
-    return result as T;
   });
 
   const inputEnded = Deferred.await(inputDone);
