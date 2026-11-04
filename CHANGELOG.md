@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A message's sender is placed by the rows, not the view.** The inbox
+  stamps a run sender's relation (parent, child, sibling, …) from the parent
+  edges the rows record, in the job that writes the message, and a retry of
+  a message compares against the relation it was stamped with, so a retry
+  after a detach is the same request instead of a spurious conflict, and a
+  detached child keeps the grants its ancestors' rows give it. SDK:
+  `ChildRuns.parent` answers the rows' edge (null for a root, or a run that
+  is not there; never `undefined`), and `LiveRun.parent` is gone.
 - **The route decides two wire knobs.** `model.useBackgroundResponses` is
   gone: a text-only turn goes out as background work whenever its route can
   carry it, which the setting's default already did.

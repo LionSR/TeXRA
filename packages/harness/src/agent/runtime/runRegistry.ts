@@ -21,14 +21,18 @@ import {
   Schema,
   type Scope,
   Semaphore,
-  SubscriptionRef,
 } from 'effect';
 
 import type { finalizeRun } from '@agent/storage/runLifecycle';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
+import {
+  grantSource,
+  grantsKept,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
+import { ancestryRows } from '@shared/session/runRelation';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
@@ -178,7 +182,6 @@ export class RunRegistry implements RunsShape {
     return {
       runId,
       controls,
-      parent: this.attachedParent(runId),
       readsMessages,
       drained: this.awaitDrained(runId),
     };
@@ -195,7 +198,7 @@ export class RunRegistry implements RunsShape {
   /** The run's attached parent here: the settled view's for a run that
    *  exists, its activation's for one not yet created. A decision that
    *  writes reads the run's records in its job instead. */
-  private attachedParent(runId: RunId): RunId | null {
+  attachedParent(runId: RunId): RunId | null {
     const run = this.init.view.run(runId);
     return run
       ? run.parentId
@@ -602,15 +605,14 @@ export class RunRegistry implements RunsShape {
     return log.transact((tx) =>
       Effect.gen({ self: this }, function* () {
         const children = this.childRunIds(parentRunId);
-        const view = SubscriptionRef.getUnsafe(this.init.view.ref);
-        // Each born child's kept grants, from its rows: the view may not
-        // hold a child born a moment ago.
+        // Each born child's kept grants, from its rows and its ancestors'.
         const kept = new Map<RunId, ApprovalGrants>();
         for (const id of children) {
           const facts = yield* log.facts(id);
           if (facts?.start == null || facts.grants === null) continue;
           const parent = facts.start.parent?.id ?? parentRunId;
-          kept.set(id, grantsKept(view, id, parent, facts.grants));
+          const line = yield* ancestryRows((run) => log.facts(run), parent);
+          kept.set(id, grantsKept(grantSource(line), id, parent, facts.grants));
           yield* log.hold(id);
         }
         if (kept.size > 0)

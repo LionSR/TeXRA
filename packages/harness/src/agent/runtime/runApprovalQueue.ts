@@ -24,6 +24,7 @@ import {
   type ApprovalBypassKind,
   type ApprovalGrants,
   type ApprovalGrantSource,
+  grantSource,
 } from '@shared/approvalBypassKind';
 import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
@@ -43,7 +44,7 @@ import type {
 } from '@shared/session/sessionApprovals';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { Settings } from '@shared/config/settings';
-import type { RunRows } from '@shared/session/runRowsShape';
+import { ancestryRows } from '@shared/session/runRelation';
 import {
   Approvals,
   SessionLog,
@@ -124,19 +125,13 @@ export const sessionApprovals: Effect.Effect<
           : approval.prompt,
       ).pipe(withPerKeyLane(lanes[kind], runId)),
     activationRows: Effect.fn('activationRows')(function* (runId) {
-      const runs = new Map<RunId, { parentId: RunId | null }>();
-      const policy = new Map<RunId, ApprovalGrants>();
-      for (let id: RunId | null = runId; id !== null && !runs.has(id);) {
-        const facts: RunRows | null = yield* log.facts(id);
-        const parentId: RunId | null = facts?.parent?.id ?? null;
-        runs.set(id, { parentId });
-        policy.set(id, facts?.grants ?? NO_APPROVAL_GRANTS);
-        id = parentId;
-      }
+      const source = grantSource(
+        yield* ancestryRows((id) => log.facts(id), runId),
+      );
       const next = afterActivation(
-        { runs, policy },
+        source,
         runId,
-        policy.get(runId) ?? NO_APPROVAL_GRANTS,
+        source.policy.get(runId) ?? NO_APPROVAL_GRANTS,
       );
       return next === null ? [] : [policyRow(runId, next)];
     }),
