@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Record as Rec, Result } from 'effect';
 import { hasMagic } from 'glob';
 
 import {
@@ -9,6 +9,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { CliWorkflowRunResult } from '@cli/schemas/cliOutput';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import {
+  DOCUMENT_TASK_OPTIONS,
+  type DocumentTaskOptions,
+} from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
@@ -83,7 +87,8 @@ interface HeadlessRunInit {
   readonly model?: string;
   readonly instruction: string;
   readonly instructionFile?: string;
-  readonly reflect?: boolean;
+  /** The document task's switches, each a flag of the same name. */
+  readonly options: DocumentTaskOptions;
 }
 
 /** Keep binary media out of document text interpolation on both run paths. */
@@ -224,7 +229,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       // The entry resolved above has a task, so the patch is never null.
       const config: AgentConfigPayload = {
         ...launch,
-        ...documentTaskPatch(launch, agent, { reflect: init.reflect }),
+        ...documentTaskPatch(launch, agent, init.options),
       };
 
       return yield* executeCliWorkflowConfig(config, runContext, {
@@ -248,10 +253,13 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 ): Effect.fn.Return<number, Error, ProcessServices> {
   // `--output` and `--output-dir` are rejected as a pair before this point, so
   // at most one of them is set here.
+  const option = Rec.keys(DOCUMENT_TASK_OPTIONS).find(
+    (key) => init.options[key],
+  );
   const workflowOnlyFlag =
     (init.output && '--output') ||
     (init.outputDir && '--output-dir') ||
-    (init.reflect && '--reflect');
+    (option && `--${option}`);
   if (workflowOnlyFlag) {
     return yield* failUsage(
       `${workflowOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
@@ -510,11 +518,10 @@ export const headlessRunCommand = defineCliCommand({
       description:
         'File whose contents are passed before --instruction when both are set',
     },
-    reflect: {
-      type: 'boolean',
-      description:
-        'Document tasks only: have the critic agent review each revision but the last',
-    },
+    ...Rec.map(DOCUMENT_TASK_OPTIONS, ({ description }) => ({
+      type: 'boolean' as const,
+      description: `Document tasks only: ${description}`,
+    })),
   },
   run: (context, ctx) =>
     runHeadlessAgent(context, {
@@ -523,6 +530,9 @@ export const headlessRunCommand = defineCliCommand({
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
-      reflect: ctx.args.reflect === true,
+      options: Rec.map(
+        DOCUMENT_TASK_OPTIONS,
+        (_, key) => ctx.args[key] === true,
+      ),
     }),
 });

@@ -308,6 +308,20 @@ contract the approval shows.
 `FileSelectGroup.ts` renders its items from the table; `task.rewrite` is gone
 from `documentTask.ts` and the YAMLs.
 
+_Landed 2026-11-04: `DOCUMENT_TASK_OPTIONS`
+(`packages/texra/src/shared/plugins/documents.ts`) is the table, a `label`,
+`description` and `menu` per stored key; `DocumentTaskOptionsSchema`, the
+`document_task` tool's fields, `texra run`'s flags, the launch form's menu
+items and the approval badges render from it, so every surface offers every
+switch under the stored name (the tool's `extractFigures` and `extractTikz`
+are gone, the form gained Critic review, `FileSelectConfig.toolConfig` is
+gone). `task.rewrite` is gone: `outputs.length === 0` at its one reader, so a
+task that declares `outputs` gets no diff lineage (before, a single-input one
+was diffed against its unrelated input). The harness card's dead badge block
+went with it; the `badges` section kind stays, since the Codex card states
+one (the claim above that the block was its only producer was wrong). No row
+or protocol bumps._
+
 The storage layer, error definitions and catch sites, interruption and stop,
 and the model-call failure path are inventoried under the same rule in
 [storage, errors and stop paths](./2026-11-03-storage-errors-and-stop-paths.md).

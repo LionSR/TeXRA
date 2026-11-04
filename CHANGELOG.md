@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A document task's switches have one name on every surface.** The
+  `document_task` tool's `extractFigures` and `extractTikz` inputs are
+  `autoExtractFigure` and `autoExtractTikzFigure`, the names a run stores
+  and its approval shows, and the tool also takes `attachTeXCount` and
+  `autoCompileInputPdf`. `texra run` takes `--attachTeXCount`,
+  `--autoExtractFigure`, `--autoExtractTikzFigure` and
+  `--autoCompileInputPdf` beside `--reflect`. The launch form's Input menu
+  offers Critic review, and a proposal card badges every switch the task
+  was launched with. `task.rewrite` is gone from agent YAML: a task that
+  declares `outputs` writes new documents and gets no diff lineage, one
+  that declares none rewrites its inputs; an agent file that still sets
+  `rewrite:` is refused at load as an unrecognized key, so delete the line.
+  No stored row changes.
 - **Launch options that travel together are one shape.** SDK: a
   `ProcessChildStrategy` is a one-turn command (`interruptedTurn`, the result
   a killed process still has) or a coding agent's CLI session, whose
