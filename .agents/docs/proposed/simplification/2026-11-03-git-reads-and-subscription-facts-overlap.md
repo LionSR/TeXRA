@@ -30,12 +30,16 @@ Windows quoting) has to be found and repeated in each.
 Proposed change (one PR, `refactor:`):
 
 - `packages/texra/src/utils/git/` becomes the one owner of the host-neutral
-  reads: `isGitRepository`, plus `originUrl`, `currentBranch` (null when
-  detached) and `originDefaultBranch`, each returning a plain value and
-  taking `(cwd, settings)`.
-- `packages/cli/src/runtime/gitOps.ts` keeps only `gh` and the branch-creating
-  writes; its read helpers are deleted and `installGithubAction.ts` imports
-  the texra ones with `settings: undefined`.
+  reads: `isGitRepository`, plus `repositoryRoot`, `originUrl`,
+  `currentBranch` (null when detached) and `originDefaultBranch`, each
+  returning a plain value and taking `(cwd, settings)`.
+- `packages/cli/src/runtime/gitOps.ts` keeps the `git` runner (for the writes
+  in `installGithubAction.ts`), `gh`, `ghAvailable` and `localBranchExists`;
+  its five read helpers (`isGitRepo`, `repoRoot`, `remoteUrl`,
+  `currentBranch`, `defaultBranch`) are deleted and `installGithubAction.ts`
+  imports the texra ones with `settings: undefined`.
+- `packages/texra/src/latex/latexdiff.ts` drops its own
+  `rev-parse --show-toplevel` lookup for `repositoryRoot`.
 - `githubSubscriptionTool.ts` calls the same reads and keeps its own error
   wording for the failure cases it reports.
 - `workspaceInfo.ts` stays in the harness (it may not import the app) and keeps
@@ -45,8 +49,9 @@ Proposed change (one PR, `refactor:`):
 Decision to make first: whether a bare repository counts as "a repository" for
 `install-github-action`. The shared probe says no; the CLI currently says yes.
 
-Net elements target: delete four helpers in `gitOps.ts` and one runner in the
-subscription tool, add none beyond the three new reads. Before landing, run
+Net elements target: delete five read helpers in `gitOps.ts`, the root lookup
+in `latexdiff.ts` and one runner in the subscription tool; add none beyond the
+four new reads. Before landing, run
 `npm run typecheck`, `npm run test:changed` and `npm run check:dead-code-ratchet`.
 
 ## 2. Subscription provider facts: two files share a name
