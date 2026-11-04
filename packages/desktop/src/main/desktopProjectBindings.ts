@@ -24,6 +24,7 @@ import {
   type ProcessServices,
   ToolAvailability,
   type SessionHostInteractions,
+  withLogChannel,
 } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
@@ -52,7 +53,7 @@ import { DesktopToolEditApprovalHost } from './desktopToolEditApproval.js';
 import { createDesktopWorkspaceIpc } from './desktopWorkspaceIpc.js';
 import { desktopSpawner, type DesktopSpawn } from './desktopWindows.js';
 import { parsedRoute, type DesktopCommandRoute } from './desktopIpcTypes.js';
-import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
+import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type {
   DesktopProject,
   DesktopProjectRegistry,
@@ -105,7 +106,7 @@ interface ProjectBindingsOptions {
   readonly resourcesPath: string;
   /** Recording has one process owner, shared by every project and window. */
   readonly draftRequests: HostDraftRequests;
-  readonly onboarding: DesktopOnboardingIpc;
+  readonly onboarding: WindowOnboarding;
 }
 
 export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
@@ -310,16 +311,15 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
               ),
           }),
       });
-      // The funnel is host state every open project's snapshot carries (8.1).
-      yield* Effect.acquireRelease(
-        Effect.sync(() =>
-          options.onboarding.onFunnelChange((state) =>
-            snapshot.setOnboarding(state),
-          ),
+      // The funnel is host state every open project's snapshot carries. The
+      // first snapshot sets the funnel as it stands now, before its refresh.
+      yield* SubscriptionRef.changes(options.onboarding.funnel).pipe(
+        Stream.runForEach((state) =>
+          state ? snapshot.setOnboarding(state) : Effect.void,
         ),
-        (unsubscribe) => Effect.sync(unsubscribe),
+        Effect.forkScoped,
       );
-      const funnel = options.onboarding.funnelState();
+      const funnel = yield* SubscriptionRef.get(options.onboarding.funnel);
       const initialSnapshot = funnel
         ? snapshot.setOnboarding(funnel).pipe(Effect.andThen(snapshot.refresh))
         : snapshot.refresh;
@@ -415,11 +415,9 @@ export const openProjectBindings = Effect.fn('desktop.openProjectBindings')(
         (message) => {
           const binding = bindings.get(message.session);
           if (!binding) {
-            return Effect.sync(() =>
-              console.warn(
-                `Dropped a workspace request for closed project ${message.session}`,
-              ),
-            );
+            return Effect.logWarning(
+              `Dropped a workspace request for closed project ${message.session}`,
+            ).pipe(withLogChannel('desktop'));
           }
           // Hidden projects retain their resources, but cannot cover the
           // visible project with a late browser-bounds notification.

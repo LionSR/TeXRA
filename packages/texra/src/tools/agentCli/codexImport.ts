@@ -17,42 +17,22 @@
  *    the CLI may see.
  *
  * 4. `getCodexConfig()` — the same lazy access for `codexConfig`, which the
- *    tool-registration path must not pull in eagerly, plus the one reading of
- *    the call's effective sandbox mode.
+ *    tool-registration path must not pull in eagerly.
  */
 
 import * as path from 'node:path';
-import { Settings } from '@texra-ai/harness/host';
 
 import { Effect, type FileSystem } from 'effect';
 
 import { inheritedEnv } from '@texra-ai/harness/node';
-import type { CodexSandboxMode } from '@texra/shared/agentCliSettings';
-import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
   resolvePackageDir,
 } from '@texra/tools/support/externalBinaryUtils';
-import type { SandboxMode } from '@openai/codex-sdk';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 
 type PlatformInfo = { pkg: string; triple: string };
-
-/**
- * Every `CodexSandboxMode` catalog value must be one the SDK's `SandboxMode`
- * union accepts, so a persisted value the SDK doesn't support fails to
- * compile here. `codexSandboxMode` below reads through the shared
- * override-or-setting helper typed to the SDK's own `SandboxMode`, not this
- * narrower catalog type, so this stand-alone assert is what used to live in
- * that read's declared return type (mirrors `_EffortLevelsAligned` in
- * `claudeAgentShared.ts`).
- */
-type _AssertExtends<T extends true> = T;
-type _CodexSandboxModeAligned = _AssertExtends<
-  CodexSandboxMode extends SandboxMode ? true : false
->;
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -193,17 +173,3 @@ export const openCodexClient = Effect.fn('codex.openClient')(function* () {
 /** Lazy accessor for codexConfig.ts exports: Node's module cache answers
  *  every call after the first. */
 export const getCodexConfig = Effect.promise(() => import('./codexConfig.js'));
-
-/**
- * The sandbox mode a codex call runs under: its own override, else the
- * user-configured default. The approval prompt the loop opens and the launch
- * that follows it read the same one from here. The schema↔SDK alignment
- * guard lives in {@link _CodexSandboxModeAligned} above, not in this read.
- */
-export const codexSandboxMode = (
-  input: { readonly sandbox_mode?: SandboxMode | null },
-  stores: SettingsStores,
-): Effect.Effect<SandboxMode, StateReadFailed> =>
-  input.sandbox_mode == null
-    ? Settings.get(stores, CodexStateKey.SANDBOX_MODE)
-    : Effect.succeed(input.sandbox_mode);

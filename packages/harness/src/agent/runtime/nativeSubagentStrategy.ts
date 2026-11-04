@@ -45,9 +45,6 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
   readonly runId: RunId;
   readonly startedAt: number;
   readonly workingDirectory?: string;
-  /** An awaited call's child: it ends after one cycle, fresh or resumed,
-   *  and its report is persisted, not delivered: its caller reads it. */
-  readonly inBand?: true;
 }
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
@@ -100,12 +97,6 @@ export function createNativeSubagentStrategy(
     // that carries no message of its own (`turnErrorMessage`).
     stageLabel: config.script == null ? 'Native subagent' : 'Native recipe run',
 
-    // An awaited child has no later turn to consume a follow-up delivery;
-    // its awaiting caller reads the persisted report/result instead.
-    ...(params.inBand === true && {
-      deliveryMode: 'persistOnly' as const,
-    }),
-
     launch: (notify, turns) =>
       runNative(
         Effect.gen(function* () {
@@ -146,8 +137,7 @@ export function createNativeSubagentStrategy(
         }),
       ),
 
-    isTurnInterrupted: (turn) =>
-      params.inBand !== true && turn.outcome === RUN_OUTCOME.CANCELLED,
+    isTurnInterrupted: (turn) => turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: (turn) => turn.failure !== undefined,
     turnErrorMessage: (turn) => turn.failure?.message,
 

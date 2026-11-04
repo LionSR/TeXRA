@@ -23,7 +23,6 @@ prompt: |
 
 # --- Document task: the documents it lays out, then one request per revision ---
 task:
-  rewrite: true
   prefix: |
     Project context:
     <documents>

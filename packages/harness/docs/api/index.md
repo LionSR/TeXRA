@@ -210,7 +210,7 @@ type DefinedTool<T, R = never, Name extends string = string> = Omit<
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T, R>;
+  readonly guard?: ToolGuard<T>;
 };
 ```
 
@@ -389,7 +389,7 @@ interface ITool<E = Error, R = never> {
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
    * A description rendered from the other tools the run declares and the
    * modules its scripts may import, in place of `definition.description`:
@@ -481,9 +481,8 @@ interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been

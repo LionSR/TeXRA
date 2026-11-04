@@ -1,7 +1,10 @@
 import { Cause, Effect, Exit, FiberSet, Scope, Semaphore } from 'effect';
 import { Menu, type BrowserWindow } from 'electron';
 
-import { workspaceEnvironmentLayer } from '@texra-ai/harness/host';
+import {
+  withLogChannel,
+  workspaceEnvironmentLayer,
+} from '@texra-ai/harness/host';
 import { DESKTOP_HEADLESS } from './desktopPresentation.js';
 import type { ProcessRuntime, ProcessServices } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -145,11 +148,9 @@ export function createDesktopWindows(options: {
     const release = yield* Effect.cached(
       Scope.close(scope, Exit.void).pipe(
         Effect.catchCause((cause) =>
-          Effect.sync(() =>
-            console.error(
-              'The desktop window did not release cleanly:',
-              Cause.squash(cause),
-            ),
+          Effect.logError('The desktop window did not release cleanly').pipe(
+            Effect.annotateLogs({ data: Cause.squash(cause) }),
+            withLogChannel('desktop'),
           ),
         ),
       ),
@@ -182,6 +183,8 @@ export function createDesktopWindows(options: {
       FiberSet.run(
         reopens,
         open.pipe(
+          // On stderr as well as in the app log: the service-client E2E
+          // reads the main process's stderr for this line.
           Effect.catchDefect((defect) =>
             Effect.sync(() =>
               console.error(

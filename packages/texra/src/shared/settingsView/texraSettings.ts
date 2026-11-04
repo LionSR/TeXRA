@@ -9,8 +9,8 @@
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
- * (`bib.*`), LaTeX (`latex.*`, `latexdiff.tempFileLocation`, the
- * formatter), inline criticism and telemetry.
+ * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism and
+ * telemetry.
  */
 
 // Third-party imports
@@ -65,11 +65,6 @@ export const TELEMETRY_ENABLED_KEY = 'telemetry.enabled';
 
 /** Config key for what a window does with interrupted tasks at open. */
 export const RESUME_ON_OPEN_KEY = 'resumeOnOpen';
-
-export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
-  'sameDirectory',
-  'workspaceTemp',
-] as const;
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
@@ -199,13 +194,6 @@ const TEXRA_CONFIG_ROWS: Record<
     description:
       'Template used for generating standalone documents when extracting and compiling TikZ figures',
   },
-  'latex.wrapCritiqueInAlign': {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    description:
-      'Wrap bare criticism and comment commands inside align environments with intertext.',
-  },
   'latex.enabledReplacements': {
     schema: Schema.Array(
       Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES),
@@ -233,13 +221,6 @@ const TEXRA_CONFIG_ROWS: Record<
       Schema.withDecodingDefault(Effect.succeed({})),
     ),
     description: 'Custom direct text replacements.',
-  },
-  'latexdiff.tempFileLocation': {
-    schema: Schema.Literals(LATEXDIFF_TEMP_FILE_LOCATIONS).pipe(
-      Schema.withDecodingDefault(Effect.succeed('sameDirectory')),
-    ),
-    description:
-      'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
   },
   [TELEMETRY_ENABLED_KEY]: {
     schema: Schema.Boolean.pipe(

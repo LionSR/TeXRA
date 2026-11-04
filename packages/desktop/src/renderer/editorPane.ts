@@ -18,15 +18,15 @@ import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
 import type { Theme } from '@texra/shared/ipc';
-import { monacoLanguageForPath } from '@ui/monaco/monacoLanguage';
 import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import { applyMonacoTheme } from '@ui/wa/monacoTheme';
-import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
-import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
 import { renderEmptyState } from '@ui/wa/emptyState';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { applyMonacoTheme } from './monacoTheme';
+import { monacoPresentationOptions } from './monacoOptions';
+import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
+import { monacoLanguageForPath } from '../shared/monacoLanguage';
 
 import { createEditorFileNotice } from './editorFileNotice';
 import {

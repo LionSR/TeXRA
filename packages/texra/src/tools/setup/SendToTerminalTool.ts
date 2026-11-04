@@ -103,8 +103,7 @@ export const SendToTerminalTool = defineTool({
   // terminal whose shell keeps its own directory, which this tool never sets.
   guard: {
     command: {
-      text: (input: SendToTerminalInput) =>
-        Effect.succeed(input.command.trim()),
+      text: (input: SendToTerminalInput) => input.command.trim(),
       cwd: 'unknown',
     },
   },

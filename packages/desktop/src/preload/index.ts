@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
-import { resolvePostMessageTargetOrigin } from '@texra/shared/postMessageOrigin.js';
+import { resolvePostMessageTargetOrigin } from '../shared/postMessageOrigin.js';
 import { installElectronHostBridge } from './hostBridge.js';
 
 // The preload runs in the page's window; this Node-typed build has no DOM

@@ -3,8 +3,7 @@
 // import it to annotate a value, implement an interface, or catch an error.
 // Walked from each entry's exports through every type reference into the
 // package's own declarations; a name a dependency defines is that
-// dependency's surface. Held at zero, with no baseline file
-// (scripts/ratchet-zero-rules.mjs): any forgotten export fails.
+// dependency's surface. Held at zero: any forgotten export fails.
 import path from 'node:path';
 
 import ts from 'typescript';

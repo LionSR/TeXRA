@@ -30,7 +30,7 @@ import type { StepRoot } from '@utils/files/externalRoots';
  * either is asked for, so no tool body opens its own approval prompt or
  * re-checks its own roots.
  */
-export interface ToolGuard<T, R = never> {
+export interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -42,12 +42,8 @@ export interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the
@@ -137,7 +133,7 @@ export interface ITool<E = Error, R = never> {
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
    * A description rendered from the other tools the run declares and the
    * modules its scripts may import, in place of `definition.description`:

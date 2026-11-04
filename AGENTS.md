@@ -28,17 +28,15 @@ npm run typecheck         # builds do NOT type check, see below
 npm run gate              # the static CI jobs: invariants, typecheck + format, lint
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
-npm run test:pure         # before a push (~30s): the host-free tier and the architecture ratchets
+npm run test:pure         # before a push (~30s): the host-free tier
 npm test                  # before opening a PR: the full suite, minutes long
 npm run format
 npm run lint
-npm run check:dead-code-ratchet
 npm run hooks:install     # optional pre-commit hooks (needs `pip install pre-commit`)
 ```
 
 **Builds don't type check.** esbuild and Vite only strip types. Run
-`npm run typecheck` (or a `:safe` variant: `compile:safe`, `package:safe`,
-`build:safe`) before committing; this is the most common way a change lands
+`npm run typecheck` (or `compile:safe`) before committing; this is the most common way a change lands
 broken. `typecheck` composes `typecheck:{workspace,test-kernel,harness,llm,cli,trace-viewer,desktop}`;
 run the affected ones while developing. `typecheck:harness` is the full harness
 build and regenerates `packages/harness/dist/`. `build:initial` validates a
@@ -105,8 +103,9 @@ A pnpm workspace in three layers (design:
 - `packages/llm`: model access.
 - `packages/extension`, `packages/desktop`, `packages/cli`,
   `packages/trace-viewer`: hosts and apps over them.
-- Repo-root `src/` holds only the test suite (`src/test-kernel/`);
-  `src/README.md` maps the tree.
+- A suite that tests one package lives in that package's `test/`; repo-root
+  `src/` holds the suites that compose several packages and the shared
+  support (`src/test-kernel/`); `src/README.md` maps the tree.
 
 Use the path aliases in `tsconfig.json` instead of relative chains. Harness
 aliases (`@agent/*`, `@platform/*`, `@common/*`, `@utils/*`, …) point into
@@ -129,25 +128,18 @@ llm import no host layer. ESLint also fails:
   no disable comment honored;
 - any `@adapter-until` marker: there are no temporary adapters.
 
-The ratchets in `config/ratchets/` freeze the remaining edges. **Never widen a
-baseline**; a decrease is always welcome. The core-quality counts have no
-baseline file: `npm run check:core-quality` measures them against the merge
-base (`packages/harness/AGENTS.md` "Core quality"). `harness-deep-import-baseline` admits
-no new harness-internal specifier (`@agent/*`, `@shared/*`, `@platform/*`, …)
-from the app or a host, type-only included. `row-readers-baseline.json` lists,
-per session row type, the files that read it outside its reducers;
-`factOwnerRatchet.vitest.ts` fails a new reader and a second writer of a fact
-in its `OWNERS` table (shrink the list with
-`npx vitest run src/test-kernel/architecture/factOwnerRatchet.vitest.ts -u`).
-`refuted-candidates.json` records refactors investigated and refused; landing
-one on new evidence rewrites its entry in the same PR. Other invariants are
-hardcoded tests under `src/test-kernel/architecture/`, e.g.
-`sharedSchemasDeepImportRatchet.vitest.ts` (no `@shared/schemas/<leaf>`
-import) and `unknownErrorChannelRatchet.vitest.ts` (below). The open work is
-the public surface in
-`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`
-and shrinking the frozen lists, not another lint rule. Publishing the harness
-and llm packages is the owner's manual step (`releasing` skill).
+The core-quality counts are held against the merge base by
+`npm run check:core-quality` (`packages/harness/AGENTS.md` "Core quality").
+ESLint holds the VS Code-free zones, the host-layer and harness-no-app import
+rules, and the core-quality syntax bans. The other boundaries (no deep import
+of harness internals from the app or a host, no `@shared/schemas/<leaf>`
+import, one owner per fact) are conventions with no mechanical check; there
+are no baseline files and no architecture tests. `.agents/docs/refuted-candidates.json` records refactors
+investigated and refused; landing one on new evidence rewrites its entry in
+the same PR. The open work is the public surface in
+`.agents/docs/proposed/architecture/2026-10-21-harness-general-package-design.md`,
+not another lint rule. Publishing the harness and llm packages is the owner's
+manual step (`releasing` skill).
 
 Where things go:
 
@@ -186,9 +178,8 @@ Core logic must not import `vscode`. Check this first on any diff.
 `packages/llm/src/`, `packages/desktop/src/`, and the settings webview
 frontend `packages/extension/src/settingsView/frontend/` (the progress view's
 frontend is app code, `packages/texra/src/ui/progress/`). Enforced by
-`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`, mirrored in
-`src/test-kernel/architecture/dependencyDirection.vitest.ts`; keep both in sync
-with this list.
+`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`; keep it in sync with this
+list.
 
 **VS Code-allowed:** `packages/extension/src/extension.ts` (builds its runtime
 over `processLayer()` once), `packages/extension/src/commands/`,
@@ -260,7 +251,7 @@ in `node_modules/effect` instead of guessing a pattern.
   `withPerKeyLane` in `packages/harness/src/utils/core/perKeyQueue.ts` for one
   at a time per key), never a hand-written promise chain. Release resources on
   success, failure and interruption.
-- **No `unknown` error channel** (`unknownErrorChannelRatchet.vitest.ts`). Type
+- **No `unknown` error channel.** Type
   it with the tagged error the path raises, or `Error` for a port whose hosts
   fail differently. Turn a foreign rejection into an `Error` at its boundary
   with `ensureError` (`@utils/errors/errorMessage`), never a `(e) => e`
@@ -349,7 +340,7 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
   `wide-records`, the API reports). Different layer, different abstraction:
   no method or module that only forwards (`pass-through`). Those three rules
   hold everywhere, the core's rows and the `-outside-core` rows apart. One
-  owner per fact and decision (`factOwnerRatchet`); a general core that takes
+  owner per fact and decision; a general core that takes
   the app's vocabulary as data; complexity pulled down into the module that
   owns it; errors defined out of existence by the shape of an operation, never
   by hiding one; two designs compared before choosing. When a hotspot is too
@@ -371,8 +362,7 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
   banned (narrowing an export surface to one entry point is not one). New
   ports, facades and template methods delete what they replace in the same PR.
 - **Exports are contracts.** Default to file-local; a new export needs a
-  consumer in the same PR (`npm run check:dead-code-ratchet` against
-  `config/ratchets/knip-baseline.json`).
+  consumer in the same PR.
 - **No option for a special case.** An option is a decision the code refused
   to make. When the right value follows from a fact the code holds (a model's
   capabilities, a credential kind, what a launch names), compute it there and

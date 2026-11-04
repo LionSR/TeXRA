@@ -86,9 +86,7 @@ export function streamingTextRow(
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
- * request's own payload, never from a projected row. So is `userRetryable`:
- * the runtime's retry routing flag, which the row's own retry affordance
- * already expresses to a reader.
+ * request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',

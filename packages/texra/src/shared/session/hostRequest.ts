@@ -119,7 +119,7 @@ export const HostRequestSchema = Schema.Union([
    *  `Surface.launch` field the paths return to. */
   Schema.Struct({
     kind: Schema.Literal('pickFiles'),
-    fileType: CurrentFileTypeSchema,
+    fileType: DocumentFileTypeSchema,
   }),
   /** The current editor file into a launcher field. */
   Schema.Struct({
@@ -214,10 +214,7 @@ export const HostRequestSchema = Schema.Union([
     customDirSet: Schema.optional(Schema.NullOr(Schema.Boolean)),
   }),
   Schema.Struct({ kind: Schema.Literal('recheckDependencies') }),
-  Schema.Struct({
-    kind: Schema.Literal('openInstallGuide'),
-    tool: Schema.String,
-  }),
+  Schema.Struct({ kind: Schema.Literal('openInstallGuide') }),
   Schema.Struct({
     kind: Schema.Literal('dismissBanner'),
     banner: Schema.Literals(['gettingStarted', 'dependency']),

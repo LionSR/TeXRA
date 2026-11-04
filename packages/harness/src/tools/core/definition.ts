@@ -26,7 +26,7 @@ export type DefinedTool<T, R = never, Name extends string = string> = Omit<
   call(
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
-  readonly guard?: ToolGuard<T, R>;
+  readonly guard?: ToolGuard<T>;
 };
 
 export type DefineToolOptions<T, R = never> = Required<
@@ -54,7 +54,7 @@ export type DefineToolOptions<T, R = never> = Required<
      * `NoInfer<R>`: the guard is checked against the requirement channel the
      * tool already has, it never sets it.
      */
-    guard?: ToolGuard<T, NoInfer<R>>;
+    guard?: ToolGuard<T>;
     /** The run body. Succeed with the text the model reads back, or with a
      *  whole `ToolResult` for a summary, attachments or facts; fail with
      *  an `Error` and the model reads its message as the tool's error. */

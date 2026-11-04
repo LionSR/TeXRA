@@ -21,27 +21,27 @@ import { repeat } from 'lit/directives/repeat.js';
 import './TexraDiffView';
 import { extractErrorMessage } from '@texra-ai/harness/schemas';
 import { hostBridge, postMessage } from '@texra/shared/hostBridge';
-import { type Shell } from '@texra/shared/session/shell';
 import {
   PersistedState,
   type KeyValueStore,
 } from '@texra/shared/state/PersistedState';
 
-import {
-  formatDesktopAccelerator,
-  type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
 import { DESKTOP_THEME_KIND } from '@texra/shared/ipc';
 import { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 import { ProgressApp } from '@ui/progress/ProgressApp';
 
-import { applyHostBodyTheme } from '@ui/wa/hostTheme';
 import {
   renderIconActionButton,
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
+import { applyHostBodyTheme } from './hostTheme';
+import {
+  formatDesktopAccelerator,
+  type DesktopPlatform,
+} from '../shared/accelerators';
+import { type Shell } from './shell';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {

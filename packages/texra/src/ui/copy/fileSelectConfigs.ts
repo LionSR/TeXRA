@@ -19,8 +19,14 @@ const FileSelectConfigSchema = Schema.Struct({
   addOpenedLabel: Schema.String,
   emptyListLabel: Schema.String,
   selectListLabel: Schema.String,
-  toolConfig: Schema.optional(
-    Schema.NullOr(Schema.Literals(['tool', 'autoExtract'])),
+  /** The header menu of the task switches whose `menu` names this group
+   *  (`DOCUMENT_TASK_OPTIONS`): its trigger's id, icon and tooltip. */
+  menu: Schema.optional(
+    Schema.Struct({
+      id: Schema.String,
+      icon: Schema.Literals(ICON_NAMES),
+      label: Schema.String,
+    }),
   ),
 });
 export type FileSelectConfig = typeof FileSelectConfigSchema.Type;
@@ -33,7 +39,11 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as input',
     emptyListLabel: 'Clear all input files',
     selectListLabel: 'Add input files',
-    toolConfig: 'tool',
+    menu: {
+      id: 'toggleToolConfig',
+      icon: 'screwdriver-wrench',
+      label: 'Tool configuration options',
+    },
   },
   {
     type: 'context',
@@ -50,7 +60,11 @@ export const FILE_SELECT_CONFIGS: ReadonlyArray<FileSelectConfig> = [
     addOpenedLabel: 'Add opened files as media',
     emptyListLabel: 'Clear all media files',
     selectListLabel: 'Add media files',
-    toolConfig: 'autoExtract',
+    menu: {
+      id: 'toggleAutoExtract',
+      icon: 'wand-magic-sparkles',
+      label: 'Auto-extract options',
+    },
   },
 ];
 
