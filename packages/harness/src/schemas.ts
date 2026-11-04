@@ -122,6 +122,7 @@ export type {
   OpenFilePayload,
   RequestShowErrorPayload,
   RequestShowInstructionPayload,
+  ResponseCut,
   ResultMeta,
   ResumeRefusal,
   RunAction,

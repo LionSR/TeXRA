@@ -124,7 +124,7 @@ const afterTextResponse = Effect.fn('toolUse.afterTextResponse')(function* (
     return { state: yield* cell.append([row]), done: false };
   }
   if (text && !at.answerFinalized)
-    at = yield* cell.append(finalizedRows(runId, text));
+    at = yield* cell.append(finalizedRows(runId, text, at.lastTurn));
   if (
     finalToolName !== null &&
     at.finalToolTurn !== at.turn &&

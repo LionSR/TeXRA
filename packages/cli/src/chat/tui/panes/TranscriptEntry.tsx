@@ -10,6 +10,7 @@ import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { fillRows } from '@cli/runtime/terminalText';
 
 // Local imports - CLI TUI rendering
+import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
 import { Markdown } from '../render/Markdown';
 import { ToolUseRow } from './ToolUseRow';
 import {
@@ -118,6 +119,7 @@ export const TranscriptEntry = memo(function TranscriptEntry({
       }
       return (
         <Box
+          flexDirection="column"
           marginBottom={layout.marginBottomRows}
           marginTop={layout.marginTopRows}
         >
@@ -125,6 +127,9 @@ export const TranscriptEntry = memo(function TranscriptEntry({
             content={transcriptRowHeadline(entry)}
             width={layout.columns}
           />
+          {entry.kind === 'assistant' && entry.cut !== undefined ? (
+            <Text dimColor>{RESPONSE_CUT_NOTE[entry.cut]}</Text>
+          ) : null}
         </Box>
       );
     default:

@@ -1387,6 +1387,13 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **An answer the model could not finish says so.** When a reply stopped at
+  the model's output limit or at the provider's content filter, it was shown
+  as a complete answer. The assistant row in the progress view and the
+  terminal chat now ends with a note naming the limit. SDK: the
+  `response.finalized` row carries `cut` (`'length' | 'content-filter'`),
+  and `StreamingTextRow.cut` is its projection; `WebSearchRow.label` is
+  gone, as `rowHeadline` already words the query.
 - **SDK: a stored turn of another codec version replays as plain content.**
   `ModelOrigin.codecVersion` (`@texra-ai/llm`) is any positive integer, not
   only `1`. A run holding a turn whose provider state another build encoded
