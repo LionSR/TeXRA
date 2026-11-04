@@ -2,8 +2,10 @@
  * `self(prompt, opts)`: a script's function that runs this agent again, as
  * a child of the call. Forked (the default), the child continues the
  * conversation as it stood when the script started, with `prompt` added to
- * the message that started it (`forkSeed`); fresh, it starts from `prompt` alone with the
- * conversation's files and memories. Either way it is the same agent with
+ * the message that started it (`forkSeed`); fresh, it starts with no earlier
+ * conversation, from `prompt` and the conversation's files and memories.
+ * Either way `selfTask` frames `prompt` as the one part of the script's work
+ * the child does. It is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
  * The default goal strategy is this function in a loop (`builtIn:goal`).
  */
@@ -44,7 +46,7 @@ const SelfInputSchema = Schema.Struct({
   fork: nullishWithDefault(
     Schema.Boolean,
     true,
-    'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts from `prompt` alone.',
+    'Continue this conversation as it stood when the script started, with `prompt` added to the message that started it; `false` starts with no earlier conversation. Either way the child is told `prompt` is the one part of the work it does.',
   ),
   schema: Schema.optional(
     Schema.NullOr(Schema.Record(Schema.String, Schema.Unknown)),
@@ -146,8 +148,8 @@ const runSelf = Effect.fn('self.call')(function* (
   if (limited !== null) return limited;
   const runId = agentChildRunId(call);
   const { rootUserInstruction: _root, script: _script, ...launch } = config;
-  // Forked, the child is born on the conversation's history; fresh, on the
-  // prompt alone. Either way it is launched, never resumed, so it starts
+  // Forked, the child is born on the conversation's history; fresh, on its
+  // framed prompt alone. Either way it is launched, never resumed, so it starts
   // with the grants its parent holds now.
   const launched = yield* Effect.result(
     Effect.gen(function* () {
@@ -212,7 +214,7 @@ export const SelfTool = defineTool({
   slow: true,
   description: `Run yourself again on a prompt, as a child of this call, and wait for its result: \`{ response, files, structured?, runId, outcome, cost, spent }\`, as \`agent()\` resolves.
 
-Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts from \`prompt\` alone. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
+Forked (the default), the child continues this conversation as it stood when the script started (the message of the turn that started it, not that turn's work so far), with \`prompt\` added to that message; with \`fork: false\` it starts with no earlier conversation. Either way the child is told \`prompt\` is the one part of the script's work it does, and not to take on the rest. It is you with your tools and model: nothing is proposed or approved again. It rejects with an Error named \`AgentFailed\` or \`Skipped\` (the user stopped it). Call it from a script; called directly, it runs nothing.`,
   schema: SelfInputSchema,
   execute: Effect.fn('SelfTool.execute')(function* (input: SelfInput) {
     const call = yield* requireToolRun('self');
