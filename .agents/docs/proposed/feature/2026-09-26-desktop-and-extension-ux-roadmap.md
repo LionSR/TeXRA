@@ -79,6 +79,8 @@ Each item is independent and small enough for one PR.
      the exit code).
    - PDF error state and "Open externally" (`pdfPane.ts`).
    - Styled dialogs instead of `window.confirm`. Done for closing an
-     unsaved tab (`discardDialog.ts`). `reportRuntimeFailure` in `main.ts`
+     unsaved tab (`discardDialog.ts`). Close group asks about each unsaved
+     tab in turn: the dialog queues requests, so Cancel keeps that one tab
+     and the next is asked. `reportRuntimeFailure` in `main.ts`
      keeps the native confirm on purpose: it runs when the renderer itself
      may be broken.

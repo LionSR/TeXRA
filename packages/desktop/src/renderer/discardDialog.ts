@@ -8,6 +8,8 @@ import { createOverlayDialog, renderElement } from './overlayDialog';
  * The `wa-dialog` counts as a native-view overlay (`trackNativeViewOverlays`),
  * so the browser view hides while it is open. `discard` runs only when
  * Discard is chosen; closing the dialog any other way keeps the tab.
+ * Requests wait their turn: closing a group with several unsaved tabs
+ * asks about each one in order.
  */
 export function createDiscardChangesDialog(appRoot: HTMLElement) {
   const message = document.createElement('p');
@@ -25,7 +27,21 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
     title: 'Discard unsaved changes?',
     content,
   });
-  let onDiscard: (() => void) | undefined;
+  // The head is the request on screen. `showing` stays true until the
+  // dialog has finished closing; `answered` stops a second answer (a
+  // double click, or the wa-hide a Discard click causes) from taking the
+  // next request.
+  const queue: { title: string; discard: () => void }[] = [];
+  let showing = false;
+  let answered = false;
+  const showHead = () => {
+    const head = queue[0];
+    if (!head) return;
+    showing = true;
+    answered = false;
+    message.textContent = `${head.title} has unsaved changes. Close it and discard them?`;
+    dialog.open = true;
+  };
 
   actions.append(
     renderElement(
@@ -44,22 +60,29 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
         kind: 'danger',
         className: 'desktop-discard-confirm',
         onClick: () => {
-          const discard = onDiscard;
-          onDiscard = undefined;
+          if (answered) return;
+          answered = true;
+          const head = queue.shift();
           dialog.open = false;
-          discard?.();
+          head?.discard();
         },
       }),
     ),
   );
+  // Cancel, the close button and Escape all close through wa-hide.
   dialog.addEventListener('wa-hide', (event) => {
-    if (event.target === dialog) onDiscard = undefined;
+    if (event.target !== dialog || answered) return;
+    answered = true;
+    queue.shift();
+  });
+  dialog.addEventListener('wa-after-hide', (event) => {
+    if (event.target !== dialog) return;
+    showing = false;
+    showHead();
   });
 
-  // A newer request replaces a pending one.
   return (title: string, discard: () => void): void => {
-    message.textContent = `${title} has unsaved changes. Close it and discard them?`;
-    onDiscard = discard;
-    dialog.open = true;
+    queue.push({ title, discard });
+    if (!showing) showHead();
   };
 }
