@@ -7,6 +7,7 @@
 import { Effect, FileSystem, Schema } from 'effect';
 
 import { defineTool } from '@texra-ai/harness';
+import { absentReason } from '@texra-ai/harness/node';
 import { executed, renderPrompt } from '@texra-ai/harness/plugins';
 import { fileLocationDisplayPath } from '@texra-ai/harness/schemas';
 import { failureContextFromLogs } from '@texra/agent/output/compileFailureRoundContext';
@@ -109,12 +110,9 @@ export const DocumentReviewTool = defineTool({
         const before =
           base === null
             ? ''
-            : yield* fs.readFileString(base.absolutePath).pipe(
-                Effect.catchIf(
-                  (error) => error.reason._tag === 'NotFound',
-                  () => Effect.succeed(''),
-                ),
-              );
+            : yield* fs
+                .readFileString(base.absolutePath)
+                .pipe(Effect.catchIf(absentReason, () => Effect.succeed('')));
         const after = yield* fs.readFileString(output.location.absolutePath);
         return {
           path: fileLocationDisplayPath(output.location),

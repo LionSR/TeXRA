@@ -7,10 +7,10 @@
 // tree, extracted with `git archive`, so a file whose count rose fails and
 // names its sites, a file new on the head starts at zero, a renamed file
 // keeps its count once the rename is staged, and a count that fell needs no
-// edit: nothing is committed and nothing regenerated. A rule listed in
-// ZERO_RULES (ratchet-zero-rules.mjs) fails any site. file-size is a cap: a
-// file may not grow past its base length rounded up to a multiple of
-// FILE_SIZE_STEP, which never rises, so small edits inside the step are free.
+// edit: nothing is committed and nothing regenerated. A rule in ZERO_RULES
+// fails any site. file-size is a cap: a file may not grow past its base
+// length rounded up to a multiple of FILE_SIZE_STEP, which never rises, so
+// small edits inside the step are free.
 // shallow-modules budgets interface elements while a module is shallow, so
 // reducing its public surface lowers the row and deepening it removes it.
 //
@@ -43,7 +43,6 @@ import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
 import { CORE_FILE_LINES, RULES, measure } from './core-quality-measure.mjs';
 import { ratchetBase, renamesSince, withBaseTree } from './ratchet-base.mjs';
-import { ZERO_RULES } from './ratchet-zero-rules.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -53,8 +52,20 @@ const SITES_SHOWN = 8;
 /** The line step a file-size cap is rounded up in. */
 const FILE_SIZE_STEP = 25;
 
-const heldAtZero = (rule) =>
-  Object.hasOwn(ZERO_RULES, `config/ratchets/core-quality/${rule}.json`);
+/** Rules no file may break any more: any site fails, whatever the base holds. */
+const ZERO_RULES = new Set([
+  'consistent-type-assertions',
+  'durable-invariants',
+  'effect-run',
+  'import-cycles',
+  'new-promise',
+  'no-explicit-any',
+  'no-non-null-assertion',
+  'promise-then',
+  'try-catch-effect',
+  'type-assertions',
+  'type-assertions-outside-core',
+]);
 
 function describeSites(entry) {
   const shown = entry.sites
@@ -286,7 +297,7 @@ const main = async () => {
     problems.push(
       ...checkRule(
         rule,
-        heldAtZero(rule) ? null : before.get(rule),
+        ZERO_RULES.has(rule) ? null : before.get(rule),
         actual,
         baseKey,
       ),

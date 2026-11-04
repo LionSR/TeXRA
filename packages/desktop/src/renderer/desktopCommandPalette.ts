@@ -7,12 +7,12 @@ import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import { html, nothing, render } from 'lit';
 import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
+import type { IconName } from '@ui/wa/iconNames';
+import { waIcon } from '@ui/wa/webAwesomeIcons';
 import {
   formatDesktopAccelerator,
   type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
-import type { IconName } from '@ui/wa/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
+} from '../shared/accelerators';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,

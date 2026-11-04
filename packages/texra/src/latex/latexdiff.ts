@@ -7,7 +7,11 @@ import {
   withLogChannel,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import { executeCommand, readNormalizedFile } from '@texra-ai/harness/node';
+import {
+  absentReason,
+  executeCommand,
+  readNormalizedFile,
+} from '@texra-ai/harness/node';
 import { formatError, type FileLocation } from '@texra-ai/harness/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
@@ -123,9 +127,8 @@ export class LaTeXdiffService {
       ],
       { concurrency: 2 },
     ).pipe(
-      Effect.catchIf(
-        (error) => error.reason._tag === 'NotFound',
-        () => Effect.succeed<[string, string] | null>(null),
+      Effect.catchIf(absentReason, () =>
+        Effect.succeed<[string, string] | null>(null),
       ),
     );
   }
