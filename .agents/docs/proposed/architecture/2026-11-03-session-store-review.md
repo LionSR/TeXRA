@@ -4,7 +4,7 @@ Date: 2026-11-03
 Status: proposed — a read-only review of the storage layer against the 1.0
 design (`.agents/docs/implemented/architecture/2026-09-28-storage-v1-design.md`),
 with the post-1.0 compatibility policy stated as rules and the pre-freeze
-changes those rules need. Baseline: `main` at `9062f1b` (first read at `b411a6d`; the 2026-11-04 rulings reconciled in §5).
+changes those rules need. Baseline: `main` at `bc690f4` (first read at `b411a6d`, re-checked at `9062f1b`; the 2026-11-04 rulings reconciled in §5).
 
 ## Summary
 
@@ -181,7 +181,9 @@ opened on it; one value gate; `databaseLayer({ file, create })`; one busy
 policy). In the same day `main` bumped six row kinds (`run.end` 4 to 6,
 `run.position` 2 to 3, `log` 4 to 5, `response.finalized` 1 to 2,
 `model.message` 9 to 11, `context.edit` 6 to 7) and regenerated the golden
-store four times. After the freeze that day's work is six upcasters. What
+store four times; by the evening of 2026-11-04 four more had moved
+(`run.end` 7, `request.opened` 8, `log` 6, `model.message` 12). After the
+freeze those two days are ten upcasters. What
 changes in this note:
 
 | Item     | Before                                       | After the rulings                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
