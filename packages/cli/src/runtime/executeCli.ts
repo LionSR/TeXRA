@@ -472,8 +472,7 @@ export const executeCliConfig: (
     ended = true;
     // A run the shutdown stopped after admission stores its cancelled end,
     // which is its result (exit 130, from its outcome); an interrupts-only
-    // exit is a launch the shutdown interrupted, and a user abort below is a
-    // stop too.
+    // exit is a launch the shutdown interrupted.
     let interrupted = false;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
