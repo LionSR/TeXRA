@@ -120,6 +120,82 @@ changes, and decided O5 differently:
 - The 1.0 storage freeze waits for the slices that change stored rows (2, 3,
   4 and D).
 
+### Slice 3 design (2026-11-04, after a read-only survey)
+
+What the code does today, against O1's description:
+
+- Nobody holds a store lock. Every process opens `texra.db` in WAL mode with
+  a busy retry (`databaseLayer`, `packages/harness/src/controllers/session/Database.ts`);
+  who may run a run is the per-aggregate claim `event_sequence.owner_id`,
+  checked on every append. `storeOpenElsewhere` is the probe of
+  `texra doctor --prune-storage` alone (`projectDatabase.ts`).
+- The desktop and the extension already attach: with a service, a window
+  holds `serviceSession` and `serviceProjectState` and opens no store. The
+  CLI chat opens the project store even when attached (`runChatTui.tsx`,
+  `initPlatform.ts`), and headless `texra run`, `team run` and the document
+  resume never attach (`executeCli.ts`).
+- The service (`texra serve`) is one per storage root, found through its
+  record in the global store (a compare-and-set), one session per project
+  opened on the first lease and closed after 600 s idle. An upgrade drains:
+  the old and the new service both hold a project while the old one's tasks
+  end. Windows has no service (a named pipe takes the default ACL); every
+  host falls back to running in process.
+- The no-workspace store is shared by the desktop's always-local fallback
+  session and every folderless VS Code window.
+
+Six facts about SQLite and the stores bound the mechanism: `locking_mode =
+EXCLUSIVE` in WAL mode makes the holder the only process, readers included,
+so a second opener cannot read; the global store carries the service record's
+compare-and-set and must stay multi-process, so the lock is the project
+store's alone; an idle close releases the lock; the lock is per connection,
+so it cannot sit on a second connection beside the writer; the prober and
+the claims exist only to arbitrate between openers; and a store's schema
+change is a version bump, not an upcaster.
+
+The mechanism, then:
+
+1. **One opener per project store**: the process that drives its runs holds
+   `locking_mode = EXCLUSIVE` on its connection for the connection's life.
+   Where a service runs, that is the service; it opens a project on the first
+   lease and closes it idle, and clients open nothing. A second opener gets
+   `BUSY` and attaches to the service. There is no read-only opener: a
+   process that can neither hold nor attach says "another TeXRA process holds
+   this project" and offers nothing else. Prune's probe keeps working (`BUSY`
+   is `open`).
+2. **Every client goes through the service.** The desktop and the extension
+   do. The CLI chat stops opening the store when attached and reads project
+   state through the service as the desktop does; headless `texra run`,
+   `team run` and a document resume beside a service run through it, as
+   `texra tasks start` does; with no service, the first opener holds, as the
+   in-process path does today.
+3. **Windows gets the service** over a named pipe with an explicit DACL (the
+   user's SID alone): the one piece of new host code, and a prerequisite, or
+   a Windows window would be shut out of a project another window holds.
+4. **The no-workspace store** goes through the service like any project.
+5. **An upgrade drain** opens projects lazily in the new service; one the
+   draining service still holds answers `BUSY`, and the new service retries
+   until the old one's tasks end, within the drain's own deadline.
+6. **Deleted with the claims**: `event_sequence.owner_id` and its trigger and
+   `NEXT_SEQ`'s owner check; `acquireClaims`, `releaseClaims`, `claimOwner`,
+   `claimAll`, `reclaimable`, `provingOwners`, `DatabaseNotOwner`,
+   `DatabaseClaimRefused`, `heldElsewhereBy`, `claimStanding`;
+   `proveOwnerLiveness`, `proveRecorded`, `deadOwners` and the prober layer;
+   `ProcessIdentity.owners`, `LocalRuntimeState.self` and `dead`,
+   `RunView.ownerId` and `ownedHere`, the `ownedElsewhere` arms of the three
+   unions, the held parks (`heldFor`), `holdProcessRoot`. `RunView.readOnly`
+   keeps its one remaining meaning, rows of an earlier build, and is named
+   for it (`unreadable`), with its delete action. The fourteen test files
+   that pin claims (`sessionEvents`, `sessionViewUpdate`, `resumeRun`,
+   `RunAgentOwnership`, `ResumeCommand`, `ApprovalQueue`, `ChildRunLoop`,
+   `SessionIsolation`, `sessionPrograms`, `DelegationHeadless`, the crash
+   conformance and store-fault supports, `goldenStore`, the fan-out and
+   session-view fixtures) lose those cases; `claimHolder` and `untilStored`
+   read through the session's connection instead of the raw file.
+
+Order: the Windows pipe first, then the CLI's attach for chat state and
+headless runs, then the lock with the deletions in one PR. The lock alone,
+before the two, would strand a Windows window and the CLI.
+
 ## Findings by area
 
 Each row: the fact, the representation kept, what goes, how many non-test
