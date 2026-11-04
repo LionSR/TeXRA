@@ -80,7 +80,6 @@ function unknownErrorChannels(file: string): string[] {
 const IDENTITY_CATCH_JOINS: Readonly<Record<string, number>> = {
   'packages/llm/src/api/openaiResponsesWebSocket.ts': 1,
   'packages/llm/src/api/transport.ts': 1,
-  'packages/texra/src/latex/arxivProcessor.ts': 1,
 };
 
 /** The keys a foreign-rejection mapper is handed under: `Effect.try` /

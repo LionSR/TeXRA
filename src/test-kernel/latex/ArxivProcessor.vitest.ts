@@ -11,7 +11,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { setLogSink } from '@texra-ai/harness/node';
-import { ArxivProcessor } from '@latex/arxivProcessor';
+import { downloadArxivSource } from '@latex/arxivProcessor';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -50,7 +50,7 @@ describe('arXiv source download filenames', () => {
           await fs.writeFile(path.join(workspaceRoot, 'main.tex'), 'mine');
           return fs.readFile(tarPath);
         });
-        const download = ArxivProcessor.downloadSource('2404.12175', {
+        const download = downloadArxivSource('2404.12175', {
           workspaceRoot,
           formatter: null,
           autoIndent: false,

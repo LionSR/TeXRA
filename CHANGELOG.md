@@ -6,6 +6,29 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A run's failure is one value from the model call to the run's end.**
+  The `failed` row, the retry request, the `run.end` row and the
+  `AgentError` a root's launch raises carry the failure as the run recorded
+  it; nothing re-classifies it from an error's message or a cache on the
+  error object. A `run.end` error is the recorded model failure
+  (`kind: 'model'`, with its classification, status, provider and the text
+  the attempt streamed) or a local `disk-full`, `result-lost` or
+  `unexpected` one; `context-window` and `missing-api-key` are its
+  classification, no longer kinds of their own. Whether a person is offered
+  a retry is the `failed` row's `next` alone (llm's verdict: the same
+  request can succeed, or a quota ran out), so `userRetryable` is gone from
+  every row, and the credential move a retry offers is decided over llm's
+  verdict on the plan that ran out, before it is recorded. A subscription
+  token is renewed once on any authentication failure (a 403 as a 401
+  was). An unclassified model failure's `run.end` message is the failure's
+  own words, without the "Error executing agent" prefix, and a child's
+  error delivery no longer carries a `retryable` attribute. SDK:
+  `AgentError.failure` carries the recorded failure, `AgentErrorKind` is
+  `disk-full | result-lost | unexpected | model`, `RetryErrorInfo`,
+  `ProviderError`, `ErrorLogData` and a retry request's `errorDetails` lose
+  `userRetryable`, and the `ExhaustionReason` type is gone (a plan that ran
+  out is the classification's `kind`). Rows: `model.message` v12,
+  `request.opened` v8, `run.end` v7, `log` v6; service protocol 51.
 - **A run's model route is decided over one set of facts.** The binding a
   `run.config` records now carries the subscription routes it was decided
   over, and a model switch is admitted over the routes the run's history

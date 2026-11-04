@@ -13,7 +13,9 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { tokenCancelled } from '@frontend/vscode/vscodeEventWait';
 import {
-  ArxivProcessor,
+  downloadArxivSource,
+  getArxivPaperDirName,
+  validateArxivId,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
@@ -40,14 +42,14 @@ export const downloadArXivSource: (
     const arxivId = yield* inputBox({
       placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
       prompt: 'Enter arXiv ID or URL',
-      validateInput: ArxivProcessor.validateId.bind(ArxivProcessor),
+      validateInput: validateArxivId,
     });
 
     if (!arxivId) {
       return;
     }
 
-    const paperId = ArxivProcessor.getPaperDirName(arxivId);
+    const paperId = getArxivPaperDirName(arxivId);
 
     const destinationPick = yield* quickPick<
       vscode.QuickPickItem & { value: ArxivDownloadDestination }
@@ -93,19 +95,16 @@ export const downloadArXivSource: (
       (progress, token) =>
         Effect.raceFirst(
           Effect.gen(function* () {
-            const downloadResult = yield* ArxivProcessor.downloadSource(
-              arxivId,
-              {
-                progressCallback: (message, increment) =>
-                  progress.report({ message, increment }),
-                workspaceRoot: roots.workspace ?? '',
-                formatter: autoIndent
-                  ? yield* resolveLatexFormatter(roots)
-                  : null,
-                autoIndent,
-                destination,
-              },
-            );
+            const downloadResult = yield* downloadArxivSource(arxivId, {
+              progressCallback: (message, increment) =>
+                progress.report({ message, increment }),
+              workspaceRoot: roots.workspace ?? '',
+              formatter: autoIndent
+                ? yield* resolveLatexFormatter(roots)
+                : null,
+              autoIndent,
+              destination,
+            });
             return Option.some(downloadResult.path);
           }),
           // Cancel interrupts the download, whose finalizers remove the

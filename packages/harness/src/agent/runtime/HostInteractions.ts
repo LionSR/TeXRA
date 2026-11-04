@@ -5,7 +5,6 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
@@ -359,12 +358,12 @@ export function launchNoticeOf(error: unknown): LaunchNotice | undefined {
 /**
  * Present a failed run from its raw error, replayed to a surface that
  * attaches later: a refused launch's notice ({@link launchNoticeOf}), or
- * else the primary failure, classified and worded as `prefix` plus its text
- * (a `Rejected` request's reason). With no prefix, the text is the
- * failure's own and its classification rides beside it, which a host may
- * word in its place; a prefixed text says more than the failure, so it is
- * shown as written. A host that throws on the notice shows that text as an
- * error instead. It presents whatever it is given, so each failure has one
+ * else the primary failure as `prefix` plus its text (a `Rejected`
+ * request's reason). With no prefix, a model failure is shown as its run
+ * would record it, its classification beside, which a host may word in its
+ * place; a prefixed text says more than the failure, so it is shown as
+ * written. A host that throws on the notice shows that text as an error
+ * instead. It presents whatever it is given, so each failure has one
  * presenter: a launch that failed before its run opened is its caller's,
  * and a run's end is the session's ({@link presentTerminalResult}).
  */
@@ -383,11 +382,11 @@ export function presentRunFailure(
       replayWhenAttached: true,
       fallbackMessage: text,
     });
-  return presentAgentFailure(interactions, {
-    kind: classifyAgentError(primary),
-    message: text,
-    ...(prefix === '' && {
-      classification: normalizeProviderError(primary).classification,
-    }),
-  });
+  const classified = prefix === '' ? classifyAgentError(primary) : undefined;
+  return presentAgentFailure(
+    interactions,
+    classified?.kind === 'model'
+      ? classified
+      : { kind: 'unexpected', message: text },
+  );
 }

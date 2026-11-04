@@ -179,7 +179,7 @@ export class TuiSession {
    * it would otherwise claim (resume, follow-up-wake resume) MUST call this as
    * its first statement, before any `await`, so the claim happens before the
    * caller can be suspended and a concurrent entry point can slip in and claim
-   * the same slot. `startRootRun` claims via `markRunPending` directly
+   * the same slot. `launchRootRun` claims via `markRunPending` directly
    * instead — it never suspends before claiming, so it has no check-then-await
    * window for this primitive to close.
    */

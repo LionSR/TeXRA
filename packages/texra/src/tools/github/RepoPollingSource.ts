@@ -48,21 +48,17 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { ghGet, type GitHubServices } from './githubClient';
+import { ghGet } from './githubClient';
 import {
   type BasePollSubscriptionState,
   createBasePollState,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
   type PollEventListener,
   PollingSourceBase,
   type PollingLifetime,
   type PollServices,
 } from './PollingSourceBase';
 import { dedupeComments, type DedupedResource } from './pollingDedup';
-import {
-  MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
-  GITHUB_POLL_INTERVAL_MS,
-} from './prSubscriptionConstants';
+import { MAX_CONCURRENT_REPO_SUBSCRIPTIONS } from './prSubscriptionConstants';
 import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
@@ -167,9 +163,7 @@ export class RepoPollingSource extends PollingSourceBase<
         // MAX_CONCURRENT_REPO_SUBSCRIPTIONS repos ≈ 1,080 req/hr — well below
         // the limit even sharing with a couple of per-PR pollers.
         name: 'RepoPollingSource',
-        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
         maxConcurrent: MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
-        ...DEFAULT_POLLING_BACKOFF_CONFIG,
       },
       lifetime,
     );
@@ -187,15 +181,12 @@ export class RepoPollingSource extends PollingSourceBase<
     return formatRepoSubscriptionError(state.slug, detail);
   }
 
-  protected pollOne(
-    _key: RepoKey,
-    state: SubscriptionState,
-  ): Effect.Effect<void, Error, GitHubServices> {
-    return this.pollRepo(state);
-  }
-
-  private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(
-    function* (this: RepoPollingSource, state: SubscriptionState) {
+  protected readonly pollOne = Effect.fn('RepoPollingSource.pollRepo')(
+    function* (
+      this: RepoPollingSource,
+      _key: RepoKey,
+      state: SubscriptionState,
+    ) {
       const { owner, repo } = state;
       const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}${state.issueComments.sinceCursor ? `&since=${encodeURIComponent(state.issueComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
       const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}${state.reviewComments.sinceCursor ? `&since=${encodeURIComponent(state.reviewComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;

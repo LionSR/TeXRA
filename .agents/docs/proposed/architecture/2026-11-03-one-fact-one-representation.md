@@ -338,8 +338,13 @@ the fold's `binding?.backend ?? state.backend` stays, since a `run.config`
 without a binding names only what it changes. The fallback mode lives in
 `runModelDecision.ts`'s one reasons table (rank and fallback per reason);
 the CLI table, `RunModelCandidate.fallbackMode` and the two caller
-overrides are gone. The error rows (one, two and six) follow in their own
-slice: they change four row shapes together._
+overrides are gone. The error rows (one, two and six) landed the same day:
+`userRetryable` is gone from every row (the offer is the `failed` row's
+`next`, llm's verdict), the credential move is decided over llm's `quota`
+before it is recorded, and a failure is one value from the model call to
+`run.end` and `AgentError.failure`, with no cache on the error
+(`errorMetadata.ts` is gone) and no re-classification; `model.message` v12,
+`request.opened` v8, `run.end` v7, `log` v6._
 
 ### E. The parent edge
 

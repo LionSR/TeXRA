@@ -276,7 +276,7 @@ behaviour, which is the documented one.
   model-visible error with no log. `diagnostics.code` values (`hook_denied`,
   `tool_unavailable`) and `diagnostics.name` have no reader; "skipped" is
   signalled both as a disposition and as `name: 'Skipped'`, and
-  `scriptRun.ts:55` checks both.
+  `scriptRun.ts:53` checks both.
 
 **Proposal.** The loop reads `finishReason`: `length` and overflow are one
 outcome it acts on (a warning row at least, a compaction or a stop by policy),

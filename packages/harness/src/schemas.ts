@@ -93,7 +93,6 @@ export type {
   DispatchFacts,
   DisplaySessionEvent,
   ErrorLogData,
-  ExhaustionReason,
   ExternalFileLocation,
   FileListEntry,
   FileLocation,
