@@ -39,7 +39,6 @@ const AgentConfigBannerDataSchema = Schema.Struct({
  * choose-one fact so no renderer has to decode it from an id.
  */
 const MissingToolSchema = Schema.Struct({
-  id: Schema.String,
   label: Schema.String,
   interchangeable: Schema.Boolean,
   /** What TeXRA can't do without it, completing "TeXRA can't …". */

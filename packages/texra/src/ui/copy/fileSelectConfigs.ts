@@ -8,7 +8,7 @@ import { Schema } from 'effect';
 
 import {
   DocumentFileTypeSchema,
-  type MultipleDocumentFileType,
+  type DocumentFileType,
 } from '@texra/shared/launcher/fileTypes';
 import { ICON_NAMES } from '@ui/wa/iconNames';
 
@@ -74,4 +74,4 @@ export const LAUNCH_FILE_LISTS = {
   context: 'contextFiles',
   media: 'mediaFiles',
   output: 'outputFiles',
-} as const satisfies Record<MultipleDocumentFileType, string>;
+} as const satisfies Record<DocumentFileType | 'output', string>;

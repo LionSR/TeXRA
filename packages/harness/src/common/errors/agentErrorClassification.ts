@@ -6,12 +6,7 @@ import {
   type RunEnd,
 } from '@shared/schemas';
 
-import { isDiskFullError } from './errorPredicates';
-import {
-  DISK_FULL_MESSAGE,
-  modelFailureIn,
-  unexpectedMessage,
-} from './sdkError/providerErrorFormat';
+import { failureIn } from './sdkError/providerErrorFormat';
 
 export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
 
@@ -24,20 +19,12 @@ export function primaryAgentError(err: unknown): unknown {
   return err;
 }
 
-/**
- * A run's failure as its `run.end` row records it. Every kind is decided by
- * a typed signal: an errno, or the model failure in the cause chain (as the
- * run recorded it, else llm's verdict or a missing route worded fresh);
- * anything else is unexpected, in its own words.
- */
+/** A run's failure as its `run.end` row records it ({@link failureIn}). */
 export function classifyAgentError(err: unknown): NonNullable<RunEnd['error']> {
-  const primary = primaryAgentError(err);
-  if (isDiskFullError(primary))
-    return { kind: 'disk-full', message: DISK_FULL_MESSAGE };
-  const failure = modelFailureIn(primary);
-  return failure === undefined
-    ? { kind: 'unexpected', message: unexpectedMessage(primary) }
-    : { kind: 'model', ...toRetryErrorInfo(failure) };
+  const failure = failureIn(primaryAgentError(err));
+  return failure.kind === 'model'
+    ? { kind: 'model', ...toRetryErrorInfo(failure.failure) }
+    : failure;
 }
 
 /** How a host presents an agent error: an instruction, or a plain error. */
