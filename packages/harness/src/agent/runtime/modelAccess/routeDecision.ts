@@ -172,7 +172,7 @@ export const admitSwitch = Effect.fn('admitSwitch')(
  * re-derives it.
  *
  * - A used-up plan falls back to the route the model takes with every
- *   preference off, unless that is not a plain key route.
+ *   preference off, when that is a plain key route.
  * - A key whose upstream account ran out of credit needs a changed key.
  *
  * A coding-plan fallback is automatic when its key is already stored and the

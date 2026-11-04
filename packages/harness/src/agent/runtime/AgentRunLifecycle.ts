@@ -17,7 +17,6 @@ import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import {
-  type RetryErrorInfo,
   type RunOutcome,
   emptyRunEndOutput,
   RUN_OUTCOME,
@@ -183,16 +182,6 @@ const endWith = <R>(
   });
 };
 
-/** The failure a child's report and a root's `AgentError` carry: a model
- *  failure as recorded, else the words alone. */
-const reportedFailure = (
-  error: NonNullable<ResultEvent['error']>,
-): RetryErrorInfo => {
-  if (error.kind !== 'model') return { message: error.message };
-  const { kind: _kind, ...failure } = error;
-  return failure;
-};
-
 /**
  * The single owner of provider/runtime failure exits: a flow's reported
  * failure (an `AgentError` carrying it as recorded) or an exception that
@@ -246,7 +235,9 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
           message: `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`,
         }),
       );
-  const failure = reportedFailure(error);
+  // The failure a child's report and a root's `AgentError` carry: the error
+  // without its kind, a model failure as recorded or the words alone.
+  const { kind: _kind, ...failure } = error;
   const outcome = stopped ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
   // A child's failure rides its result, the error its delivery reports.
   const subagentResult: RunReport | undefined =
