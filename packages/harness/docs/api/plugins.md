@@ -322,40 +322,47 @@ type CellError =
 ## ChildLaunch
 
 One child launch as the shared core runs it: the agent and its prompt,
-the files a task works over (empty for a chat), and the recipe a task's
-run opens on. `tool` names the launching tool in its reuse key and its
-copy.
+and what the child is. A chat (`task: null`) may ask for a value of
+`schema` and attaches `mediaFiles` to its prompt. A task opens on what
+the launching plugin builds for the approved agent (`configFor`: its
+recipe and outputs, null for an agent with no task block) and works over
+`files` with `options`, as its proposal says. `tool` names the launching
+tool in its reuse key and its copy.
 
 ```ts
-interface ChildLaunch {
+type ChildLaunch = {
   readonly tool: string;
   readonly agentName: string;
   /** An agent the call defines, named `agentName`: no catalog entry. */
   readonly persona?: AgentProposal['persona'];
   readonly prompt: string;
   readonly model: string | null | undefined;
-  readonly schema: Record<string, unknown> | null | undefined;
   readonly memories: readonly string[];
   readonly workingDirectory: string | null | undefined;
   readonly id: string | null | undefined;
   readonly timeoutMs: number | null | undefined;
   readonly background: boolean | null | undefined;
-  readonly files: {
-    readonly inputFiles: readonly string[];
-    readonly contextFiles: readonly string[];
-    readonly mediaFiles: readonly string[];
-    readonly outputFiles: readonly string[];
-  };
-  /** A task: the child opens on what the launching plugin builds for the
-   *  approved agent (its recipe and outputs; null for an agent with no task
-   *  block); the proposal says it works over `files` with `options`. */
-  readonly task: {
-    readonly configFor: (
-      chosen: AgentProposal,
-    ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
-    readonly options: NonNullable<AgentProposal['options']>;
-  } | null;
-}
+} & (
+  | {
+      readonly task: null;
+      readonly schema: Record<string, unknown> | null | undefined;
+      readonly mediaFiles: readonly string[];
+    }
+  | {
+      readonly task: {
+        readonly configFor: (
+          chosen: AgentProposal,
+        ) => Pick<AgentConfig, 'script' | 'outputFiles'> | null;
+        readonly options: NonNullable<AgentProposal['options']>;
+      };
+      readonly files: {
+        readonly inputFiles: readonly string[];
+        readonly contextFiles: readonly string[];
+        readonly mediaFiles: readonly string[];
+        readonly outputFiles: readonly string[];
+      };
+    }
+);
 ```
 
 ## ChildRunDelivery

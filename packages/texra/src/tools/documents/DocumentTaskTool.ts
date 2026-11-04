@@ -76,7 +76,6 @@ const runDocumentTask = Effect.fn('DocumentTaskTool.call')(function* (
     agentName: input.agentName,
     prompt: input.prompt,
     model: input.model,
-    schema: null,
     memories: input.memories,
     workingDirectory: input.working_directory,
     id: input.id,
