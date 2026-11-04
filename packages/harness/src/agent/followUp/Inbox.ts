@@ -12,7 +12,7 @@ import {
   heldElsewhereBy,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { runRelation } from '@shared/session/runRelation';
+import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
@@ -28,7 +28,7 @@ import {
 import type { ClaimError, SessionLogShape } from '@shared/session/sessionLog';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
-import { needsWake, parentsFromRows, RunInput } from './RunInput';
+import { needsWake, RunInput } from './RunInput';
 import {
   queuedRow,
   sameAsFirst,
@@ -321,9 +321,9 @@ export class SessionInbox {
       if (options.fromParent === true && input.parent?.id !== sender)
         return only({ kind: 'refused', reason: 'notParent' });
       // Stamped inside the job, from the parent edges the rows record.
-      const parents = yield* parentsFromRows(this.read, runId, sender);
+      const line = yield* ancestryRows(this.read, runId, sender);
       const row = queuedRow(item, options.hold, (from) =>
-        runRelation(from, runId, (id) => parents.get(id)),
+        runRelation(from, runId, (id) => line.get(id)?.parent?.id),
       );
       const queuedStill = input.followUps.some(
         (f) => f.followUpId === row.followUpId,

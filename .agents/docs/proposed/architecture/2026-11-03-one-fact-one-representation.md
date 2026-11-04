@@ -306,9 +306,10 @@ a retry with its stored row, so a retry after a detach fails with a spurious
 Acceptance: `grep -rn 'parentId' packages/harness/src/agent` hits readers of
 `facts.parent` and renderers only.
 
-_Landed 2026-11-04: the inbox stamps from `parentsFromRows` (the rows'
-`parent`, recipient and sender up to their roots), `sentBefore` compares
-against the stamped relation, `ChildRuns.parent` reads the rows,
+_Landed 2026-11-04: one rows walker, `ancestryRows` (`runRelation.ts`), serves
+the inbox's stamp, the activation's grants and the detach's kept grants
+(`grantSource` in `approvalBypassKind.ts`, F's one item); `sentBefore`
+compares against the stamped relation, `ChildRuns.parent` reads the rows,
 `LiveRun.parent` and `Inbox.parentOf` are gone; the registry's
 `attachedParent` stays the in-process tree a stop cascades over. `unbornParent`
 waits for O5's slice._
