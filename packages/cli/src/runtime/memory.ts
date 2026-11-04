@@ -1,5 +1,6 @@
-import { Effect, PlatformError, Predicate } from 'effect';
+import { Effect, Predicate } from 'effect';
 
+import { absentReason } from '@texra-ai/harness/node';
 import { MemoryStore } from '@texra-ai/harness/plugins';
 import {
   type MemoryViewItem,
@@ -56,16 +57,12 @@ export const loadCliMemoryDetail = Effect.fn('cli.loadCliMemoryDetail')(
     // A typed argument: its surrounding whitespace is not part of the name.
     const storagePath = yield* MemoryStore.storagePath(inputPath.trim());
     const preview = yield* MemoryStore.preview(storagePath).pipe(
-      Effect.catchIf(
-        (error) =>
-          PlatformError.isPlatformError(error) &&
-          error.reason._tag === 'NotFound',
-        () =>
-          Effect.fail(
-            new Error(
-              `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
-            ),
+      Effect.catchIf(absentReason, () =>
+        Effect.fail(
+          new Error(
+            `No stored memory at ${MemoryStore.displayPath(storagePath)}; \`memory list\` shows the stored ones.`,
           ),
+        ),
       ),
     );
     return {

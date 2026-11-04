@@ -349,15 +349,14 @@ export function createDesktopWorkspaceIpc(
         ),
       );
 
-  const readFile = (path: string) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* path.startsWith('texra-agent:')
-        ? resolveAgentDocument(path, false)
-        : resolveWorkspacePath(options.getWorkspacePath(), path);
-      const contents = yield* editorText(fs, absolutePath);
-      return { kind: 'contents', contents } satisfies HostOutcome;
-    });
+  const readFile = Effect.fn('readFile')(function* (path: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const absolutePath = yield* path.startsWith('texra-agent:')
+      ? resolveAgentDocument(path, false)
+      : resolveWorkspacePath(options.getWorkspacePath(), path);
+    const contents = yield* editorText(fs, absolutePath);
+    return { kind: 'contents', contents } satisfies HostOutcome;
+  });
 
   // One save of a file at a time. Each save is its own request fiber, so v5's
   // write could otherwise land after v6's and leave v5 on disk while the tab

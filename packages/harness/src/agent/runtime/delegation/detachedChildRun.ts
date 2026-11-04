@@ -174,8 +174,8 @@ export const launchProcessChild = <TTurn>(
   parentRunId: RunId,
   launch: ProcessChildLaunch<TTurn>,
 ): Effect.Effect<RunId, Error, SessionServices> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+  Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
       const log = yield* SessionLog;
       const runId = yield* resumedChildRunId({
         parentRunId,

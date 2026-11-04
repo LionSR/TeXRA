@@ -90,11 +90,7 @@ function perform(
       );
     case 'notice':
       return Effect.suspend(() => {
-        const presented = host.emit?.(
-          call.notice.event,
-          // The notice's schema paired the event with its payload.
-          call.notice.payload as never,
-        );
+        const presented = host.emit?.(call.notice.event, call.notice.payload);
         return presented ?? Effect.void;
       }).pipe(Effect.as(null));
     case 'filesWritten':

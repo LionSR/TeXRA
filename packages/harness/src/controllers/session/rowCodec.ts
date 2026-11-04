@@ -257,8 +257,7 @@ const jsonObject = Schema.decodeUnknownSync(Schema.JsonObject);
 function parseData(data: string, blobs: Blobs): unknown {
   if (!/"\$+b":/.test(data)) return JSON.parse(data);
   return JSON.parse(data, (_key, value: unknown) => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value))
-      return value;
+    if (!Predicate.isObject(value)) return value;
     if (!('$b' in value)) return renameRefShaped(value, (key) => key.slice(1));
     const digest = String(value.$b);
     const text = blobs.get(digest);

@@ -111,23 +111,23 @@ export class WorkspaceAgentsController<
     );
   }
 
-  getVisibleAgents() {
-    return Effect.gen({ self: this }, function* () {
-      const { identifiers } = yield* this.resolveStoredSelection();
-      if (identifiers === undefined) {
-        return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
-      }
-      const { entries } = this.resolveIdentifiers(identifiers);
-      return [
-        ...entries,
-        ...(yield* unlistedCustomAgents(
-          this.deps.repoState,
-          this.deps.getAgents(),
-          entries.map(agentKeyOf),
-        )),
-      ];
-    });
-  }
+  readonly getVisibleAgents = Effect.fn(
+    'WorkspaceAgentsController.getVisibleAgents',
+  )({ self: this }, function* () {
+    const { identifiers } = yield* this.resolveStoredSelection();
+    if (identifiers === undefined) {
+      return yield* visibleAgents(this.deps.repoState, this.deps.getAgents());
+    }
+    const { entries } = this.resolveIdentifiers(identifiers);
+    return [
+      ...entries,
+      ...(yield* unlistedCustomAgents(
+        this.deps.repoState,
+        this.deps.getAgents(),
+        entries.map(agentKeyOf),
+      )),
+    ];
+  });
 
   /** Return the effective stored identifiers, including unavailable members. */
   getEnabledAgentKeys() {
@@ -136,8 +136,9 @@ export class WorkspaceAgentsController<
     );
   }
 
-  snapshot() {
-    return Effect.gen({ self: this }, function* () {
+  readonly snapshot = Effect.fn('WorkspaceAgentsController.snapshot')(
+    { self: this },
+    function* () {
       const selection = yield* this.getSelection();
       const { effectiveSelection, identifiers, missingTeamId } =
         yield* this.resolveSelection(selection);
@@ -152,14 +153,14 @@ export class WorkspaceAgentsController<
         missingTeamId,
         unresolvedNames: [...new Set(unresolvedNames)],
       };
-    });
-  }
+    },
+  );
 
-  private selectionKeys({
-    effectiveSelection,
-    identifiers,
-  }: ResolvedSelection) {
-    return Effect.gen({ self: this }, function* () {
+  private readonly selectionKeys = Effect.fn(
+    'WorkspaceAgentsController.selectionKeys',
+  )(
+    { self: this },
+    function* ({ effectiveSelection, identifiers }: ResolvedSelection) {
       if (identifiers === undefined) return undefined;
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
@@ -173,8 +174,8 @@ export class WorkspaceAgentsController<
         keys,
       );
       return [...keys, ...unlisted.map(agentKeyOf)];
-    });
-  }
+    },
+  );
 
   /**
    * The one walk from stored identifiers to catalog entries. `entries` are the
@@ -205,10 +206,13 @@ export class WorkspaceAgentsController<
    * through the app's membership port: one the workspace no longer has reads
    * as every agent, with its id reported.
    */
-  private resolveSelection(
-    selection: WorkspaceAgentsSelection,
-  ): Effect.Effect<ResolvedSelection, StateReadFailed> {
-    return Effect.gen({ self: this }, function* () {
+  private readonly resolveSelection = Effect.fn(
+    'WorkspaceAgentsController.resolveSelection',
+  )(
+    { self: this },
+    function* (
+      selection: WorkspaceAgentsSelection,
+    ): Effect.fn.Return<ResolvedSelection, StateReadFailed> {
       if (selection.kind === 'all') return { effectiveSelection: selection };
       if (selection.kind === 'custom') {
         return {
@@ -229,8 +233,8 @@ export class WorkspaceAgentsController<
             effectiveSelection: { kind: 'team', teamId },
             identifiers: members,
           };
-    });
-  }
+    },
+  );
 
   private writeSelection(
     selection: WorkspaceAgentsSelection,

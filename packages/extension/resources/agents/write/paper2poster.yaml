@@ -10,7 +10,6 @@ prompt: |
   - Write poster text plainly: every sentence and bullet states a specific fact, method, or result in plain words. Give the poster one focal result, and let the results themselves carry the emphasis.
 
 task:
-  rewrite: false
   outputs:
     - poster.tex
   files:

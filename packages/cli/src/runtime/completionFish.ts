@@ -44,18 +44,17 @@ function dynamicFlagValueLines(
       }
     }
   }
-  return Object.keys(DYNAMIC_VALUE_FLAG_SOURCES)
-    .filter((name) => flagsByName.has(name))
-    .map((name) => {
-      const flag = flagsByName.get(name)!;
-      const base = [`-l ${flag.name}`];
-      for (const alias of flag.aliases) base.push(`-s ${alias}`);
-      base.push(
-        '-r',
-        `-a '${dynamicListSource(DYNAMIC_VALUE_FLAG_SOURCES[name])}'`,
-      );
-      return fishCompleteLine(base);
-    });
+  return Object.keys(DYNAMIC_VALUE_FLAG_SOURCES).flatMap((name) => {
+    const flag = flagsByName.get(name);
+    if (flag === undefined) return [];
+    const base = [`-l ${flag.name}`];
+    for (const alias of flag.aliases) base.push(`-s ${alias}`);
+    base.push(
+      '-r',
+      `-a '${dynamicListSource(DYNAMIC_VALUE_FLAG_SOURCES[name])}'`,
+    );
+    return [fishCompleteLine(base)];
+  });
 }
 
 function fishEscape(value: string): string {

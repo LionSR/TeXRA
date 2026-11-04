@@ -12,7 +12,7 @@ import {
   heldElsewhereBy,
   type DatabaseReadFailed,
 } from '@shared/session/database';
-import { runRelation } from '@shared/session/runRelation';
+import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
@@ -111,8 +111,6 @@ export class SessionInbox {
   private disposed = false;
 
   private readonly port: InboxPort;
-  private readonly parentOf = (runId: RunId): RunId | null | undefined =>
-    this.port.run(runId)?.parentId;
 
   constructor(port: InboxPort) {
     this.port = port;
@@ -179,8 +177,8 @@ export class SessionInbox {
     this.readers.delete(runId);
     input.end();
     if (!terminal) return;
-    this.port.detach(() =>
-      Effect.gen({ self: this }, function* () {
+    this.port.detach(
+      Effect.fnUntraced({ self: this }, function* () {
         if (
           this.readers.has(runId) ||
           queued(yield* this.read(runId), this.port.run)
@@ -270,18 +268,27 @@ export class SessionInbox {
     this.observers.clear();
   }
 
-  private admit(
+  private readonly admit: (
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
     append: Append,
-  ): Effect.Effect<Sent, ClaimError | Conflict> {
-    return Effect.gen({ self: this }, function* () {
+  ) => Effect.Effect<Sent, ClaimError | Conflict> = Effect.fn(
+    'SessionInbox.admit',
+  )(
+    { self: this },
+    function* (
+      runId: RunId,
+      item: InboxItem,
+      options: SendOptions,
+      append: Append,
+    ) {
       const { rows, sent } = yield* this.admission(runId, item, options);
       if (rows.length > 0) yield* append(rows);
       return sent;
-    }).pipe(Effect.scoped);
-  }
+    },
+    Effect.scoped,
+  );
 
   /** One send decided in the caller's job under the run's claim: the row
    *  the job appends with its own, and how it landed (see {@link send}). */
@@ -313,9 +320,10 @@ export class SessionInbox {
       const sender = item.from.kind === 'run' ? item.from.runId : null;
       if (options.fromParent === true && input.parent?.id !== sender)
         return only({ kind: 'refused', reason: 'notParent' });
-      // Stamped inside the job, from committed parentage.
-      const row = queuedRow(item, options.hold, (sender) =>
-        runRelation(sender, runId, this.parentOf),
+      // Stamped inside the job, from the parent edges the rows record.
+      const line = yield* ancestryRows(this.read, runId, sender);
+      const row = queuedRow(item, options.hold, (from) =>
+        runRelation(from, runId, (id) => line.get(id)?.parent?.id),
       );
       const queuedStill = input.followUps.some(
         (f) => f.followUpId === row.followUpId,
@@ -355,11 +363,10 @@ export class SessionInbox {
   }
 
   /** The run's input, lifecycle and parent as its committed rows say them. */
-  read(runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> {
-    return Effect.suspend(() =>
+  readonly read = (runId: RunId): Effect.Effect<RunRows, DatabaseReadFailed> =>
+    Effect.suspend(() =>
       this.port.log.runRows(qualifyAggregateId('run', runId), 'input'),
     );
-  }
 
   private notify(closed: InboxClosed): void {
     for (const observer of this.observers) {

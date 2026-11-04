@@ -15,11 +15,12 @@ import {
 } from 'effect';
 import { app, clipboard, dialog, Menu } from 'electron';
 
-import { withPerKeyLane, type PerKeyLane } from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import type { HostDraftRequests } from '@texra/controllers/session/hostDraftRequests';
 import {
   DESKTOP_PROJECT_COMMANDS,
   DesktopCloseProjectMessageSchema,
+  DesktopOpenRecentProjectMessageSchema,
   DesktopSelectProjectMessageSchema,
 } from '../shared/desktopProjectMessages.js';
 import { DESKTOP_WORKSPACE_INBOUND_COMMANDS } from '../shared/desktopWorkspaceMessages.js';
@@ -190,13 +191,16 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   });
 
   const postProjects = () => {
-    const { projects: open, activeKey } = SubscriptionRef.getUnsafe(
-      projects.state,
-    );
+    const {
+      projects: open,
+      activeKey,
+      recent,
+    } = SubscriptionRef.getUnsafe(projects.state);
     host.post({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
       open: open.flatMap(({ key, root }) => (root === undefined ? [] : [key])),
       activeKey,
+      recent,
     });
   };
   let menuRecent: readonly string[] | undefined;
@@ -250,7 +254,7 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
   // reset claims it in `did-navigate`'s own step, so the new document's first
   // `subscribe` (or terminal) reaches the binding the reset makes, never the
   // one it is about to close.
-  const routing = withPerKeyLane(new Map<string, PerKeyLane>(), 'routing');
+  const routing = Semaphore.makeUnsafe(1).withPermit;
 
   // The renderer owns editor dirtiness. This event is the main process's only
   // reading of it: Chromium emits it after the renderer's beforeunload handler
@@ -281,11 +285,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       const settings = surface.settings();
       return settings
         ? settings.route(message)
-        : Effect.sync(() =>
-            console.warn(
-              `Dropped ${message.command}: no project shows settings`,
-            ),
-          );
+        : Effect.logWarning(
+            `Dropped ${message.command}: no project shows settings`,
+          ).pipe(withLogChannel('desktop'));
     }),
     claim(DESKTOP_WORKSPACE_INBOUND_COMMANDS, (message) =>
       routing(Effect.suspend(() => bindings.workspaceRoute(message))),
@@ -302,6 +304,19 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
       [DESKTOP_PROJECT_COMMANDS.CLOSE_PROJECT]: parsedRoute(
         DesktopCloseProjectMessageSchema,
         (message) => navigation.close(message.key, message.hasUnsavedChanges),
+      ),
+      // The renderer names a folder, so only one the recent list holds opens:
+      // a stale or forged root is dropped, never opened.
+      [DESKTOP_PROJECT_COMMANDS.OPEN_RECENT]: parsedRoute(
+        DesktopOpenRecentProjectMessageSchema,
+        (message) =>
+          SubscriptionRef.getUnsafe(projects.state).recent.includes(
+            message.root,
+          )
+            ? navigation.open(message.root)
+            : Effect.logWarning(
+                `Dropped ${message.command}: ${message.root} is not a recent project`,
+              ),
       ),
     },
     createDesktopLogIpc(
@@ -358,11 +373,9 @@ export const openDesktopWindow = Effect.fn('desktop.openWindow')(function* (
         const binding = bindings.get(session);
         return binding
           ? binding.port.receive(message)
-          : Effect.sync(() =>
-              console.warn(
-                `Dropped a renderer message for session ${session}: not open`,
-              ),
-            );
+          : Effect.logWarning(
+              `Dropped a renderer message for session ${session}: not open`,
+            ).pipe(withLogChannel('desktop'));
       });
       spawn(routing(receive), { startImmediately: true });
     },

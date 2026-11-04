@@ -9,9 +9,9 @@ import { commonViewStyles, designTokens } from '@ui/styles';
 
 // Local imports - shared Web Awesome helpers
 import { renderLoadingState } from '@ui/wa/loadingState';
-import { applyMonacoTheme } from '@ui/wa/monacoTheme';
-import { monacoPresentationOptions } from '@ui/wa/monacoOptions';
-import { installMonacoCommandDescriptions } from '@ui/wa/monacoCommandDescriptions';
+import { applyMonacoTheme } from './monacoTheme';
+import { monacoPresentationOptions } from './monacoOptions';
+import { installMonacoCommandDescriptions } from './monacoCommandDescriptions';
 
 type DiffEditor = ReturnType<MonacoModule['editor']['createDiffEditor']>;
 type TextModel = ReturnType<MonacoModule['editor']['createModel']>;

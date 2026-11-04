@@ -51,15 +51,13 @@ export function readCliTeams(repoState: StateStore) {
 }
 
 /** Resolve the current display name for a persisted team identity. */
-export function readCliTeamName(
+export const readCliTeamName = Effect.fn('readCliTeamName')(function* (
   repoState: StateStore,
   teamId: string | undefined,
 ) {
-  return Effect.gen(function* () {
-    if (!teamId) return undefined;
-    return findTeamPreset(yield* readCliTeams(repoState), teamId)?.name;
-  });
-}
+  if (!teamId) return undefined;
+  return findTeamPreset(yield* readCliTeams(repoState), teamId)?.name;
+});
 
 function cliTeamAvailabilityParts(plan: CliTeamRunPlan): string[] {
   const availability = teamAvailability(plan);

@@ -210,18 +210,19 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
     const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
     const installCmd = !installed ? this.getInstallCommand(dep) : null;
+    const { actionCommand } = dep;
 
     let actionSlot: TemplateResult | typeof nothing;
     if (installed) {
       actionSlot = nothing;
-    } else if (dep.actionCommand) {
+    } else if (actionCommand) {
       actionSlot = html`
         <wa-button
           appearance="outlined"
           variant="neutral"
           size="s"
           title="${dep.actionLabel ?? 'Install'}"
-          @click=${() => postMessage(dep.actionCommand!)}
+          @click=${() => postMessage(actionCommand)}
         >
           ${waIcon('cloud-arrow-down', { slot: 'start' })}
           ${dep.actionLabel ?? 'Install'}

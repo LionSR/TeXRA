@@ -365,7 +365,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(mocks.stopRequest).toHaveBeenCalledExactlyOnceWith({
             kind: 'run.stop',
             runId: launchedRunId(),
-            detachActiveChildren: false,
             reason: 'shutdown',
           });
 

@@ -3,6 +3,7 @@ import { Deferred, Effect, Exit, Schedule } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
+import { holdSignals } from '@cli/runtime/processSignals';
 import { askServiceToStop } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
@@ -71,61 +72,53 @@ function installServiceLogSink(): void {
 }
 
 /** Serve until the service ends, closing every session it opened. */
-function runServe(context: CliContext, idleSeconds: number) {
-  return Effect.gen(function* () {
-    installServiceLogSink();
-    // Whoever started it, the service runs with the user's login-shell
-    // environment, so every window finds the same tools.
-    yield* adoptLoginShellEnvironment().pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(
-          `${error.message}; tasks run with only HOME and the TEXRA_* settings the service was started with, so tools such as latexmk and git may not be found`,
-        ),
+const runServe = Effect.fn('runServe')(function* (
+  context: CliContext,
+  idleSeconds: number,
+) {
+  installServiceLogSink();
+  // Whoever started it, the service runs with the user's login-shell
+  // environment, so every window finds the same tools.
+  yield* adoptLoginShellEnvironment().pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `${error.message}; tasks run with only HOME and the TEXRA_* settings the service was started with, so tools such as latexmk and git may not be found`,
       ),
+    ),
+  );
+  const shutdown = yield* Deferred.make<void>();
+  const sessions = yield* Sessions;
+  const served = Effect.gen(function* () {
+    const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
+    yield* Effect.acquireRelease(
+      Effect.sync(() => holdSignals({ SIGINT: onSignal, SIGTERM: onSignal })),
+      (release) => Effect.sync(release),
     );
-    const shutdown = yield* Deferred.make<void>();
-    const sessions = yield* Sessions;
-    const served = Effect.gen(function* () {
-      const onSignal = () => Deferred.doneUnsafe(shutdown, Exit.void);
-      yield* Effect.acquireRelease(
-        Effect.sync(() => {
-          process.on('SIGINT', onSignal);
-          process.on('SIGTERM', onSignal);
-        }),
-        () =>
-          Effect.sync(() => {
-            process.off('SIGINT', onSignal);
-            process.off('SIGTERM', onSignal);
-          }),
-      );
-      // The stores the projects' roots open live in this scope.
-      const projects = yield* cliServiceProjects(
-        context,
-        yield* Effect.scope,
-        sessions,
-      );
-      // Finalizers run last-added first: the sessions close, their runs
-      // stopped and finished; then the stores their roots opened.
-      yield* Effect.addFinalizer(() => sessions.closeAll);
-      return yield* serve({
-        idleAfter: `${idleSeconds} seconds`,
-        shutdown,
-        settle: Effect.asVoid(sessions.closeAll),
-      }).pipe(Effect.provideService(ServiceProjects, projects));
-    }).pipe(Effect.scoped);
-    return yield* served.pipe(
-      Effect.as(CliExitCode.Success),
-      Effect.catchTag(
-        ['ServiceAlreadyRunning', 'ServiceUnavailable'],
-        (error) =>
-          Effect.sync(() => {
-            writeTextStderr(error.message);
-            return CliExitCode.Usage;
-          }),
-      ),
+    // The stores the projects' roots open live in this scope.
+    const projects = yield* cliServiceProjects(
+      context,
+      yield* Effect.scope,
+      sessions,
     );
-  });
-}
+    // Finalizers run last-added first: the sessions close, their runs
+    // stopped and finished; then the stores their roots opened.
+    yield* Effect.addFinalizer(() => sessions.closeAll);
+    return yield* serve({
+      idleAfter: `${idleSeconds} seconds`,
+      shutdown,
+      settle: Effect.asVoid(sessions.closeAll),
+    }).pipe(Effect.provideService(ServiceProjects, projects));
+  }).pipe(Effect.scoped);
+  return yield* served.pipe(
+    Effect.as(CliExitCode.Success),
+    Effect.catchTag(['ServiceAlreadyRunning', 'ServiceUnavailable'], (error) =>
+      Effect.sync(() => {
+        writeTextStderr(error.message);
+        return CliExitCode.Usage;
+      }),
+    ),
+  );
+});
 
 export const serveCommand = defineCliCommand({
   meta: {

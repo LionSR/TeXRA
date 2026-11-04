@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
@@ -31,10 +31,9 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
   // that never started. A malformed wrapper (a non-boolean
   // `preferHelperModel`) is a bad command argument, not a launch: it fails
   // with its own schema error.
-  const wrapped =
-    input !== null && typeof input === 'object' && 'config' in input
-      ? yield* Schema.decodeUnknownEffect(WrappedExecuteInputSchema)(input)
-      : null;
+  const wrapped = Predicate.hasProperty(input, 'config')
+    ? yield* Schema.decodeUnknownEffect(WrappedExecuteInputSchema)(input)
+    : null;
   const config = yield* decodeLaunchConfig(wrapped ? wrapped.config : input);
 
   const run = yield* launch(

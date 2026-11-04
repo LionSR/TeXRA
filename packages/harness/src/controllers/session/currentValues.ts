@@ -130,8 +130,8 @@ export function currentValues(store: {
             );
             return result;
           }
-          const value = JSON.stringify(
-            Schema.decodeUnknownSync(family.schema)(next),
+          const value = Schema.encodeSync(Schema.fromJsonString(family.schema))(
+            next,
           );
           if (row?.value !== value) {
             yield* exec(UPSERT_VALUE, [

@@ -148,7 +148,7 @@ const BundledCodexModelSchema = Schema.Struct({
 });
 
 const isReasoningEffort = (value: unknown): value is ReasoningEffort =>
-  EFFORT_SCALE.includes(value as ReasoningEffort);
+  EFFORT_SCALE.some((effort) => effort === value);
 
 /**
  * The levels the catalog lists for `slug`: `undefined` when the catalog or

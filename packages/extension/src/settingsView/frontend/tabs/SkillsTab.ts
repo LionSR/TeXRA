@@ -1,4 +1,3 @@
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { SignalWatcher } from '@lit-labs/signals';
@@ -14,6 +13,7 @@ import {
   type SkillDisplayItem,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postMessage } from '@texra/shared/hostBridge';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { commonViewStyles, designTokens } from '@ui/styles';
@@ -24,7 +24,6 @@ import { catalogDetailStyles } from '../components/shared/catalogDetailStyles';
 import { settingSignal } from '../settingsState';
 import type { SettingsCatalogItem } from '../components/shared/SettingsCatalog';
 import '../components/shared/SettingsCatalog';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 const SOURCE_LABELS: Record<ActiveSkillSourceScope, string> = {
   bundled: 'Bundled',
@@ -109,7 +108,14 @@ export class SkillsTab extends SignalWatcher(LitElement) {
       id=${`skill-source-${scope}`}
       .checked=${live(!this.disabledSources.includes(scope))}
       ?disabled=${!this.masterEnabled}
-      @change=${(event: Event) => this.setEnabled(WorkspaceStateKey.DISABLED_SKILL_SOURCES, scope, (event.target as WaSwitch).checked)}
+      @change=${(event: Event) => {
+        if (event.target instanceof WaSwitch)
+          this.setEnabled(
+            WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+            scope,
+            event.target.checked,
+          );
+      }}
       >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</wa-switch
     >`;
   }
@@ -154,12 +160,14 @@ export class SkillsTab extends SignalWatcher(LitElement) {
         checked: item.enabled,
         disabled:
           !this.masterEnabled || this.disabledSources.includes(item.scope),
-        onChange: (event: Event) =>
-          this.setEnabled(
-            WorkspaceStateKey.DISABLED_SKILLS,
-            item.name,
-            (event.target as WaSwitch).checked,
-          ),
+        onChange: (event: Event) => {
+          if (event.target instanceof WaSwitch)
+            this.setEnabled(
+              WorkspaceStateKey.DISABLED_SKILLS,
+              item.name,
+              event.target.checked,
+            );
+        },
       })}
       <dl class="catalog-detail-meta">
         <dt class="catalog-detail-meta-label">Instructions</dt>

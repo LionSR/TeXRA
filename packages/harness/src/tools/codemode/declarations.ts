@@ -95,8 +95,15 @@ function typeOf(
       })
       .join('');
   }
-  if (Array.isArray(schema.allOf))
-    return schema.allOf.map((part) => recur(part)).join(' & ');
+  if (Array.isArray(schema.allOf)) {
+    // The object's own fields beside `allOf` are a part of the intersection.
+    const { allOf, ...own } = schema;
+    const parts =
+      own.type === undefined && own.properties === undefined
+        ? allOf
+        : [own, ...allOf];
+    return parts.map((part) => recur(part)).join(' & ');
+  }
   if (Array.isArray(schema.type))
     return union(schema.type.map((type) => recur({ ...schema, type })));
   switch (schema.type) {

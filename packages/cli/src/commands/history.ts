@@ -41,49 +41,46 @@ function parseHistoryListLimit(value: string | undefined): number | undefined {
   return Number.isSafeInteger(limit) && limit > 0 ? limit : undefined;
 }
 
-function runHistoryList(context: CliContext, options: { limit?: number }) {
-  // The init and the history read it feeds are one program, run on the
-  // process runtime the command entry installs.
-  return Effect.gen(function* () {
-    const stores = yield* initCliPlatform(context);
-    const entries = yield* listCliHistoryEntries(stores.session);
-    const visibleEntries =
-      options.limit !== undefined ? entries.slice(0, options.limit) : entries;
+const runHistoryList = Effect.fn('runHistoryList')(function* (
+  context: CliContext,
+  options: { limit?: number },
+) {
+  const stores = yield* initCliPlatform(context);
+  const entries = yield* listCliHistoryEntries(stores.session);
+  const visibleEntries =
+    options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
-    yield* emitPagedCliResult(context, {
-      json: visibleEntries,
-      ndjson: cliHistoryNdjsonRecords(visibleEntries),
-      text: visibleEntries.length
-        ? formatCliHistoryText(visibleEntries)
-        : 'No history yet. Runs appear here after you start an agent.',
-    });
-    return CliExitCode.Success;
+  yield* emitPagedCliResult(context, {
+    json: visibleEntries,
+    ndjson: cliHistoryNdjsonRecords(visibleEntries),
+    text: visibleEntries.length
+      ? formatCliHistoryText(visibleEntries)
+      : 'No history yet. Runs appear here after you start an agent.',
   });
-}
+  return CliExitCode.Success;
+});
 
-function runHistoryShow(
+const runHistoryShow = Effect.fn('runHistoryShow')(function* (
   context: CliContext,
   id: RunId,
   options: { full?: boolean },
 ) {
-  return Effect.gen(function* () {
-    const stores = yield* initCliPlatform(context);
-    const details = yield* readCliHistoryDetails(stores.session, id, {
-      includeFullConversation: options.full === true,
-    });
-    if (!details) {
-      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-      return CliExitCode.Usage;
-    }
-
-    emitCliResult(context, {
-      json: details,
-      ndjson: cliHistoryDetailNdjsonRecord(details),
-      text: formatCliHistoryDetailsText(details),
-    });
-    return CliExitCode.Success;
+  const stores = yield* initCliPlatform(context);
+  const details = yield* readCliHistoryDetails(stores.session, id, {
+    includeFullConversation: options.full === true,
   });
-}
+  if (!details) {
+    writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+    return CliExitCode.Usage;
+  }
+
+  emitCliResult(context, {
+    json: details,
+    ndjson: cliHistoryDetailNdjsonRecord(details),
+    text: formatCliHistoryDetailsText(details),
+  });
+  return CliExitCode.Success;
+});
 
 /**
  * Export a stored conversation to stdout as a standalone document.
@@ -98,142 +95,138 @@ function runHistoryShow(
  * fonts all inlined, so `> out.html` opens correctly via `file://` with no
  * server).
  */
-function runHistoryExport(
+const runHistoryExport = Effect.fn('runHistoryExport')(function* (
   context: CliContext,
   id: RunId,
   format: 'html' | 'md',
 ) {
-  return Effect.gen(function* () {
-    const stores = yield* initCliPlatform(context);
-    if (format === 'md') {
-      const exportResult = yield* readCliHistoryExportInput(stores.session, id);
-      if (exportResult.status === 'not_found') {
-        writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-        return CliExitCode.Usage;
-      }
-      if (exportResult.status === 'incomplete') {
-        writeTextStderr(
-          `Run ${id} exists but has nothing to export yet (no stored ` +
-            `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
-        );
-        return CliExitCode.Usage;
-      }
-      writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
-      return CliExitCode.Success;
-    }
-
-    const session = yield* stores.session;
-    const traceResult = yield* session.records(id).readTrace();
-    if (traceResult.status !== 'ok') {
-      switch (traceResult.status) {
-        case 'config_missing':
-          writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
-          break;
-        case 'streamLogs_missing':
-          writeTextStderr(
-            `Run ${id} exists but has no replayable run-root transcript ` +
-              "(it produced no output, or only its child runs' transcripts remain).",
-          );
-          break;
-        default:
-          absurd(traceResult);
-      }
+  const stores = yield* initCliPlatform(context);
+  if (format === 'md') {
+    const exportResult = yield* readCliHistoryExportInput(stores.session, id);
+    if (exportResult.status === 'not_found') {
+      writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
       return CliExitCode.Usage;
     }
-    const template = yield* readCliHistoryStandaloneTemplate(
-      context.resourcesPath,
-    );
-    if (template === null) {
+    if (exportResult.status === 'incomplete') {
       writeTextStderr(
-        'The bundled trace-viewer standalone template was not found in this ' +
-          'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
-          'packages/trace-viewer builds.',
+        `Run ${id} exists but has nothing to export yet (no stored ` +
+          `config and/or conversation). Run \`texra history show ${id}\` to see what is available.`,
       );
       return CliExitCode.Usage;
     }
-    writeRawStdout(injectStandaloneTrace(template, traceResult.trace));
+    writeRawStdout(formatChatAsMarkdown(exportResult.exportInput));
     return CliExitCode.Success;
-  });
-}
+  }
 
-function runHistoryDelete(
+  const session = yield* stores.session;
+  const traceResult = yield* session.records(id).readTrace();
+  if (traceResult.status !== 'ok') {
+    switch (traceResult.status) {
+      case 'config_missing':
+        writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
+        break;
+      case 'streamLogs_missing':
+        writeTextStderr(
+          `Run ${id} exists but has no replayable run-root transcript ` +
+            "(it produced no output, or only its child runs' transcripts remain).",
+        );
+        break;
+      default:
+        absurd(traceResult);
+    }
+    return CliExitCode.Usage;
+  }
+  const template = yield* readCliHistoryStandaloneTemplate(
+    context.resourcesPath,
+  );
+  if (template === null) {
+    writeTextStderr(
+      'The bundled trace-viewer standalone template was not found in this ' +
+        'CLI install. Rebuild the CLI (`npm run texra-local:build`) so ' +
+        'packages/trace-viewer builds.',
+    );
+    return CliExitCode.Usage;
+  }
+  writeRawStdout(injectStandaloneTrace(template, traceResult.trace));
+  return CliExitCode.Success;
+});
+
+const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   context: CliContext,
   options: { target: RunId | 'all'; yes: boolean },
 ) {
-  return Effect.gen(function* () {
-    const stores = yield* initCliPlatform(context);
-    // Both deletion paths read the same session: opened once here, in the
-    // one program the run case runs.
-    const session = yield* stores.session;
+  const stores = yield* initCliPlatform(context);
+  // Both deletion paths read the same session: opened once here, in the
+  // one program the run case runs.
+  const session = yield* stores.session;
 
-    // `--all` is destructive and unrecoverable. Refuse it unless the caller
-    // also passes `--yes`, and quote the count so the stakes are explicit.
-    if (options.target === 'all' && !options.yes) {
-      // Unlike list, a full wipe counts (and later clears) every stored
-      // run, process entries and agent-spawned children included.
-      const count = (yield* session.view.read([])).runs.size;
+  // `--all` is destructive and unrecoverable. Refuse it unless the caller
+  // also passes `--yes`, and quote the count so the stakes are explicit.
+  if (options.target === 'all' && !options.yes) {
+    // Unlike list, a full wipe counts (and later clears) every stored
+    // run, process entries and agent-spawned children included.
+    const count = (yield* session.view.read([])).runs.size;
+    writeTextStderr(
+      `Refusing to delete ${formatResultCount(count, 'stored task')}. Re-run with --yes to confirm.`,
+    );
+    return CliExitCode.Usage;
+  }
+
+  // A deletion that fails reports its error and exits Usage, the way
+  // every other refusal on this command does; a defect reaches the crash
+  // handler.
+  const result: CliHistoryDeleteResult | null = yield* deleteCliHistory(
+    session,
+    options.target,
+  ).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        writeErrorStderr(error);
+        return null;
+      }),
+    ),
+  );
+  if (result === null) return CliExitCode.Usage;
+
+  // JSON/NDJSON consumers get the structured result (including
+  // `found:false`) so scripts can branch on it; text consumers get a stderr
+  // error + Usage exit because the human-readable path can't render "not
+  // found" usefully.
+  if (result.deleted === 'one' && context.outputFormat === 'text') {
+    if (result.status === 'not-found') {
+      writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
+      return CliExitCode.Usage;
+    }
+    if (result.status === 'active') {
       writeTextStderr(
-        `Refusing to delete ${formatResultCount(count, 'stored task')}. Re-run with --yes to confirm.`,
+        `Task ${result.id} is active in TeXRA and was not deleted.`,
       );
       return CliExitCode.Usage;
     }
+  }
 
-    // A deletion that fails reports its error and exits Usage, the way
-    // every other refusal on this command does; a defect reaches the crash
-    // handler.
-    const result: CliHistoryDeleteResult | null = yield* deleteCliHistory(
-      session,
-      options.target,
-    ).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          writeErrorStderr(error);
-          return null;
-        }),
-      ),
-    );
-    if (result === null) return CliExitCode.Usage;
-
-    // JSON/NDJSON consumers get the structured result (including
-    // `found:false`) so scripts can branch on it; text consumers get a stderr
-    // error + Usage exit because the human-readable path can't render "not
-    // found" usefully.
-    if (result.deleted === 'one' && context.outputFormat === 'text') {
-      if (result.status === 'not-found') {
-        writeTextStderr(formatCliHistoryNotFoundText(result.id, context.cwd));
-        return CliExitCode.Usage;
-      }
-      if (result.status === 'active') {
-        writeTextStderr(
-          `Task ${result.id} is active in TeXRA and was not deleted.`,
-        );
-        return CliExitCode.Usage;
-      }
-    }
-
-    let text: string;
-    if (result.deleted === 'all') {
-      text = formatCliHistoryDeletionSummary({
-        deleted: result.count,
-        active: result.active.length,
-        failed: result.failed.length,
-      });
-    } else if (result.status === 'deleted') {
-      text = `Deleted task ${result.id}.`;
-    } else {
-      text = '';
-    }
-
-    emitCliResult(context, {
-      json: result,
-      ndjson: { kind: 'history-delete', result },
-      text,
+  let text: string;
+  if (result.deleted === 'all') {
+    text = formatCliHistoryDeletionSummary({
+      deleted: result.count,
+      active: result.active.length,
+      failed: result.failed.length,
     });
-    return result.deleted === 'all' && result.failed.length > 0
-      ? CliExitCode.Usage
-      : CliExitCode.Success;
+  } else if (result.status === 'deleted') {
+    text = `Deleted task ${result.id}.`;
+  } else {
+    text = '';
+  }
+
+  emitCliResult(context, {
+    json: result,
+    ndjson: { kind: 'history-delete', result },
+    text,
   });
-}
+  return result.deleted === 'all' && result.failed.length > 0
+    ? CliExitCode.Usage
+    : CliExitCode.Success;
+});
 
 const historyListCommand = defineCliCommand({
   meta: { name: 'list', description: 'List stored tasks' },

@@ -29,8 +29,8 @@ import { ensureError } from '@utils/errors/errorMessage';
  * than quietly disappearing. Reads only; the write path keeps the stored
  * record verbatim so an unreadable entry is never dropped from storage.
  */
-export function reasoningEffortOverrides(state: StateStore) {
-  return Effect.gen(function* () {
+export const reasoningEffortOverrides = Effect.fn('reasoningEffortOverrides')(
+  function* (state: StateStore) {
     const stored = yield* Settings.state(
       state,
       GlobalStateKey.REASONING_LEVELS,
@@ -54,8 +54,8 @@ export function reasoningEffortOverrides(state: StateStore) {
       );
     }
     return overrides;
-  });
-}
+  },
+);
 
 /** The protocol each backend serves a run on. */
 export const PROTOCOL_BY_BACKEND: Readonly<

@@ -16,25 +16,19 @@ import { type RetryErrorInfo, toRetryErrorInfo } from '@shared/schemas';
 export type CallFailure = ModelError | RouteUnavailable;
 
 /**
- * The failure a run records for `error` on a binding of `provider`.
- * A model failure carries the text the attempt had streamed, which the
- * retry surface shows; an `unsent` failure (a rebind or renewal that failed)
- * is never offered again, so the user reads why.
+ * The failure a run records for `error` on a binding of `provider`: its
+ * words, and the text a model failure had streamed before it, which the
+ * retry surface shows.
  */
 export function failureInfo(
   error: CallFailure,
   provider: string,
-  options: { readonly unsent?: boolean } = {},
 ): RetryErrorInfo {
-  const info = toRetryErrorInfo(providerErrorOf(error));
   const partialText =
-    options.unsent !== true && error instanceof ModelError
-      ? error.partialText
-      : undefined;
+    error instanceof ModelError ? error.partialText : undefined;
   return {
-    ...info,
+    ...toRetryErrorInfo(providerErrorOf(error)),
     provider,
-    userRetryable: options.unsent !== true && info.userRetryable,
     ...(partialText ? { partialText } : {}),
   };
 }

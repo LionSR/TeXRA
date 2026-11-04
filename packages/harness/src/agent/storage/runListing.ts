@@ -10,7 +10,7 @@ import {
   type RunId,
   type RunIdentity,
   RUN_SUBSTATE,
-  type RunLifecycleStatus,
+  type RunOutcome,
 } from '@shared/schemas';
 import { recordsOf } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -29,9 +29,8 @@ const RUN_STORAGE_CONCURRENCY = 32;
 export interface AgentRunListingEntry {
   id: RunId;
   timestamp: string;
-  /** The run's folded status; a terminal outcome phase is its durable
-   *  outcome. */
-  status: RunLifecycleStatus;
+  /** The run's durable outcome (its `run.end`), null while none has landed. */
+  outcome: RunOutcome | null;
   /** A stop rested the run (the fold's paused substate), a status of its own. */
   paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
@@ -92,7 +91,7 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
         return {
           id,
           timestamp: new Date(run.launchedAt).toISOString(),
-          status: run.status,
+          outcome: run.durableOutcome,
           ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),

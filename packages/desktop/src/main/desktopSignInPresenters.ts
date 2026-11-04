@@ -46,11 +46,8 @@ export function desktopSignInPresenters(
           result.response === 0 ? copyToClipboard(url) : Effect.void,
         ),
       ),
-    presentSubscriptionDeviceCode: (
-      prompt: SubscriptionDeviceCodePrompt,
-      productName: string,
-    ) =>
-      Effect.gen(function* () {
+    presentSubscriptionDeviceCode: Effect.fn('presentSubscriptionDeviceCode')(
+      function* (prompt: SubscriptionDeviceCodePrompt, productName: string) {
         // Copied up front: the dialog closes on any button.
         yield* copyToClipboard(prompt.userCode);
         const result = yield* showInfoDialog(window, {
@@ -68,6 +65,7 @@ export function desktopSignInPresenters(
             prompt.verificationUrlComplete ?? prompt.verificationUrl,
           );
         }
-      }),
+      },
+    ),
   };
 }

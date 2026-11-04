@@ -55,6 +55,7 @@ export type RunHistoryDraft = Live<
 >;
 type RunHistoryDraftType =
   | 'run.position'
+  | 'run.end'
   | 'model.message'
   | 'context.edit'
   | 'tool.intent'
@@ -132,6 +133,8 @@ export type RunState = RunPosition &
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
     readonly lastEdit: number | null;
+    /** The turn compacted for a request the window could not hold. */
+    readonly overflowCompacted: boolean;
     /** The latest `tools.offered` row's set; `null` before the first. */
     readonly offeredTools: readonly OfferedTool[] | null;
     /** The address of the system text the run's context froze. */
@@ -155,16 +158,20 @@ export type RunState = RunPosition &
 type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stage.start' | 'stream.end';
 type ResultType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
-type EndType = 'run.end' | 'stage.end' | 'followup.closed'; // and what it closes
+type EndType = 'stage.end' | 'followup.closed'; // and what it closes
 /** The row types the run state reads, each with a handler in
  *  `ROW_HANDLERS`. A run's input is not among them: the inbox reads it. */
 export type RunStateRowType = Exclude<
   SharedRunRow['type'] | RunHistoryDraft['type'] | 'run.activate',
   CardRowType | 'followup.queued' | 'followup.consumed'
 >;
-/** The drafts the run state does not read (a run's input and the display
- *  rows above): any job may commit them without the run's cell. */
-export type RunInputDraft = Exclude<RunHistoryDraft, { type: RunStateRowType }>;
+/** The drafts any job may commit without the run's cell: the ones the run
+ *  state does not read (a run's input and the display rows above), and the
+ *  run's end, which nothing continues from until the next open folds it. */
+export type RunInputDraft = Exclude<
+  RunHistoryDraft,
+  { type: Exclude<RunStateRowType, 'run.end'> }
+>;
 
 /** The state a run starts from: every field at its zero, no family bound
  *  yet. The run program opens from this and stamps its family. */
@@ -188,6 +195,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   ...NO_FACTS,
   lastEdit: null,
+  overflowCompacted: false,
   offeredTools: null,
   offeredWith: { skills: [], hooks: [], modules: {} },
   offeredSystem: null,
@@ -287,7 +295,6 @@ const applySharedRow = (
   if (verdict.kind === 'unresolved')
     return outOfOrder(`decision names no request ${verdict.requestId}`);
   if (verdict.kind === 'contradiction') return outOfOrder(verdict.detail);
-  const closed = row.type === 'run.position' && row.payload.reason === 'closed';
   return Result.succeed({
     ...state,
     ...(row.type === 'request.decided' && {
@@ -302,7 +309,6 @@ const applySharedRow = (
       row.payload.at === 'turn.begin' && { answer: '' }),
     ...(row.type === 'run.position' && { resuming: false }),
     phase: phaseAfter(state.phase, verdict.rows.at),
-    invocation: closed ? closedBy(state.invocation) : state.invocation,
   });
 };
 
@@ -315,6 +321,19 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'run.position': { requires: 'any', apply: applySharedRow },
   'request.opened': { requires: 'existing', apply: applySharedRow },
   'request.decided': { requires: 'existing', apply: applySharedRow },
+  'run.end': {
+    // The lifecycle's end. A shutdown's cut the attempt it stopped, which
+    // spends no retry when the run resumes.
+    requires: 'existing',
+    apply: (state, row) =>
+      Result.succeed({
+        ...state,
+        invocation:
+          row.reason === 'shutdown'
+            ? closedBy(state.invocation)
+            : state.invocation,
+      }),
+  },
   'run.activate': {
     requires: 'existing',
     apply: (state) =>
@@ -394,6 +413,8 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       return Result.succeed({
         ...state,
         messages,
+        invocation: p.trigger === 'overflow' ? null : state.invocation,
+        overflowCompacted: state.overflowCompacted || p.trigger === 'overflow',
         continuation: null,
         // The next step renders the system text again, every change in it.
         offeredSystem: null,

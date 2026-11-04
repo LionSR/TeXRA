@@ -5,16 +5,13 @@
  * subject identifies the account.
  */
 
-// Node imports
-import { createPublicKey, verify } from 'node:crypto';
-
 // Third-party imports
-import { Clock, Duration, Effect, Result, Schema } from 'effect';
-import { HttpClient, HttpClientRequest } from 'effect/http';
+import { Duration, Effect, Layer, Schema } from 'effect';
+import { SecureRandom, Signature } from 'effect/crypto';
+import { Jwks, Jwt } from 'effect/jose';
 
 // Local imports
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
-import { toErrorMessage } from './support.js';
 
 /** The issuer whose tokens are checked, and its name in messages. */
 interface IdTokenIssuer {
@@ -23,31 +20,17 @@ interface IdTokenIssuer {
   readonly name: string;
 }
 
-const IdTokenHeaderSchema = Schema.Struct({
-  alg: Schema.Literal('RS256'),
-  kid: Schema.String,
-});
-const IdTokenPayloadSchema = Schema.Struct({
-  iss: Schema.String,
-  aud: Schema.Union([Schema.String, Schema.Array(Schema.String)]),
-  exp: Schema.Finite,
+/** The claims read beyond the registered ones `Jwt` checks. */
+const IdTokenClaimsSchema = Schema.Struct({
   nonce: Schema.String,
   sub: Schema.String.check(Schema.isMinLength(1)),
 });
-/** The RSA members `createPublicKey` reads; a key of another type fails to
- *  import and is reported as unusable. */
-const JwksSchema = Schema.Struct({
-  keys: Schema.Array(
-    Schema.Struct({
-      kid: Schema.optional(Schema.String),
-      kty: Schema.String,
-      n: Schema.optional(Schema.String),
-      e: Schema.optional(Schema.String),
-    }),
-  ),
-});
 
 const JWKS_TIMEOUT = Duration.seconds(30);
+
+const signatureLayer = Signature.layerWebCrypto.pipe(
+  Layer.provide(SecureRandom.layerWebCrypto),
+);
 
 /** The subject of `token`, verified for `attempt`'s client and nonce. */
 export const verifyIdToken = Effect.fn('idToken.verify')(function* (
@@ -61,65 +44,29 @@ export const verifyIdToken = Effect.fn('idToken.verify')(function* (
       kind: 'config',
       cause,
     });
-  const decodeSegment = <T>(
-    segment: string,
-    schema: Schema.Codec<T, unknown>,
-    part: string,
-  ) =>
-    Schema.decodeUnknownEffect(Schema.fromJsonString(schema))(
-      Buffer.from(segment, 'base64url').toString('utf-8'),
-    ).pipe(Effect.mapError((cause) => rejected(`its ${part}`, cause)));
-
-  const parts = token.split('.');
-  if (parts.length !== 3) return yield* rejected('not a JWT');
-  const [header, payload, signature] = parts;
-  const { kid } = yield* decodeSegment(header, IdTokenHeaderSchema, 'header');
-  const keysText = yield* Effect.scoped(
+  const { claims } = yield* Effect.scoped(
     Effect.flatMap(
-      Effect.flatMap(HttpClient.HttpClient, (client) =>
-        HttpClient.withScope(HttpClient.filterStatusOk(client)).execute(
-          HttpClientRequest.get(issuer.jwksUrl),
-        ),
-      ),
-      (response) => response.text,
+      Jwks.makeRemote({ url: issuer.jwksUrl, timeout: JWKS_TIMEOUT }),
+      (jwks) =>
+        Jwt.verifyWithKeySet(IdTokenClaimsSchema, token, {
+          algorithms: ['RS256'],
+          issuer: issuer.issuer,
+          audience: attempt.clientId,
+          requiredClaims: ['exp'],
+        }).pipe(Effect.provideService(Jwks.Jwks, jwks)),
     ),
   ).pipe(
-    Effect.timeout(JWKS_TIMEOUT),
-    Effect.mapError(
-      (cause) =>
-        new SubscriptionOAuthError({
-          message: `Could not fetch ${issuer.name}'s signing keys: ${toErrorMessage(cause)}`,
-          kind: 'transient',
-          cause,
-        }),
+    Effect.provide(signatureLayer),
+    Effect.mapError((cause) =>
+      cause._tag === 'JoseError' && cause.reason._tag === 'KeySetUnavailable'
+        ? new SubscriptionOAuthError({
+            message: `Could not fetch ${issuer.name}'s signing keys: ${cause.message}`,
+            kind: 'transient',
+            cause,
+          })
+        : rejected(cause.message, cause),
     ),
   );
-  const { keys } = yield* Schema.decodeUnknownEffect(
-    Schema.fromJsonString(JwksSchema),
-  )(keysText).pipe(
-    Effect.mapError((cause) => rejected('its signing keys', cause)),
-  );
-  const jwk = keys.find((key) => key.kid === kid);
-  if (jwk === undefined) return yield* rejected('unknown signing key');
-  const signed = Result.try({
-    try: () =>
-      verify(
-        'sha256',
-        Buffer.from(`${header}.${payload}`),
-        createPublicKey({ key: jwk, format: 'jwk' }),
-        Buffer.from(signature, 'base64url'),
-      ),
-    catch: (cause) => rejected('unusable signing key', cause),
-  });
-  if (Result.isFailure(signed)) return yield* signed.failure;
-  if (!signed.success) return yield* rejected('bad signature');
-  const claims = yield* decodeSegment(payload, IdTokenPayloadSchema, 'claims');
-  const audiences = typeof claims.aud === 'string' ? [claims.aud] : claims.aud;
-  if (claims.iss !== issuer.issuer) return yield* rejected('another issuer');
-  if (!audiences.includes(attempt.clientId))
-    return yield* rejected('another client');
-  if (claims.exp * 1000 <= (yield* Clock.currentTimeMillis))
-    return yield* rejected('expired');
   if (claims.nonce !== attempt.nonce)
     return yield* rejected('another sign-in attempt');
   return claims.sub;

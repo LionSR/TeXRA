@@ -4,8 +4,7 @@
  * `Runs` tag that serves these is its module's.
  */
 
-import type { RunId } from '@shared/schemas';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
+import type { RunId, RunStopReason } from '@shared/schemas';
 import type { Effect } from 'effect';
 import type { SessionServices } from './rootLaunch';
 
@@ -35,10 +34,6 @@ export interface LiveRun {
   readonly runId: RunId;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
-  /** Its attached parent: the view's edge, or for a child whose `run.start`
-   *  the view has not folded yet, the parent its activation launched under;
-   *  null for a root. */
-  readonly parent: RunId | null;
   /** Whether the generation live here reads a message: a one-shot loop
    *  (headless, or an in-band child) ends after its turn and reads none,
    *  and a run with no loop of its own (a background command) reads what
@@ -55,7 +50,14 @@ export interface LiveRun {
  * to no tool); a run resumes through `resumeRun`.
  */
 export interface RunsShape {
-  stop(runId: RunId, options: RunStopOptions): RunStop;
+  /** Stop a run for `reason`. A `user` stop is an explicit stop of the
+   *  work: the run cancels the remote background operation it is observing,
+   *  and its children follow the session's "Keep agents running" setting,
+   *  read as the stop runs (a detached child runs on as a root, and an
+   *  in-band call awaiting it stops only its wait). A `shutdown` stop only
+   *  ends this process's hold on the run, leaving that operation for a
+   *  resume to observe, and ends its children's holds with it. */
+  stop(runId: RunId, reason: RunStopReason): RunStop;
   /** What this process holds for `runId`, or undefined while no launch of
    *  it is in flight here. */
   get(runId: RunId): LiveRun | undefined;
@@ -87,18 +89,3 @@ export interface RunStop {
  *  like `shutdown`, writes no end and leaves the run resumable; an admitted
  *  run that is interrupted ends `cancelled` through its lifecycle. */
 export type StopCause = RunStopReason | 'released';
-
-/** What a stop does to the run's children, decided once by the stop
- *  (`RunRegistry.stop`): `detachActiveChildren` when the caller sets it (the
- *  session's close and the headless CLI's shutdown always cascade), else the
- *  session's "Keep subagents running" setting, read as the stop runs. A
- *  detached child runs on as a root, and an in-band call awaiting it stops
- *  only its wait. */
-export interface RunStopOptions {
-  readonly detachActiveChildren?: boolean;
-  /** Why the run stops. A `user` stop is an explicit stop of the work: the
-   *  run cancels the remote background operation it is observing. A
-   *  `shutdown` stop only ends this process's hold on the run, leaving that
-   *  operation for a resume to observe. */
-  readonly reason: RunStopReason;
-}

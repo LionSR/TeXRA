@@ -42,11 +42,7 @@ import {
   type SessionEventsShape,
   type UnfoldedDraft,
 } from '@shared/session/sessionEvents';
-import {
-  recordOf,
-  RUN_ROW_READS,
-  runRowsFrom,
-} from '@shared/session/runRowReads';
+import { RUN_ROW_READS, runRowsFrom } from '@shared/session/runRowReads';
 import { RUN_STATE_ROW_TYPES } from '@shared/session/runState';
 import type {
   SessionLogShape,
@@ -89,7 +85,7 @@ const CHANNEL = 'sessionStore';
 
 /** Whether `row` is a run's deletion marker. */
 const isRemoval = (row: SessionEvent | undefined): boolean =>
-  row !== undefined && recordOf(row).removed !== null;
+  row?.type === 'run.removed';
 
 /** Log a failure on this channel, with the failure attached as its `data`. */
 const logFailure =
@@ -233,7 +229,7 @@ const transaction =
             Effect.sync(() => {
               committed = rows.at(-1)?.commit ?? committed;
               for (const row of rows)
-                if (recordOf(row).start !== null) owned.push(row.aggregateId);
+                if (row.type === 'run.start') owned.push(row.aggregateId);
             }),
           ),
         claim: (runId) =>
@@ -369,8 +365,8 @@ export const makeSessionStore = Effect.fn('sessionStore.makeSessionStore')(
       ).pipe(Stream.ensuring(Deferred.succeed(foldedEnded, undefined))),
       deliver: (removed) =>
         events.all(anchor, delivered).pipe(
-          Stream.runForEach((event) =>
-            Effect.gen(function* () {
+          Stream.runForEach(
+            Effect.fnUntraced(function* (event) {
               const target = aggregateTarget(event.aggregateId);
               if (target.kind === 'run' && isRemoval(event)) removed(target.id);
               yield* trace.committed(event);

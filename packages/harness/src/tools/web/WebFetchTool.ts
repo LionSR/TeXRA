@@ -65,8 +65,8 @@ function isRestrictedIp(address: string): boolean {
   if (!ipaddr.isValid(address)) return false;
   const ip = ipaddr.process(address);
   const range = ip.range();
-  if (ip.kind() === 'ipv6' && (range === 'rfc6052' || range === '6to4')) {
-    const { parts } = ip as ipaddr.IPv6;
+  if (ip instanceof ipaddr.IPv6 && (range === 'rfc6052' || range === '6to4')) {
+    const { parts } = ip;
     const [high, low] =
       range === 'rfc6052' ? [parts[6], parts[7]] : [parts[1], parts[2]];
     return isRestrictedIp(

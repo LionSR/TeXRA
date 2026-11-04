@@ -67,7 +67,7 @@ export function parseMarkdownFenceDelimiter(
   }
   const delimiter = match[1];
   return {
-    marker: delimiter[0] as '`' | '~',
+    marker: delimiter.startsWith('`') ? '`' : '~',
     length: delimiter.length,
     info: (match[2] ?? '').trim(),
   };

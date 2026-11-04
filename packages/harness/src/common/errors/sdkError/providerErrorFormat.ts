@@ -16,13 +16,8 @@ import {
 } from '@utils/errors/errorMessage';
 import { formatCompactDuration } from '@utils/text/stringUtils';
 
-import { RouteUnavailable } from '../agentErrors';
-import {
-  findInCauseChain,
-  isDiskFullError,
-  isUserAbort,
-} from '../errorPredicates';
-import { attachProviderError, detectProviderError } from './errorMetadata';
+import { AgentError, RouteUnavailable } from '../agentErrors';
+import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 
 /** A used-up plan as the failure records it. */
 type UsedUpPlan = Extract<
@@ -149,17 +144,6 @@ function failureMessage(error: ModelError): string {
 }
 
 /**
- * Whether a person is offered a retry after `error`: whenever llm says the
- * same request can succeed, and after a used-up plan, whose retry carries
- * the switch onto the user's own credential. A missing route is fixed
- * outside the run, so its retry is never offered.
- */
-export function offersRetry(error: ModelError | RouteUnavailable): boolean {
-  if (!(error instanceof ModelError)) return false;
-  return error.retryable || error.kind === 'quota-exhausted';
-}
-
-/**
  * A model call's failure as the person reads it, worded once for the retry a
  * run records (`failureInfo`) and for a failure formatted fresh: a helper
  * call, which records nothing, or a run that ended before recording one.
@@ -175,7 +159,6 @@ export function providerErrorOf(
   return {
     message:
       error instanceof ModelError ? failureMessage(error) : routeMessage(error),
-    userRetryable: offersRetry(error),
     ...(status !== undefined && { statusCode: status }),
     ...(statusText !== undefined && { statusText }),
     ...(classification !== undefined && { classification }),
@@ -184,41 +167,42 @@ export function providerErrorOf(
   };
 }
 
-/** A failure formatted fresh: an abort, a full disk, a model failure, or any error's message. */
-function formatFailure(err: unknown): ProviderError {
-  if (isUserAbort(err))
-    return { message: 'Request aborted', userRetryable: false };
-  if (isDiskFullError(err)) {
-    return {
-      message: 'No space left on device. Free up disk space and try again.',
-      userRetryable: false,
-    };
-  }
-  const known = findInCauseChain(err, (cause) =>
-    cause instanceof ModelError || cause instanceof RouteUnavailable
-      ? cause
-      : undefined,
-  );
-  if (known !== undefined) return providerErrorOf(known);
-  return {
-    message: extractErrorMessage(err) ?? 'Provider request failed',
-    // No status: likely a network-level failure; offer the retry.
-    userRetryable: true,
-  };
+/** The words of a full disk, wherever one is met. */
+const DISK_FULL_MESSAGE =
+  'No space left on device. Free up disk space and try again.';
+
+/** What a failure is, decided once for every reader: a full disk (an
+ *  errno), the model failure in the cause chain (as the run that ended on it
+ *  recorded it, else llm's verdict or the missing route worded fresh), or
+ *  anything else in its own words. */
+export function failureIn(
+  err: unknown,
+):
+  | { readonly kind: 'disk-full'; readonly message: string }
+  | { readonly kind: 'model'; readonly failure: ProviderError }
+  | { readonly kind: 'unexpected'; readonly message: string } {
+  if (isDiskFullError(err))
+    return { kind: 'disk-full', message: DISK_FULL_MESSAGE };
+  const failure = findInCauseChain(err, (cause) => {
+    if (cause instanceof AgentError) return cause.failure;
+    return cause instanceof ModelError || cause instanceof RouteUnavailable
+      ? providerErrorOf(cause)
+      : undefined;
+  });
+  return failure === undefined
+    ? {
+        kind: 'unexpected',
+        message: extractErrorMessage(err) ?? 'Provider request failed',
+      }
+    : { kind: 'model', failure };
 }
 
-/**
- * Normalize a failure for display and logs. A `ProviderError` a run recorded
- * and carried back (attached on its error, possibly on a deeper `cause`) is
- * recovered as recorded; anything else is formatted fresh, uncached.
- */
+/** A failure as a host reads it: a full disk, a model failure, or the error's words. */
 export function normalizeProviderError(err: unknown): ProviderError {
-  const cached = findInCauseChain(err, detectProviderError);
-  if (cached) {
-    attachProviderError(err, cached);
-    return cached;
-  }
-  return formatFailure(err);
+  const failure = failureIn(err);
+  return failure.kind === 'model'
+    ? failure.failure
+    : { message: failure.message };
 }
 
 /** The user-facing message of any failure. */

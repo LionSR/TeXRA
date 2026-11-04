@@ -13,18 +13,54 @@ import {
   Context,
   Duration,
   Effect,
+  Exit,
   FileSystem,
   Predicate,
   Schedule,
 } from 'effect';
-import { isSqlError } from 'effect/sql/SqlError';
+import { isSqlError, type SqlError } from 'effect/sql/SqlError';
 import type { OwnerId, OwnerLiveness } from '@shared/schemas';
 import { DatabaseClaimRefused } from '@shared/session/database';
 import type * as SqlClient from 'effect/sql/SqlClient';
 
 export type Sql = SqlClient.SqlClient;
 
+/** A store's file and the two SQLite keeps beside it in WAL mode. */
+export const STORE_FILE_SUFFIXES = Object.freeze(['', '-wal', '-shm'] as const);
+
+/** The names an open leaves beside a store: a pre-1.0 store moved aside
+ *  whole, a damaged file, and the staged copy `underCopy` makes before it
+ *  takes a name. `ASIDE` below matches each, and what goes with it. */
+export const asideName = Object.freeze({
+  pre1: (filename: string): string => `${filename}.pre1`,
+  corrupt: (filename: string, at: number): string =>
+    `${filename}.corrupt-${at}`,
+  staged: (base: string): string => `${base}.${randomUUID()}.partial`,
+});
+
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
+
+/** Run `body` in a `BEGIN IMMEDIATE` transaction. The ending is
+ *  uninterruptible, so the transaction never stays open: a body that
+ *  succeeds commits when `keep` holds its value and rolls back otherwise;
+ *  a body that fails, or a COMMIT that fails, rolls back and keeps its own
+ *  failure. */
+export const inImmediateTransaction =
+  <A>(sql: Sql, keep: (value: A) => boolean = () => true) =>
+  <E, R>(body: Effect.Effect<A, E, R>): Effect.Effect<A, E | SqlError, R> =>
+    Effect.acquireUseRelease(
+      run(sql, 'BEGIN IMMEDIATE'),
+      () => body,
+      (_, exit) => {
+        const rollback = run(sql, 'ROLLBACK');
+        const abandon = rollback.pipe(
+          Effect.ignore({ log: 'Warn', message: 'A ROLLBACK failed' }),
+        );
+        if (Exit.isFailure(exit)) return abandon;
+        if (!keep(exit.value)) return rollback;
+        return run(sql, 'COMMIT').pipe(Effect.onError(() => abandon));
+      },
+    );
 
 export const pragmaValue = (sql: Sql, pragma: string) =>
   sql
@@ -122,7 +158,7 @@ export const freeName = Effect.fnUntraced(function* (base: string) {
   for (let n = 1; ; n += 1) {
     const name = n === 1 ? base : `${base}.${n}`;
     const taken = yield* Effect.forEach(
-      ['', '-wal', '-shm'],
+      STORE_FILE_SUFFIXES,
       (suffix) => fs.exists(`${name}${suffix}`),
       { concurrency: 'unbounded' },
     );
@@ -148,9 +184,9 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   const fs = yield* FileSystem.FileSystem;
   const stamp = yield* pragmaValue(sql, 'user_version');
   const version = yield* pragmaValue(sql, 'data_version');
-  const staged = `${base}.${randomUUID()}.partial`;
+  const staged = asideName.staged(base);
   yield* sql.unsafe('VACUUM INTO ?', [staged]);
-  yield* run(sql, 'BEGIN IMMEDIATE');
+  // A move commits; a store that changed since the copy rolls back.
   const moved = yield* Effect.gen(function* () {
     if (
       (yield* pragmaValue(sql, 'user_version')) !== stamp ||
@@ -163,29 +199,23 @@ export const underCopy = Effect.fnUntraced(function* <E>(
     yield* body;
     return aside;
   }).pipe(
+    inImmediateTransaction(sql, (aside: string | null) => aside !== null),
     Effect.onError(() =>
-      Effect.all([
-        run(sql, 'ROLLBACK').pipe(Effect.ignore),
-        fs.remove(staged, { force: true }).pipe(
-          Effect.ignore({
-            log: 'Warn',
-            message: `A staged store copy stays behind: ${staged}`,
-          }),
-        ),
-      ]),
+      fs.remove(staged, { force: true }).pipe(
+        Effect.ignore({
+          log: 'Warn',
+          message: `A staged store copy stays behind: ${staged}`,
+        }),
+      ),
     ),
   );
-  if (moved === null) {
-    yield* run(sql, 'ROLLBACK');
-    yield* fs.remove(staged, { force: true });
-    return null;
-  }
-  yield* run(sql, 'COMMIT');
+  if (moved === null) yield* fs.remove(staged, { force: true });
   return moved;
 });
 
-/** An aside copy beside the store: its kind, the `.<n>` of a taken name,
- *  and a moved WAL or shared-memory file. */
+/** An `asideName` suffix, the `.<n>` of a taken name, and a moved WAL or
+ *  shared-memory file. Never a staged copy: its name cannot tell one a kill
+ *  left behind from one an open holds between its copy and its rename. */
 const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
 
 /** The aside copies beside the store at `filename`, with their sizes. */

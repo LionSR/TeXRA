@@ -105,28 +105,28 @@ const connect = Effect.fnUntraced(function* (
       socket.once('close', () => {
         invalid ??= closed;
       });
+      const iterator: AsyncIterator<unknown> = reader[Symbol.asyncIterator]();
       return {
         socket,
         reader,
-        iterator: reader[Symbol.asyncIterator]() as AsyncIterator<unknown>,
+        iterator,
       };
     }),
-    ({ socket, reader, iterator }, exit) =>
-      Effect.gen(function* () {
-        invalid ??= closed;
-        reader.destroy(closed);
-        yield* join(
-          iterator.return ? iterator.return() : Promise.resolve(),
-          exit,
-        ).pipe(
-          Effect.ensuring(
-            Effect.callback<void>((resume) => {
-              if (socket.readyState === WebSocket.CLOSED) resume(Effect.void);
-              else socket.once('close', () => resume(Effect.void));
-            }),
-          ),
-        );
-      }),
+    Effect.fnUntraced(function* ({ socket, reader, iterator }, exit) {
+      invalid ??= closed;
+      reader.destroy(closed);
+      yield* join(
+        iterator.return ? iterator.return() : Promise.resolve(),
+        exit,
+      ).pipe(
+        Effect.ensuring(
+          Effect.callback<void>((resume) => {
+            if (socket.readyState === WebSocket.CLOSED) resume(Effect.void);
+            else socket.once('close', () => resume(Effect.void));
+          }),
+        ),
+      );
+    }),
   );
   const { socket, reader, iterator } = resource;
   const invalidate = (error: ModelError) => {
@@ -186,18 +186,17 @@ const connect = Effect.fnUntraced(function* (
     socket.once('unexpected-response', onUnexpected);
     return Effect.sync(remove);
   }).pipe(Effect.interruptible);
-  yield* Effect.gen(function* () {
-    while (!invalid) {
-      yield* Effect.sleep(30_000);
-      if (!invalid)
-        yield* Effect.callback<void>((resume) => {
-          socket.ping((cause: Error | undefined) => {
-            if (cause) invalidate(failure(cause));
-            resume(Effect.void);
-          });
-        });
-    }
-  }).pipe(Effect.forkScoped);
+  const ping = Effect.callback<void>((resume) => {
+    socket.ping((cause: Error | undefined) => {
+      if (cause) invalidate(failure(cause));
+      resume(Effect.void);
+    });
+  });
+  yield* Effect.suspend(() => (invalid ? Effect.void : ping)).pipe(
+    Effect.delay('30 seconds'),
+    Effect.repeat({ while: () => !invalid }),
+    Effect.forkScoped,
+  );
 
   /** Send one turn and stream its events; the caller's scope holds the turn. */
   const send = (input: Parameters<Model['streamTurn']>[0]) => {
@@ -224,22 +223,18 @@ const connect = Effect.fnUntraced(function* (
           phase = 'reading';
           return Effect.void;
         }),
-        (_, exit) =>
-          Effect.gen(function* () {
-            if (!completed || Exit.isFailure(exit)) invalidate(closed);
-            if (pendingRead) yield* join(pendingRead, exit);
-            pendingRead = undefined;
-            if (!invalid) phase = 'idle';
-          }),
+        Effect.fnUntraced(function* (_, exit) {
+          if (!completed || Exit.isFailure(exit)) invalidate(closed);
+          if (pendingRead) yield* join(pendingRead, exit);
+          pendingRead = undefined;
+          if (!invalid) phase = 'idle';
+        }),
       );
       yield* Effect.callback<void, ModelError>((resume) => {
         socket.send(
           JSON.stringify({
             type: 'response.create',
             ...parameters,
-            ...(config.webSocketStreamParameter === 'required'
-              ? { stream: true }
-              : {}),
           }),
           (cause) => resume(cause ? Effect.fail(failure(cause)) : Effect.void),
         );
@@ -247,9 +242,10 @@ const connect = Effect.fnUntraced(function* (
       const chunks = Stream.fromPull(
         Effect.succeed(
           Effect.gen(function* () {
-            pendingRead = iterator.next();
+            const read = iterator.next();
+            pendingRead = read;
             const next = yield* Effect.tryPromise({
-              try: () => pendingRead!,
+              try: () => read,
               catch: failure,
             });
             pendingRead = undefined;
@@ -300,8 +296,8 @@ const connect = Effect.fnUntraced(function* (
       return responseEvents(chunks, origin, (result) =>
         withResponsesContinuation(config, turn, result),
       ).pipe(
-        Stream.mapEffect((event) =>
-          Effect.gen(function* () {
+        Stream.mapEffect(
+          Effect.fnUntraced(function* (event) {
             if (event.kind === 'identified') {
               if (event.providerResponseId === latestResponseId)
                 return yield* new ModelError({

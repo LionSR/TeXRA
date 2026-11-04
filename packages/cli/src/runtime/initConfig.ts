@@ -85,14 +85,14 @@ function gitignoreWithTexra(existing: string): string | null {
 
 export type GitignoreOutcome = 'added' | 'present' | 'created';
 
-export function ensureTexraGitignored(
-  cwd: string,
-): Effect.Effect<
-  GitignoreOutcome,
-  PlatformError.PlatformError,
-  FileSystem.FileSystem
-> {
-  return Effect.gen(function* () {
+export const ensureTexraGitignored = Effect.fn('ensureTexraGitignored')(
+  function* (
+    cwd: string,
+  ): Effect.fn.Return<
+    GitignoreOutcome,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem
+  > {
     const fs = yield* FileSystem.FileSystem;
     const gitignorePath = path.join(cwd, '.gitignore');
     const existing = yield* fs.readFileString(gitignorePath).pipe(
@@ -108,5 +108,5 @@ export function ensureTexraGitignored(
     if (next === null) return 'present';
     yield* writeInitFileAtomic(gitignorePath, next);
     return existing === undefined ? 'created' : 'added';
-  });
-}
+  },
+);

@@ -6,7 +6,7 @@
  * `items`). The tool catalog builds the package's uniform tool definitions
  * from it; the structured-output tool builder shares it.
  */
-import { Predicate, Schema, SchemaAST } from 'effect';
+import { type JsonSchema, Predicate, Schema, SchemaAST } from 'effect';
 
 import type { ToolDefinition } from '@shared/schemas';
 
@@ -55,14 +55,14 @@ function schemaLiteralValue(schema: JSONSchemaObject): unknown {
  * enum is what the model actually selects between.
  */
 function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
-  const variantKey = (['oneOf', 'anyOf', 'allOf'] as const).find(
-    (k) => Array.isArray(schema[k]) && schema.type !== 'object',
+  if (schema.type === 'object') return schema;
+  const rawVariants = [schema.oneOf, schema.anyOf, schema.allOf].find((v) =>
+    Array.isArray(v),
   );
-  if (!variantKey) return schema;
+  if (!rawVariants) return schema;
 
-  const rawVariants = schema[variantKey] as unknown[];
   const variants = rawVariants.filter(
-    (v): v is JSONSchemaObject => Predicate.isObject(v) && v.type === 'object',
+    (v) => Predicate.isObject(v) && v.type === 'object',
   );
   if (variants.length === 0 || variants.length !== rawVariants.length) {
     return schema;
@@ -80,7 +80,7 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
   for (const name of allPropNames) {
     const branchSchemas = variantProperties
       .map((props) => props[name])
-      .filter((s): s is JSONSchemaObject => s !== undefined);
+      .filter(Predicate.isNotUndefined);
     if (branchSchemas.length === 1) {
       mergedProperties[name] = branchSchemas[0];
       continue;
@@ -88,17 +88,17 @@ function flattenTopLevelUnion(schema: JSONSchemaObject): JSONSchemaObject {
     // Discriminator: every branch pins this prop to a literal value.
     const constValues = branchSchemas
       .map(schemaLiteralValue)
-      .filter((value) => value !== undefined);
+      .filter(Predicate.isNotUndefined);
     if (constValues.length === branchSchemas.length) {
       const descriptions = branchSchemas
         .map((s) => s.description)
-        .filter((d): d is string => typeof d === 'string');
+        .filter(Predicate.isString);
       // Infer the discriminator type from the branch shapes rather than
       // hardcoding 'string': a literal discriminator may also be a number
       // or a boolean.
       const branchType = branchSchemas
         .map((s) => (typeof s.type === 'string' ? s.type : undefined))
-        .find((t): t is string => t !== undefined);
+        .find(Predicate.isNotUndefined);
       const inferredType = branchType ?? typeof constValues[0];
       const merged: JSONSchemaObject = {
         type: inferredType,
@@ -213,7 +213,9 @@ const distinct = (nodes: readonly unknown[]): unknown[] => [
 /** A tool's input as JSON Schema, unflattened: its Effect Schema converted
  *  (its definitions, if any, attached as `$defs`, where the emitted `$ref`s
  *  point), else its pre-converted parameters. */
-export const inputSchema = (definition: ToolDefinition): unknown => {
+export const inputSchema = (
+  definition: ToolDefinition,
+): JsonSchema.JsonSchema | undefined => {
   if (definition.schema === undefined) return definition.parameters;
   const { schema, definitions } = Schema.toJsonSchemaDocument(
     definition.schema,
@@ -232,7 +234,7 @@ export const inputSchema = (definition: ToolDefinition): unknown => {
 export function convertToolSchema(
   def: ToolDefinition,
 ): JSONSchemaObject | null {
-  const schema = inputSchema(def) as JSONSchemaObject | null | undefined;
+  const schema: JSONSchemaObject | undefined = inputSchema(def);
   if (!schema) return null;
   return withArrayItems(
     stripDollarSchema(withObjectRoot(def, flattenTopLevelUnion(schema))),

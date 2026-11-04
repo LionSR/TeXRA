@@ -74,8 +74,10 @@ export class FileSecrets implements PlatformSecrets {
   set(key: string, value: string): Effect.Effect<void, SecretsFailed> {
     const { directory } = this;
     const file = this.fileOf(key);
-    return this.mutate('set', key, (fs) =>
-      Effect.gen(function* () {
+    return this.mutate(
+      'set',
+      key,
+      Effect.fnUntraced(function* (fs) {
         yield* fs.makeDirectory(directory, {
           recursive: true,
           mode: DIRECTORY_MODE,

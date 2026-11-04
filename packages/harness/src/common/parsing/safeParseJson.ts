@@ -14,7 +14,7 @@ import { ensureError } from '@utils/errors/errorMessage';
  */
 export function safeParseJson(text: string): Result.Result<unknown, Error> {
   return Result.try({
-    try: () => JSON.parse(text) as unknown,
+    try: (): unknown => JSON.parse(text),
     catch: ensureError,
   });
 }
