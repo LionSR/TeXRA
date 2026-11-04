@@ -391,7 +391,7 @@ export function getRunRecords(runId: RunId) {
         }
         const end = yield* runEndOf(runId, held, lifecycles, history);
         return {
-          ...(end ?? {}),
+          ...end,
           output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },
         };
       },

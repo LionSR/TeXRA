@@ -97,7 +97,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     // tokens like `"."` or `".."`, which would otherwise path-join
     // through the common-paths search to existing directories (e.g.
     // `/usr/bin/.`) and produce a false "ok" verification result.
-    if (!/^[A-Za-z0-9][A-Za-z0-9._+\-]*$/.test(name)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(name)) {
       return yield* Effect.fail(
         new ToolError(
           `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "${IMAGE_TOOL_LABEL}").`,

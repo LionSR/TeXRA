@@ -158,7 +158,7 @@ function baseConfig(): Parameters<typeof executeCliConfig>[0] {
 
 /** The id the run under test was launched with: the CLI mints it. */
 function launchedRunId(): RunId {
-  return (mocks.admit.mock.calls[0]?.[0] as LaunchInput).runId;
+  return (mocks.admit.mock.calls[0]![0] as LaunchInput).runId;
 }
 
 /** A run program's options with the session, runtime and shutdown scope
