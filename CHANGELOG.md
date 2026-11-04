@@ -23,8 +23,8 @@ All notable changes to this project will be documented in this file.
   task cascades to its agents on shutdown and otherwise follows "Keep agents
   running"; `run.stop.detachActiveChildren` is gone from the service
   protocol (52). SDK: `ChildRuns.autoApproved` says whether the launching
-  run does its work unasked; `RunStopOptions` is gone (`Runs.stop(runId,
-reason)`); `decideApproval` takes no `promptRequired`.
+  run does its work unasked; `RunStopOptions` is gone, so a stop is
+  `Runs.stop(runId, reason)`; `decideApproval` takes no `promptRequired`.
 - **A run's failure is one value from the model call to the run's end.**
   The `failed` row, the retry request, the `run.end` row and the
   `AgentError` a root's launch raises carry the failure as the run recorded

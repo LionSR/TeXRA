@@ -289,7 +289,7 @@ export const stopSessionRuns = (
   });
 
 /** The session's approvals, with the one reading of its policy
- *  (`sessionPermission`) over its presentation host and roots. */
+ *  (`sessionPermission`) over its presentation host. */
 const approvalsLayer = Layer.effect(
   Approvals,
   Effect.gen(function* () {

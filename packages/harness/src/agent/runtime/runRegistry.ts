@@ -480,27 +480,25 @@ export class RunRegistry implements RunsShape {
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
     const marked = activation?.stop;
     if (activation !== undefined) this.markStopped(runId, reason);
-    // A shutdown ends this process's hold, and its children's holds with
-    // it; a user's stop reads "Keep agents running" below.
-    const shutdown = reason === 'shutdown';
     // Something here to stop: a launch.
     const local = activation !== undefined;
-    const end = this.stopEnd(runId, reason);
     let reached = false;
     // The child sweep and the root cascade visit each run once.
     const stopHere = (cascade: boolean): boolean => {
       reached = this.terminate(runId, new Set(), cascade, reason);
       return reached;
     };
-    if (shutdown && (local || end === undefined)) {
+    // A shutdown ends this process's hold, and its children's holds with
+    // it; it owes no end row (`stopEnd`), so the sweep is the whole stop.
+    if (reason === 'shutdown') {
       stopHere(true);
       return { accepted: () => reached, settlement: Effect.void };
     }
+    // A user's stop: its children follow "Keep agents running".
+    const end = this.stopEnd(runId, reason);
     const key = GlobalStateKey.DETACH_SUBAGENTS_ON_STOP;
     const apply = Effect.flatMap(
-      shutdown
-        ? Effect.succeed(false)
-        : Effect.suspend(() => Settings.get<boolean>(this.init.roots, key)),
+      Effect.suspend(() => Settings.get<boolean>(this.init.roots, key)),
       (detach) =>
         (detach ? this.detachActiveChildren(runId) : Effect.void).pipe(
           Effect.andThen(
