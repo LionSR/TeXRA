@@ -132,6 +132,10 @@ export const RULES = {
     'The wide-records rule over the source outside the core (the rest of the harness, the app, the hosts).',
   'type-assertions-outside-core':
     'The type-assertions rule over the source outside the core (the rest of the harness, the app, the hosts).',
+  'no-non-null-assertion-test-kernel':
+    'A definite-assignment `!` (`let x!: T`) in src/test-kernel: give the binding a value or a `| undefined` the test narrows. ESLint fails `value!` there.',
+  'type-assertions-test-kernel':
+    'The type-assertions rule over src/test-kernel: decode fixtures with their schema, narrow with `assert`, or name the invariant of a test double in a `// cast:` reason.',
 };
 
 /**
@@ -144,6 +148,15 @@ const OUTSIDE_CORE_RULES = {
   'shallow-modules': 'shallow-modules-outside-core',
   'wide-records': 'wide-records-outside-core',
   'type-assertions': 'type-assertions-outside-core',
+};
+
+/**
+ * The rules src/test-kernel is held to, suites included, under their own
+ * names. The depth rules do not apply: a suite is not an interface.
+ */
+const TEST_KERNEL_RULES = {
+  'no-non-null-assertion': 'no-non-null-assertion-test-kernel',
+  'type-assertions': 'type-assertions-test-kernel',
 };
 
 /** Every package's source; the part outside the core takes the depth rules. */
@@ -1573,6 +1586,19 @@ export async function measure(rootDir) {
   );
   for (const [rule, outsideRule] of Object.entries(OUTSIDE_CORE_RULES)) {
     byRule.set(outsideRule, outside.get(rule));
+  }
+  const tests = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
+  measureAst(
+    rootDir,
+    walkFiles(path.join(rootDir, 'src/test-kernel'), {
+      include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
+    })
+      .map(({ relativePath }) => `src/test-kernel/${relativePath}`)
+      .toSorted(),
+    tests,
+  );
+  for (const [rule, testRule] of Object.entries(TEST_KERNEL_RULES)) {
+    byRule.set(testRule, tests.get(rule));
   }
   await measureCycles(rootDir, files, byRule);
   measureReadmes(rootDir, byRule);

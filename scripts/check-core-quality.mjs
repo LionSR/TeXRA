@@ -61,10 +61,12 @@ const ZERO_RULES = new Set([
   'new-promise',
   'no-explicit-any',
   'no-non-null-assertion',
+  'no-non-null-assertion-test-kernel',
   'promise-then',
   'try-catch-effect',
   'type-assertions',
   'type-assertions-outside-core',
+  'type-assertions-test-kernel',
 ]);
 
 function describeSites(entry) {

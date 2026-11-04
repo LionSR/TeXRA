@@ -815,6 +815,14 @@ export default tseslint.config(
     },
   },
 
+  // The test suite asserts a value present with `assert`, not `!`, so a
+  // missing value fails with a message; an unexplained `as` there is held at
+  // zero by scripts/check-core-quality.mjs.
+  {
+    files: ['src/test-kernel/**/*.{ts,mts}'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'error' },
+  },
+
   // CLI scripts run in a fresh lint process so their program does not coexist
   // with the workspace and host programs. Select it directly rather than
   // creating every earlier project while searching for the script's owner.
