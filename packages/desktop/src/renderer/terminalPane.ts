@@ -48,6 +48,8 @@ interface TerminalPane {
   /** Reports process exit in-band so the pane doesn't look merely idle,
    *  and offers a restart that starts a new shell in the same tab. */
   reportExit(sessionId: string, exitCode: number): void;
+  /** Reports a shell that failed to start, and offers Restart as an exit
+   *  does. */
   reportError(sessionId: string, message: string): void;
   /** Re-fits the active terminal; call after the pane becomes visible. */
   layout(): void;
@@ -143,6 +145,21 @@ export function createTerminalPane(
     }
   }
 
+  /** Mark a session's shell gone (it exited, or never started) and offer
+   *  to start a new one in the same tab. */
+  function offerRestart(sessionId: string, session: TerminalSession): void {
+    session.exited = true;
+    render(
+      renderLabeledActionButton({
+        icon: 'rotate-right',
+        text: 'Restart',
+        kind: 'secondary',
+        onClick: () => restart(sessionId, session),
+      }),
+      session.exitActions,
+    );
+  }
+
   /** Start a new shell for an exited session, below its old output. */
   function restart(sessionId: string, session: TerminalSession): void {
     session.exited = false;
@@ -198,29 +215,22 @@ export function createTerminalPane(
     reportExit(sessionId, exitCode) {
       const session = sessions.get(sessionId);
       if (!session || session.exited) return;
-      session.exited = true;
       // Written into the buffer rather than shown as a toast: it belongs with
       // the output it terminates.
       session.terminal.write(
         `\r\n\u001b[90m[process exited with code ${exitCode}]\u001b[0m\r\n`,
       );
-      render(
-        renderLabeledActionButton({
-          icon: 'rotate-right',
-          text: 'Restart',
-          kind: 'secondary',
-          onClick: () => restart(sessionId, session),
-        }),
-        session.exitActions,
-      );
+      offerRestart(sessionId, session);
     },
 
     reportError(sessionId, message) {
       // A start that fails after the tab closed reports into nothing: the
       // tab is gone, and a terminal created here would never be disposed.
-      sessions
-        .get(sessionId)
-        ?.terminal.write(`\r\n\u001b[31m${message}\u001b[0m\r\n`);
+      const session = sessions.get(sessionId);
+      if (!session) return;
+      session.terminal.write(`\r\n\u001b[31m${message}\u001b[0m\r\n`);
+      // The error is a start that failed, so no shell runs: offer another.
+      offerRestart(sessionId, session);
     },
 
     layout() {
