@@ -327,7 +327,7 @@ jobs:
         run: pnpm --filter texra build:fast
 
       - name: Check extension VSIX contents
-        run: pnpm run check:vsix-contents
+        run: node scripts/verify-vsix-contents.mjs
 
       - name: Upload extension VSIX artifact
         uses: actions/upload-artifact@v7
