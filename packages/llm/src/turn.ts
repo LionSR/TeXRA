@@ -12,9 +12,11 @@ import { Effect, Schema, Stream, Struct } from 'effect';
 import {
   BackgroundCapabilitySchema,
   BindingSchema,
+  CountSchema,
   JsonObjectSchema,
   ModelOriginSchema,
   sameModelOrigin,
+  TurnUsageSchema,
 } from './protocol.js';
 
 // Local imports - canonical messages
@@ -47,9 +49,6 @@ const ToolDefinitionsSchema = Schema.Array(ToolDefinitionSchema).check(
     { message: 'Tool definitions must have distinct names.' },
   ),
 );
-
-/** A non-negative integer: a token or item count. */
-const CountSchema = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 const ToolChoiceSchema = Schema.Union([
   Schema.Literal('auto'),
@@ -275,38 +274,6 @@ export const ResolvedTurnSchema = Schema.Union([
 /** A prepared turn: the request with the binding's controls fixed. */
 export type ResolvedTurn = typeof ResolvedTurnSchema.Type;
 
-/** A turn's token counts as reported; an unknown count stays null. Only what
- *  no neutral count holds is `providerUsage`: an xAI receipt's cost, and
- *  Anthropic's uncached input count and 5m/1h split of its cache writes. */
-const TurnUsageSchema = Schema.Struct({
-  inputTokens: Schema.NullOr(CountSchema),
-  outputTokens: Schema.NullOr(CountSchema),
-  totalTokens: Schema.NullOr(CountSchema),
-  /** Prompt tokens read from the provider's cache. */
-  cachedInputTokens: Schema.NullOr(CountSchema),
-  /** Prompt tokens written to the provider's cache (Anthropic). */
-  cacheWriteTokens: Schema.NullOr(CountSchema),
-  reasoningTokens: Schema.NullOr(CountSchema),
-  /** Prompt tokens a provider-run tool added (Google). */
-  toolUsePromptTokens: Schema.NullOr(CountSchema),
-  providerUsage: Schema.optional(
-    Schema.Union([
-      Schema.Struct({
-        kind: Schema.Literal('xai'),
-        costInUsdTicks: Schema.NullOr(CountSchema),
-      }),
-      Schema.Struct({
-        kind: Schema.Literal('anthropic'),
-        uncachedInputTokens: Schema.NullOr(CountSchema),
-        cacheCreation5mTokens: Schema.NullOr(CountSchema),
-        cacheCreation1hTokens: Schema.NullOr(CountSchema),
-      }),
-    ]),
-  ),
-});
-/** {@link TurnUsageSchema}'s value. */
-export type TurnUsage = typeof TurnUsageSchema.Type;
-
 const IdentitySchema = Schema.Struct({
   providerResponseId: Schema.String.check(Schema.isMinLength(1)),
   requestedOrigin: ModelOriginSchema,
@@ -328,7 +295,6 @@ export const TurnResultSchema = Schema.Struct({
     'tool-calls',
     'stop-sequence',
     'refusal',
-    'context-window-exceeded',
   ]),
   stopSequence: Schema.optional(Schema.String),
   finishEvidence: Schema.optional(
@@ -416,7 +382,6 @@ export const TurnResultSchema = Schema.Struct({
     if (
       result.finishReason !== 'length' &&
       result.finishReason !== 'content-filter' &&
-      result.finishReason !== 'context-window-exceeded' &&
       result.content.some(
         (part) =>
           part.evidence != null &&

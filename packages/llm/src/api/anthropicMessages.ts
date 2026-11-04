@@ -320,7 +320,6 @@ const FINISH = {
   stop_sequence: 'stop-sequence',
   tool_use: 'tool-calls',
   refusal: 'refusal',
-  model_context_window_exceeded: 'context-window-exceeded',
 } as const;
 
 /** The canonical receipt of Anthropic's cumulative counters. */
@@ -453,6 +452,18 @@ function anthropicWire() {
         return yield* fail(
           'Anthropic paused hosted execution requires a separate supported continuation protocol.',
           'unsupported',
+        );
+      // The one overflow every protocol reports the same way: the error
+      // the other providers raise as an HTTP failure. Anthropic billed the
+      // input it read before stopping, so the failure carries its usage.
+      if (reason === 'model_context_window_exceeded')
+        return yield* Effect.fail(
+          new ModelError({
+            kind: 'context-overflow',
+            message:
+              "Anthropic stopped: the request exceeds the model's context window.",
+            usage: canonicalUsage(usage),
+          }),
         );
       stopped = true;
       const refusal = stop.stop_details;

@@ -132,6 +132,8 @@ export type RunState = RunPosition &
     readonly usage: RunUsageTotals;
     /** The latest `context.edit`'s `seq`: the next edit's `base`. */
     readonly lastEdit: number | null;
+    /** The turn compacted for a request the window could not hold. */
+    readonly overflowCompacted: boolean;
     /** The latest `tools.offered` row's set; `null` before the first. */
     readonly offeredTools: readonly OfferedTool[] | null;
     /** The address of the system text the run's context froze. */
@@ -188,6 +190,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   ...NO_FACTS,
   lastEdit: null,
+  overflowCompacted: false,
   offeredTools: null,
   offeredWith: { skills: [], hooks: [], modules: {} },
   offeredSystem: null,
@@ -394,6 +397,8 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       return Result.succeed({
         ...state,
         messages,
+        invocation: p.trigger === 'overflow' ? null : state.invocation,
+        overflowCompacted: state.overflowCompacted || p.trigger === 'overflow',
         continuation: null,
         // The next step renders the system text again, every change in it.
         offeredSystem: null,
