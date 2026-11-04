@@ -63,6 +63,7 @@ import {
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runActionRefusal } from '@shared/session/runActions';
+import { descriptionRow } from '@shared/session/runFacts';
 import { ownFactRow } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -208,14 +209,7 @@ const rename = (
     req.runId,
     heldHere,
     deps.sessionLog
-      .transact([
-        {
-          type: 'run.description',
-          aggregateId: qualifyAggregateId('run', req.runId),
-          description: req.title,
-          by: 'user',
-        },
-      ])
+      .transact([descriptionRow(req.runId, req.title, 'user')])
       .pipe(
         Effect.mapError(
           writeRejection({
