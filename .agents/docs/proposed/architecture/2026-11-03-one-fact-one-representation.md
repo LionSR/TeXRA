@@ -393,7 +393,17 @@ one source and derived types (O10). _The command list landed 2026-11-04: the
 catalog's `setupInvokable` column is the one list, and the tool derives its
 allowlist from it. The provider list waits on a browser-safe llm entry:
 `shared/schemas` and the settings webview cannot import llm's root, which
-is not browser-safe, so deriving it is a packaging decision first._ The run actions of
+is not browser-safe, so deriving it is a packaging decision first._ _The
+provider list landed 2026-11-04 as far as the rulings in the code allow: the
+Models tab's source order is llm's `API_KEY_PROVIDER_IDS` itself (the hand
+list and its compile gate are gone). The stored enums (`ModelBackendSchema`,
+`ApiKeyProviderIdSchema`) and the settings rows (`providerSettings.ts`) stay
+owned by storage, each covered against the catalog by a compile-time check:
+the harness pins llm by a caret range, so a catalog that grew in a newer llm
+would otherwise widen a stored union in the field without a harness release,
+which `prompts.ts` and `providerSettings.ts` rule out in so many words. The
+packaging block itself was stale: `shared/` and the settings webview already
+import llm's root._ The run actions of
 `packages/harness/src/shared/schemas/run.ts:114` were listed here beside
 `openGuiWindow.ts:106`, which is the host request kinds, an unrelated set; no
 second spelling of the run actions was found, so that pair is dropped.
