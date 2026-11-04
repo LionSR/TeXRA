@@ -39,6 +39,7 @@ describe('desktop Electron host bridge', () => {
     vi.stubGlobal('postMessage', (message: unknown) => posted.push(message));
 
     await loadPreloadModule({ contextBridge, ipcRenderer });
+    // cast: the preload registers its push listener with this signature.
     const push = ipcRenderer.on.mock.calls.find(
       ([channel]) => channel === ELECTRON_WEBVIEW_PUSH_CHANNEL,
     )?.[1] as (event: unknown, message: unknown) => void;
@@ -47,10 +48,12 @@ describe('desktop Electron host bridge', () => {
     push({}, { command: 'desktop:showPrompt', n: 2 });
     expect(posted).toEqual([]);
 
+    // cast: the preload exposes its pushes API under this key.
     (exposed.get(DESKTOP_PUSHES_API_KEY) as DesktopPushesApi).listening();
     push({}, { command: 'desktop:closeDiff', n: 3 });
-    expect(posted.map((message) => (message as { n: number }).n)).toEqual([
-      1, 2, 3,
-    ]);
+    expect(
+      // cast: every message pushed above carries `n`.
+      posted.map((message) => (message as { n: number }).n),
+    ).toEqual([1, 2, 3]);
   });
 });

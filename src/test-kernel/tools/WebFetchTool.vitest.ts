@@ -66,6 +66,7 @@ layer(SessionGraph.hosted)('WebFetchTool', (it) => {
       // The metadata address a cloud instance serves credentials from.
       const fetchStub = vi.mocked(undiciFetch).mockClear();
       fetchStub.mockResolvedValueOnce(
+        // cast: Node's global Response is undici's; only the declared types differ.
         new Response(null, {
           status: 302,
           headers: { Location: 'http://169.254.169.254/latest/meta-data/' },

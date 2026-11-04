@@ -10,7 +10,7 @@
  *   own subscribed.
  */
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Scope, Stream } from 'effect';
+import { Context, Effect, Exit, Schema, Scope, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
@@ -45,11 +45,16 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     return yield* sessions.open(testWorkspaceRoots());
   });
 
+/** The stored data of a `run.end` row, as far as these cases read it. */
+const RunEndData = Schema.fromJsonString(
+  Schema.Struct({ outcome: Schema.String }),
+);
+
 /** The outcomes of the run's `run.end` rows, in order. */
 const endsOf = (storage: string, runId: RunId) =>
   storedRows(storage)
     .filter((row) => row.run === runId && row.type === 'run.end')
-    .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
+    .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data).outcome);
 
 /** How many times the run was activated after commit `after`. */
 const activationsAfter = (storage: string, runId: string, after: number) =>
@@ -124,6 +129,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
                 const storage = crashedCopy(roots.storage);
                 yield* intent.release;
                 yield* Sessions.use((sessions) => sessions.close(roots));
+                // cast: the store's logical id of a run aggregate is its RunId.
                 const child = storedRows(storage).find(
                   (row) => row.parent === run.runId && row.type === 'run.start',
                 )?.run as RunId;

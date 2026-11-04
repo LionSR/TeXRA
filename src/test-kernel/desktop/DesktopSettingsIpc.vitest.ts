@@ -1,6 +1,6 @@
 import { layer } from '@effect/vitest';
 import { Effect, Result, Schema } from 'effect';
-import { beforeAll, expect, vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -26,9 +26,6 @@ vi.mock(
       Effect.succeed(DEFAULT_LATEX_SETTINGS_STATUS),
   }),
 );
-
-type DesktopSettingsIpcModule =
-  typeof import('@desktop/main/desktopSettingsIpc');
 
 const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
@@ -61,8 +58,6 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
   };
 }
 
-let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
-
 /**
  * The settings IPC over a session whose roots carry `config` and stores of
  * their own, for the test's scope: one root holds one session, and the IPC
@@ -81,6 +76,9 @@ const createSettingsFixture = (config: ConfigProvider) =>
       globalState: new FakeStateStore(),
     });
     const runtime = yield* SessionGraph.runtime;
+    const { createDesktopSettingsIpc } = yield* Effect.promise(
+      () => import('@desktop/main/desktopSettingsIpc'),
+    );
     const ipc = yield* createDesktopSettingsIpc({
       spawn: (program) => {
         runtime.runFork(program);
@@ -122,11 +120,6 @@ function flushAsyncWork(): Promise<void> {
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'desktop settings IPC',
   (it) => {
-    beforeAll(async () => {
-      ({ createDesktopSettingsIpc } =
-        await import('@desktop/main/desktopSettingsIpc'));
-    });
-
     it.effect(
       'writes the approval policy to the local config scope, not global or the project file',
       () =>
