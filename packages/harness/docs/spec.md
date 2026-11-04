@@ -279,7 +279,7 @@ never sent to a renderer (`shared/schemas/sessionEvent.ts:410-438`).
 - `script.call` (folded: yes): A call a `script` guest issued, with its
   arguments (`shared/schemas/runHistoryEvent.ts:339-360`).
 - `tool.result` (folded: yes): A call's one settlement and its disposition
-  (`shared/schemas/runHistoryEvent.ts:391-440`).
+  (`shared/schemas/runHistoryEvent.ts:391-434`).
 - `tools.offered` (folded: yes): The step's offered tools, system text and
   hooks, when they changed (`shared/schemas/sessionEvent.ts:422`).
 - `context.blob` (folded: yes): Model-facing content stored by sha256 address
@@ -300,7 +300,7 @@ The `model.message` arms:
 - `failed`: The attempt failed, or its outcome is unknown: a person-admitted
   attempt found with no outcome on resume is re-asked under a `failed` row
   (`agent/runtime/ModelInvoker.ts:713-728`). Carries its error and the move
-  after it (`retry`, `unchain`, `ask`, `stop`, `cancel`).
+  after it (`retry`, `unchain`, `ask`, `stop`).
 - `response`: The completed turn, its dispatch facts per call, and its priced
   usage.
 - `handed-down`: The one call a script's run opens on; no model made it.
@@ -388,7 +388,7 @@ points are normative:
 - **W6**, `model.message` `failed`: for a turn or a summary, commits for every
   recorded failure, naming the next move
   (`agent/runtime/ModelInvoker.ts:595-655`, `:688`;
-  `agent/runtime/run/invocation.ts:366-376`).
+  `agent/runtime/run/invocation.ts:366-375`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
   wait; a decision commits once (`agent/runtime/requestPolicy.ts:287-308`,
   `:355-367`).
@@ -453,7 +453,7 @@ child loop drives has no run history and writes no position; it parks on
 recording MUST commit a `failed` row whose `next` is the move after it; a
 renewed observation of an accepted operation repeats without one (section 6),
 and a helper call records none (`agent/runtime/run/modelCall.ts:166`)
-(`agent/runtime/run/invocation.ts:366-376`,
+(`agent/runtime/run/invocation.ts:366-375`,
 `agent/runtime/ModelInvoker.ts:595-612`). A `failed` row that asks MUST be
 preceded, in its batch, by the `request.opened` of its retry request
 (`agent/runtime/ModelInvoker.ts:643-654`, `shared/session/runHistory.ts:188`).
@@ -539,12 +539,12 @@ the run already holds history state (`agent/runtime/loop/runProgram.ts:122-127`)
 ## 6. Retry
 
 Every model call the harness makes MUST go through one loop, `runInvocation`
-(`agent/runtime/run/invocation.ts:341-379`; callers
+(`agent/runtime/run/invocation.ts:341-377`; callers
 `agent/runtime/ModelInvoker.ts:661`, `agent/runtime/run/modelCall.ts:123`). Its
 next move is `nextAttempt(invocation, requests, retries)`, read off the
 invocation's rows before every move but the repeat of a renewed observation
 (`agent/runtime/run/invocation.ts:351-354`, `:368-371`,
-`shared/session/inFlight.ts:202-246`):
+`shared/session/inFlight.ts:202-244`):
 
 | Rows show                                                        | Move                                        |
 | ---------------------------------------------------------------- | ------------------------------------------- |
@@ -556,24 +556,23 @@ invocation's rows before every move but the repeat of a renewed observation
 | open attempt a clean close stopped (its halt says `closed`)      | as above; the stopped attempt spent nothing |
 | `failed` with `retry` or `unchain`                               | send the next attempt                       |
 | `failed` with `stop`                                             | end the invocation failed                   |
-| `failed` with `cancel`                                           | end the invocation cancelled                |
 | `failed` with `ask`, request undecided                           | wait for the decision                       |
 | `failed` with `ask`, decided `retry`                             | rebind on the chosen credentials, then send |
 | `failed` with `ask`, decided `deny`                              | end the invocation failed                   |
 | `failed` with `ask`, any other decision                          | end the invocation cancelled                |
 
 The move a `failed` row records is decided once, by `failedNext`
-(`shared/session/inFlight.ts:266-283`), except for two rows that name their move
+(`shared/session/inFlight.ts:264-281`), except for two rows that name their move
 themselves: a renewed credential's resend, `retry`
 (`agent/runtime/run/invocation.ts:329-332`), and a re-ask, `ask` under a fresh
 request id (`agent/runtime/ModelInvoker.ts:713-728`):
 
 - A `continuation-gone` failure of an attempt that sent a continuation answers
-  `unchain`, once per invocation (`shared/session/inFlight.ts:272-277`,
+  `unchain`, once per invocation (`shared/session/inFlight.ts:270-275`,
   `agent/runtime/run/invocation.ts:279-282`).
 - A retryable failure answers `retry` while the invocation's earlier failures,
   `unchain` ones excluded, are fewer than the budget
-  (`shared/session/inFlight.ts:81-89`, `:196-200`, `:278-279`). Every earlier
+  (`shared/session/inFlight.ts:81-89`, `:196-200`, `:276-277`). Every earlier
   failure counts, whichever move followed it: one that a person's retry allowed
   spends the budget as an automatic resend does, and so does an attempt with no
   recorded outcome, which may have been billed, so a crash that recurs on every
@@ -589,7 +588,7 @@ request id (`agent/runtime/ModelInvoker.ts:713-728`):
   summary starts a fresh budget.
 - Past the budget, a failure a person may retry answers `ask` under a fresh
   request id; where nobody can be asked, `stop`
-  (`shared/session/inFlight.ts:275-277`).
+  (`shared/session/inFlight.ts:273-275`).
 - A failed observation of an accepted operation never resubmits it automatically
   (`agent/runtime/run/invocation.ts:279-287`). The one automatic repeat is a
   renewed observation after a rejected subscription token, which observes the

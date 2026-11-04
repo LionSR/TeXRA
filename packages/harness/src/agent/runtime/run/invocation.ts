@@ -373,7 +373,6 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
     const recorded = yield* driver.failed(ref, failure, next, bound);
     if (next.kind === 'stop')
       return { kind: 'failed', error: recorded, cause: failure.error };
-    if (next.kind === 'cancel') return CANCELLED;
     yield* pauseBefore(driver, next, failure);
   }
 });

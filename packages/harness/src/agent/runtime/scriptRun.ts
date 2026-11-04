@@ -31,7 +31,6 @@ type ScriptCallStatus =
   | 'completed'
   | 'failed'
   | 'skipped'
-  | 'cancelled'
   /** No settlement yet: running while the run is, cut short after. */
   | 'unsettled';
 
@@ -51,7 +50,6 @@ export interface ScriptCallCard {
 const statusOf = (settled: ToolResultPayload | undefined): ScriptCallStatus => {
   if (settled === undefined) return 'unsettled';
   if (settled.result.status === 'executed') return 'completed';
-  if (settled.disposition === 'cancelled') return 'cancelled';
   if (settled.disposition === 'skipped' || settled.result.name === 'Skipped')
     return 'skipped';
   return 'failed';
@@ -208,7 +206,6 @@ const scriptRunSummary = Effect.fn('scriptRun.summary')(function* (
         break;
       case 'failed':
       case 'skipped':
-      case 'cancelled':
         counts[call.status] += 1;
         break;
       default:

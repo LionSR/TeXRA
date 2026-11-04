@@ -61,8 +61,9 @@ export type InvocationPurpose = typeof InvocationPurposeSchema.Type;
 /**
  * What follows a failed attempt: another attempt (`retry`, or `unchain`,
  * which also drops the provider continuation the vendor no longer holds),
- * the person's answer to the retry request `requestId` (`ask`), the end of
- * the invocation as failed (`stop`) or as a user abort (`cancel`).
+ * the person's answer to the retry request `requestId` (`ask`), or the end
+ * of the invocation as failed (`stop`). A person's cancel is their answer
+ * to the `ask`.
  */
 const FailedNextSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('retry') }),
@@ -72,7 +73,6 @@ const FailedNextSchema = Schema.Union([
     requestId: Schema.String.check(Schema.isMinLength(1)),
   }),
   Schema.Struct({ kind: Schema.Literal('stop') }),
-  Schema.Struct({ kind: Schema.Literal('cancel') }),
 ]);
 /** The move a `failed` row records after its attempt. */
 export type FailedNext = typeof FailedNextSchema.Type;
@@ -402,15 +402,9 @@ export const ToolResultPayloadSchema = Schema.Struct({
   responseId: ResponseIdSchema,
   callId: CallIdSchema,
   attempt: Schema.Int.check(Schema.isGreaterThan(0)),
-  /** The fold's key fact: a cancelled call is a disposition, never a
-   *  match on the English prose of an error message. */
-  disposition: Schema.Literals([
-    'executed',
-    'failed',
-    'cancelled',
-    'skipped',
-    'duplicate',
-  ]),
+  /** How the call ended, read as a fact, never matched from the English
+   *  prose of an error message. */
+  disposition: Schema.Literals(['executed', 'failed', 'skipped', 'duplicate']),
   duplicateOf: Schema.NullOr(CallIdSchema),
   result: SettledToolResultSchema,
   attachments: Schema.Array(SettledAttachmentSchema),
