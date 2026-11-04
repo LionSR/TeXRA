@@ -258,14 +258,10 @@ const checkToolChoice = (
       );
 };
 
-/** The namespace a ChatGPT plan's function tools sit in. */
-const CHATGPT_TOOL_NAMESPACE = 'texra';
-
 /** The namespace function tools must sit in, or null: a ChatGPT plan's alone. */
 export const toolNamespaceOf = (
   config: OpenAIResponsesConfiguration,
-): string | null =>
-  config.requestDialect === 'chatgpt' ? CHATGPT_TOOL_NAMESPACE : null;
+): string | null => (config.requestDialect === 'chatgpt' ? 'texra' : null);
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,

@@ -1,13 +1,13 @@
 /**
  * Conversation compaction for the tool-use loop: a run-scoped step beside
  * the loop that writes a `context.edit` with cause `compaction` (trigger
- * `context-limit` at the threshold share of the bound model's window, or
- * `user` for a `/compact`), replacing the history it summarized. A
- * threshold compaction runs in the background ({@link backgroundCompaction});
- * a `/compact` waits for its own. The replacement is a summary the bound
- * model produces through the invoker's priced `call`, its attempts recorded
- * on the run's history, folded back as one user message. Every skip and
- * failure is logged and shown as a compaction activity, never silent.
+ * `context-limit` at the threshold share of the bound model's window, `user`
+ * for a `/compact`, `overflow` after a request the window could not hold),
+ * replacing the history it summarized. A threshold compaction runs in the
+ * background ({@link backgroundCompaction}); the others wait for their own.
+ * The replacement, a summary the bound model produces through the invoker's
+ * priced `call` (its attempts on the run's history), is one user message.
+ * Every skip and failure is logged and shown as a compaction activity.
  */
 import { Cause, Effect, Exit, Fiber, type Scope } from 'effect';
 
@@ -279,14 +279,14 @@ const compactIfNeeded = Effect.fn('compaction.check')(function* (
 });
 
 /**
- * The tool-use loop's compaction (durable harness, gap 4). Crossing the
- * threshold starts the summary on a fiber in the run's scope, and a later
- * request boundary of the turn, or its end at the latest, lands it as the
- * edit of messages `[0, to)` at the `base` it was computed from. Every
- * other edit of the view (a `/compact`, a model switch) settles this first
+ * The tool-use loop's compaction. Crossing the threshold starts the summary
+ * on a fiber in the run's scope, and a later request boundary of the turn,
+ * or its end at the latest, lands it as the edit of messages `[0, to)` at
+ * the `base` it was computed from. Every other edit of the view (a
+ * `/compact`, an overflow, a model switch) settles this first
  * ({@link settle}), so no summary meets a view another edit moved. A history
- * past the window waits for the summary; a `/compact` settles, then
- * summarizes the whole history.
+ * past the window waits for the summary; a `/compact` or an overflow
+ * settles, then summarizes the whole history.
  */
 export interface BackgroundCompaction {
   /** At a request boundary, no attempt open; `requests` consume `/compact`s.

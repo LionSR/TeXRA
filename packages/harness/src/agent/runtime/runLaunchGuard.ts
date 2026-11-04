@@ -344,8 +344,8 @@ const cutShort = ({ childTurn }: RunRows): boolean =>
  * The one closer of what a dead process or a clean close left of `run`: a
  * child of `parent` as it resumes, or a process run a detach left with no
  * parent as a session opens (`sweepLeftoverRuns`). One cut short whose
- * process is gone, or that a clean close stopped (`run.position halted`,
- * reason `closed`), is resumed under its own id when its rows can continue,
+ * process is gone, or that a clean close stopped (its `run.end` reason
+ * `shutdown`), is resumed under its own id when its rows can continue,
  * so its result reaches its parent as it would have; one that cannot
  * continue (a background command, a task that ended, a resume refused once
  * it decides) is reported ({@link reportInterrupted}). Left alone: a run

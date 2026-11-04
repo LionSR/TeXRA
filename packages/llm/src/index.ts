@@ -53,8 +53,11 @@ export {
   sameModelOrigin,
   TurnProtocolSchema,
 } from './protocol.js';
-export type { TurnUsage } from './protocol.js';
-export type { ModelOrigin, PreparedHistoryEntry } from './protocol.js';
+export type {
+  ModelOrigin,
+  PreparedHistoryEntry,
+  TurnUsage,
+} from './protocol.js';
 export { AssistantMessageSchema, MessageSchema } from './message.js';
 export type { AssistantMessage, Continuation } from './message.js';
 export {

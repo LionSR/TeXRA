@@ -26,8 +26,8 @@ type ResponsesTransport = Extract<
 >['transport'];
 
 /** Resolves controls before admission; a route with no output limit
- *  ignores the request's, and the lowering refuses an unsupported storage
- *  request. No transport request is made here. */
+ *  ignores the request's, and the lowering refuses a continuation on a
+ *  route that does not store. No transport request is made here. */
 export const prepareResponsesTurn = (
   config: OpenAIResponsesConfiguration,
   origin: ResponseOrigin,

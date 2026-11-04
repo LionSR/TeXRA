@@ -17,7 +17,6 @@ import {
   qualifyAggregateId,
   type FollowUpDisposition,
   type PositionAt,
-  type ResponseCut,
   type RunBinding,
   type RunId,
   type RunInput,
@@ -34,14 +33,6 @@ import type { TurnResult } from '@texra-ai/llm';
 
 import type { AgentRunShape } from '../run/AgentRun';
 
-/** The limit that ended `turn`'s answer early, if one did. */
-const cutOf = (turn: TurnResult | null): ResponseCut | undefined => {
-  const finish = turn?.finishReason;
-  return finish === 'length' || finish === 'content-filter'
-    ? finish
-    : undefined;
-};
-
 /** The row making `text` the response shown as final, with the limit that
  *  ended it early when one did (`turn`, the turn that wrote it): a row of
  *  the run's history, awaited, never a detached trace row. */
@@ -50,13 +41,15 @@ export const finalizedRows = (
   text: string,
   turn: TurnResult | null,
 ): RunHistoryDraft[] => {
-  const cut = cutOf(turn);
+  const finish = turn?.finishReason;
   return [
     {
       type: 'response.finalized',
       aggregateId: qualifyAggregateId('run', runId),
       text,
-      ...(cut === undefined ? {} : { cut }),
+      ...((finish === 'length' || finish === 'content-filter') && {
+        cut: finish,
+      }),
     },
   ];
 };

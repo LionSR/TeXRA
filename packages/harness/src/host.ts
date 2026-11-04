@@ -223,8 +223,8 @@ export {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 // Failures as hosts and plugins read them: the agent error, predicates, cause
-// chain, abort, and a failure's message with its classification
-// (`toErrorMessage` is in `./schemas`).
+// chain, and a failure's message with its classification (`toErrorMessage`
+// is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
