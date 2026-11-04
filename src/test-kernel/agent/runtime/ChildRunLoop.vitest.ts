@@ -143,7 +143,12 @@ function createFakeStrategy(): FakeStrategyHandle {
   const strategy: ProcessChildStrategy<FakeTurn> = {
     stageLabel: 'Fake child run',
     launch: () => runTurn,
-    runTurn: () => runTurn,
+    cli: {
+      runTurn: () => runTurn,
+      pauseNotice: () => undefined,
+      onTurnSuccess: () => {},
+      releaseSessionOwnership: () => {},
+    },
     isTurnError: (turn) => turn.kind === 'error-turn',
     formatDelivery: (turn) => Effect.succeed(`delivered:${turn.value}`),
     formatError: (turn) => `error:${turn?.value ?? 'thrown'}`,
@@ -334,6 +339,7 @@ describe('childRunLoop E2E fixtures', () => {
             const loop = yield* startLoop(runId, {
               stageLabel: 'Finalize-before-wake test',
               launch: () => Effect.succeed({ kind: 'terminal', value: 'done' }),
+              interruptedTurn: () => ({ kind: 'terminal', value: 'cut' }),
               formatDelivery: (turn) =>
                 Effect.succeed(`delivered:${turn.value}`),
               formatError: () => 'error',
@@ -362,6 +368,7 @@ describe('childRunLoop E2E fixtures', () => {
             const owned: boolean[] = [];
             const strategy: NativeChildStrategy<FakeTurn> = {
               stageLabel: 'Delivers two turns',
+              isTurnInterrupted: () => false,
               launch: (_notify, turns) =>
                 Effect.gen(function* () {
                   for (const value of ['one', 'two']) {

@@ -136,14 +136,11 @@ export const texraProcessLayer = ({
       ),
     ),
     usageLog: usageLogLayer(usageLog),
-    // Every host shows a root run's title in its run list and history.
-    labelRuns: true,
     minimumLogLevel,
     workspace,
     ...(globalStores && {
       appState: AppState.layer(globalStores.appState),
       globalDatabase: globalStores.globalDatabase,
-      seedToolSwitches: false,
     }),
     // TeXRA's plugin list is fixed in this build, so a list the harness
     // refuses is a defect of the build, not a failure a host can recover.

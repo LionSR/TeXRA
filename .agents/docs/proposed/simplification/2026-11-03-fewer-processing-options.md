@@ -252,6 +252,27 @@ pattern, so the "options" are one choice spelled as several.
 combinations a producer builds; the `nativeSubagentStrategy` and
 `childRunLoop` interfaces name concrete strategies.
 
+_Landed 2026-11-04 (all but `ChildLaunch`): the members that travel together
+are one bag each, so a strategy with only some of them no longer type-checks:
+`NativeChildStrategy.script` (`deliveryId` + `stopNotice`, the script run's)
+with `isTurnInterrupted` required, and `ProcessChildStrategy` a union of the
+one-turn command (`interruptedTurn`) and the agent CLI's `cli` (`runTurn`,
+`pauseNotice`, `onTurnSuccess`, `releaseSessionOwnership`); named strategy
+interfaces were tried and refused by `childRunLoop.ts`'s size cap and the
+layer-names baseline, which pins `ProcessChildStrategy` to that module.
+`inBand` and `deliveryMode: 'persistOnly'` are gone, the loop reads its own
+`awaited`; `CompactionInput.force` is gone (the reason is `forced`'s
+argument; `compactIfNeeded` folded into it); `RegisterRunOptions.descriptionBy`
+is gone (the fork appends its copied title row to its registration rows);
+`ProcessLayerOptions.seedToolSwitches` and `labelRuns` are gone (a store the
+process builds is seeded, a handed-in one left alone, `Sessions.layer` seeds
+the embedder's; `processLayer` provides `RunLabels` to every host);
+`AgentRuntimeEmitOptions.replayWhenAttached` is gone (replay is the
+behaviour). Kept: `resume.stopAfterCycle` (a host resume is a second
+producer with a varying value). Split off: the `ChildLaunch` union on `task`
+(chat: `schema` + `mediaFiles`; task: `files`): `AgentTool.ts` sits two lines
+under its size cap, so it lands with a trim of that file._
+
 ## 5. The document task's options: one table, one name, every surface
 
 `DocumentTaskOptionsSchema` (`packages/texra/src/shared/plugins/documents.ts:222-239`)

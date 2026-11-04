@@ -84,7 +84,8 @@ export function getDisplayedInstruction(
  * Whether the session labels its root runs: one extra helper-model request
  * per root run, reported to the usage log but not to the run's own usage.
  * The label is the app's (a session's title in its run list and history),
- * so it is off unless the composition asks for it (`labelRuns`); a child
+ * so it is off unless the process layer provides it (`processLayer`
+ * does; `Sessions.layer` does not); a child
  * run is never labelled and keeps its agent name.
  */
 export const RunLabels = Context.Reference<boolean>(

@@ -199,9 +199,9 @@ export class SessionHostInteractions implements HostInteractions {
         );
       }
       // The replay loop warn-logs a replay that fails.
-      return options.replayWhenAttached && !this.disposed
-        ? this.queuePresentationReplay(present)
-        : Effect.void;
+      return this.disposed
+        ? Effect.void
+        : this.queuePresentationReplay(present);
     });
   }
 
@@ -290,10 +290,9 @@ function presentAgentFailure(
   error: Parameters<typeof agentErrorPresentation>[0],
 ): Effect.Effect<void> {
   const toast = agentErrorPresentation(error);
-  const options = { replayWhenAttached: true };
   return toast.type === 'instruction'
-    ? interactions.emit('requestShowInstruction', toast.payload, options)
-    : interactions.emit('requestShowError', toast.payload, options);
+    ? interactions.emit('requestShowInstruction', toast.payload)
+    : interactions.emit('requestShowError', toast.payload);
 }
 
 /**
@@ -379,7 +378,6 @@ export function presentRunFailure(
   const notice = launchNoticeOf(primary);
   if (notice !== undefined)
     return interactions.emit(notice.event, notice.payload, {
-      replayWhenAttached: true,
       fallbackMessage: text,
     });
   const classified = prefix === '' ? classifyAgentError(primary) : undefined;

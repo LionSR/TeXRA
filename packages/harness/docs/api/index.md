@@ -478,9 +478,8 @@ interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been
