@@ -288,6 +288,26 @@ that fails while the user quits exits 0 and bypasses `settleExitCode`.
 Acceptance: `grep -rn 'process.exit(' packages/cli/src` returns one file;
 `grep -rn "process.on('SIG" packages/cli/src` returns one file.
 
+_Landed 2026-11-04 (rows two to four; the first waits for slice 3): the
+chat's exit is one `Deferred<ChatExit>` on `TuiSession` (`leaving` is its
+done-state), completed by the exit controller's `leave` on every path, and
+`claim.stop`, `stopRequested`, `askStop` and the teardown memo are gone; a stop
+asked during a launch is a program that waits for the claim's `launched`
+and then asks the session, so the three re-reads of the flag went with it.
+The exit code is the claim's, written only by `settleExitCode` (`TuiSession.
+exitCode` reads it, or the dead-view failure), and `process.exit` lives in
+`initPlatform.ts` alone (`cliExit`, `leaveAtOnce`): the TUI's three sites,
+the self-update's two and the platform's own all go through it. Signals are
+held as policies through `holdSignals` (`processSignals.ts`, the one
+`process.on('SIG…')` site): the platform, a foreground child, `texra serve`
+and the chat TUI each hold theirs, and the newest holder answers, so the
+hand-off and the five install sites are gone. Headless, the six shutdown
+flags are the launch fiber's `Exit` plus `stopRun` (the launch's
+interruption until the session accepts the run, its stop after) and one
+`shutdown` boolean the finalization's drain needs. Today's defect is gone by
+shape: a failure is the claim's exit code before anything asks whether the
+chat is leaving._
+
 ### D. Model, route and retry
 
 Audit verdict: partial. The run model and gate cooling have owners; retryable,

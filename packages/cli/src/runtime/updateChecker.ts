@@ -242,28 +242,31 @@ let updateNotifyStarted = false;
  * never gets between the user and their session.
  *
  * Disable entirely with `TEXRA_NO_UPDATE_CHECK=1`.
+ *
+ * Answers the exit code the command ends with when the process should go no
+ * further (an update ran, or its installer was cancelled), else `undefined`.
  */
 export function notifyCliUpdate(
   context: CliContext,
-): Effect.Effect<void, Error, ProcessServices> {
-  if (updateNotifyStarted) return Effect.void;
+): Effect.Effect<number | undefined, Error, ProcessServices> {
+  if (updateNotifyStarted) return Effect.undefined;
   updateNotifyStarted = true;
 
   const ambient = readCliAmbientState();
-  if (ambient.isCi) return Effect.void;
+  if (ambient.isCi) return Effect.undefined;
   // Require all three standard runs to be a TTY. stdout matters even though
   // the prompt uses stdin/stderr: a half-redirected invocation like
   // `texra chat > out` is an interactive-mode usage error the command rejects
   // before this runs, and we must not prompt for (or run) a self-update
   // before it does.
   if (!ambient.stdinIsTty || !ambient.stdoutIsTty || !ambient.stderrIsTty)
-    return Effect.void;
+    return Effect.undefined;
   if (context.outputFormat === 'ndjson' || context.quietLogs === true)
-    return Effect.void;
+    return Effect.undefined;
   // A source checkout or `npm link` build runs from `packages/cli/dist`, not a
   // node_modules tree; an `npm install -g` prompt can't update it, so skip.
   const method = detectInstallMethod();
-  if (!method) return Effect.void;
+  if (!method) return Effect.undefined;
 
   const { command, args } = buildUpdateCommand(method);
   const updateCmd = [command, ...args].join(' ');
@@ -326,16 +329,16 @@ export function notifyCliUpdate(
     writeTextStderr(style.muted(`Updating via ${method}…`));
     const update = yield* Effect.exit(runCliUpdate(method));
     if (Exit.isFailure(update)) {
-      // Ctrl-C on the installer interrupts the foreground command. No command
-      // boundary owns this exit, so the interrupt's exit code is set here, as
-      // the success path below exits here too; any other failure propagates.
+      // Ctrl-C on the installer interrupts the foreground command: the
+      // command ends with the interrupt's code, as it does with the success
+      // path's below; any other failure propagates.
       if (!Cause.hasInterruptsOnly(update.cause))
         return yield* Effect.failCause(update.cause);
       writeTextStderr(
         style.muted('Update cancelled. Update later with: ') +
           style.command(updateCmd),
       );
-      return process.exit(CliExitCode.Interrupted);
+      return CliExitCode.Interrupted;
     }
     if (!update.value) {
       writeTextStderr(
@@ -355,6 +358,6 @@ export function notifyCliUpdate(
         style.command('texra') +
         style.muted(' again to use it.'),
     );
-    return process.exit(CliExitCode.Success);
+    return CliExitCode.Success;
   });
 }

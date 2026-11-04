@@ -40,17 +40,13 @@ import {
   writeTextStderrAndWait,
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
-import { terminalForegroundHeld } from './foregroundCommand';
+import { holdSignals, type SignalPolicy } from './processSignals';
 import type { CliContext } from './cliContext';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
-type CliShutdownSignal = 'SIGINT' | 'SIGTERM';
-// Removers for the listeners installCliShutdownSignalHandlers put on the
-// process — kept so handOffCliShutdownSignalHandlers can remove exactly those
-// (not every SIGINT/SIGTERM listener on the process) once an exclusive owner
-// (the chat TUI) is about to install its own. Undefined means no platform
-// handlers are currently installed.
-let shutdownHandlers: (() => void)[] | undefined;
+// The user's own `--quiet`, set with `installed`: the shutdown sequence's
+// warnings are the one thing the platform still says after its log sink.
+let shutdownQuiet = false;
 // What the first init installed, set in one assignment once its fallible
 // setup has succeeded; later inits return it rather than building a second
 // set. `session` is the one memoized open of the process session
@@ -128,24 +124,19 @@ export type CliPlatformServices = SettingsStores & {
 };
 
 /**
- * The canonical "shut down the CLI platform" sequence — lifecycle shutdown
+ * The canonical "shut down the CLI platform" sequence: lifecycle shutdown
  * hooks, then the NDJSON stdout flush, then the runtime disposal that drains
- * the usage log — shared by every process.exit()-ing teardown path: the
- * headless signal handlers below AND the interactive chat TUI's own signal
- * handlers (see `handOffCliShutdownSignalHandlers`), which take over
- * SIGINT/SIGTERM exclusively once mounted and must perform the same sequence
- * the platform's own (now handed-off) handlers would have. One definition
- * means the two paths can't drift.
+ * the usage log. `cliExit` below runs it before `process.exit`, for the
+ * platform's own signal policy and for the chat TUI's teardown alike, so the
+ * two paths cannot drift; `bin/texra.ts`'s `ensuring` runs the same steps on
+ * the ordinary return path.
  *
  * A program, not a run: the caller runs it on the default runtime rather
  * than the process runtime, because the lifecycle shutdown below disposes the
  * process runtime (`disposeCliProcessRuntime`) before the flushes run, and a
  * teardown path must not depend on the thing it is tearing down.
  */
-export function cliPlatformShutdownSequence(options: {
-  /** The user's own `--quiet`, never a command's silenced log sink. */
-  readonly quiet: boolean;
-}): Effect.Effect<void> {
+function cliPlatformShutdownSequence(): Effect.Effect<void> {
   // Each step is best effort, so a failure never stops termination, but it
   // is said, on stderr: the process runtime is gone by the flushes, and the
   // log sink is silent under the chat TUI (which has unmounted by now), so
@@ -153,7 +144,7 @@ export function cliPlatformShutdownSequence(options: {
   const bestEffort = (step: string, effect: Effect.Effect<void>) =>
     effect.pipe(
       Effect.catchCause((cause) =>
-        options.quiet
+        shutdownQuiet
           ? Effect.void
           : writeTextStderrAndWait(
               `[warn] [cli.shutdown] ${step} failed: ${Cause.pretty(cause)}`,
@@ -171,69 +162,44 @@ export function cliPlatformShutdownSequence(options: {
 }
 
 /**
- * The one run of an exit program: the CLI's two exit edges, the platform's
- * signal handlers above and the chat TUI's teardown, run theirs here, on the
- * default runtime, because `cliPlatformShutdownSequence` disposes the process
- * runtime a run on it would be standing on.
+ * The one run of an exit program: the platform's signal policy and the chat
+ * TUI's teardown run theirs here, on the default runtime, because
+ * `cliPlatformShutdownSequence` disposes the process runtime a run on it
+ * would be standing on.
  */
 export function runCliExit<E>(exit: Effect.Effect<void, E>): Promise<void> {
   return Effect.runPromise(exit);
 }
 
-function installCliShutdownSignalHandlers(quiet: boolean): void {
-  if (shutdownHandlers) return;
-  const handlers: (() => void)[] = [];
-  shutdownHandlers = handlers;
+/** A process already leaving: a further signal ends it at once with that
+ *  signal's code. The terminal's own `exit` hook restores the tty. */
+export const leaveAtOnce: SignalPolicy = {
+  SIGINT: () => process.exit(CliExitCode.Interrupted),
+  SIGTERM: () => process.exit(CliExitCode.Terminated),
+  SIGHUP: () => process.exit(129),
+};
 
-  const install = (signal: CliShutdownSignal, exitCode: number) => {
-    const handler = async () => {
-      // A foreground child (a pager, the self-update) owns Ctrl-C while it
-      // runs; its own listener records the interrupt, and
-      // `runForegroundCommand` interrupts its command if the child died of
-      // it. Re-arm so the next SIGINT reaches this handler again.
-      if (signal === 'SIGINT' && terminalForegroundHeld()) {
-        process.once(signal, handler);
-        return;
-      }
-      // A second signal during the shutdown sequence leaves at once: with
-      // this `once` listener spent, it would otherwise be Node's default
-      // death, mid-flush.
-      process.once(signal, () => process.exit(exitCode));
-      await runCliExit(cliPlatformShutdownSequence({ quiet }));
-      process.exit(exitCode);
-    };
-    process.once(signal, handler);
-    handlers.push(() => process.removeListener(signal, handler));
-  };
-
-  install('SIGINT', CliExitCode.Interrupted);
-  install('SIGTERM', CliExitCode.Terminated);
+/** The one exit of a CLI process that leaves on its own: the platform's
+ *  shutdown sequence, then `process.exit(code)`. A program for `runCliExit`;
+ *  the caller holds `leaveAtOnce` first so a second signal meanwhile is not
+ *  Node's default death mid-flush. */
+export function cliExit(code: number): Effect.Effect<never> {
+  return cliPlatformShutdownSequence().pipe(
+    Effect.andThen(Effect.sync(() => process.exit(code))),
+  );
 }
 
-/**
- * Hands exclusive SIGINT/SIGTERM ownership from the platform's own handlers
- * (installed by `installCliShutdownSignalHandlers` above) to a caller that is
- * about to install its own — the chat TUI, immediately before it calls
- * `process.on('SIGINT'/'SIGTERM', ...)` once Ink mounts. Removes exactly the
- * listeners this module installed (tracked in `shutdownHandlers`), not every
- * SIGINT/SIGTERM listener on the process, and clears that store so a later
- * `initCliPlatform` first-init could reinstall if the platform is ever torn
- * down and reinitialized.
- *
- * Call this right at the handoff point, not any earlier: everything between
- * the interactive entry's `initCliPlatform` and this call (onboarding, model
- * resolution) still needs a graceful handler, so the platform's stays live
- * for that whole window instead of being suppressed for the entire span up
- * front.
- *
- * A no-op if the platform handlers were never installed (e.g. a headless
- * `initCliPlatform` call with `installSignalHandlers: false`, or a second
- * call after an earlier handoff already ran).
- */
-export function handOffCliShutdownSignalHandlers(): void {
-  for (const remove of shutdownHandlers ?? []) remove();
-  shutdownHandlers = undefined;
-}
+// The platform's own answer to SIGINT and SIGTERM: leave through `cliExit`
+// with the signal's code. A holder above it (a foreground child's, the chat
+// TUI's) answers instead while it holds.
+const leaveOnSignal = (code: number) => (): void => {
+  holdSignals(leaveAtOnce);
+  void runCliExit(cliExit(code));
+};
+const platformSignalPolicy: SignalPolicy = {
+  SIGINT: leaveOnSignal(CliExitCode.Interrupted),
+  SIGTERM: leaveOnSignal(CliExitCode.Terminated),
+};
 
 /**
  * Record the model the chat is running as the default helper model. Returns
@@ -256,18 +222,14 @@ export function setCliHelperModel(
  * the init and the work it feeds run on one fiber instead of a Promise the
  * init resolves and a second run over the result.
  *
- * `installSignalHandlers` (default true) is the one behavioural choice here.
- * The headless commands leave it at the default and keep the platform's
- * SIGINT/SIGTERM pair for the whole command. The interactive entries — `texra
- * chat` (including the bare `texra` default), `texra setup` and `texra
- * resume` — also leave it at the default, deliberately: each still does real
- * work (onboarding, model resolution) between this call and the moment Ink
- * mounts, and that window needs a graceful handler just as much as a headless
- * command does. `runChat()` calls `handOffCliShutdownSignalHandlers()`
- * immediately before installing its own `process.on('SIGINT'/'SIGTERM', ...)`
- * pair, at which point ownership transfers exclusively and the two handler
- * sets can never both be live. Pass `false` only where no handler should be
- * installed at all (the TUI harness).
+ * `installSignalHandlers` (default true) is the one behavioural choice here:
+ * the platform holds SIGINT and SIGTERM (`holdSignals`) for the whole
+ * command, the interactive entries included, since onboarding and model
+ * resolution run before Ink mounts and need a graceful exit as much as a
+ * headless command does. The chat TUI holds its own policy above the
+ * platform's once Ink mounts and releases it as it leaves, so the newest
+ * holder answers and the two are never both live. Pass `false` only where no
+ * handler should be installed at all (the TUI harness).
  */
 export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
   context: CliPlatformInitOptions &
@@ -408,9 +370,9 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
           shutdown: yield* Effect.cached(Scope.close(scope, Exit.void)),
         };
         installed = platform;
-        if (context.installSignalHandlers !== false) {
-          installCliShutdownSignalHandlers(context.quietLogs);
-        }
+        shutdownQuiet = context.quietLogs;
+        if (context.installSignalHandlers !== false)
+          holdSignals(platformSignalPolicy);
         return { globalState, platform };
       }).pipe(
         Effect.onExit((exit) =>
