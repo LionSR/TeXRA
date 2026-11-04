@@ -20,7 +20,7 @@ function missingTool(
 ): MissingTool {
   const usedFor = DEPENDENCY_USE[id];
   const label = LATEX_TOOL_ENTRIES[id].label ?? id;
-  return { id, label, interchangeable, usedFor };
+  return { label, interchangeable, usedFor };
 }
 
 /**

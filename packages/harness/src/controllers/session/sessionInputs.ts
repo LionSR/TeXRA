@@ -8,21 +8,13 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import {
-  Effect,
-  Layer,
-  Schedule,
-  Schema,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
   DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
-  RunIdSchema,
   type AggregateId,
   type LocalRuntimeState,
   type ExistenceReconciliation,
@@ -39,8 +31,8 @@ import { Settings } from '@shared/config/settings';
 import {
   LocalRuntimeSource,
   TextChunkSource,
+  textSince,
   type InflightText,
-  type InflightTextChunk,
 } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -292,26 +284,22 @@ function reconcileExistence(read: {
  *  started a new chain. */
 function textChunks(held: InflightText, next: InflightText): TextChunk[] {
   const chunks: TextChunk[] = [];
-  for (const [key, value] of next) {
-    const tail = held.get(key);
-    if (value === tail) continue;
-    const parts: string[] = [];
-    let at: InflightTextChunk | undefined = value;
-    while (at !== undefined && at !== tail) {
-      parts.push(at.text);
-      at = at.previous;
+  for (const [runId, rows] of next) {
+    const heldRows = held.get(runId);
+    for (const [rowId, value] of rows) {
+      const tail = heldRows?.get(rowId);
+      if (value === tail) continue;
+      const { from, text } = textSince(value, tail);
+      if (value.length <= from) continue;
+      chunks.push({
+        _tag: 'chunk',
+        runId,
+        rowId,
+        from,
+        to: value.length,
+        text,
+      });
     }
-    const from = at === tail ? (tail?.length ?? 0) : 0;
-    if (value.length <= from) continue;
-    const slash = key.indexOf('/');
-    chunks.push({
-      _tag: 'chunk',
-      runId: Schema.decodeUnknownSync(RunIdSchema)(key.slice(0, slash)),
-      rowId: key.slice(slash + 1),
-      from,
-      to: value.length,
-      text: parts.toReversed().join(''),
-    });
   }
   return chunks;
 }
