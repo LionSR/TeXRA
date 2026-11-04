@@ -54,29 +54,29 @@ const GUIDANCE_FILES = [
   'packages/harness/docs/spec.md',
 ];
 
-// Files whose `path:line` citations are checked against the tree as well,
-// each with the directory its bare paths are relative to. A bare `:line`
-// continues the file cited last. Code moving under a citation leaves its
-// range past the end of the file or on the wrong lines; this catches the
-// first, not the second.
-const LINE_CITING_FILES = new Map([
+// Files whose code citations are checked against the tree as well, each with
+// the directory its bare paths are relative to. A citation is `path#name`,
+// where the name is a declaration or other text its file holds verbatim (a
+// quoted literal, a test title, the opening words of a message), matched as
+// a whole word; a bare `#name` continues the file cited last. A line number
+// is refused: code moving under it leaves it on the wrong lines with nothing
+// to tell, while a name either stays with its code or disappears with it.
+const NAME_CITING_FILES = new Map([
   ['packages/harness/docs/spec.md', 'packages/harness/src/'],
 ]);
-const LINE_CITE = /^([\w./@-]+\.\w+)?:(\d+)(?:-(\d+))?$/u;
-const lineCounts = new Map();
+const CODE_CITE = /^([\w./@-]+\.\w+)?(?:#(.+)|:\d+(?:-\d+)?)$/u;
+const fileTexts = new Map();
 
-/** Lines in a repo file, or null when it does not exist. */
-function lineCount(path) {
-  if (!lineCounts.has(path)) {
+/** A repo file's text, or null when it does not exist. */
+function fileText(path) {
+  if (!fileTexts.has(path)) {
     const absolute = join(repoRoot, path);
-    lineCounts.set(
+    fileTexts.set(
       path,
-      existsSync(absolute)
-        ? readFileSync(absolute, 'utf8').replace(/\n$/u, '').split('\n').length
-        : null,
+      existsSync(absolute) ? readFileSync(absolute, 'utf8') : null,
     );
   }
-  return lineCounts.get(path);
+  return fileTexts.get(path);
 }
 
 // Standing docs: architecture notes and the published guide. Dated proposals
@@ -408,14 +408,14 @@ const targets = [
 
 const failures = [];
 const eventFailures = [];
-const lineFailures = [];
+const citeFailures = [];
 
 for (const file of targets) {
   const body = stripFencedBlocks(readFileSync(join(repoRoot, file), 'utf8'));
   const lines = body.split('\n');
   const ignored = ignoredLines(lines);
   const definitions = referenceDefinitions(lines);
-  const lineCiteBase = LINE_CITING_FILES.get(file);
+  const citeBase = NAME_CITING_FILES.get(file);
   let citedFile = null;
 
   for (const [index, line] of lines.entries()) {
@@ -455,25 +455,26 @@ for (const file of targets) {
     }
 
     for (const [, token] of line.matchAll(/`([^`\n]+)`/g)) {
-      const cite = lineCiteBase === undefined ? null : LINE_CITE.exec(token);
+      const cite = citeBase === undefined ? null : CODE_CITE.exec(token);
       if (cite !== null) {
-        const [, path, first, last = first] = cite;
+        const [, path, name] = cite;
         if (path !== undefined) {
           citedFile = PATH_PREFIXES.some((prefix) => path.startsWith(prefix))
             ? path
-            : lineCiteBase + path;
+            : citeBase + path;
         }
-        const count = citedFile === null ? null : lineCount(citedFile);
+        const text = citedFile === null ? null : fileText(citedFile);
+        const escaped = name?.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
         const problem =
-          count === null
-            ? `no such file ${citedFile ?? '(no file cited before it)'}`
-            : Number(first) < 1 ||
-                Number(first) > Number(last) ||
-                Number(last) > count
-              ? `${citedFile} has ${count} lines`
-              : null;
+          name === undefined
+            ? 'a line number; cite path#name'
+            : text === null
+              ? `no such file ${citedFile ?? '(no file cited before it)'}`
+              : new RegExp(`(?<![\\w$])${escaped}(?![\\w$])`, 'u').test(text)
+                ? null
+                : `${citedFile} does not contain ${name}`;
         if (problem !== null) {
-          lineFailures.push({
+          citeFailures.push({
             file,
             line: index + 1,
             candidate: token,
@@ -485,7 +486,7 @@ for (const file of targets) {
       // Trim trailing line cites (`:12`, `:73-80`, `:25-29,59-65`, `:18,27,28`),
       // then trailing sentence punctuation that fell inside the backticks.
       // Line numbers are not validated here — only path existence (issue
-      // #9730); LINE_CITING_FILES above are the exception.
+      // #9730); NAME_CITING_FILES above refuse them instead.
       const candidate = token
         .trim()
         .replace(/:(?:\d+(?:-\d+)?)(?:,\d+(?:-\d+)?)*$/, '')
@@ -548,20 +549,20 @@ if (failures.length > 0) {
   );
 }
 
-if (lineFailures.length > 0) {
-  console.error('Line citations point past their file or at no file:\n');
-  for (const { file, line, candidate, problem } of lineFailures) {
+if (citeFailures.length > 0) {
+  console.error('Code citations that do not name what their file holds:\n');
+  for (const { file, line, candidate, problem } of citeFailures) {
     console.error(`  ${file}:${line}  ${candidate}  (${problem})`);
   }
   console.error(
-    `\n${lineFailures.length} bad line citation(s). Find the code the citation meant on the current tree and update its range.`,
+    `\n${citeFailures.length} bad code citation(s). Find the code the sentence means on the current tree and cite it by name.`,
   );
 }
 
 if (
   failures.length > 0 ||
   eventFailures.length > 0 ||
-  lineFailures.length > 0
+  citeFailures.length > 0
 ) {
   process.exit(1);
 }
