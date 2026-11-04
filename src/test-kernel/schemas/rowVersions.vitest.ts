@@ -128,7 +128,7 @@ describe('row versions', () => {
 
   it('reads or retires every row kind ever stored', () => {
     // A kind deleted without a retirement would make every store that holds
-    // it refuse to open. The list only grows: check-ratchet-baselines fails a
+    // it refuse to open. The list only grows: check-row-kinds-ever fails a
     // name the base branch lists and the tree does not.
     const { kinds } = Schema.decodeUnknownSync(
       Schema.Struct({ kinds: Schema.Array(Schema.String) }),

@@ -49,7 +49,6 @@ const kernelTimeoutMs = process.platform === 'win32' ? 20_000 : 10_000;
 // decides file by file.
 const PURE_DIRS = [
   'agent',
-  'architecture',
   'auth',
   'cli',
   'commands',
