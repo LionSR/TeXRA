@@ -83,8 +83,8 @@ variable for any other provider, and an invented one renders as false.
 ## Settings guide
 
 - `task.outputs`: the files a task writes when it creates new content; a
-  task that names none edits the input documents, which are diffed against
-  them.
+  task that names none edits the input documents, and each revision is
+  diffed against the original inputs.
 - `temperature`: optional, 0 to 1, default 1.0. Low (0.1) for editing and
   correction, higher (0.5–0.8) for creative or generative work.
 - `task.requests`: one entry for single-pass tasks, two when reflection

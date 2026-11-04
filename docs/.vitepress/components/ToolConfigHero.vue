@@ -1,7 +1,8 @@
 <script setup>
 // Tool Config product slice: the per-run helper menus that live in the file-
 // group headers (FileSelectGroup.ts). The Input group carries the "Tool
-// configuration options" button (tools) → Attach TeX Count; the Media group
+// configuration options" button (tools) → Attach TeX Count / Critic review;
+// the Media group
 // carries the "Auto-extract options" button (wand) → Figures / TikZ Figures /
 // Compile Input PDF. Both buttons light up (has-options) while a helper is on,
 // shown here with their wa-dropdown menus open.
@@ -30,7 +31,7 @@ import MockupFrame from './MockupFrame.vue';
           <span class="sec-lbl">Files</span>
         </div>
 
-        <!-- Input: carries the Tool config menu (Attach TeX Count). -->
+        <!-- Input: carries the Tool config menu (Attach TeX Count, Critic review). -->
         <div class="field">
           <div class="frow">
             <span class="f-label"
@@ -64,6 +65,10 @@ import MockupFrame from './MockupFrame.vue';
                 ><wa-icon library="texra" name="check"></wa-icon
               ></span>
               Attach TeX Count
+            </div>
+            <div class="wa-item">
+              <span class="wa-check"></span>
+              Critic review
             </div>
           </div>
 

@@ -164,7 +164,6 @@ export class FileSelectGroup extends LitElement {
     this.patchLaunch({ [item.value]: item.checked });
   };
 
-  /** Shared wa-dropdown chrome (trigger button + tooltip) for the checkbox menus. */
   /** The group's header menu: the task switches its file group offers
    *  (`DOCUMENT_TASK_OPTIONS`), none for a group that offers none. The
    *  group renders only for a document task (ProgressApp's file section),

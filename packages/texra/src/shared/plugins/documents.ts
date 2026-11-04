@@ -216,42 +216,42 @@ export type DocumentAgentOption = typeof DocumentAgentOptionSchema.Type;
  * table; `menu` is the launch form's file group whose header menu offers
  * the switch.
  */
-export const DOCUMENT_TASK_OPTIONS = {
-  attachTeXCount: {
+export const DOCUMENT_TASK_OPTIONS = Object.freeze({
+  attachTeXCount: Object.freeze({
     label: 'Attach TeX Count',
     description:
       "Add each input document's texcount statistics to the prompt, so the agent knows its size and structure.",
     menu: 'input',
-  },
-  reflect: {
+  }),
+  reflect: Object.freeze({
     label: 'Critic review',
     description:
       'Have the `critic` agent review each revision but the last; the next revision reads its critique.',
     menu: 'input',
-  },
-  autoExtractFigure: {
+  }),
+  autoExtractFigure: Object.freeze({
     label: 'Figures',
     description: 'Attach the figures the input LaTeX includes as media.',
     menu: 'media',
-  },
-  autoExtractTikzFigure: {
+  }),
+  autoExtractTikzFigure: Object.freeze({
     label: 'TikZ Figures',
     description: 'Compile the input LaTeX TikZ figures and attach them.',
     menu: 'media',
-  },
-  autoCompileInputPdf: {
+  }),
+  autoCompileInputPdf: Object.freeze({
     label: 'Compile Input PDF',
     description: 'Compile each input LaTeX file and attach its PDF.',
     menu: 'media',
-  },
-} as const satisfies Record<
+  }),
+} satisfies Record<
   string,
   {
     readonly label: string;
     readonly description: string;
     readonly menu: 'input' | 'media';
   }
->;
+>);
 
 /** The switches as a run stores them, each off unless the launch set it. */
 export const DocumentTaskOptionsSchema = Schema.Struct(
