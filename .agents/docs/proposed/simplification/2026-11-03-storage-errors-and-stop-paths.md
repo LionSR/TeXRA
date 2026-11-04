@@ -239,13 +239,9 @@ behaviour, which is the documented one.
 
 ## 6. The model-call failure path
 
-- **Dead outcomes.** `FailedNextSchema` (`packages/harness/src/shared/schemas/runHistoryEvent.ts:67-76`)
-  admits `cancel`; `failedNext` (`packages/harness/src/shared/session/inFlight.ts:269-286`)
-  and `afterFailure` (`invocation.ts:332`) never produce it, and its two
-  consumers (`inFlight.ts:236-237`, `invocation.ts:376`) are dead. A person's
-  cancel already travels `ask` → `request.decided`.
-  `ToolResultPayload.disposition: 'cancelled'` (`runHistoryEvent.ts:404-410`)
-  has no producer; `dispositionOf` returns `executed` or `failed`.
+- **Dead outcomes.** Done: `FailedNext` `cancel` and the `tool.result`
+  disposition `cancelled` are deleted with their dead readers (a person's
+  cancel travels `ask` → `request.decided`).
 - **A truncated turn is a silent success.** `finishReason` is stored
   (`packages/harness/src/shared/schemas/storedTurn.ts:125`) and read by nothing
   outside the llm package; Anthropic `max_tokens` and OpenAI
@@ -279,10 +275,9 @@ behaviour, which is the documented one.
   model-visible error with no log. `diagnostics.code` values (`hook_denied`,
   `tool_unavailable`) and `diagnostics.name` have no reader; "skipped" is
   signalled both as a disposition and as `name: 'Skipped'`, and
-  `scriptRun.ts:55` checks both.
+  `scriptRun.ts:53` checks both.
 
-**Proposal.** Delete `cancel` from `FailedNextSchema` and `cancelled` from the
-disposition. The loop reads `finishReason`: `length` and overflow are one
+**Proposal.** The loop reads `finishReason`: `length` and overflow are one
 outcome it acts on (a warning row at least, a compaction or a stop by policy),
 not a success. One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
