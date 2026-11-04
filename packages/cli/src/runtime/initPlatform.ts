@@ -167,17 +167,17 @@ function cliPlatformShutdownSequence(): Effect.Effect<void> {
  * `cliPlatformShutdownSequence` disposes the process runtime a run on it
  * would be standing on.
  */
-export function runCliExit<E>(exit: Effect.Effect<void, E>): Promise<void> {
+export function runCliExit<A, E>(exit: Effect.Effect<A, E>): Promise<A> {
   return Effect.runPromise(exit);
 }
 
 /** A process already leaving: a further signal ends it at once with that
  *  signal's code. The terminal's own `exit` hook restores the tty. */
-export const leaveAtOnce: SignalPolicy = {
+export const leaveAtOnce: Readonly<SignalPolicy> = Object.freeze({
   SIGINT: () => process.exit(CliExitCode.Interrupted),
   SIGTERM: () => process.exit(CliExitCode.Terminated),
   SIGHUP: () => process.exit(129),
-};
+});
 
 /** The one exit of a CLI process that leaves on its own: the platform's
  *  shutdown sequence, then `process.exit(code)`. A program for `runCliExit`;
@@ -196,10 +196,10 @@ const leaveOnSignal = (code: number) => (): void => {
   holdSignals(leaveAtOnce);
   void runCliExit(cliExit(code));
 };
-const platformSignalPolicy: SignalPolicy = {
+const platformSignalPolicy: Readonly<SignalPolicy> = Object.freeze({
   SIGINT: leaveOnSignal(CliExitCode.Interrupted),
   SIGTERM: leaveOnSignal(CliExitCode.Terminated),
-};
+});
 
 /**
  * Record the model the chat is running as the default helper model. Returns

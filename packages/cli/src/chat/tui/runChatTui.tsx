@@ -764,6 +764,9 @@ export async function runChat(
     }),
   );
 
+  // The code the exit's drain answers, read before the exit clears the
+  // chat's state.
+  let exitCode: CliExitCode;
   try {
     await ink.waitUntilExit();
   } finally {
@@ -772,8 +775,8 @@ export async function runChat(
     // teardown finishes only on the graceful path, whose drain closes that
     // scope first (a signal exit ends in process.exit and never returns
     // here), so nothing subscribed to the view outlives the bridge.
-    await exitController.gracefulTeardown();
+    exitCode = await exitController.gracefulTeardown();
     unbindSessionView();
   }
-  return { exitCode: session.exitCode };
+  return { exitCode };
 }

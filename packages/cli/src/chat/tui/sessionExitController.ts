@@ -104,8 +104,9 @@ interface SessionExitController {
   /** Hold the process signals under this controller's policy. */
   readonly install: () => void;
   /** The post-`waitUntilExit` graceful teardown: decides a graceful exit if
-   *  none was decided yet, and finishes once the exit's drain has. */
-  readonly gracefulTeardown: () => Promise<void>;
+   *  none was decided yet, and finishes once the exit's drain has, with the
+   *  code the chat ends with. */
+  readonly gracefulTeardown: () => Promise<CliExitCode>;
 }
 
 export function createSessionExitController(
@@ -121,7 +122,7 @@ export function createSessionExitController(
   // The TUI's hold on the signals, released as it leaves.
   let releaseSignals = (): void => {};
   // The one run of the exit, started by the path that decides it.
-  let exited: Promise<void> | undefined;
+  let exited: Promise<CliExitCode> | undefined;
   // Persist the reopen hint to native scrollback: the main session plus each
   // subagent TeXRA drives, so any route can be continued by its own id.
   // The view is read before resetCliState() clears it; the child lists
@@ -221,6 +222,9 @@ export function createSessionExitController(
       }),
     );
     ctx.terminal.release();
+    // The code the chat ends with: the drain above awaited the run, so the
+    // claim's code is final, and resetCliState() below clears the claim.
+    const exitCode = session.exitCode;
     // Print the resume hint after the terminal modes are restored, but before
     // resetCliState() clears the stream tree the hint is built from.
     printResumeHintOnExit(resumeHint);
@@ -238,10 +242,11 @@ export function createSessionExitController(
         );
       }
       return yield* cliExit(
-        disposalFailure ? CliExitCode.AgentError : session.exitCode,
+        disposalFailure ? CliExitCode.AgentError : exitCode,
       );
     }
     if (disposalFailure) return yield* Effect.fail(disposalFailure);
+    return exitCode;
   });
 
   /**
@@ -337,9 +342,9 @@ export function createSessionExitController(
     releaseSignals = holdSignals(policy);
   };
 
-  const gracefulTeardown = (): Promise<void> => {
+  const gracefulTeardown = (): Promise<CliExitCode> => {
     leave({ kind: 'graceful' });
-    return exited ?? Promise.resolve();
+    return (exited ??= runCliExit(exitProgram));
   };
 
   return {

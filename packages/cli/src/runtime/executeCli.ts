@@ -326,29 +326,27 @@ export const executeCliConfig: (
           ).pipe(Effect.as(false)),
         ),
       );
-    // How a shutdown stops the run, as the launch stands: the launch fiber's
-    // interruption until the session accepts the run, which aborts the
-    // launch; the session's stop after, which the run's own end answers. An
-    // ended run's stop is the registry's quiet no-op.
-    let stopRun: Effect.Effect<boolean> = Effect.suspend(() =>
-      Fiber.interrupt(launched),
-    ).pipe(Effect.as(false));
+    // Set as the session's acceptance opens the wait for the run's end,
+    // inside that wait's uninterruptible region: an interrupt that landed
+    // before it aborted the launch, one after it is answered by the
+    // session's stop.
+    let accepted = false;
     /** The run's acceptance and its committed end. Once accepted, the end is
      *  the session's to deliver: a shutdown reaches it as a stop, never as an
-     *  abandoned wait, so an interrupted launch is the only interrupts-only
-     *  exit this fiber has. */
+     *  abandoned wait. */
     const launched = yield* Effect.forkChild(
       Effect.suspend(() =>
         launchOn(session, request, runContext, options),
       ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() => {
-            stopRun = stopThroughSession;
-          }),
-        ),
         Effect.flatMap((run) =>
           Effect.uninterruptible(
-            Effect.map(run.result, (end) => ({ ...end, runId: run.runId })),
+            Effect.suspend(() => {
+              accepted = true;
+              return Effect.map(run.result, (end) => ({
+                ...end,
+                runId: run.runId,
+              }));
+            }),
           ),
         ),
       ),
@@ -364,12 +362,15 @@ export const executeCliConfig: (
         yield* withProcessServices(
           options.services.runtime,
           Effect.gen(function* () {
-            // A launch aborted before acceptance may have borne the run all
-            // the same: the finalization drains its rows, and the race below
-            // waits whole once that drain starts a recovery notice. A run that
-            // ended is left to its finalization (the recovery notice, a
-            // document task's output copy), waited for whole the same way.
-            const stopped = yield* stopRun;
+            // The launch is interrupted where it still can be, before the
+            // session accepted the run; one accepted by then, or while the
+            // interrupt was on its way, is stopped through the session, which
+            // its own end answers (an ended run's stop is the registry's
+            // quiet no-op). A launch aborted before acceptance may have borne
+            // the run all the same: the finalization drains its rows, and the
+            // race below waits whole once that drain starts a recovery notice.
+            if (!accepted) yield* Effect.forkDetach(Fiber.interrupt(launched));
+            const stopped = accepted ? yield* stopThroughSession : false;
             // A stop that reached no live run (it had ended) promises no
             // recovery: the run's own end is what the handler waits for.
             // Decided here, from the rows before the run's end, and again by
@@ -463,13 +464,16 @@ export const executeCliConfig: (
     const detachPresentation = Scope.close(presentationScope, Exit.void);
     const exit = yield* Fiber.await(launched);
     // A run the shutdown stopped after the session accepted it stores its
-    // cancelled end, which is its result (exit 130, from its outcome); an
-    // interrupts-only exit is a launch the shutdown aborted before that.
-    const launchAborted =
+    // cancelled end, which is its result (exit 130, from its outcome). An
+    // interrupts-only exit is the shutdown's interrupt: of the launch, which
+    // it aborted, or, landing as the accepted wait opened, of the fiber once
+    // the stopped run's end let it go (exit 130 as well).
+    const interrupted =
       shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
+    const launchAborted = interrupted && !accepted;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
-    } else if (!launchAborted) {
+    } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
       // The session words a launch's failure as a `RunFailure`; what it
       // failed with is its cause.
@@ -571,7 +575,7 @@ export const executeCliConfig: (
     if (!runResult.ok) {
       return {
         ok: false as const,
-        exitCode: launchAborted
+        exitCode: interrupted
           ? CliExitCode.Interrupted
           : runOutcomeExitCode(RUN_OUTCOME.FAILED),
       };
