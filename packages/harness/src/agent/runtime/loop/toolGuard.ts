@@ -65,7 +65,7 @@ import type { preToolUse } from './hooks';
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
 /** Each operation a run asks permission for: the grant that answers it and
- *  what a denial is told as. A call of a tool that declares no `guard.grant`
+ *  what a denial is told as. A call of a tool that declares no `command.grant`
  *  takes the run's delegated-work grant, so a command grant never approves
  *  it. */
 const OPERATIONS = {

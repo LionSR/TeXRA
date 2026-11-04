@@ -13,7 +13,7 @@
  * catalog exactly, which `modelSettings.ts` checks at compile time.
  */
 
-/** A provider's custom-endpoint row, stored as `texra.endpoint.<id>`. */
+/** A provider's custom-endpoint row, stored as `<namespace>.endpoint.<id>`. */
 const endpointRow = <const Id extends string>(id: Id, displayName: string) => ({
   id,
   displayName,
