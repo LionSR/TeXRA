@@ -312,9 +312,6 @@ export const databaseLayer = (
         '"commit" > ? AND "commit" <= ?',
         '"commit"',
       );
-      const aggregate = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq BETWEEN ? AND ?
-        ORDER BY e.seq`;
       // Named: for an `IN` list the planner walks the aggregate's seq index.
       const typedRows = `SELECT ${EVENT_COLUMNS} FROM event e
         INDEXED BY event_aggregate_type ${EVENT_JOINS}
@@ -819,19 +816,14 @@ export const databaseLayer = (
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
           ),
         }),
-        readAggregate: (
-          id,
-          fromSeq,
-          types,
-          toSeq = Number.MAX_SAFE_INTEGER,
-        ) => {
-          const range = [...aggregateColumns(id), fromSeq, toSeq];
-          return query(
-            types === undefined
-              ? decodedRows(aggregate, range, true)
-              : decodedRows(typedRows, [...range, JSON.stringify(types)], true),
-          );
-        },
+        readAggregate: (id, fromSeq, types, toSeq = Number.MAX_SAFE_INTEGER) =>
+          query(
+            decodedRows(
+              typedRows,
+              [...aggregateColumns(id), fromSeq, toSeq, JSON.stringify(types)],
+              true,
+            ),
+          ),
         readDisplayAggregate: (id, fromSeq) =>
           projected(
             decodedRows(displayAggregate, [
