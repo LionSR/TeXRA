@@ -25,6 +25,19 @@ import type * as SqlClient from 'effect/sql/SqlClient';
 
 export type Sql = SqlClient.SqlClient;
 
+/** A store's file and the two SQLite keeps beside it in WAL mode. */
+export const STORE_FILE_SUFFIXES = ['', '-wal', '-shm'] as const;
+
+/** The names an open leaves beside a store: a pre-1.0 store moved aside
+ *  whole, a damaged file, and the staged copy `underCopy` makes before it
+ *  takes a name. `ASIDE` below matches each, and what goes with it. */
+export const asideName = {
+  pre1: (filename: string): string => `${filename}.pre1`,
+  corrupt: (filename: string, at: number): string =>
+    `${filename}.corrupt-${at}`,
+  staged: (base: string): string => `${base}.${randomUUID()}.partial`,
+};
+
 export const run = (sql: Sql, statement: string) => sql.unsafe(statement, []);
 
 /** Run `body` in a `BEGIN IMMEDIATE` transaction. The ending is
@@ -145,7 +158,7 @@ export const freeName = Effect.fnUntraced(function* (base: string) {
   for (let n = 1; ; n += 1) {
     const name = n === 1 ? base : `${base}.${n}`;
     const taken = yield* Effect.forEach(
-      ['', '-wal', '-shm'],
+      STORE_FILE_SUFFIXES,
       (suffix) => fs.exists(`${name}${suffix}`),
       { concurrency: 'unbounded' },
     );
@@ -171,7 +184,7 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   const fs = yield* FileSystem.FileSystem;
   const stamp = yield* pragmaValue(sql, 'user_version');
   const version = yield* pragmaValue(sql, 'data_version');
-  const staged = `${base}.${randomUUID()}.partial`;
+  const staged = asideName.staged(base);
   yield* sql.unsafe('VACUUM INTO ?', [staged]);
   // A move commits; a store that changed since the copy rolls back.
   const moved = yield* Effect.gen(function* () {
@@ -200,9 +213,10 @@ export const underCopy = Effect.fnUntraced(function* <E>(
   return moved;
 });
 
-/** An aside copy beside the store: its kind, the `.<n>` of a taken name,
- *  and a moved WAL or shared-memory file. */
-const ASIDE = /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm)?$/;
+/** An `asideName` suffix, the `.<n>` of a taken name, a moved WAL or
+ *  shared-memory file, or a staged copy a kill left behind. */
+const ASIDE =
+  /^\.(?:pre1|corrupt-\d+)(?:\.\d+)?(?:-wal|-shm|\.[0-9a-f-]{36}\.partial)?$/;
 
 /** The aside copies beside the store at `filename`, with their sizes. */
 export const asideCopies = Effect.fnUntraced(function* (filename: string) {
