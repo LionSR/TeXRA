@@ -142,7 +142,7 @@ Smaller instances of the same shape:
   `supportsNativePdf: false` (`packages/llm/src/models/modelRoute.ts:304`) and
   read back as `supportsDocumentInput` (`responsesConfiguration.ts:101`).
 - `isUnservedModel` (`modelRoute.ts:118-122`) and `decideModelRoute`'s
-  `'unserved'` (`:216`) disagree on retired models. _Done 2026-11-04:
+  `'unserved'` (`:215`) disagree on retired models. _Done 2026-11-04:
   `decideModelRoute` gates on `isUnservedModel`, so a retired model is
   refused at bind._
 
