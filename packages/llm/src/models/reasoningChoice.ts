@@ -118,11 +118,10 @@ function snapped(
   accepted: readonly ReasoningEffort[],
   wanted: ReasoningEffort,
   label: string,
-  strict: boolean,
 ): { effort: ReasoningEffort; requested?: ReasoningEffort; note?: string } {
   if (accepted.includes(wanted)) return { effort: wanted };
   const effort = nearestEffort(accepted, wanted);
-  if (effort === undefined || strict) {
+  if (effort === undefined) {
     throw new ReasoningChoiceError({
       message: `${label} does not accept effort ${wanted} (accepts ${accepted.join(', ') || 'no effort level'}).`,
     });
@@ -142,8 +141,6 @@ export interface ChooseReasoningOptions {
   readonly route?: Pick<ModelRoute, 'kind'>;
   /** The caller's own ceiling on the levels it can serve (e.g. an installed Codex CLI's). */
   readonly routeEfforts?: readonly ReasoningEffort[];
-  /** Refuse instead of substituting a nearby level. */
-  readonly strict?: boolean;
 }
 
 /**
@@ -156,7 +153,7 @@ export interface ChooseReasoningOptions {
  *   thinking, as is thinking on a model that never thinks, because on/off
  *   changes the kind of answer, not its amount.
  * - Any other level the model lacks becomes the nearest level it has (ties
- *   go up), reported in `note`; `strict` refuses instead.
+ *   go up), reported in `note`.
  */
 export function chooseReasoning(
   config: Pick<ModelConfig, 'label' | 'provider' | 'reasoning' | 'modes'>,
@@ -164,7 +161,6 @@ export function chooseReasoning(
   options: ChooseReasoningOptions = {},
 ): ReasoningChoice {
   const reasoning = routeControls(config, options.route);
-  const strict = options.strict ?? false;
   const label = config.label;
 
   if (
@@ -228,7 +224,7 @@ export function chooseReasoning(
       note: `${label} has no effort levels; ignoring ${wanted}.`,
     };
   }
-  return { thinking: true, mode, ...snapped(accepted, wanted, label, strict) };
+  return { thinking: true, mode, ...snapped(accepted, wanted, label) };
 }
 
 /**

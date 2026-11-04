@@ -46,7 +46,6 @@ import type { ITool } from '@agent/core/tools/ToolTypes';
 import { mcpPluginId } from '@common/plugins/mcpServers';
 import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { mcpServerOfToolName } from '@shared/tools/toolDisplayName';
 import {
   sameIdentity,
@@ -280,9 +279,7 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     else definitions[index] = tool.definition;
   }
   // Which tools the requests send (`OfferedTool.sent`), recorded per tool.
-  const scriptAlone =
-    [...resolvedNames].some(isScript) &&
-    (yield* Settings.get<boolean>(roots, GlobalStateKey.SCRIPT_ONLY));
+  const scriptAlone = [...resolvedNames].some(isScript);
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool<Error, PluginToolServices>>();
   const offered: OfferedTool[] = [];

@@ -71,7 +71,7 @@ const ResponsesReasoningSchema = Schema.NullOr(
   Schema.Struct({
     effort: ReasoningEffortSchema,
     mode: Schema.NullOr(Schema.Literals(['standard', 'pro'])),
-    summary: Schema.NullOr(Schema.Literals(['auto', 'concise', 'detailed'])),
+    summary: Schema.NullOr(Schema.Literal('auto')),
   }),
 );
 const AnthropicThinkingSchema = Schema.Union([
@@ -107,7 +107,6 @@ export const TurnRequestSchema = Schema.Struct({
   /** This turn's output ceiling in place of the binding's; a route that
    *  takes no output limit ignores it. */
   maxOutputTokens: Schema.optional(Schema.Int.check(Schema.isGreaterThan(0))),
-  store: Schema.optional(Schema.Boolean),
   continuation: Schema.optional(ContinuationSchema),
   /** Groups the requests that share a prefix (a run's), for a provider
    *  that routes its prompt cache by key. */
@@ -128,7 +127,6 @@ const ResponsesControlsSchema = Schema.Struct({
     Schema.Number.check(Schema.isBetween({ minimum: 0, maximum: 2 })),
   ),
   store: Schema.Boolean,
-  parallelToolCalls: Schema.Boolean,
   toolChoice: ToolChoiceSchema,
   reasoning: ResponsesReasoningSchema,
   serviceTier: Schema.NullOr(Schema.Literal('fast')),
@@ -138,7 +136,6 @@ const ResponsesControlsSchema = Schema.Struct({
 // current models refuse a forced tool, so neither is representable here.
 const AnthropicControlsSchema = Schema.Struct({
   maxOutputTokens: Schema.Int.check(Schema.isGreaterThan(0)),
-  parallelToolCalls: Schema.Boolean,
   toolChoice: Schema.Literal('auto'),
   thinking: AnthropicThinkingSchema,
   effort: EffortSchema,
@@ -162,18 +159,9 @@ const ModelConfigurationSchema = Schema.Union([
     Struct.assign({
       protocol: Schema.Literal('openai-responses'),
       background: BackgroundCapabilitySchema,
-      supportsStorage: Schema.Boolean,
       /** The route takes input files; a document is refused locally otherwise. */
       supportsDocumentInput: Schema.Boolean,
-      webSocketStreamParameter: Schema.Literals(['implicit', 'required']),
       allowedReasoningEfforts: Schema.Array(ReasoningEffortLevelSchema),
-      instructions: Schema.Union([
-        Schema.Struct({ kind: Schema.Literal('optional') }),
-        Schema.Struct({
-          kind: Schema.Literal('required'),
-          fallback: Schema.String,
-        }),
-      ]),
       /**
        * A chained request carries no `instructions`: the route reuses the
        * stored response's own and refuses both together (xAI). The prefix
@@ -182,17 +170,16 @@ const ModelConfigurationSchema = Schema.Union([
       continuationInheritsInstructions: Schema.Boolean,
       /** The route takes `tool_choice` naming one function, not only `auto`. */
       supportsForcedToolChoice: Schema.Boolean,
-      /** The namespace function tools must sit in (a ChatGPT plan), or `null`. */
-      toolNamespace: Schema.NullOr(Schema.String),
       /** OpenAI's own endpoint (the API or a ChatGPT plan): it routes its prompt
        *  cache by `prompt_cache_key` and takes `developer` messages mid-run. */
       openaiEndpoint: Schema.Boolean,
       /**
-       * `openai` sends OpenAI's full request surface; `compatible` omits what
+       * `openai` sends OpenAI's full request surface; `chatgpt` sends it with
+       * function tools inside the plan's namespace; `compatible` omits what
        * the vendor Responses endpoints do not take: the encrypted-reasoning
        * `include`, `strict` on tools, and a `store` that is only the default.
        */
-      requestDialect: Schema.Literals(['openai', 'compatible']),
+      requestDialect: Schema.Literals(['openai', 'compatible', 'chatgpt']),
       defaults: ResponsesControlsSchema.mapFields(
         Struct.omit(['toolChoice', 'promptCacheKey']),
       ),

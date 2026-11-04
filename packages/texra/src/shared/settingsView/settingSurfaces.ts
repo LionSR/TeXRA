@@ -167,7 +167,6 @@ export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
   // --- Memory and code mode --------------------------------------------------
   // Memory has no `/config` row; script-only tools have no settings-view row.
   [GlobalStateKey.MEMORY_ENABLED]: { surfaces: { settingsView: 'memory' } },
-  [GlobalStateKey.SCRIPT_ONLY]: { surfaces: { cliConfig: true } },
 
   // --- Providers --------------------------------------------------------------
   [GlobalStateKey.WEBSOCKET_OPENAI]: providerToggle({

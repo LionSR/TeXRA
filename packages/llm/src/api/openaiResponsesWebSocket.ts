@@ -235,9 +235,6 @@ const connect = Effect.fnUntraced(function* (
           JSON.stringify({
             type: 'response.create',
             ...parameters,
-            ...(config.webSocketStreamParameter === 'required'
-              ? { stream: true }
-              : {}),
           }),
           (cause) => resume(cause ? Effect.fail(failure(cause)) : Effect.void),
         );

@@ -203,7 +203,6 @@ function bind(spec: LiveProtocol, apiKey: string): Model {
       maxOutputTokens: 2048,
       temperature: 0,
       reasoning: chooseReasoning(selected.config, selected.request),
-      parallelToolCalls: true,
       serverState: true,
     },
   });

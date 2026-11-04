@@ -108,15 +108,14 @@ export const multiAgent: Plugin = definePlugin({
 
 /**
  * Code mode: the `script` tool, a program that calls the run's other tools,
- * and `self()`, the function a script runs this agent again with. An agent
- * gets them if its configuration names `script`, or, while script-only
- * tools are on, as every chat run does; its session layer is the code
- * sandbox the scripts run in.
+ * and `self()`, the function a script runs this agent again with. Every
+ * chat run gets them, and reaches its other tools from a script alone; its
+ * session layer is the code sandbox the scripts run in.
  */
 export const codemode = definePlugin({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
-  injectedWhen: { script: GlobalStateKey.SCRIPT_ONLY },
+  injectedWhen: { script: true },
   sessionLayer: codeSandboxLayer,
 });
 

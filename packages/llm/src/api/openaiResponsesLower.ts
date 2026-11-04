@@ -84,6 +84,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   documents: DocumentAccess,
   callIds: string[],
 ) {
+  const namespace = toolNamespaceOf(config);
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
@@ -223,9 +224,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             type: 'function_call',
             call_id: part.providerCallId,
             name: part.name,
-            ...(config.toolNamespace !== null
-              ? { namespace: config.toolNamespace }
-              : {}),
+            ...(namespace === null ? {} : { namespace }),
             arguments: part.argumentsText,
             ...(part.evidence?.itemId !== undefined
               ? { id: part.evidence.itemId }
@@ -258,6 +257,15 @@ const checkToolChoice = (
         }),
       );
 };
+
+/** The namespace a ChatGPT plan's function tools sit in. */
+const CHATGPT_TOOL_NAMESPACE = 'texra';
+
+/** The namespace function tools must sit in, or null: a ChatGPT plan's alone. */
+export const toolNamespaceOf = (
+  config: OpenAIResponsesConfiguration,
+): string | null =>
+  config.requestDialect === 'chatgpt' ? CHATGPT_TOOL_NAMESPACE : null;
 
 const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
   turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
@@ -299,7 +307,6 @@ export const withResponsesContinuation = Effect.fn(
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state
   if (
-    !config.supportsStorage ||
     !turn.controls.store ||
     (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
   )

@@ -19,7 +19,6 @@ const CONFIG: AnthropicMessagesConfiguration = {
   supportsSystemMessages: false,
   defaults: {
     maxOutputTokens: 8192,
-    parallelToolCalls: false,
     thinking: { mode: 'adaptive', display: 'summarized' },
     effort: 'high',
     cache: '5m',

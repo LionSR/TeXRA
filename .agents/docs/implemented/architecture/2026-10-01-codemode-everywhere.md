@@ -40,6 +40,11 @@ request sends what the row records (`sentDefinitions` in
 recorded whatever the setting says now. Flipping the default waits for the
 evaluation under "Still open".
 
+_Amended 2026-11-04: "only" is the one mode. The `codeMode.scriptOnly` setting
+is gone: every chat run gets `script`, and the request sends the model
+`script` and the run's own tools alone (the 2026-10-24 evaluation ran the
+"only" arm at 0.85x to 0.87x of the wall clock at 18% to 66% less cost)._
+
 ## Separation of concerns
 
 | Concern              | Owner                                                                                                   | Must not know about                                                                   |
