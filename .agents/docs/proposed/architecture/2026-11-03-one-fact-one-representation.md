@@ -264,6 +264,10 @@ checks below green. No slice keeps two representations "for now".
    numbers as their baselines, so every later slice shows its count falling.
 2. **A2 + A3: the stop reason and the abort kind** (O2, O3). Smallest stored
    change, largest classifier deletion; amends the one-outcome ruling and M8.
+   _Landed 2026-11-04: `run.end.reason`, the halt without `reason`, the fold
+   reading the end row; the `abort` kind, `isUserAbort`, `AGENT_ERROR_OUTCOME`,
+   `outcomeFromCause`'s `seen` and the lost-claim branch gone. `Attempt.closed`
+   stays as the fold's projection of the one field._
 3. **A1: ownership** (O1). The lock, the deletions in the "who may run" row,
    the service as lock holder, the fallback rule in one place (C, first row).
    Amends D4 and M3.

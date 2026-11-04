@@ -12,7 +12,7 @@ import {
  * Host-neutral, so any host can reference it.
  * A more specific error should be added only when a concrete thrower and
  * catcher exist for it — anything else duplicates the existing
- * `ProviderError` schema and `isUserAbort` machinery.
+ * `ProviderError` schema.
  */
 export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,

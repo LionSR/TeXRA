@@ -38,6 +38,17 @@ export const recipeBlockOf = (
     ? config.script.block
     : null;
 
+/**
+ * Why a run stops. `user` is an explicit stop of the work (a stop button,
+ * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
+ * background operation it is observing. `shutdown` only ends this process's
+ * hold on the run (an exit, a signal, a session close), leaving that
+ * operation for a resume to observe.
+ */
+export const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
+/** Why a run stops: a `user` stop or this process's `shutdown`. */
+export type RunStopReason = typeof RunStopReasonSchema.Type;
+
 /** Terminal errors keep the classified kind beside the provider detail,
  *  and always say what went wrong (`message`). */
 const RunEndErrorSchema = Schema.Union([
@@ -46,7 +57,7 @@ const RunEndErrorSchema = Schema.Union([
     .mapFields(
       Struct.assign({
         message: RetryErrorInfoSchema.fields.message,
-        kind: Schema.Literals(['abort', 'disk-full', 'result-lost']),
+        kind: Schema.Literals(['disk-full', 'result-lost']),
       }),
     ),
 
@@ -94,6 +105,10 @@ export function emptyRunEndOutput(): RunEndOutput {
  */
 export const RunEndSchema = Schema.Struct({
   outcome: RunOutcomeSchema,
+  /** Why a cancelled end stopped the run: a person's stop or this process's
+   *  shutdown. Absent on any other end, and on a cancel neither gave (a
+   *  holder's release). */
+  reason: Schema.optional(RunStopReasonSchema),
   error: Schema.optional(RunEndErrorSchema),
   usage: Schema.optional(RunUsageTotalsSchema),
   output: RunEndOutputSchema,

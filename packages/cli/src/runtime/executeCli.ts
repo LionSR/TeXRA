@@ -32,7 +32,6 @@ import {
   type ProcessServices,
   SESSION_CLOSE_DEADLINE_MS,
   AgentError,
-  isUserAbort,
 } from '@texra-ai/harness/host';
 import type { CliRunResult } from '@cli/schemas/cliOutput';
 import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
@@ -490,10 +489,7 @@ export const executeCliConfig: (
       // exit code here; anything else (e.g. registerRun disk I/O,
       // workspaceState.update failures) is unexpected and must keep
       // propagating to bin/texra.ts's crash handler.
-      if (shutdownRequested && isUserAbort(err)) {
-        interrupted = true;
-        shutdownLaunchAborted = !admitted;
-      } else if (err instanceof CliUsageError) {
+      if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
         // A launch that failed before its run opened is the caller's to

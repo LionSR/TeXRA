@@ -94,16 +94,6 @@ export function recordSessionEvents(
   };
 }
 
-/** The events (or drafts) of one arm. */
-export function eventsOfType<
-  E extends { readonly type: string },
-  T extends E['type'],
->(events: readonly E[], type: T): Array<Extract<E, { type: T }>> {
-  return events.filter(
-    (event): event is Extract<E, { type: T }> => event.type === type,
-  );
-}
-
 /**
  * A host that records what the runtime presents to it. The port answers
  * nothing (ruling A9-3): a request a run opens is a `request.opened` row, so
