@@ -11,9 +11,7 @@ second config-path derivation, `ConfigProvider.inspect`'s `| undefined`, the
 plugin digest's symlink read (now one `lstat` per entry, with no recovery) and
 the hook runner's stdio read (now logged at `warn` before the result keeps
 what was read) have since been settled. The `initializeNodeRuntimeSkills`
-inline was dropped: the package split made it a published `./node` export
-(`packages/harness/src/node.ts`) whose caller, `bootstrapHost`, now lives in
-the app, which may not import `@skills`. Re-checked against `main` at `808521a8ed`
+inline is moot: neither it nor `bootstrapHost` exists any more. Re-checked against `main` at `808521a8ed`
 (2026-10-30); what follows is still open.
 
 ## 1. Two silent catches

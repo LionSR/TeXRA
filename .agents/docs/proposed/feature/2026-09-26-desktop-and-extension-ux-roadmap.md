@@ -35,9 +35,10 @@ The UI should be quiet and should never mislead the user. In priority order:
 
 ## Decided
 
-- **The desktop wears the TeXRA brand**: warm paper surfaces, aubergine ink,
-  and the logo purple `#6f387a` as the single interaction accent in both
-  themes, as tokens in `packages/desktop/src/renderer/themeTokens.css`.
+- **The desktop has its own palette**: a cool neutral canvas, ink text and
+  one blue interaction accent in both themes, as tokens in
+  `packages/desktop/src/renderer/themeTokens.css`. #13895 replaced the brand
+  purple `#6f387a` this line used to record.
 - **The VS Code extension stays native** to the editor theme. A brand accent
   inside someone's editor theme is noise, not identity.
 - **The composer is the one home to attach files.** `<launch-attachments>`
@@ -46,6 +47,11 @@ The UI should be quiet and should never mislead the user. In priority order:
   Auto-approve), never a second vocabulary. The composer's Approval chip
   offers the policy from Settings or Auto-approve for this task only, which
   can only loosen Ask; Block still blocks.
+- **Recent projects live in the empty rail**: with no project open, the
+  Projects section lists up to five recently closed folders under "Open a
+  project", the list File › Open Recent shows. The "Open a project to start"
+  card in `main.ts` shows only until the first project list arrives, so it
+  is not the place.
 - **Not doing:** a redesign of the shell layout (the three-column frame and
   the shared conversation surface are sound), and hover-only reveal for a
   live call's controls, which would hide the only control over it.
@@ -59,22 +65,24 @@ Each item is independent and small enough for one PR.
 2. **Saved prompts.** Save a composer prompt as a named entry that runs
    with one click; settings-backed, one list per project. Its home is the
    same open question as 1.
-3. **No-folder screen.** The desktop's "Open a project to start" card
-   (`packages/desktop/src/renderer/main.ts`) could list recent projects; the
-   data already feeds File › Open Recent.
-4. **Command palette reach.** The palette
-   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has no Open
-   Terminal / Files / Browser or switch-project commands.
-5. **Settings search.** Each settings catalog has its own search field
+3. **Command palette reach.** The palette
+   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has Show Terminal
+   and Show Files, but no Open Browser or switch-project commands.
+4. **Settings search.** Each settings catalog has its own search field
    (`SettingsCatalog.ts`); there is still no filter across the tabs.
-   Paragraph-length descriptions that expose internals remain (for example
-   "Interactions (submit + poll)" in `stateSettings.ts`). The owner has not
+   The example once given for descriptions that expose internals,
+   "Interactions (submit + poll)" in `stateSettings.ts`, belongs to
+   `model.useGoogleBackgroundResponses`, which no settings UI shows. The owner has not
    decided whether the Agents › Advanced switches stay, so wait on that
    before polishing them.
-6. **Loading and failure placeholders.** "Error loading content"
+5. **Loading and failure placeholders.** "Error loading content"
    (`packages/extension/src/common/webview/BundledViewContentProvider.ts`)
    has no retry or log link.
-7. **Desktop pane polish.**
+6. **Desktop pane polish.**
    - PDF error state and "Open externally" (`pdfPane.ts`).
-   - Styled dialogs instead of `window.confirm` (`main.ts`,
-     `workbenchController.ts`).
+   - Styled dialogs instead of `window.confirm`. Done for closing an
+     unsaved tab (`discardDialog.ts`). Close group asks about each unsaved
+     tab in turn: the dialog queues requests, so Cancel keeps that one tab
+     and the next is asked. `reportRuntimeFailure` in `main.ts`
+     keeps the native confirm on purpose: it runs when the renderer itself
+     may be broken.

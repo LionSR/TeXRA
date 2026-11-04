@@ -490,34 +490,37 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
  * Skipped for the workspace root, where stray .tex files would be a false
  * positive.
  */
-function hasExistingSource(
+const hasExistingSource: (
   isRoot: boolean,
   paperDirFull: string,
-): Effect.Effect<boolean, ArxivSourceError, FileSystem.FileSystem | Path.Path> {
-  return Effect.gen(function* () {
-    if (isRoot) {
-      return false;
-    }
-    const fs = yield* FileSystem.FileSystem;
-    if ((yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined) {
-      return false;
-    }
-    // The tolerant listing is the facade's `readDir`: the provider typed
-    // ordinary entries from the `readdir` dirent, but a *symlink* dirent
-    // still ran one `stat` (`fileTypeFor` → `resolveSymlinkType`). The
-    // strict form fails the whole listing on one unreadable entry, which
-    // would abort the download -- turning "the source is already here"
-    // into a failure.
-    const entries = yield* permanentFs(
-      readDirectoryTypedTolerant(paperDirFull),
-    );
-    const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
-    if (hasTexFiles) {
-      yield* Effect.logInfo(`arXiv source already exists at: ${paperDirFull}`);
-    }
-    return hasTexFiles;
-  }).pipe(withLogChannel(ARXIV_CHANNEL));
-}
+) => Effect.Effect<
+  boolean,
+  ArxivSourceError,
+  FileSystem.FileSystem | Path.Path
+> = Effect.fn('hasExistingSource')(function* (
+  isRoot: boolean,
+  paperDirFull: string,
+) {
+  if (isRoot) {
+    return false;
+  }
+  const fs = yield* FileSystem.FileSystem;
+  if ((yield* permanentFs(entryTypeIn(fs, paperDirFull))) === undefined) {
+    return false;
+  }
+  // The tolerant listing is the facade's `readDir`: the provider typed
+  // ordinary entries from the `readdir` dirent, but a *symlink* dirent
+  // still ran one `stat` (`fileTypeFor` → `resolveSymlinkType`). The
+  // strict form fails the whole listing on one unreadable entry, which
+  // would abort the download -- turning "the source is already here"
+  // into a failure.
+  const entries = yield* permanentFs(readDirectoryTypedTolerant(paperDirFull));
+  const hasTexFiles = entries.some(([name]) => hasExtension(name, '.tex'));
+  if (hasTexFiles) {
+    yield* Effect.logInfo(`arXiv source already exists at: ${paperDirFull}`);
+  }
+  return hasTexFiles;
+}, withLogChannel(ARXIV_CHANNEL));
 
 /**
  * Remove the paper directory an unfinished download created: a partial

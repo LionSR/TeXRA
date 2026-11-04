@@ -152,34 +152,33 @@ export function handleGetTeXCount(
           title: 'Counting LaTeX Document',
           cancellable: false,
         },
-        (progress) =>
-          Effect.gen(function* () {
-            progress.report({ message: 'Running texcount...' });
+        Effect.fnUntraced(function* (progress) {
+          progress.report({ message: 'Running texcount...' });
 
-            const { output, errors } = yield* getTeXCount(
-              roots.workspace,
-              relativePath,
-              {
-                mode: countingMode.value,
-                settings: roots,
-              },
-            );
+          const { output, errors } = yield* getTeXCount(
+            roots.workspace,
+            relativePath,
+            {
+              mode: countingMode.value,
+              settings: roots,
+            },
+          );
 
-            if (!output) {
-              const message =
-                errors[0] ??
-                'Failed to get tex count. Please verify the file path.';
-              yield* showLoggedMessage(CHANNEL, message);
-              return;
-            }
+          if (!output) {
+            const message =
+              errors[0] ??
+              'Failed to get tex count. Please verify the file path.';
+            yield* showLoggedMessage(CHANNEL, message);
+            return;
+          }
 
-            const stats = parseTeXCountStats(output);
+          const stats = parseTeXCountStats(output);
 
-            yield* quickPick(stats, {
-              placeHolder: 'TeXCount Results (press Esc to dismiss)',
-              canPickMany: false,
-            });
-          }),
+          yield* quickPick(stats, {
+            placeHolder: 'TeXCount Results (press Esc to dismiss)',
+            canPickMany: false,
+          });
+        }),
       );
     }),
   );
