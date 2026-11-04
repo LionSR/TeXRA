@@ -302,11 +302,12 @@ held as policies through `holdSignals` (`processSignals.ts`, the one
 `process.on('SIG…')` site): the platform, a foreground child, `texra serve`
 and the chat TUI each hold theirs, and the newest holder answers, so the
 hand-off and the five install sites are gone. Headless, the six shutdown
-flags are the launch fiber's `Exit` plus `stopRun` (the launch's
-interruption until the session accepts the run, its stop after) and one
-`shutdown` boolean the finalization's drain needs. Today's defect is gone by
-shape: a failure is the claim's exit code before anything asks whether the
-chat is leaving._
+flags are two: `shutdown` (the finalization's drain needs it) and `accepted`
+(set as the uninterruptible wait for the run's end opens), with the launch
+fiber's `Exit` deciding the rest: the step interrupts the launch only while
+the run is not accepted and stops an accepted run through the session.
+Today's defect is gone by shape: a failure is the claim's exit code before
+anything asks whether the chat is leaving._
 
 ### D. Model, route and retry
 
