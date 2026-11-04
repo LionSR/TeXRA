@@ -135,6 +135,7 @@ const sidebarCallbacks = {
   onNewTask: noop,
   onOpenCommands: noop,
   onOpenFolder: noop,
+  onOpenRecent: noop,
   onSelectProject: noop,
   onProjectAction: noop,
   onOpenSettings: noop,
@@ -145,6 +146,7 @@ const rail = (projects: readonly RailProject[], shell: Shell) =>
   shellSidebarTemplate(
     {
       projects,
+      recent: [],
       shell,
       commandsLabel: 'Commands',
       commandsTitle: 'Commands - ⌘K',

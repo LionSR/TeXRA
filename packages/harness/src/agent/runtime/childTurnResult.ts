@@ -102,8 +102,8 @@ export interface ChildDelivery {
 /** One finished turn: what its ending batch commits and what it delivers. */
 export interface ChildTurnResult {
   readonly rows: readonly TurnResultRow[];
-  /** The parent delivery, committed with the rows; none for a detached or
-   *  persist-only child, or a turn a stop ended. */
+  /** The parent delivery, committed with the rows; none for a detached
+   *  child, one nothing awaits, or a turn a stop ended. */
   readonly delivery: ChildDelivery | undefined;
 }
 
