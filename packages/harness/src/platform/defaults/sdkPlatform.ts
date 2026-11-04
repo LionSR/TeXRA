@@ -10,8 +10,10 @@ import type { PlatformSecrets } from '@platform/secrets';
 // Local imports - platform defaults
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import {
   settingsCatalog,
   type SettingsCatalog,
@@ -71,7 +73,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceDir = canonicalizeWorkspacePath(
     options.workspaceDir ?? process.cwd(),
   );
-  const globalState = new MemoryStateStore();
   return {
     secrets: unpersistedSecrets,
     agentDirectories: {
@@ -79,10 +80,11 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       customConfigured: () => Effect.succeed(true),
       builtIn: () => Effect.succeed(''),
     },
-    roots: createNodeWorkspaceRoots({
-      workspacePath: workspaceDir,
-      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
+    roots: {
+      workspace: workspaceDir,
       storageRoot: options.storageDir,
+      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
+      globalStorage: resolveGlobalStoragePath(options.storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(
@@ -90,7 +92,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       ),
       workspaceState: new MemoryStateStore(),
       repoState: new MemoryStateStore(),
-      globalState,
-    }),
+      globalState: new MemoryStateStore(),
+    },
   };
 }
