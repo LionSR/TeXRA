@@ -99,7 +99,6 @@ const decideExecutable = (
 ): ApprovalPolicyDecision =>
   decideApproval({
     policy,
-    promptRequired: true,
     scopedBypass,
     canPresent: canPresent(owners),
   });

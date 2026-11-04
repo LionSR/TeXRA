@@ -334,26 +334,20 @@ const handle = (
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
     case 'run.stop':
-      // An unset child policy is the stop's to decide (`RunRegistry.stop`).
-      return runs
-        .stop(req.runId, {
-          detachActiveChildren: req.detachActiveChildren ?? undefined,
-          reason: req.reason,
-        })
-        .settlement.pipe(
-          // A setting that would not read, or a refused terminal row (a live
-          // foreign owner, a rolled-back transaction): the run is still in
-          // flight, so the requester hears that rather than `done`.
-          Effect.mapError(
-            (error): RequestError =>
-              new Unavailable({
-                runId: req.runId,
-                reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
-              }),
-          ),
-          Effect.as(done),
-          Effect.uninterruptible,
-        );
+      return runs.stop(req.runId, req.reason).settlement.pipe(
+        // A setting that would not read, or a refused terminal row (a live
+        // foreign owner, a rolled-back transaction): the run is still in
+        // flight, so the requester hears that rather than `done`.
+        Effect.mapError(
+          (error): RequestError =>
+            new Unavailable({
+              runId: req.runId,
+              reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+            }),
+        ),
+        Effect.as(done),
+        Effect.uninterruptible,
+      );
     case 'run.delete':
       return deleteAdmittedRun(deps, req.runId, admitted, 'single', runs);
     case 'run.compact':

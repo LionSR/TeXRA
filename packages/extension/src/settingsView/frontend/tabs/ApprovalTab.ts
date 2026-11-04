@@ -8,14 +8,12 @@
 import '@awesome.me/webawesome/dist/components/radio/radio.js';
 import WaRadioGroup from '@awesome.me/webawesome/dist/components/radio-group/radio-group.js';
 import { SignalWatcher } from '@lit-labs/signals';
-import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
+import { LitElement, html, css, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 import {
   WorkspaceStateKey,
-  BASH_APPROVAL_CONFIG_KEY,
   GOAL_MAX_COST_SETTING,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   parseApprovalPolicy,
   APPROVAL_POLICY_CONFIG_KEY,
   type ApprovalPolicy,
@@ -96,16 +94,6 @@ export class ApprovalTab extends SignalWatcher(LitElement) {
                 }
               </p>
             </div>
-            ${
-              // The two switches refine Ask only (decideApproval ignores
-              // them under Never and Auto-approve), so they show only then.
-              policy === 'ask'
-                ? html`
-                    ${renderStateSettingToggleRow(TOOL_EDIT_APPROVAL_CONFIG_KEY)}
-                    ${renderStateSettingToggleRow(BASH_APPROVAL_CONFIG_KEY)}
-                  `
-                : nothing
-            }
             ${renderStateSettingToggleRow(
               WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
             )}

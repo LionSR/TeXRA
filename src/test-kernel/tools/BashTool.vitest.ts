@@ -96,7 +96,7 @@ async function parkRunWaiting(
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
-  config: { 'toolUse.requireBashApproval': false },
+  config: { approvalPolicy: 'yolo' },
 } as const;
 
 /** The run id a background launch reports in its output. */
@@ -221,7 +221,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           // the killed process report its non-zero exit.
           const stopSettlement = yield* Effect.forkChild(
             Context.get(session, Runs)
-              .stop(runId, { reason: 'user' })
+              .stop(runId, 'user')
               .settlement.pipe(Effect.provide(session)),
           );
           resolveCommand({

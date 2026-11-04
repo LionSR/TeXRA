@@ -7,10 +7,6 @@
  * schema without importing the catalog.
  */
 
-export const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'toolUse.requireEditApproval';
-
-export const BASH_APPROVAL_CONFIG_KEY = 'toolUse.requireBashApproval';
-
 /** Config key for the per-session child-run concurrency budget. */
 export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
   'childRunConcurrencyBudget';

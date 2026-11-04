@@ -294,11 +294,7 @@ const approvalsLayer = Layer.effect(
   Approvals,
   Effect.gen(function* () {
     const approvals = yield* sessionApprovals;
-    const permission = sessionPermission(
-      approvals,
-      yield* Interactions,
-      yield* SessionRoots,
-    );
+    const permission = sessionPermission(approvals, yield* Interactions);
     return { ...approvals, permission };
   }),
 );

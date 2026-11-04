@@ -134,7 +134,7 @@ const perTest = Layer.provideMerge(
   TestSession.layer(undefined, { host: {} }),
   FakeHost.layer({
     workspacePath: '/workspace',
-    config: { 'toolUse.requireBashApproval': false },
+    config: { approvalPolicy: 'yolo' },
   }),
 );
 

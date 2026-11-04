@@ -204,9 +204,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       }),
     );
 
-    it.effect('lets never override a disabled approval setting', () =>
+    it.effect('denies an edit under never, and tells the host', () =>
       Effect.gen(function* () {
-        yield* setUp({ 'toolUse.requireEditApproval': false });
+        yield* setUp();
         setTestApprovalPolicy('never', Context.get(session, SessionRoots));
 
         const write = stubWorkspaceFile('denied.txt', {

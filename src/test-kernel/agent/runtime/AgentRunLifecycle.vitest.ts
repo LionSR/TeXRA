@@ -121,10 +121,9 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         // which is the window the stop below has to land in.
         yield* Deferred.await(parked.started);
 
-        const stop = Context.get(session, Runs).stop(runId, {
-          reason: 'user',
-          detachActiveChildren: false,
-        });
+        // A shutdown: its stop reads no setting, which this fixture's roots
+        // do not serve, and ends the hold at once.
+        const stop = Context.get(session, Runs).stop(runId, 'shutdown');
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement.pipe(Effect.provide(session));
 

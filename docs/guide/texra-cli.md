@@ -612,12 +612,11 @@ agent as an argument). Shared TeXRA settings
 the CLI honors, such as `texra.telemetry.enabled`, are also accepted. The
 built-in CLI model default is `deepseek/deepseek-v4-pro`.
 
-The approval policy (`texra.approvalPolicy`) and the two approval switches
-(`texra.toolUse.requireEditApproval`, `texra.toolUse.requireBashApproval`) are
-never read from `.texra/config.json`, because a repository you clone can
-carry that file. Set them with `/config` or the settings view: they are kept
-in your own storage for the current workspace, and a value in your user
-configuration file is the default for every workspace. A project file that sets one is ignored and `texra doctor` reports the key.
+The approval policy (`texra.approvalPolicy`) is never read from
+`.texra/config.json`, because a repository you clone can carry that file. Set
+it with `/config` or the settings view: it is kept in your own storage for the
+current workspace, and a value in your user configuration file is the default
+for every workspace. A project file that sets it is ignored and `texra doctor` reports the key.
 
 The corresponding environment variables are `TEXRA_AGENT`, `TEXRA_MODEL`,
 `TEXRA_OUTPUT_FORMAT`, and `TEXRA_APPROVAL_POLICY`. Run

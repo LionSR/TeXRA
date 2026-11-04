@@ -68,7 +68,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
                 message: `Run is already running: ${runId}`,
               });
               yield* Context.get(session, Runs)
-                .stop(runId, { reason: 'user' })
+                .stop(runId, 'user')
                 .settlement.pipe(Effect.provide(session));
               yield* Fiber.await(first);
               expect(

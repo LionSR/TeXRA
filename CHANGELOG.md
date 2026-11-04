@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One approval decision.** A run's `approvalPolicy` (Block, Ask,
+  Auto-approve) is the one setting that says whether its shell commands,
+  file edits, delegations and coding-agent launches ask first. Under Ask
+  every guarded operation asks unless the task granted it on a request card;
+  `texra.toolUse.requireEditApproval` and `texra.toolUse.requireBashApproval`
+  are gone (a stored value is ignored). The `codex` and `claude_code` tools
+  derive their sandbox and permission mode from the launching run: a launch
+  a person approved runs Codex `workspace-write` and Claude Code
+  `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex
+  `danger-full-access` and Claude Code `bypassPermissions`; Codex never
+  prompts on its own. Removed: the `codexSandboxMode`, `codexApprovalPolicy`
+  and `claudeAgentPermissionMode` settings with their rows in Settings and
+  `/config`, and the tools' `sandbox_mode` and `permission_mode` inputs (a
+  read-only `plan` Claude child can no longer be requested). A stop of a
+  task cascades to its agents on shutdown and otherwise follows "Keep agents
+  running"; `run.stop.detachActiveChildren` is gone from the service
+  protocol (52). SDK: `ChildRuns.autoApproved` says whether the launching
+  run does its work unasked; `RunStopOptions` is gone (`Runs.stop(runId,
+reason)`); `decideApproval` takes no `promptRequired`.
 - **A run's failure is one value from the model call to the run's end.**
   The `failed` row, the retry request, the `run.end` row and the
   `AgentError` a root's launch raises carry the failure as the run recorded

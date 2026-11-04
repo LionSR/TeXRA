@@ -50,7 +50,6 @@ import type {
   RunControls,
   RunsShape,
   RunStop,
-  RunStopOptions,
   StopCause,
 } from './runs';
 import type { executeAgent } from './executeAgent';
@@ -474,32 +473,34 @@ export class RunRegistry implements RunsShape {
    * its children are touched, and given the end the stop owes it
    * ({@link stopEnd}); a refused claim or row fails it.
    */
-  stop(runId: RunId, options: RunStopOptions): RunStop {
+  stop(runId: RunId, reason: RunStopReason): RunStop {
     const activation = this.activations.get(runId);
     // Marked at the request: from here a child is refused under the run
     // (`assertAdmitsChild`) and a user's message sent while the stop runs
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
     const marked = activation?.stop;
-    if (activation !== undefined) this.markStopped(runId, options.reason);
-    const asked = options.detachActiveChildren;
+    if (activation !== undefined) this.markStopped(runId, reason);
+    // A shutdown ends this process's hold, and its children's holds with
+    // it; a user's stop reads "Keep agents running" below.
+    const shutdown = reason === 'shutdown';
     // Something here to stop: a launch.
     const local = activation !== undefined;
-    const end = this.stopEnd(runId, options.reason);
+    const end = this.stopEnd(runId, reason);
     let reached = false;
     // The child sweep and the root cascade visit each run once.
     const stopHere = (cascade: boolean): boolean => {
-      reached = this.terminate(runId, new Set(), cascade, options.reason);
+      reached = this.terminate(runId, new Set(), cascade, reason);
       return reached;
     };
-    if (asked === false && (local || end === undefined)) {
+    if (shutdown && (local || end === undefined)) {
       stopHere(true);
       return { accepted: () => reached, settlement: Effect.void };
     }
     const key = GlobalStateKey.DETACH_SUBAGENTS_ON_STOP;
     const apply = Effect.flatMap(
-      asked === undefined
-        ? Effect.suspend(() => Settings.get<boolean>(this.init.roots, key))
-        : Effect.succeed(asked),
+      shutdown
+        ? Effect.succeed(false)
+        : Effect.suspend(() => Settings.get<boolean>(this.init.roots, key)),
       (detach) =>
         (detach ? this.detachActiveChildren(runId) : Effect.void).pipe(
           Effect.andThen(
@@ -555,8 +556,7 @@ export class RunRegistry implements RunsShape {
     const active = new Set(this.activations.keys());
     for (const runId of active) {
       const parent = this.attachedParent(runId);
-      if (parent === null || !active.has(parent))
-        this.stop(runId, { detachActiveChildren: false, reason: 'shutdown' });
+      if (parent === null || !active.has(parent)) this.stop(runId, 'shutdown');
     }
   }
 

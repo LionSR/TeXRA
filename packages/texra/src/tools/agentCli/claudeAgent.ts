@@ -24,7 +24,7 @@
 // Third-party imports
 import { Effect, type FileSystem, Schema, Stream } from 'effect';
 import { defineTool, type ToolResult } from '@texra-ai/harness';
-import { ToolContext } from '@texra-ai/harness/plugins';
+import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
 import { Secrets } from '@texra-ai/harness/host';
 
 // Local imports
@@ -44,15 +44,12 @@ import {
 import {
   AgentCliEffortSchema,
   ClaudeAgentModelSchema,
-  ClaudeAgentPermissionModeSchema,
 } from '@texra/shared/agentCliSettings';
-import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 // Local file imports
 import { ClaudeBackgroundTaskTracker } from './claudeAgentBackgroundTasks';
 import {
-  claudeAgentPermissionMode,
   getClaudeAgentConfig,
   importClaudeAgentSdk,
   findClaudeBinaryPath,
@@ -94,14 +91,6 @@ const ClaudeAgentInputSchema = Schema.Struct({
     description:
       'Instruction for the Claude Code agent. For a new session, describe the task. For a resume (session_id set), describe the follow-up.',
   }),
-  // A subset of the SDK's `PermissionMode`: 'dontAsk' and 'auto' are internal
-  // to the SDK and never offered here.
-  permission_mode: Schema.optional(
-    Schema.NullOr(ClaudeAgentPermissionModeSchema),
-  ).annotate({
-    description:
-      'Permission behavior for the agent: acceptEdits auto-applies file edits, plan keeps the agent read-only (defaults to user-configured mode, typically acceptEdits).',
-  }),
   model: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description: `Claude model reference, optionally with an effort suffix (e.g. 'anthropic/claude-opus-5-5' or 'anthropic/claude-opus-5-5@high'). Any non-retired Anthropic model; current ones: ${ClaudeAgentModelSchema.literals.join(', ')}. Defaults to the user-configured model.`,
   }),
@@ -128,6 +117,17 @@ const ClaudeAgentInputSchema = Schema.Struct({
 );
 
 type ClaudeAgentInput = typeof ClaudeAgentInputSchema.Type;
+
+/** The two of the SDK's permission modes a launch runs under. */
+type ClaudePermissionMode = Extract<
+  NonNullable<ClaudeAgentSdkOptions['permissionMode']>,
+  'acceptEdits' | 'bypassPermissions'
+>;
+
+/** File edits auto-accepted when a person approved the launch; every
+ *  permission bypassed when the run's work is auto-approved. */
+const permissionModeFor = (autoApproved: boolean): ClaudePermissionMode =>
+  autoApproved ? 'bypassPermissions' : 'acceptEdits';
 
 // ============================================================================
 // Result formatting
@@ -158,7 +158,7 @@ const runStreamedTurn = Effect.fn('runStreamedTurn')(function* (params: {
   logger: AgentTrace;
   /** The API model ID. */
   model: string;
-  permissionMode: ClaudeAgentPermissionMode;
+  permissionMode: ClaudePermissionMode;
   effort: EffortLevel | undefined;
   thinking: ThinkingConfig | undefined;
   cwd: string | undefined;
@@ -383,7 +383,7 @@ function buildClaudeAgentLaunch(params: {
   runId: RunId;
   initialPrompt: string;
   run: ClaudeCodeRun;
-  permissionMode: ClaudeAgentPermissionMode;
+  permissionMode: ClaudePermissionMode;
   cwd: string | undefined;
   additionalDirectories: string[] | undefined;
   env: NodeJS.ProcessEnv;
@@ -492,7 +492,9 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   | FileSystem.FileSystem
 > {
   const { roots } = (yield* ToolContext).env;
-  const permissionMode = yield* claudeAgentPermissionMode(input, roots);
+  const permissionMode = permissionModeFor(
+    yield* (yield* ChildRuns).autoApproved,
+  );
   const claudeRun = yield* readClaudeCodeRun(roots, input);
   const sessionId = input.session_id ?? undefined;
   const isFork = input.fork_session === true;
@@ -525,7 +527,7 @@ export const ClaudeAgentTool = defineTool({
   name: CLAUDE_AGENT_NAME,
   description:
     'Spin off a Claude Code agent (via @anthropic-ai/claude-agent-sdk) to perform code analysis, generation, or research. ' +
-    'The agent runs the native `claude` binary locally and can read files, run commands, and make edits within its permission mode. ' +
+    "The agent runs the native `claude` binary locally and can read files, run commands, and make edits within the permissions this run's approval policy grants: file edits auto-accepted when the launch was approved, every permission bypassed under Auto-approve or an all-agent-work grant. " +
     'Requires the Claude Code CLI (auto-installed with @anthropic-ai/claude-agent-sdk, or via `npm install -g @anthropic-ai/claude-code`). ' +
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
@@ -535,8 +537,10 @@ export const ClaudeAgentTool = defineTool({
   guard: {
     command: {
       text: (input: ClaudeAgentInput) =>
-        agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
-          claudeAgentPermissionMode(input, stores),
+        agentCliApprovalCommand(
+          CLAUDE_AGENT_NAME,
+          input.prompt,
+          permissionModeFor,
         ),
     },
   },
@@ -547,7 +551,7 @@ const launchClaudeAgentSession = Effect.fn(
   'claudeAgent.launchClaudeAgentSession',
 )(function* (
   input: ClaudeAgentInput,
-  permissionMode: ClaudeAgentPermissionMode,
+  permissionMode: ClaudePermissionMode,
   claudeRun: ClaudeCodeRun,
   releaseFallbackClaim: (() => void) | undefined,
 ): Effect.fn.Return<
