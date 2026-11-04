@@ -264,6 +264,18 @@ export interface Registration {
   readonly start: Extract<SessionEventDraft, { type: 'run.start' }> | null;
 }
 
+/** The row that titles `runId`: the model's summary, or the user's rename. */
+export const descriptionRow = (
+  runId: RunId,
+  description: string,
+  by: 'model' | 'user',
+): Extract<SessionEventDraft, { type: 'run.description' }> => ({
+  type: 'run.description',
+  aggregateId: qualifyAggregateId('run', runId),
+  description,
+  by,
+});
+
 /** The rows that register a run, in commit order: a new run's (`born`)
  *  `run.start`, its configuration, its `run.activate` (a re-registration's with
  *  the grants it ends, `ended`), and the description it is born with. */
@@ -297,12 +309,7 @@ export function registrationDrafts(
     ...(born ? [] : ended),
   ];
   if (options.description !== undefined)
-    rows.push({
-      type: 'run.description',
-      aggregateId: target,
-      description: options.description,
-      by: 'model',
-    });
+    rows.push(descriptionRow(runId, options.description, 'model'));
   return { rows, start: born ? start : null };
 }
 

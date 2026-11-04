@@ -37,6 +37,7 @@ import {
 } from '@shared/session/runHistory';
 import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
+import { descriptionRow } from '@shared/session/runFacts';
 import { factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -246,15 +247,7 @@ export const forkRun = Effect.fn('forkRun')(function* (
     registration: Effect.succeed(
       title === null
         ? rows
-        : [
-            ...rows,
-            {
-              type: 'run.description' as const,
-              aggregateId: qualifyAggregateId('run', runId),
-              description: title.description,
-              by: title.by,
-            },
-          ],
+        : [...rows, descriptionRow(runId, title.description, title.by)],
     ),
   });
   yield* cell.append([

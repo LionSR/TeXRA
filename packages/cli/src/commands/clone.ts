@@ -150,11 +150,6 @@ export const cloneCommand = withUsageSections(
     },
     args: {
       ...GLOBAL_ARGS,
-      cwd: {
-        ...GLOBAL_ARGS.cwd,
-        description:
-          'Empty directory to clone into (defaults to the current directory)',
-      },
       project: {
         type: 'positional',
         required: true,
@@ -163,7 +158,8 @@ export const cloneCommand = withUsageSections(
       destination: {
         type: 'positional',
         required: false,
-        description: 'Directory to create or clone into (defaults to --cwd)',
+        description:
+          'Directory to create or clone into (defaults to the working directory)',
       },
     },
     // `clone` runs without a platform, but its token ports are the
@@ -186,12 +182,6 @@ export const cloneCommand = withUsageSections(
         });
       }
 
-      if (ctx.args.destination && ctx.args.cwd) {
-        throw new CliUsageError({
-          message:
-            'Pass the clone destination either as the second argument or with --cwd, not both.',
-        });
-      }
       const workspacePath = ctx.args.destination
         ? resolve(context.cwd, ctx.args.destination)
         : context.cwd;

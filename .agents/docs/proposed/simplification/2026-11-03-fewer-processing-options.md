@@ -382,8 +382,21 @@ strategy hook, exercised by `packages/harness/example/09-goal-strategies.ts`;
 `followUp.receipt` stays as public SDK. Waiting on the owner: `acceptEditedFile`'s
 `copyMeta` (deleting it removes the VS Code "Save as copy" choice, a working
 control the desktop never had), the four replacement presets with their key
-pairs (a feature reachable from `config.json` by hand), and `git.markCommits`.
-The CLI items are a `texra-cli` PR of their own._
+pairs (a feature reachable from `config.json` by hand), and `git.markCommits`._
+
+_Landed 2026-11-04 (CLI): `clone`'s destination is its second argument and
+`--cwd` keeps its one global meaning (the directory the command works in,
+which the positional resolves against; `clone` and `init` no longer re-describe
+it); `config agents` takes `--agents <inherit|all|team:<team>|list>`,
+`--default-team <team|none>` and `--default-agent <agent|none>`, the grammar
+the command already printed and the forms used, so five flags and four usage
+errors are gone (three in `config agents`, `clone`'s "not both"); each value
+is trimmed once, a keyword reads in any case, and a team is looked up one way
+for both flags.
+Checked and kept: `--input`, `--context`, `--instruction` and `--model` are
+declared per command because their help differs per command (the team
+orchestrator, `run`'s media and document-task notes), `--model` was never
+collected once, and `--instruction-file` is the one identical pair._
 
 ## Rejected
 

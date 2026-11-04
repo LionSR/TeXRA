@@ -117,11 +117,11 @@ export const computeOutputDiffStats = Effect.fn(
   workspace: string | undefined,
   baseFiles: FileLocation[],
   currRound: number,
-  rewrite: boolean,
+  /** Whether the outputs descend from the inputs (false for new documents). */
+  lineage: boolean,
 ) {
   const roundOutputs = ensureRoundData(state, currRound).outputs;
   const mapping = traceFileLineage(state, baseFiles, currRound);
-  const suppressLineage = !rewrite;
 
   return yield* Effect.forEach(
     roundOutputs,
@@ -154,10 +154,10 @@ export const computeOutputDiffStats = Effect.fn(
           }
         }
 
-        const effectiveOriginal = suppressLineage
-          ? null
-          : yield* toWorkspaceOrigin(workspace, originalLocation);
-        const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;
+        const effectiveOriginal = lineage
+          ? yield* toWorkspaceOrigin(workspace, originalLocation)
+          : null;
+        const effectiveDiffBase = lineage ? diffBaseLocation : null;
         const stats = yield* computeDiffStats(effectiveDiffBase, location);
 
         return {
