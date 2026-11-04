@@ -7,6 +7,7 @@ import {
   type AgentConfig,
   AgentConfigSchema,
   qualifyAggregateId,
+  RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { type CliContext } from '@cli/runtime/cliContext';
@@ -37,7 +38,7 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
   writeTextStderr: mocks.writeTextStderr,
 }));
 
-const RUN_ID = 'eec001' as RunId;
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('eec001');
 
 const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'planner',

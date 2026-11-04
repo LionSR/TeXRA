@@ -131,6 +131,7 @@ vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
   return {
     directLeanLanguageServices: () =>
       Layer.succeed(LeanLanguageServices)(
+        // cast: no case in this suite reaches the Lean language services.
         {} as LeanLanguageServices['Service'],
       ),
   };
@@ -456,8 +457,10 @@ describe('Sessions owner', () => {
         // cast: the stop handler reads only these of the session's owners.
         const session = Context.make(
           SessionViewAccess,
+          // cast: the stop handler reads only the view's ref and its runs.
           viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
         ).pipe(
+          // cast: the stop handler calls only `stop` of the runs.
           Context.add(Runs, { stop } as unknown as Runs['Service']),
           Context.add(
             SessionRoots,
@@ -471,6 +474,7 @@ describe('Sessions owner', () => {
           log: { ...db, removeRun: events.removeRun },
           // cast: no request here asks, decides or holds a claim.
           asks: {} as Parameters<typeof sessionRequests>[0]['asks'],
+          // cast: nor does one read the session log.
           sessionLog: {} as SessionLog['Service'],
           view: Context.get(session, SessionViewAccess),
           local,
@@ -738,7 +742,8 @@ describe('the session event table and its one publisher', () => {
           },
           commit: 0,
         });
-        expect(readFileSync(opened.movedAside!.aside)).toEqual(truncated);
+        if (opened.movedAside == null) throw new Error('nothing moved aside');
+        expect(readFileSync(opened.movedAside.aside)).toEqual(truncated);
       });
     }),
   );
@@ -1060,6 +1065,8 @@ describe('the session event table and its one publisher', () => {
           thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
           thread({ turnCount: 3 }),
         ]);
+        const initialCommit = initial[0]?.commit;
+        if (initialCommit === undefined) throw new Error('nothing appended');
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
         );
@@ -1118,7 +1125,7 @@ describe('the session event table and its one publisher', () => {
           expect(
             yield* Effect.flip(
               Effect.flatten(
-                first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+                first.prepareRunRemoval(root, 'bulk', initialCommit),
               ),
             ),
           ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
@@ -1128,7 +1135,7 @@ describe('the session event table and its one publisher', () => {
         const committed = [
           ...(yield* first.appendAll([waiting])),
           ...(yield* Effect.flatten(
-            first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+            first.prepareRunRemoval(root, 'bulk', initialCommit),
           )),
         ];
         expect(committed.at(-1)).toMatchObject({
@@ -1159,11 +1166,11 @@ describe('the session event table and its one publisher', () => {
           );
         }
         expect(yield* first.currentCommit).toBe(8);
-        const tombstone = committed.at(-1)!;
+        const tombstone = committed.at(-1);
         const cleanupError = new Error(
           'The generated directory is not writable.',
         );
-        if (tombstone.type !== 'run.removed') throw new Error('no tombstone');
+        if (tombstone?.type !== 'run.removed') throw new Error('no tombstone');
         // A failed cleanup keeps the tombstone for the next pass.
         expect(
           yield* Effect.flip(
@@ -1196,7 +1203,7 @@ describe('the session event table and its one publisher', () => {
         expect(
           (yield* Effect.flip(
             Effect.flatten(
-              first.prepareRunRemoval(root, 'single', initial[0]!.commit),
+              first.prepareRunRemoval(root, 'single', initialCommit),
             ),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
@@ -1502,8 +1509,9 @@ describe('the session event table and its one publisher', () => {
           });
           expect((yield* second.appendAll([waiting]))[0]?.commit).toBe(3);
           const otherRoot = qualifyAggregateId('run', OLDER);
-          const otherStart = (yield* first.aggregateState([otherRoot]))[0]!
-            .startCommit!;
+          const otherStart = (yield* first.aggregateState([otherRoot]))[0]
+            ?.startCommit;
+          if (otherStart == null) throw new Error('no start commit');
           for (const mode of ['bulk', 'automatic'] as const) {
             expect(
               yield* Effect.flip(
@@ -1810,7 +1818,7 @@ describe('RunHistory', () => {
                   path: 'out/plot.png',
                   mimeType: 'image/png',
                   base64Data: 'AAAA',
-                  // Not part of the row shape: the decode must drop it.
+                  // cast: not part of the row shape; the decode must drop it.
                   bytes: new Uint8Array([1, 2]) as never,
                   sourceTool: 'bash',
                 },
