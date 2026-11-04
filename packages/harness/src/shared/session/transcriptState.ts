@@ -74,6 +74,8 @@ export type Slot =
       /** The durable text; live text is held apart (`live`). */
       text: string;
       running: boolean;
+      /** The limit that ended an answer early (`response.finalized`). */
+      cut?: StreamingTextRow['cut'];
     }
   | {
       readonly kind: 'tool';
@@ -331,7 +333,13 @@ function rowOf(
     case 'text': {
       const text = live ?? slot.text;
       return slot.rowKind
-        ? streamingTextRow(slot.base, slot.rowKind, text, slot.running)
+        ? streamingTextRow(
+            slot.base,
+            slot.rowKind,
+            text,
+            slot.running,
+            slot.cut,
+          )
         : plainLogRow(slot.base, text);
     }
     case 'tool':

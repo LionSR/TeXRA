@@ -156,6 +156,30 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ]);
         }),
       );
+
+      // Failure mode: a turn the model's output limit ended early was
+      // finalized as a complete answer, and nothing shown said so.
+      it.effect('names the limit that ended an answer early', () =>
+        Effect.gen(function* () {
+          const session = yield* quietSession();
+          const runId = startedRun(session);
+          const { result } = yield* runScript({
+            runId,
+            session,
+            tools: {},
+            script: [textTurn('The proof begins with the', 'length')],
+          });
+          expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
+          const finalized = yield* Context.get(session, SessionLog).history(
+            qualifyAggregateId('run', runId),
+            undefined,
+            ['response.finalized'],
+          );
+          expect(finalized).toMatchObject([
+            { type: 'response.finalized', cut: 'length' },
+          ]);
+        }),
+      );
     });
   },
 );

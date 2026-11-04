@@ -2,15 +2,15 @@
 
 import { html } from 'lit';
 
+import { rowHeadline, type WebSearchRow } from '@texra-ai/harness/transcript';
 import type { FormatResult } from '@ui/progress/formatters/baseLogFormatter';
 import { buildToolUseDetails } from './helpers';
-import type { WebSearchRow } from '@texra-ai/harness/transcript';
 
 export function formatWebSearchTemplate(row: WebSearchRow): FormatResult {
   return buildToolUseDetails({
     row,
     iconName: 'globe',
-    label: row.label,
+    label: rowHeadline(row),
     isError: false,
     content: html``,
   });

@@ -214,7 +214,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'context.state': { ...V1, listing: 'own' },
   'stream.start': { ...V1, listing: 'none' },
   'stream.end': { ...V1, listing: 'none' },
-  'response.finalized': { ...V1, listing: 'none' },
+  // v2: `cut` names the limit that ended the answer early (no upcaster: an
+  // earlier build would show a cut answer as complete).
+  'response.finalized': { version: 2, upcast: [], listing: 'none' },
   'run.report': { ...V1, listing: 'own' },
   // v2: no `cliWorkflow` producer and no delivery-time diffs (no upcaster,
   // as `run.config`).
