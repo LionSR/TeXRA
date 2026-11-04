@@ -916,7 +916,7 @@ These existing suites check the sections above.
   (budget), `:441` (manual retry through a durable approval), `:565`
   (automatic attempts stop at the limit), `:591` (an attempt the process
   stopped during spends a retry);
-  `src/test-kernel/agent/runtime/ModelRetryGate.vitest.ts:72`
+  `packages/harness/test/agent/runtime/ModelRetryGate.vitest.ts:72`
 - **7 claims**:
   `src/test-kernel/controllers/session/sessionEvents.vitest.ts:438` (requests
   follow current claims), `:1031` (deletion needs every dependent claim),
