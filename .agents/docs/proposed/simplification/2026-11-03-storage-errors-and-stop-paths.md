@@ -203,10 +203,11 @@ Stop and interruption: one answer to "did it stop or fail"
   `Effect.interrupt` that drops finalizer failures (`invocation.ts:216`,
   `ModelInvoker.ts:319-320`, `compaction.ts:209-211`).
 - **`StopCause`** (`packages/harness/src/agent/runtime/runs.ts:89`) is
-  `'user' | 'shutdown' | 'released'`; `'released'` exists only as the default
-  argument of `interrupt` (`packages/harness/src/agent/runtime/runRegistry.ts:456`)
-  and no consumer branches on it; `shutdown` differs from it in one place, the
-  `closed` halt reason (`loop/rows.ts:97`).
+  `'user' | 'shutdown' | 'released'`. Correction (2026-11-04): `released` has
+  a consumer, the lifecycle writes an end with no reason for it
+  (`packages/harness/src/agent/runtime/AgentRunLifecycle.ts:106`); only its
+  default-argument form (`interrupt(runId, cause = 'released')`,
+  `runRegistry.ts:456`) hides which callers mean it.
 - **Ten functions stop a run**: `stop`, `interrupt`, `terminate`, `stopAll`,
   `stopEnd` (written from `stop` and again from `start`'s resume body,
   `runRegistry.ts:293-295,484`), `dispose`, `rootRun`'s `Fiber.interrupt`
@@ -240,7 +241,9 @@ Stop and interruption: one answer to "did it stop or fail"
   and `notResumable` are only worded; `pluginUnavailable` is lumped with two
   others by its one consumer.
 - `COMPACTION_REASONS[reason].trigger` is written to `context.edit`
-  (`compaction.ts:262`) and read by nothing.
+  (`compaction.ts:262`). Correction (2026-11-04): the run state reads it
+  (`packages/harness/src/shared/session/runState.ts:416-417`, since #14639),
+  so it stays.
 
 **Proposal.** `stopOrFailure(cause)` beside `outcomeFromCause` is the one
 decider; `endRun`, `endChildLoop`, `runLaunchGuard` and the CLI call it;
@@ -251,7 +254,7 @@ into the result. `detachActiveChildren` leaves the wire; `shutdown` implies
 cascade inside the registry. One `runEndError(cause)`. The loop phase is
 renamed so `halted` has one meaning. The script delivery summary says
 `cancelled`. Ownership and build are decided once, in `runRejection`, and the
-earlier checks go. `trigger` is read by a projection or deleted.
+earlier checks go. The two `released` callers name their cause.
 
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
@@ -266,9 +269,9 @@ fold computes `RunView.working` once (`isWorkingRun` and `isActivePhase`
 deleted). The CLI's exit is one `Deferred<ChatExit>`: `claim.stop`,
 `stopRequested`, `askStop` and the teardown memo are gone, `process.exit` has
 one home, and headless the six shutdown flags are the launch fiber's `Exit`
-plus one boolean. Open: `StopCause 'released'`, the remaining stop-or-failure
-deciders, the two meanings of `halted`, the unread compaction `trigger`, the
-resume refusals decided three times._
+plus one boolean. Open: the `released` default argument, the remaining stop-or-failure
+deciders, the two meanings of `halted`, the resume refusals decided three
+times._
 
 ## 6. The model-call failure path
 
@@ -321,8 +324,10 @@ resume refusals decided three times._
 disposition. The cut is named and shown (done); whether a cut turn should end
 the run is a product call, not a cleanup. One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
-two. The gate owns every wait: `pauseBefore`'s sleep goes and `retryAfterMs`
-is honoured. One thrown-to-result converter; a non-`ToolError` defect is
+two. The gate owning every wait needs a decision first: for a failure llm scoped
+to no route (a transport error with no status, a malformed stream),
+`pauseBefore`'s flat sleep is the only wait, so deleting it means either no
+wait or cooling the wire route for a failure that says nothing about it. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.
 
