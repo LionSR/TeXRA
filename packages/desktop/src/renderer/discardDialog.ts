@@ -77,8 +77,13 @@ export function createDiscardChangesDialog(appRoot: HTMLElement) {
   });
   dialog.addEventListener('wa-after-hide', (event) => {
     if (event.target !== dialog) return;
-    showing = false;
-    showHead();
+    // The dialog sets `open = false` just before this event. Reopening in the
+    // same update leaves `open` unchanged, so the dialog would never show its
+    // modal: show the next request once that update has run.
+    void dialog.updateComplete.then(() => {
+      showing = false;
+      showHead();
+    });
   });
 
   return (title: string, discard: () => void): void => {
