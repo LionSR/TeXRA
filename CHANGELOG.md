@@ -1535,6 +1535,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A retired model is refused when a run binds it.** The route decision
+  sent a model llm-zoo marks retired to its provider key (or a subscription
+  still listing it), so a resumed or switched run failed at the provider
+  instead. It is now unserved, as the picker already treated it, and the run
+  says the model is retired.
 - **A request the model's context window cannot hold is compacted and sent
   again.** When the provider refused a request as too long, or the run's
   own estimate did, the run ended failed. The run now compacts its history
