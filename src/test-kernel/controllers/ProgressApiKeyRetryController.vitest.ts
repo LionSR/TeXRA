@@ -1,12 +1,12 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName, type ApiKeyProviderId } from '@texra-ai/llm';
 import { Secrets } from '@texra-ai/harness/host';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 describe('ProgressApiKeyRetryController', () => {
   it.effect(
@@ -34,7 +34,7 @@ describe('ProgressApiKeyRetryController', () => {
         });
 
         yield* controller.useOwnApiKey({
-          stream: 'stream-a' as RunId,
+          stream: Schema.decodeUnknownSync(RunIdSchema)('a0000a'),
           requestId: 'retry-a',
           provider: 'anthropic',
           requireNewKey: true,
