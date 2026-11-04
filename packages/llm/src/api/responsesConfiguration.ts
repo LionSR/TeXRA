@@ -70,14 +70,10 @@ function firstPartyResponses(facts: Facts): ResponsesConfiguration {
   const { credential, options } = spec;
   const choice = options.reasoning;
   const effort = wireEffort(config, choice);
-  // GPT-5 asks for a reasoning summary only when the user turned it on;
-  // every other reasoning Responses model asks. `null` omits the field.
-  const summary: 'auto' | null =
-    !config.id.startsWith('gpt-5') || options.reasoningSummary ? 'auto' : null;
   const reasoning =
     config.reasoning === undefined
       ? null
-      : { effort, mode: choice.mode, summary };
+      : { effort, mode: choice.mode, summary: 'auto' as const };
   if (credential.kind === 'chatgpt') {
     // OpenAI's token sharing: the public Responses API under a ChatGPT plan's
     // rules. A request is stateless and streamed (`store: false`, no

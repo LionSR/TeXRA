@@ -96,14 +96,16 @@ row for one today.
 _Landed 2026-11-04 (first part): `model.useBackgroundResponses` (its default
 was already the rule) and `model.openaiParallelToolCalls` are gone, with
 `BindSpec.options.parallelToolCalls`; `readBackgroundToggles` is
-`readGoogleBackground`. `codeMode.scriptOnly` is its own slice: the canned
+`readGoogleBackground`. `model.gpt5ReasoningSummary` followed the same
+day on the owner's word: a GPT-5 reasoning request asks for a summary as
+every other reasoning model's does, and `BindSpec.options.reasoningSummary`
+is gone. `codeMode.scriptOnly` is its own slice: the canned
 validation model (CI's `validate` job, the golden store) calls `plan` and
 `bash` directly, so flipping to script-only first rewrites that conversation
-to call them from scripts, then runs the GLM and `agent()` journeys. Three
-keys wait for the owner's word, each a product-visible default: `model.useGoogleBackgroundResponses` (off: Google
-text-only turns would stop streaming), `model.gpt5ReasoningSummary` (off:
-its description says the summary needs an account with access) and
-`model.openaiFastTier` (off: a documented, dearer tier)._
+to call them from scripts, then runs the GLM and `agent()` journeys. Two
+keys wait for the owner's word, each a product-visible default:
+`model.useGoogleBackgroundResponses` (off: Google text-only turns would stop
+streaming) and `model.openaiFastTier` (off: a documented, dearer tier)._
 
 ## 2. Declarative columns that are constants or restatements
 

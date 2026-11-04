@@ -150,7 +150,6 @@ export function configurationFor(spec: BindSpec): {
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
     reasoning: chooseReasoning(config, {}, { route }),
-    reasoningSummary: false,
     serverState: false,
     fastTier: false,
     webSocket: false,
