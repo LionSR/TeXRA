@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Clock, Effect, Schema } from 'effect';
+import { Clock, Deferred, Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -19,6 +19,7 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
+  type CommitOrdinal,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -89,7 +90,10 @@ export interface ApprovalMeta {
 
 /**
  * Launch one detached child under `runId` and return the receipt the model
- * reads: the child's result arrives later as a follow-up.
+ * reads: the child's result arrives later as a follow-up. The receipt names
+ * a child that exists: the call waits for the child's opening to commit,
+ * and a launch that fails before it fails the call, which the parent reads
+ * as the call's result.
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
@@ -103,18 +107,16 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
     },
   ) {
     const { runId, grants } = launch;
-    const { session: parentSession, runId: parentRunId } = parent.run;
+    const { runId: parentRunId } = parent.run;
     const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
     const agentName = childConfigPayload.agent;
     const startedAt = yield* Clock.currentTimeMillis;
     const definition = yield* prepareAgentDefinition({
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
-      session: parentSession,
-      suppressErrorNotification: true,
     });
     const { config } = definition;
+    const opened = yield* Deferred.make<CommitOrdinal>();
     yield* startDetachedChildRunLoop({
-      session: parentSession,
       runId,
       parentRunId,
       agentName,
@@ -128,10 +130,11 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
           grants,
         },
         runId,
-        session: parentSession,
         startedAt,
         workingDirectory,
+        onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
       }),
+      opened,
     });
 
     const meta = launch.approvalMeta;

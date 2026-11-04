@@ -1,7 +1,7 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { String as Str } from 'effect';
 import type { SelectItem } from '@cli/tui/ui/Select';
-import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
+import type { TexraSettingRow } from '@texra/shared/settingsView/settingSurfaces';
 
 const CONFIG_CATEGORY_LABELS: Readonly<Record<string, string>> = {
   git: 'Git and worktrees',
@@ -24,7 +24,7 @@ export function configCategoryLabel(category: string): string {
 }
 
 export function buildConfigCategoryItems(
-  entries: readonly SurfacedSettingEntry[],
+  entries: readonly TexraSettingRow[],
 ): Array<SelectItem<string>> {
   const counts = new Map<string, number>();
   for (const entry of entries) {

@@ -24,7 +24,9 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { formatResultCount } from '@texra-ai/harness/transcript';
+import { workspaceTeams } from '@texra/shared/agentTeams';
 import { formatUnknownTeamMessage } from '@texra/shared/teamLaunch';
+import { applyTeam } from '@texra/shared/teamPlan';
 import {
   AGENT_TEMPLATE_FILES,
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
@@ -157,7 +159,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       return {
         command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
         // The setup starter is a selectable agent list, not a team card.
-        presets: (yield* workspaceAgents.allPresets()).filter(
+        presets: (yield* workspaceTeams(ports.roots.repoState)).filter(
           (preset) => !preset.setupOnly,
         ),
         orchestratorAgents: catalog.getOrchestratorAgentNames(),
@@ -438,21 +440,22 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
       present.reported(
         'Failed to apply agent team',
         Effect.gen(function* () {
-          const { workspaceAgents, catalog } = yield* page;
-          const result = yield* workspaceAgents.applyTeam(message.presetId);
+          const { agents, workspaceAgents } = yield* page;
+          const result = yield* applyTeam(message.presetId, {
+            workspaceAgents,
+            repoState: ports.roots.repoState,
+            resolveAgent: agents.get,
+          });
           switch (result.status) {
             case 'unknown':
               return yield* present.alert(
                 formatUnknownTeamMessage(message.presetId),
               );
             case 'applied': {
-              const selectedToolUseAgent = yield* catalog.getPresetRoot(
-                [...result.preset.agents],
-                result.preset.id,
-              );
+              const { preset, rootAgent, missingAgents } = result.plan;
               // The team is committed before this repaint, so a failed
               // repaint says the apply itself went through.
-              yield* refreshAfterAgentMutation(selectedToolUseAgent, true).pipe(
+              yield* refreshAfterAgentMutation(rootAgent?.name, true).pipe(
                 Effect.mapError(
                   (cause) =>
                     new Error(
@@ -461,11 +464,11 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
                     ),
                 ),
               );
-              const unresolvedCount = result.resolution.missingAgents.length;
+              const unresolvedCount = missingAgents.length;
               return yield* present.notice(
                 unresolvedCount === 0
-                  ? `Applied "${result.preset.name}" team`
-                  : `Applied "${result.preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
+                  ? `Applied "${preset.name}" team`
+                  : `Applied "${preset.name}" with ${formatResultCount(unresolvedCount, 'member')} still unavailable`,
               );
             }
             default:

@@ -48,21 +48,17 @@ import {
   formatRepoReviewComment,
   formatRepoSubscriptionError,
 } from './formatRepoEvent';
-import { ghGet, type GitHubServices } from './githubClient';
+import { ghGet } from './githubClient';
 import {
   type BasePollSubscriptionState,
   createBasePollState,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
   type PollEventListener,
   PollingSourceBase,
   type PollingLifetime,
   type PollServices,
 } from './PollingSourceBase';
 import { dedupeComments, type DedupedResource } from './pollingDedup';
-import {
-  MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
-  GITHUB_POLL_INTERVAL_MS,
-} from './prSubscriptionConstants';
+import { MAX_CONCURRENT_REPO_SUBSCRIPTIONS } from './prSubscriptionConstants';
 import {
   GhIssueCommentArraySchema,
   GhPullRequestSchema,
@@ -112,7 +108,7 @@ export interface RepoSubscribeInput {
 }
 
 export function repoKeyToString(repo: RepoSubscribeInput): RepoKey {
-  return `${repo.owner}/${repo.repo}` as RepoKey;
+  return `${repo.owner}/${repo.repo}`;
 }
 
 interface SubscriptionState extends BasePollSubscriptionState {
@@ -167,9 +163,7 @@ export class RepoPollingSource extends PollingSourceBase<
         // MAX_CONCURRENT_REPO_SUBSCRIPTIONS repos ≈ 1,080 req/hr — well below
         // the limit even sharing with a couple of per-PR pollers.
         name: 'RepoPollingSource',
-        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
         maxConcurrent: MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
-        ...DEFAULT_POLLING_BACKOFF_CONFIG,
       },
       lifetime,
     );
@@ -187,15 +181,12 @@ export class RepoPollingSource extends PollingSourceBase<
     return formatRepoSubscriptionError(state.slug, detail);
   }
 
-  protected pollOne(
-    _key: RepoKey,
-    state: SubscriptionState,
-  ): Effect.Effect<void, Error, GitHubServices> {
-    return this.pollRepo(state);
-  }
-
-  private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(
-    function* (this: RepoPollingSource, state: SubscriptionState) {
+  protected readonly pollOne = Effect.fn('RepoPollingSource.pollRepo')(
+    function* (
+      this: RepoPollingSource,
+      _key: RepoKey,
+      state: SubscriptionState,
+    ) {
       const { owner, repo } = state;
       const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}${state.issueComments.sinceCursor ? `&since=${encodeURIComponent(state.issueComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
       const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}${state.reviewComments.sinceCursor ? `&since=${encodeURIComponent(state.reviewComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
@@ -312,7 +303,7 @@ export class RepoPollingSource extends PollingSourceBase<
         () => {},
         state.reviewComments,
         (c) => {
-          const prNumber = parsePRNumberFromReviewCommentUrl(c.html_url);
+          const prNumber = matchPositiveInt(PR_NUMBER_RE, c.html_url);
           if (prNumber === undefined) return Effect.void;
           return this.emit(
             state,
@@ -385,7 +376,7 @@ export class RepoPollingSource extends PollingSourceBase<
     // Pulls list is already sorted by updated_at desc, so slicing yields
     // the freshest candidates when the per-tick cap bites.
     const probes = candidates.slice(0, MAX_MERGEABLE_PROBES_PER_TICK);
-    // Each probe settles on its own: one PR's failed GET must not drop the
+    // Each probe finishes on its own: one PR's failed GET must not drop the
     // readings of the others, which is what `Promise.allSettled` gave here.
     const probeResults = yield* Effect.forEach(
       probes,
@@ -545,6 +536,3 @@ function parseTargetNumberFromIssueUrl(c: GhIssueComment): number | undefined {
  * `html_url` is `…/pull/{number}#discussion_r…`.
  */
 const PR_NUMBER_RE = /\/pull\/(\d+)(?:[?#/]|$)/;
-function parsePRNumberFromReviewCommentUrl(url: string): number | undefined {
-  return matchPositiveInt(PR_NUMBER_RE, url);
-}

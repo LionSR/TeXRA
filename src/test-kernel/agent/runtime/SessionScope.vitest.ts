@@ -1,27 +1,30 @@
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Context, Layer } from 'effect';
+import { expect } from 'vitest';
 
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { closeSessionOf } from '@test/support/sessionEnd';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import { submitFollowUp, Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { SessionLog } from '@shared/session/runHistory';
+import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
+  isolatedTestSession,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 
-describe('sendFollowUp host-path session routing', () => {
+// The file's process default session, beside the one each case opens.
+layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
+  excludeTestServices: true,
+})('sendFollowUp host-path session routing', (it) => {
   it.effect(
     'resolves the follow-up target against the passed session, not the process default',
     () =>
       Effect.gen(function* () {
-        const processSession = yield* createTestSession();
+        const processSession = yield* isolatedTestSession();
         const parentRun = publishTestRunStart(processSession);
-        yield* processSession.log.settled;
+        yield* Context.get(processSession, SessionLog).settled;
         yield* Effect.addFinalizer(() =>
-          processSession.followUps
-            .closeInput(parentRun)
-            .pipe(Effect.andThen(closeSessionOf(processSession))),
+          Context.get(processSession, Inbox).closeInput(parentRun),
         );
 
         // A host-path caller (outside any run ALS, like the desktop IPC handler)
@@ -30,10 +33,8 @@ describe('sendFollowUp host-path session routing', () => {
           yield* submitFollowUp(
             parentRun,
             { text: 'continue', from: { kind: 'user' as const } },
-            {
-              session: processSession,
-            },
-          ),
+            {},
+          ).pipe(Effect.provide(processSession)),
         ).toEqual({ status: 'queued' });
 
         // The default session does not own this run; selecting the actual
@@ -44,9 +45,9 @@ describe('sendFollowUp host-path session routing', () => {
           yield* submitFollowUp(
             parentRun,
             { text: 'continue', from: { kind: 'user' as const } },
-            {
-              session: testDefaultSession(),
-            },
+            {},
+          ).pipe(
+            Effect.provide(yield* Effect.flatMap(TestSession, sessionHandleOf)),
           ),
         ).toEqual({
           status: 'failed',

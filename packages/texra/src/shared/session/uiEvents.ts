@@ -1,5 +1,5 @@
 /**
- * The events a shell component dispatches. Three carry one arm of the
+ * The events a shell component dispatches. Three carry one case of the
  * record they change, unchanged, as their `detail`: a `RuntimeRequest` for
  * the session runtime, a `HostRequest` for a host capability, and a
  * `SurfaceAction` for the surface the root owns. The fourth, `submit`, is

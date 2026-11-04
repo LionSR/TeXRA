@@ -21,6 +21,13 @@ export const AgentModePresetSchema = Schema.Struct({
 
 export type AgentModePreset = typeof AgentModePresetSchema.Type;
 
+/** A team of the workspace's catalog: a preset and where it came from. */
+export interface TeamPreset extends AgentModePreset {
+  readonly source: 'built-in' | 'custom';
+  /** The setup starter: an agent list a workspace can select, never a launch. */
+  readonly setupOnly?: true;
+}
+
 /** The workspace's saved teams (repository state), stored as written. */
 export const CUSTOM_TEAMS_KEY = 'customTeams';
 
@@ -191,17 +198,21 @@ export const AGENT_MODE_PRESETS: AgentModePreset[] = [
   },
 ];
 
-/**
- * A workspace's team catalog (`AgentDirectoriesPort.teams`, the harness's
- * `TeamPreset`s), in display order: the setup starter (tagged `setupOnly`),
- * the built-in teams, then the workspace's saved ones. Built-in ids are
- * reserved: a saved team with the same id is dropped so the built-in always
- * wins.
- */
-export const workspaceTeams = <E>(repoState: {
+/** The repository state read the catalog needs (a `StateStore`'s `get`). */
+interface RepoStateRead<E> {
   readonly get: (key: string) => Effect.Effect<unknown, E>;
-}) =>
-  Effect.map(repoState.get(CUSTOM_TEAMS_KEY), (customRaw) => {
+}
+
+/**
+ * A workspace's team catalog, in display order: the setup starter (tagged
+ * `setupOnly`), the built-in teams, then the workspace's saved ones. Built-in
+ * ids are reserved: a saved team with the same id is dropped so the built-in
+ * always wins.
+ */
+export const workspaceTeams = <E>(
+  repoState: RepoStateRead<E>,
+): Effect.Effect<readonly TeamPreset[], E> =>
+  Effect.map(repoState.get(CUSTOM_TEAMS_KEY), (customRaw): TeamPreset[] => {
     const builtIns = [
       {
         ...STARTER_AGENT_MODE_PRESET,
@@ -221,3 +232,17 @@ export const workspaceTeams = <E>(repoState: {
         .map((preset) => ({ ...preset, source: 'custom' as const })),
     ];
   });
+
+/**
+ * The members of the workspace's team `teamId`, `undefined` for a team it has
+ * none of: what the harness reads of a team (`AgentDirectoriesPort.teamMembers`)
+ * to resolve the selection naming it.
+ */
+export const teamMembers = <E>(
+  repoState: RepoStateRead<E>,
+  teamId: string,
+): Effect.Effect<readonly string[] | undefined, E> =>
+  Effect.map(
+    workspaceTeams(repoState),
+    (teams) => teams.find((team) => team.id === teamId)?.agents,
+  );

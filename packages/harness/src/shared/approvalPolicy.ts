@@ -58,17 +58,14 @@ export function approvalPolicyDenialMessage(
     : APPROVAL_UNPRESENTABLE_MESSAGE;
 }
 
-/** Decide one Bash or tool-edit permission from request-time policy facts. */
+/** Decide one guarded operation under the policy from request-time facts. */
 export function decideApproval(input: {
   readonly policy: ApprovalPolicy;
-  readonly promptRequired: boolean;
   readonly scopedBypass: boolean;
   readonly canPresent: boolean;
 }): ApprovalPolicyDecision {
   if (input.policy === 'never') return 'deny-policy';
-  if (input.policy === 'yolo' || input.scopedBypass || !input.promptRequired) {
-    return 'allow';
-  }
+  if (input.policy === 'yolo' || input.scopedBypass) return 'allow';
   return input.canPresent ? 'present' : 'deny-unpresentable';
 }
 
@@ -95,26 +92,6 @@ export type ApprovalPolicyDenial = {
       readonly deny: Exclude<HumanInputDecision, 'present'>['deny'];
     }
 );
-
-/**
- * Decide one delegation proposal. `never` denies it as it denies every other
- * request kind. Otherwise a scoped proposal bypass approves it, and `yolo` or
- * a run that cannot present one proceeds `unattended`: such a run withholds
- * `requiresApproval` delegation tools up front, so one that still executes
- * was offered for unattended use, and the proposal is a review surface rather
- * than the security gate (the child's bash and edits still gate).
- */
-export function decideProposalApproval(input: {
-  readonly policy: ApprovalPolicy;
-  readonly scopedBypass: boolean;
-  readonly canPresent: boolean;
-}): 'bypass' | 'unattended' | 'present' | 'deny-policy' {
-  if (input.policy === 'never') return 'deny-policy';
-  if (input.scopedBypass) return 'bypass';
-  return input.policy === 'yolo' || !input.canPresent
-    ? 'unattended'
-    : 'present';
-}
 
 const APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';

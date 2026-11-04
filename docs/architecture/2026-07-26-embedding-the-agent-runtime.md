@@ -62,11 +62,11 @@ step to run and no version state key to keep.
 The runtime skill sources are a `processLayer` option (`skills`: the
 bundled resources tree, and the CLI's source flags), which the layer serves
 as `HostSkillSources` beneath every session; the model HTTP dispatcher is
-installed by `processLayer` itself. Beside that layer, a Node root calls
-`bootstrapHost` (`packages/texra/src/controllers/hostBootstrap.ts:46-54`)
-once, on its own process runtime: it seeds the first-install disabled
-tools. An embedder that skips either gets a runtime without them, not a
-broken one.
+installed by `processLayer` itself. TeXRA's hosts build it through
+`texraProcessLayer` (`packages/texra/src/controllers/texraProcessLayer.ts`),
+which fixes TeXRA's policy around it and seeds the first-install disabled
+tools as the layer builds. An embedder that skips the seed gets a runtime
+without it, not a broken one.
 
 Only a composition root imports `processLayer`; ESLint pins the import
 to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
@@ -74,7 +74,7 @@ to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
 ### Feature-parity step — the `lean4` plugin's process layer
 
 TeXRA's Lean tools are the `lean4` plugin
-(`packages/texra/src/tools/integrationPlugins.ts`), and its process layer is
+(`packages/texra/src/tools/lean/plugin.ts`), and its process layer is
 the Lean language-server pool. By default that is the direct
 `lake env lean --server` pool (`directLeanLanguageServices`,
 `packages/texra/src/tools/lean/direct/directLspAdapter.ts`); a host passes its
@@ -137,7 +137,7 @@ Alternatively, skip the packaged tree entirely and hand `processLayer` an
 
 ### Prerequisite A — a session
 
-A root launch runs on a session (`session.runs.launch`). The CLI bootstrap in
+A root launch runs on a session (`session.start`). The CLI bootstrap in
 `packages/cli/src/runtime/initPlatform.ts` prepares one memoized session-opening
 Effect; commands run `services.session` when they need a session. Utility commands
 that need no session leave the store unopened.
@@ -239,15 +239,11 @@ schemas reject fails it with `RunFailure` before admission too (`admitInput`,
 `packages/harness/src/effect/sessionPrograms.ts:94-137`, wraps
 `InlinePersonaSchema.parse` and `AgentConfigSchema.parse`, so a typed
 `temperature: 2` is one); and a failure after admission fails `run.result`
-with `RunFailure`. A host inside this repository that already holds a
-`ValidatedRunRequest` launches through `session.runs.launch` on its
-`SessionHandle` instead, which needs the composition root's `SessionOwner`.
-`validateRunRequest` (`packages/texra/src/controllers/session/runRequests.ts`)
-is the result-style helper that builds one: it returns either a
-`ValidatedRunRequest` or a validation message. A caller that prefers
-exceptions may instead run `AgentConfigSchema.parse` and construct the
-`ValidatedRunRequest` structurally, as production extension callers do
-(`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
+with `RunFailure`. A host inside this repository decodes its configuration
+first with `decodeLaunchConfig`
+(`packages/texra/src/controllers/session/launchConfig.ts`), which fails
+with a `Rejected` naming the first issue, and starts the decoded
+`AgentConfig`.
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`packages/harness/src/shared/schemas/agentConfig.ts`). A launch names no agent
 category: every agent runs as a chat, and launch resolution
@@ -302,9 +298,9 @@ agents unless the files exist on disk.
   empty path (`packages/harness/src/agent/index/agentYamlScanner.ts:71`), so
   `builtIn: () => Effect.succeed('')` skips the packaged resources tree and
   points `custom()` at your own YAML directory.
-- **Choosing where custom agents live.** The CLI builds its port with
-  `new AgentDirectoryService({ channel: 'cli', resourcesPath, state })`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:235-239`,
+- **Choosing where custom agents live.** TeXRA's hosts build their port with
+  `new AgentDirectoryService({ channel: 'AgentLoad', resourcesPath, state, teamMembers })`
+  (`packages/texra/src/controllers/texraProcessLayer.ts`,
   `packages/harness/src/agent/index/AgentDirectoryService.ts`). An embedder can
   supply a literal implementation instead:
 
@@ -360,12 +356,14 @@ resumes a waiting run.
 
 ### The request kinds
 
-The payload union is the vocabulary: `toolEdit`, `bash`, `retry`,
-`proposal`, `planApproval`, `externalInquiry`, `userQuestion`
-(`packages/harness/src/shared/schemas/progressView/data.ts:106-128`). Every kind but
-`externalInquiry` blocks the tool or turn that opened it
-(`requestParksItsCaller`, `:144-148`); an external inquiry is answered later
-and blocks nothing.
+The payload union is the vocabulary: the harness's own `toolEdit`, `bash`,
+`retry`, `proposal`, `planApproval` and `userQuestion`, and a plugin's
+request, `plugin` (`PermissionPayloadSchema`,
+`packages/harness/src/shared/schemas/request.ts`). Every kind of the
+harness's own blocks the tool or turn that opened it; a plugin's request
+declares whether it does (`blocksCaller`) and which answers it takes
+(`answers`). TeXRA's external inquiry is a plugin request that blocks
+nothing and is answered later.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 
@@ -374,7 +372,7 @@ passes to `session.interactions.use({...})`; on the public `@texra-ai/harness`
 surface, a session with no `approve` handler attached in `session.attach({ approve })`
 withholds approval-gated tools automatically. `approvalPromptsUnavailable` is a
 field of `HostInteractions` (`packages/harness/src/agent/runtime/HostInteractions.ts:49`), not
-an option of the root launch, and `RootLaunchOptions` has no such property. The
+a start option, and `StartOptionsSchema` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`liveToolGates`,
@@ -386,12 +384,13 @@ same answer. When the answer is to withhold, `resolveStepTools` drops every
 catalog `requiresApproval` tool before the model sees it
 (`packages/harness/src/agent/runtime/agentToolResolution.ts:194-198`), so a run cannot open the
 requests those tools would raise. Tools an embedder supplies in
-`RootLaunchOptions.tools` are not withheld: they are overlaid after the gates
+`StartInput.tools` are not withheld: they are overlaid after the gates
 (`packages/harness/src/agent/runtime/agentToolResolution.ts:287-297`) and the model is
 offered them, so a run-scoped tool that needs approval is left to the
 approval guard, which may deny the call, rather than removed. The tools that open
-`toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
-`userQuestion` requests all declare `requiresApproval: true`.
+`toolEdit`, `bash`, `proposal`, `planApproval`, plugin and
+`userQuestion` requests all declare `requiresApproval` or a command
+(`guard.bash`), which `asksApproval` reads.
 
 The headless CLI host answers it from its mode alone
 (`packages/cli/src/runtime/approvalAdapter.ts`); the session applies its
@@ -416,8 +415,8 @@ whose rows `session.requests.ask` commits beside the `request.opened`).
 
 ### What ends a wait without a decision
 
-Stopping the run (`session.runs.stop(runId)`, with the id
-`RootLaunchOptions.onRun` hands over; `packages/harness/src/agent/runtime/runs.ts`) ends
+Stopping the run (`session.runs.stop(runId)`, with the id the start's
+`Run` carries; `packages/harness/src/agent/runtime/runs.ts`) ends
 the run. A request opened through `SessionHandle.openRequest` (a command, an
 edit, a plan, a delegation, a question) is closed by the interruption: it
 commits `request.decided` with `{ action: 'cancel', cause: 'Run interrupted.' }`
@@ -450,9 +449,12 @@ when it opens.
   Given a resources tree, the process also reads each of its plugins'
   bundled skills under `<resourcesPath>/plugins/<id>/skills` (today `lean4`
   and `multi-agent`).
-- **`seedDisabledToolDefaults(key)`:** No first-install tool defaults are
-  written, so no plugin whose switch starts `off` is default-disabled. More tools
-  are available, not fewer (`packages/harness/src/tools/toolAvailability.ts:77-95`).
+- **A store handed to `processLayer` (`ProcessLayerOptions.appState`):** It is
+  left as it is: no first-install tool defaults are written, so no plugin
+  whose switch starts `off` is default-disabled. More tools are available,
+  not fewer. A store the process builds itself, and the embedder's global
+  state under `Sessions.layer`, are seeded (`seedDisabledToolDefaults` in
+  `packages/harness/src/tools/toolAvailability.ts`).
 - **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
   whatever port the embedder passed. The `memory`/`plan` injections do not
@@ -482,22 +484,20 @@ following classification makes that distinction.
 ### Runtime bootstrap and shipped-feature parity
 
 - **`:297-306` — `installCliProcessRuntime(...)`:** Required. The one process
-  runtime, a `ManagedRuntime` over `processLayer`
-  (`packages/cli/src/runtime/cliProcessRuntime.ts:242-246`), which also
-  builds the agent-directories port (`:230-241`) and passes the runtime
-  skill sources. The `lean4` plugin's direct Lean language-server pool
+  runtime, a `ManagedRuntime` over `texraProcessLayer`
+  (`packages/texra/src/controllers/texraProcessLayer.ts`), which builds the
+  agent-directories port, passes the runtime skill sources and seeds the
+  first-install tool switches. The `lean4` plugin's direct Lean language-server pool
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
   leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
 - **`:352-361` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
-- **`:395` — `bootstrapHost({ roots })`:**
-  The shared once-per-process write every host runs beside its runtime
-  (`packages/texra/src/controllers/hostBootstrap.ts:46-54`): the
-  first-install disabled-tool seed. (The runtime skill sources and the model HTTP dispatcher are
-  `processLayer()`'s own; `Sessions.layer` never sets the dispatcher.) An embedder that skips it gets a runtime
-  without the seed, not a broken one. The CLI runs it before publishing its roots
-  so the fallible seed fails while they are still private.
+- **The first-install seed:** `texraProcessLayer` seeds the disabled tools
+  as the runtime's layer builds, before any program reads the switches. (The
+  runtime skill sources and the model HTTP dispatcher are `processLayer()`'s
+  own; `Sessions.layer` never sets the dispatcher.) An embedder that skips it
+  gets a runtime without the seed, not a broken one.
 
 ### CLI initialization choices — not runtime obligations
 
@@ -516,19 +516,20 @@ following classification makes that distinction.
   Recommended for any long-lived process that runs `bash` tools; an embedder
   holds the same order in its own scope, closing sessions before it disposes
   the runtime.
-- **`installCliShutdownSignalHandlers()`:** SIGINT/SIGTERM handling for a
-  terminal process, which closes that scope.
+- **`holdSignals(policy)`** (`packages/cli/src/runtime/processSignals.ts`):
+  the one place the CLI listens for a signal; the platform's own policy
+  closes that scope through `cliExit`, and a holder above it (a foreground
+  child, the chat TUI) answers instead while it holds.
 
 ### Cross-check against desktop
 
 The desktop main process makes the same runtime choices, showing how a shipped
 host obtains full feature parity rather than proving that every call is a
-minimum runtime requirement: it builds its agent-directories port at
-`packages/desktop/src/main/platform/index.ts:102-113`, passes the same
-skill sources to its `processLayer` and runs the same `bootstrapHost` at
-`:164`. Product policy is not necessarily CLI-only: the disabled-tool seed
-reaches both hosts through that one shared call, and the skill sources
-through the one `processLayer` option, rather than being repeated per host.
+minimum runtime requirement: `packages/desktop/src/main/platform/index.ts`
+calls the same `texraProcessLayer` with its own resources root. Product
+policy is not necessarily CLI-only: the agent directories, the skill sources
+and the disabled-tool seed reach every host through that one layer rather
+than being repeated per host.
 
 ---
 

@@ -36,7 +36,7 @@ import {
 
 /**
  * Open the stores backing the workspace and local config targets. The desktop
- * opens one pair per paper beside the process-wide global store;
+ * opens one pair per project beside the process-wide global store;
  * single-workspace hosts go through {@link openTexraConfigStores}.
  *
  * One home per target, fixed by one rule: a workspace's project configuration

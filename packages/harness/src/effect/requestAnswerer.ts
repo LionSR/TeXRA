@@ -2,11 +2,12 @@
  * A host attached to one session of `@texra-ai/harness`: its presentation
  * surface, and its approval handler at work, which requests it is asked
  * (once each) and what is recorded when it does not answer. A request is
- * never left parked on a handler that failed, threw, or went quiet: that is
+ * never left waiting on a handler that failed, threw, or went quiet: that is
  * a denial, with the cause logged.
  */
 import {
   Cause,
+  Context,
   Deferred,
   Duration,
   Effect,
@@ -17,15 +18,24 @@ import {
   Stream,
 } from 'effect';
 
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import type { SessionHandle as RuntimeSessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  Interactions,
+  type HostInteractions,
+} from '@agent/runtime/HostInteractions';
+import { SessionRequests } from '@agent/runtime/requestPolicy';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { withLogChannel } from '@logger/effectLog';
-import { requestParksItsCaller, type RequestDecision } from '@shared/schemas';
+import { attentionOf } from '@shared/session/sessionView';
+import { SessionViewAccess } from '@shared/session/runHistory';
+import {
+  answerMismatch,
+  blocksCaller,
+  type RequestDecision,
+} from '@shared/schemas';
 import type {
   PendingRequest,
   SessionView,
 } from '@shared/session/readonlyViews';
-import { attentionOf } from '@shared/session/sessionView';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { ApprovalHandler, SessionHost } from './sessions.js';
@@ -40,26 +50,33 @@ const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
 
 /** The handler's decision on `pending`, or a denial naming why it gave
- *  none: a failure, a throw, or no answer in time. A withdrawal (the
- *  prompt interrupted) stays one: it is no decision at all. */
+ *  none it can use: a failure, a throw, no answer in time, or a decision the
+ *  request's kind does not take. A withdrawal (the prompt interrupted) stays
+ *  one: it is no decision at all. */
 const decisionOf = (
   host: AnsweringHost,
   pending: PendingRequest,
 ): Effect.Effect<RequestDecision> =>
   // Called on the host itself: a class-based host keeps its receiver.
   Effect.suspend(() => host.approve(pending)).pipe(
+    Effect.flatMap((decision) => {
+      const mismatch = answerMismatch(pending.payload, decision);
+      return mismatch === null
+        ? Effect.succeed(decision)
+        : Effect.fail(new Error(mismatch));
+    }),
     Effect.timeout(APPROVAL_HANDLER_TIMEOUT),
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt
         : Effect.logWarning(
-            `The approval handler gave no decision on request ${pending.requestId}; it is denied`,
+            `The approval handler gave no usable decision on request ${pending.requestId}; it is denied`,
           ).pipe(
             Effect.annotateLogs({ data: cause }),
             withLogChannel(CHANNEL),
             Effect.as<RequestDecision>({
               action: 'deny',
-              reason: `The approval handler gave no decision: ${toErrorMessage(Cause.squash(cause))}`,
+              reason: `The approval handler gave no usable decision: ${toErrorMessage(Cause.squash(cause))}`,
             }),
           ),
     ),
@@ -73,12 +90,12 @@ const decisionOf = (
  * `Effect.never` and releases it in a finalizer, which runs once the view
  * drops the request, however it was decided.
  */
-export const followPendingRequests = <P extends PendingRequest, R>(
-  view: { readonly changes: Stream.Stream<SessionView> },
-  select: (view: SessionView) => readonly P[],
-  program: (request: P) => Effect.Effect<void, never, R>,
-): Effect.Effect<void, never, R | Scope.Scope> =>
-  Effect.gen(function* () {
+export const followPendingRequests = Effect.fn('followPendingRequests')(
+  function* <P extends PendingRequest, R>(
+    view: { readonly changes: Stream.Stream<SessionView> },
+    select: (view: SessionView) => readonly P[],
+    program: (request: P) => Effect.Effect<void, never, R>,
+  ): Effect.fn.Return<void, never, R | Scope.Scope> {
     // Keyed by run and request, as the fold keys a pending request.
     const keyOf = (request: PendingRequest): string =>
       `${request.runId}\0${request.requestId}`;
@@ -103,11 +120,12 @@ export const followPendingRequests = <P extends PendingRequest, R>(
         ),
       );
     });
-  });
+  },
+);
 
 /**
  * Answer the runs' requests of `session` with the host's `approve`, until
- * interrupted: every request a parked run waits on here (the attention rule
+ * interrupted: every request a waiting run waits on here (the attention rule
  * every host reads), once, through the session's one `request.decide`. A
  * decision the session refuses to record is tried again briefly, then
  * logged and its request offered again on the next view; a handler still
@@ -115,26 +133,29 @@ export const followPendingRequests = <P extends PendingRequest, R>(
  * interrupted.
  */
 const answerRequests = (
-  session: RuntimeSessionHandle,
+  session: Context.Context<SessionServices>,
   host: AnsweringHost,
 ): Effect.Effect<void, never, Scope.Scope> =>
   followPendingRequests(
-    session.view,
+    Context.get(session, SessionViewAccess),
     (view) =>
       attentionOf(view).requests.filter((pending) =>
-        requestParksItsCaller(pending.payload),
+        blocksCaller(pending.payload),
       ),
     (pending) =>
       decisionOf(host, pending).pipe(
         Effect.flatMap((decision) =>
-          session.requests
+          Context.get(session, SessionRequests)
             .request({
               kind: 'request.decide',
               runId: pending.runId,
               requestId: pending.requestId,
               decision,
             })
-            .pipe(Effect.retry({ schedule: DECIDE_RETRY, times: 3 })),
+            .pipe(
+              Effect.provide(session),
+              Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
+            ),
         ),
         // A decided request stays held until the view drops it, so the fold
         // catching up cannot re-ask it.
@@ -159,29 +180,27 @@ const answerRequests = (
  * or the session closes. A host with a handler can answer whatever its
  * surface says.
  */
-export function attachHost(
-  session: RuntimeSessionHandle,
+export const attachHost = Effect.fn('attachHost')(function* (
+  session: Context.Context<SessionServices>,
   host: SessionHost,
-): Effect.Effect<void, never, Scope.Scope> {
-  return Effect.gen(function* () {
-    // The session disposes its host as it closes: the answerer ends then.
-    const ended = yield* Deferred.make<void>();
-    yield* Effect.acquireRelease(
-      session.interactions.use(
-        overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
-      ),
-      (detach) => Effect.sync(detach),
-    );
-    if (!answers(host)) return;
-    // The session ended: closing the answerer's scope interrupts every
-    // prompt still out, so none decides against it.
-    yield* Effect.forkScoped(
-      Effect.scoped(answerRequests(session, host)).pipe(
-        Effect.raceFirst(Deferred.await(ended)),
-      ),
-    );
-  });
-}
+): Effect.fn.Return<void, never, Scope.Scope> {
+  // The session disposes its host as it closes: the answerer ends then.
+  const ended = yield* Deferred.make<void>();
+  yield* Effect.acquireRelease(
+    Context.get(session, Interactions).use(
+      overlay(host, () => Deferred.doneUnsafe(ended, Effect.void)),
+    ),
+    (detach) => Effect.sync(detach),
+  );
+  if (!answers(host)) return;
+  // The session ended: closing the answerer's scope interrupts every
+  // prompt still out, so none decides against it.
+  yield* Effect.forkScoped(
+    Effect.scoped(answerRequests(session, host)).pipe(
+      Effect.raceFirst(Deferred.await(ended)),
+    ),
+  );
+});
 
 /** A host that answers the runs' requests. */
 type AnsweringHost = SessionHost & { readonly approve: ApprovalHandler };

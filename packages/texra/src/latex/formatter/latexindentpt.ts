@@ -3,21 +3,13 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/host';
-import { entryTypeIn } from '@texra-ai/harness/node';
+import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { runToolWithCheck } from '@texra/utils/system/toolChecks';
+import { runTool } from '@texra/utils/system/toolChecks';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
 export const LATEXINDENT_CONFIG_KEY = 'latex.latexindentConfig';
-
-/**
- * A missing `latexindent` is reported once per session, then stays quiet.
- * Formatting that silently does nothing is the failure mode worth avoiding;
- * a user who does not want the report picks a different LaTeX formatter,
- * which includes "none".
- */
-let missingLatexindentReported = false;
 
 const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   logPath: string,
@@ -56,7 +48,7 @@ export const filesByPrefix = Effect.fn('latex.filesByPrefix')(function* (
     .readDirectory(dir)
     .pipe(
       Effect.catch((error) =>
-        error.reason._tag === 'NotFound'
+        absentReason(error)
           ? Effect.succeed<ReadonlyArray<string>>([])
           : Effect.logWarning(`Failed to list ${dir}`).pipe(
               Effect.annotateLogs({ data: error }),
@@ -133,15 +125,14 @@ export const runLatexIndent = Effect.fn('latex.runLatexIndent')(function* (
   }
   args.push(absolutePath);
 
-  const result = yield* runToolWithCheck('latexindent', args, {
+  // A missing latexindent is the caller's `ToolMissing`: it never started, so
+  // it left no backup or log to clean up.
+  const { success } = yield* runTool('latexindent', args, {
     channel: CHANNEL,
     cwd: workspacePath,
     // The slots the caller resolved this formatter from.
     settings,
-    showError: !missingLatexindentReported,
   });
-  if (result === false) missingLatexindentReported = true;
-  const success = Boolean(result && result.success);
 
   // Always clean up backup files — latexindent creates .bak before modifying,
   // so a crash or failure can still leave orphaned backups.

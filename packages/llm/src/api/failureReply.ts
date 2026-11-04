@@ -3,6 +3,10 @@
  * its SDK put it, the status it resolves to, and the message that is safe to
  * show. The verdict (`verdict.ts`) is decided over this reading.
  */
+// Third-party imports
+import { Predicate } from 'effect';
+
+// Local imports
 import type { ModelError } from '../errors.js';
 
 /** A loosely typed object off an SDK error or a reply body. */
@@ -47,13 +51,13 @@ export const envelopes = (body: unknown): Fields[] =>
 export const firstString = (body: unknown, key: string): string | undefined =>
   envelopes(body)
     .map((candidate) => stringField(candidate, key))
-    .find((value) => value !== undefined);
+    .find(Predicate.isNotUndefined);
 
 /** The first finite number `key` across the body and its envelope. */
 export const firstNumber = (body: unknown, key: string): number | undefined =>
   envelopes(body)
     .map((candidate) => numberField(candidate, key))
-    .find((value) => value !== undefined);
+    .find(Predicate.isNotUndefined);
 
 /** JSON text, or `undefined` when it is not JSON. */
 function parsedJson(text: string): unknown {
@@ -90,7 +94,7 @@ function sdkStatus(source: unknown): number | undefined {
     [source.response, source.error]
       .filter(isFields)
       .map((nested) => numberField(nested, 'status'))
-      .find((value) => value !== undefined)
+      .find(Predicate.isNotUndefined)
   );
 }
 
@@ -115,9 +119,9 @@ const statusFromBody = (body: unknown): number | undefined =>
   envelopes(body)
     .reverse()
     .flatMap((candidate) => [candidate.type, candidate.code])
-    .filter((value) => typeof value === 'string')
+    .filter(Predicate.isString)
     .map((value) => STATUS_BY_ERROR_TYPE.get(value))
-    .find((status) => status !== undefined);
+    .find(Predicate.isNotUndefined);
 
 /** A sub-400 status (an SSE 200 carrying an error body) never outranks the body's. */
 function resolvedStatus(
@@ -166,7 +170,9 @@ function serializes(text: string, body: unknown): boolean {
 /** One failure's reply, read once. */
 export function readReply(error: ModelError): Reply {
   const source = error.cause instanceof Error ? error.cause : error;
-  const body = replyBody(source);
+  // A streamed response's failure event carries its error as a plain object.
+  const body =
+    replyBody(source) ?? (isFields(error.cause) ? error.cause : undefined);
   const own =
     source instanceof Error && source.message.trim() !== ''
       ? source.message.trim()

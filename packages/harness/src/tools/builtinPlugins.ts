@@ -6,9 +6,8 @@
  */
 
 // Local imports
-import type { CodeSandbox } from '@agent/codeSandbox/codeSandbox';
 import { agentTool } from '@agent/runtime/delegation/AgentTool';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
+import { GOAL_PLAN_KIND } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import { BashTool } from '@tools/bash';
@@ -20,31 +19,26 @@ import { GlobTool } from '@tools/glob';
 import { GrepTool } from '@tools/grep';
 import { MemoryTool } from '@tools/memory/MemoryTool';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
+import { GOAL_MODULE } from '@tools/plan/goalScript';
 import { PlanTool } from '@tools/plan/PlanTool';
-import { defineBuiltinPlugin, type Plugin } from '@tools/plugins';
+import { definePlugin, type Plugin } from '@tools/plugins';
 import { ReadFileTool } from '@tools/ReadTool';
 import { ALWAYS_AVAILABLE } from '@tools/toolProbes';
 import { WebFetchTool } from '@tools/web/WebFetchTool';
 import { WebSearchTool } from '@tools/web/WebSearchTool';
 import { writeFileTool, type WriteFilter } from '@tools/WriteTool';
 
-const fileTools = (writeFilter?: WriteFilter) => ({
-  bash: BashTool,
-  read_file: ReadFileTool,
-  write_file: writeFileTool(writeFilter),
-  edit_file: EditFileTool,
-  glob: GlobTool,
-  grep: GrepTool,
-});
+const fileTools = (writeFilter?: WriteFilter) =>
+  [
+    BashTool,
+    ReadFileTool,
+    writeFileTool(writeFilter),
+    EditFileTool,
+    GlobTool,
+    GrepTool,
+  ] as const;
 
-const SCRIPT_TOOLS = { script: ScriptTool, self: SelfTool };
-
-/**
- * A built-in plugin: as a plugin's definition, but its tools may read the
- * call's place in its run (`RunCall`) and its script, which the run loop
- * provides to every call and no app's tool may require.
- */
-const builtin = defineBuiltinPlugin;
+const SCRIPT_TOOLS = [ScriptTool, SelfTool] as const;
 
 /**
  * Compile-time guard: every canonical tool with specialized display
@@ -55,7 +49,8 @@ type AssertNever<T extends never> = T;
 type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
   Exclude<
     CanonicalToolDisplayName,
-    keyof ReturnType<typeof fileTools> | keyof typeof SCRIPT_TOOLS
+    | ReturnType<typeof fileTools>[number]['definition']['name']
+    | (typeof SCRIPT_TOOLS)[number]['definition']['name']
   >
 >;
 
@@ -64,25 +59,22 @@ type _CanonicalDisplayNamesAreBuiltIns = AssertNever<
 export const fileOps = (
   options: { readonly writeFilter?: WriteFilter } = {},
 ): Plugin =>
-  builtin({
+  definePlugin({
     id: 'file-ops',
     tools: fileTools(options.writeFilter),
   });
 
 /** The web: `web_search` and `web_fetch`. */
-export const web: Plugin = builtin({
+export const web: Plugin = definePlugin({
   id: 'web',
-  tools: { web_search: WebSearchTool, web_fetch: WebFetchTool },
+  tools: [WebSearchTool, WebFetchTool],
 });
 
 /** Memory and past runs: the `memory` tool, offered while memory is on,
  *  and `executions`. */
-export const memoryWorkflow: Plugin = builtin({
+export const memoryWorkflow: Plugin = definePlugin({
   id: 'memory-workflow',
-  tools: {
-    memory: MemoryTool,
-    executions: ExecutionsTool,
-  },
+  tools: [MemoryTool, ExecutionsTool],
   injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
   prompt: memoryPromptSection,
 });
@@ -90,11 +82,14 @@ export const memoryWorkflow: Plugin = builtin({
 /**
  * Plans and goals: the `plan` tool proposes a plan, which the user may run
  * as a goal: a background script of the conversation that runs its agent
- * in rounds through `self()` (`goalScript`).
+ * in rounds through `self()` (`goalScript`), on the default strategy, its
+ * module `builtIn:goal`, unless `goal.strategy` names another.
  */
-export const goal: Plugin = builtin({
+export const goal: Plugin = definePlugin({
   id: 'goal',
-  tools: { plan: PlanTool },
+  tools: [PlanTool],
+  factKinds: [GOAL_PLAN_KIND],
+  scriptModules: { goal: GOAL_MODULE },
   // A goal is a script whose rounds are `self()`.
   requires: ['codemode'],
   injectedWhen: { plan: true },
@@ -103,9 +98,9 @@ export const goal: Plugin = builtin({
 });
 
 /** Child agents: the `agent` tool. */
-export const multiAgent: Plugin = builtin({
+export const multiAgent: Plugin = definePlugin({
   id: 'multi-agent',
-  tools: { [AGENT_TOOL_NAME]: agentTool() },
+  tools: [agentTool()],
   // The one delegation tool: the built-in orchestrators need it.
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
@@ -118,7 +113,7 @@ export const multiAgent: Plugin = builtin({
  * tools are on, as every chat run does; its session layer is the code
  * sandbox the scripts run in.
  */
-export const codemode = builtin<CodeSandbox>({
+export const codemode = definePlugin({
   id: 'codemode',
   tools: SCRIPT_TOOLS,
   injectedWhen: { script: GlobalStateKey.SCRIPT_ONLY },

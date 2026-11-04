@@ -1,5 +1,5 @@
 /**
- * The trace viewer's host (PRD one-fold-three-renderers, 7.7): a page-local
+ * The trace viewer's host: a page-local
  * `HostBridgeApi` installed at module evaluation, before the progress bundle
  * resolves its bridge, so the unchanged webview runs against an exported
  * trace exactly as it runs against a live host. A `Subscribe` is answered
@@ -35,15 +35,19 @@ import { parseTraceData } from './traceDataSchema';
 import { traceFrame } from './traceFrames';
 import type { TraceDocument } from '@texra-ai/harness/schemas';
 
+// The inline trace `standaloneTraceHtml` writes into the exported page.
+declare global {
+  var __TEXRA_TRACE__: unknown;
+}
+
 /** The session key the page's `<progress-app data-session>` names. */
 const TRACE_SESSION = 'trace';
 
 async function loadTrace(): Promise<TraceDocument> {
-  const globalWindow = window as { __TEXRA_TRACE__?: unknown };
-  const inline = globalWindow.__TEXRA_TRACE__;
+  const inline = globalThis.__TEXRA_TRACE__;
   if (inline) {
     // Once consumed, drop the raw copy: nothing else reads this global.
-    delete globalWindow.__TEXRA_TRACE__;
+    globalThis.__TEXRA_TRACE__ = undefined;
     return parseTraceData(inline);
   }
   const params = new URLSearchParams(window.location.search);
@@ -120,9 +124,7 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
       state = next;
     },
   };
-  (globalThis as { [HOST_BRIDGE_API_KEY]?: HostBridgeApi })[
-    HOST_BRIDGE_API_KEY
-  ] = bridge;
+  globalThis[HOST_BRIDGE_API_KEY] = bridge;
 }
 
 /** The document this page shows; the bridge answers subscribes from it. */

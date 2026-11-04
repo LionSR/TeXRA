@@ -1,15 +1,15 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { layer } from '@effect/vitest';
+import { beforeEach, expect, vi } from 'vitest';
 
-import { Effect, Scope } from 'effect';
+import { Effect, Layer, Scope } from 'effect';
 import { createSessionExitController } from '@cli/chat/tui/sessionExitController';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import type { RunId } from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { bindTestSessionView } from './fixtures/sessionViewFixture';
+import { SessionGraph } from '@test/support/testKernel';
+import { boundTestSessionView } from './fixtures/sessionViewFixture';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 const mocks = vi.hoisted(() => ({
-  handOffCliShutdownSignalHandlers: vi.fn(),
-  cliPlatformShutdownSequence: vi.fn(),
+  cliExit: vi.fn(),
   writeTextStderrAndWait: vi.fn(),
   writeTextStdout: vi.fn(),
 }));
@@ -19,8 +19,8 @@ vi.mock('@cli/runtime/cliContext', () => ({
 }));
 
 vi.mock('@cli/runtime/initPlatform', () => ({
-  handOffCliShutdownSignalHandlers: mocks.handOffCliShutdownSignalHandlers,
-  cliPlatformShutdownSequence: mocks.cliPlatformShutdownSequence,
+  cliExit: mocks.cliExit,
+  leaveAtOnce: {},
   runCliExit: (exit: Effect.Effect<void, unknown>) => Effect.runPromise(exit),
 }));
 
@@ -33,15 +33,9 @@ vi.mock('@cli/tui/terminalCleanup', () => ({
   supportsTerminalJobControl: () => false,
 }));
 
-describe('chat TUI session exit controller', () => {
-  beforeAll(bindTestSessionView);
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.cliPlatformShutdownSequence.mockReturnValue(Effect.void);
-    mocks.writeTextStderrAndWait.mockReturnValue(Effect.void);
-  });
-
-  function createController(session: TuiSession) {
+/** The controller over the block's runtime, as the chat entry builds it. */
+const createController = (session: TuiSession) =>
+  Effect.map(SessionGraph.runtime, (runtime) => {
     const terminal = { suspend: vi.fn(), resume: vi.fn(), release: vi.fn() };
     const controller = createSessionExitController({
       ink: {
@@ -58,30 +52,43 @@ describe('chat TUI session exit controller', () => {
       cwd: '/tmp/project',
       chatScope: Scope.makeUnsafe(),
       terminal,
-      runtime: testRuntime(),
+      runtime,
       submitted: Effect.void,
       getApprovalPolicy: () => 'ask',
       flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
       interruptActive: vi.fn(),
-      quiet: false,
     });
     return { controller, terminal };
-  }
-
-  it('restores the terminal and prints the hint when the graceful flush fails', async () => {
-    const session = new TuiSession();
-    session.runId = 'exec-graceful-flush' as RunId;
-    const { controller, terminal } = createController(session);
-
-    await controller.gracefulTeardown();
-
-    expect(mocks.writeTextStderrAndWait).toHaveBeenCalledWith(
-      expect.stringContaining('Transcript flush failed during exit'),
-    );
-    expect(terminal.release).toHaveBeenCalledOnce();
-    expect(mocks.writeTextStdout).toHaveBeenCalledWith(
-      expect.stringContaining('texra resume exec-graceful-flush'),
-    );
   });
+
+// Live clock: the teardown's flush and exit sequence run in real time.
+layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
+  excludeTestServices: true,
+})('chat TUI session exit controller', (it) => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.cliExit.mockReturnValue(Effect.void);
+    mocks.writeTextStderrAndWait.mockReturnValue(Effect.void);
+  });
+
+  it.effect(
+    'restores the terminal and prints the hint when the graceful flush fails',
+    () =>
+      Effect.gen(function* () {
+        const session = new TuiSession();
+        session.runId = 'exec-graceful-flush' as RunId;
+        const { controller, terminal } = yield* createController(session);
+
+        yield* Effect.promise(() => controller.gracefulTeardown());
+
+        expect(mocks.writeTextStderrAndWait).toHaveBeenCalledWith(
+          expect.stringContaining('Transcript flush failed during exit'),
+        );
+        expect(terminal.release).toHaveBeenCalledOnce();
+        expect(mocks.writeTextStdout).toHaveBeenCalledWith(
+          expect.stringContaining('texra resume exec-graceful-flush'),
+        );
+      }),
+  );
 });

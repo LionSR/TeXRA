@@ -7,10 +7,6 @@
  * schema without importing the catalog.
  */
 
-export const TOOL_EDIT_APPROVAL_CONFIG_KEY = 'toolUse.requireEditApproval';
-
-export const BASH_APPROVAL_CONFIG_KEY = 'toolUse.requireBashApproval';
-
 /** Config key for the per-session child-run concurrency budget. */
 export const CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY =
   'childRunConcurrencyBudget';
@@ -94,22 +90,6 @@ export const CHILD_RUN_CONCURRENCY_BUDGET_SETTING = Object.freeze({
 } as const);
 
 /**
- * What an interactive host window does at open with the tasks a closed or
- * crashed process left interrupted:
- * `ask` lists them, `auto` continues them. Headless runs and the SDK do
- * neither, whatever this says.
- */
-export const RESUME_ON_OPEN_SETTING = Object.freeze({
-  configKey: 'resumeOnOpen',
-  values: ['ask', 'auto'],
-  defaultValue: 'ask',
-  description:
-    'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
-} as const);
-
-export type ResumeOnOpen = (typeof RESUME_ON_OPEN_SETTING.values)[number];
-
-/**
  * Bounds, default, and copy for `goal.maxCostUsd`: what a goal's rounds may
  * spend before it pauses instead of starting another round, and `0`
  * disables the cap. Read when the goal launches, into its script. Shared by
@@ -123,4 +103,17 @@ export const GOAL_MAX_COST_SETTING = Object.freeze({
   max: 10_000,
   description:
     'Spend in US dollars, across its rounds, at which an autonomous goal pauses instead of starting another round. Raise it, then run the goal again to continue. Set to 0 to remove the cap (not recommended with auto-approve on your own API key).',
+} as const);
+
+/**
+ * Default and copy for `goal.strategy`: the script module whose `goal`
+ * export a plan run as a goal calls. The default is the goal plugin's own
+ * module; a `scriptModules` entry of any plugin that is on may replace it. Read when
+ * the goal launches.
+ */
+export const GOAL_STRATEGY_SETTING = Object.freeze({
+  configKey: 'goal.strategy',
+  defaultValue: 'builtIn:goal',
+  description:
+    "The script module a plan run as a goal runs, by its import specifier (`builtIn:<module>`): its `goal(objective, { maxCostUsd })` export decides the rounds, what context each starts from and when to stop, and resolves to the goal's result. Defaults to the goal plugin's own module.",
 } as const);

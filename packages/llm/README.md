@@ -14,7 +14,7 @@ credentials through `CredentialStore`.
 ## Install
 
 Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
-package is ESM only. `effect` (^4.0.6) is a peer dependency, so your install
+package is ESM only. `effect` (^4.1.0) is a peer dependency, so your install
 supplies the one copy of it:
 
 ```bash
@@ -44,7 +44,6 @@ passes a `fetch` that answers 401, so it needs no key.
 ```ts
 import { Effect } from 'effect';
 import {
-  chooseReasoning,
   completedTurn,
   decideModelRoute,
   OWN_KEY_ROUTE_FACTS,
@@ -64,25 +63,12 @@ if (endpoint === undefined) throw new Error('No endpoint for the provider.');
 
 const program = Effect.gen(function* () {
   const binding = yield* bindModel({
-    protocol: 'anthropic-messages',
     model: selected.config,
+    route,
     endpoint,
-    credentialScope: `${route.provider}:api-key`,
     credential: {
       kind: 'api-key',
       apiKey: process.env.ANTHROPIC_API_KEY ?? '',
-    },
-    billing: 'api-key',
-    options: {
-      maxOutputTokens: 1024,
-      temperature: 0,
-      reasoning: chooseReasoning(selected.config, selected.request),
-      parallelToolCalls: false,
-      reasoningSummary: false,
-      serverState: false,
-      fastTier: false,
-      webSocket: false,
-      background: false,
     },
   });
   const turn = yield* binding.model.prepareTurn({
@@ -102,9 +88,14 @@ const result = await Effect.runPromise(program);
 console.log(result.content);
 ```
 
-`bindModel` returns a `Binding`. It holds the `Model` and the facts its
-configuration fixed: the origin, background capability, service tier, and
-whether the route takes a forced tool choice. The connection, and any files
+`bindModel` binds the model on its provider's protocol and derives what the
+route fixes: the config it runs and bills with (`routeConfig`), the credential
+scope on its origin, and the plan it bills. Every option has a default (the
+catalog's output limit, the model's default reasoning, the provider's own
+temperature, every switch off). It returns a `Binding`, which holds the
+`Model` and the facts its configuration fixed: the origin, the routed config,
+the billing route, the output limit, background capability, service tier,
+and whether the route takes a forced tool choice. The connection, and any files
 the model uploads, live in the caller's `Scope`. Closing the scope releases
 them.
 
@@ -191,6 +182,22 @@ the protocols with remote execution. `observe` takes the accepted turn back
 because a completion's continuation anchors to the exact history prefix it
 covers, which the operation handle deliberately does not copy.
 
+Every turn stores the origin it was requested on (`ModelOrigin`: protocol,
+requested model, deployment and `codecVersion`). A later request replays a
+stored turn's provider-specific state (reasoning signatures, encrypted
+reasoning, provider evidence) only when that origin matches its own exactly
+(`sameModelOrigin`). A turn of the same protocol from another origin is sent
+as plain content, without its reasoning and evidence, as after a model
+switch (`replayableHistory`); another protocol's evidence fails explicitly in
+the codec. `codecVersion` changes only when the meaning of that stored state
+changes, so a turn a newer codec would read differently is resent as plain
+content instead of misread. Adding a field or changing how a request is
+built keeps the version. A turn of another version must still decode, so
+`codecVersion` covers a change of meaning only. A change to the stored
+shape of that state, one an older build could not decode, also bumps the
+harness's `model.message` row version, and an older build then refuses the
+store rather than the turn (`ROW_KINDS`, `packages/harness/src/shared/schemas/rowVersions.ts`).
+
 ## The tree
 
 | File                              | What it owns                                                                                                                                                            |
@@ -218,7 +225,7 @@ covers, which the operation handle deliberately does not copy.
 | `api/verdict.ts`                  | the verdict on a failure, read off the vendor's reply (`failureReply.ts`): status, retryability, scope, quota                                                           |
 | `providers/`                      | the provider plugins, the API-key providers and their key lookup, `CredentialStore`                                                                                     |
 | `models/`                         | model selection over llm-zoo, the route decision and its config and endpoint, the reasoning choice, a turn's cost                                                       |
-| `oauth/`                          | the ChatGPT (`codex/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                              |
+| `oauth/`                          | the ChatGPT (`chatgpt/`) and Grok (`xai/`) sign-in flows over the shared subscription coordinator, loopback and device flows                                            |
 
 ## Who calls it
 

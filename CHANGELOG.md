@@ -6,6 +6,217 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **One flag per choice in `texra config agents`.** `--agents` takes the
+  workspace agents as one value (`inherit`, `all`, `team:<team>` by id,
+  name or slug, or a comma-separated agent list), `--default-team` takes a
+  team or `none`, and `--default-agent` an agent or `none`; `--inherit`,
+  `--all`, `--team`, `--clear-default` and `--clear-default-agent` are
+  gone, with the three "not both" errors. `texra clone` takes its
+  destination as the second argument, resolved against `--cwd` (the
+  directory every command works in) and defaulting to it; passing both no
+  longer errors.
+- **Two LaTeX config keys are gone.** `latex.wrapCritiqueInAlign` is gone:
+  a bare criticism command is always wrapped in an `align` environment with
+  `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
+  file is always written beside the file it stands in for, where its
+  relative inputs resolve. A stored value of either is ignored.
+- **A child launch is a chat or a task.** SDK: `ChildLaunch`
+  (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
+  and the `mediaFiles` on its prompt) or a task (`task` with its `files`:
+  input, context, media and output lists); a launch that names a task's
+  lists for a chat, or a schema for a task, no longer type-checks. A stop
+  while a child call resolves its files or picks a model now stops the
+  call, where it was reported as the call's error. No stored row or
+  service message changes.
+- **A document task's switches have one name on every surface.** The
+  `document_task` tool's `extractFigures` and `extractTikz` inputs are
+  `autoExtractFigure` and `autoExtractTikzFigure`, the names a run stores
+  and its approval shows, and the tool also takes `attachTeXCount` and
+  `autoCompileInputPdf`. `texra run` takes `--attachTeXCount`,
+  `--autoExtractFigure`, `--autoExtractTikzFigure` and
+  `--autoCompileInputPdf` beside `--reflect`. The launch form's Input menu
+  offers Critic review, and a proposal card badges every switch the task
+  was launched with. `task.rewrite` is gone from agent YAML: a task that
+  declares `outputs` writes new documents and gets no diff lineage, one
+  that declares none rewrites its inputs; an agent file that still sets
+  `rewrite:` is refused at load as an unrecognized key, so delete the line.
+  No stored row changes.
+- **Launch options that travel together are one shape.** SDK: a
+  `ProcessChildStrategy` is a one-turn command (`interruptedTurn`, the result
+  a killed process still has) or a coding agent's CLI session, whose
+  `runTurn`, `pauseNotice`, `onTurnSuccess` and `releaseSessionOwnership`
+  are one required `cli` bag; a strategy with only some of them no longer
+  type-checks. `ProcessLayerOptions.labelRuns` and
+  `seedToolSwitches` are gone: a process built with `processLayer` labels
+  its root runs, and the first-install tool switches are seeded into the
+  store the process builds itself (`Sessions.layer` seeds the embedder's
+  global state; a store handed to `processLayer` is left as it is).
+  `AgentRuntimeEmitOptions.replayWhenAttached` is gone: a notice raised
+  while no host is attached always waits for the next one. A forked run's
+  copied title rides its registration rows (`RegisterRunOptions` has no
+  `descriptionBy`), and a compaction's reason is the one argument it takes
+  (`CompactionInput` has no `force`). No stored row or service message
+  changes.
+- **One approval decision.** A run's `approvalPolicy` (Block, Ask,
+  Auto-approve) is the one setting that says whether its shell commands,
+  file edits, delegations and coding-agent launches ask first. Under Ask
+  every guarded operation asks unless the task granted it on a request card;
+  `texra.toolUse.requireEditApproval` and `texra.toolUse.requireBashApproval`
+  are gone (a stored value is ignored). The `codex` and `claude_code` tools
+  derive their sandbox and permission mode from the launching run: a launch
+  a person approved runs Codex `workspace-write` and Claude Code
+  `acceptEdits`; under Auto-approve or an all-agent-work grant it runs Codex
+  `danger-full-access` and Claude Code `bypassPermissions`; Codex never
+  prompts on its own. Removed: the `codexSandboxMode`, `codexApprovalPolicy`
+  and `claudeAgentPermissionMode` settings with their rows in Settings and
+  `/config`, and the tools' `sandbox_mode` and `permission_mode` inputs (a
+  read-only `plan` Claude child can no longer be requested). A stop of a
+  task cascades to its agents on shutdown and otherwise follows "Keep agents
+  running"; `run.stop.detachActiveChildren` is gone from the service
+  protocol (52). SDK: `ChildRuns.autoApproved` says whether the launching
+  run does its work unasked; `RunStopOptions` is gone, so a stop is
+  `Runs.stop(runId, reason)`; `decideApproval` takes no `promptRequired`.
+- **A run's failure is one value from the model call to the run's end.**
+  The `failed` row, the retry request, the `run.end` row and the
+  `AgentError` a root's launch raises carry the failure as the run recorded
+  it; nothing re-classifies it from an error's message or a cache on the
+  error object. A `run.end` error is the recorded model failure
+  (`kind: 'model'`, with its classification, status, provider and the text
+  the attempt streamed) or a local `disk-full`, `result-lost` or
+  `unexpected` one; `context-window` and `missing-api-key` are its
+  classification, no longer kinds of their own. Whether a person is offered
+  a retry is the `failed` row's `next` alone (llm's verdict: the same
+  request can succeed, or a quota ran out), so `userRetryable` is gone from
+  every row, and the credential move a retry offers is decided over llm's
+  verdict on the plan that ran out, before it is recorded. A subscription
+  token is renewed once on any authentication failure (a 403 as a 401
+  was). An unclassified model failure's `run.end` message is the failure's
+  own words, without the "Error executing agent" prefix, and a child's
+  error delivery no longer carries a `retryable` attribute. SDK:
+  `AgentError.failure` carries the recorded failure, `AgentErrorKind` is
+  `disk-full | result-lost | unexpected | model`, `RetryErrorInfo`,
+  `ProviderError`, `ErrorLogData` and a retry request's `errorDetails` lose
+  `userRetryable`, and the `ExhaustionReason` type is gone (a plan that ran
+  out is the classification's `kind`). Rows: `model.message` v12,
+  `request.opened` v8, `run.end` v7, `log` v6; service protocol 51.
+- **A run's model route is decided over one set of facts.** The binding a
+  `run.config` records now carries the subscription routes it was decided
+  over, and a model switch is admitted over the routes the run's history
+  holds, the same set the next binding reads, so a switch after a quota
+  fallback is answered as the binding will answer it. A model that would be
+  served from a different conversation format is refused by the route
+  decision itself, for a switch and for a resume alike (a resumed run no
+  longer binds under its stored backend when the model moved). SDK:
+  `RunModelCandidate.fallbackMode` is gone: each candidate's reason decides
+  its fallback (a named or credential-chosen model is refused, a configured
+  or remembered one falls back with a notice, a default silently), in one
+  table.
+- **The view says whether a run is working.** `RunView.working` is true
+  while the run is inside a turn: live, not paused, not interrupted and not
+  waiting for its user. `runStartedAt` is set only while the run is busy on
+  a turn (not while it waits on a person's answer, nor when interrupted or
+  paused), so a clock reads it and nothing else, and `durableOutcome` is the
+  one reading of "ended, and how". Hosts read these three instead of deriving them from
+  the status word, so an interrupted run no longer shows as active in the
+  terminal (its status bar, the live-assistant row, `/clear`'s refusal) and
+  the header clock stops with it. SDK: `isWorkingRun` and `isActivePhase`
+  are gone (read `working`), `RunView.runStartedAt` is null unless the run
+  is busy (`turnStartedAt` carries the turn's start as the rows record it),
+  and a run listing entry's `status` is `outcome`: the run's durable
+  outcome, null until it ends.
+- **A message's sender is placed by the rows, not the view.** The inbox
+  stamps a run sender's relation (parent, child, sibling, …) from the parent
+  edges the rows record, in the job that writes the message, and a retry of
+  a message compares against the relation it was stamped with, so a retry
+  after a detach is the same request instead of a spurious conflict, and a
+  detached child keeps the grants its ancestors' rows give it. SDK:
+  `ChildRuns.parent` answers the rows' edge (null for a root, or a run that
+  is not there; never `undefined`), and `LiveRun.parent` is gone.
+- **The route decides three wire knobs.** `model.useBackgroundResponses` is
+  gone: a text-only turn goes out as background work whenever its route can
+  carry it, which the setting's default already did.
+  `model.openaiParallelToolCalls` is gone: a model may always call tools in
+  parallel. `model.gpt5ReasoningSummary` is gone: a GPT-5 reasoning request
+  asks for a summary as every other reasoning model's does, so its thinking
+  shows as it streams. SDK: `BindSpec.options.parallelToolCalls` and
+  `reasoningSummary`, `TurnRequest.store` and `ChooseReasoningOptions.strict`
+  are gone; a
+  Responses configuration loses `supportsStorage`, `instructions`,
+  `webSocketStreamParameter` and `toolNamespace`, and its `requestDialect`
+  gains `chatgpt` (the plan's namespaced function tools); a reasoning
+  request's `summary` is `'auto'` or null.
+- **A cancelled run says who stopped it.** The `run.end` row carries
+  `reason`: `user` for a person's stop, `shutdown` for the process's exit,
+  neither for a holder's release. A run the process closed mid-request
+  resumes without spending a retry, as before, and a child's delivery wakes
+  it, as after a crash; only a person's stop holds that delivery back. SDK:
+  `RunEnd.reason` and `RunStopReason` (from `@texra-ai/harness`); the halt
+  position carries no `reason`; the `abort` error kind, `isUserAbort` and
+  `AGENT_ERROR_OUTCOME` are gone, as a stop is the run fiber's interruption
+  and nothing else, and `outcomeFromCause` reads a cause alone.
+- **ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source
+  agents.** The ChatGPT plan now pays for calls to the public Responses API
+  (`api.openai.com/v1`) through a client OpenAI registers for you at the
+  first sign-in, instead of ChatGPT's Codex backend through the Codex CLI's
+  client. Sign in again: the earlier session is not read. Sign-in is
+  browser-only (no device code; `--device` uses the browser), the consent
+  page must allow plan usage, and the plan's usage meter is gone from the
+  settings view and `/login status`, since OpenAI shows it in ChatGPT. The
+  registered client outlives sign-out, which revokes the session at OpenAI
+  (and says so when OpenAI does not confirm it), so signing in again reuses
+  the client; to
+  register a different ChatGPT account, sign in with it twice (the first
+  attempt says so and forgets the old registration). On this route the
+  agent's tools travel in one `texra` namespace, as OpenAI requires, and a
+  forced tool choice is not offered.
+  SDK: `codexCoordinator`, `codexLoginWithLoopback`, `getCodexStatus` and
+  `CodexSession` are `chatgptCoordinator`, `chatgptLoginWithLoopback`,
+  `getChatgptStatus` and `ChatgptSession`; `codexLoginWithDeviceCode` is
+  gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
+  account id; `SubscriptionCoordinator.buildAuthorizeRequest` is an Effect
+  and `loginWithCode` takes the authorize request and its callback.
+- **SDK: a used-up plan and an unusable subscription carry their facts;
+  the app words them.** `SUBSCRIPTION_AUTH_NAMES` (`./schemas`) and
+  `quotaFallbackRouteFor`, `QuotaFallbackRoute` and
+  `QuotaFallbackExhaustionReason` are gone: the harness words these failures
+  plainly, naming a plan by the provider it bills ("Usage limit reached on
+  your OpenAI Plus plan. Resets in 2h 5m."), and TeXRA words the facts
+  wherever it shows them, as before. A used-up plan's classification
+  carries its tier and reset (`planType`, `resetsInMs`), and the GLM Coding
+  Plan's is named by its route, `glm-coding-plan-subscription`; a
+  subscription that cannot bill the call is `RouteUnavailable.session`
+  (`route`, `needsReauth`), with the session's own failure as its message,
+  and is classified `subscription-session` (`route`, `needsReauth`,
+  `sessionError`); an automatic fallback is a `quotaFallback` log row
+  recording the route (`ProgressStatusRow.quotaFallback`), and a status row
+  has no `detail`. `RetryPermission` carries the failure once and whole as
+  `errorDetails` (no `errorMessage`). A `requestShowError` notice carries
+  the failure's classification beside its message
+  (`RequestShowErrorPayloadSchema`), an error row the classified failure it
+  records (`ErrorRow.failure`, and no `detailText`: a host joins `details`),
+  and a classified failure's run end names its cause without "Error
+  executing agent …:". `getSdkErrorMessage` (`./host`)
+  is `normalizeProviderError`, which returns the message with its
+  classification (`ProviderError`). Conversations saved by an earlier build
+  show as written by that build and cannot be resumed by this one.
+- **SDK: a refused launch is its caller's to show.** `session.start` and
+  `session.resume` no longer show the unknown-model instruction or the
+  missing-agent notice through the session's host, at once or to a host
+  that attaches later: the failure carries it as `AgentError.notice`
+  (`LaunchNoticeSchema` in `./schemas`), `launchNoticeOf` (`./host`) reads
+  it through the `RunFailure`, and `presentRunFailure` shows it in place of
+  the generic error. `attachErrorPresentationClaimed` and
+  `hasErrorPresentationClaimed` are gone.
+- **SDK: a tool edit's proposal is the request's, not the session's.**
+  `ToolEditPermission.content` names the proposal (`ToolEditContent`) by its
+  address in the session's blob store, written with the `request.opened`
+  row; `request.preview` answers it from the store, and `request.edit` is
+  gone: an approve carries the proposed file as the person left it as the
+  decision's `content`. `StagedToolEdit` leaves `@texra-ai/harness/schemas`;
+  `CallRequests.open` takes the blobs a payload names. A blocked resume
+  (`RunView.statusNotice` `resumeBlocked`, `LocalRuntimeState.resumeBlocked`)
+  carries no `retry`: whether an unblocked task continues by itself is the
+  `resumeOnOpen` setting's, read once at open.
 - **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
   leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
   `snapshotEntries` take the app's id as a string.
@@ -118,12 +329,18 @@ All notable changes to this project will be documented in this file.
   address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
   `mediaFiles` is `media: { name, mimeType, digest }[]`.
 
-- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.0.6 (peer
-  floor `^4.0.6`).** Their Effect peers (`effect`, plus
+- **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
+  floor `^4.1.0`).** Their Effect peers (`effect`, plus
   `@effect/platform-node` and `@effect/sql-sqlite-node` for the harness) now
-  start at `^4.0.6`. Effect 4.0.6 changed how a SQL transaction acquires its
-  connection, and the harness's session database follows the new contract,
-  which 4.0.5 lacks.
+  start at `^4.1.0`. Effect 4.0.6 changed how a SQL transaction acquires its
+  connection, and Effect 4.1.0 derives a file system's `glob` from a typed
+  directory listing; the harness's session database and its rooted file
+  systems (`WorkspaceFs`, `StorageFs`, `GlobalStorageFs`) follow both
+  contracts, which earlier versions lack. A `glob` on those file systems now
+  reads Effect's pattern syntax: its wildcards match case-sensitively on every
+  platform (they ignored case on macOS and Windows), `\` escapes the next
+  character instead of separating paths, and extended globs such as `@(a|b)`
+  are not interpreted.
 - **Goal mode is a script.** **Run as goal** on a plan now runs the goal
   template, a background script of the conversation whose rounds are the
   same agent again: each round continues the conversation as it stood when
@@ -770,6 +987,22 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 ### Features
 
+- **SDK: a message to a run carries the caller's id, and its receipt says
+  what became of it.**
+  - `followUp.send` takes an optional `id` and answers with that id and
+    the message's receipt.
+  - A retry under the same id answers with the first send's receipt instead
+    of sending the message twice. That holds after a lost reply, and after
+    the run stopped taking input.
+  - A different message under that id fails with `Conflict`.
+  - `followUp.receipt`, with `wait: true` to wait, reads the receipt from
+    the run's rows. It is one of: `accepted`; `incorporated` into a turn;
+    `answered`; or `unanswered`, with why. Why is one of: the turn failed,
+    the run ended first, or the message left the queue unread.
+  - The harness examples wait on the receipt instead of counting model
+    calls.
+  - A turn's end position records the turn's outcome (`run.position` v2), so
+    a run an earlier build wrote reads as that build's.
 - **A message typed while a run works is answered at its next model
   request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
   model inside the turn; since then it waited for the turn to end. A message
@@ -1302,6 +1535,134 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A retired model is refused when a run binds it.** The route decision
+  sent a model llm-zoo marks retired to its provider key (or a subscription
+  still listing it), so a resumed or switched run failed at the provider
+  instead. It is now unserved, as the picker already treated it, and the run
+  says the model is retired.
+- **A request the model's context window cannot hold is compacted and sent
+  again.** When the provider refused a request as too long, or the run's
+  own estimate did, the run ended failed. The run now compacts its history
+  once in that turn and sends the request again; a history too short to
+  compact, or a single attachment larger than the window, still fails with
+  the provider's message. Anthropic reports an overflowed request as a
+  finished turn, which counted as a completed answer; it is now the same
+  `context-overflow` failure every other provider raises, and what Anthropic
+  billed for it still counts toward the run's usage. SDK: the
+  `context-window-exceeded` finish reason is gone from `TurnResult` and the
+  stored turn, a compaction's `trigger` may be `overflow`, `ModelError`
+  carries the `usage` of a response the provider billed before refusing it,
+  and a `failed` row carries that usage priced.
+- **An answer the model could not finish says so.** When a reply stopped at
+  the model's output limit or at the provider's content filter, it was shown
+  as a complete answer. The assistant row in the progress view and the
+  terminal chat now ends with a note naming the limit. SDK: the
+  `response.finalized` row carries `cut` (`'length' | 'content-filter'`),
+  and `StreamingTextRow.cut` is its projection; `WebSearchRow.label` is
+  gone, as `rowHeadline` already words the query.
+- **SDK: a stored turn of another codec version replays as plain content.**
+  `ModelOrigin.codecVersion` (`@texra-ai/llm`) is any positive integer, not
+  only `1`. A run holding a turn whose provider state another build encoded
+  continues without that turn's reasoning and evidence, as after a model
+  switch, instead of failing as an invalid turn request. This build still
+  writes version 1.
+- **A used-up plan or a lapsed subscription reads in TeXRA's words again
+  wherever a run's failure shows.** The end-of-run notice (the desktop and
+  VS Code message, `texra run`'s `ERROR` line), a launch that fails before
+  its run starts, and the transcript's error rows say which plan ran out
+  and which switch or sign-in to use, as before: "ChatGPT
+  subscription usage limit reached (Plus plan). Resets in 2h 5m. Switch to
+  your own OpenAI API key to keep working, or wait until the limit
+  resets." and "ChatGPT subscription unavailable: … Sign in with ChatGPT
+  again, or turn off "ChatGPT subscription"." Such a failure leads with its
+  cause, without "Error executing agent …:" in front. The ChatGPT sign-in,
+  the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
+  the setup assistant and the guide say "OpenAI models" where they said
+  "Codex models".
+- **No model request runs only to title a subagent, and the SDK sends none
+  you did not ask for.** A subagent or a script's `self()` round keeps its
+  agent name instead of a generated title, so a loop of rounds no longer
+  doubles its requests. SDK: a session titles its runs only when the
+  composition asks (`processLayer({ labelRuns: true })`, as every TeXRA app
+  does); `Sessions.layer` titles none, so an embedder's runs make only the
+  requests their agents do.
+- **SDK: the harness logs through your program's own logger.**
+  `Sessions.layer` no longer replaces the Effect loggers, minimum level and
+  tracer of the program that provides it, so the harness's lines go where
+  your `Logger.layer` sends them instead of straight to the console.
+  `effectDiagnosticsLayer` with `setLogSink` still routes them through the
+  harness's redacting sink.
+- **A DeepSeek account out of credit reads as out of credit.** A request
+  DeepSeek refuses for an empty balance (HTTP 402, "Insufficient Balance")
+  is now reported as the account running out of credit, with the same
+  choice to replace the key that an OpenAI or Anthropic account out of
+  credit gets. Before, it read as an unexpected error.
+- **A lost durable fact is a row or a failure, never a warning.** A
+  subagent's result held for a parent open in another process is delivered
+  under a claim its park let go, so the delivery no longer polls for the
+  child's process to exit; a request a stopped or failed run leaves open is
+  cancelled with the run's end; a run that cannot hold its claim, or record
+  a finished compaction as it stops, ends failed naming the refusal; a
+  subagent launch that fails before its run exists fails the `agent` call
+  that launched it; and a file a model cannot take, or a tool attachment it
+  cannot read inline, is told to the model in the message that carried it.
+  Before, each scrolled by as a warning and the fact was lost.
+- **An approved tool edit keeps the person's changes across a crash.** The
+  proposed file as the person left it in the diff view now travels with the
+  approval and is recorded with it, and the proposal itself is stored with
+  the request, so a task resumed in a new process applies what was approved
+  and shows the same diff. Before, both lived only in the process that
+  opened the request, and a resume applied the tool's own proposal. A
+  window that closes mid-review takes its unsent edits with it, as an
+  editor does. Every window of the project shows the same proposal, and
+  changes made in one window go only with an approval from that window:
+  an approval sent after another window answered is refused. When the
+  request closes without the changes made in a window (another window or
+  the terminal answered it, or the task stopped), that window keeps them,
+  VS Code in a new editor and the desktop app in the file its editor
+  saved, and says they were not applied.
+- **A task interrupted by a crash is no longer held forever after the
+  network changes.** On macOS the computer's name follows the network (a
+  router-assigned name at home, `name.local` elsewhere), and a task whose
+  process stopped under one name was treated as running on another
+  computer: it was never shown as interrupted and could not be resumed.
+  TeXRA now identifies the process itself, not the computer's name.
+- **A model request cut off by a crash counts against its retries.** When
+  the process died while a model request was running (for example, a
+  response that ran it out of memory), every reopen sent the request again
+  without asking, and with **Interrupted tasks** set to continue them all
+  it could be billed again on every start. Each such attempt now uses one
+  of the automatic retries; once they are spent, TeXRA asks before sending
+  it again, and a run with nobody to answer, such as a headless one, ends
+  there instead.
+- **A tool call that crashes TeXRA is not run on every start.** A tool call
+  that is safe to repeat (a file read, say), cut short by the process
+  stopping, was run again each time the task resumed, so a call that ran the
+  process out of memory stopped every start. After three such starts, TeXRA
+  no longer runs it and tells the model the call may be what stops the
+  process.
+- **A background subagent or script a crash cut short continues when its
+  task resumes.** A task that sent work to the background (a subagent, a
+  script, a command) and whose process then died left that work as it was:
+  the task, told the result would arrive on its own, waited for it in vain,
+  and the subagent or script was never continued. When the task resumes it
+  now resumes each such child under its own id, and the result arrives as
+  it would have; one that cannot continue (a command, a document task) is
+  reported to the task as interrupted with its outcome unknown, once. The
+  same holds for children a clean close of the app or CLI stopped: they
+  continue when their task does.
+- **Closing TeXRA during a model request no longer costs the task a
+  retry.** A request the app or CLI closing cut off was counted like one a
+  crash cut, so a task resumed after a close had one automatic retry fewer
+  for that request. The close now records that it stopped the request, and
+  the resume sends it again without spending a retry; a crash still counts.
+- **Work a crash interrupted is reported or finished.** A background
+  command that was running when the app or CLI stopped was deleted at the
+  next start, and the task that launched it, told the result would arrive
+  on its own, waited for it in vain. That task now receives a message that
+  a restart interrupted the command and its outcome is unknown. A task that
+  had not been given its title before the crash now gets one when it
+  resumes.
 - **One notice when a message cannot wake its task.** A message sent to a
   task whose agent or plugin is missing or off showed two notices, the
   second a generic "could not be resumed automatically" that suggested a
@@ -1371,6 +1732,10 @@ show` print the same notice, and the new `texra agents customize`,
 - **The panel's agent menu lists each agent once, and a document agent
   opens on files.** Picking an agent such as `criticize` starts its
   document task and shows the file panel; a file icon marks those agents.
+  The New task form runs only an agent the menu lists: one you hide in
+  Settings → Agents after picking it (or one Run again… brings back)
+  reads **Choose agent** until you pick another, rather than starting
+  with files the form no longer shows.
 - **`texra`'s `/key` picker shows which providers already have a key.** Each
   provider row reads "Key set", "Env" or "Not set", as the API-keys page of
   `/config` already did. If the key store cannot be read, the rows read
@@ -1808,7 +2173,9 @@ view` on a sub-agent the parent waited for shows its report instead of
   definitions) never reached the compaction trigger; the trigger, the context
   gauge and the output-length limit now all read the last response's reported
   input plus output tokens and add an estimate for what was added since. The
-  gauge therefore counts the model's reply too.
+  gauge therefore counts the model's reply too. An estimate for images, PDFs
+  and audio attached since the model's last reply now counts toward
+  compaction and the output-length limit, where they counted as nothing.
 
 - **Long histories stay usable.** With a few thousand runs in a workspace,
   starting a session no longer stalls for minutes, and an agent's history
@@ -2287,6 +2654,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   heading, hash marks included, as its one-line summary in the terminal's
   plan panel and in the plan notice an orchestrator receives. A heading is
   used only when the plan has no other text, without its marks.
+- **An MCP server hears when TeXRA stops waiting.** When you stopped a run
+  during an MCP tool call, or the call hit its 60-second limit, the server
+  was never told and kept working on it. TeXRA now sends the protocol's
+  cancellation notice, so the server can stop.
 
 ### Extension (VS Code)
 
@@ -2513,6 +2884,15 @@ view` on a sub-agent the parent waited for shows its report instead of
 
 #### Bug Fixes
 
+- **One owner for how the terminal client leaves.** A run that fails while
+  you quit the chat now exits 1 instead of 0, and the chat reads its exit code
+  from one place. Ctrl-C while the chat is still choosing a model stops the
+  run it starts instead of dropping your message, and a resume refused while
+  a stop was asked says why and exits 2. `texra chat` ends through its own
+  exit code after a self-update. Every CLI signal listener goes through one
+  registry (`holdSignals`): the platform, a foreground pager or installer,
+  `texra serve` and the chat each hold their policy and the newest answers,
+  so a second Ctrl-C during a graceful exit still leaves at once.
 - **`/agent` shows workflows again.** Once teams joined the picker its list
   overflowed at every terminal height, and the Workflows section with its
   `texra run <name>` hint was dropped. The picker now scrolls its agents and
@@ -2549,6 +2929,10 @@ view` on a sub-agent the parent waited for shows its report instead of
   opens where the new text differs from the old. The card's title names the
   file relative to the workspace instead of wrapping its absolute path over
   several lines.
+- **The resume command printed on Windows pastes into PowerShell** — its
+  `--cwd` and `--source` paths are quoted the way PowerShell reads them, so a
+  path holding an apostrophe pastes as written instead of with every
+  backslash doubled.
 
 ## [0.40.10] - 2026-09-06
 

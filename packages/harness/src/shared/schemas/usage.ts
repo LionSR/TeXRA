@@ -1,29 +1,18 @@
-import { Effect, Schema, Struct, type Types } from 'effect';
+import { Schema, Struct, type Types } from 'effect';
 
 export const TokenCountSchema = Schema.Int.check(
   Schema.isGreaterThanOrEqualTo(0),
 );
 
-export const UsageRouteSchema = Schema.Literals([
-  'chatgpt-subscription',
-  'xai-subscription',
-  'kimi-code-subscription',
-  'glm-coding-plan-subscription',
-  'api-key',
-]);
-
-/** The route a request's usage is billed through. */
-export type UsageRoute = typeof UsageRouteSchema.Type;
-
 /**
- * The subscription routes a run can decline. A retry the user answered with
- * their own API key declines the route that ran out of quota, for that run
- * only: the choice is a fact of the run, not of the user's settings, so no
- * preference is rewritten and two concurrent runs cannot cancel each other's
- * fallback. `api-key` is excluded because it is the route a decline falls
- * back to.
+ * The subscription routes a run can decline: storage's spelling of llm's
+ * `PLAN_ROUTES`, which the route decision converts both ways, so a plan in
+ * one list only fails to compile. A retry the user answered with their own
+ * API key declines the route that ran out of quota, for that run only: the
+ * choice is a fact of the run, not of the user's settings, so no preference
+ * is rewritten and two concurrent runs cannot cancel each other's fallback.
  */
-export const DeclinableUsageRouteSchema = UsageRouteSchema.pick([
+export const DeclinableUsageRouteSchema = Schema.Literals([
   'chatgpt-subscription',
   'xai-subscription',
   'kimi-code-subscription',
@@ -32,14 +21,32 @@ export const DeclinableUsageRouteSchema = UsageRouteSchema.pick([
 
 export type DeclinableUsageRoute = typeof DeclinableUsageRouteSchema.Type;
 
+export const UsageRouteSchema = Schema.Literals([
+  ...DeclinableUsageRouteSchema.literals,
+  'api-key',
+]);
+
+/** The route a request's usage is billed through. */
+export type UsageRoute = typeof UsageRouteSchema.Type;
+
+/**
+ * Priced token counts under the names of the package's `TurnUsage`, from
+ * one call or summed over many. A count the provider did not report is
+ * absent.
+ */
 export const TokenUsageStatsSchema = Schema.Struct({
   inputTokens: TokenCountSchema,
   outputTokens: TokenCountSchema,
   cost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-  cacheReadInputTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens read from the provider's cache. */
+  cachedInputTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens billed at the full input rate: input minus cache reads. */
   cacheMissInputTokens: Schema.optional(TokenCountSchema),
-  cacheCreationInputTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens written to the provider's cache (Anthropic). */
+  cacheWriteTokens: Schema.optional(TokenCountSchema),
   reasoningTokens: Schema.optional(TokenCountSchema),
+  /** Prompt tokens a provider-run tool added (Google). */
+  toolUsePromptTokens: Schema.optional(TokenCountSchema),
   usageRoute: Schema.optional(UsageRouteSchema),
   /** The subscription plan that covered this usage, when the route names one
    *  (today only `chatgpt-subscription`). Recorded per usage row so a resumed
@@ -61,10 +68,11 @@ export function emptyUsageStats(): EmptyUsageStats {
     inputTokens: 0,
     outputTokens: 0,
     cost: 0,
-    cacheReadInputTokens: 0,
+    cachedInputTokens: 0,
     cacheMissInputTokens: 0,
-    cacheCreationInputTokens: 0,
+    cacheWriteTokens: 0,
     reasoningTokens: 0,
+    toolUsePromptTokens: 0,
   };
 }
 
@@ -103,19 +111,6 @@ export function sumUsageStats(
   return total;
 }
 
-/** Extended token usage with per-round deltas. */
-export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.mapFields(
-  Struct.assign({
-    elapsedTime: Schema.optional(
-      Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-    ),
-    toolUseTokens: Schema.optional(TokenCountSchema),
-  }),
-);
-
-export type ExtendedTokenUsageStats =
-  (typeof ExtendedTokenUsageStatsSchema)['Type'];
-
 /**
  * Schema for the totals recorded when a run ends.
  *
@@ -124,41 +119,31 @@ export type ExtendedTokenUsageStats =
  * premiums). No extra adjustments are applied here.
  */
 export const RunUsageTotalsSchema = Schema.Struct({
-  firstInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalOutputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)).pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCacheReadInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCacheMissInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalCacheCreationInputTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalReasoningTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
-  totalToolUsePromptTokens: TokenCountSchema.pipe(
-    Schema.withDecodingDefault(Effect.succeed(0)),
-  ),
+  firstInputTokens: TokenCountSchema,
+  totalInputTokens: TokenCountSchema,
+  totalOutputTokens: TokenCountSchema,
+  totalCost: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
+  totalCachedInputTokens: TokenCountSchema,
+  totalCacheMissInputTokens: TokenCountSchema,
+  totalCacheWriteTokens: TokenCountSchema,
+  totalReasoningTokens: TokenCountSchema,
+  totalToolUsePromptTokens: TokenCountSchema,
 });
 
 export type RunUsageTotals = typeof RunUsageTotalsSchema.Type;
 
 /** A run's usage before its first turn: every counter at its zero. */
-export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze(
-  Schema.decodeUnknownSync(RunUsageTotalsSchema)({}),
-);
+export const EMPTY_RUN_USAGE_TOTALS: RunUsageTotals = Object.freeze({
+  firstInputTokens: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  totalCost: 0,
+  totalCachedInputTokens: 0,
+  totalCacheMissInputTokens: 0,
+  totalCacheWriteTokens: 0,
+  totalReasoningTokens: 0,
+  totalToolUsePromptTokens: 0,
+});
 
 /** `totals` summed field by field; the first input is the first's. */
 export function sumRunUsageTotals(

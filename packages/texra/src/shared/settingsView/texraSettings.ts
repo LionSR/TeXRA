@@ -2,13 +2,15 @@
  * TeXRA's own setting rows and keys, and the static catalog its settings
  * surfaces read: the harness's rows (`@shared/state/stateSettings`), these,
  * and the rows its plugins declare (`./documentsSettings`,
- * `./integrationSettings`). Every host's config carries {@link TEXRA_SETTINGS}
- * (`ConfigProvider.catalog`), and the settings surfaces read it.
+ * `./integrationSettings`). Every host's config carries the catalog
+ * ({@link TEXRA_SETTINGS}`.catalog`, `ConfigProvider.catalog`); the settings
+ * surfaces read the placed rows beside it, where each row's placement is the
+ * row's own or, for a harness row, the one `./settingSurfaces` gives its key.
  *
  * Owner by key: the CLI's startup rows (`agent`, `model`, `chat`, `run`,
  * `outputFormat`), `agentOutputs.autoOpenFinal`, the bibliography
- * (`bib.*`), LaTeX (`latex.*`, `latexdiff.tempFileLocation`, the
- * formatter), inline criticism and telemetry.
+ * (`bib.*`), LaTeX (`latex.*`, the formatter), inline criticism and
+ * telemetry.
  */
 
 // Third-party imports
@@ -17,6 +19,7 @@ import { Effect, Schema } from 'effect';
 // Local imports
 import {
   configTreeRows,
+  GlobalStateKey,
   settingsCatalog,
   type SettingsCatalog,
   type StateSettingEntry,
@@ -37,7 +40,12 @@ import {
   CLAUDE_AGENT_SETTINGS,
   CODEX_SETTINGS,
 } from '@texra/shared/settingsView/integrationSettings';
-import type { SurfacedSettingEntry } from '@texra-ai/harness/schemas';
+import {
+  HARNESS_ROW_SURFACES,
+  type SettingsViewRow,
+  type TexraSettingRow,
+} from '@texra/shared/settingsView/settingSurfaces';
+import type { SettingsViewSnapshot } from '@texra/shared/settingsView/settingsViewMessages';
 
 /** TeXRA's state keys: LaTeX's, inline criticism and telemetry. */
 export const TexraStateKey = Object.freeze({
@@ -55,10 +63,8 @@ export type TexraStateKey = (typeof TexraStateKey)[keyof typeof TexraStateKey];
 /** Config key for the usage-telemetry opt-in. */
 export const TELEMETRY_ENABLED_KEY = 'telemetry.enabled';
 
-export const LATEXDIFF_TEMP_FILE_LOCATIONS = [
-  'sameDirectory',
-  'workspaceTemp',
-] as const;
+/** Config key for what a window does with interrupted tasks at open. */
+export const RESUME_ON_OPEN_KEY = 'resumeOnOpen';
 
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
@@ -101,7 +107,8 @@ const CliRunDefaultsSchema = Schema.optional(
 /** TeXRA's config-file-backed rows, keyed by their dotted path. */
 const TEXRA_CONFIG_ROWS: Record<
   string,
-  Omit<StateSettingEntry, 'key' | 'slot'>
+  | Omit<StateSettingEntry, 'key' | 'slot'>
+  | Omit<TexraSettingRow, 'key' | 'slot'>
 > = {
   agent: {
     schema: CliAgentSchema,
@@ -127,6 +134,19 @@ const TEXRA_CONFIG_ROWS: Record<
     schema: CliOutputFormatSchema,
     description:
       'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
+  },
+  // Global: how one person wants their windows to open.
+  [RESUME_ON_OPEN_KEY]: {
+    schema: Schema.Literals(['ask', 'auto']).pipe(
+      Schema.withDecodingDefault(Effect.succeed('ask' as const)),
+    ),
+    configTarget: 'global',
+    title: 'Interrupted tasks',
+    description:
+      'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
+    category: 'agents',
+    enumLabels: ['Ask', 'Resume automatically'],
+    surfaces: { settingsView: 'approval', cliConfig: true },
   },
   'agentOutputs.autoOpenFinal': {
     schema: Schema.Boolean.pipe(
@@ -174,13 +194,6 @@ const TEXRA_CONFIG_ROWS: Record<
     description:
       'Template used for generating standalone documents when extracting and compiling TikZ figures',
   },
-  'latex.wrapCritiqueInAlign': {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    description:
-      'Wrap bare criticism and comment commands inside align environments with intertext.',
-  },
   'latex.enabledReplacements': {
     schema: Schema.Array(
       Schema.Literals(NON_REGEX_REPLACEMENT_CATEGORIES),
@@ -209,13 +222,6 @@ const TEXRA_CONFIG_ROWS: Record<
     ),
     description: 'Custom direct text replacements.',
   },
-  'latexdiff.tempFileLocation': {
-    schema: Schema.Literals(LATEXDIFF_TEMP_FILE_LOCATIONS).pipe(
-      Schema.withDecodingDefault(Effect.succeed('sameDirectory')),
-    ),
-    description:
-      'Where to create temporary files for LaTeX preview and diff operations during tool edit approval.',
-  },
   [TELEMETRY_ENABLED_KEY]: {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
@@ -231,7 +237,7 @@ const TEXRA_CONFIG_ROWS: Record<
 };
 
 /** TeXRA's rows, its plugins' last, in catalog order. */
-const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
+const TEXRA_SETTING_ROWS: readonly (StateSettingEntry | TexraSettingRow)[] = [
   ...configTreeRows(TEXRA_CONFIG_ROWS),
   // --- LaTeX formatter -------------------------------------------------------
   {
@@ -252,7 +258,7 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
       'leave formatting unchanged',
     ],
     surfaces: { settingsView: 'latex' },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
 
   // --- Inline criticism -------------------------------------------------------
   // Editor squiggles and Problems-panel entries exist only in VS Code. The
@@ -269,15 +275,125 @@ const TEXRA_SETTING_ROWS: readonly StateSettingEntry[] = [
     category: 'latex',
     slot: 'globalState',
     surfaces: { settingsView: 'latex' },
-  } satisfies SurfacedSettingEntry,
+  } satisfies TexraSettingRow,
 
   // --- Plugins' rows ----------------------------------------------------------
   ...DOCUMENTS_SETTINGS,
   ...[...CODEX_SETTINGS, ...CLAUDE_AGENT_SETTINGS].map(({ row }) => row),
 ];
 
-/** The whole catalog TeXRA's settings surfaces render: the harness's rows and TeXRA's. */
-export const TEXRA_SETTINGS: SettingsCatalog = settingsCatalog({
+/**
+ * TeXRA's helper model while the person has chosen none (polishing, agent
+ * creation, merge, session descriptions). DeepSeek V4.1 Flash is the cheapest
+ * capable option (~$0.15/$0.60 per MTok) and keeps these one-shot,
+ * non-streaming helper calls fast.
+ */
+const DEFAULT_HELPER_MODEL = 'deepseek/deepseek-flash@none';
+
+/** The catalog every host's config carries: the harness's rows and TeXRA's. */
+const catalog: SettingsCatalog = settingsCatalog({
   namespace: 'texra',
   rows: TEXRA_SETTING_ROWS,
+  defaults: { [GlobalStateKey.HELPER_MODEL]: DEFAULT_HELPER_MODEL },
 });
+
+function hasOwnSurfaces(row: StateSettingEntry): row is TexraSettingRow {
+  return 'surfaces' in row;
+}
+
+/**
+ * The rows some TeXRA UI renders, in catalog order: a harness row joined with
+ * the placement `HARNESS_ROW_SURFACES` gives its key, or a TeXRA row with its
+ * own. A placement for a key no row has, a placed row without display copy,
+ * and a row with display copy that nothing shows are defects.
+ */
+function placeRows(): readonly TexraSettingRow[] {
+  const unmatched = new Set(Object.keys(HARNESS_ROW_SURFACES));
+  const rows = catalog.rows.flatMap((row): TexraSettingRow[] => {
+    const placement = HARNESS_ROW_SURFACES[row.key];
+    unmatched.delete(row.key);
+    if (placement === undefined) {
+      if (hasOwnSurfaces(row)) return [row];
+      if (row.description !== undefined && row.category !== undefined) {
+        throw new Error(
+          `Setting ${row.key} has display copy but no UI shows it.`,
+        );
+      }
+      return [];
+    }
+    if (row.description === undefined || row.category === undefined) {
+      throw new Error(
+        `Setting ${row.key} is shown but has no description or category.`,
+      );
+    }
+    return [
+      {
+        ...row,
+        description: row.description,
+        category: row.category,
+        ...placement,
+      },
+    ];
+  });
+  if (unmatched.size > 0) {
+    throw new Error(`No setting has the key ${[...unmatched].join(', ')}.`);
+  }
+  return rows;
+}
+
+const placedRows = placeRows();
+const placedByKey = new Map(placedRows.map((row) => [row.key, row]));
+
+function isSettingsViewRow(row: TexraSettingRow): row is SettingsViewRow {
+  return row.surfaces.settingsView !== undefined;
+}
+
+/**
+ * The catalog TeXRA's hosts hand the harness, and the lookups TeXRA's settings
+ * UIs read: every list is a filter over the placed rows, never hand-maintained.
+ */
+export const TEXRA_SETTINGS = {
+  catalog,
+  /** Look up a row the settings view's unified write path owns. */
+  settingsViewByKey: (key: string): SettingsViewRow | undefined => {
+    const row = placedByKey.get(key);
+    return row !== undefined && isSettingsViewRow(row) ? row : undefined;
+  },
+  /**
+   * The rows one settings-view snapshot carries, in catalog order: the
+   * outbound payload's schema, the backend's read loop and the webview's
+   * apply step each iterate this list, so placing a row on a snapshot puts it
+   * on the wire.
+   */
+  snapshotEntries: (
+    snapshot: SettingsViewSnapshot,
+  ): readonly SettingsViewRow[] =>
+    placedRows.filter(
+      (row): row is SettingsViewRow => row.surfaces.settingsView === snapshot,
+    ),
+  /** The `/config` panel's rows: `surfaces.cliConfig` is the one predicate. */
+  cliRows: placedRows.filter((row) => row.surfaces.cliConfig === true),
+  /** Look up a row the CLI `/config` panel lists, and so may write. */
+  cliByKey: (key: string): TexraSettingRow | undefined => {
+    const row = placedByKey.get(key);
+    return row?.surfaces.cliConfig === true ? row : undefined;
+  },
+  /**
+   * The Models tab's controls for one provider, in catalog order, each with
+   * its copy resolved (a control without its own label or description shows
+   * the row's title and description).
+   */
+  modelsTab: (provider: string) =>
+    placedRows.flatMap((entry) =>
+      (entry.surfaces.models ?? [])
+        .filter((control) => control.provider === provider)
+        .map(({ provider: _provider, label, description, ...rest }) => ({
+          entry,
+          surface: {
+            ...rest,
+            label: label ?? entry.title ?? entry.key,
+            description: description ?? entry.description,
+          },
+        })),
+    ),
+};

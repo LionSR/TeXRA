@@ -1,7 +1,7 @@
 // Wire contract for the open projects: the main process tells the renderer
 // which projects are open and which one the window shows; the renderer asks to
 // show another one, or to close one. A project is named on the wire by its
-// session key (the storage root the fold's `SessionView.key` carries), so
+// session key (the storage root the session view's `SessionView.key` carries), so
 // the rail row, the frames, and the requests of one project all share it.
 
 import { Schema } from 'effect';
@@ -12,18 +12,30 @@ export const DESKTOP_PROJECT_COMMANDS = {
   REQUEST_PROJECTS: 'desktop:projects:request',
   SELECT_PROJECT: 'desktop:projects:select',
   CLOSE_PROJECT: 'desktop:projects:close',
+  /** Reopen a folder from the recent list the last projects message sent. */
+  OPEN_RECENT: 'desktop:projects:openRecent',
 } as const;
 
 export const DesktopProjectsMessageSchema = Schema.Struct({
   command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.PROJECTS),
   /** The open projects' session keys, in rail order. What a rail row,
    *  switcher entry, or project chip prints for one is the `project` display
-   *  record of its host snapshot (PRD 8.1), which rides the session's frames
+   *  record of its host snapshot, which rides the session's frames
    *  and is not repeated here; its folder stays with the main process. */
   open: Schema.Array(Schema.String),
   /** Key of the session this window shows: an open project's, or the
    *  no-workspace session's, which is never listed in `open`. */
   activeKey: Schema.String,
+  /** The closed projects' folders File › Open Recent offers, the most
+   *  recently closed first: the no-project screen lists them too. */
+  recent: Schema.Array(Schema.String),
+});
+
+/** A folder of the recent list; the main process opens it only while the
+ *  list still holds it. */
+export const DesktopOpenRecentProjectMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.OPEN_RECENT),
+  root: Schema.String,
 });
 
 export const DesktopSelectProjectMessageSchema = Schema.Struct({

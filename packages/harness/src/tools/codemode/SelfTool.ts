@@ -5,7 +5,7 @@
  * the message that started it (`forkSeed`); fresh, it starts from `prompt` alone with the
  * conversation's files and memories. Either way it is the same agent with
  * the same tools, so nothing is proposed: the user approved the script.
- * The goal is this function in a loop (`goalScript`).
+ * The default goal strategy is this function in a loop (`builtIn:goal`).
  */
 import { Effect, Result, Schema, SynchronizedRef } from 'effect';
 
@@ -30,6 +30,7 @@ import {
   ToolError,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { defineTool } from '@tools/core/definition';
 import { nullishWithDefault } from '@tools/core/inputSchema';
 import { errorResult } from '@tools/core/result';
@@ -77,7 +78,7 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
     };
   if (script.kind !== 'background')
     return { config: run.config, source: null, before: 0, boundAt: undefined };
-  const start = (yield* run.session.log.facts(run.runId))?.start;
+  const start = (yield* (yield* SessionLog).facts(run.runId))?.start;
   const missing = new ToolError(
     `self() needs the conversation the script ${run.runId} launched from, and the call that launched it.`,
   );
@@ -85,13 +86,13 @@ const selfOf = Effect.fn('self.of')(function* (call: RunToolCall) {
   if (edge?.call == null) return yield* Effect.fail(missing);
   const { id: parent } = edge;
   const { card } = edge.call;
-  const config = yield* getRunRecords(run.session, parent).readConfig();
+  const config = yield* getRunRecords(parent).readConfig();
   // The cut is the response that issued the script, not the script's own
   // start, which a full child-run budget can delay past later turns: the
   // one whose call opened the card the script's start names (a provider
   // may reuse a call id, never a card), or, for a call a script of the
   // conversation made, the response that issued that script.
-  const conversation = yield* run.session.runHistory.load(parent);
+  const conversation = yield* (yield* RunHistory).load(parent);
   const issued = Object.values(conversation?.calls ?? {}).find(
     ({ logId }) => logId === card,
   );
@@ -111,7 +112,7 @@ const runSelf = Effect.fn('self.call')(function* (
   script: ScriptScope,
 ) {
   const { run } = call;
-  const { session, runId: parentRunId } = run;
+  const { runId: parentRunId } = run;
   const { config, source, before, boundAt } = yield* selfOf(call);
   if (input.fork && source === null)
     return errorResult(
@@ -152,17 +153,9 @@ const runSelf = Effect.fn('self.call')(function* (
     Effect.gen(function* () {
       const forked =
         input.fork && source !== null
-          ? yield* forkSeed(
-              session,
-              source,
-              before,
-              runId,
-              input.prompt,
-              boundAt,
-            )
+          ? yield* forkSeed(source, before, runId, input.prompt, boundAt)
           : null;
       return yield* executeSubagentInBand({
-        session,
         runId,
         parentRunId,
         configPayload: Schema.decodeUnknownSync(AgentConfigSchema)({
@@ -212,6 +205,9 @@ Forked (the default), the child continues this conversation as it stood when the
     if (script === null)
       return errorResult('self() runs only inside a script.');
     const budget = yield* scriptChildBudget(call.env.roots, script);
-    return yield* budget.withPermits(1)(runSelf(call, input, script));
+    // The child launches under the session's runs the engine door holds.
+    return yield* budget.withPermits(1)(
+      runSelf(call, input, script).pipe(Effect.provide(call.session)),
+    );
   }),
 });

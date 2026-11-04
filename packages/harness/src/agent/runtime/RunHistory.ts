@@ -1,11 +1,11 @@
 /**
  * The run history over one session's log, and every run's cell: reads take
- * the aggregate's every row (`SessionLog.rows`, never the display tail),
+ * the run's history rows (`SessionLog.history`, never the display tail),
  * writes go through the session's one door (`SessionLog.transact`, done
  * once the view has applied them) or the job a cell was opened within, and
  * `applyRunRows` rebuilds the state on both paths.
  */
-import { Effect, Result, SynchronizedRef } from 'effect';
+import { Effect, Predicate, Result, SynchronizedRef } from 'effect';
 
 import {
   qualifyAggregateId,
@@ -28,6 +28,7 @@ import {
 import {
   applyRunRows,
   freshRunState,
+  isRunStateRow,
   RunHistoryInconsistent,
   unboundRequests,
   type RunHistoryDraft,
@@ -38,9 +39,9 @@ import type {
   RunHistoryRow,
 } from '@shared/session/historyTurns';
 import type { Alongside, Append } from '@shared/session/sessionEvents';
+import type { SessionLogShape } from '@shared/session/sessionLog';
 import { runHistoryRows, storedDraft, unpreparedHistory } from './storedTurn';
 import type { ModelOrigin } from '@texra-ai/llm';
-import type { SessionLog } from './SessionHandle';
 
 const isResponse = (row: RunHistoryDraft): boolean =>
   row.type === 'model.message' && row.payload.kind === 'response';
@@ -123,22 +124,20 @@ function unsafeEndpoint(origin: ModelOrigin): string | null {
     url.username !== '' || url.password !== '' ? 'userinfo' : null,
     endpoint.includes('?') ? 'a query string' : null,
     endpoint.includes('#') ? 'a fragment' : null,
-  ].filter((part): part is string => part !== null);
+  ].filter(Predicate.isNotNull);
   return violations.length === 0
     ? null
     : `${url.protocol}//${url.host}${url.pathname} carries ${violations.join(' and ')}`;
 }
 
-/**
- * The batch at provisional commits above the state's: the row handlers read
- * a `commit` only to require strict increase, so applying these answers
- * "does this batch apply?" exactly as the published rows will.
- */
+/** The batch's history rows at provisional commits above the state's: the
+ *  handlers read a `commit` only for strict increase, so these apply as the
+ *  published rows will. */
 const candidates = (
   state: RunState,
   rows: readonly RunHistoryDraft[],
 ): readonly RunHistoryRow[] =>
-  rows.map((row, i) => ({
+  rows.filter(isRunStateRow).map((row, i) => ({
     ...row,
     ...{ seq: i + 1, commit: state.commit + i + 1, origin: null, at: 0 },
   }));
@@ -189,7 +188,7 @@ const inconsistent = (runId: RunId, cause: RunHistoryInconsistent) =>
     cause,
   });
 
-/** Committed rows applied to `state`, their turns read back first. */
+/** Committed history rows applied to `state`, their turns read back first. */
 const applyStored = (state: RunState | null, rows: readonly SessionEvent[]) =>
   Result.flatMap(runHistoryRows(rows), (live) => applyRunRows(state, live));
 
@@ -233,7 +232,7 @@ const none: Effect.Effect<readonly SessionEventDraft[]> = Effect.succeed([]);
 /** One checked batch, committed in the job `within` names or in the
  *  session's own (`sessionLog`). */
 const commit = Effect.fn('RunCell.commit')(function* <E>(
-  sessionLog: Pick<SessionLog, 'transact'>,
+  sessionLog: Pick<SessionLogShape, 'transact'>,
   run: RunId,
   state: RunState,
   rows: readonly RunHistoryDraft[],
@@ -273,31 +272,30 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
     if (refusal !== null) return yield* refusal;
   }
   const target = qualifyAggregateId('run', run);
-  const job = (append: Append) =>
-    Effect.gen(function* () {
-      // Decided in the job, so it reads what the jobs before it left.
-      // The store refuses a `run.start` anywhere but a run's first row.
-      const born = yield* registration;
-      const stray = born.find((row) => row.aggregateId !== target);
-      if (stray !== undefined)
-        return yield* broken(`a registration targets ${stray.aggregateId}`);
-      const beside = yield* alongside;
-      const written = yield* runStateAppend(append)([
-        ...born,
-        ...rows.map(storedDraft),
-      ]);
-      yield* append(beside);
-      return written;
-    }).pipe(Effect.scoped);
+  const job = Effect.fn('job')(function* (append: Append) {
+    // Decided in the job, so it reads what the jobs before it left.
+    // The store refuses a `run.start` anywhere but a run's first row.
+    const born = yield* registration;
+    const stray = born.find((row) => row.aggregateId !== target);
+    if (stray !== undefined)
+      return yield* broken(`a registration targets ${stray.aggregateId}`);
+    const beside = yield* alongside;
+    const written = yield* runStateAppend(append)([
+      ...born,
+      ...rows.map(storedDraft),
+    ]);
+    yield* append(beside);
+    return written;
+  }, Effect.scoped);
   // A target no longer held open is `not-owner`, nothing written.
   const committed = yield* (
     within === undefined
       ? sessionLog.transact((tx) => job(tx.append))
       : job(within)
   ).pipe(notOwner(run));
-  // The same rows again at the commits the publisher assigned: the state
-  // the run continues from. A failure here is this module's defect.
-  const applied = applyStored(state, committed);
+  // The same history rows again at the commits the publisher assigned: the
+  // state the run continues from. A failure here is this module's defect.
+  const applied = applyStored(state, committed.filter(isRunStateRow));
   if (Result.isSuccess(applied) && applied.success !== null)
     return applied.success;
   const why = Result.isFailure(applied) ? applied.failure.detail : 'nothing';
@@ -310,10 +308,10 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
  * transaction that activates it.
  */
 export function makeRunHistory(
-  sessionLog: Pick<SessionLog, 'transact' | 'rows'>,
+  sessionLog: Pick<SessionLogShape, 'transact' | 'history'>,
 ): RunHistory['Service'] {
   const stored = (run: RunId) =>
-    sessionLog.rows(qualifyAggregateId('run', run));
+    sessionLog.history(qualifyAggregateId('run', run));
 
   /** `load`, and a read inside a job (`prepared` false: a batch that
    *  changes the history is checked from where it changes). */
@@ -359,7 +357,8 @@ export function makeRunHistory(
           const rows = [...(yield* activation(before)), ...cancels];
           const written =
             rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);
-          return yield* loaded(run, applyStored(before, written));
+          const history = written.filter(isRunStateRow);
+          return yield* loaded(run, applyStored(before, history));
         }),
       )
       .pipe(notOwner(run));

@@ -24,11 +24,11 @@ import { withLogChannel } from '@logger/effectLog';
 import { readModelOptions, type ModelOption } from '@model/computeModelOptions';
 import { decideRunModel } from '@model/runModelDecision';
 import {
+  AGENT_TOOL_NAME,
   MODEL_AVAILABILITY_STATUS,
   type AgentDelegationScope,
   type DelegationTargets,
 } from '@shared/schemas';
-import { AGENT_TOOL_NAME } from '@shared/constants/delegationTools';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 
 import { Settings } from '@shared/config/settings';
@@ -234,11 +234,7 @@ export const selectAvailableDelegationModel = Effect.fn(
   const decision = decideRunModel(
     [
       { model: input.requestedModel, reason: 'explicit-override' },
-      {
-        model: input.parentModel,
-        reason: 'parent-run',
-        fallbackMode: 'silent',
-      },
+      { model: input.parentModel, reason: 'parent-run' },
       { model: availableModels[0], reason: 'access-list-default' },
     ],
     // Availability belongs to the model; an `@effort` suffix does not change it.

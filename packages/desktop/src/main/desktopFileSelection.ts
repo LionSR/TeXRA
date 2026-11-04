@@ -25,7 +25,7 @@ interface DesktopFileSelectionOptions {
 
 /**
  * The file lists and pickers of one paper: the `host` snapshot's file
- * catalogs (PRD 8.1) and the `pickFiles` arm of `host.request` (8.3).
+ * catalogs and the `pickFiles` arm of `host.request` (8.3).
  */
 export interface DesktopFileSelection {
   /** The launcher's single-slot catalogs: base candidates, edited

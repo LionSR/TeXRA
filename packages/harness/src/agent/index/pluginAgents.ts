@@ -9,7 +9,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Result, Schema } from 'effect';
+import { Effect, FileSystem, Predicate, Result, Schema } from 'effect';
 
 // Local imports - common
 import {
@@ -94,7 +94,7 @@ const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   const tools =
     declared === undefined || declared.length === 0
       ? undefined
-      : [...new Set(mapped.filter((tool) => tool !== undefined))];
+      : [...new Set(mapped.filter(Predicate.isNotUndefined))];
   const entry: AgentEntry = {
     name: `${plugin}:${parsed.success.name ?? path.basename(file, '.md')}`,
     source: 'plugin',
@@ -130,9 +130,8 @@ export const requirePluginAgentLoads = (
     : Effect.fail(
         new Error(
           `Agent ${entry.name} does not run: ${
-            load.withheld.find((reason) =>
-              reason.startsWith(`Plugin ${plugin} `),
-            ) ?? `plugin ${plugin} is not installed or not enabled.`
+            load.withheld.find((held) => held.plugin === plugin)?.reason ??
+            `plugin ${plugin} is not installed or not enabled.`
           }`,
         ),
       );

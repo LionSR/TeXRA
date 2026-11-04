@@ -12,13 +12,12 @@
  *
  * Sources (read from source, not blog posts):
  * - OpenCode: packages/opencode/src/plugin/xai.ts (anomalyco/opencode)
- * - hermes-agent PR #26534 (Grok-CLI client id registration notes in OpenCode)
+ * - hermes-agent pull request 26534 (Grok-CLI client id registration notes in OpenCode)
  */
 
 import { Effect, Option, Schema, SchemaGetter, Struct } from 'effect';
 import { NonEmptyJwtClaim, decodeJwtClaimsWithSchema } from '../jwtDecode.js';
 import { defineLoopbackLogin } from '../loopbackLogin.js';
-import { createSecretBackedCoordinator } from '../sessionAccess.js';
 import { SubscriptionOAuthCoordinator } from '../SubscriptionOAuthCoordinator.js';
 import {
   SubscriptionSessionBaseSchema,
@@ -31,9 +30,9 @@ import type {
 import type { SubscriptionOAuthError } from '../subscriptionOAuthError.js';
 import type {
   SubscriptionCoordinator,
+  SubscriptionOAuthPolicy,
   SubscriptionSessionStatus,
 } from '../subscriptionCoordinator.js';
-import type { SubscriptionOAuthPolicy } from '../SubscriptionOAuthCoordinator.js';
 
 /** Borrowed OAuth client id (Grok CLI desktop registration). */
 export const XAI_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828';
@@ -197,10 +196,11 @@ function decodeXaiJwtClaims(token: string): XaiJwtClaims {
 
 /**
  * The Grok sign-in policy for the shared `SubscriptionOAuthCoordinator`: only
- * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT/Codex,
+ * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT,
  * so the shared coordinator runs it as is.
  */
 const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
+  secretKey: XAI_SESSION_SECRET_KEY,
   sessionSchema: XaiSessionSchema,
   tokenEndpoint: {
     tokenUrl: XAI_TOKEN_URL,
@@ -242,11 +242,8 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
  */
 export const xaiCoordinator: (
   secrets: CredentialStore,
-) => SubscriptionCoordinator<XaiSession> = createSecretBackedCoordinator({
-  secretKey: XAI_SESSION_SECRET_KEY,
-  makeCoordinator: (storage) =>
-    new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),
-});
+) => SubscriptionCoordinator<XaiSession> =
+  SubscriptionOAuthCoordinator.forProvider(XAI_POLICY);
 
 /** Signed-in status, read from the caller's secret store. A store that
  *  cannot be read, or a stored session that does not parse, fails. */

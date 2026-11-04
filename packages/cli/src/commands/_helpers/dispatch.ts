@@ -15,10 +15,7 @@ import {
   flagFromArg,
   type AnyCommand,
 } from '@cli/runtime/completionCommandTree';
-import {
-  editDistance,
-  typoSuggestionThreshold,
-} from '@texra/utils/text/editDistance';
+import { editDistance, typoSuggestionThreshold } from './editDistance';
 import {
   GLOBAL_ARGS,
   GLOBAL_BOOL_FLAGS,
@@ -35,7 +32,8 @@ export function isCliError(error: unknown): error is Error {
   return (
     error instanceof Error &&
     error.name === 'CLIError' &&
-    typeof (error as { code?: unknown }).code === 'string'
+    'code' in error &&
+    typeof error.code === 'string'
   );
 }
 
@@ -279,7 +277,7 @@ function isPureSubCommandContainer(
 ): boolean {
   return (
     Object.keys(subCommands).length > 0 &&
-    typeof (cmd as { run?: unknown }).run !== 'function'
+    !('run' in cmd && typeof cmd.run === 'function')
   );
 }
 
@@ -385,12 +383,6 @@ function addFlagSpec(specs: CommandFlagSpecs, name: string, def: ArgDef): void {
   }
 }
 
-function addInteractiveHeadlessOnlyFlags(specs: CommandFlagSpecs): void {
-  for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
-    addFlagSpec(specs, name, GLOBAL_ARGS[name]);
-  }
-}
-
 async function commandFlagSpecs(
   resolved: ResolvedCliCommand,
 ): Promise<CommandFlagSpecs> {
@@ -408,7 +400,9 @@ async function commandFlagSpecs(
   ) {
     // Keep the existing explicit "interactive command" usage error for these
     // known headless-only global flags instead of downgrading it to "unknown".
-    addInteractiveHeadlessOnlyFlags(specs);
+    for (const name of HEADLESS_ONLY_GLOBAL_ARG_NAMES) {
+      addFlagSpec(specs, name, GLOBAL_ARGS[name]);
+    }
   }
 
   return specs;

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Struct } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -76,7 +76,7 @@ export function registerCommands(
 
   const actions: ExtensionCommandActions = {
     showSettings: (tab) => settingsViewProvider.showSettingsView(tab),
-    // New Task is the header's "+" (PRD 12.4): the New-task state into
+    // New Task is the header's "+": the New-task state into
     // view with the launcher's selections as they are.
     newTask: () => progressViewProvider.showLauncher(),
     cleanBuild: () => confirmCleanBuild,
@@ -87,8 +87,7 @@ export function registerCommands(
       launchSetupAssistant(
         roots,
         runSession,
-        (runId) =>
-          Effect.sync(() => progressViewProvider.presentLaunchedRun(runId)),
+        progressViewProvider.runValidated,
         progressViewProvider.showConnectModel(),
         progressViewProvider.showProgressView(),
       ).pipe(
@@ -125,9 +124,7 @@ export function registerCommands(
         : agentRunExecuteCommand(input, progressViewProvider.runValidated),
   };
 
-  for (const id of Object.keys(EXTENSION_COMMAND_HANDLERS) as ReadonlyArray<
-    keyof typeof EXTENSION_COMMAND_HANDLERS
-  >) {
+  for (const id of Struct.keys(EXTENSION_COMMAND_HANDLERS)) {
     context.subscriptions.push(
       vscode.commands.registerCommand(id, (...rawArgs: unknown[]) => {
         const program = dispatchCommandFromRegistry(

@@ -4,6 +4,7 @@ import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import { modelFailureText } from '@ui/copy/modelAccess';
 import { ConfirmCard } from './ConfirmCard';
 import {
   ScrollableModalText,
@@ -23,13 +24,13 @@ const RETRY_REQUEST_HIDDEN_NOUN = 'error rows';
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { data } = props.payload;
-  const errorText = data.errorMessage ?? data.operation;
+  const errorText = modelFailureText(data.errorDetails);
   // The run decided the offer; the card only renders it.
   const canSwitchToPersonalKey = data.credentialSwitch != null;
   // The modal only names the answer. `y` retries on the credentials the run
-  // already has; `approvalDecisionArms` turns a retry on personal credentials
+  // already has; `approvalDecisionArm` turns a retry on personal credentials
   // into the host's `useOwnApiKey`, which asks for the key when none is
-  // stored and then settles the retry on it.
+  // stored and then runs the retry on it.
   const retryDecision: SurfaceDecision = { action: 'retry' };
   const switchDecision: SurfaceDecision = {
     action: 'retry',

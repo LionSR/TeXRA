@@ -1,10 +1,13 @@
 /**
  * The part vocabulary every provider codec reports a response in, and the
- * canonical-part algebra the turn fold applies: identity, restatement and
+ * canonical-part algebra the turn assembly applies: identity, restatement and
  * growth by appended text.
  */
 // Node imports
 import { isDeepStrictEqual } from 'node:util';
+
+// Third-party imports
+import { Predicate } from 'effect';
 
 // Local imports - canonical model contract
 import type { ResolvedTurn, TurnResult } from '../turn.js';
@@ -55,7 +58,7 @@ export type PartEvent =
   | { readonly kind: 'usage'; readonly usage: TurnResult['usage'] }
   | {
       readonly kind: 'finish';
-      /** A `null` reason leaves it to the settled content: a tool-call
+      /** A `null` reason leaves it to the final content: a tool-call
        *  finish when it holds calls, else a plain stop. */
       readonly finish: Pick<
         TurnResult,
@@ -99,10 +102,9 @@ export const sameIdentity = (left: Part, right: Part): boolean =>
  * time it restates an item, and the first is kept.
  */
 export const restates = (done: unknown, again: unknown): boolean =>
-  typeof again !== 'object' || again === null || Array.isArray(again)
+  !Predicate.isObject(again)
     ? isDeepStrictEqual(done, again)
-    : typeof done === 'object' &&
-      done !== null &&
+    : Predicate.isObjectOrArray(done) &&
       Object.entries(again).every(
         ([key, value]) =>
           value === undefined ||

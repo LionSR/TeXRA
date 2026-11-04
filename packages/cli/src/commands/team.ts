@@ -1,13 +1,9 @@
 import { Effect, Predicate } from 'effect';
 import { defineCommand } from 'citty';
 
-import {
-  AgentCatalog,
-  findTeamPreset,
-  planTeamRun,
-  type ProcessServices,
-} from '@texra-ai/harness/host';
+import { AgentCatalog, type ProcessServices } from '@texra-ai/harness/host';
 import { canLaunchTeam, planTeamRuns } from '@texra/shared/teamLaunch';
+import { findTeamPreset, planTeamRun } from '@texra/shared/teamPlan';
 import { BUILTIN_TEAM_ROOT_AGENT_NAMES } from '@texra/shared/constants/agents';
 
 import { missingAgentMessage, missingTeamMessage } from '../runtime/agents';
@@ -179,69 +175,68 @@ const runTeam = Effect.fn('runTeam')(function* (
       allowEmptyInput: hasInstruction,
       requireWorkspaceFiles: true,
     },
-    ({ inputFiles, contextFiles, stdinInputPath }) =>
-      Effect.gen(function* () {
-        if (runContext.approvalPolicy === 'never') {
-          writeTextStderr(
-            `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
-          );
-        }
+    Effect.fnUntraced(function* ({ inputFiles, contextFiles, stdinInputPath }) {
+      if (runContext.approvalPolicy === 'never') {
+        writeTextStderr(
+          `WARN team ${plan.preset.id} may run without subagents because approval policy "never" denies approval-gated tools, the agent tool included. Use an interactive run to answer prompts, or pass --approval-policy yolo only when you intentionally want to auto-approve privileged tools.`,
+        );
+      }
 
-        // Preserve the user's launch input without copying the model-only
-        // directive assembled into config.instruction below.
-        const displayInstruction =
-          instruction ||
-          [
-            formatAttachedFileList('Attached input files:', init.inputFiles),
-            formatAttachedFileList(
-              'Attached read-only context files:',
-              init.contextFiles,
-            ),
-          ]
-            .filter(Predicate.isNotNullish)
-            .join('\n\n');
-        const config: AgentConfigPayload = {
-          agent: rootAgent.name,
-          agentSource: rootAgent.source,
-          model,
+      // Preserve the user's launch input without copying the model-only
+      // directive assembled into config.instruction below.
+      const displayInstruction =
+        instruction ||
+        [
+          formatAttachedFileList('Attached input files:', init.inputFiles),
+          formatAttachedFileList(
+            'Attached read-only context files:',
+            init.contextFiles,
+          ),
+        ]
+          .filter(Predicate.isNotNullish)
+          .join('\n\n');
+      const config: AgentConfigPayload = {
+        agent: rootAgent.name,
+        agentSource: rootAgent.source,
+        model,
+        inputFiles,
+        contextFiles,
+        instruction: formatTeamRunInstruction(plan.preset, {
           inputFiles,
           contextFiles,
-          instruction: formatTeamRunInstruction(plan.preset, {
-            inputFiles,
-            contextFiles,
-            instruction,
-            approvalContext: runContext,
-            workingDirectory: runContext.cwd,
-          }),
-          displayInstruction,
+          instruction,
+          approvalContext: runContext,
           workingDirectory: runContext.cwd,
-          cli: { teamId: plan.preset.id },
-          delegationAgentScope: [...plan.agentKeys],
-        };
+        }),
+        displayInstruction,
+        workingDirectory: runContext.cwd,
+        cli: { teamId: plan.preset.id },
+        delegationAgentScope: [...plan.agentKeys],
+      };
 
-        const run = yield* executeCliToolUseConfig(config, runContext, {
-          services,
-          recoveryInputIsDurable: stdinInputPath === undefined,
-        });
-        if (!run.ok) return run.exitCode;
+      const run = yield* executeCliToolUseConfig(config, runContext, {
+        services,
+        recoveryInputIsDurable: stdinInputPath === undefined,
+      });
+      if (!run.ok) return run.exitCode;
 
-        const payload = {
-          preset: {
-            id: plan.preset.id,
-            name: plan.preset.name,
-            source: plan.preset.source,
-          },
-          rootAgent: rootAgent.name,
-          result: run.result,
-        };
-        emitCliResult(runContext, {
-          json: payload,
-          ndjson: { kind: 'team-result', ...payload },
-          text: toolUseResultText(run.result),
-        });
+      const payload = {
+        preset: {
+          id: plan.preset.id,
+          name: plan.preset.name,
+          source: plan.preset.source,
+        },
+        rootAgent: rootAgent.name,
+        result: run.result,
+      };
+      emitCliResult(runContext, {
+        json: payload,
+        ndjson: { kind: 'team-result', ...payload },
+        text: toolUseResultText(run.result),
+      });
 
-        return run.exitCode;
-      }),
+      return run.exitCode;
+    }),
   );
 });
 

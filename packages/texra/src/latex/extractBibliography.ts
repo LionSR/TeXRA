@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Predicate } from 'effect';
 
 // Named import only: bibtex's UMD exports carry `__esModule: true`, so a
 // default import bundles to `undefined` under esbuild's ESM interop and the
@@ -103,14 +103,16 @@ function formatFieldValue(value: unknown): string {
   if (typeof value === 'string') {
     return `{${value}}`;
   }
-  if (typeof value === 'object') {
-    const candidate = value as { type?: string; stringify?: () => string };
-    if (typeof candidate.stringify === 'function') {
-      const rendered = candidate.stringify();
-      return candidate.type === 'quotedstringwrapper'
-        ? `"${rendered}"`
-        : `{${rendered}}`;
-    }
+  if (
+    typeof value === 'object' &&
+    Predicate.hasProperty(value, 'stringify') &&
+    Predicate.isFunction(value.stringify)
+  ) {
+    const rendered: unknown = value.stringify();
+    return Predicate.hasProperty(value, 'type') &&
+      value.type === 'quotedstringwrapper'
+      ? `"${String(rendered)}"`
+      : `{${String(rendered)}}`;
   }
   return `{${String(value)}}`;
 }
@@ -169,7 +171,7 @@ export const loadBibliographyEntries = Effect.fn(
 ): Effect.fn.Return<BibliographyEntriesResult, Error, FileSystem.FileSystem> {
   // Citation keys are matched case-insensitively; the first definition of a
   // key across the bibliography files wins, so the files are read as one
-  // bounded fan-out and folded back in their declared order.
+  // bounded fan-out and merged back in their declared order.
   const contents = yield* Effect.forEach(
     bibliographyFiles,
     readBibliographyFile,

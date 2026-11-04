@@ -117,7 +117,6 @@ export const EVIDENCE_PROTOCOL = {
   'openai-responses-function-call': 'openai-responses',
   'anthropic-thinking-signature': 'anthropic-messages',
   'anthropic-redacted-thinking': 'anthropic-messages',
-  google: 'google-interactions',
   anthropic: 'anthropic-messages',
   xai: 'openai-responses',
   'google-interactions': 'google-interactions',

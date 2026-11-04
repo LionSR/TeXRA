@@ -10,10 +10,9 @@ import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import { ArxivProcessor } from '@latex/arxivProcessor';
-import { setLogSink } from '@logger/logSink';
+import { setLogSink } from '@texra-ai/harness/node';
+import { downloadArxivSource } from '@latex/arxivProcessor';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
@@ -34,8 +33,6 @@ afterEach(async () => {
 });
 
 describe('arXiv source download filenames', () => {
-  setupPlatform({});
-
   it.live(
     'refuses an archive entry that already exists at the root, then places a clean one',
     () =>
@@ -53,7 +50,7 @@ describe('arXiv source download filenames', () => {
           await fs.writeFile(path.join(workspaceRoot, 'main.tex'), 'mine');
           return fs.readFile(tarPath);
         });
-        const download = ArxivProcessor.downloadSource('2404.12175', {
+        const download = downloadArxivSource('2404.12175', {
           workspaceRoot,
           formatter: null,
           autoIndent: false,

@@ -26,16 +26,22 @@ Node.js platform implementation and host building blocks for
   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
   [`writeFileAtomic`](#writefileatomic), and
   [`readNormalizedFile`](#readnormalizedfile).
+- **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
+  name where the log entries go, and
+  [`effectDiagnosticsLayer`](#effectdiagnosticslayer) at which level.
 
 ## absentReason
 
-The failures an existence probe reads as absent: the path is not there
+Whether a failure means nothing is at the path: it is not there
 (`ENOENT`), or a parent component is a file rather than a directory
-(`ENOTDIR`), which the platform reports as `BadResource`. Every other
-failure propagates.
+(`ENOTDIR`), the two cases Node's own `statSync(path, { throwIfNoEntry:
+false })` reads as no entry. It answers for the standard library's
+`PlatformError`, which reports `ENOTDIR` as `BadResource`, and for a bare
+Node error. Every other failure (`EACCES`, `ELOOP`, `EISDIR`, ...) is not
+absence and propagates from a caller that recovers only this.
 
 ```ts
-const absentReason: (error: PlatformError) => boolean
+const absentReason: (error: unknown) => boolean
 ```
 
 ## canonicalizeWorkspacePath
@@ -73,7 +79,7 @@ the effect itself, so this port's members compose into any caller's program.
 
 ```ts
 interface ConfigStore {
-  get<T>(key: string): T | undefined;
+  get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
 ```
@@ -82,7 +88,7 @@ interface ConfigStore {
 
 Build the `WorkspaceRoots` for one workspace folder: the canonical physical
 root, the pinned storage path, and the config/state stores opened for it.
-Every host (and the desktop, once per open paper) builds its roots here so
+Every host (and the desktop, once per open project) builds its roots here so
 the config-provider choice cannot drift.
 
 ```ts
@@ -106,6 +112,29 @@ freeze the setting for a whole session.
 
 ```ts
 const effectDiagnosticsLayer: (minimumLogLevel: LogLevel) => Layer<never, never, never>
+```
+
+## entryChannel
+
+Which channel an entry belongs to, or `undefined` when it names none. An
+`Effect.log*` carries one only through `Effect.annotateLogs`; a tracer span
+opened by `Effect.withSpan` does not supply it, because the entry's `spans`
+field reads `CurrentLogSpans` (`Effect.withLogSpan`), a separate mechanism.
+An unattributed entry lands on the host's shared surface, which is the right
+home for it.
+
+```ts
+function entryChannel(entry: LogEntry): string | undefined
+```
+
+## entryMessage
+
+Render an entry's message for a host that wants one line of text. Effect
+hands `message` through as a single value or an array of them, so both
+shapes fold here rather than at each host.
+
+```ts
+function entryMessage(entry: LogEntry): string
 ```
 
 ## entryTypeIn
@@ -382,6 +411,34 @@ interface JsonStoreOptions {
 }
 ```
 
+## LOG_CHANNEL
+
+Annotation naming the logical channel an entry belongs to.
+
+```ts
+const LOG_CHANNEL: "channel"
+```
+
+## LogEntry
+
+One diagnostic record, shaped by Effect's own structured formatter rather
+than by a type of ours: `Logger.formatStructured` already carries level,
+fiber, timestamp, message, cause, annotations, and spans, so the logger
+layer maps straight onto this with no adaptation.
+
+```ts
+type LogEntry = ReturnType<typeof Logger.formatStructured.log>;
+```
+
+## LogSink
+
+```ts
+interface LogSink {
+  write(entry: LogEntry): void;
+  dispose?(): void;
+}
+```
+
 ## makeMachineGitEnv
 
 Build an environment for a non-interactive git subprocess: the current
@@ -433,8 +490,10 @@ interface NodePlatformOptions {
   readonly workspaceDir?: string;
   /**
    * The directory this platform stores run history, checkpoints and its
-   * global state under, and reads its `mcp.json` from. Required: the package
-   * never falls back to a per-user default directory.
+   * global state under, and reads the user's own files from: its
+   * `mcp.json`, the `AGENTS.md` a workspace without one falls back to, and,
+   * given skill sources, the skills under its `skills/`. Required: the
+   * package never falls back to a per-user default directory.
    */
   readonly storageDir: string;
   /** The catalog the platform's config resolves against (`settingsCatalog`);
@@ -574,8 +633,9 @@ dirent type the platform left `Unknown` is probed, and only that probe's
 failure costs a row. The strict form stays with the containment and
 deletion walkers, where a refused answer is the safe one.
 
-The Node call is the one `FileSystem` cannot make: `readDirectory` returns
-names alone, and the pre-`readdir` answer is what carries the types.
+It reads the dirents through Node's `readdir` directly, so its callers need
+only `Path`; the strict form gets the same typed listing from
+`FileSystem.readDirectoryEntries`.
 
 ```ts
 const readDirectoryTypedTolerant: (target: string) => Effect<(readonly [string, Type])[], PlatformError, Path>
@@ -650,6 +710,19 @@ production).
 function secretsDirectory(storageRoot: string): string
 ```
 
+## setLogSink
+
+Install the host sink, disposing whatever it replaces. Entries are redacted
+unless the host identifies a local operator terminal as trusted. Passing
+`null` restores the console fallback.
+
+```ts
+function setLogSink(
+  next: LogSink | null,
+  options: { readonly trusted?: boolean } = {},
+): void
+```
+
 ## whichOnExtendedPath
 
 Resolve `name` on the process PATH extended with `appDirs` the way a shell
@@ -718,4 +791,14 @@ file would make unreadable on resume; not for workspace files.
 
 ```ts
 const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>
+```
+
+## writeLogLine
+
+One `WARN` channel line, for the few synchronous publication points with no
+fiber to run `Effect.log*` on (the trace emitter, pre-runtime and shutdown
+paths). The entry has the shape the logger layer writes.
+
+```ts
+function writeLogLine(channel: string, message: string): void
 ```

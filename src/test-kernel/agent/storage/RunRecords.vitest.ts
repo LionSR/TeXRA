@@ -1,29 +1,33 @@
-import { Effect, Schema, Stream, SubscriptionRef } from 'effect';
-import { it } from '@effect/vitest';
-import { beforeEach, describe, expect } from 'vitest';
+import { Effect, Schema, SubscriptionRef, Context } from 'effect';
+import { layer } from '@effect/vitest';
+import { expect } from 'vitest';
 
-import { getRunRecords } from '@agent/storage/runRecords';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  qualifyAggregateId,
   AgentConfigSchema,
+  qualifyAggregateId,
   type RunId,
-} from '@shared/schemas';
-import { testRuntime } from '@test/support/testProcessRuntime';
-import { createTestSession } from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
+} from '@texra-ai/harness/schemas';
+import { getRunRecords } from '@agent/storage/runRecords';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
+import {
+  FakeHost,
+  isolatedTestSession,
+  SessionGraph,
+} from '@test/support/testKernel';
 
-setupPlatform({ workspacePath: '/workspace' });
 const runId = 'abcdef' as RunId;
-let session: SessionHandle;
-const run = <A, E>(effect: Effect.Effect<A, E>) =>
-  testRuntime().runPromise(effect);
 
-beforeEach(async () => {
-  session = await Effect.runPromise(createTestSession());
-  await run(
-    session.log.transact([
+/** `body` over the test's session, with the run `runId` started on it. */
+const withStartedSession = <A, E>(
+  body: (
+    session: Context.Context<SessionServices>,
+  ) => Effect.Effect<A, E, SessionServices>,
+) =>
+  Effect.gen(function* () {
+    const session = yield* isolatedTestSession();
+    yield* Context.get(session, SessionLog).transact([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', runId),
@@ -32,90 +36,110 @@ beforeEach(async () => {
         parent: null,
         provenance: null,
       },
-    ]),
-  );
-});
-
-describe('canonical run records', () => {
-  it('preserves private values while display readers drain past their commits', async () => {
-    const records = getRunRecords(session, runId);
-    const config = Schema.decodeUnknownSync(AgentConfigSchema)({
-      agent: 'worker',
-      instruction: 'private instruction',
-    });
-    await run(seedRunRecord(session, runId, config));
-    await run(seedReport(session, runId, 'private report'));
-    expect(await run(records.readConfig())).toEqual(config);
-    expect(await run(records.readReport())).toBe('private report');
-    const visible = await run(Stream.runCollect(session.log.listing()));
-    // The configuration is the run's one `run.config` display row; the
-    // report stays private.
-    expect(visible.map((event) => event.type)).toEqual([
-      'run.start',
-      'run.config',
     ]);
-    expect(SubscriptionRef.getUnsafe(session.view.ref).cursor).toBe(
-      session.log.now(),
-    );
+    return yield* body(session).pipe(Effect.provide(session));
   });
 
-  it.effect(
-    'hides all private records at deletion while their rows await collection',
-    () =>
-      Effect.gen(function* () {
-        const records = getRunRecords(session, runId);
-        yield* seedRunRecord(
-          session,
-          runId,
-          Schema.decodeUnknownSync(AgentConfigSchema)({
-            agent: 'worker',
-          }),
-        );
-        yield* seedReport(session, runId, 'retained report bytes');
-        yield* session.log.transact([
-          {
-            type: 'run.result',
-            aggregateId: qualifyAggregateId('run', runId),
-            result: {
-              producer: 'subagent',
-              output: { response: 'done', files: [] },
-            },
-          },
-        ]);
-        yield* session.log.transact([
-          {
-            type: 'run.end',
-            aggregateId: qualifyAggregateId('run', runId),
-            outcome: 'completed',
-            output: { response: '', files: [] },
-          },
-        ]);
-        expect(yield* records.readReport()).toBe('retained report bytes');
-        // The result joins the terminal fact to the reply the delivery
-        // recorded, and drops the producer's own context.
-        expect(yield* records.readResult()).toEqual({
-          outcome: 'completed',
-          output: { response: 'done', files: [] },
-        });
-        yield* session.log.transact([
-          {
-            type: 'run.removed',
-            aggregateId: qualifyAggregateId('run', runId),
-          },
-        ]);
-        expect(
-          yield* Effect.all([
-            records.exists(),
-            records.readRunRecord(),
-            records.readReport(),
-            records.readWorkspaceFiles(),
-            records.readResultMeta(),
-          ]),
-        ).toEqual([false, null, null, [], null]);
-        const retained = yield* session.log.rows(
-          qualifyAggregateId('run', runId),
-        );
-        expect(retained.some((row) => row.type === 'run.removed')).toBe(true);
-      }),
-  );
-});
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'canonical run records',
+  (it) => {
+    it.layer(FakeHost.layer({ workspacePath: '/workspace' }), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect(
+        'preserves private values while display readers drain past their commits',
+        () =>
+          withStartedSession((session) =>
+            Effect.gen(function* () {
+              const records = getRunRecords(runId);
+              const config = Schema.decodeUnknownSync(AgentConfigSchema)({
+                agent: 'worker',
+                instruction: 'private instruction',
+              });
+              yield* seedRunRecord(session, runId, config);
+              yield* seedReport(session, runId, 'private report');
+              expect(yield* records.readConfig()).toEqual(config);
+              expect(yield* records.readReport()).toBe('private report');
+              const visible = yield* Context.get(session, SessionLog).display(
+                runId,
+              );
+              // The configuration is the run's one `run.config` display
+              // row; the report stays private.
+              expect(visible.map((event) => event.type)).toEqual([
+                'run.start',
+                'run.config',
+              ]);
+              expect(
+                SubscriptionRef.getUnsafe(
+                  Context.get(session, SessionViewAccess).ref,
+                ).cursor,
+              ).toBe(Context.get(session, SessionLog).now());
+            }),
+          ),
+      );
+
+      it.effect(
+        'hides all private records at deletion while their rows await collection',
+        () =>
+          withStartedSession((session) =>
+            Effect.gen(function* () {
+              const records = getRunRecords(runId);
+              yield* seedRunRecord(
+                session,
+                runId,
+                Schema.decodeUnknownSync(AgentConfigSchema)({
+                  agent: 'worker',
+                }),
+              );
+              yield* seedReport(session, runId, 'retained report bytes');
+              yield* Context.get(session, SessionLog).transact([
+                {
+                  type: 'run.result',
+                  aggregateId: qualifyAggregateId('run', runId),
+                  result: {
+                    producer: 'subagent',
+                    output: { response: 'done', files: [] },
+                  },
+                },
+              ]);
+              yield* Context.get(session, SessionLog).transact([
+                {
+                  type: 'run.end',
+                  aggregateId: qualifyAggregateId('run', runId),
+                  outcome: 'completed',
+                  output: { response: '', files: [] },
+                },
+              ]);
+              expect(yield* records.readReport()).toBe('retained report bytes');
+              // The result joins the terminal fact to the reply the delivery
+              // recorded, and drops the producer's own context.
+              expect(yield* records.readResult()).toEqual({
+                outcome: 'completed',
+                output: { response: 'done', files: [] },
+              });
+              yield* Context.get(session, SessionLog).transact([
+                {
+                  type: 'run.removed',
+                  aggregateId: qualifyAggregateId('run', runId),
+                },
+              ]);
+              expect(
+                yield* Effect.all([
+                  records.exists(),
+                  records.readRunRecord(),
+                  records.readReport(),
+                  records.readWorkspaceFiles(),
+                  records.readResultMeta(),
+                ]),
+              ).toEqual([false, null, null, [], null]);
+              const retained = yield* Context.get(session, SessionLog).runRows(
+                qualifyAggregateId('run', runId),
+                'input',
+              );
+              expect(retained.removed).not.toBeNull();
+            }),
+          ),
+      );
+    });
+  },
+);

@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@logger/logSink';
+import { setLogSink } from '@texra-ai/harness/node';
 
 // Local imports - test support
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';

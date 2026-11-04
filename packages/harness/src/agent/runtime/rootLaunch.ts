@@ -1,185 +1,209 @@
-import { Effect, Fiber, SubscriptionRef } from 'effect';
+import {
+  Context,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  SubscriptionRef,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { SessionOwner } from '@platform/processRuntime';
+import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import {
+  SessionRoots,
+  type StorageFs,
+  type WorkspaceFs,
+} from '@platform/rootedFs';
 import {
   APPROVAL_BYPASS_KINDS,
   inheritedGrants,
   NO_APPROVAL_GRANTS,
   type ApprovalPolicyLimit,
 } from '@shared/approvalBypassKind';
-import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId } from '@shared/schemas';
-import { generateRunId } from '@utils/core';
+import type { CommitOrdinal, RunId, SessionCloseReport } from '@shared/schemas';
+import type { SessionOpenError } from '@shared/session/database';
+import type { StartOptionsSchema } from '@shared/session/runtimeRequest';
+import {
+  type Approvals,
+  SessionViewAccess,
+  type HistoryQuery,
+  type RunHistory,
+  type SessionLog,
+} from '@shared/session/runHistory';
 import { humanGrant } from './runApprovalQueue';
-import { prepareAgentDefinition } from './AgentLaunchContext';
-import { runWithLaunchGuard } from './runLaunchGuard';
+import {
+  activationIfOpened,
+  prepareAgentDefinition,
+} from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
-import { registryOf } from './runRegistry';
-import { presentRunFailure } from './terminalResultToast';
-import type { SessionHandle } from './SessionHandle';
-import type { RunEndResult } from './RunEndResult';
+import { registryOf, Runs } from './runRegistry';
+import type { SessionHandleInit } from './SessionHandle';
+import type { Interactions } from './HostInteractions';
+import type { ProjectTools } from './loop/step';
+import type { SessionRequests } from './requestPolicy';
 
 /**
- * Options for a root launch (`Runs.launch({ request, options })`). Fields
- * shared with the lower-level `executeAgent` are picked from
- * `ExecuteAgentOptions` (and forwarded as-is) so the two option types can't
- * drift apart silently; see that interface for their docs.
+ * A session's own services: each owner its layer built (`sessionOwners.ts`),
+ * which its runs, its requests and the SDK's reads of it take from context.
  */
-export interface RootLaunchOptions extends Pick<
-  ExecuteAgentOptions,
-  'tools' | 'onRun' | 'onAdmitted'
-> {
-  /** Stop the run after one model/tool cycle instead of waiting for
-   *  follow-up input. */
-  stopAfterCycle?: boolean;
-  /**
-   * The caller owns presentation for failures before registration; after
-   * that the run's `result` event presents.
-   */
-  suppressErrorNotification?: boolean;
-  /**
-   * Opt-in for a host's quick fix-up actions: run the launched agent on the
-   * configured helper model instead of the selected one. Off for a direct
-   * launch and for orchestrator delegations, which keep the chosen model.
-   */
-  preferHelperModel?: boolean;
-  /**
-   * The chat's previous root: this run starts with the human grants that
-   * run held, so a conversation keeps the grants its earlier rounds made.
-   */
-  continues?: RunId;
-  /** An Auto-approve launch: the run starts with every bypass granted, in
-   *  its `run.start`, so no approval opens ahead of the grant. */
-  approveDelegatedWork?: boolean;
-  /**
-   * The policy the launch asked for explicitly (a CLI flag, its env
-   * variable, `--no-input`, a chat's `/approval`). Unless it is
-   * Auto-approve, it is the run's launch limit on its `run.start`: the run
-   * and its descendants run under the stricter of it and the project's
-   * policy, for good. A launch never widens the project's policy.
-   */
-  approvalPolicy?: ApprovalPolicy;
-}
+export type SessionServices =
+  | Runs
+  | SessionLog
+  | SessionViewAccess
+  | Approvals
+  | RunHistory
+  | HistoryQuery
+  | Inbox
+  | Interactions
+  | SessionRequests
+  | ProjectTools
+  | SessionRoots
+  | WorkspaceFs
+  | StorageFs;
 
-/** A fresh launch; a persisted run resumes through `resumeRun`. */
-export interface RootLaunchRequest {
-  readonly config: AgentConfig;
-  /** The id to register the run under; one is minted when omitted. */
-  readonly runId?: RunId;
-}
+/** The process's session owner: one session per workspace storage root,
+ *  served by `processLayer` over the `LayerMap` that owns every session's
+ *  lifetime. Every opener (the hosts' default sessions, the desktop's
+ *  projects, the service's tasks, the SDK's `Sessions`) reaches it from
+ *  context. The session `open` returns (its services, as a context) is
+ *  borrowed access with no disposal obligation: `close` is how a session
+ *  ends, and the process layer's own release closes whatever is still
+ *  open. */
+export class SessionOwner extends Context.Service<
+  SessionOwner,
+  {
+    /** The session of `init.roots`' storage root: the one already open
+     *  there, or built now over `init`, which is read only then: a later
+     *  opener of the same root gets the session the first one built. */
+    readonly open: (
+      init: SessionHandleInit,
+    ) => Effect.Effect<Context.Context<SessionServices>, SessionOpenError>;
+    /** Every session the owner holds, waiting within the close budget. */
+    readonly list: Effect.Effect<readonly Context.Context<SessionServices>[]>;
+    /** Whether it still holds the session of `root` whose runs are `runs`:
+     *  that root's entry, never another's. */
+    readonly holds: (
+      root: string,
+      runs: Runs['Service'],
+    ) => Effect.Effect<boolean>;
+    /** Close a storage root's session: refuse new runs, stop its own ones
+     *  and wait inside `SESSION_CLOSE_DEADLINE_MS`, report those still
+     *  live abandoned, flush, release. A root with no open session reports
+     *  `settled`. Never touches another root's session. */
+    readonly close: (root: string) => Effect.Effect<SessionCloseReport>;
+    /** A process shutdown's close: drain what the plugins' pollers admitted,
+     *  then close every held session at once, under one deadline. */
+    readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
+  }
+>()('@texra-ai/harness/SessionOwner') {}
+
+/** A root launch as `session.start` hands it over: the configuration it
+ *  resolved, the run id it minted, the start's options in its own words
+ *  (`StartOptionsSchema`), and the run's own tools. */
+type RootLaunch = typeof StartOptionsSchema.Type &
+  Pick<ExecuteAgentOptions, 'tools'> & {
+    readonly config: AgentConfig;
+    readonly runId: RunId;
+  };
 
 /**
- * START HERE — a root launch, what `Runs.launch({ request, options })` runs
- * (its session's `programs.root`): the composition root's `SessionOwner`
- * must still hold the session; the run id is minted when the request names
- * none; the run is admitted at the session's door and awaited, the caller's
- * interruption stopping it. A run that fails before it opens has no row to
- * present it: its launch does, once, unless the caller presents it.
+ * START HERE: a root launch, what `session.start` runs. The composition
+ * root's `SessionOwner` must still hold the session. It answers the commit
+ * of the run's opening once that commits, the run going on on the session's
+ * fork; a launch that fails first fails this, and the caller's interruption
+ * before then stops the run. A run that opened never fails this: its end,
+ * failed or not, is its `run.end` row's.
  *
- * Use `Runs.launch` unless you need per-chunk streaming/lifecycle callbacks
- * or subagent lineage; for those, drop to the lower-level `executeAgent`,
- * where the caller owns runId generation and the registration.
+ * A run with a parent, or one that is resumed rather than registered here
+ * (a child's strategy, `resumeRun`), runs the lower-level `executeAgent`
+ * through `RunRegistry.start` instead.
  */
-export const rootRun = Effect.fn('rootRun')(
-  function* (
-    request: RootLaunchRequest,
-    options: RootLaunchOptions & { readonly session: SessionHandle },
-  ): Effect.fn.Return<RunEndResult, Error, SessionOwner> {
-    const { session } = options;
-    if (!(yield* (yield* SessionOwner).holds(session)))
-      return yield* Effect.fail(
-        new Error('This session is closed; open it again to launch a run.'),
-      );
-    const runId = request.runId ?? generateRunId();
-    // The caller's interruption stops the run from the moment it starts.
-    return yield* Effect.uninterruptibleMask((restore) =>
-      Effect.flatMap(
-        registryOf(session.runs).start(
-          runId,
-          admittedRun(runId, request, options),
-          (run) => run,
-        ),
-        (fiber) =>
-          restore(Fiber.join(fiber)).pipe(
-            Effect.onInterrupt(() => Fiber.interrupt(fiber)),
-          ),
-      ),
+export const rootRun = Effect.fn('rootRun')(function* (
+  launch: RootLaunch,
+): Effect.fn.Return<CommitOrdinal, Error, SessionOwner | SessionServices> {
+  const runs = yield* Runs;
+  const { storage } = yield* SessionRoots;
+  if (!(yield* (yield* SessionOwner).holds(storage, runs)))
+    return yield* Effect.fail(
+      new Error('This session is closed; open it again to launch a run.'),
     );
-  },
-  (launch, _request, options) =>
-    launch.pipe(
-      Effect.tapError((error) =>
-        options.suppressErrorNotification === true
-          ? Effect.void
-          : presentRunFailure(options.session.interactions, error),
+  const opened = yield* Deferred.make<CommitOrdinal>();
+  const onAdmitted = (_: RunId, commit: CommitOrdinal) =>
+    Deferred.succeed(opened, commit);
+  return yield* Effect.uninterruptibleMask((restore) =>
+    Effect.flatMap(
+      registryOf(runs).start(
+        launch.runId,
+        admittedRun(launch, onAdmitted),
+        (run) => run,
       ),
+      (fiber) =>
+        restore(
+          Effect.raceFirst(
+            Deferred.await(opened),
+            Fiber.await(fiber).pipe(
+              Effect.flatMap((exit) =>
+                Exit.isFailure(exit) && !Deferred.isDoneUnsafe(opened)
+                  ? Effect.failCause(exit.cause)
+                  : activationIfOpened(opened),
+              ),
+            ),
+          ),
+        ).pipe(
+          // A caller interrupted as the run opened never holds it.
+          Effect.tap(() => restore(Effect.void)),
+          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+        ),
     ),
-);
+  );
+});
 
 /**
- * The run a root launch admits, on the launched fiber: it resolves the model
- * and runs the run under the launch terminal ({@link runWithLaunchGuard}),
- * which lets the run's claim go once it ends. The
- * run is born with its opening, so a launch that fails before it leaves no
- * run: its failure is the launch's.
+ * The run a root launch admits, on the launched fiber, whose generation
+ * holds the run's claim: it resolves the model and runs the run. The run is
+ * born with its opening, so a launch that fails before it leaves no run:
+ * its failure is the launch's.
  */
 const admittedRun = Effect.fn('admittedRun')(function* (
-  runId: RunId,
-  request: RootLaunchRequest,
-  options: RootLaunchOptions & { readonly session: SessionHandle },
+  launch: RootLaunch,
+  onAdmitted: NonNullable<ExecuteAgentOptions['onAdmitted']>,
 ) {
-  const {
-    preferHelperModel,
-    suppressErrorNotification,
-    continues,
-    approveDelegatedWork,
-    approvalPolicy,
-    stopAfterCycle,
-    ...executeAgentOptions
-  } = options;
-  const runSession = options.session;
+  const { runId, continues, approval } = launch;
   // Resolve the selected model before registering the run. The helper
   // model swap reads the enabled-model list and the routing switches, so it
   // takes this session's setting slots.
-  const config = preferHelperModel
-    ? yield* applyHelperModelPreference(request.config, runSession.roots)
-    : request.config;
+  const config = launch.helperModel
+    ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
+    : launch.config;
   const definition = yield* prepareAgentDefinition({
     config,
-    session: runSession,
-    suppressErrorNotification,
-    stopAfterCycle,
+    stopAfterCycle: launch.interactive !== true,
   });
   // A chat round takes the human grants of the round it continues, never
-  // its launch limit: the round asks with the chat's policy now. An
-  // Auto-approve launch grants every bypass over them.
+  // its launch limit: the round asks with the chat's policy now. A launch
+  // whose delegated work starts approved grants every bypass over them.
   const inherited =
     continues !== undefined && continues !== runId
       ? inheritedGrants(
-          SubscriptionRef.getUnsafe(runSession.view.ref),
+          SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref),
           continues,
         )
       : NO_APPROVAL_GRANTS;
-  const { limit: _previous, ...grants } = approveDelegatedWork
+  const { limit: _previous, ...grants } = approval?.delegated
     ? humanGrant(APPROVAL_BYPASS_KINDS, true)(inherited)
     : inherited;
   // A policy the launch asked for, Auto-approve aside, is the run's
   // limit whatever the project's is now, so widening the project's
   // policy later never widens this run.
   const limit: ApprovalPolicyLimit | undefined =
-    approvalPolicy === 'yolo' ? undefined : approvalPolicy;
-  return yield* runWithLaunchGuard(
-    runSession,
-    runId,
-    executeAgent(definition, runId, {
-      ...executeAgentOptions,
-      registration: {
-        identity: { kind: 'agent', agent: definition.config.agent },
-        grants: limit === undefined ? grants : { ...grants, limit },
-      },
-    }),
-    true,
-  );
+    approval?.policy === 'yolo' ? undefined : approval?.policy;
+  return yield* executeAgent(definition, runId, {
+    tools: launch.tools,
+    onAdmitted,
+    registration: {
+      identity: { kind: 'agent', agent: definition.config.agent },
+      grants: limit === undefined ? grants : { ...grants, limit },
+    },
+  });
 });

@@ -25,6 +25,7 @@ import {
   type PerKeyLane,
 } from '@texra-ai/harness/host';
 import {
+  absentReason,
   entryTypeIn,
   readDirectoryTypedTolerant,
 } from '@texra-ai/harness/node';
@@ -136,14 +137,6 @@ const WORKSPACE_BOUNDARY_ERROR =
   'Only files inside the workspace folder can be opened.';
 
 /**
- * Absent, and nothing else. A path that is not there is the write path's
- * expected case; a permission or I/O failure on the same call is a real fault
- * and must not read as "the file does not exist yet".
- */
-const isAbsent = (error: WorkspaceFileFailure): boolean =>
-  error._tag === 'PlatformError' && error.reason._tag === 'NotFound';
-
-/**
  * Enforces that a canonical target lies within the canonical workspace root,
  * answering the target on success. Both inputs must already be canonicalized
  * (the write path synthesizes its target from a canonical parent plus
@@ -213,7 +206,9 @@ const resolveWorkspaceWritePath = Effect.fn(
   'desktopWorkspaceIpc.resolveWorkspaceWritePath',
 )(function* (workspaceRoot: string | undefined, inputPath: string) {
   const existing = yield* resolveWorkspacePath(workspaceRoot, inputPath).pipe(
-    Effect.catchIf(isAbsent, () => Effect.succeed(undefined)),
+    // Absent, and nothing else: a permission or I/O failure on the same call
+    // is a real fault and must not read as "the file does not exist yet".
+    Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
   );
   if (existing !== undefined) return existing;
 
@@ -243,7 +238,7 @@ const resolveWorkspaceWritePath = Effect.fn(
     [fs.realPath(root), fs.realPath(parent)],
     { concurrency: 2 },
   ).pipe(
-    Effect.catchIf(isAbsent, () =>
+    Effect.catchIf(absentReason, () =>
       Effect.fail(
         new WorkspaceRequestRefused({
           message:
@@ -354,15 +349,14 @@ export function createDesktopWorkspaceIpc(
         ),
       );
 
-  const readFile = (path: string) =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const absolutePath = yield* path.startsWith('texra-agent:')
-        ? resolveAgentDocument(path, false)
-        : resolveWorkspacePath(options.getWorkspacePath(), path);
-      const contents = yield* editorText(fs, absolutePath);
-      return { kind: 'contents', contents } satisfies HostOutcome;
-    });
+  const readFile = Effect.fn('readFile')(function* (path: string) {
+    const fs = yield* FileSystem.FileSystem;
+    const absolutePath = yield* path.startsWith('texra-agent:')
+      ? resolveAgentDocument(path, false)
+      : resolveWorkspacePath(options.getWorkspacePath(), path);
+    const contents = yield* editorText(fs, absolutePath);
+    return { kind: 'contents', contents } satisfies HostOutcome;
+  });
 
   // One save of a file at a time. Each save is its own request fiber, so v5's
   // write could otherwise land after v6's and leave v5 on disk while the tab
@@ -385,10 +379,7 @@ export function createDesktopWorkspaceIpc(
         : resolveWorkspaceWritePath(options.getWorkspacePath(), path);
       if (base !== null) {
         const onDisk = yield* editorText(fs, absolutePath).pipe(
-          Effect.catchIf(
-            (error) => error.reason._tag === 'NotFound',
-            () => Effect.succeed(null),
-          ),
+          Effect.catchIf(absentReason, () => Effect.succeed(null)),
         );
         if (onDisk !== null && onDisk !== base)
           return { kind: 'changedOnDisk' } satisfies HostOutcome;

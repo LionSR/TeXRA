@@ -9,7 +9,6 @@
 // the sheets load in.
 import { designTokens } from '@ui/styles';
 import { noticeStyles } from '@ui/styles/surfaceStyles';
-import { monacoStyles } from '@ui/styles/monacoStyles';
 import {
   buttonStyles,
   focusRingStyles,
@@ -17,6 +16,7 @@ import {
   iconSurfaceStyles,
   settingsRowStyles,
 } from '@ui/styles/controlStyles';
+import { monacoStyles } from './monacoStyles';
 
 const shared = new CSSStyleSheet();
 shared.replaceSync(

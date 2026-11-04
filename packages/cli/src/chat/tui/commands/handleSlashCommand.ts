@@ -26,7 +26,7 @@ import type { ProcessServices } from '@texra-ai/harness/host';
  * Run a command body with centralized echo and error persistence. A typed
  * failure and a throw from the body alike reach the transcript, which is what
  * the `try`/`catch` around the awaited handler did before it became a
- * program. Interruption is not folded in: a fiber the runtime is tearing down
+ * program. Interruption is not turned into a failure: a fiber the runtime is tearing down
  * did not fail the command.
  */
 function runGuardedSlashCommand(
@@ -55,11 +55,11 @@ function runGuardedSlashCommand(
   });
 }
 
-export function handleTuiSlashCommand(
-  line: string,
-  context: SlashCommandContext,
-): Effect.Effect<boolean, Error, ProcessServices> {
-  return Effect.gen(function* () {
+export const handleTuiSlashCommand = Effect.fn('handleTuiSlashCommand')(
+  function* (
+    line: string,
+    context: SlashCommandContext,
+  ): Effect.fn.Return<boolean, Error, ProcessServices> {
     const redactedIntent = findRedactedSlashCommandInput(line);
     const parsed = parseSlashInput(line);
     if (!parsed) {
@@ -123,5 +123,5 @@ export function handleTuiSlashCommand(
         : `Unknown command: /${parsed.name}.${didYouMean} Type /help to list commands.`,
     );
     return true;
-  });
-}
+  },
+);

@@ -4,12 +4,12 @@
 // per suite.
 
 import { Effect } from 'effect';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
 
 import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { SettingsStores } from '@shared/config/settings';
 
 import { fakeConfig, FakeStateStore } from './FakePlatform';
+import type { StateStore, StateReadFailed } from '@texra-ai/harness/host';
 
 interface FakeSettingsStores {
   readonly stores: SettingsStores;

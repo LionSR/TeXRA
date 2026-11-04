@@ -13,13 +13,10 @@ import {
   ApprovalPolicySchema,
   type ApprovalPolicyDenial,
   FileLocationSchema,
-  INSTRUCTION_ACTION,
+  LaunchNoticeSchema,
+  RequestShowErrorPayloadSchema,
   RunIdSchema,
-  type RequestEnsureProgressViewPayload,
-  type RequestOpenFilePayload,
-  type RequestShowErrorPayload,
-  type RequestShowInstructionPayload,
-  type ShowAgentConfigBannerPayload,
+  type OpenFilePayload,
 } from '@texra-ai/harness/schemas';
 import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
@@ -83,49 +80,20 @@ const ApprovalPolicyDenialSchema = Schema.Union([
   }),
 ]) satisfies Schema.Codec<ApprovalPolicyDenial, unknown>;
 
-/** The runtime's notices, by event, as a window presents them. */
+/** The runtime's notices, by event, as a window presents them: the two a
+ *  refused launch carries among them. */
 const NoticeSchema = Schema.Union([
   Schema.Struct({
-    event: Schema.Literal('requestOpenFile'),
+    event: Schema.Literal('openFile'),
     payload: Schema.Struct({
       location: FileLocationSchema,
       preserveFocus: Schema.Boolean,
-    }) satisfies Schema.Codec<RequestOpenFilePayload, unknown>,
+    }) satisfies Schema.Codec<OpenFilePayload, unknown>,
   }),
-  Schema.Struct({
-    event: Schema.Literal('requestShowInstruction'),
-    payload: Schema.Struct({
-      key: Schema.String,
-      message: Schema.String,
-      actions: Schema.optional(Schema.Array(Schema.Enum(INSTRUCTION_ACTION))),
-      showSuppress: Schema.optional(Schema.Boolean),
-    }) satisfies Schema.Codec<RequestShowInstructionPayload, unknown>,
-  }),
-  Schema.Struct({
-    event: Schema.Literal('showAgentConfigBanner'),
-    payload: Schema.Struct({
-      agentName: Schema.String,
-    }) satisfies Schema.Codec<ShowAgentConfigBannerPayload, unknown>,
-  }),
+  ...LaunchNoticeSchema.members,
   Schema.Struct({
     event: Schema.Literal('requestShowError'),
-    payload: Schema.Struct({
-      message: Schema.String,
-      docsPage: Schema.optional(Schema.String),
-    }) satisfies Schema.Codec<RequestShowErrorPayload, unknown>,
-  }),
-  Schema.Struct({
-    event: Schema.Literal('requestEnsureProgressView'),
-    payload: Schema.Struct({
-      fallbackNotification: Schema.optional(
-        Schema.Struct({
-          agentName: Schema.String,
-          modelName: Schema.String,
-          inputName: Schema.String,
-          outputInfo: Schema.String,
-        }),
-      ),
-    }) satisfies Schema.Codec<RequestEnsureProgressViewPayload, unknown>,
+    payload: RequestShowErrorPayloadSchema,
   }),
 ]);
 export type Notice = typeof NoticeSchema.Type;

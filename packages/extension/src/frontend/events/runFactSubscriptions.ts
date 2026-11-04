@@ -1,11 +1,8 @@
 import { Stream } from 'effect';
 
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import {
-  DOCUMENTS_OUTPUT_KEY,
-  documentRoundsOf,
-} from '@texra/shared/plugins/documents';
-import type { RunId, SessionView } from '@texra-ai/harness/schemas';
+import { documentRoundsOf } from '@texra/shared/plugins/documents';
+import type { RunId, RunView, SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * The output files a run's documents fact names, every revision's, each time
@@ -18,22 +15,27 @@ export function outputFilesProduced(source: {
   readonly view: { readonly changes: Stream.Stream<SessionView> };
 }): Stream.Stream<readonly OutputFileInfo[]> {
   // By value: a view rebuilt from the same rows (a resubscribed window)
-  // names no new output.
+  // names no new output. A run's `facts` object is replaced only when a
+  // fact lands, so the same one needs no decode.
+  type Seen = { readonly facts: RunView['facts']; readonly value: string };
   return source.view.changes.pipe(
     Stream.mapAccum(
-      (): ReadonlyMap<RunId, string> | undefined => undefined,
+      (): ReadonlyMap<RunId, Seen> | undefined => undefined,
       (seen, view) => {
-        const now = new Map<RunId, string>();
+        const now = new Map<RunId, Seen>();
         const changed: (readonly OutputFileInfo[])[] = [];
         for (const run of view.runs.values()) {
-          const fact = run.facts[DOCUMENTS_OUTPUT_KEY];
-          if (fact === undefined) continue;
-          const value = JSON.stringify(fact);
-          now.set(run.id, value);
-          if (seen !== undefined && seen.get(run.id) !== value)
-            changed.push(
-              documentRoundsOf(fact).flatMap((round) => round.outputs),
-            );
+          const prior = seen?.get(run.id);
+          if (prior?.facts === run.facts) {
+            now.set(run.id, prior);
+            continue;
+          }
+          const rounds = documentRoundsOf(run);
+          if (rounds.length === 0) continue;
+          const value = JSON.stringify(rounds);
+          now.set(run.id, { facts: run.facts, value });
+          if (seen !== undefined && prior?.value !== value)
+            changed.push(rounds.flatMap((round) => round.outputs));
         }
         return [now, changed] as const;
       },

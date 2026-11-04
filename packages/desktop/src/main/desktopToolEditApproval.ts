@@ -2,14 +2,16 @@
  * Desktop preview port for {@link ToolEditApprovalController}.
  *
  * Each request gets its own temp directory; the renderer opens the staged
- * copies through the window's diff and file viewers, and the user's edits are
- * read back from the proposed copy on disk, each time it is saved.
+ * copies through the window's diff and file viewers, and an approval reads
+ * the user's edits back from the proposed copy on disk, where the editor
+ * the desktop opened it in saved them.
  */
 
 // Third-party imports
-import { Effect, FileSystem, Stream } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
+import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
 import type {
@@ -20,6 +22,7 @@ import type {
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
+import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 
 import type { HostRequestFailure } from '@texra-ai/harness';
 
@@ -28,7 +31,7 @@ import type { DesktopSpawn } from './desktopWindows.js';
 
 type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
-  'openPath' | 'openBuildDisplay' | 'showErrorMessage'
+  'openPath' | 'openBuildDisplay' | 'showErrorMessage' | 'showWarningMessage'
 > & {
   /**
    * Show the staged diff under `previewId`, the key `closeDiff` below closes
@@ -51,7 +54,8 @@ type DesktopToolEditApprovalUi = Pick<
 
 interface DesktopToolEditApprovalHostOptions {
   ui: DesktopToolEditApprovalUi;
-  /** Runs the error report on a fiber of the window's scope. */
+  /** Runs the error report and the notices on a fiber of the window's
+   *  scope. */
   spawn: DesktopSpawn;
   /** Whether the window is focused and shows this project. */
   focused(): boolean;
@@ -88,11 +92,12 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
         }).pipe(
           Effect.map(
             ({ originalPath, proposedPath }) =>
-              new DesktopToolEditPreview(ui, request, {
-                tempDir,
-                originalPath,
-                proposedPath,
-              }),
+              new DesktopToolEditPreview(
+                ui,
+                request,
+                { tempDir, originalPath, proposedPath },
+                (message) => this.show(ui.showWarningMessage(message)),
+              ),
           ),
           // A failed write leaves the directory it made; nothing else would
           // remove it, since the preview that owns it was never built.
@@ -113,18 +118,21 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   }
 
   reportError(message: string): void {
-    // Fire-and-forget, as the voided promise was; a dialog that cannot show
-    // the report leaves a console trace instead of an unhandled rejection.
+    this.show(this.options.ui.showErrorMessage(message));
+  }
+
+  /** Fire-and-forget, as the voided promise was: the dialog waits for the
+   *  user, its caller does not. One that cannot show leaves a console trace
+   *  instead of an unhandled rejection. */
+  private show(dialog: Effect.Effect<void, NotificationFailed>): void {
     this.options.spawn(
-      this.options.ui.showErrorMessage(message).pipe(
+      dialog.pipe(
         // The handler's parameter names the channel's whole error type, so a
         // second tag added here fails to compile instead of being dropped.
         Effect.catch((failure: NotificationFailed) =>
-          Effect.sync(() => {
-            console.error(
-              `Tool-edit error report could not be shown: ${failure.message}`,
-            );
-          }),
+          Effect.logError(
+            `Tool-edit notice could not be shown: ${failure.message}`,
+          ).pipe(withLogChannel('desktop')),
         ),
       ),
     );
@@ -141,14 +149,18 @@ class DesktopToolEditPreview implements ToolEditPreview {
   private readonly ui: DesktopToolEditApprovalUi;
   private readonly request: ToolEditPreviewRequest;
   private readonly staged: DesktopStagedFiles;
+  /** Tell the user something without waiting for them to read it. */
+  private readonly warn: (message: string) => void;
   constructor(
     ui: DesktopToolEditApprovalUi,
     request: ToolEditPreviewRequest,
     staged: DesktopStagedFiles,
+    warn: (message: string) => void,
   ) {
     this.ui = ui;
     this.request = request;
     this.staged = staged;
+    this.warn = warn;
   }
 
   get originalPath(): string {
@@ -176,28 +188,6 @@ class DesktopToolEditPreview implements ToolEditPreview {
     return this.ui.openPath(this.staged.proposedPath);
   }
 
-  /** The proposed copy each time it changes on disk: the user saved it. */
-  get edits(): Stream.Stream<string, never, FileSystem.FileSystem> {
-    return Stream.unwrap(
-      FileSystem.FileSystem.use((fs) =>
-        Effect.succeed(
-          fs.watch(this.staged.proposedPath).pipe(
-            Stream.mapEffect(() => fs.readFileString(this.staged.proposedPath)),
-            Stream.changes,
-          ),
-        ),
-      ),
-    ).pipe(
-      Stream.catch((error) =>
-        Stream.fromEffect(
-          Effect.logWarning(
-            `Edits to ${this.staged.proposedPath} stopped reaching the session: ${toErrorMessage(error)}`,
-          ),
-        ).pipe(Stream.drain),
-      ),
-    );
-  }
-
   readProposedContent(): Effect.Effect<
     string,
     HostRequestFailure,
@@ -213,21 +203,31 @@ class DesktopToolEditPreview implements ToolEditPreview {
   /**
    * Close the view before the files behind it go, in that order. The close
    * names this request's preview, so a request settling while the user reads
-   * another diff takes only its own off the Review workbench.
+   * another diff takes only its own off the Review workbench. `unapplied` is
+   * the proposed copy as the user's editor saved it: that file stays where
+   * the editor has it open, and only the original beside it goes.
    */
-  dispose(): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
-    return this.ui
-      .closeDiff(this.request.requestId)
-      .pipe(
+  dispose(
+    unapplied?: string,
+  ): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
+    const { tempDir, originalPath, proposedPath } = this.staged;
+    return Effect.suspend(() => {
+      if (unapplied !== undefined)
+        this.warn(
+          UNAPPLIED_TOOL_EDIT.inFile(this.request.relativePath, proposedPath),
+        );
+      return this.ui.closeDiff(this.request.requestId).pipe(
         Effect.andThen(
           FileSystem.FileSystem.use((fs) =>
-            fs.remove(this.staged.tempDir, { recursive: true, force: true }),
-          ).pipe(
-            Effect.mapError((cause) =>
-              hostFailure('approval.removeTempDir', cause),
-            ),
+            unapplied === undefined
+              ? fs.remove(tempDir, { recursive: true, force: true })
+              : fs.remove(originalPath, { force: true }),
           ),
         ),
+        Effect.mapError((cause) =>
+          hostFailure('approval.removeTempDir', cause),
+        ),
       );
+    });
   }
 }

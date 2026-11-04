@@ -40,9 +40,9 @@ export const LATEX_CONFIG_DEFAULTS = {
   workflowRejectOnCompileFailure: true,
   latexdiffBetweenRounds: false,
   latexdiffTimeoutMs: 10000,
-  latexdiffMathMarkup: 'coarse' as LatexdiffMathMarkupValue,
+  latexdiffMathMarkup: 'coarse' satisfies LatexdiffMathMarkupValue,
   latexdiffChangesOnly: true,
-  latexFormatter: 'latexindent' as LatexFormatterValue,
+  latexFormatter: 'latexindent' satisfies LatexFormatterValue,
 } as const;
 
 /** Numeric ranges (used by the setting schemas and UI inputs). */

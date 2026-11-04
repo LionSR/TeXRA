@@ -1,32 +1,14 @@
 import { Effect } from 'effect';
 
-import { type DatabaseReadFailed, type LocalSession } from '@texra-ai/harness';
 import { InstalledPlugins, type SettingsStores } from '@texra-ai/harness/host';
+import { RUN_OUTCOME, type RunOutcome } from '@texra-ai/harness/schemas';
 import {
-  type RunEndResult,
-  toErrorMessage,
-  RUN_OUTCOME,
-  type RunOutcome,
-} from '@texra-ai/harness/schemas';
-import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
+  runOutcomeToCliRunStatus,
+  type CliPluginPin,
+  type CliRunResult,
+} from '@cli/schemas/cliOutput';
 
 import { CliExitCode } from './exitCodes';
-import type { CliPluginPin } from '../schemas/cliOutput';
-
-// A type alias, not an interface: the result line types its payload as a
-// loose object, which an interface (no implicit index signature) cannot meet.
-type CliRunResultMetadata = {
-  /** The plugins installed when this invocation started or resumed the run. */
-  readonly plugins?: readonly CliPluginPin[];
-  readonly workingDirectory?: string;
-  readonly runDirectory?: string;
-  readonly copiedOutput?: string;
-  readonly copiedOutputs?: string[];
-};
-
-// Intersecting distributes over the run result union, attaching the
-// CLI-only metadata fields to every member.
-export type CliRunResult = RunEndResult & CliRunResultMetadata;
 
 /**
  * The plugins that load as a run result names them, read the way this
@@ -72,37 +54,3 @@ export function runOutcomeExitCode(outcome: RunOutcome): CliExitCode {
   }
   return CliExitCode.Success;
 }
-
-/** Read the terminal outcome together with the durability fact needed before
- *  advertising persisted-run recovery. */
-export const readCliRunOutcomeState = Effect.fn('readCliRunOutcomeState')(
-  function* (
-    session: LocalSession,
-    result: RunEndResult,
-    reportReadFailure: (error: Error) => void,
-  ): Effect.fn.Return<{ outcome: RunOutcome; outcomePersisted: boolean }> {
-    return yield* session
-      .records(result.runId)
-      .readRunEnd()
-      .pipe(
-        Effect.map((end) => ({
-          outcome: end === null ? result.outcome : end.outcome,
-          outcomePersisted: end !== null,
-        })),
-        // The handler names the channel's whole error type, so a second
-        // failure added to `readRunEnd` fails to compile here rather than
-        // being reported as a failed outcome read.
-        Effect.catch((error: DatabaseReadFailed) =>
-          Effect.sync(() => {
-            reportReadFailure(
-              new Error(
-                `Could not verify the persisted outcome for run ${result.runId}; using the current run outcome: ${toErrorMessage(error)}`,
-                { cause: error },
-              ),
-            );
-            return { outcome: result.outcome, outcomePersisted: false };
-          }),
-        ),
-      );
-  },
-);

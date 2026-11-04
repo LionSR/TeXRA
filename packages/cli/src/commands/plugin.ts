@@ -43,20 +43,18 @@ function pluginExitCode(error: unknown): number {
  * the global storage the managed plugins live under), then run one plugin
  * operation on the runtime it installed, whose spawner git runs on.
  */
-function withPluginEnv<A, E>(
+const withPluginEnv = Effect.fn('withPluginEnv')(function* <A, E>(
   context: CliContext,
   operation: (
     env: PluginEnv,
   ) => Effect.Effect<A, E, ChildProcessSpawner | FileSystem.FileSystem>,
 ) {
-  return Effect.gen(function* () {
-    const services = yield* initCliPlatform(context);
-    return yield* withProcessServices(
-      services.runtime,
-      operation(services.roots),
-    );
-  });
-}
+  const services = yield* initCliPlatform(context);
+  return yield* withProcessServices(
+    services.runtime,
+    operation(services.roots),
+  );
+});
 
 const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);
 
@@ -214,13 +212,19 @@ const pluginListCommand = defineCliCommand({
 
 /** One plugin in full: its listing, each hook it runs, and every hook or
  *  event it configures that TeXRA does not run. */
-function formatPluginShow(plugin: PluginListing): string {
+const formatPluginShow = Effect.fn('formatPluginShow')(function* (
+  plugin: PluginListing,
+) {
   const listed = formatPluginList([plugin]);
   if (plugin.problem) return listed;
+  const hooks = yield* Effect.forEach(
+    plugin.hooks,
+    InstalledPlugins.describeHook,
+  );
   return [
     listed,
     plugin.hooks.length === 0 ? '  hooks: none' : '  hooks:',
-    ...plugin.hooks.map((hook) => `    ${InstalledPlugins.describeHook(hook)}`),
+    ...hooks.map((line) => `    ${line}`),
     ...(plugin.unsupportedHooks.length === 0
       ? []
       : [
@@ -228,7 +232,7 @@ function formatPluginShow(plugin: PluginListing): string {
           ...plugin.unsupportedHooks.map((line) => `    ${line}`),
         ]),
   ].join('\n');
-}
+});
 
 const pluginShowCommand = defineCliCommand({
   meta: {
@@ -249,12 +253,14 @@ const pluginShowCommand = defineCliCommand({
                 message: `No plugin named ${ctx.args.name} is installed.`,
               }),
             );
-          emitCliResult(context, {
-            json: plugin,
-            ndjson: { kind: 'plugin' as const, plugin },
-            text: formatPluginShow(plugin),
+          return Effect.map(formatPluginShow(plugin), (text) => {
+            emitCliResult(context, {
+              json: plugin,
+              ndjson: { kind: 'plugin' as const, plugin },
+              text,
+            });
+            return CliExitCode.Success;
           });
-          return Effect.succeed(CliExitCode.Success);
         }),
       ),
     ),

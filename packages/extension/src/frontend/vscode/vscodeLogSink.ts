@@ -8,6 +8,7 @@
  * the transcript's to render, not a per-run output channel's.
  */
 // Third-party imports
+import { Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -17,7 +18,7 @@ import {
   entryMessage,
   type LogEntry,
   type LogSink,
-} from '@texra-ai/harness/host';
+} from '@texra-ai/harness/node';
 
 /** Everything the channel itself does not already render. Every annotation
  * arrives already rendered and bounded by the write path, so this shows them
@@ -29,7 +30,7 @@ function detail(entry: LogEntry): string {
   const parts = [
     entry.cause,
     extra.length === 0 ? undefined : JSON.stringify(Object.fromEntries(extra)),
-  ].filter((part): part is string => part !== undefined);
+  ].filter(Predicate.isNotUndefined);
   return parts.length === 0 ? '' : `\n${parts.join('\n')}`;
 }
 

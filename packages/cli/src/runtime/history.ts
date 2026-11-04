@@ -6,8 +6,10 @@ import {
   toErrorMessage,
   isRunId,
   isTaskConfig,
+  RUN_OUTCOME,
   RUN_SUBSTATE,
   type RunId,
+  type RunOutcome,
   serializeFilteredConfig,
 } from '@texra-ai/harness/schemas';
 import {
@@ -26,15 +28,10 @@ import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
+import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
-import {
-  cliRunStanding,
-  HISTORY_RUN_STATUS,
-  HISTORY_RUN_STATUS_LABEL,
-  type HistoryRunStatus,
-} from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -61,6 +58,58 @@ function mergeHistoryFiles(
   return [...files.values()].toSorted((a, b) => a.path.localeCompare(b.path));
 }
 
+/** A persisted run's status in `texra history`'s NDJSON and tab output. */
+const HISTORY_RUN_STATUS = {
+  RESUMABLE: 'resumable',
+  /** A child a stop rested (`RunView.substate` paused): its parent's model
+   *  continues it by calling it again. */
+  PAUSED: 'paused',
+  COMPLETED: RUN_OUTCOME.COMPLETED,
+  CANCELLED: RUN_OUTCOME.CANCELLED,
+  FAILED: RUN_OUTCOME.FAILED,
+  UNKNOWN: 'unknown',
+} as const;
+
+type HistoryRunStatus =
+  (typeof HISTORY_RUN_STATUS)[keyof typeof HISTORY_RUN_STATUS];
+
+/** What a run's history standing is decided from: the view's facts
+ *  and `records(id).readResumable()`'s answer. */
+interface CliRunFacts {
+  readonly resumable: boolean;
+  /** The run's durable outcome; null or absent while none has landed. */
+  readonly outcome?: RunOutcome | null;
+  /** A stop rested the run instead of ending it (a paused child). */
+  readonly paused?: boolean;
+}
+
+/** A run's CLI history standing: the frozen `status` and the `resumable`
+ *  boolean beside it. */
+interface CliRunStanding {
+  readonly status: HistoryRunStatus;
+  readonly resumable: boolean;
+}
+
+/**
+ * The history standing of a run. `status` is a frozen contract (texra-action
+ * reads the NDJSON stream): resumability promotes only an interrupted or
+ * outcome-less run to `resumable`, so a failed run that can continue still
+ * reports `failed` beside `resumable: true`. An outcome-less run that cannot
+ * continue reports `unknown`.
+ */
+function cliRunStanding(facts: CliRunFacts): CliRunStanding {
+  // A paused child is continued by its parent's model, never by `resume`.
+  if (facts.paused)
+    return { status: HISTORY_RUN_STATUS.PAUSED, resumable: false };
+  const outcome = facts.outcome ?? undefined;
+  const status =
+    facts.resumable &&
+    (outcome === undefined || outcome === RUN_OUTCOME.CANCELLED)
+      ? HISTORY_RUN_STATUS.RESUMABLE
+      : (outcome ?? HISTORY_RUN_STATUS.UNKNOWN);
+  return { status, resumable: facts.resumable };
+}
+
 export interface CliHistoryEntry {
   readonly id: RunId;
   readonly timestamp: string;
@@ -68,7 +117,7 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /** `records(id).readResumable()`'s answer, the one `texra resume` acts on.
-   *  Ownership and loadability are settled when the run is opened.
+   *  Ownership and loadability are decided when the run is opened.
    *  Independent of the frozen `status`: a failed run can be resumable. */
   readonly resumable: boolean;
   /** The listing's cause when the run cannot resume in this build (its rows
@@ -84,8 +133,11 @@ export interface CliHistoryEntry {
 interface CliHistoryDetails {
   readonly id: RunId;
   readonly status: HistoryRunStatus;
-  /** The run's launch facts as the session's fold holds them. */
-  readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
+  /** The run's launch facts as the session view holds them. */
+  readonly run: Pick<
+    RunView,
+    'launchedAt' | 'parentId' | 'description' | 'statusKey'
+  > | null;
   readonly config: AgentConfig | null;
   readonly result: RunResult | null;
   readonly report: string | null;
@@ -204,7 +256,10 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       ],
       { concurrency: 8 },
     );
-    // The model the run is on, as the view folds it for the listing too.
+    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
+      return null;
+    }
+    // The model the run is on, as the view derives it for the listing too.
     const currentModel = config ? (run?.model ?? undefined) : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
@@ -212,7 +267,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     // A run with no config is corrupt: there is nothing to resume it under.
     const standing = cliRunStanding({
       resumable: config !== null && checkpointPresent,
-      phase: run?.status,
+      outcome: run?.durableOutcome,
       paused: run?.substate === RUN_SUBSTATE.PAUSED,
     });
     const conversationPreview = createConversationPreview(conversation);
@@ -228,9 +283,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       })),
     );
 
-    if (!run && !config && conversation.length === 0 && !checkpointPresent) {
-      return null;
-    }
     return {
       id,
       status: standing.status,
@@ -239,6 +291,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
             launchedAt: run.launchedAt,
             parentId: run.parentId,
             description: run.description,
+            statusKey: run.statusKey,
           }
         : null,
       config,
@@ -270,7 +323,7 @@ type CliHistoryExportInputResult =
  * ChatExportInput} the markdown export formatter consumes (the HTML export path
  * uses `assembleTrace` instead — see `commands/history.ts`). Thin CLI-specific
  * wrapper around the shared {@link loadChatExportInput} loader, which also
- * backs the progress-view `ChatExportController.buildExportInput` — so the CLI
+ * backs the progress-view `writeTranscript` operation — so the CLI
  * and GUI render the same conversation identically.
  *
  * Distinguishes "this run id has no stored data at all" (`not_found`
@@ -435,9 +488,13 @@ export function formatCliHistoryDetailsText(
   const model = details.currentModel ?? config?.model;
   const team = teamIdOf(config);
   const cliOutputFile = config?.cli?.outputFile?.trim();
+  // Worded as every host words it; `details.status` is the NDJSON contract's.
+  const status = `${run ? runStatusLabel(run.statusKey) : 'Unknown'}${
+    details.status === HISTORY_RUN_STATUS.RESUMABLE ? ' (resumable)' : ''
+  }`;
   const lines = [
     `Run: ${details.id}`,
-    `Status: ${HISTORY_RUN_STATUS_LABEL[details.status]}`,
+    `Status: ${status}`,
     `Timestamp: ${run ? new Date(run.launchedAt).toISOString() : 'unknown'}`,
     `Agent: ${config?.agent ?? 'unknown'}`,
     `Model: ${model ?? 'unknown'}`,
@@ -487,14 +544,14 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
   const { status, resumable } = cliRunStanding({
     resumable: entry.resumable,
-    phase: entry.status,
+    outcome: entry.outcome,
     paused: entry.paused,
   });
   return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    // The model the run is on, as the listing folds it from the run's
+    // The model the run is on, as the listing derives it from the run's
     // snapshots; the record keeps the model it was launched with.
     model: entry.model ?? config.model,
     status,

@@ -46,8 +46,8 @@ interface ProgressApiKeyRetryControllerDeps {
     provider: ApiKeyProviderId,
   ): Effect.Effect<void, ApiKeyPromptFailed, Secrets>;
   isRetryPending(stream: RunId, requestId: string): boolean;
-  /** Settles the retry on the user's own key; a refusal fails it, for the
-   *  host arm that took the request to present. */
+  /** Finishes the retry on the user's own key; a refusal fails it, for the
+   *  host case that took the request to present. */
   triggerRetry(
     stream: RunId,
     requestId: string,
@@ -58,7 +58,7 @@ interface ProgressApiKeyRetryControllerDeps {
  * The key-entry half of a retry's move onto the user's own credential. Which
  * provider and whether a changed key is required are the run's decision,
  * carried on the retry request; this only makes sure that key exists before
- * the retry is settled on it.
+ * the retry is finished on it.
  */
 export class ProgressApiKeyRetryController {
   private readonly deps: ProgressApiKeyRetryControllerDeps;
@@ -67,7 +67,7 @@ export class ProgressApiKeyRetryController {
   }
 
   /** Switch this retry onto the user's own key and relaunch it. The host
-   *  arm that took the request runs this where it stands. */
+   *  case that took the request runs this where it stands. */
   readonly useOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.useOwnApiKey',
   )(function* (

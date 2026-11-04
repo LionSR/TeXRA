@@ -1,5 +1,6 @@
 // Host-neutral parsing/formatting for the child-run delivery-envelope XML
-// blocks whose tag vocabulary @shared/deliveryTags owns (`DELIVERY_TAGS`).
+// blocks whose tag vocabulary @shared/deliveryTags owns
+// (`DELIVERY_TAG_PATTERN`).
 // These blocks are queued follow-up messages addressed to the orchestrator
 // *model*, injected into the conversation as user turns.
 //
@@ -13,11 +14,7 @@
 
 import escapeRegExp from 'escape-string-regexp';
 import { Result, Schema } from 'effect';
-import {
-  DELIVERY_TAG,
-  DELIVERY_TAGS,
-  type DeliveryTagName,
-} from '@shared/deliveryTags';
+import { DELIVERY_TAG, DELIVERY_TAG_PATTERN } from '@shared/deliveryTags';
 import type {
   SubagentProgressUpdate,
   ScriptDeliverySummary,
@@ -32,36 +29,36 @@ import {
   stripControlCharacters,
 } from '@utils/text/stringUtils';
 
-// Derived from the single owned DELIVERY_TAGS list (@shared/deliveryTags), so
-// a future child-run kind only needs one entry there and can never leak as raw
-// XML into the CLI transcript or the queued follow-ups panel.
-const DELIVERY_TAG_NAMES = DELIVERY_TAGS.map((entry) => entry.tag);
-const DELIVERY_TAG_ALTERNATION = DELIVERY_TAG_NAMES.join('|');
+// Every recognizer below is derived from the one owned pattern
+// (@shared/deliveryTags), so a new child-run kind can never leak as raw XML
+// into the CLI transcript or the queued follow-ups panel.
+//
 // `\b` after the alternation is NOT a safe tag-name terminator here: `-` is a
 // non-word character, so `\b` also matches between `t` and `-` inside e.g.
-// `codex-result-partial`, letting a future hyphen-extended tag prefix-match
-// an existing one (no current DELIVERY_TAGS entry is a prefix of another, but
-// the vocabulary is a shared, growing const). Every producer
-// (deliveryEnvelope.ts / subagentResults.ts / github/formatUtils.ts) only ever
-// follows a tag name with whitespace (attributes), `>` (bare open, e.g.
-// `<run-activity>`), or the exact `/>` self-closing delimiter (bare open, e.g.
-// `<subagent-result>`), so anchor
-// on those delimiters instead of accepting any slash continuation.
+// `script-result-partial`, letting a hyphen-extended tag prefix-match an
+// existing one. Every producer (`formatDelivery`, `formatSubagentProgress`, a
+// plugin's activity wrapper) only ever follows a tag name with whitespace
+// (attributes), `>` (a bare open, as an activity report's), or the exact `/>`
+// self-closing delimiter, so anchor on those delimiters instead of accepting
+// any slash continuation.
 const TAG_NAME_END = '(?=[\\s>]|/>)';
 const DELIVERY_TAG_RE = new RegExp(
-  `^<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}`,
+  `^<(${DELIVERY_TAG_PATTERN})${TAG_NAME_END}`,
 );
 // Embedded-block variants of the same recognizer, for delivery-envelope
 // blocks that appear mid-stream inside assistant-role text rather than as a
 // standalone follow-up message (see findIncompleteEmbeddedSubagentFollowup /
 // summarizeEmbeddedSubagentFollowups below).
 const EMBEDDED_DELIVERY_BLOCK_RE = new RegExp(
-  `<(?:${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*/>|<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*>[\\s\\S]*?</\\1>`,
+  `<(?:${DELIVERY_TAG_PATTERN})${TAG_NAME_END}[^>]*/>|<(${DELIVERY_TAG_PATTERN})${TAG_NAME_END}[^>]*>[\\s\\S]*?</\\1>`,
   'g',
 );
 const EMBEDDED_DELIVERY_OPEN_RE = new RegExp(
-  `<(${DELIVERY_TAG_ALTERNATION})${TAG_NAME_END}[^>]*(?:/>|>)`,
+  `<(${DELIVERY_TAG_PATTERN})${TAG_NAME_END}[^>]*(?:/>|>)`,
   'g',
+);
+const EMBEDDED_DELIVERY_TAG_RE = new RegExp(
+  `<(?:${DELIVERY_TAG_PATTERN})${TAG_NAME_END}`,
 );
 const EMPTY_FOLLOW_UP_SUMMARY = '(empty follow-up)';
 const RESULT_RESPONSE_PREVIEW_LINES = 12;
@@ -74,10 +71,8 @@ const RESULT_RESPONSE_PREVIEW_CHARS = 1400;
  * panel, and the progress-view message bubble. Leading whitespace is allowed
  * because producers hand blocks to the render surfaces untrimmed.
  */
-export function deliveryTagOf(text: string): DeliveryTagName | undefined {
-  // Safe cast: the pattern's only alternation group is the DELIVERY_TAGS tag
-  // names, so a match can only capture one of those values.
-  return DELIVERY_TAG_RE.exec(text.trim())?.[1] as DeliveryTagName | undefined;
+export function deliveryTagOf(text: string): string | undefined {
+  return DELIVERY_TAG_RE.exec(text.trim())?.[1];
 }
 
 function followupText(text: unknown): string | undefined {
@@ -180,7 +175,7 @@ export function parseScriptDeliverySummary(
 }
 
 /** The envelopes that carry a `<script-summary>` element. */
-export const SUMMARIZED_TAGS: ReadonlySet<DeliveryTagName> = new Set([
+export const SUMMARIZED_TAGS: ReadonlySet<string> = new Set([
   DELIVERY_TAG.scriptResult,
   DELIVERY_TAG.scriptError,
 ]);
@@ -345,10 +340,8 @@ export function summarizeSubagentFollowup(text: unknown): string {
   }
 
   // Result/error envelopes share one shape across families
-  // (deliveryEnvelope.ts's `formatDelivery`): subagent-*, background-*,
-  // codex-*, claude-agent-*. Agent-CLI producers (codex.ts, claudeAgent.ts)
-  // don't set an `agent` attribute, so fall back to the tag's own family name
-  // (e.g. `codex-result` → `codex`) rather than the generic `subagent`.
+  // (deliveryEnvelope.ts's `formatDelivery`); one without an `agent`
+  // attribute is named by its family.
   if (tag.endsWith('-result')) {
     const agent = attr(trimmed, 'agent') ?? tag.slice(0, -'-result'.length);
     const status = attr(trimmed, 'status') ?? 'completed';
@@ -370,9 +363,9 @@ export function summarizeSubagentFollowup(text: unknown): string {
     return message ? `${head}\n${decodeXmlEntities(message)}` : head;
   }
 
-  // Activity envelopes (github-webhook-activity) wrap a
-  // plain sanitized text body — no attribute schema, so surface its first
-  // line instead of the raw wrapper tags.
+  // Activity envelopes (`<family>-activity`) wrap a plain sanitized text
+  // body with no attribute schema, so surface its first line instead of the
+  // raw wrapper tags.
   const body = elementBody(trimmed, tag);
   const firstLine = body?.split('\n')[0]?.trim();
   return firstLine || normalized;
@@ -382,10 +375,6 @@ type IncompleteEmbeddedSubagentFollowup = {
   readonly index: number;
   readonly block: string;
 };
-
-function containsEmbeddedDeliveryTag(text: string): boolean {
-  return DELIVERY_TAG_NAMES.some((tag) => text.includes(`<${tag}`));
-}
 
 function findIncompleteEmbeddedSubagentFollowup(
   text: string,
@@ -407,13 +396,13 @@ function findIncompleteEmbeddedSubagentFollowup(
 
 export function hasIncompleteEmbeddedSubagentFollowup(text: string): boolean {
   return (
-    containsEmbeddedDeliveryTag(text) &&
+    EMBEDDED_DELIVERY_TAG_RE.test(text) &&
     findIncompleteEmbeddedSubagentFollowup(text) !== undefined
   );
 }
 
 export function summarizeEmbeddedSubagentFollowups(text: string): string {
-  if (!containsEmbeddedDeliveryTag(text)) return text;
+  if (!EMBEDDED_DELIVERY_TAG_RE.test(text)) return text;
   const completeSummarized = text.replaceAll(
     EMBEDDED_DELIVERY_BLOCK_RE,
     (block) => summarizeSubagentFollowup(block),

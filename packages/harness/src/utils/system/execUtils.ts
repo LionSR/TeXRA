@@ -2,14 +2,14 @@ import * as path from 'node:path';
 
 import { Duration, Effect, Fiber, Result, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
-import { quote as shellQuote } from 'shell-quote';
+import * as CommandLine from 'effect/process/CommandLine';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { ExecResult } from '@shared/schemas';
-import type { SettingsStores } from '@shared/config/settings';
+import { Settings, type SettingsStores } from '@shared/config/settings';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { inheritedEnv } from '@utils/system/envFlags';
-import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
 import { IS_WINDOWS, withCommandDirs } from '@utils/system/platformPaths';
 import { toWindowsCommand } from '@utils/system/windowsCommandLine';
 import type {
@@ -23,15 +23,63 @@ const CHANNEL = 'execUtils';
 /** SIGTERM to SIGKILL escalation for every teardown the scope runs. */
 const FORCE_KILL_AFTER = Duration.seconds(5);
 const DEFAULT_MAX_BUFFER = 100_000_000;
-/** The sentinel prefixed to a POSIX shell's script, reading the lifeline on
- *  fd 3. On its own line, so the shell's error messages quote only the
- *  command. */
-const LIFELINE_SENTINEL =
-  '( (read x <&3; kill -s KILL 0) >/dev/null 2>&1 & ); exec 3<&-\n';
+/**
+ * A POSIX shell's script around `command`: a sentinel reading the lifeline
+ * on fd 3, then the command in a subshell, so a `wait` in it does not wait
+ * on the sentinel. Once the command ends the shell stops the sentinel and
+ * reaps it itself: an orphaned sentinel would stay in the process group as
+ * a zombie until init reaps it, and the spawner's teardown waits for the
+ * group to empty (seconds per command under a slow-reaping init). The
+ * command starts on line 2, so the shell's error messages number its lines
+ * as before.
+ */
+const withLifeline = (command: string): string =>
+  '(read x <&3; kill -s KILL 0) >/dev/null 2>&1 & texra_lifeline=$!; exec 3<&-; (\n' +
+  `${command}\n)\n` +
+  'texra_status=$?; kill $texra_lifeline 2>/dev/null; wait $texra_lifeline 2>/dev/null; exit $texra_status\n';
 
 function normalizeOutput(text: string | null | undefined): string {
   return text?.trim() ?? '';
 }
+
+/**
+ * Git author environment for a spawned process.
+ *
+ * When the calling session's workspace marks agent commits, these are merged
+ * into the environment of every command {@link executeCommand} runs, so any
+ * `git commit` carries the configured agent identity. Read at spawn time from
+ * the setting slots the caller named on the command options, not from a value
+ * applied once for the whole process: a process holding several projects
+ * attributes each project's commits by that project's own setting. Empty when
+ * the caller has no workspace, or when commit marking is off.
+ */
+const gitAuthorEnv = Effect.fn('gitAuthorEnv')(function* (
+  settings: SettingsStores | undefined,
+) {
+  if (!settings) return {};
+  if (
+    !(yield* Settings.get<boolean>(
+      settings,
+      WorkspaceStateKey.GIT_MARK_COMMITS,
+    ))
+  ) {
+    return {};
+  }
+  const name = yield* Settings.get<string>(
+    settings,
+    WorkspaceStateKey.GIT_AUTHOR_NAME,
+  );
+  const email = yield* Settings.get<string>(
+    settings,
+    WorkspaceStateKey.GIT_AUTHOR_EMAIL,
+  );
+  return {
+    GIT_AUTHOR_NAME: name,
+    GIT_AUTHOR_EMAIL: email,
+    GIT_COMMITTER_NAME: name,
+    GIT_COMMITTER_EMAIL: email,
+  };
+});
 
 /**
  * The complete environment a command runs with: {@link inheritedEnv} on the
@@ -185,15 +233,14 @@ function buildCommand(
   if (IS_WINDOWS) return ChildProcess.make(command, { ...common, shell: true });
   // A POSIX shell runs as its own process group, so a stop reaches piped
   // children and backgrounded jobs, and carries a lifeline: fd 3 is a pipe
-  // only this process holds the write end of. The sentinel below, forked into
-  // the group and out of the shell's job table (so a `wait` in the command
-  // does not wait on it), blocks reading it; when this process dies by any
-  // means, a SIGKILL or a crash included, the kernel closes the write end and
-  // the sentinel kills the whole group. The shell closes its own copy before
-  // the command runs, so nothing the command starts inherits it. A stop is
-  // still the scope's release (SIGTERM to the group, SIGKILL after five
-  // seconds), which ends the sentinel with the rest of the group.
-  return ChildProcess.make(`${LIFELINE_SENTINEL}${command}`, {
+  // only this process holds the write end of. The sentinel (`withLifeline`)
+  // blocks reading it; when this process dies by any means, a SIGKILL or a
+  // crash included, the kernel closes the write end and the sentinel kills
+  // the whole group. The shell closes its own copy before the command runs,
+  // so nothing the command starts inherits it. A stop is still the scope's
+  // release (SIGTERM to the group, SIGKILL after five seconds), which ends
+  // the sentinel with the rest of the group.
+  return ChildProcess.make(withLifeline(command), {
     ...common,
     shell: true,
     detached: true,
@@ -239,8 +286,12 @@ function describeFailure(error: PlatformError): string {
   return toErrorMessage(error.reason.cause ?? error.reason._tag);
 }
 
+/** The command for a log or a message: argv quoted as this platform's
+ *  programs split a command line, with control characters escaped. */
 function displayCommand(command: string | string[]): string {
-  return Array.isArray(command) ? shellQuote(command) : command;
+  return Array.isArray(command)
+    ? CommandLine.display(command, { format: IS_WINDOWS ? 'windows' : 'posix' })
+    : command;
 }
 
 function resultFromOutcome(
@@ -402,7 +453,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   }
   // The git identity is a setting read; a failed read fails this command,
   // reported like a spawn failure, rather than dropping the identity.
-  const authorEnv = yield* Effect.result(getGitAuthorEnv(options.settings));
+  const authorEnv = yield* Effect.result(gitAuthorEnv(options.settings));
   if (authorEnv._tag === 'Failure') {
     const message = toErrorMessage(authorEnv.failure);
     yield* logError(message);

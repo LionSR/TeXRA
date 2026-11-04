@@ -5,15 +5,15 @@
   "type": "module",
   "description": "Runs @texra-ai/llm and @texra-ai/harness from packed tarballs, as a consumer would",
   "scripts": {
-    "start": "node 01-llm-turn.ts && node 02-session-and-events.ts && node 03-custom-tools-and-plugins.ts && node 04-approvals-and-requests.ts && node 05-durable-resume-and-fork.ts && node 06-views-and-transcript.ts"
+    "start": "node 01-llm-turn.ts && node 02-session-and-events.ts && node 03-custom-tools-and-plugins.ts && node 04-approvals-and-requests.ts && node 05-durable-resume-and-fork.ts && node 06-views-and-transcript.ts && node 07-programmed-path.ts && node 08-crash-and-resume.ts && node 09-goal-strategies.ts && node 10-external-plugin.ts"
   },
   "dependencies": {
-    "@effect/platform-node": "^4.0.6",
-    "@effect/sql-sqlite-node": "^4.0.6",
+    "@effect/platform-node": "^4.1.0",
+    "@effect/sql-sqlite-node": "^4.1.0",
     "@texra-ai/harness": "file:harness.tgz",
     "@texra-ai/llm": "file:llm.tgz",
-    "effect": "^4.0.6",
-    "undici": "^8.0.2"
+    "acme-notes": "file:acme-notes.tgz",
+    "effect": "^4.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.19.0"

@@ -54,9 +54,6 @@ class DoctorProbeFailed extends Schema.TaggedError<DoctorProbeFailed>()(
   },
 ) {}
 
-const probeFailure = (cause: unknown): DoctorProbeFailed =>
-  new DoctorProbeFailed({ cause });
-
 /**
  * The probes only the CLI root can build: platform init either failed
  * (`degraded`, which skips the checks that need it) or produced the stores
@@ -326,7 +323,9 @@ function checkConfig(
 function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
   return deps.usageLoggingOptOut.pipe(
     // A config store that throws reports as this check's failure.
-    Effect.catchDefect((cause) => Effect.fail(probeFailure(cause))),
+    Effect.catchDefect((cause) =>
+      Effect.fail(new DoctorProbeFailed({ cause })),
+    ),
     Effect.map((optOut) => {
       if (optOut?.source === 'environment') {
         return skip(
@@ -365,58 +364,56 @@ function checkTelemetry(deps: ReadyDoctorInput): Effect.Effect<DoctorCheck> {
 
 type DoctorServices = FileSystem.FileSystem | ChildProcessSpawner;
 
-export function buildDoctorReport(
+export const buildDoctorReport = Effect.fn('buildDoctorReport')(function* (
   context: CliContext,
   input: DoctorInput,
-): Effect.Effect<DoctorReport, never, DoctorServices> {
-  return Effect.gen(function* () {
-    // A platform-init failure takes out every dependency-based check
-    // (models/telemetry), so surface it once here rather than as N
-    // unrelated-looking failures. The checks that do not need the platform
-    // (node, workspace, resources, LaTeX, config) still run.
-    // The checks are independent, so they run at once; the rows keep their
-    // order.
-    const [workspace, resources, sessionDependentChecks, latex, config] =
-      yield* Effect.all(
-        [
-          checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
-          checkDirectory(
-            'resources',
-            'Packaged resources',
-            context.resourcesPath,
-            'read',
-          ),
-          input.kind === 'ready'
-            ? Effect.all([checkModels(input), checkTelemetry(input)], {
-                concurrency: 'unbounded',
-              })
-            : Effect.succeed([
-                failFromError(
-                  'platform',
-                  'Platform init',
-                  'Could not initialize the TeXRA platform.',
-                  input.initError,
-                ),
-              ]),
-          checkLatex(),
-          checkConfig(context),
-        ],
-        { concurrency: 'unbounded' },
-      );
-    const checks: DoctorCheck[] = [
-      checkNode(process.versions.node),
-      workspace,
-      resources,
-      ...sessionDependentChecks,
-      ...latex,
-      config,
-    ];
-    return {
-      ok: !checks.some((check) => check.status === 'fail'),
-      checks,
-    };
-  });
-}
+): Effect.fn.Return<DoctorReport, never, DoctorServices> {
+  // A platform-init failure takes out every dependency-based check
+  // (models/telemetry), so surface it once here rather than as N
+  // unrelated-looking failures. The checks that do not need the platform
+  // (node, workspace, resources, LaTeX, config) still run.
+  // The checks are independent, so they run at once; the rows keep their
+  // order.
+  const [workspace, resources, sessionDependentChecks, latex, config] =
+    yield* Effect.all(
+      [
+        checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
+        checkDirectory(
+          'resources',
+          'Packaged resources',
+          context.resourcesPath,
+          'read',
+        ),
+        input.kind === 'ready'
+          ? Effect.all([checkModels(input), checkTelemetry(input)], {
+              concurrency: 'unbounded',
+            })
+          : Effect.succeed([
+              failFromError(
+                'platform',
+                'Platform init',
+                'Could not initialize the TeXRA platform.',
+                input.initError,
+              ),
+            ]),
+        checkLatex(),
+        checkConfig(context),
+      ],
+      { concurrency: 'unbounded' },
+    );
+  const checks: DoctorCheck[] = [
+    checkNode(process.versions.node),
+    workspace,
+    resources,
+    ...sessionDependentChecks,
+    ...latex,
+    config,
+  ];
+  return {
+    ok: !checks.some((check) => check.status === 'fail'),
+    checks,
+  };
+});
 
 export function doctorExitCode(report: DoctorReport): number {
   return report.ok ? CliExitCode.Success : CliExitCode.ModelOrNetworkError;

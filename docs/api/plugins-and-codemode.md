@@ -78,23 +78,23 @@ export const latexMetricsPlugin = definePlugin({
   id: 'latex-metrics',
   toggle: 'on',
   availability: ALWAYS_AVAILABLE,
-  tools: {
-    count_equations: countEquationsTool,
-  },
+  tools: [countEquationsTool],
 });
 ```
 
 A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 
 - **`id`**: stable lowercase identifier (`[a-z0-9-]+`), persisted in settings and `tools.offered` rows.
-- **`tools`**: map of tool name to `ITool`. Every tool name is unique across the process's [`ToolRegistry`](./harness/plugins#toolregistry).
+- **`tools`**: list of `ITool` values, registered by each tool's `definition.name`. Every tool name is unique across the process's [`ToolRegistry`](./harness/plugins#toolregistry).
 - **`availability` and `toggle`**: `availability` probes external dependencies ([`ALWAYS_AVAILABLE`](./harness/plugins#always_available) or [`probeTool`](./harness/node#probetool)); missing dependencies withhold the plugin's tools. `toggle: 'on' | 'off'` creates a user setting switch seeded on first install.
 - **`injectedWhen`**: maps tool names to a boolean setting key (or `true`) to inject those tools into every tool-using agent while the plugin is enabled.
 - **`processLayer` and `sessionLayer`**: lazy Effect `Layer`s ([`ProcessPluginLayer`](./harness/plugins#processpluginlayer), [`SessionPluginLayer`](./harness/plugins#sessionpluginlayer)) built when a step first pins the plugin. Work that outlives a step keeps the session layer alive with [`PluginHold`](./harness/plugins#pluginhold).
 - **`prompt`**: [`PromptSection`](./harness/plugins#promptsection) appended to the system prompt while active.
 - **`decision`**: [`RequestDecisionHook`](./harness/plugins#requestdecisionhook) run when a request of the plugin's kind is decided.
-- **`arms`**: [`PluginArm`](./harness/plugins#pluginarm) schemas and upcasters for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`).
+- **`factKinds`**: [`FactKind`](./harness/plugins#factkind) schemas, upcasters and fork policy for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`; `fork: 'copy'` carries a run's row into its forks).
 - **`agentBlock`**: [`AgentBlock`](./harness/plugins#agentblock) claiming a top-level YAML key in agent definitions (read via [`agentBlockOf`](./harness/plugins#agentblockof)) to run a structured recipe script.
+
+An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail? }` from one observation of the asking workspace. The check owns optional-detail failures: log the cause and retain an availability result already established. The harness owns the complete check's deadline, cached results and refresh.
 
 ### Runtime services inside a tool body
 

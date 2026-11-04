@@ -2,9 +2,10 @@ name: golden_crash
 description: The crash-point conformance run, truncated after each of its commits and resumed.
 tools:
   - read_file
+  - edit_file
   - bash
   - agent
   - script
 
 prompt: |-
-  GOLDEN-CRASH: two calls, then a script with an owned child.
+  GOLDEN-CRASH: two calls, an edit of the file they read, then a script with an owned child.

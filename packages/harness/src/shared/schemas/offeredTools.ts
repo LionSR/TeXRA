@@ -6,14 +6,10 @@
  */
 import { Schema } from 'effect';
 
+import { Sha256Schema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 
 /* ---------------------------------------------------------- tools.offered */
-
-/** A content address: the sha256 of a value's canonical JSON. */
-export const Sha256Schema = Schema.String.check(
-  Schema.isPattern(/^[0-9a-f]{64}$/),
-);
 
 /** One offered tool and its identity: a call to it runs only while the tool
  *  the run would dispatch still has this name, digest, plugin and revision. */
@@ -31,9 +27,10 @@ const OfferedToolSchema = Schema.Struct({
   plugin: Schema.String.check(Schema.isMinLength(1)),
   revision: Schema.String.check(Schema.isMinLength(1)),
   /** Whether the step's requests send the model this declaration. False
-   *  while script-only tools are on (`GlobalStateKey.SCRIPT_ONLY`) for
-   *  every tool but `script` and the run's own: the model reaches it from
-   *  inside a script alone. Not part of the identity. */
+   *  for a script's own function (`self`), and, while script-only tools
+   *  are on (`GlobalStateKey.SCRIPT_ONLY`), for every tool but `script`
+   *  and the run's own: the model reaches it from inside a script alone.
+   *  Not part of the identity. */
   sent: Schema.Boolean,
 });
 export type OfferedTool = typeof OfferedToolSchema.Type;

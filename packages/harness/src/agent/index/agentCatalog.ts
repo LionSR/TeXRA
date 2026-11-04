@@ -19,10 +19,9 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
   type AgentDirectoriesFailed,
-  type StateReadFailed,
 } from '@platform/interfaces';
-import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { StateReadFailed } from '@shared/config/settings';
 import type {
   AgentDelegationScope,
   AgentScanIssue,
@@ -45,7 +44,7 @@ import {
   type AgentCustomizeRefused,
 } from './AgentDirectoryService';
 import { scanPluginAgents } from './pluginAgents';
-import type { AgentEntry } from './agentEntry';
+import type { AgentCatalogServices, AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
 
@@ -124,7 +123,7 @@ export interface AgentCatalogShape {
     AgentEntry,
     AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
-  /** The workspace's agent selection and team presets, over this catalog. */
+  /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
     stores: WorkspaceAgentsStores,
   ) => WorkspaceAgentsController<AgentEntry>;
@@ -186,7 +185,7 @@ interface CatalogState {
   loadFailure: string | undefined;
   /** A source changed and its reload has not begun; cleared as a scan starts. */
   changePending: boolean;
-  readonly teams: AgentDirectories['Service']['teams'];
+  readonly teamMembers: AgentDirectories['Service']['teamMembers'];
 }
 
 /** Scan every agent source and publish the result into `state`. */
@@ -265,7 +264,7 @@ function catalogReads(state: CatalogState) {
     new WorkspaceAgentsController<AgentEntry>({
       repoState,
       globalState,
-      teams: state.teams,
+      teamMembers: state.teamMembers,
       getAgents: list,
       resolveAgent: get,
     });
@@ -327,7 +326,7 @@ export class AgentCatalog extends Context.Service<
         skippedFiles: Object.freeze([]),
         loadFailure: undefined,
         changePending: false,
-        teams: Context.get(services, AgentDirectories).teams,
+        teamMembers: Context.get(services, AgentDirectories).teamMembers,
       };
       // Every load enters one lane: a fiber that arrives while a load runs
       // waits for it, and a failed scan fails only its own caller.
@@ -356,25 +355,24 @@ export class AgentCatalog extends Context.Service<
       const reads = catalogReads(state);
       const { resolve, newerBuiltIn } = reads;
 
-      const forLaunch = (
+      const forLaunch = Effect.fn('forLaunch')(function* (
         stores: WorkspaceAgentsStores,
         identifier: string,
         source?: AgentSource | null,
-      ) =>
-        Effect.gen(function* () {
-          const entry =
-            (yield* Effect.andThen(settled, () =>
-              resolve(stores, identifier, source),
-            )) ??
-            (yield* Effect.andThen(refresh, () =>
-              resolve(stores, identifier, source),
-            ));
-          if (entry) return entry;
-          return yield* new AgentNotFound({
-            agent: identifier,
-            message: missMessage(state, identifier),
-          });
+      ) {
+        const entry =
+          (yield* Effect.andThen(settled, () =>
+            resolve(stores, identifier, source),
+          )) ??
+          (yield* Effect.andThen(refresh, () =>
+            resolve(stores, identifier, source),
+          ));
+        if (entry) return entry;
+        return yield* new AgentNotFound({
+          agent: identifier,
+          message: missMessage(state, identifier),
         });
+      });
 
       const customize = (entry: AgentEntry, change: AgentCustomization) =>
         customizeCopy(entry, change, newerBuiltIn(entry)).pipe(

@@ -1,28 +1,17 @@
-import '@test/support/defaultSessionTestSetup';
-
-import { it } from '@effect/vitest';
-import { Effect, Exit, Result, Schema, Scope } from 'effect';
-import {
-  afterEach,
-  beforeAll,
-  describe,
-  expect,
-  onTestFinished,
-  vi,
-} from 'vitest';
+import { layer } from '@effect/vitest';
+import { Effect, Result, Schema } from 'effect';
+import { beforeAll, expect, vi } from 'vitest';
+import { APPROVAL_POLICY_CONFIG_KEY } from '@texra-ai/harness/schemas';
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
-import { type ConfigProvider } from '@platform/interfaces';
-import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
-import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { fakeConfig, FakeStateStore } from '@test/support/FakePlatform';
-import { createTestSession } from '@test/support/sessionTestUtils';
+import { SessionGraph, TestSession } from '@test/support/testKernel';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
   SettingsViewInboundMessageSchema,
 } from '@texra/shared/settingsView/settingsViewMessages';
+import type { ConfigProvider } from '@texra-ai/harness/host';
 
 // The LaTeX page spawns the LaTeX probes; a fixed status keeps the suite off
 // the machine's tools, as the harness's unprobed tool availability does for
@@ -74,34 +63,27 @@ function createStubSettingsBindings(): DesktopSettingsIpcOptions['bindings'] {
 
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
-const liveScopes: Scope.Closeable[] = [];
-
-async function createSettingsFixture(config: ConfigProvider) {
-  // The paper's three setting slots reach the body through its session's
-  // roots, as the desktop passes them.
-  const session = await Effect.runPromise(
-    createTestSession({
-      roots: {
-        ...testWorkspaceRoots(),
-        storage: '/workspace/settings-ipc/storage',
-        config,
-        workspaceState: new FakeStateStore(),
-        repoState: new FakeStateStore(),
-        globalState: new FakeStateStore(),
-      },
-    }),
-  );
-  // One root holds one session: released at test end, or the next fixture
-  // over this root would get this test's session and its workspace state.
-  onTestFinished(() => Effect.runPromise(closeSessionOf(session)));
-  // The IPC subscribes to the process app-signal bus, so a fixture whose
-  // scope stayed open would keep reacting to later tests' emits.
-  const scope = Scope.makeUnsafe();
-  liveScopes.push(scope);
-  const settings = testRuntime().runSync(
-    createDesktopSettingsIpc({
+/**
+ * The settings IPC over a session whose roots carry `config` and stores of
+ * their own, for the test's scope: one root holds one session, and the IPC
+ * subscribes to the process app-signal bus, so both end with the test.
+ */
+const createSettingsFixture = (config: ConfigProvider) =>
+  Effect.gen(function* () {
+    // The paper's three setting slots reach the body through its session's
+    // roots, as the desktop passes them.
+    const session = yield* TestSession.open({
+      ...testWorkspaceRoots(),
+      storage: '/workspace/settings-ipc/storage',
+      config,
+      workspaceState: new FakeStateStore(),
+      repoState: new FakeStateStore(),
+      globalState: new FakeStateStore(),
+    });
+    const runtime = yield* SessionGraph.runtime;
+    const ipc = yield* createDesktopSettingsIpc({
       spawn: (program) => {
-        testRuntime().runFork(program);
+        runtime.runFork(program);
       },
       bindings: createStubSettingsBindings(),
       signInPresentation: {
@@ -111,26 +93,24 @@ async function createSettingsFixture(config: ConfigProvider) {
       },
       resourcesPath: '/resources',
       roots: session.roots,
-    }).pipe(
-      // Runs an owned command's program the way the window's router does.
-      Effect.map((ipc) => ({
+    });
+    return {
+      settings: {
         ...ipc,
         // Whether the shared inbound schema takes the message; a message it
-        // rejects runs a warning and nothing else.
+        // rejects runs a warning and nothing else. Runs an owned command's
+        // program the way the window's router does.
         handleMessage(message: Parameters<typeof ipc.route>[0]) {
-          testRuntime().runFork(ipc.route(message));
+          runtime.runFork(ipc.route(message));
           return Result.isSuccess(
             Schema.decodeUnknownResult(SettingsViewInboundMessageSchema)(
               message,
             ),
           );
         },
-      })),
-      Scope.provide(scope),
-    ),
-  );
-  return { settings };
-}
+      },
+    };
+  });
 
 function flushAsyncWork(): Promise<void> {
   return new Promise((resolve) =>
@@ -138,40 +118,43 @@ function flushAsyncWork(): Promise<void> {
   );
 }
 
-describe('desktop settings IPC', () => {
-  beforeAll(async () => {
-    ({ createDesktopSettingsIpc } =
-      await import('@desktop/main/desktopSettingsIpc'));
-  });
+// Live clock: the IPC's programs settle on real event-loop turns.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'desktop settings IPC',
+  (it) => {
+    beforeAll(async () => {
+      ({ createDesktopSettingsIpc } =
+        await import('@desktop/main/desktopSettingsIpc'));
+    });
 
-  afterEach(() => {
-    for (const scope of liveScopes.splice(0))
-      testRuntime().runFork(Scope.close(scope, Exit.void));
-  });
+    it.effect(
+      'writes the approval policy to the local config scope, not global or the project file',
+      () =>
+        Effect.gen(function* () {
+          const config = fakeConfig();
+          const update = vi.spyOn(config, 'update');
 
-  it('writes the bash-approval toggle to the local config scope, not global or the project file', async () => {
-    const config = fakeConfig();
-    const update = vi.spyOn(config, 'update');
+          const { settings } = yield* createSettingsFixture(config);
 
-    const { settings } = await createSettingsFixture(config);
+          expect(
+            settings.handleMessage({
+              command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
+              key: APPROVAL_POLICY_CONFIG_KEY,
+              value: 'yolo',
+            }),
+          ).toBe(true);
+          yield* Effect.promise(flushAsyncWork);
 
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: BASH_APPROVAL_CONFIG_KEY,
-        value: false,
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(config.get('toolUse.requireBashApproval')).toBe(false);
-    // Security-adjacent scope pin: a per-workspace approval bypass must never
-    // be written to the global config target (see issue #7085), nor to the
-    // project file a cloned repository controls.
-    expect(update).toHaveBeenCalledWith(
-      'toolUse.requireBashApproval',
-      false,
-      'local',
+          expect(config.get(APPROVAL_POLICY_CONFIG_KEY)).toBe('yolo');
+          // Security-adjacent scope pin: a per-workspace approval bypass must
+          // never be written to the global config target (see issue #7085),
+          // nor to the project file a cloned repository controls.
+          expect(update).toHaveBeenCalledWith(
+            APPROVAL_POLICY_CONFIG_KEY,
+            'yolo',
+            'local',
+          );
+        }),
     );
-  });
-});
+  },
+);

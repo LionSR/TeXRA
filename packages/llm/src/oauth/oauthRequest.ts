@@ -80,7 +80,7 @@ interface OAuthPostOptions {
  * the request or its body cannot complete within the timeout; status handling
  * is the caller's.
  */
-export const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
+const postOAuth = Effect.fn('oauthRequest.postOAuth')(function* (
   options: OAuthPostOptions,
 ) {
   const client = yield* HttpClient.HttpClient;

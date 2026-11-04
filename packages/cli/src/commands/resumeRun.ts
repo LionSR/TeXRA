@@ -79,185 +79,181 @@ const workflowRecoveryInputsAreDurable = Effect.fn(
  * Continue a stored session through the session's resume: a tool-use
  * session reopens the interactive chat TUI (so a usable terminal is
  * required), whose `/resume` calls it; a workflow run resumes headless under
- * its persisted run id, in the same run skeleton as `texra run`. The chat arm names the session with its persisted
+ * its persisted run id, in the same run skeleton as `texra run`. The chat case names the session with its persisted
  * record rather than mounting the TUI itself: `defineCliCommand` mounts it
- * once this program has settled. This entry never suppresses the platform's
+ * once this program has finished. This entry never suppresses the platform's
  * own signal handlers: the window below (the ownership gate, the resume)
  * still needs a graceful handler, and `runChat` hands ownership over once Ink
  * mounts.
  */
-export function runResumeCommand(
+export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   context: CliContext,
   id: RunId,
-  /** `--fork`: continue a new task holding the conversation as it stood at
-   *  its latest settled point. */
   fork = false,
 ) {
-  return Effect.gen(function* () {
-    const stores = yield* initCliPlatform(context);
-    const session = yield* stores.session;
-    const store = session.records(id);
-    const configResult = yield* Effect.result(store.readConfig());
-    if (Result.isFailure(configResult)) {
-      writeTextStderr(loadFailureMessage(id, configResult.failure));
+  const stores = yield* initCliPlatform(context);
+  const session = yield* stores.session;
+  const store = session.records(id);
+  const configResult = yield* Effect.result(store.readConfig());
+  if (Result.isFailure(configResult)) {
+    writeTextStderr(loadFailureMessage(id, configResult.failure));
+    return CliExitCode.AgentError;
+  }
+  const config = configResult.success;
+  if (!config) {
+    writeTextStderr(`Run not found: ${id}`);
+    return CliExitCode.Usage;
+  }
+  const documentTask = isTaskConfig(config);
+  if (fork && documentTask) {
+    writeTextStderr(
+      `Task ${id} is a document task: only a conversation can be forked.`,
+    );
+    return CliExitCode.Usage;
+  }
+  // A fork reads the source's committed rows, whoever holds it, and the
+  // chat continues the new task.
+  if (fork) {
+    const terminalFailure = interactiveTerminalFailure(context);
+    if (terminalFailure) {
+      writeTextStderr(
+        formatInteractiveTerminalFailure(terminalFailure, {
+          headlessMessage: `Forking continues the new task in an interactive chat: run \`${context.commandName} resume ${id} --fork\` in a terminal.`,
+          dumbTerminalCommand: 'resume',
+          dumbTerminalOptions: { commandName: context.commandName },
+        }),
+      );
+      return CliExitCode.Usage;
+    }
+    const forked = yield* Effect.result(forkRun(session, id, null));
+    if (Result.isFailure(forked)) {
+      writeTextStderr(requestErrorText(forked.failure));
+      return CliExitCode.Usage;
+    }
+    const forkId = forked.success;
+    const forkConfig = yield* session.records(forkId).readConfig();
+    if (!forkConfig) {
+      writeTextStderr(`Task ${forkId} was forked without a configuration.`);
       return CliExitCode.AgentError;
     }
-    const config = configResult.success;
-    if (!config) {
-      writeTextStderr(`Run not found: ${id}`);
-      return CliExitCode.Usage;
-    }
-    const documentTask = isTaskConfig(config);
-    if (fork && documentTask) {
+    return { chat: { initialResume: { id: forkId, config: forkConfig } } };
+  }
+  // Gate resume on ownership: a run held by any owner that is alive or cannot
+  // be proven dead refuses, naming that owner.
+  const rejection = yield* store.readRejection();
+  if (rejection?.kind === 'finished') {
+    writeTextStderr(describeFollowUpFailure('finished'));
+    return CliExitCode.Usage;
+  }
+  // A conversation the service holds continues there: the chat is its
+  // client, so the service stays the run's one writer.
+  if (rejection?.kind === 'ownedElsewhere') {
+    const inService = documentTask
+      ? Result.succeed(false)
+      : yield* Effect.result(heldByService(rejection.owner));
+    // A service that cannot be asked may be the holder: its own reason
+    // (how to stop a wedged one) is what the user can act on.
+    if (Result.isFailure(inService)) {
       writeTextStderr(
-        `Task ${id} is a document task: only a conversation can be forked.`,
+        `Task ${id} is held by another process, which may be the TeXRA service, and the service could not be asked: ${inService.failure.reason}`,
       );
       return CliExitCode.Usage;
     }
-    // A fork reads the source's committed rows, whoever holds it, and the
-    // chat continues the new task.
-    if (fork) {
-      const terminalFailure = interactiveTerminalFailure(context);
-      if (terminalFailure) {
-        writeTextStderr(
-          formatInteractiveTerminalFailure(terminalFailure, {
-            headlessMessage: `Forking continues the new task in an interactive chat: run \`${context.commandName} resume ${id} --fork\` in a terminal.`,
-            dumbTerminalCommand: 'resume',
-            dumbTerminalOptions: { commandName: context.commandName },
-          }),
-        );
-        return CliExitCode.Usage;
-      }
-      const forked = yield* Effect.result(forkRun(session, id, null));
-      if (Result.isFailure(forked)) {
-        writeTextStderr(requestErrorText(forked.failure));
-        return CliExitCode.Usage;
-      }
-      const forkId = forked.success;
-      const forkConfig = yield* session.records(forkId).readConfig();
-      if (!forkConfig) {
-        writeTextStderr(`Task ${forkId} was forked without a configuration.`);
-        return CliExitCode.AgentError;
-      }
-      return { chat: { initialResume: { id: forkId, config: forkConfig } } };
-    }
-    // Gate resume on ownership: a run held by any owner that is alive or cannot
-    // be proven dead refuses, naming that owner.
-    const rejection = yield* store.readRejection();
-    if (rejection?.kind === 'finished') {
-      writeTextStderr(describeFollowUpFailure('finished'));
+    if (!inService.success) {
+      // The owner named by the pid and machine its claim recorded: the
+      // two parts of an identity a user can act on.
+      const { pid, hostname } = ownerIdentity(rejection.owner);
+      writeTextStderr(
+        `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
+      );
       return CliExitCode.Usage;
     }
-    // A conversation the service holds continues there: the chat is its
-    // client, so the service stays the run's one writer.
-    if (rejection?.kind === 'owned_elsewhere') {
-      const inService = documentTask
-        ? Result.succeed(false)
-        : yield* Effect.result(heldByService(rejection.owner));
-      // A service that cannot be asked may be the holder: its own reason
-      // (how to stop a wedged one) is what the user can act on.
-      if (Result.isFailure(inService)) {
-        writeTextStderr(
-          `Task ${id} is held by another process, which may be the TeXRA service, and the service could not be asked: ${inService.failure.reason}`,
-        );
-        return CliExitCode.Usage;
-      }
-      if (!inService.success) {
-        // The owner named by the pid and machine its claim recorded: the
-        // two parts of an identity a user can act on.
-        const { pid, hostname } = ownerIdentity(rejection.owner);
-        writeTextStderr(
-          `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
-        );
-        return CliExitCode.Usage;
-      }
-    }
+  }
 
-    // A resumed task continues under the approval it was launched with: a
-    // requested policy is said not to apply, never dropped silently. A
-    // chat's new rounds take it.
-    if (context.requestedApprovalPolicy !== undefined)
-      writeTextStderr(
-        `The requested approval policy (${approvalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
-      );
-
-    // A chat resume reopens the interactive TUI, so headless callers are
-    // rejected before resume-state loading. A document task resumes headless
-    // and skips this gate entirely.
-    if (!documentTask) {
-      const terminalFailure = interactiveTerminalFailure(context);
-      if (terminalFailure) {
-        const commandName = context.commandName;
-        const runCommand = `${commandName} run`;
-        writeTextStderr(
-          formatInteractiveTerminalFailure(terminalFailure, {
-            headlessMessage: `Resuming continues an interactive chat session, run \`${formatResumeCommand(
-              commandName,
-              id,
-              { approvalPolicy: context.approvalPolicy },
-            )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
-            dumbTerminalCommand: 'resume',
-            dumbTerminalOptions: {
-              commandName,
-              nonInteractiveFallback: `\`${runCommand}\``,
-            },
-          }),
-        );
-        return CliExitCode.Usage;
-      }
-      return {
-        chat: { initialResume: { id, config } },
-      };
-    }
-
-    // The launch pinned the resolved source on the record, so resume checks
-    // that exact entry rather than re-resolving the bare name.
-    const agent = yield* Effect.result(
-      resolveCliRunAgent(
-        stores,
-        config.agentSource
-          ? agentKey(config.agentSource, agentName(config.agent))
-          : config.agent,
-      ),
+  // A resumed task continues under the approval it was launched with: a
+  // requested policy is said not to apply, never dropped silently. A
+  // chat's new rounds take it.
+  if (context.requestedApprovalPolicy !== undefined)
+    writeTextStderr(
+      `The requested approval policy (${approvalPolicyLabel(context.requestedApprovalPolicy)}) does not change task ${id}: it resumes under the approval it was launched with${documentTask ? '' : "; the chat's new messages take it"}.`,
     );
-    if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
 
-    // Fast-fail on an unusable destination before the run restarts;
-    // `executeCliWorkflowConfig` reads the same persisted `cli` block. Each
-    // stored-destination reader throws on a bad persisted path, so
-    // `Effect.try` keeps that refusal on the typed channel — interleaved with
-    // its own probe, because the file probe's `mkdir -p` runs before the
-    // directory path is ever read.
-    const resumed = yield* Effect.result(
-      Effect.gen(function* () {
-        const outputFile = yield* Effect.try({
-          try: () => resumeWorkflowOutputFile(config),
-          catch: ensureError,
-        });
-        yield* assertOutputFileAvailable(outputFile, context.cwd);
-        const outputDirectory = yield* Effect.try({
-          try: () => resumeWorkflowOutputDirectory(config),
-          catch: ensureError,
-        });
-        yield* assertOutputDirAvailable(outputDirectory, context.cwd);
-        const recoveryInputIsDurable = yield* workflowRecoveryInputsAreDurable(
-          config,
-          context.cwd,
-        );
-        // The run continues through the session's resume, inside the
-        // headless run skeleton the fresh launch uses.
-        return yield* executeCliWorkflowConfig(
-          config,
-          buildHeadlessRunContext(context),
-          {
-            services: stores,
-            runId: id,
-            recoveryInputIsDurable,
+  // A chat resume reopens the interactive TUI, so headless callers are
+  // rejected before resume-state loading. A document task resumes headless
+  // and skips this gate entirely.
+  if (!documentTask) {
+    const terminalFailure = interactiveTerminalFailure(context);
+    if (terminalFailure) {
+      const commandName = context.commandName;
+      const runCommand = `${commandName} run`;
+      writeTextStderr(
+        formatInteractiveTerminalFailure(terminalFailure, {
+          headlessMessage: `Resuming continues an interactive chat session, run \`${formatResumeCommand(
+            commandName,
+            id,
+            { approvalPolicy: context.approvalPolicy },
+          )}\` in a terminal. For scripting, use \`${runCommand}\`.`,
+          dumbTerminalCommand: 'resume',
+          dumbTerminalOptions: {
+            commandName,
+            nonInteractiveFallback: `\`${runCommand}\``,
           },
-        );
-      }),
-    );
-    if (Result.isSuccess(resumed)) return resumed.success;
-    return resumeFailureExit(id, resumed.failure);
-  });
-}
+        }),
+      );
+      return CliExitCode.Usage;
+    }
+    return {
+      chat: { initialResume: { id, config } },
+    };
+  }
+
+  // The launch pinned the resolved source on the record, so resume checks
+  // that exact entry rather than re-resolving the bare name.
+  const agent = yield* Effect.result(
+    resolveCliRunAgent(
+      stores,
+      config.agentSource
+        ? agentKey(config.agentSource, agentName(config.agent))
+        : config.agent,
+    ),
+  );
+  if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
+
+  // Fast-fail on an unusable destination before the run restarts;
+  // `executeCliWorkflowConfig` reads the same persisted `cli` block. Each
+  // stored-destination reader throws on a bad persisted path, so
+  // `Effect.try` keeps that refusal on the typed channel — interleaved with
+  // its own probe, because the file probe's `mkdir -p` runs before the
+  // directory path is ever read.
+  const resumed = yield* Effect.result(
+    Effect.gen(function* () {
+      const outputFile = yield* Effect.try({
+        try: () => resumeWorkflowOutputFile(config),
+        catch: ensureError,
+      });
+      yield* assertOutputFileAvailable(outputFile, context.cwd);
+      const outputDirectory = yield* Effect.try({
+        try: () => resumeWorkflowOutputDirectory(config),
+        catch: ensureError,
+      });
+      yield* assertOutputDirAvailable(outputDirectory, context.cwd);
+      const recoveryInputIsDurable = yield* workflowRecoveryInputsAreDurable(
+        config,
+        context.cwd,
+      );
+      // The run continues through the session's resume, inside the
+      // headless run skeleton the fresh launch uses.
+      return yield* executeCliWorkflowConfig(
+        config,
+        buildHeadlessRunContext(context),
+        {
+          services: stores,
+          runId: id,
+          recoveryInputIsDurable,
+        },
+      );
+    }),
+  );
+  if (Result.isSuccess(resumed)) return resumed.success;
+  return resumeFailureExit(id, resumed.failure);
+});

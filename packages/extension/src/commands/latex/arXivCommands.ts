@@ -13,7 +13,9 @@ import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import { withVSCodeProgress } from '@frontend/ui/progress';
 import { tokenCancelled } from '@frontend/vscode/vscodeEventWait';
 import {
-  ArxivProcessor,
+  downloadArxivSource,
+  getArxivPaperDirName,
+  validateArxivId,
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
@@ -31,33 +33,37 @@ const CHANNEL = 'arXivCommands';
  * replaces was: a typed failure and a rejected prompt alike are squashed to
  * the value that `catch` clause bound, so the message is unchanged.
  */
-export function downloadArXivSource(
+export const downloadArXivSource: (
   roots: WorkspaceRoots,
-): Effect.Effect<void, never, ProcessServices> {
-  return Effect.gen(function* () {
+) => Effect.Effect<void, never, ProcessServices> = Effect.fn(
+  'downloadArXivSource',
+)(
+  function* (roots: WorkspaceRoots) {
     const arxivId = yield* inputBox({
       placeHolder: 'e.g., 2404.12175 or https://arxiv.org/abs/2404.12175',
       prompt: 'Enter arXiv ID or URL',
-      validateInput: ArxivProcessor.validateId.bind(ArxivProcessor),
+      validateInput: validateArxivId,
     });
 
     if (!arxivId) {
       return;
     }
 
-    const paperId = ArxivProcessor.getPaperDirName(arxivId);
+    const paperId = getArxivPaperDirName(arxivId);
 
-    const destinationPick = yield* quickPick(
+    const destinationPick = yield* quickPick<
+      vscode.QuickPickItem & { value: ArxivDownloadDestination }
+    >(
       [
         {
           label: `References/${paperId}`,
           description: 'Download into References folder',
-          value: 'references' as ArxivDownloadDestination,
+          value: 'references',
         },
         {
           label: 'Workspace root',
           description: 'Download directly into the workspace root',
-          value: 'root' as ArxivDownloadDestination,
+          value: 'root',
         },
       ],
       {
@@ -89,19 +95,16 @@ export function downloadArXivSource(
       (progress, token) =>
         Effect.raceFirst(
           Effect.gen(function* () {
-            const downloadResult = yield* ArxivProcessor.downloadSource(
-              arxivId,
-              {
-                progressCallback: (message, increment) =>
-                  progress.report({ message, increment }),
-                workspaceRoot: roots.workspace ?? '',
-                formatter: autoIndent
-                  ? yield* resolveLatexFormatter(roots)
-                  : null,
-                autoIndent,
-                destination,
-              },
-            );
+            const downloadResult = yield* downloadArxivSource(arxivId, {
+              progressCallback: (message, increment) =>
+                progress.report({ message, increment }),
+              workspaceRoot: roots.workspace ?? '',
+              formatter: autoIndent
+                ? yield* resolveLatexFormatter(roots)
+                : null,
+              autoIndent,
+              destination,
+            });
             return Option.some(downloadResult.path);
           }),
           // Cancel interrupts the download, whose finalizers remove the
@@ -132,19 +135,18 @@ export function downloadArXivSource(
         CHANNEL,
       );
     }
-  }).pipe(
-    Effect.catchCause((cause) =>
-      // Shutdown interrupts this fiber while it waits on a host prompt or on
-      // the download. That is a cancellation, not a download failure, and the
-      // `Effect.catch` this replaces never saw it, so it must not become a
-      // notification now that the download runs on this fiber.
-      Cause.hasInterruptsOnly(cause)
-        ? Effect.interrupt
-        : showLoggedErrorMessage(
-            CHANNEL,
-            'Failed to download arXiv source',
-            Cause.squash(cause),
-          ).pipe(Effect.asVoid),
-    ),
-  );
-}
+  },
+  Effect.catchCause((cause) =>
+    // Shutdown interrupts this fiber while it waits on a host prompt or on
+    // the download. That is a cancellation, not a download failure, and the
+    // `Effect.catch` this replaces never saw it, so it must not become a
+    // notification now that the download runs on this fiber.
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.interrupt
+      : showLoggedErrorMessage(
+          CHANNEL,
+          'Failed to download arXiv source',
+          Cause.squash(cause),
+        ).pipe(Effect.asVoid),
+  ),
+);

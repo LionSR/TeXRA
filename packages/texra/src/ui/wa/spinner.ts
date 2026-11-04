@@ -5,7 +5,7 @@
 // the spinner shadow after its first render.
 
 import '@awesome.me/webawesome/dist/components/spinner/spinner.js';
-import { nothing } from 'lit';
+import { LitElement, nothing } from 'lit';
 import { Directive, directive, type ElementPart } from 'lit/directive.js';
 
 const REDUCED_MOTION_STYLE_ATTR = 'data-texra-reduced-motion';
@@ -35,10 +35,8 @@ function adoptReducedMotion(host: Element): void {
 }
 
 function scheduleAdopt(host: Element): void {
-  const pending = (host as { updateComplete?: Promise<unknown> })
-    .updateComplete;
-  if (pending) {
-    void pending.then(
+  if (host instanceof LitElement) {
+    void host.updateComplete.then(
       () => adoptReducedMotion(host),
       (error: unknown) => {
         console.warn(

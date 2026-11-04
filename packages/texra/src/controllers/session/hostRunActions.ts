@@ -1,13 +1,15 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
-import * as path from 'node:path';
 
 import {
+  Cancelled,
   DatabaseReadFailed,
   isRequestRefusal,
   Rejected,
   type RequestError,
   type RequestRefusal,
   type Run,
+  type RunEnd,
+  type RunFailure,
   type Session,
   type StartInput,
   Unavailable,
@@ -21,12 +23,11 @@ import {
   type Secrets,
   StateReadFailed,
   withLogChannel,
-  pathToLocationIn,
+  launchNoticeOf,
   presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import { entryTypeIn } from '@texra-ai/harness/node';
 import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
 import { type ApiKeyProviderId, type SecretsFailed } from '@texra-ai/llm';
@@ -39,11 +40,7 @@ import {
   type RunAction,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import {
-  validateRunRequest,
-  type RunRequest,
-  type ValidatedRunRequest,
-} from '@texra/controllers/session/runRequests';
+import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
@@ -63,12 +60,10 @@ import {
   ProgressApiKeyRetryController,
 } from '../progressView/ProgressApiKeyRetryController';
 import {
-  ProgressFollowUpController,
+  planCompileFixer,
   type CompileFixerPlanFailed,
-  type ProgressFollowUpModelOption,
-  type ProgressFollowUpState,
-} from '../progressView/ProgressFollowUpController';
-import type { RunEndResult, AgentConfig } from '@texra-ai/harness/schemas';
+} from '../progressView/compileFixer';
+import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'HostRunActions';
 
@@ -85,18 +80,6 @@ interface WorkflowFileOperationResult {
   readonly result: FileOpResult;
   readonly inputFile: string;
 }
-
-/**
- * The host's launcher could not start the run, or the run it started
- * failed: a bare `Error`, lifted here with that error as `cause`.
- */
-class RunLaunchFailed extends Schema.TaggedError<RunLaunchFailed>()(
-  'RunLaunchFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
 
 /** The run's saved setup could not be read: the database would not answer
  *  or refused the committed `run.config` row, or the service holding the
@@ -128,22 +111,27 @@ export interface HostRunActionPorts {
   >;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
+  /** Bring the host's progress surface into view for a run this window just
+   *  started, or name the run in a notice when it cannot. Absent on a host
+   *  whose surface is always on screen. */
+  readonly revealProgress?: (config: AgentConfig) => Effect.Effect<void, Error>;
   /** Where this window's run actions land: its own session, or the
    *  background service's. Run state is read from its view. */
   readonly session: Session;
   /** The host's scope: what an action does when its run ends lives as long
    *  as the host. */
   readonly scope: Scope.Scope;
-  /** The host's follow-up for a run this window started, once admitted:
-   *  select it, and retire the missing-agent banner its agent resolved. */
+  /** The window's follow-up for a run it started, once admitted: show the
+   *  run once its surfaces hold it, and retire the missing-agent banner its
+   *  agent resolved. */
   launched(run: Run): Effect.Effect<void>;
   /** Open a settled run's final output, when its agent names one. */
   openFinalOutput(
     config: AgentConfig,
-    result: RunEndResult,
+    result: RunEnd,
   ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
-    readonly ProgressFollowUpModelOption[],
+    Parameters<typeof planCompileFixer>[0]['modelOptions'],
     ModelHostFactUnreadable | StateReadFailed
   >;
   /**
@@ -165,14 +153,16 @@ export interface HostRunActionPorts {
  *  that host's launcher, catalogs, key prompt, and notifications. */
 export interface HostRunActions {
   /**
-   * The window's launcher: start a validated fresh run on its session,
-   * answering once it is admitted. A failure before the run opens is
-   * presented here, once, and fails with the launch's own error; the
-   * launched run is the host's to select, and its final output opens when
-   * it ends.
+   * The window's launcher: start a fresh run of an already decoded
+   * configuration (`decodeLaunchConfig`) on its session, answering once it
+   * is admitted; it decodes nothing itself. A failure before the run opens is
+   * logged and presented here, once, and fails with the launch's own error,
+   * which the caller does not present again (a request answers `Cancelled`);
+   * the launched run is the window's to show (`launched`), and its final
+   * output opens when it ends.
    */
   runValidated(
-    request: ValidatedRunRequest,
+    config: AgentConfig,
     options?: RunValidatedOptions,
   ): Effect.Effect<Run, Error>;
   /** Merge `editedFile` into `baseFile`: the merge agent's document task on
@@ -180,7 +170,7 @@ export interface HostRunActions {
   merge(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed | StateReadFailed>;
+  ): Effect.Effect<void, RequestRefusal | StateReadFailed>;
   resume(
     runId: RunId,
   ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
@@ -198,7 +188,7 @@ export interface HostRunActions {
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
-    | RunLaunchFailed
+    | RunFailure
   >;
   readConfig(
     runId: RunId,
@@ -230,7 +220,6 @@ export interface HostRunActions {
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
-    | RunLaunchFailed
     | SecretsFailed
     | StateReadFailed,
     AppState | Secrets
@@ -241,7 +230,9 @@ export interface HostRunActions {
   fork(runId: RunId, at: number | null): Effect.Effect<RunId, RequestRefusal>;
   /** The run's output facts as the view holds them, read by the workflow
    *  controllers. */
-  readonly runOutputs: ProgressFollowUpState;
+  readonly runOutputs: {
+    getOutputFiles(runId: RunId): ReturnType<typeof documentsOf>['files'];
+  };
   sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
@@ -277,15 +268,32 @@ export const createHostRunActions = Effect.fn(
         ? Effect.void
         : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
     });
-  const launchFailed = (cause: Error): RequestRefusal | RunLaunchFailed =>
-    isRequestRefusal(cause)
-      ? cause
-      : new RunLaunchFailed({ message: toErrorMessage(cause), cause });
-
-  const runValidated: HostRunActions['runValidated'] = ({ config }, options) =>
+  const runValidated: HostRunActions['runValidated'] = (config, options) =>
     session.start({ config, ...options, interactive: true }).pipe(
-      // A failure before the run opens has no row to show it.
-      Effect.tapError((error) => presentRunFailure(ports.present, error)),
+      // A failure before the run opens has no row to show it: it is logged
+      // and shows here, in this window, by the notice a refused launch
+      // carries.
+      Effect.tapError((error) =>
+        Effect.logWarning(`The ${config.agent} run did not start`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(presentRunFailure(ports.present, error)),
+        ),
+      ),
+      // The reveal, and the toast it falls back to, outlive the launch
+      // request: nothing waits on a person dismissing a notice, and a failed
+      // reveal is a diagnostic for a run already started.
+      Effect.tap(() =>
+        Effect.forkIn(
+          (ports.revealProgress?.(config) ?? Effect.void).pipe(
+            Effect.ignore({
+              log: 'Warn',
+              message: 'Revealing the progress view',
+            }),
+          ),
+          ports.scope,
+        ),
+      ),
       Effect.tap(ports.launched),
       // Presentation reacts to the outcome the run committed; it never
       // runs inside the run, so it cannot change that outcome.
@@ -299,36 +307,28 @@ export const createHostRunActions = Effect.fn(
         ),
       ),
     );
-  /** Validate a request an action built, then start it: one that does
-   *  not validate is refused before anything starts, a refusal the
-   *  launcher worded travels as itself, anything else is RunLaunchFailed. */
+  /** Start the configuration an action built: one that does not decode is
+   *  rejected before anything starts, and one that does not start is
+   *  `Cancelled`, the answer no surface shows, since the launcher has
+   *  already told why. */
   const startAgentRequest = (
-    request: RunRequest,
+    config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, RequestRefusal | RunLaunchFailed> => {
-    const validated = validateRunRequest(request);
-    if (!validated.valid) {
-      return Effect.logError(validated.message).pipe(
-        Effect.annotateLogs({ data: validated.issue }),
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          Effect.fail(new Rejected({ reason: validated.message })),
+  ): Effect.Effect<Run, Rejected | Cancelled> =>
+    decodeLaunchConfig(config).pipe(
+      Effect.flatMap((decoded) =>
+        runValidated(decoded, options).pipe(
+          Effect.mapError(() => new Cancelled()),
         ),
-      );
-    }
-    return runValidated(validated.request, options).pipe(
-      Effect.mapError(launchFailed),
-    );
-  };
-  /** Start a request an action built and wait for its run to end. */
-  const runAgentRequest = (
-    request: RunRequest,
-    options?: RunValidatedOptions,
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> =>
-    startAgentRequest(request, options).pipe(
-      Effect.flatMap((run) =>
-        run.result.pipe(Effect.asVoid, Effect.mapError(launchFailed)),
       ),
+    );
+  /** Start a configuration an action built and wait for its run to end. */
+  const runAgentRequest = (
+    config: AgentConfigInput,
+    options?: RunValidatedOptions,
+  ): Effect.Effect<void, Rejected | Cancelled | RunFailure> =>
+    startAgentRequest(config, options).pipe(
+      Effect.flatMap((run) => Effect.asVoid(run.result)),
     );
 
   const documentsOfRun = (runId: RunId) => {
@@ -337,8 +337,6 @@ export const createHostRunActions = Effect.fn(
   };
   const runOutputs = {
     getOutputFiles: (runId: RunId) => documentsOfRun(runId)?.files ?? {},
-    getCompileFailures: (runId: RunId) =>
-      documentsOfRun(runId)?.compileFailures ?? {},
   };
 
   const readConfig = Effect.fn('HostRunActions.readConfig')(function* (
@@ -442,33 +440,6 @@ export const createHostRunActions = Effect.fn(
       }),
   });
 
-  const followUp = new ProgressFollowUpController({
-    loadModelOptions: () => ports.loadModelOptions(),
-    state: runOutputs,
-    // The session's own folder, carried as data: the planner resolves and
-    // probes its candidates there rather than through the calling
-    // context's ambient roots.
-    workspace: {
-      locatePath: (target) => {
-        // With no folder open every path is outside it.
-        const location = roots.workspace
-          ? pathToLocationIn(roots.workspace, target)
-          : undefined;
-        return location?.kind === 'workspace'
-          ? location
-          : { kind: 'external' as const };
-      },
-      // Asked only of a path `locatePath` placed in the folder.
-      exists: (relativePath) =>
-        roots.workspace
-          ? Effect.map(
-              entryTypeIn(fs, path.join(roots.workspace, relativePath)),
-              (type) => type !== undefined,
-            )
-          : Effect.succeed(false),
-    },
-  });
-
   return {
     runOutputs,
     sendFollowUp(runId, text) {
@@ -477,12 +448,7 @@ export const createHostRunActions = Effect.fn(
         .request({ kind: 'followUp.send', runId, text })
         .pipe(
           Effect.flatMap((outcome) => {
-            if (outcome.kind !== 'followUp') return Effect.void;
-            const shown = presentFollowUpResult(
-              outcome.status === 'sent'
-                ? { status: 'sent' }
-                : { status: 'queued', wake: outcome.wake ?? undefined },
-            );
+            const shown = presentFollowUpResult(outcome);
             return shown.severity === 'none'
               ? Effect.void
               : present(shown.message);
@@ -510,17 +476,21 @@ export const createHostRunActions = Effect.fn(
      * it: it continues the run's own rows (a child's, with the parent
      * that owns it). A run that does not take it refuses the request (its
      * reason already told); one that waits for what blocks it is asked
-     * for, and its own line says what it waits for. A workflow settles
-     * with its whole run, whose output opens then.
+     * for, and its own line says what it waits for; one whose launch is
+     * refused (a model this build does not know) shows the notice the
+     * failure carries, in this window. A workflow settles with its whole
+     * run, whose output opens then.
      */
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
       yield* nativeAgentRun(runId, 'resume');
       const run = yield* resumeRun(session, runId).pipe(
         Effect.catchTag('RunFailure', (failure) =>
-          Effect.fail(new Unavailable({ runId, reason: failure.message })),
+          launchNoticeOf(failure) === undefined
+            ? Effect.fail(new Unavailable({ runId, reason: failure.message }))
+            : Effect.as(presentRunFailure(ports.present, failure), null),
         ),
       );
-      if (run === 'waiting') return;
+      if (run === null || run === 'waiting') return;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
       const result = yield* run.result.pipe(
@@ -564,7 +534,7 @@ export const createHostRunActions = Effect.fn(
           AgentCatalogLoadError: refuse,
         }),
       );
-      if (config !== null) yield* startAgentRequest({ config });
+      if (config !== null) yield* startAgentRequest(config);
     }),
     readConfig,
     workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
@@ -609,10 +579,6 @@ export const createHostRunActions = Effect.fn(
               ),
             ),
           );
-        if (outcome.kind !== 'runFiles')
-          return yield* Effect.die(
-            new Error(`run.files answered ${outcome.kind}`),
-          );
         const { result } = outcome;
         return {
           inputFile,
@@ -633,13 +599,20 @@ export const createHostRunActions = Effect.fn(
         );
       }
       const config = yield* readConfig(runId);
-      const plan = yield* followUp.planCompileFixerForRun(runId, config);
+      const modelOptions = yield* ports.loadModelOptions();
+      const plan = yield* planCompileFixer({
+        runId,
+        runConfig: config,
+        documents: documentsOfRun(runId),
+        modelOptions,
+        workspaceRoot: roots.workspace,
+      }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
       if (plan.kind === 'warning') {
         yield* ports.showWarning(plan.message);
       } else if (plan.kind === 'info') {
         yield* ports.showInfo(plan.message);
       } else {
-        yield* runAgentRequest(plan.request, {
+        yield* runAgentRequest(plan.config, {
           helperModel: true,
         });
       }
@@ -656,9 +629,17 @@ export const createHostRunActions = Effect.fn(
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);
       // The fork waits for its host: continuing it waits on the user's
-      // next message. A refusal is told by the resume itself, and the fork
-      // keeps its Resume.
-      yield* resumeRun(session, forked).pipe(Effect.ignore({ log: 'Warn' }));
+      // next message. A refusal is told by the resume itself, a refused
+      // launch by the notice it carries, shown here; the fork keeps its
+      // Resume.
+      yield* resumeRun(session, forked).pipe(
+        Effect.tapError((error) =>
+          launchNoticeOf(error) === undefined
+            ? Effect.void
+            : presentRunFailure(ports.present, error),
+        ),
+        Effect.ignore({ log: 'Warn' }),
+      );
       return forked;
     }),
   };

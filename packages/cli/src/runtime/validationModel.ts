@@ -12,10 +12,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, Layer, Stream } from 'effect';
+import { Effect, Layer, Schedule, Stream } from 'effect';
 import {
   type Model,
   type ModelConfig,
+  ModelError,
   type ModelOrigin,
   originOf,
   type ResolvedTurn,
@@ -104,11 +105,13 @@ function goldenTurn(
   flagPath: string,
   call: (name: string, input: unknown) => TurnResult['content'][number],
 ): Effect.Effect<TurnResult['content'] | null> {
-  const gate = (name: string) =>
-    Effect.gen(function* () {
-      const file = path.join(path.dirname(flagPath), name);
-      while (!existsSync(file)) yield* Effect.sleep('20 millis');
-    });
+  const gate = (name: string) => {
+    const file = path.join(path.dirname(flagPath), name);
+    return Effect.sync(() => existsSync(file)).pipe(
+      Effect.repeat({ until: Boolean, schedule: Schedule.spaced('20 millis') }),
+      Effect.asVoid,
+    );
+  };
   const system = turn.system ?? '';
   const results = turn.messages.filter((m) => m.role === 'tool');
   const said = JSON.stringify(turn.messages);
@@ -124,15 +127,18 @@ function goldenTurn(
   // A call naming GOLDEN-PARK (a label's too) waits for its release file.
   if ((system + said).includes('GOLDEN-PARK'))
     return Effect.as(gate('golden-park.release'), text('Parked run released.'));
-  // A call awaiting approval: the tool and command after the marker.
+  // A call awaiting approval: the tool after the marker, and its command,
+  // or its whole input when a JSON object follows the tool.
   const [marker, asked = 'bash', command = 'echo approved >> approved.txt'] =
     /GOLDEN-APPROVAL(?: (\w+))?(?: (.+))?/.exec(system) ?? [];
-  if (marker !== undefined)
+  if (marker !== undefined) {
+    const input: unknown = command.startsWith('{')
+      ? JSON.parse(command)
+      : { command };
     return Effect.succeed(
-      results.length
-        ? text('The approved command ran.')
-        : [call(asked, { command })],
+      results.length ? text('The approved command ran.') : [call(asked, input)],
     );
+  }
   // A diagnostics read the service forwards to an attached window.
   if (system.includes('GOLDEN-DIAGNOSTICS'))
     return Effect.succeed(
@@ -190,6 +196,8 @@ function goldenTurn(
     if (said.includes('The golden chat so far.'))
       return Effect.succeed(text('Answered after the compaction.'));
     // The goal's round (`self()`): a command its grant approves, a verdict.
+    // Its first call is held, so the chat that started the goal finishes
+    // its turn before the round goes on.
     const round = turn.tools.some(({ name }) => name === 'submit_output');
     const step = round
       ? [
@@ -197,8 +205,10 @@ function goldenTurn(
           call('submit_output', { status: 'done', report: ANSWERED }),
         ]
       : [call('plan', { objective: 'Answer the golden chat, then stop.' })];
-    if (round || results.length === 0)
-      return Effect.succeed(step.slice(results.length, results.length + 1));
+    const next = step.slice(results.length, results.length + 1);
+    if (round && results.length === 0)
+      return gate('golden-round.release').pipe(Effect.as(next));
+    if (round || results.length === 0) return Effect.succeed(next);
     if (said.includes('After the model switch.'))
       return Effect.succeed(text('Answered after the model switch.'));
     return Effect.succeed(
@@ -211,7 +221,8 @@ function goldenTurn(
   }
   if (system.includes('GOLDEN-SCRIPT')) {
     // A background command waiting for its release file; its result wakes
-    // the task once more.
+    // the task once more. The wait is Node's, not a shell loop: the bash
+    // tool runs a command in cmd.exe on Windows, which has no `until`.
     if (said.includes('Run in the background.')) {
       const last = turn.messages.at(-1);
       if (last?.role === 'tool')
@@ -220,8 +231,7 @@ function goldenTurn(
         JSON.stringify(last).includes('Run in the background.')
           ? [
               call('bash', {
-                command:
-                  'until [ -e ../bash.release ]; do sleep 0.05; done; echo released',
+                command: `node -e "const wait = setInterval(() => { if (require('fs').existsSync('../bash.release')) { clearInterval(wait); console.log('released'); } }, 50)"`,
                 description: 'Wait for the release',
                 run_in_background: true,
               }),
@@ -275,9 +285,10 @@ function goldenTurn(
           ]
         : text('Noted.'),
     );
-  // The crash-point run: two calls, a script, the echo's text. A step a crash
-  // cut off unstarted is asked for again; a view an edit replaced no longer
-  // holds the task, and the echo shows the view the edit left.
+  // The crash-point run: two calls, an edit of the file they read, a script,
+  // the echo's text. A step a crash cut off unstarted is asked for again; a
+  // view an edit replaced no longer holds the task, and the echo shows the
+  // view the edit left.
   if (system.includes('GOLDEN-CRASH')) {
     const done = results.filter(
       (message) =>
@@ -294,6 +305,15 @@ function goldenTurn(
         call('bash', {
           command: 'echo batch >> effects.log',
           description: 'Record the batch effect',
+        }),
+      ],
+      // The file the first step read, edited in the next response: a process
+      // resumed between the two answers the edit's read gate from the rows.
+      () => [
+        call('edit_file', {
+          path: 'notes.tex',
+          old_str: 'reads this file',
+          new_str: 'edits this file',
         }),
       ],
       () => [call('script', { title: 'Gather', code: GOLDEN_CRASH_SOURCE })],
@@ -452,7 +472,7 @@ function validationModel(config: ModelConfig): {
         call('executions', {
           path: '/executions',
           action: 'query',
-          sql: 'SELECT name, kind, lifecycle FROM runs ORDER BY started_at',
+          sql: 'SELECT name, kind, status FROM runs ORDER BY started_at',
         }),
       ];
     } else if ((scriptFanout && toolNames.has('script')) || historyQuery) {
@@ -486,7 +506,9 @@ function validationModel(config: ModelConfig): {
         outputTokens: 1,
         totalTokens: inputTokens + 1,
         cachedInputTokens: null,
+        cacheWriteTokens: null,
         reasoningTokens: null,
+        toolUsePromptTokens: null,
       },
     };
   };
@@ -502,7 +524,6 @@ function validationModel(config: ModelConfig): {
         temperature: 0,
         maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
         store: false,
-        parallelToolCalls: true,
         toolChoice: request.toolChoice ?? 'auto',
         reasoning: null,
         serviceTier: null,
@@ -524,6 +545,13 @@ function validationModel(config: ModelConfig): {
             envVar('TEXRA_INTERNAL_VALIDATE_GOLDEN'),
             envVar(FLAG),
           ]);
+        // A golden turn the provider refuses as too long for the model.
+        if (golden === '1' && turn.system?.includes('GOLDEN-OVERFLOW'))
+          return yield* new ModelError({
+            kind: 'context-overflow',
+            message: 'The request exceeds the context window.',
+            status: 400,
+          });
         return complete(
           turn,
           scriptFanout === '1',

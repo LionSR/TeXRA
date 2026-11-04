@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 // Local imports - platform
-import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import {
   canonicalizeWorkspacePath,
   relativeToRoot,
-} from '@utils/system/nodeWorkspace';
+} from '@texra-ai/harness/node';
+import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 describe('Node workspace identity', () => {
   const tempDirs = useTempDirs();

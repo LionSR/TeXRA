@@ -23,7 +23,7 @@ type RunStatusTone = (typeof RUN_STATUS_TONE)[keyof typeof RUN_STATUS_TONE];
  * A key is the run's phase, its substate when it has one, `ready` before
  * its first activation, or one of the fold's two readings: `interrupted`
  * (an in-flight run whose owner process nobody holds) and `waitingOnUser`
- * (a run parked on the user's answer). The words are the app's; the fold
+ * (a run waiting on the user's answer). The words are the app's; the fold
  * stores the key.
  */
 const RUN_STATUS_TONE_OF = {

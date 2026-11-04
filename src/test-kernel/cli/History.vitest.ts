@@ -1,38 +1,39 @@
-import '@test/support/sessionGraphTestSetup';
-
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
-import { Effect, Schema } from 'effect';
-import { it } from '@effect/vitest';
-import { beforeEach, describe, expect } from 'vitest';
-import type { RunRecord } from '@agent/core/definition/RunRecord';
+import { Effect, Schema, Context } from 'effect';
+import { layer } from '@effect/vitest';
+import { expect } from 'vitest';
+import {
+  AgentConfigSchema,
+  emptyRunEndOutput,
+  qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+  type RunRecord,
+} from '@texra-ai/harness/schemas';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
 import {
   cliHistoryNdjsonRecords,
   listCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
-import {
-  AgentConfigSchema,
-  qualifyAggregateId,
-  emptyRunEndOutput,
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
+import { SessionLog } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
-
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-
-import { createFakeHost, setupPlatform } from '@test/support/setupPlatform';
+import { createFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
-
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  FakeHost,
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 
 const config = Schema.decodeUnknownSync(AgentConfigSchema)(
   asDocumentTask({
@@ -47,124 +48,152 @@ const config = Schema.decodeUnknownSync(AgentConfigSchema)(
 const tempDirs = useTempDirs();
 
 /** The process session the CLI's history readers open. */
-const historySession = Effect.sync(() => testSessionOf(testDefaultSession()));
+const historySession = Effect.map(TestSession, (session) =>
+  Effect.succeed(session),
+);
 
-const historyEntries = () =>
-  testRuntime().runPromise(listCliHistoryEntries(historySession));
+const historyEntries = Effect.flatMap(historySession, listCliHistoryEntries);
 
 const historyDetails = (id: RunId) =>
-  testRuntime().runPromise(readCliHistoryDetails(historySession, id));
+  Effect.flatMap(historySession, (session) =>
+    readCliHistoryDetails(session, id),
+  );
 
 /**
  * Publish the run's listing facts into the process session, which is where
  * `history` reads them from (the session's `RunView`, the same one every
  * surface reads).
  */
-async function publishRunFacts(
+const publishRunFacts = (
+  session: Context.Context<SessionServices>,
   runId: RunId,
   facts: {
     record: RunRecord;
     edited?: readonly string[];
     outcome?: RunOutcome;
   },
-): Promise<void> {
-  const session = testDefaultSession();
-  publishTestRunStart(session, runId);
-  await Effect.runPromise(session.log.settled);
-  await Effect.runPromise(seedRunRecord(session, runId, facts.record));
-  if (facts.edited)
-    await Effect.runPromise(seedEditedFiles(session, runId, facts.edited));
-  if (facts.outcome) {
-    publishTestRows(session, [
-      {
-        type: 'run.end',
-        aggregateId: qualifyAggregateId('run', runId),
-        outcome: facts.outcome,
-        output: emptyRunEndOutput(),
-      },
-    ]);
-  }
-  await Effect.runPromise(session.log.settled);
-}
-
-describe('CLI history runtime', () => {
-  setupPlatform(async () => {
-    const historyStoragePath = await makeTempDir(
-      'texra-history-storage-',
-      tempDirs,
-    );
-    return createFakeHost({
-      storagePath: historyStoragePath,
-      globalStoragePath: historyStoragePath,
-    });
+) =>
+  Effect.gen(function* () {
+    publishTestRunStart(session, runId);
+    yield* Context.get(session, SessionLog).settled;
+    yield* seedRunRecord(session, runId, facts.record);
+    if (facts.edited) yield* seedEditedFiles(session, runId, facts.edited);
+    if (facts.outcome) {
+      publishTestRows(session, [
+        {
+          type: 'run.end',
+          aggregateId: qualifyAggregateId('run', runId),
+          outcome: facts.outcome,
+          output: emptyRunEndOutput(),
+        },
+      ]);
+    }
+    yield* Context.get(session, SessionLog).settled;
   });
 
-  beforeEach(async () => {
-    const { openTestDefaultSession, closeTestDefaultSession } =
-      await import('@test/support/sessionEnd');
-    await Effect.runPromise(closeTestDefaultSession);
-    await Effect.runPromise(
-      openTestDefaultSession({ roots: testWorkspaceRoots() }),
-    );
-  });
-
-  it('projects NDJSON status onto the frozen pre-consolidation vocabulary', async () => {
-    // Byte parity for the public stream (proposal gate G): terminal outcomes
-    // emit as CliRunStatus ('interrupted'/'error'/'completed');
-    // 'resumable' passes through. Internal entries keep RunOutcome. A
-    // document task that ended is settled; one that has not, resumes.
-    const outcomes = [
-      ['b1b1b1', RUN_OUTCOME.CANCELLED],
-      ['b2b2b2', RUN_OUTCOME.FAILED],
-      ['b3b3b3', RUN_OUTCOME.COMPLETED],
-      ['b4b4b4', undefined],
-    ] as const;
-    for (const [id, outcome] of outcomes)
-      await publishRunFacts(id as RunId, {
-        record: config,
-        ...(outcome && { outcome }),
-      });
-
-    const entries = await historyEntries();
-    const byId = (id: string) => entries.find((entry) => entry.id === id);
-    expect(outcomes.map(([id]) => byId(id)?.status)).toEqual([
-      'cancelled',
-      'failed',
-      'completed',
-      'resumable',
-    ]);
-    expect(
-      outcomes.map(
-        ([id]) =>
-          (
-            cliHistoryNdjsonRecords([byId(id)!])[0] as {
-              entry: { status: string };
-            }
-          ).entry.status,
-      ),
-    ).toEqual(['interrupted', 'error', 'completed', 'resumable']);
-  });
-
-  it('does not surface missing files or persisted paths outside the workspace', async () => {
-    const root = await makeTempDir('texra-history-root-', tempDirs);
-    const workspace = path.join(root, 'workspace');
-    const outsidePath = path.join(root, 'outside.md');
-    await mkdir(workspace);
-    await writeFile(outsidePath, 'outside');
-    // A stored tool-use run whose settled calls edited these paths.
-    await publishRunFacts('a1a1a1' as RunId, {
-      record: Schema.decodeUnknownSync(AgentConfigSchema)({
-        ...config,
-        script: null,
-        inputFiles: [],
-        outputFiles: [],
-        workingDirectory: workspace,
+// Live clock: the history readers run as the command runs them.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'CLI history runtime',
+  (it) => {
+    // Per case: a host whose storage is a temp directory of its own, and
+    // the process session over that store.
+    it.layer(
+      FakeHost.layer(async () => {
+        const historyStoragePath = await makeTempDir(
+          'texra-history-storage-',
+          tempDirs,
+        );
+        return createFakeHost({
+          storagePath: historyStoragePath,
+          globalStoragePath: historyStoragePath,
+        });
       }),
-      edited: ['../outside.md', outsidePath, 'missing.md'],
+      { buildPerTest: true },
+    )((it) => {
+      it.layer(TestSession.layer(testWorkspaceRoots(), { persistent: true }))(
+        (it) => {
+          it.effect(
+            'projects NDJSON status onto the frozen pre-consolidation vocabulary',
+            () =>
+              Effect.gen(function* () {
+                // Byte parity for the public stream (proposal gate G):
+                // terminal outcomes emit as CliRunStatus
+                // ('interrupted'/'error'/'completed'); 'resumable' passes
+                // through. Internal entries keep RunOutcome. A document task
+                // that ended is settled; one that has not, resumes.
+                const session = yield* Effect.flatMap(
+                  TestSession,
+                  sessionHandleOf,
+                );
+                const outcomes = [
+                  ['b1b1b1', RUN_OUTCOME.CANCELLED],
+                  ['b2b2b2', RUN_OUTCOME.FAILED],
+                  ['b3b3b3', RUN_OUTCOME.COMPLETED],
+                  ['b4b4b4', undefined],
+                ] as const;
+                for (const [id, outcome] of outcomes)
+                  yield* publishRunFacts(session, id as RunId, {
+                    record: config,
+                    ...(outcome && { outcome }),
+                  });
+
+                const entries = yield* historyEntries;
+                const byId = (id: string) =>
+                  entries.find((entry) => entry.id === id);
+                expect(outcomes.map(([id]) => byId(id)?.status)).toEqual([
+                  'cancelled',
+                  'failed',
+                  'completed',
+                  'resumable',
+                ]);
+                expect(
+                  outcomes.map(
+                    ([id]) =>
+                      (
+                        cliHistoryNdjsonRecords([byId(id)!])[0] as {
+                          entry: { status: string };
+                        }
+                      ).entry.status,
+                  ),
+                ).toEqual(['interrupted', 'error', 'completed', 'resumable']);
+              }),
+          );
+
+          it.effect(
+            'does not surface missing files or persisted paths outside the workspace',
+            () =>
+              Effect.gen(function* () {
+                const session = yield* Effect.flatMap(
+                  TestSession,
+                  sessionHandleOf,
+                );
+                const root = yield* Effect.promise(() =>
+                  makeTempDir('texra-history-root-', tempDirs),
+                );
+                const workspace = path.join(root, 'workspace');
+                const outsidePath = path.join(root, 'outside.md');
+                yield* Effect.promise(() => mkdir(workspace));
+                yield* Effect.promise(() => writeFile(outsidePath, 'outside'));
+                // A stored tool-use run whose settled calls edited these
+                // paths.
+                yield* publishRunFacts(session, 'a1a1a1' as RunId, {
+                  record: Schema.decodeUnknownSync(AgentConfigSchema)({
+                    ...config,
+                    script: null,
+                    inputFiles: [],
+                    outputFiles: [],
+                    workingDirectory: workspace,
+                  }),
+                  edited: ['../outside.md', outsidePath, 'missing.md'],
+                });
+
+                const details = yield* historyDetails('a1a1a1' as RunId);
+
+                expect(details?.files).toEqual([]);
+              }),
+          );
+        },
+      );
     });
-
-    const details = await historyDetails('a1a1a1' as RunId);
-
-    expect(details?.files).toEqual([]);
-  });
-});
+  },
+);

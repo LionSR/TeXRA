@@ -5,15 +5,6 @@
  */
 import { Schema } from 'effect';
 
-import {
-  AgentProposalPermissionSchema,
-  BashPermissionSchema,
-  ExternalInquiryPermissionSchema,
-  PlanApprovalPermissionSchema,
-  RetryPermissionSchema,
-  ToolEditPermissionSchema,
-  UserQuestionPermissionSchema,
-} from '../prompts';
 import { ScriptDeliverySummarySchema } from '../scriptDelivery';
 import { StoredMediaSchema } from '../storedTurn';
 
@@ -155,50 +146,3 @@ export type NormalizedToolUse = {
 export const WebSearchPayloadSchema = Schema.Struct({
   query: Schema.optional(Schema.String),
 });
-
-/** What a pending request shows (diff, command, question), never host
- *  handles: the payload of `request.opened`. */
-export const PermissionPayloadSchema = Schema.Union([
-  Schema.Struct({
-    kind: Schema.Literal('toolEdit'),
-    data: ToolEditPermissionSchema,
-  }),
-  Schema.Struct({ kind: Schema.Literal('bash'), data: BashPermissionSchema }),
-  Schema.Struct({ kind: Schema.Literal('retry'), data: RetryPermissionSchema }),
-  Schema.Struct({
-    kind: Schema.Literal('proposal'),
-    data: AgentProposalPermissionSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('planApproval'),
-    data: PlanApprovalPermissionSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('externalInquiry'),
-    data: ExternalInquiryPermissionSchema,
-  }),
-  Schema.Struct({
-    kind: Schema.Literal('userQuestion'),
-    data: UserQuestionPermissionSchema,
-  }),
-]);
-export type PermissionPayload = typeof PermissionPayloadSchema.Type;
-/**
- * The one request kind vocabulary, read off the payload union. The
- * `request.opened` fact and every surface that lists pending requests key
- * off it, so a spelling that drifts fails to compile.
- */
-export type ProgressPermissionKind = PermissionPayload['kind'];
-/**
- * Whether a request parks the tool that opened it. Every kind does but the
- * external inquiry: its tool returns `dispatched` at once and the run carries
- * on, so the answer arrives as a follow-up instead of releasing a parked
- * fiber. Both folds read the distinction off this one predicate - the run
- * fold to decide which open requests a snapshot may leave unbound, the
- * session fold to decide which ones make a run wait on its user.
- */
-export function requestParksItsCaller(
-  payload: Pick<PermissionPayload, 'kind'>,
-): boolean {
-  return payload.kind !== 'externalInquiry';
-}

@@ -3,9 +3,9 @@
  * fiber per attached
  * port, the `Subscribe` handler, and the two request handlers. The
  * extension attaches its sidebar webview and its editor tab as two ports,
- * the desktop attaches its renderer per open paper; each port's frames are
+ * the desktop attaches its renderer per open project; each port's frames are
  * cut from the same session graph and each port's transcript set is one
- * member of the union the fold sees. What the host renders but does not own
+ * member of the union the view sees. What the host renders but does not own
  * rides every port's frames as the `host` snapshot, one level per session
  * that the host's producers write.
  *
@@ -86,9 +86,9 @@ interface SessionBridgeOptions {
    *  `Cancelled` or refuses with `Unavailable` or `Rejected`; anything else
    *  it fails or dies with is a defect, logged here and answered
    *  `Internal`. The channel is {@link HostRequestFailure}: each host lifts
-   *  a Promise-faced capability once, under the member's name, so every arm
+   *  a Promise-faced capability once, under the member's name, so every case
    *  fails with a tag and a bare rejection value can no longer reach this
-   *  fold. The last arm that widened it to `Error` was the transcript
+   *  channel. The last case that widened it to `Error` was the transcript
    *  export; its steps carry tags now. */
   readonly handleHostRequest: (
     request: HostRequest,
@@ -192,10 +192,11 @@ export class SessionBridge {
     else entry.port.send(message);
   }
 
-  attach(
-    port: SessionPort,
-  ): Effect.Effect<AttachedPort, SessionBridgeClosedError> {
-    return Effect.gen({ self: this }, function* () {
+  readonly attach = Effect.fn('SessionBridge.attach')(
+    { self: this },
+    function* (
+      port: SessionPort,
+    ): Effect.fn.Return<AttachedPort, SessionBridgeClosedError> {
       // A port re-attaching under a live id supersedes the previous one.
       // Close it to completion before installing the replacement so the old
       // entry's cleanup cannot be skipped by the new map entry.
@@ -241,8 +242,8 @@ export class SessionBridge {
         },
         close: entry.close,
       };
-    });
-  }
+    },
+  );
 
   /**
    * Answer a `Subscribe`: the next replay's fiber interrupts the one in

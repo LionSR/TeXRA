@@ -3,16 +3,23 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
+import { SessionGraph } from '@test/support/testKernel';
+import type { ProcessRuntime } from '@texra-ai/harness/host';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),
+}));
+
+/** The runtime the command's entry installs: the test's, while it runs. */
+const installed = vi.hoisted(() => ({
+  runtime: undefined as ProcessRuntime | undefined,
 }));
 
 vi.mock('@cli/runtime/browser', () => ({
@@ -20,14 +27,32 @@ vi.mock('@cli/runtime/browser', () => ({
 }));
 
 // The command brings no platform up, but its entry still installs the process
-// runtime its program runs on. Here that is the harness's, so the suite never
+// runtime its program runs on. Here that is the block's, so the suite never
 // builds a real one.
 vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
-  const { testRuntime } = await import('@test/support/testProcessRuntime');
   const actual =
     await importOriginal<typeof import('@cli/runtime/cliProcessRuntime')>();
-  return { ...actual, installCliProcessRuntime: () => testRuntime() };
+  return {
+    ...actual,
+    installCliProcessRuntime: () => {
+      if (!installed.runtime) throw new Error('No test runtime is installed.');
+      return installed.runtime;
+    },
+  };
 });
+
+/** Hand the entry the block's runtime for the test's scope. */
+const useCliRuntime = Effect.acquireRelease(
+  Effect.tap(SessionGraph.runtime, (runtime) =>
+    Effect.sync(() => {
+      installed.runtime = runtime;
+    }),
+  ),
+  () =>
+    Effect.sync(() => {
+      installed.runtime = undefined;
+    }),
+);
 
 const repos: string[] = [];
 
@@ -70,31 +95,42 @@ afterEach(() => {
   }
 });
 
-describe('install-github-action command', () => {
-  beforeEach(() => {
-    spyOnStreamWrite(process.stdout);
-    spyOnStreamWrite(process.stderr);
-    browserMocks.tryOpenBrowser.mockReset();
-    browserMocks.tryOpenBrowser.mockImplementation(() => Effect.succeed(true));
-  });
-
-  it('reuses an existing branch under --force without resetting its commits', async () => {
-    const repo = makeRepo();
-    await expect(runInstall(repo)).resolves.toEqual({
-      exitCode: CliExitCode.Success,
+// Live clock: the command drives real git processes.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'install-github-action command',
+  (it) => {
+    beforeEach(() => {
+      spyOnStreamWrite(process.stdout);
+      spyOnStreamWrite(process.stderr);
+      browserMocks.tryOpenBrowser.mockReset();
+      browserMocks.tryOpenBrowser.mockImplementation(() =>
+        Effect.succeed(true),
+      );
     });
 
-    writeFileSync(path.join(repo, 'custom.txt'), 'keep me\n');
-    git(repo, 'add', 'custom.txt');
-    git(repo, 'commit', '-m', 'custom branch edit');
-    const customCommit = git(repo, 'rev-parse', 'HEAD');
+    it.effect(
+      'reuses an existing branch under --force without resetting its commits',
+      () =>
+        Effect.gen(function* () {
+          yield* useCliRuntime;
+          const repo = makeRepo();
+          expect(yield* Effect.promise(() => runInstall(repo))).toEqual({
+            exitCode: CliExitCode.Success,
+          });
 
-    git(repo, 'checkout', 'main');
+          writeFileSync(path.join(repo, 'custom.txt'), 'keep me\n');
+          git(repo, 'add', 'custom.txt');
+          git(repo, 'commit', '-m', 'custom branch edit');
+          const customCommit = git(repo, 'rev-parse', 'HEAD');
 
-    await expect(runInstall(repo, '--force')).resolves.toEqual({
-      exitCode: CliExitCode.Success,
-    });
+          git(repo, 'checkout', 'main');
 
-    expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
-  });
-});
+          expect(
+            yield* Effect.promise(() => runInstall(repo, '--force')),
+          ).toEqual({ exitCode: CliExitCode.Success });
+
+          expect(git(repo, 'rev-parse', 'HEAD')).toBe(customCommit);
+        }),
+    );
+  },
+);

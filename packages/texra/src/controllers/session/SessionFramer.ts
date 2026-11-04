@@ -1,7 +1,7 @@
 /**
  * The transport framer: one per
  * transport port, answering each Subscribe with the same ordered input
- * reader the runtime fold uses: listing, named histories, local state,
+ * reader the runtime view uses: listing, named histories, local state,
  * completion marker, then durable events before live text. Host snapshots
  * are merged beside those inputs. A cold mount starts from the runtime
  * view's cursor; a resubscribe starts from the cursor it supplies.
@@ -12,7 +12,7 @@
  *
  * Framing is `Stream.groupedWithin(rows, 16 millis)` then
  * `Stream.buffer({ strategy: 'suspend' })`: durable rows must not drop, and
- * suspension parks the framer, never the publisher. Text chunks ride the
+ * suspension pauses the framer, never the publisher. Text chunks ride the
  * same buffer, merged to one per streaming row per frame where adjacent,
  * which the offsets make lossless. A later `Subscribe` on the port
  * supersedes the replay in flight; its frames echo its generation and the
@@ -22,7 +22,7 @@
  * Rows are framed as committed: secrets never enter the event table, so no
  * framer redacts.
  */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
 import {
   qualifyAggregateId,
@@ -177,7 +177,7 @@ export function frameSubscription(
           ),
         );
       const hosts = SubscriptionRef.changes(host).pipe(
-        Stream.filter((value): value is HostSnapshot => value !== null),
+        Stream.filter(Predicate.isNotNull),
         Stream.map((value): FrameItem => ({ _tag: 'host', host: value })),
       );
       return Stream.merge(inputs, hosts).pipe(

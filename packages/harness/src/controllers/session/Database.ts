@@ -5,7 +5,7 @@
  * per session root (`WorkspaceRoots`), never a process singleton; an ephemeral
  * session runs the same schema in SQLite memory, and a failed file open is an
  * error, never the ephemeral mode. `storeSchema.ts` owns the DDL and the open
- * sequence; `rowCodec.ts` every stored shape, by the arms the process's
+ * sequence; `rowCodec.ts` every stored shape, by the fact kinds the process's
  * plugins contribute (this module reads no payload); `projections` the
  * projectors and their upkeep, run in this module's transactions. This
  * module owns the envelope: the writer (`ProcessIdentity`), the publish
@@ -40,7 +40,6 @@ import {
   isDisplaySessionEvent,
   RunIdSchema,
   aggregateTarget,
-  referencedAggregates,
   type AggregateId,
   type OwnerId,
   type RunParent,
@@ -61,7 +60,7 @@ import {
   DatabaseStoreNewer,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { currentValues, READ_RETRY } from './currentValues';
 import { localDatabasePath } from './localDatabasePath';
@@ -103,7 +102,7 @@ import {
 } from './storeAside';
 import { openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
-const SESSION_DATABASE_FILE = 'texra.db';
+export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
@@ -150,6 +149,10 @@ SELECT s.kind, s.logical_id AS logicalId, s.uid, s.owner_id AS ownerId,
 FROM event_sequence s LEFT JOIN event_sequence p ON p.id = s.parent_id
 WHERE s.id IN (${AGGREGATE_LIST})
 `;
+/** The aggregates whose existence or claim changed after an ordinal
+ *  (`aggregate_change`, `storeSchema.ts`), a primary-key range. */
+const CHANGED_SINCE = `SELECT kind, logical_id AS logicalId, change
+  FROM aggregate_change WHERE change > ? ORDER BY change`;
 
 /** Stored rows a display page reads before it runs on to its batch's end. */
 const DISPLAY_PAGE_ROWS = 2000;
@@ -254,9 +257,9 @@ export const databaseLayer = (
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows.at(0)));
       /** The store gate (`storeGate`), in the caller's transaction. */
-      const arms = armsOf((yield* ToolRegistry).entries.values());
-      const gate = storeGate(exec, arms);
-      const reader = rowReader(path, arms, exec);
+      const factKinds = factKindsOf((yield* ToolRegistry).entries.values());
+      const gate = storeGate(exec, factKinds);
+      const reader = rowReader(path, factKinds, exec);
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
@@ -310,14 +313,14 @@ export const databaseLayer = (
         '"commit"',
       );
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
+        WHERE s.kind = ? AND s.logical_id = ? AND e.seq BETWEEN ? AND ?
         ORDER BY e.seq`;
       // Named: for an `IN` list the planner walks the aggregate's seq index.
       const typedRows = `SELECT ${EVENT_COLUMNS} FROM event e
         INDEXED BY event_aggregate_type ${EVENT_JOINS}
-        WHERE s.kind = ? AND s.logical_id = ? AND e.seq >= ?
+        WHERE s.kind = ? AND s.logical_id = ? AND e.seq BETWEEN ? AND ?
           AND e.type IN (SELECT value FROM json_each(?)) ORDER BY e.seq`;
-      // A tombstone closes its run and stays its last row until collected.
+      // A deletion marker closes its run and stays its last row until collected.
       const pendingDeletions = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.type = 'run.removed' ORDER BY e."commit"`;
       // One aggregate's display rows, its projected rows among them.
@@ -340,17 +343,18 @@ export const databaseLayer = (
       // A failed read logs and retries; `version` moves once its commit is read.
       yield* Effect.forkScoped(
         Stream.tick('250 millis').pipe(
-          Stream.runForEach(() =>
-            Effect.gen(function* () {
-              const next = (yield* query(execOne(dataVersion, [])))
-                ?.data_version;
-              if (next !== version) {
-                const commit = yield* query(currentCommit);
-                version = next;
-                yield* observe(commit);
-                yield* SubscriptionRef.update(level, (wake) => wake + 1);
-              }
-            }).pipe(
+          Stream.runForEach(
+            Effect.fnUntraced(
+              function* () {
+                const next = (yield* query(execOne(dataVersion, [])))
+                  ?.data_version;
+                if (next !== version) {
+                  const commit = yield* query(currentCommit);
+                  version = next;
+                  yield* observe(commit);
+                  yield* SubscriptionRef.update(level, (wake) => wake + 1);
+                }
+              },
               Effect.tapError((error) =>
                 Effect.logWarning(
                   'The session database change poll failed; retrying.',
@@ -475,12 +479,12 @@ export const databaseLayer = (
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
       const collectClosed = `DELETE FROM event_sequence
         WHERE kind = ? AND logical_id = ? AND closed_by = ?`;
-      // An aggregate's plugin rows, for its arms' transition rules.
+      // An aggregate's plugin rows, for its fact kinds' transition rules.
       const pluginRows = `SELECT ${EVENT_COLUMNS} FROM ${EVENT_FROM}
         WHERE e.aggregate = ? AND e.type = 'plugin.fact' ORDER BY e.seq`;
       const readState = (ids: readonly AggregateId[]) =>
-        Effect.gen(function* () {
-          return (yield* exec(READ_STATE, aggregateLists(ids))).map((row) =>
+        Effect.map(exec(READ_STATE, aggregateLists(ids)), (rows) =>
+          rows.map((row) =>
             Schema.decodeUnknownSync(AggregateStateSchema)({
               ...row,
               aggregateId: aggregateOf(row.kind, row.logicalId),
@@ -489,29 +493,32 @@ export const databaseLayer = (
                   ? null
                   : aggregateOf(row.parentKind, row.parentLogicalId),
             }),
-          );
-        });
-      const readDependents = (id: AggregateId) =>
-        Effect.gen(function* () {
-          return yield* readState(
-            (yield* exec(dependentKeys, aggregateColumns(id))).map((row) =>
-              aggregateOf(row.kind, row.logicalId),
-            ),
-          );
-        });
+          ),
+        );
+      const readDependents = Effect.fn('readDependents')(function* (
+        id: AggregateId,
+      ) {
+        return yield* readState(
+          (yield* exec(dependentKeys, aggregateColumns(id))).map((row) =>
+            aggregateOf(row.kind, row.logicalId),
+          ),
+        );
+      });
       /** A row whose claim moved or closed rejects this writer. Read in the
        *  rejecting transaction, so the typed rejection names the holder. */
-      const refuseWriter = (id: AggregateId, absent: string) =>
-        Effect.gen(function* () {
-          const held = (yield* readState([id]))[0];
-          if (held === undefined) return yield* invariant(`${absent}: ${id}`);
-          const { ownerId, closed } = held;
-          return yield* new DatabaseNotOwner({
-            aggregateId: id,
-            ownerId,
-            closed,
-          });
+      const refuseWriter = Effect.fn('refuseWriter')(function* (
+        id: AggregateId,
+        absent: string,
+      ) {
+        const held = (yield* readState([id]))[0];
+        if (held === undefined) return yield* invariant(`${absent}: ${id}`);
+        const { ownerId, closed } = held;
+        return yield* new DatabaseNotOwner({
+          aggregateId: id,
+          ownerId,
+          closed,
         });
+      });
       const othersOf = (observed: readonly AggregateState[]) =>
         new Set(
           observed.flatMap((row) =>
@@ -522,259 +529,250 @@ export const databaseLayer = (
         );
       /** Claim `observed`, which MUST be read in this same transaction, once
        *  its other owners are proven dead (deleting a single run: or unprovable). */
-      const claimAll = (
+      const claimAll = Effect.fn('claimAll')(function* (
         observed: readonly AggregateState[],
         mode?: DeletionMode,
-      ) =>
-        Effect.gen(function* () {
-          yield* reclaimable(othersOf(observed), mode === 'single');
-          yield* exec(
-            `UPDATE event_sequence SET owner_id = ? WHERE id IN (${AGGREGATE_LIST}) AND closed_by IS NULL`,
-            [
-              identity.ownerId,
-              ...aggregateLists(observed.map((row) => row.aggregateId)),
-            ],
-          );
-        });
+      ) {
+        yield* reclaimable(othersOf(observed), mode === 'single');
+        yield* exec(
+          `UPDATE event_sequence SET owner_id = ? WHERE id IN (${AGGREGATE_LIST}) AND closed_by IS NULL`,
+          [
+            identity.ownerId,
+            ...aggregateLists(observed.map((row) => row.aggregateId)),
+          ],
+        );
+      });
       const upkeep = projectionUpkeep(exec, reader.read, path);
       /** A read of the projections, in the same read transaction as the
        *  check that they are current, so another build's rebuild never hands
        *  it a half-built one; a stale one catches up, a transaction a step,
        *  and the read runs again. */
-      const projected = <A, E>(read: Effect.Effect<A, E>) =>
-        Effect.gen(function* () {
-          for (;;) {
-            const result = yield* transaction(
-              'read',
-              Effect.gen(function* () {
-                if (!(yield* upkeep.current(yield* currentCommit))) return null;
-                return { value: yield* read };
-              }),
-              readFailed,
-            );
-            if (result !== null) return result.value;
-            yield* transaction(
-              'derive',
-              Effect.flatMap(currentCommit, upkeep.catchUp),
-              readFailed,
-            ).pipe(Effect.repeat({ until: (done) => done }));
-          }
-        });
-      const appendRows = (
+      const projected = Effect.fn('projected')(function* <A, E>(
+        read: Effect.Effect<A, E>,
+      ) {
+        for (;;) {
+          const result = yield* transaction(
+            'read',
+            Effect.gen(function* () {
+              if (!(yield* upkeep.current(yield* currentCommit))) return null;
+              return { value: yield* read };
+            }),
+            readFailed,
+          );
+          if (result !== null) return result.value;
+          yield* transaction(
+            'derive',
+            Effect.flatMap(currentCommit, upkeep.catchUp),
+            readFailed,
+          ).pipe(Effect.repeat({ until: (done) => done }));
+        }
+      });
+      const appendRows = Effect.fn('appendRows')(function* (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
-      ) =>
-        Effect.gen(function* () {
-          const before = yield* currentCommit;
-          const committed = yield* Effect.forEach(prepared, ({ draft, row }) =>
-            appendRow(draft, row, at),
-          );
-          const kinds = new Map(
-            prepared.flatMap(({ draft, row }) => [
-              [row.type, row.version] as const,
-              ...(draft.type === 'plugin.fact'
-                ? [
-                    [
-                      pluginKind(draft.plugin, draft.kind),
-                      draft.version,
-                    ] as const,
-                  ]
-                : []),
-            ]),
-          );
-          for (const [type, version] of kinds)
-            yield* exec(UPSERT_KIND, [type, version]);
-          yield* upkeep.follow(committed, before);
-          return committed;
-        });
-      const appendRow = (
+      ) {
+        const before = yield* currentCommit;
+        const committed = yield* Effect.forEach(prepared, ({ draft, row }) =>
+          appendRow(draft, row, at),
+        );
+        const kinds = new Map(
+          prepared.flatMap(({ draft, row }) => [
+            [row.type, row.version] as const,
+            ...(draft.type === 'plugin.fact'
+              ? [[pluginKind(draft.plugin, draft.kind), draft.version] as const]
+              : []),
+          ]),
+        );
+        for (const [type, version] of kinds)
+          yield* exec(UPSERT_KIND, [type, version]);
+        yield* upkeep.follow(committed, before);
+        return committed;
+      });
+      const appendRow = Effect.fn('appendRow')(function* (
         draft: SessionEventDraft,
         row: EncodedRow,
         at: number,
-      ) =>
-        Effect.gen(function* () {
-          const edges = edgesOf(draft);
-          const target = aggregateTarget(draft.aggregateId);
-          const columns = aggregateColumns(draft.aggregateId);
-          if (edges.borrowsClaim) {
-            // A plugin's own aggregate borrows its claim for this transaction only.
-            yield* exec(claim, [identity.ownerId, ...columns, null]);
-          }
-          if (edges.reparent != null) {
-            // A new parent run must be open and held by this writer.
-            const current = (yield* readState([draft.aggregateId]))[0];
-            if (current?.parentId !== edges.reparent) {
-              const parent = (yield* readState([edges.reparent]))[0];
-              if (
-                !parent ||
-                parent.closed ||
-                parent.ownerId !== identity.ownerId
-              ) {
-                return yield* invariant(
-                  `A plugin aggregate's new parent must be open and owned here: ${edges.reparent}`,
-                );
-              }
-            }
-          }
-          const next = yield* execOne(NEXT_SEQ, [
-            ...columns,
-            randomUUID(),
-            identity.ownerId,
-          ]);
-          const seq = next?.seq;
-          const aggregate = next?.id;
-          if (typeof seq !== 'number' || typeof aggregate !== 'number') {
-            return yield* refuseWriter(
-              draft.aggregateId,
-              'Sequence refused for an absent aggregate',
-            );
-          }
-          if (draft.type === 'plugin.fact') {
-            const name = `${draft.plugin}/${draft.kind}`;
-            // Never over a corrupt row of the aggregate: it fails whole.
-            const last = (yield* reader.read(
-              yield* exec(pluginRows, [aggregate]),
-              true,
-            )).findLast(
-              (row) =>
-                row.type === 'plugin.fact' &&
-                `${row.plugin}/${row.kind}` === name,
-            );
-            const refused =
-              target.kind === 'run' && draft.parent !== null
-                ? `A run's own plugin fact names no parent: ${name}`
-                : arms[name]?.admits?.(
-                    last?.type === 'plugin.fact' ? last : undefined,
-                    draft,
-                  );
-            if (refused) return yield* invariant(refused);
-          }
-          // The seq-1 rule: a run aggregate begins with exactly
-          // one `run.start`, and nothing else ever lands at seq 1.
-          if (
-            target.kind === 'run' &&
-            (seq === 1) !== (draft.type === 'run.start')
-          ) {
-            return yield* invariant(
-              `A run must begin with exactly one run.start: ${draft.aggregateId}`,
-            );
-          }
-          if (
-            (draft.type === 'run.start' || draft.type === 'run.removed') &&
-            target.kind !== 'run'
-          ) {
-            return yield* invariant(
-              `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
-            );
-          }
-          // Stamp the declared parent's incarnation in this transaction: a
-          // reused logical id must not redirect the child to a later one.
-          let parent: RunParent | null = null;
-          if (edges.parent !== null) {
-            const parentState = (yield* readState([edges.parent]))[0];
+      ) {
+        const edges = edgesOf(draft);
+        const target = aggregateTarget(draft.aggregateId);
+        const columns = aggregateColumns(draft.aggregateId);
+        if (edges.borrowsClaim) {
+          // A plugin's own aggregate borrows its claim for this transaction only.
+          yield* exec(claim, [identity.ownerId, ...columns, null]);
+        }
+        if (edges.reparent != null) {
+          // A new parent run must be open and held by this writer.
+          const current = (yield* readState([draft.aggregateId]))[0];
+          if (current?.parentId !== edges.reparent) {
+            const parent = (yield* readState([edges.reparent]))[0];
             if (
-              !parentState ||
-              parentState.closed ||
-              parentState.startCommit === null
+              !parent ||
+              parent.closed ||
+              parent.ownerId !== identity.ownerId
             ) {
               return yield* invariant(
-                `Child creation requires an open parent: ${edges.parent}`,
+                `A plugin aggregate's new parent must be open and owned here: ${edges.reparent}`,
               );
             }
-            parent = {
-              id: runIdOf(aggregateTarget(edges.parent).id),
-              uid: parentState.uid,
-              call:
-                draft.type === 'run.start'
-                  ? (draft.parent?.call ?? null)
-                  : null,
-            };
           }
-          // A tombstone names only run directories this lifecycle owns,
-          // derived under the closure's permit and transaction, not a caller.
-          const committedDraft = yield* Effect.gen(function* () {
-            if (draft.type === 'run.removed') {
-              const owned = yield* exec(deletionRuns, columns);
-              return { ...draft, runIds: owned.map((r) => runIdOf(r.runId)) };
-            }
-            if (draft.type === 'run.start') return { ...draft, parent };
-            return draft;
-          });
-          const encoded =
-            committedDraft === draft ? row : encodeDraft(committedDraft);
-          const commit = (yield* execOne(INSERT_EVENT, [
-            aggregate,
-            seq,
-            encoded.type,
-            encoded.version,
-            identity.ownerId,
-            at,
-            encoded.data,
-          ]))?.commit;
-          if (typeof commit !== 'number')
+        }
+        const next = yield* execOne(NEXT_SEQ, [
+          ...columns,
+          randomUUID(),
+          identity.ownerId,
+        ]);
+        const seq = next?.seq;
+        const aggregate = next?.id;
+        if (typeof seq !== 'number' || typeof aggregate !== 'number') {
+          return yield* refuseWriter(
+            draft.aggregateId,
+            'Sequence refused for an absent aggregate',
+          );
+        }
+        if (draft.type === 'plugin.fact') {
+          const name = `${draft.plugin}/${draft.kind}`;
+          // Never over a corrupt row of the aggregate: it fails whole.
+          const last = (yield* reader.read(
+            yield* exec(pluginRows, [aggregate]),
+            true,
+          )).findLast(
+            (row) =>
+              row.type === 'plugin.fact' &&
+              `${row.plugin}/${row.kind}` === name,
+          );
+          const refused =
+            target.kind === 'run' && draft.parent !== null
+              ? `A run's own plugin fact names no parent: ${name}`
+              : factKinds[name]?.accepts?.(
+                  last?.type === 'plugin.fact' ? last : undefined,
+                  draft,
+                );
+          if (refused) return yield* invariant(refused);
+        }
+        // The seq-1 rule: a run aggregate begins with exactly
+        // one `run.start`, and nothing else ever lands at seq 1.
+        if (
+          target.kind === 'run' &&
+          (seq === 1) !== (draft.type === 'run.start')
+        ) {
+          return yield* invariant(
+            `A run must begin with exactly one run.start: ${draft.aggregateId}`,
+          );
+        }
+        if (
+          (draft.type === 'run.start' || draft.type === 'run.removed') &&
+          target.kind !== 'run'
+        ) {
+          return yield* invariant(
+            `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
+          );
+        }
+        // Stamp the declared parent's incarnation in this transaction: a
+        // reused logical id must not redirect the child to a later one.
+        let parent: RunParent | null = null;
+        if (edges.parent !== null) {
+          const parentState = (yield* readState([edges.parent]))[0];
+          if (
+            !parentState ||
+            parentState.closed ||
+            parentState.startCommit === null
+          ) {
             return yield* invariant(
-              `No commit assigned for aggregate ${draft.aggregateId}`,
-            );
-          for (const { digest, value } of encoded.blobs) {
-            yield* exec(INSERT_BLOB, [digest, value]);
-            yield* exec(INSERT_REF, [commit, digest]);
-          }
-          // Linked, not written: the foreign key refuses a blob that is gone.
-          for (const digest of encoded.references)
-            yield* exec(INSERT_REF, [commit, digest]);
-          if (seq === 1) {
-            yield* exec(
-              'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
-              [commit, aggregate],
+              `Child creation requires an open parent: ${edges.parent}`,
             );
           }
-          if (edges.reparent !== undefined) {
-            // A plugin's aggregate hangs under its `parent` run, so that
-            // run's deletion collects it, or under none.
-            const parentColumns =
-              edges.reparent === null
-                ? [null, null]
-                : aggregateColumns(edges.reparent);
-            yield* exec(reparent, [
-              ...parentColumns,
-              aggregate,
-              identity.ownerId,
-            ]);
-          }
-          if (edges.borrowsClaim) {
-            yield* exec(
-              'UPDATE event_sequence SET owner_id = NULL WHERE id = ? AND owner_id = ?',
-              [aggregate, identity.ownerId],
-            );
-          }
-          if (edges.closes) {
-            // Closing an aggregate requires every open dependent claim, held
-            // in the tombstone's transaction, so no claimant can change between.
-            const unowned = yield* execOne(unownedDependent, [
-              ...columns,
-              identity.ownerId,
-            ]);
-            if (unowned)
-              return yield* invariant(
-                `Deletion requires the dependent claim: ${aggregateOf(unowned.kind, unowned.logicalId)}`,
-              );
-            yield* exec(closeDependents, [...columns, commit]);
-          }
-          return {
-            ...committedDraft,
-            seq,
-            commit,
-            origin: identity.ownerId,
-            at,
+          parent = {
+            id: runIdOf(aggregateTarget(edges.parent).id),
+            uid: parentState.uid,
+            call:
+              draft.type === 'run.start' ? (draft.parent?.call ?? null) : null,
           };
+        }
+        // A deletion marker names only run directories this lifecycle owns,
+        // derived under the closure's permit and transaction, not a caller.
+        const committedDraft = yield* Effect.gen(function* () {
+          if (draft.type === 'run.removed') {
+            const owned = yield* exec(deletionRuns, columns);
+            return { ...draft, runIds: owned.map((r) => runIdOf(r.runId)) };
+          }
+          if (draft.type === 'run.start') return { ...draft, parent };
+          return draft;
         });
+        const encoded =
+          committedDraft === draft ? row : encodeDraft(committedDraft);
+        const commit = (yield* execOne(INSERT_EVENT, [
+          aggregate,
+          seq,
+          encoded.type,
+          encoded.version,
+          identity.ownerId,
+          at,
+          encoded.data,
+        ]))?.commit;
+        if (typeof commit !== 'number')
+          return yield* invariant(
+            `No commit assigned for aggregate ${draft.aggregateId}`,
+          );
+        for (const { digest, value } of encoded.blobs) {
+          yield* exec(INSERT_BLOB, [digest, value]);
+          yield* exec(INSERT_REF, [commit, digest]);
+        }
+        // Linked, not written: the foreign key refuses a blob that is gone.
+        for (const digest of encoded.references)
+          yield* exec(INSERT_REF, [commit, digest]);
+        if (seq === 1) {
+          yield* exec(
+            'UPDATE event_sequence SET start_commit = ? WHERE id = ?',
+            [commit, aggregate],
+          );
+        }
+        if (edges.reparent !== undefined) {
+          // A plugin's aggregate hangs under its `parent` run, so that
+          // run's deletion collects it, or under none.
+          const parentColumns =
+            edges.reparent === null
+              ? [null, null]
+              : aggregateColumns(edges.reparent);
+          yield* exec(reparent, [
+            ...parentColumns,
+            aggregate,
+            identity.ownerId,
+          ]);
+        }
+        if (edges.borrowsClaim) {
+          yield* exec(
+            'UPDATE event_sequence SET owner_id = NULL WHERE id = ? AND owner_id = ?',
+            [aggregate, identity.ownerId],
+          );
+        }
+        if (edges.closes) {
+          // Closing an aggregate requires every open dependent claim, held
+          // in the deletion marker's transaction, so no claimant can change between.
+          const unowned = yield* execOne(unownedDependent, [
+            ...columns,
+            identity.ownerId,
+          ]);
+          if (unowned)
+            return yield* invariant(
+              `Deletion requires the dependent claim: ${aggregateOf(unowned.kind, unowned.logicalId)}`,
+            );
+          yield* exec(closeDependents, [...columns, commit]);
+        }
+        return {
+          ...committedDraft,
+          seq,
+          commit,
+          origin: identity.ownerId,
+          at,
+        };
+      });
       return {
         observedCommit,
         movedAside,
         level,
         currentCommit: query(currentCommit),
         readDisplay: (fromCommit) => {
-          // Pages are separate snapshots: a tombstone seen stays in view.
+          // Pages are separate snapshots: a deletion marker seen stays in view.
           const tombstones = new Map<number, SessionEvent>();
           return Stream.paginate(fromCommit, (from) =>
             projected(
@@ -821,16 +819,19 @@ export const databaseLayer = (
             exec(UPSERT_KIND, [CURRENT_VALUE_KIND, CURRENT_VALUE_VERSION]),
           ),
         }),
-        readAggregate: (id, fromSeq, types) =>
-          query(
+        readAggregate: (
+          id,
+          fromSeq,
+          types,
+          toSeq = Number.MAX_SAFE_INTEGER,
+        ) => {
+          const range = [...aggregateColumns(id), fromSeq, toSeq];
+          return query(
             types === undefined
-              ? decodedRows(aggregate, [...aggregateColumns(id), fromSeq], true)
-              : decodedRows(
-                  typedRows,
-                  [...aggregateColumns(id), fromSeq, JSON.stringify(types)],
-                  true,
-                ),
-          ),
+              ? decodedRows(aggregate, range, true)
+              : decodedRows(typedRows, [...range, JSON.stringify(types)], true),
+          );
+        },
         readDisplayAggregate: (id, fromSeq) =>
           projected(
             decodedRows(displayAggregate, [
@@ -854,10 +855,13 @@ export const databaseLayer = (
             liveness: yield* liveness(owner),
           };
         }),
-        readInputBatch: (ids, fromCommit, checkedIds = ids) =>
+        readInputBatch: (ids, fromCommit, checkedIds, since) =>
           projected(
             Effect.gen(function* () {
               const cursor = yield* currentCommit;
+              const changed =
+                since === undefined ? [] : yield* exec(CHANGED_SINCE, [since]);
+              const change = Number(changed.at(-1)?.change ?? since ?? 0);
               const events = yield* decodedRows(inputRows, [
                 LISTED_TYPES,
                 ...aggregateLists(ids),
@@ -866,12 +870,12 @@ export const databaseLayer = (
                 cursor,
               ]);
               const checked = new Set(checkedIds);
-              for (const event of events) {
-                for (const id of referencedAggregates(event)) checked.add(id);
-              }
+              for (const row of changed)
+                checked.add(aggregateOf(row.kind, row.logicalId));
               const checkedAggregateIds = [...checked];
               return {
                 cursor,
+                change,
                 events,
                 checkedAggregateIds,
                 state: yield* readState(checkedAggregateIds),
@@ -937,40 +941,41 @@ export const databaseLayer = (
         ),
         deletions: {
           pending: () => query(decodedRows(pendingDeletions, [])),
-          collect: (tombstone, cleanup) =>
-            Effect.gen(function* () {
-              const columns = aggregateColumns(tombstone.aggregateId);
-              // Already collected (by this pass before, or another process).
-              if (
-                (yield* query(
-                  execOne(closedBy, [...columns, tombstone.commit]),
-                )) === undefined
-              )
-                return;
-              // A store a newer build wrote takes no deletion from this one,
-              // and the files go only once the store would take the collection.
-              yield* query(gate);
-              // Filesystem promises cannot be undone by fiber interruption.
-              yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
-              yield* transact(
-                Effect.gen(function* () {
-                  const digests = (yield* exec(dependentBlobs, columns)).map(
-                    (row) => row.digest,
-                  );
-                  yield* exec(collectClosed, [...columns, tombstone.commit]);
-                  if (digests.length > 0)
-                    yield* exec(collectBlobs, [JSON.stringify(digests)]);
-                }),
-              );
-              yield* reclaimFreePages(sql, path);
-            }),
+          collect: Effect.fn('collect')(function* (tombstone, cleanup) {
+            const columns = aggregateColumns(tombstone.aggregateId);
+            // Already collected (by this pass before, or another process).
+            if (
+              (yield* query(
+                execOne(closedBy, [...columns, tombstone.commit]),
+              )) === undefined
+            )
+              return;
+            // A store a newer build wrote takes no deletion from this one,
+            // and the files go only once the store would take the collection.
+            yield* query(gate);
+            // Filesystem promises cannot be undone by fiber interruption.
+            yield* cleanup(tombstone.runIds).pipe(Effect.uninterruptible);
+            yield* transact(
+              Effect.gen(function* () {
+                const digests = (yield* exec(dependentBlobs, columns)).map(
+                  (row) => row.digest,
+                );
+                yield* exec(collectClosed, [...columns, tombstone.commit]);
+                if (digests.length > 0)
+                  yield* exec(collectBlobs, [JSON.stringify(digests)]);
+              }),
+            );
+            yield* reclaimFreePages(sql, path);
+          }),
         },
-        releaseClaims: (ids) =>
+        releaseClaims: (ids, heldAgain = () => false) =>
           ids.length === 0
             ? Effect.void
             : transaction(
                 'write',
-                exec(release, [...aggregateLists(ids), identity.ownerId]),
+                exec(release, [...aggregateLists(ids), identity.ownerId]).pipe(
+                  Effect.when(Effect.sync(() => !heldAgain())),
+                ),
                 writeFailed,
                 false,
               ),

@@ -10,11 +10,11 @@
  */
 
 // Local file imports
+import type { ConfigProvider, StateStore } from '@shared/config/settings';
 import { JsonConfigProvider } from './jsonConfigProvider';
 import { resolveGlobalStoragePath } from './workspaceStorage';
 import type { WorkspaceRoots } from '../workspaceRoots';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { ConfigProvider, StateStore } from '../interfaces';
 
 /** The per-workspace services a Node host opens for one workspace folder. */
 export interface NodeWorkspaceRootsInit {
@@ -41,7 +41,7 @@ export interface NodeWorkspaceRootsInit {
 /**
  * Build the `WorkspaceRoots` for one workspace folder: the canonical physical
  * root, the pinned storage path, and the config/state stores opened for it.
- * Every host (and the desktop, once per open paper) builds its roots here so
+ * Every host (and the desktop, once per open project) builds its roots here so
  * the config-provider choice cannot drift.
  */
 export function createNodeWorkspaceRoots(

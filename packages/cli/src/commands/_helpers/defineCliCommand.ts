@@ -1,7 +1,7 @@
 import { defineCommand, type ArgsDef, type CommandDef } from 'citty';
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import { setLogSink } from '@texra-ai/harness/host';
+import { setLogSink } from '@texra-ai/harness/node';
 import { ensureError } from '@texra-ai/harness/schemas';
 import {
   installCliProcessRuntime,
@@ -28,11 +28,11 @@ type CliCommandRunContext<A extends ArgsDef> = Parameters<
 >[0];
 
 /**
- * What a command's program settles on: the process exit code, or the chat
+ * What a command's program finishes with: the process exit code, or the chat
  * session it hands the terminal to (`texra setup`'s setup agent, `texra
  * resume`'s tool-use session). The TUI is not part of the program: `runChat`
  * installs Ink, its own SIGINT/SIGTERM pair and the teardown it owns, so it
- * mounts after the program has settled rather than inside a fiber of the
+ * mounts after the program has finished rather than inside a fiber of the
  * runtime it outlives.
  */
 type CliCommandOutcome = number | { readonly chat: RunChatInit };
@@ -51,10 +51,10 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
    * warnings surfaced by `contextFromArgs`) and citty's run context, and
    * returns the command as the program it is: one Effect ending in the
    * process exit code, which this helper runs on the process runtime below.
-   * The value it settles on is forwarded to `setExitCode`, so a handler
+   * The value it finishes with is forwarded to `setExitCode`, so a handler
    * reduces to "do the work, return a code" — or, for a command that ends in
    * the chat TUI, "do the work, name the session", which this helper mounts
-   * once the program has settled.
+   * once the program has finished.
    *
    * It is called to BUILD that program, before the runtime is installed. A
    * command that can refuse its arguments without the runtime refuses HERE,
@@ -98,7 +98,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
 }
 
 /**
- * Folds the `contextFromArgs` → install the process runtime → run the
+ * Combines the `contextFromArgs` → install the process runtime → run the
  * command's program → `setExitCode` boilerplate (optionally with the
  * error→stderr+exit-code catch) that every headless command repeats into one
  * declaration.
@@ -124,12 +124,11 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       const context = await Effect.runPromise(
         contextFromArgs(ctx.args, ctx.rawArgs),
       );
-      const runCtx = ctx as CliCommandRunContext<A>;
       // Built before the run below, not inside it: a `CliUsageError` the
       // builder throws is the command refusing its arguments, which `runCli`
       // reports as a usage error, and `catchExitCode` speaks only for the
       // work. Building it here keeps that true for a command that does both.
-      const program = options.run(context, runCtx);
+      const program = options.run(context, ctx);
       // The sink that covers the runtime build below, chosen now that the
       // context has answered `--quiet`. `installCliProcessRuntime` logs
       // while its layers build (`UsageLogService started …`), and for a
@@ -144,7 +143,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
       );
       // The command runs on the process runtime from plain async code, never
       // from inside a default-runtime fiber: started from one, a headless
-      // run's Ctrl-C shutdown drain never settled. A failed install folds
+      // run's Ctrl-C shutdown drain never finished. A failed install turns
       // into the same exit as a failed program, so both reach one report.
       const runtime = Result.try({
         try: () =>
@@ -179,8 +178,8 @@ export function defineCliCommand<const A extends ArgsDef, E>(
           setExitCode(outcome);
           return;
         }
-        // The TUI mounts at this Promise edge, after the program has settled,
-        // on the runtime that program ran on (a settled program means the
+        // The TUI mounts at this Promise edge, after the program has finished,
+        // on the runtime that program ran on (a finished program means the
         // install succeeded): `runChat` owns Ink, its own signal handlers and
         // its teardown.
         const { runChat } = await import('@cli/chat/tui/runChatTui');

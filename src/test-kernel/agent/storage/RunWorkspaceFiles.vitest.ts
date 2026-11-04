@@ -1,20 +1,20 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { fakePath } from '@test/support/FakePlatform';
-import { setupPlatform } from '@test/support/setupPlatform';
+import { FakeHost } from '@test/support/testKernel';
 
 const WORKSPACE_PATH = fakePath('workspace');
 
-describe('listRunWorkspaceFiles', () => {
-  setupPlatform({ workspacePath: WORKSPACE_PATH });
-
-  it.live(
+layer(FakeHost.layer({ workspacePath: WORKSPACE_PATH }), {
+  excludeTestServices: true,
+})('listRunWorkspaceFiles', (it) => {
+  it.effect(
     'lists unique contained entries in path order and omits missing paths',
     () =>
       Effect.gen(function* () {

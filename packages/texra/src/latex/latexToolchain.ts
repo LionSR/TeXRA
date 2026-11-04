@@ -5,7 +5,7 @@ import {
   SUPPORTED_LATEX_COMPILERS,
   type DoctorLatexTool,
 } from '@texra/shared/constants/latexToolchain';
-import { checkToolInstalled } from '@texra/utils/system/toolChecks';
+import { probeTool } from '@texra/utils/system/toolChecks';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexToolStatus = DoctorLatexTool & { readonly installed: boolean };
@@ -24,10 +24,10 @@ export const probeLatexToolchain = Effect.fn('latex.probeLatexToolchain')(
   > {
     const tools = yield* Effect.all(
       DOCTOR_LATEX_TOOLS.map((tool) =>
-        Effect.map(
-          checkToolInstalled(tool.name, false),
-          (installed): LatexToolStatus => ({ ...tool, installed }),
-        ),
+        Effect.map(probeTool(tool.name), (installed): LatexToolStatus => ({
+          ...tool,
+          installed,
+        })),
       ),
       { concurrency: 'unbounded' },
     );
@@ -40,15 +40,5 @@ export const probeLatexToolchain = Effect.fn('latex.probeLatexToolchain')(
         installed.has(name),
       ),
     };
-  },
-);
-
-/** Returns true when a compiler {@link compileLatex2Pdf} can drive is on PATH. */
-export const hasLatexCompiler = Effect.fn('latex.hasLatexCompiler')(
-  function* (): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-    for (const tool of SUPPORTED_LATEX_COMPILERS) {
-      if (yield* checkToolInstalled(tool, false)) return true;
-    }
-    return false;
   },
 );

@@ -39,7 +39,7 @@ jobs:
       packages: ${{ steps.detect.outputs.packages }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Deno
         uses: denoland/setup-deno@v2.0.5
@@ -124,15 +124,16 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      # The ratchets and cheap invariant scripts (`npm run gate:invariants`).
+      # The cheap invariant scripts (`npm run gate:invariants`).
       - name: Check invariants
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. The ratchet check judges this tree against its
-          # merge base with the target: fetch the target tip if it is missing,
-          # then deepen the target and HEAD until git finds the merge base. The
-          # check fails loudly if it still cannot.
+          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (the
+          # core-quality counts, fact spread and row-kind list) judge this
+          # tree against its merge base with the target: fetch the target tip
+          # if it is missing, then deepen the target and HEAD until git finds
+          # the merge base. The checks fail loudly if it still cannot.
           if ! git rev-parse --verify "$TEXRA_RATCHET_BASE^{commit}" >/dev/null 2>&1; then
             git fetch --no-tags --depth=1 origin \
               "+refs/heads/${TEXRA_RATCHET_BASE#origin/}:refs/remotes/$TEXRA_RATCHET_BASE"
@@ -175,7 +176,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -196,7 +197,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -215,13 +216,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # setup-node@v5 caches the package manager named by package.json's
       # `packageManager` (pnpm) by default and fails when pnpm is absent;
       # this job installs nothing, so opt out.
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           package-manager-cache: false
@@ -283,10 +284,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
+
+      # Vitest starts the files that took longest last run first; without
+      # its results it falls back to the largest files, and the crash-point
+      # suites (a few lines each, the slowest by far) would start last and
+      # set the shard's wall-clock. Each run saves its own results; a run
+      # restores the newest a shard saved, a PR's from its base branch.
+      - name: Restore test durations
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.vite/vitest
+          key: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-
 
       # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
       # shards exist because a single runner can't go wider than that.
@@ -302,7 +315,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -357,7 +370,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -392,7 +405,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -443,7 +456,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -461,7 +474,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -495,7 +508,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace

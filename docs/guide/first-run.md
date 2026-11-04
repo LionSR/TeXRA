@@ -26,7 +26,7 @@ A credential is the one step no agent can do for you. Three ways in:
 - **Use your own provider API key**: Anthropic, OpenAI, Google, and
   more. Read
   [Quick start: add a key or connect a subscription](./quick-start.md#add-a-key-or-connect-a-subscription).
-- **Use a ChatGPT subscription**: Codex models through your ChatGPT plan.
+- **Use a ChatGPT subscription**: OpenAI models through your ChatGPT plan.
   In VS Code, open **Settings → Models → Subscriptions** and use the
   ChatGPT sign-in section; in the terminal, run `texra auth chatgpt login`.
   Grok connects from the same place; Kimi Code and the GLM Coding Plan take

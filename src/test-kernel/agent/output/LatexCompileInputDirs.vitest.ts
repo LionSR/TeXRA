@@ -2,19 +2,19 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 // Local imports
-import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
+import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import { RunFileService } from '@texra-ai/harness/plugins';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { installPlatform } from '@test/support/setupPlatform';
 import { spiedTrace } from '@test/support/spiedTrace';
+import { FakeHost } from '@test/support/testKernel';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
-import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
 import {
@@ -30,12 +30,10 @@ const mocks = vi.hoisted(() => ({
     (): Effect.Effect<{ ok: boolean; logTail?: string }> =>
       Effect.succeed({ ok: true }),
   ),
-  hasLatexCompiler: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
   publishCompiledPdfArtifact: vi.fn((): Effect.Effect<null, Error> =>
     Effect.succeed(null),
   ),
-  // The latexdiff process edge: its probe and its run.
-  checkToolInstalled: vi.fn((): Effect.Effect<boolean> => Effect.succeed(true)),
+  // The latexdiff process edge: its run.
   executeCommand: vi.fn(() =>
     Effect.succeed({
       success: true,
@@ -46,20 +44,12 @@ const mocks = vi.hoisted(() => ({
   ),
 }));
 
-vi.mock('@texra/utils/system/toolChecks', () => ({
-  checkToolInstalled: mocks.checkToolInstalled,
-}));
-
 vi.mock('@utils/system/execUtils', () => ({
   executeCommand: mocks.executeCommand,
 }));
 
 vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
-}));
-
-vi.mock('@latex/latexToolchain', () => ({
-  hasLatexCompiler: mocks.hasLatexCompiler,
 }));
 
 vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
@@ -70,32 +60,30 @@ vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
   publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
 }));
 
-describe('workflow LaTeX compile input directories', () => {
-  // Two documents sharing a file name: each pair's diff once landed on the
-  // same flat `diff/r1/main_diff.tex`, the second overwriting the first.
-  it.live("writes each document's latexdiffs under its own folder", () =>
+const runId = 'latexdiff-same-basename' as RunId;
+const document = (body: string) =>
+  `\\documentclass{article}\\begin{document}${body}\\end{document}`;
+const files = ['original', 'r0', 'r1'].flatMap((dir) =>
+  ['a', 'b'].map((folder) => path.join(dir, folder, 'main.tex')),
+);
+
+// Two documents sharing a file name: each pair's diff once landed on the
+// same flat `diff/r1/main_diff.tex`, the second overwriting the first.
+layer(
+  FakeHost.layer({
+    files: Object.fromEntries(
+      files.map((file) => [path.join(runDir(runId), file), document(file)]),
+    ),
+    storagePath,
+    workspacePath,
+    workspaceState: {
+      [DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS]: true,
+    },
+  }),
+  { excludeTestServices: true },
+)('workflow LaTeX compile input directories', (it) => {
+  it.effect("writes each document's latexdiffs under its own folder", () =>
     Effect.gen(function* () {
-      const runId = 'latexdiff-same-basename' as RunId;
-      const document = (body: string) =>
-        `\\documentclass{article}\\begin{document}${body}\\end{document}`;
-      const files = ['original', 'r0', 'r1'].flatMap((dir) =>
-        ['a', 'b'].map((folder) => path.join(dir, folder, 'main.tex')),
-      );
-      yield* Effect.promise(() =>
-        installPlatform({
-          files: Object.fromEntries(
-            files.map((file) => [
-              path.join(runDir(runId), file),
-              document(file),
-            ]),
-          ),
-          storagePath,
-          workspacePath,
-          workspaceState: {
-            [DocumentsStateKey.LATEXDIFF_BETWEEN_ROUNDS]: true,
-          },
-        }),
-      );
       const output = (round: number, folder: string): OutputFileInfo => ({
         source: `${folder}/main.tex`,
         round,

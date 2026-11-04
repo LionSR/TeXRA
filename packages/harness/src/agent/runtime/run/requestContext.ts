@@ -1,5 +1,5 @@
 /**
- * What the model saw, recorded (#13394): every model request is rebuilt
+ * What the model saw, recorded: every model request is rebuilt
  * from the run's durable rows alone. The content a request carries besides
  * its history (each tool declaration, the system text, the resolved agent
  * definition) is stored once per run as a `context.blob` row under the
@@ -40,6 +40,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import { RunHistory } from '@shared/session/runHistory';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { sha256 } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -337,15 +338,13 @@ function mismatch(state: RunState, sent: ResolvedTurn): string | null {
  * turn `sent` goes to the provider, unless its rows rebuild it exactly.
  */
 export const checkRecordedRequest = Effect.fn('requestContext.check')(
-  function* (
-    run: Pick<AgentRunShape, 'runId' | 'session'>,
-    sent: ResolvedTurn,
-  ) {
+  function* (run: Pick<AgentRunShape, 'runId'>, sent: ResolvedTurn) {
     const on =
       (yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT')) ||
       (yield* envFlag('VITEST'));
     if (!on) return;
-    const state = yield* Effect.orDie(run.session.runHistory.load(run.runId));
+    const runHistory = yield* RunHistory;
+    const state = yield* Effect.orDie(runHistory.load(run.runId));
     const problem = Result.merge(
       Result.try({
         try: () =>

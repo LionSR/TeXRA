@@ -45,8 +45,14 @@ export const HookOutcomePayloadSchema = Schema.Struct({
   durationMs: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   status: HookStatusSchema,
   exitCode: Schema.NullOr(Schema.Int),
-  /** A `PreToolUse` denial's reason, as the model reads it. */
-  deny: Schema.NullOr(Schema.String),
+  /** What a `PreToolUse` hook said about the call: null when it gave no
+   *  answer (or `defer`), as every other event's hook does. */
+  decision: Schema.NullOr(Schema.Literals(['allow', 'deny', 'ask'])),
+  /** Why, as the model reads a denial and a person reads a question. */
+  reason: Schema.NullOr(Schema.String),
+  /** The call's input as a `PreToolUse` hook rewrote it, kept so a resume
+   *  reads it rather than running the hook again. */
+  updatedInput: Schema.NullOr(Schema.JsonObject),
   /** Text the model reads beside the prompt or the tool result; for a
    *  stop, the instruction its block continues the run with. */
   context: Schema.NullOr(Schema.String),

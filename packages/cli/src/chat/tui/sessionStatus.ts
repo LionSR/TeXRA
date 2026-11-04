@@ -27,7 +27,7 @@ export interface CliSessionStatusInput {
   readonly teamName?: string;
   readonly modelAccess: UsageRoute | undefined;
   readonly approvalBypasses?: Partial<BypassState>;
-  /** The fold's status label for the reported stream; undefined before a run. */
+  /** The session view's status label for the reported stream; undefined before a run. */
   readonly statusLabel: string | undefined;
   readonly activeChildSessions?: number;
   /** Skill names in effect for the focused tool-use stream, newest snapshot. */
@@ -55,7 +55,7 @@ interface CliSessionCostStatus {
 }
 
 /**
- * The spend of the task `run` belongs to, read off the fold: its root's
+ * The spend of the task `run` belongs to, read off the session view: its root's
  * `treeUsage`, the root's own calls (`usage`), and each agent the root
  * started that spent anything, with that agent's `treeUsage`.
  */

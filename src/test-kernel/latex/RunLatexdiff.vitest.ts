@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { latexdiffPairs } from '@latex/latexdiff/diffOperations';
-import { fileLocationDisplayPath, type RunId } from '@shared/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import { createRunStorageLocation } from '@utils/files/fileLocation';
 
 describe('latexdiffPairs', () => {
   const runId = 'abc123' as RunId;

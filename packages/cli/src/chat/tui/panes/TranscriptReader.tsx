@@ -36,7 +36,7 @@ export function TranscriptReader({
 }): React.JSX.Element {
   const { columns } = useWindowSize();
   const view = useSignal(sessionView());
-  // The transcript value, never its `rows` array: the fold appends and
+  // The transcript value, never its `rows` array: the session view appends and
   // patches rows in place and replaces the transcript on every change (a
   // new row, a patched row, a text chunk), so the transcript is the
   // identity the effect and memos below key on to stay live while the

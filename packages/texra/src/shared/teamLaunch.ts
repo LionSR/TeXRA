@@ -1,24 +1,23 @@
 /**
  * Team launch: whether a planned team can run, how available it is, the
- * picker rows the hosts show for it, and the fields a launch carries. The
- * harness plans a team (`planTeamRun`); what the plan means to a person is
- * TeXRA's.
+ * picker rows the hosts show for it, and the fields a launch carries, over
+ * the plan `planTeamRun` makes.
  */
 
 // Third-party imports
 import { String as Str } from 'effect';
+import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
+import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
+import type { TeamPreset } from '@texra/shared/agentTeams';
+import type { TeamOptionData } from '@texra/shared/pickerOptions';
 import {
   findTeamPreset,
   planTeamRun,
-  type AgentDelegationScope,
   type TeamCatalogAgent,
-  type TeamPreset,
   type TeamRunOptions,
   type TeamRunPlan,
-} from '@texra-ai/harness/host';
-import { AGENT_TOOL_NAME } from '@texra-ai/harness/plugins';
-import { agentKeyOf, type AgentSource } from '@texra-ai/harness/schemas';
-import type { TeamOptionData } from '@texra/shared/pickerOptions';
+} from '@texra/shared/teamPlan';
+import type { AgentDelegationScope } from '@texra-ai/harness/host';
 
 export function planTeamRuns<T extends TeamCatalogAgent>(
   presets: readonly TeamPreset[],
@@ -35,8 +34,10 @@ function teamPlanHasGaps(plan: TeamRunPlan): boolean {
   );
 }
 
+const NO_TEAM_ROOT = 'no runnable team root';
+
 export function teamLaunchBlockReason(plan: TeamRunPlan): string | undefined {
-  if (!plan.rootAgent) return 'no runnable team root';
+  if (!plan.rootAgent) return NO_TEAM_ROOT;
   if (!plan.rootAgent.tools?.includes(AGENT_TOOL_NAME)) {
     return `team root ${plan.rootAgent.name} is not a delegating agent`;
   }
@@ -165,12 +166,14 @@ export function resolveTeamLaunch<T extends TeamCatalogAgent>(
   if (!preset) return { status: 'unknown-team' };
 
   const plan = planTeamRun(preset, args);
-  if (!canLaunchTeam(plan)) {
-    return { status: 'blocked', reason: teamLaunchBlockReason(plan)! };
+  const reason = teamLaunchBlockReason(plan);
+  const { rootAgent } = plan;
+  if (reason !== undefined || !rootAgent) {
+    return { status: 'blocked', reason: reason ?? NO_TEAM_ROOT };
   }
   return {
     status: 'ready',
-    fields: teamExecutionFields(plan),
+    fields: teamExecutionFields({ ...plan, rootAgent }),
     missingNames: plan.missingAgents,
   };
 }

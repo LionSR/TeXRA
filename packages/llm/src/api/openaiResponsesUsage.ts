@@ -30,7 +30,7 @@ export const ResponsesUsageSchema = Schema.Struct({
       }),
     ),
   ),
-  // xAI's settled cost; only its receipts carry the key, and its
+  // xAI's final cost; only its receipts carry the key, and its
   // `output_tokens` exclude the reasoning tokens it bills on top.
   cost_in_usd_ticks: Schema.optional(
     Schema.NullOr(Schema.Int.check(Schema.isGreaterThanOrEqualTo(0))),
@@ -49,7 +49,9 @@ export function responsesUsage(
     outputTokens: usage.output_tokens,
     totalTokens: usage.total_tokens ?? null,
     cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? null,
+    cacheWriteTokens: null,
     reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? null,
+    toolUsePromptTokens: null,
     ...(usage.cost_in_usd_ticks !== undefined
       ? {
           providerUsage: {

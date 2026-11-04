@@ -18,7 +18,7 @@ import {
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
-  type Run,
+  type RunEnd,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -35,12 +35,7 @@ import {
   pathToLocationIn,
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  type RunEndResult,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import {
   handleLatexdiff,
   handleLatexdiffCommitAction,
@@ -77,7 +72,6 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import { isMultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type {
@@ -99,6 +93,7 @@ import {
   hostFailure,
   type HostCallFailed,
 } from '@texra/controllers/session/hostCallFailure';
+import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostRequest,
@@ -106,8 +101,6 @@ import type {
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
-import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
-import { getToolDocsPage } from '@texra/utils/system/toolChecks';
 import { texraGuideUrl } from '@ui/copy/guide';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 
@@ -138,8 +131,13 @@ interface ExtensionHostRequestsOptions {
   showConnectModel(): Effect.Effect<void, Error, ProcessServices>;
   /** Reveal the task list (`texra.showProgressView`). */
   showProgressView(): Effect.Effect<void, Error>;
-  /** Select a run this window just launched (the run actions' `launched`). */
-  presentLaunchedRun(runId: RunId): void;
+  /** Reveal the task list for a run this window just started, or name the
+   *  run in a toast when it cannot (the run actions' `revealProgress`). */
+  readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
+  /** The window's launcher (`HostRunActions.runValidated`), which the setup
+   *  assistant's run starts through; bound once the window has opened, so
+   *  read as that run starts. */
+  launcher(): HostRunActions['runValidated'];
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostRequestFailure, ProcessServices>;
@@ -281,90 +279,83 @@ export const createExtensionHostRequests = Effect.fn(
   }
 
   /** The editor's current file into a launcher field. */
-  function useCurrentFile(
+  const useCurrentFile = Effect.fn('useCurrentFile')(function* (
     request: Extract<HostRequest, { kind: 'useCurrentFile' }>,
   ) {
-    return Effect.gen(function* () {
-      const currentOpenFile = yield* getCurrentFile(roots);
-      if (!currentOpenFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason:
-              'No file is currently open or the file is not part of the workspace.',
-          }),
+    const currentOpenFile = yield* getCurrentFile(roots);
+    if (!currentOpenFile) {
+      return yield* Effect.fail(
+        new Rejected({
+          reason:
+            'No file is currently open or the file is not part of the workspace.',
+        }),
+      );
+    }
+    // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base
+    // file selects the file it was derived from instead, when that file is
+    // still on disk, and its commit rides onto the launcher.
+    if (request.fileType === 'base') {
+      const parsed = parseVersionControlDiffFilename(currentOpenFile);
+      if (parsed) {
+        const commitLabel = yield* runHandler(
+          'findCommitInHistory',
+          findCommitInHistory(roots, parsed.commitHash),
         );
-      }
-      // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base
-      // file selects the file it was derived from instead, when that file is
-      // still on disk, and its commit rides onto the launcher.
-      if (request.fileType === 'base') {
-        const parsed = parseVersionControlDiffFilename(currentOpenFile);
-        if (parsed) {
-          const commitLabel = yield* runHandler(
-            'findCommitInHistory',
-            findCommitInHistory(roots, parsed.commitHash),
-          );
-          if (commitLabel) {
-            options.bridge.surfaceAction({
-              kind: 'launch',
-              patch: { commit: parsed.commitHash },
-            });
-          } else {
-            yield* Effect.forkDetach(
-              announce(
-                CHANNEL,
-                vscodeUi.showInfoMessage(
-                  `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
-                ),
-                undefined,
-              ),
-            );
-          }
-          const sourceLocation = pathToLocationIn(
-            roots.workspace,
-            parsed.sourcePath,
-          );
-          const sourceExists =
-            sourceLocation.kind === 'workspace' &&
-            (yield* Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
-              workspaceFs.exists(sourceLocation.relativePath),
-            ));
-          if (sourceExists) {
-            yield* snapshot.refreshFiles;
-            return { kind: 'files', paths: [parsed.sourcePath] } as HostOutcome;
-          }
+        if (commitLabel) {
+          options.bridge.surfaceAction({
+            kind: 'launch',
+            patch: { commit: parsed.commitHash },
+          });
+        } else {
           yield* Effect.forkDetach(
             announce(
               CHANNEL,
               vscodeUi.showInfoMessage(
-                `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+                `The commit ${parsed.commitHash} referenced by ${path.basename(currentOpenFile)} was not found in the repository history.`,
               ),
               undefined,
             ),
           );
         }
+        const sourceLocation = pathToLocationIn(
+          roots.workspace,
+          parsed.sourcePath,
+        );
+        const sourceExists =
+          sourceLocation.kind === 'workspace' &&
+          (yield* Effect.flatMap(Effect.service(WorkspaceFs), (workspaceFs) =>
+            workspaceFs.exists(sourceLocation.relativePath),
+          ));
+        if (sourceExists) {
+          yield* snapshot.refreshFiles;
+          return {
+            kind: 'files',
+            paths: [parsed.sourcePath],
+          } satisfies HostOutcome;
+        }
+        yield* Effect.forkDetach(
+          announce(
+            CHANNEL,
+            vscodeUi.showInfoMessage(
+              `The base file ${parsed.sourcePath} could not be found. Keeping ${currentOpenFile} selected.`,
+            ),
+            undefined,
+          ),
+        );
       }
-      return { kind: 'files', paths: [currentOpenFile] } as HostOutcome;
-    });
-  }
+    }
+    return {
+      kind: 'files',
+      paths: [currentOpenFile],
+    } satisfies HostOutcome;
+  });
 
   function pickFiles(
     request: Extract<HostRequest, { kind: 'pickFiles' }>,
-  ): Effect.Effect<HostOutcome, Rejected | Cancelled> {
-    const { fileType } = request;
-    const pick = isMultipleDocumentFileType(fileType)
-      ? multipleFilePickers[fileType]
-      : undefined;
-    if (!pick) {
-      return Effect.fail(
-        new Rejected({
-          reason: `A picker for ${fileType} files is not available; choose one from the list.`,
-        }),
-      );
-    }
+  ): Effect.Effect<HostOutcome, Cancelled> {
     // The picker reports its own failures where they happen and answers
     // `null`, so the only outcomes left here are a selection and a cancel.
-    return pick().pipe(
+    return multipleFilePickers[request.fileType]().pipe(
       Effect.flatMap((selected) =>
         selected
           ? Effect.succeed<HostOutcome>({ kind: 'files', paths: selected })
@@ -440,23 +431,11 @@ export const createExtensionHostRequests = Effect.fn(
       const dir = yield* (yield* AgentDirectories).custom();
       if (dir) yield* revealFileInOS(dir);
     }),
-    recheckDependencies: Effect.gen(function* () {
-      yield* checkCoreDependencies(true);
-      yield* snapshot.refreshHostBanners;
-    }),
-    openInstallGuide: Effect.fn('extensionHostRequests.openInstallGuide')(
-      function* (tool) {
-        const page = getToolDocsPage(tool);
-        if (!page) {
-          return yield* Effect.fail(
-            new Rejected({
-              reason: `No install guide is registered for ${tool}.`,
-            }),
-          );
-        }
-        yield* runHandler('openDoc', openGuidePage(page));
-      },
-    ),
+    // The banner refresh probes the dependencies again; the banner shows
+    // what is missing.
+    recheckDependencies: snapshot.refreshHostBanners,
+    // Every dependency the banner lists installs from the one guide page.
+    openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
         yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');
@@ -472,7 +451,7 @@ export const createExtensionHostRequests = Effect.fn(
           launchSetupAssistant(
             roots,
             runSession,
-            (runId) => Effect.sync(() => options.presentLaunchedRun(runId)),
+            options.launcher(),
             options.showConnectModel(),
             options.showProgressView(),
           ),
@@ -495,46 +474,45 @@ export const createExtensionHostRequests = Effect.fn(
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */
-  const own = (request: OwnHostRequest) =>
-    Effect.gen(function* () {
-      switch (request.kind) {
-        case 'popOut':
-          yield* options.popOutToEditor();
-          return done;
-        case 'popBack':
-          yield* options.showInSidebar();
-          return done;
-        case 'pickFiles':
-          return yield* pickFiles(request);
-        case 'useCurrentFile':
-          return yield* useCurrentFile(request);
-        case 'addOpenedFiles': {
-          const allowed = new Set(
-            getIncludedExtensions(request.fileType).map(
-              normalizeMainViewFileExtension,
-            ),
-          );
-          const opened = yield* getOpenedFiles();
-          const outcome: HostOutcome = {
-            kind: 'files',
-            paths:
-              allowed.size > 0
-                ? opened.filter((file) =>
-                    allowed.has(normalizeMainViewFileExtension(file)),
-                  )
-                : opened,
-          };
-          return outcome;
-        }
-        case 'gettingStarted':
-          yield* runHandler(request.action, gettingStarted(request.action));
-          return done;
-        case 'workspaceFile':
-          return yield* Effect.fail(
-            new Rejected({ reason: 'The file editor is a desktop feature.' }),
-          );
+  const own = Effect.fn('own')(function* (request: OwnHostRequest) {
+    switch (request.kind) {
+      case 'popOut':
+        yield* options.popOutToEditor();
+        return done;
+      case 'popBack':
+        yield* options.showInSidebar();
+        return done;
+      case 'pickFiles':
+        return yield* pickFiles(request);
+      case 'useCurrentFile':
+        return yield* useCurrentFile(request);
+      case 'addOpenedFiles': {
+        const allowed = new Set(
+          getIncludedExtensions(request.fileType).map(
+            normalizeMainViewFileExtension,
+          ),
+        );
+        const opened = yield* getOpenedFiles();
+        const outcome: HostOutcome = {
+          kind: 'files',
+          paths:
+            allowed.size > 0
+              ? opened.filter((file) =>
+                  allowed.has(normalizeMainViewFileExtension(file)),
+                )
+              : opened,
+        };
+        return outcome;
       }
-    });
+      case 'gettingStarted':
+        yield* runHandler(request.action, gettingStarted(request.action));
+        return done;
+      case 'workspaceFile':
+        return yield* Effect.fail(
+          new Rejected({ reason: 'The file editor is a desktop feature.' }),
+        );
+    }
+  });
 
   return {
     bindings,
@@ -543,9 +521,8 @@ export const createExtensionHostRequests = Effect.fn(
     showInfoMessage: vscodeUi.showInfoMessage,
     showWarningMessage: vscodeUi.showWarningMessage,
     runs: {
-      launched: (run: Run) =>
-        Effect.sync(() => options.presentLaunchedRun(run.runId)),
-      openFinalOutput: (config: AgentConfig, result: RunEndResult) =>
+      revealProgress: options.revealProgress,
+      openFinalOutput: (config: AgentConfig, result: RunEnd) =>
         withProcessServices(
           runtime,
           openFinalOutputIfAvailable(roots, config)(result),
@@ -585,7 +562,7 @@ export const createExtensionHostRequests = Effect.fn(
           'latexdiff',
           inViewScope(handleLatexdiff(roots, base, edited)),
         ),
-      openDirectory: (directory: string) => revealFileInOS(directory),
+      openDirectory: revealFileInOS,
     },
     export: {
       // A refusal to show the pick is worded into the export's tag.

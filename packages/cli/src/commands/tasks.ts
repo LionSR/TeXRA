@@ -12,12 +12,14 @@ import {
   type RunId,
   AgentConfigSchema,
   type AgentConfigPayload,
-  generateRunId,
   type RequestError,
   ensureError,
 } from '@texra-ai/harness/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
-import type { ServiceClient } from '@texra/controllers/server/client';
+import {
+  requestOnService,
+  type ServiceClient,
+} from '@texra/controllers/server/client';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
@@ -41,7 +43,6 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import { formatToolUseAgentRunInstruction } from './_helpers/runInstructions';
-import type { Outcome } from '@texra-ai/harness';
 import type { RuntimeRequest } from '@texra-ai/harness/schemas';
 
 /** The text width an attach lays rows out at when stdout is not a terminal,
@@ -76,18 +77,19 @@ function findTask(client: ServiceClient, id: string) {
 }
 
 /** One request to the task `id` names, refused as a usage error. */
-function requestTask(
+function requestTask<R extends RuntimeRequest>(
   context: CliContext,
   id: string,
-  request: (runId: RunId) => RuntimeRequest,
+  request: (runId: RunId) => R,
 ) {
   return Effect.gen(function* () {
     const { client } = yield* connectCliService(context.storageRoot);
     const task = yield* findTask(client, id);
-    const outcome: Outcome = yield* client['task.request']({
-      workspace: task.workspace,
-      request: request(task.runId),
-    }).pipe(
+    const outcome = yield* requestOnService(
+      client,
+      task.workspace,
+      request(task.runId),
+    ).pipe(
       Effect.catchIf(
         (error): error is RequestError => error._tag !== 'RpcClientError',
         (error) =>
@@ -111,19 +113,18 @@ const listCommand = defineCliCommand({
   },
   args: { ...GLOBAL_ARGS },
   catchExitCode: CliExitCode.AgentError,
-  run: (context) =>
-    Effect.gen(function* () {
-      const { client } = yield* connectCliService(context.storageRoot);
-      const tasks = yield* client['tasks.list']({ all: false });
-      emitCliResult(context, {
-        json: tasks,
-        ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),
-        text: tasks.length
-          ? tasks.map(taskLine).join('\n')
-          : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
-      });
-      return CliExitCode.Success;
-    }).pipe(Effect.scoped),
+  run: Effect.fn('run')(function* (context) {
+    const { client } = yield* connectCliService(context.storageRoot);
+    const tasks = yield* client['tasks.list']({ all: false });
+    emitCliResult(context, {
+      json: tasks,
+      ndjson: tasks.map((task) => ({ kind: 'task' as const, task })),
+      text: tasks.length
+        ? tasks.map(taskLine).join('\n')
+        : 'No tasks yet. `texra tasks start <agent> --instruction …` starts one.',
+    });
+    return CliExitCode.Success;
+  }, Effect.scoped),
 });
 
 const attachCommand = defineCliCommand({
@@ -190,7 +191,6 @@ const startCommand = defineCliCommand({
     // with what this command asked for riding the launch
     // (`launchApproval`).
     const requested = context.requestedApprovalPolicy;
-    const approval = launchApproval(requested);
     const refused = launchApprovalNotice(
       requested,
       projectApprovalPolicy(services.config),
@@ -226,12 +226,7 @@ const startCommand = defineCliCommand({
         const { client } = yield* connectCliService(context.storageRoot);
         return yield* client['task.start']({
           workspace: context.cwd,
-          runId: generateRunId(),
-          config,
-          continues: null,
-          preferHelperModel: false,
-          approvalPolicy: approval.approvalPolicy ?? null,
-          approveDelegatedWork: approval.approveDelegatedWork,
+          start: { config, approval: launchApproval(requested) },
         });
       }),
     ).pipe(Effect.mapError(ensureError));
@@ -265,7 +260,7 @@ const sendCommand = defineCliCommand({
       text: ctx.args.text,
     })).pipe(
       Effect.map(({ task, outcome }) => {
-        const status = outcome.kind === 'followUp' ? outcome.status : 'sent';
+        const { status } = outcome;
         emitCliResult(context, {
           json: { runId: task.runId, status },
           ndjson: { kind: 'task', task: { runId: task.runId, status } },

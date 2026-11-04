@@ -26,7 +26,6 @@ import {
   type Cause,
   Deferred,
   Effect,
-  Predicate,
   Queue,
   Ref,
   Schema,
@@ -68,10 +67,10 @@ class JsonRpcFrameError extends Schema.TaggedError<JsonRpcFrameError>()(
 ) {}
 
 export interface JsonRpcConnection {
-  readonly request: <T>(
+  readonly request: (
     method: string,
     params?: unknown,
-  ) => Effect.Effect<T, JsonRpcRequestError | JsonRpcConnectionDisposed>;
+  ) => Effect.Effect<unknown, JsonRpcRequestError | JsonRpcConnectionDisposed>;
   /** Send a notification; after `close` it is dropped. */
   readonly notify: (method: string, params?: unknown) => Effect.Effect<void>;
   /** Fail every pending request with `reason` and refuse later ones. Idempotent. */
@@ -104,6 +103,9 @@ export interface JsonRpcConnectionOptions {
     method: string,
     params: unknown,
   ) => Effect.Effect<unknown> | undefined;
+  /** The `[method, params]` notification telling the peer we stopped waiting
+   *  for unanswered request `id` (its caller was interrupted, a timeout too). */
+  cancel?(id: number, method: string): readonly [string, unknown] | undefined;
 }
 
 type PendingError = JsonRpcRequestError | JsonRpcConnectionDisposed;
@@ -113,13 +115,24 @@ interface PendingRequest {
   readonly deferred: Deferred.Deferred<unknown, PendingError>;
 }
 
-interface JsonRpcMessage {
-  readonly id?: number | string | null;
-  readonly method?: string;
-  readonly params?: unknown;
-  readonly result?: unknown;
-  readonly error?: { code?: number; message?: string; data?: unknown };
-}
+const JsonRpcBodySchema = Schema.fromJsonString(
+  Schema.Struct({
+    id: Schema.optional(
+      Schema.NullOr(Schema.Union([Schema.Number, Schema.String])),
+    ),
+    method: Schema.optional(Schema.String),
+    params: Schema.optional(Schema.Unknown),
+    result: Schema.optional(Schema.Unknown),
+    error: Schema.optional(
+      Schema.Struct({
+        code: Schema.optional(Schema.Number),
+        message: Schema.optional(Schema.String),
+        data: Schema.optional(Schema.Unknown),
+      }),
+    ),
+  }),
+);
+type JsonRpcMessage = typeof JsonRpcBodySchema.Type;
 
 const CONTENT_LENGTH = /Content-Length:\s*(\d+)/i;
 const HEADER_END = '\r\n\r\n';
@@ -149,14 +162,14 @@ const takeFrames = (buffer: Buffer): Decoded =>
       const headerEnd = rest.indexOf(HEADER_END);
       if (headerEnd < 0) break;
       const header = rest.subarray(0, headerEnd).toString('ascii');
-      const match = CONTENT_LENGTH.exec(header);
-      if (!match) {
+      const length = CONTENT_LENGTH.exec(header)?.[1];
+      if (length === undefined) {
         return yield* new JsonRpcFrameError({
           message: `Frame header without Content-Length: ${header}`,
         });
       }
       const bodyStart = headerEnd + HEADER_END.length;
-      const bodyEnd = bodyStart + Number.parseInt(match[1]!, 10);
+      const bodyEnd = bodyStart + Number.parseInt(length, 10);
       if (rest.length < bodyEnd) break;
       messages.push(
         yield* parseBody(rest.subarray(bodyStart, bodyEnd).toString('utf8')),
@@ -174,21 +187,12 @@ function encodeLine(message: object): Uint8Array {
 const parseBody = (
   body: string,
 ): Effect.Effect<JsonRpcMessage, JsonRpcFrameError> =>
-  Effect.try({
-    try: (): unknown => JSON.parse(body),
-    catch: (error) =>
-      new JsonRpcFrameError({
-        message: `Frame body is not JSON: ${toErrorMessage(error)}`,
-      }),
-  }).pipe(
-    Effect.flatMap((value) =>
-      Predicate.isObject(value)
-        ? Effect.succeed(value as JsonRpcMessage)
-        : Effect.fail(
-            new JsonRpcFrameError({
-              message: `Frame body is not a JSON-RPC object: ${body.slice(0, 200)}`,
-            }),
-          ),
+  Schema.decodeEffect(JsonRpcBodySchema)(body).pipe(
+    Effect.mapError(
+      (error) =>
+        new JsonRpcFrameError({
+          message: `Frame body is not a JSON-RPC message: ${body.slice(0, 200)}\n${error.message}`,
+        }),
     ),
   );
 
@@ -272,19 +276,17 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
         ).pipe(withLogChannel(CHANNEL));
         return;
       }
-      if (message.error) {
-        yield* Deferred.fail(
-          entry.deferred,
-          new JsonRpcRequestError({
-            method: entry.method,
-            message: message.error.message ?? 'JSON-RPC error',
-            code: message.error.code,
-            cause: message.error,
-          }),
-        );
-      } else {
-        yield* Deferred.succeed(entry.deferred, message.result);
-      }
+      yield* message.error
+        ? Deferred.fail(
+            entry.deferred,
+            new JsonRpcRequestError({
+              method: entry.method,
+              message: message.error.message ?? 'JSON-RPC error',
+              code: message.error.code,
+              cause: message.error,
+            }),
+          )
+        : Deferred.succeed(entry.deferred, message.result);
       return;
     }
     if (message.id != null) {
@@ -310,8 +312,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   yield* Effect.forkScoped(
     Stream.fromQueue(outbound).pipe(
       Stream.run(options.output),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
+      Effect.catch(
+        Effect.fnUntraced(function* (error) {
           if ((yield* Ref.get(closedReason)) === undefined) {
             yield* Effect.logDebug(
               `stdin write failed: ${toErrorMessage(error)}`,
@@ -330,8 +332,8 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
         (buffer, chunk) => decode(Buffer.concat([buffer, chunk])),
       ),
       Stream.runForEach(dispatch),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
+      Effect.catch(
+        Effect.fnUntraced(function* (error) {
           if ((yield* Ref.get(closedReason)) === undefined) {
             yield* Effect.logDebug(
               `connection error: ${toErrorMessage(error)}`,
@@ -348,22 +350,29 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
   // interruption of its reader.
   yield* Effect.addFinalizer(() => close('JsonRpcConnection disposed'));
 
-  const request = Effect.fn('JsonRpc.request')(function* <T>(
+  const notify = Effect.fn('JsonRpc.notify')(function* (
     method: string,
     params?: unknown,
   ) {
-    const reason = yield* Ref.get(closedReason);
-    if (reason !== undefined) {
-      return yield* new JsonRpcConnectionDisposed({ message: reason });
-    }
+    if ((yield* Ref.get(closedReason)) !== undefined) return;
+    yield* send({
+      jsonrpc: '2.0',
+      method,
+      ...(params !== undefined && { params }),
+    });
+  });
+
+  const request = Effect.fn('JsonRpc.request')(function* (
+    method: string,
+    params?: unknown,
+  ) {
     const id = yield* Ref.updateAndGet(ids, (n) => n + 1);
     const deferred = yield* Deferred.make<unknown, PendingError>();
     yield* Ref.update(pending, (map) =>
       new Map(map).set(id, { method, deferred }),
     );
-    // `close` fails the table it drained, so a close that landed between the
-    // check above and this insert leaves this entry with nobody to fail it and
-    // no frame on the wire: re-read and fail it here rather than await forever.
+    // `close` fails only the table it drained, so an entry inserted after it
+    // would wait forever: read the state after the insert and fail it here.
     const closedSince = yield* Ref.get(closedReason);
     if (closedSince !== undefined) {
       yield* takePending(id);
@@ -375,22 +384,14 @@ export const makeJsonRpcConnection = Effect.fn('JsonRpc.make')(function* (
       method,
       ...(params !== undefined && { params }),
     });
-    const result = yield* Deferred.await(deferred).pipe(
-      Effect.onInterrupt(() => takePending(id)),
+    const notice = options.cancel?.(id, method);
+    return yield* Deferred.await(deferred).pipe(
+      Effect.onInterrupt(() =>
+        Effect.flatMap(takePending(id), (entry) =>
+          entry && notice ? notify(...notice) : Effect.void,
+        ),
+      ),
     );
-    return result as T;
-  });
-
-  const notify = Effect.fn('JsonRpc.notify')(function* (
-    method: string,
-    params?: unknown,
-  ) {
-    if ((yield* Ref.get(closedReason)) !== undefined) return;
-    yield* send({
-      jsonrpc: '2.0',
-      method,
-      ...(params !== undefined && { params }),
-    });
   });
 
   const inputEnded = Deferred.await(inputDone);

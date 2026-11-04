@@ -78,7 +78,7 @@ export function modelAccessContribution(deps: {
   readonly bindSelection: BindSelection;
   readonly onModelAccessSelect?: FormActionHandler<CliModelAccessSelection>;
   readonly onLoginSelect?: FormActionHandler<LoginFormValue>;
-  /** After a sign-in, sign-out, preference, or key save settles: the chat
+  /** After a sign-in, sign-out, preference, or key save finishes: the chat
    *  re-checks whether a model can answer now. */
   readonly onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   /** Reports a failed key-status read; the rows then read "Status unavailable". */

@@ -33,6 +33,7 @@ import {
 } from 'effect';
 import {
   ModelError,
+  fillModelError,
   type BackgroundEvent,
   type TurnEvent,
   type TurnRequest,
@@ -51,8 +52,8 @@ import {
   ModelAccess,
   type BoundModel,
 } from '@agent/runtime/modelAccess/ModelAccess';
-import type { StateReadFailed } from '@platform/interfaces';
-import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
+import { quotaFallbackMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { SessionRoots } from '@platform/rootedFs';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   MESSAGE_TYPES,
@@ -60,23 +61,30 @@ import {
   type FailedNext,
   type InvocationRef,
   type RetryErrorInfo,
+  type NormalizedUsage,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { Attempt, RetryCredentials } from '@shared/session/inFlight';
-import { findStorageRefusal, runRefusal } from '@shared/session/runHistory';
+import { turnText } from '@shared/session/runFacts';
+import {
+  findStorageRefusal,
+  runRefusal,
+  SessionLog,
+  type CellError,
+  type RunCell,
+} from '@shared/session/runHistory';
+import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
-import type { CellError, RunCell } from '@shared/session/runHistory';
 
-import { policyDecidedRows } from './requestPolicy';
+import { policyDecidedRows, SessionRequests } from './requestPolicy';
 import { AgentRun } from './run/AgentRun';
 import { runInvocation, RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
 import { observeBackground, submitAndObserve } from './run/backgroundTurn';
-import { contextTokens } from './run/contextTokens';
+import { contextTokens, outputBudget } from './run/contextTokens';
 import { priceTurnUsage, reportUsage } from './run/pricing';
-import { turnReasoning, turnText } from './run/turnText';
 import {
   admittedTurn,
   attemptRequest,
@@ -88,6 +96,7 @@ import {
 import { providerMessages } from './storedTurn';
 import { dispatchFactsFor, localCallsOf } from './run/tools';
 import { positionRow } from './loop/rows';
+import type { SessionServices } from './rootLaunch';
 
 /** The answer the invoker gives itself for an automatic quota fallback. */
 const PERSONAL_RETRY = {
@@ -95,28 +104,13 @@ const PERSONAL_RETRY = {
   decision: { action: 'retry', credentials: 'personal' },
 } as const;
 
-/**
- * The output-budget preflight's constants, as the retired handler
- * preflight used them: the buffer covers tokenization differences and API
- * framing, and a reduction below the floor is not worth taking.
- */
-const TOKEN_SAFETY_BUFFER = 10;
-const TOOL_USE_SAFETY_BUFFER = 2000;
-const MIN_COMPLETION_TOKENS = 100;
-
-/** The output budget that fits in what the input leaves of the window. */
-function reducedOutputBudget(available: number, buffer: number): number {
-  if (available <= 0) return 1;
-  const buffered = available - buffer;
-  return buffered >= MIN_COMPLETION_TOKENS ? buffered : available;
-}
-
 const EMPTY_RESPONSE_ERROR_MESSAGE =
   'Model response was empty or aborted; this may indicate a server issue or network problem.';
 
-/** What a person is asked again about an admitted attempt a stop cut. */
+/** What a person is asked before an attempt the process stopped during is
+ *  sent again: one they approved, or one past the automatic retries. */
 const INTERRUPTED_RETRY_MESSAGE =
-  'The process stopped while the retry you approved was running, so it may have been billed without an answer. Retry again?';
+  'The process stopped while a model request was running, so it may have been billed without an answer. Retry again?';
 
 /**
  * How much of a failed attempt's streamed output the failure carries. The
@@ -128,8 +122,6 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 interface InvocationResponse {
   readonly kind: 'response';
   readonly state: RunState;
-  /** The assistant text of the turn, joined; empty when it produced none. */
-  readonly text: string;
 }
 
 /** A failure's error is the run state's `lastError`. */
@@ -146,7 +138,10 @@ type InvocationOutcome =
 export type InvokeError = CellError | StateReadFailed | DatabaseReadFailed;
 
 /** What an invocation reads from its run's context. */
-type InvokeServices = FileSystem.FileSystem | RouteRetries;
+type InvokeServices = FileSystem.FileSystem | RouteRetries | SessionServices;
+
+/** What one attempt reads: its files, and its run's session. */
+type AttemptServices = FileSystem.FileSystem | SessionServices;
 
 export class ModelInvoker extends Context.Service<
   ModelInvoker,
@@ -174,15 +169,21 @@ export class ModelInvoker extends Context.Service<
 export const modelInvokerLayer = (): Layer.Layer<
   ModelInvoker,
   never,
-  AgentRun | UsageLog | ModelAccess | RouteRetries
+  AgentRun | UsageLog | ModelAccess | RouteRetries | SessionServices
 > =>
   Layer.effect(
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const { runId, session, logger } = run;
+      const { runId, logger } = run;
+      const log = yield* SessionLog;
+      const roots = yield* SessionRoots;
+      const requests = yield* SessionRequests;
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
+      /** When each attempt was sent, by its reference, for pricing a failure
+       *  the provider billed by the time it took. */
+      const attemptStarts = new WeakMap<InvocationRef, number>();
       const access = yield* ModelAccess;
       const gate = yield* RouteRetries;
       const attribution = {
@@ -203,28 +204,8 @@ export const modelInvokerLayer = (): Layer.Layer<
           logger,
           modelName: bound.modelId,
           runId,
-          roots: session.roots,
+          roots,
         });
-
-      /**
-       * The tail of the text the failing attempt had streamed, which its
-       * `failed` row carries for the retry surface. Attempts of one run go
-       * one at a time, so the last one written is the failure's.
-       */
-      let streamedTail = '';
-      const failAttempt = (error: ModelError, streamedText = '') =>
-        Effect.suspend(() => {
-          streamedTail = streamedText;
-          return Effect.fail(error);
-        });
-
-      /** Prepare one attempt's turn: a failure is the attempt's own, unsent. */
-      const prepareAttempt = (bound: BoundModel, request: TurnRequest) =>
-        Effect.tapError(bound.model.prepareTurn(request), () =>
-          Effect.sync(() => {
-            streamedTail = '';
-          }),
-        );
 
       interface AttemptTrace {
         readonly thinking: StreamHandle;
@@ -331,7 +312,11 @@ export const modelInvokerLayer = (): Layer.Layer<
           if (Result.isFailure(found))
             return yield* Effect.die(Cause.squash(streamed.cause));
           return yield* found.success instanceof ModelError
-            ? failAttempt(found.success, completed.streamedText)
+            ? Effect.fail(
+                fillModelError(found.success, {
+                  partialText: completed.streamedText,
+                }),
+              )
             : Effect.fail(found.success);
         }
         const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
@@ -339,16 +324,22 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (turn === null) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
-          return yield* failAttempt(
+          return yield* Effect.fail(
             new ModelError({
               kind: 'malformed-output',
               message: EMPTY_RESPONSE_ERROR_MESSAGE,
+              partialText: completed.streamedText,
             }),
-            completed.streamedText,
           );
         }
         const text = turnText(turn);
-        const reasoning = turnReasoning(turn);
+        const reasoning = turn.content
+          .flatMap((part) =>
+            part.kind === 'reasoning'
+              ? (part.content ?? part.summary).map((piece) => piece.text)
+              : [],
+          )
+          .join('\n');
         trace.thinking.finalize(reasoning === '' ? undefined : reasoning);
         trace.output.finalize(text);
         yield* saveDebug(turn, 'response', invocation, bound);
@@ -384,8 +375,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             contextWindow: bound.config.contextWindow,
           });
         }
-        yield* reportUsage(usageLog, bound, usage, attribution, session.roots);
-        return { kind: 'response', state: next, text };
+        yield* reportUsage(usageLog, bound, usage, attribution, roots);
+        return { kind: 'response', state: next };
       });
 
       /**
@@ -402,77 +393,59 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<
         InvocationResponse,
         ModelError | InvokeError,
-        FileSystem.FileSystem
+        AttemptServices
       > {
         const state = yield* cell.current;
+        const mode = yield* bound.delivery;
+        yield* saveDebug(state.messages, 'messages', invocation, bound);
+        // What the window leaves a foreground request (`outputBudget`); a
+        // background one is the provider's to size.
+        const { contextWindow } = bound.config;
+        const budget =
+          mode === 'background' ? null : outputBudget(state, bound);
+        if (budget?.kind === 'overflow')
+          return yield* Effect.fail(
+            new ModelError({
+              kind: 'context-overflow',
+              message: `Input is ${budget.inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
+            }),
+          );
+        const maxOutputTokens =
+          budget?.kind === 'reduced' ? budget.maxOutputTokens : undefined;
+        if (budget?.kind === 'reduced')
+          logContextManagementEvent(
+            logger,
+            `Token count (${budget.inputTokens}) + max output tokens (${budget.limit}) exceeds context window (${contextWindow}). Reducing to ${maxOutputTokens}.`,
+            {
+              action: 'max_tokens_reduced',
+              tokensBefore: budget.inputTokens,
+              contextWindow,
+              utilizationBefore: roundedUtilizationPercent(
+                budget.inputTokens,
+                contextWindow,
+              ),
+              originalMaxTokens: budget.limit,
+              reducedMaxTokens: budget.maxOutputTokens,
+              details: 'tooluse',
+            },
+          );
         // The request an attempt admits: the folded history with its media
         // resolved (the one read of media bytes), the caller's system and
         // tools, the run as its cache key, and the last response's
         // continuation while the binding matches its whole origin. A resume
         // rebuilds it from the same inputs; no row copies history.
-        const turnRequest: TurnRequest = {
-          mode: yield* bound.delivery,
+        const resolved = yield* bound.model.prepareTurn({
+          mode,
           ...(request.system !== undefined ? { system: request.system } : {}),
-          messages: yield* providerMessages(state.messages, session.log.blobs),
+          messages: yield* providerMessages(state.messages, log.blobs),
           ...(request.tools !== undefined ? { tools: request.tools } : {}),
           ...(request.toolChoice !== undefined
             ? { toolChoice: request.toolChoice }
             : {}),
+          ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
           ...chainedContinuation(state, bound.origin),
           cacheKey: run.runId,
-        };
-        let resolved = yield* prepareAttempt(bound, turnRequest);
-        yield* saveDebug(state.messages, 'messages', invocation, bound);
-        // The run's context size (`contextTokens`: the last response's
-        // provider-counted usage plus an estimate of what was added since).
-        // An input that alone exceeds the window is refused before it is
-        // billed; one leaving too little room for the requested output
-        // shrinks that output rather than letting the provider reject it.
-        if (resolved.mode === 'foreground' && bound.config.contextWindow > 0) {
-          const inputTokens = contextTokens(state);
-          if (inputTokens > bound.config.contextWindow) {
-            return yield* failAttempt(
-              new ModelError({
-                kind: 'context-overflow',
-                message: `Input is ${inputTokens} tokens, which exceeds the model's context window of ${bound.config.contextWindow} tokens.`,
-              }),
-            );
-          }
-          const { controls } = resolved;
-          const requested =
-            'maxOutputTokens' in controls ? controls.maxOutputTokens : null;
-          if (
-            requested !== null &&
-            inputTokens + requested > bound.config.contextWindow
-          ) {
-            const reduced = reducedOutputBudget(
-              bound.config.contextWindow - inputTokens,
-              bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
-            );
-            logContextManagementEvent(
-              logger,
-              `Token count (${inputTokens}) + max output tokens (${requested}) exceeds context window (${bound.config.contextWindow}). Reducing to ${reduced}.`,
-              {
-                action: 'max_tokens_reduced',
-                tokensBefore: inputTokens,
-                contextWindow: bound.config.contextWindow,
-                utilizationBefore: roundedUtilizationPercent(
-                  inputTokens,
-                  bound.config.contextWindow,
-                ),
-                originalMaxTokens: requested,
-                reducedMaxTokens: reduced,
-                details: 'tooluse',
-              },
-            );
-            // The clamp is part of the request, so it is prepared again:
-            // execution never reapplies defaults over a resolved turn.
-            resolved = yield* prepareAttempt(bound, {
-              ...turnRequest,
-              maxOutputTokens: reduced,
-            });
-          }
-        }
+        });
         // The durable fact before the billed request, with the prepared
         // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>
@@ -481,6 +454,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         yield* checkRecordedRequest(run, resolved);
         const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;
+        attemptStarts.set(invocation, started);
         const completed: AttemptOutcome = { value: null, streamedText: '' };
         const onEvent = eventSink(invocation, cell, trace, completed);
         const streamed = yield* Effect.exit(
@@ -521,11 +495,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         ): Effect.fn.Return<
           InvocationResponse,
           ModelError | InvokeError,
-          FileSystem.FileSystem
+          AttemptServices
         > {
           const background = bound.model.background;
           if (background === undefined) {
-            return yield* failAttempt(
+            return yield* Effect.fail(
               new ModelError({
                 kind: 'unsupported',
                 message:
@@ -533,10 +507,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               }),
             );
           }
-          const resolved = yield* admittedTurn(
-            yield* cell.current,
-            session.log.blobs,
-          );
+          const resolved = yield* admittedTurn(yield* cell.current, log.blobs);
           const trace = openTrace();
           const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
@@ -602,9 +573,9 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /**
        * The batch that ends attempt `ref` as `failed` with `error`. One that
-       * asks opens its retry request first, with the credential move the
-       * failure offers and, where the policy or an automatic quota fallback
-       * answers at once, that answer, so no surface lists it pending.
+       * asks opens its retry request first, with the credential move a
+       * used-up `quota` offers and, where the policy or an automatic quota
+       * fallback answers at once, that answer, so no surface lists it pending.
        */
       const failedRows = Effect.fn('ModelInvoker.failedRows')(function* (
         cell: RunCell,
@@ -612,7 +583,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         error: RetryErrorInfo,
         next: FailedNext,
         bound: BoundModel,
-      ): Effect.fn.Return<readonly RunHistoryDraft[]> {
+        usage: NormalizedUsage | null,
+        quota: ModelError['quota'],
+      ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
         const failed: RunHistoryDraft = {
           type: 'model.message',
           aggregateId,
@@ -622,25 +595,27 @@ export const modelInvokerLayer = (): Layer.Layer<
             purpose: 'turn',
             error,
             next,
+            ...(usage === null ? {} : { usage }),
           },
         };
         if (next.kind !== 'ask') return [failed];
         const { requestId } = next;
         const credentialSwitch = yield* access.credentialSwitch(
           bound,
-          error,
+          quota,
           (yield* cell.current).declinedRoutes,
         );
         const automatic =
           credentialSwitch?.kind === 'decline-route' &&
           credentialSwitch.automatic
-            ? quotaFallbackRouteFor(credentialSwitch.route)
+            ? credentialSwitch
             : null;
         if (automatic !== null) {
-          logProgressStatus(
-            logger,
-            `${automatic.retrySourceName} usage limit reached; retrying with ${automatic.retryFallbackName}.`,
-          );
+          // The notice records the route it moved off; an app words it.
+          logger.info(quotaFallbackMessage(automatic), {
+            messageType: MESSAGE_TYPES.QUOTA_FALLBACK,
+            data: { route: automatic.route },
+          });
         }
         const payload = {
           kind: 'retry',
@@ -649,7 +624,6 @@ export const modelInvokerLayer = (): Layer.Layer<
             runId,
             operation: 'Model request',
             model: bound.modelId,
-            errorMessage: error.message,
             errorDetails: error,
             credentialSwitch,
           },
@@ -664,7 +638,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           failed,
           ...(automatic
             ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
-            : policyDecidedRows(session, runId, payload)),
+            : yield* policyDecidedRows(runId, payload)),
         ];
       });
 
@@ -675,7 +649,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const ended = yield* runInvocation<
           InvocationResponse,
           InvokeError,
-          FileSystem.FileSystem
+          AttemptServices
         >({
           read: cell.current,
           binding: SynchronizedRef.get(run.model),
@@ -686,14 +660,12 @@ export const modelInvokerLayer = (): Layer.Layer<
               : observeAccepted(cell, ref, bound, accepted),
           failed: Effect.fn('ModelInvoker.failed')(function* (
             ref,
-            { error, unsent },
+            { error },
             next,
             bound,
           ) {
-            const info = failureInfo(error, bound.config.provider, {
-              partialText: unsent ? undefined : streamedTail,
-              unsent,
-            });
+            const info = failureInfo(error, bound.config.provider);
+            const quota = error instanceof ModelError ? error.quota : undefined;
             if (next.kind === 'ask' || next.kind === 'stop')
               yield* logProviderError(
                 logger,
@@ -702,7 +674,23 @@ export const modelInvokerLayer = (): Layer.Layer<
                   : 'Model request failed (no retry available)',
                 { ...info, rawErrorBody: error.cause },
               );
-            yield* cell.append(yield* failedRows(cell, ref, info, next, bound));
+            // A response the provider billed before refusing it is priced
+            // and reported like a turn's, on its `failed` row.
+            const started = attemptStarts.get(ref);
+            const usage =
+              error instanceof ModelError &&
+              error.usage !== undefined &&
+              started !== undefined
+                ? priceTurnUsage(
+                    bound,
+                    error.usage,
+                    (yield* Clock.currentTimeMillis) - started,
+                  )
+                : null;
+            yield* reportUsage(usageLog, bound, usage, attribution, roots);
+            yield* cell.append(
+              yield* failedRows(cell, ref, info, next, bound, usage, quota),
+            );
             return info;
           }),
           asker: {
@@ -711,7 +699,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               logger.debug('Waiting for manual retry');
               // The answer is the `request.decided` row the decide
               // command lands; a closing plane cancels.
-              const row = yield* session.requests
+              const row = yield* requests
                 .decision(runId, requestId, (yield* cell.current).commit)
                 .pipe(
                   Effect.catch((error) =>
@@ -736,20 +724,15 @@ export const modelInvokerLayer = (): Layer.Layer<
                   {
                     message: INTERRUPTED_RETRY_MESSAGE,
                     provider: bound.config.provider,
-                    userRetryable: true,
                   },
                   { kind: 'ask', requestId: `retry-${randomUUID()}` },
                   bound,
+                  null,
+                  undefined,
                 ),
               );
             }),
           },
-          chains: (bound) =>
-            Effect.map(
-              cell.current,
-              (state) =>
-                'continuation' in chainedContinuation(state, bound.origin),
-            ),
           retries: (yield* SynchronizedRef.get(run.model)).automaticRetries,
           logger,
         });
@@ -763,7 +746,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       /** A compaction summary on the run's binding; its caller lands it. */
       const call: ModelInvoker['Service']['call'] = (cell, request) =>
         Effect.flatMap(
-          providerMessages(request.messages, session.log.blobs),
+          providerMessages(request.messages, log.blobs),
           (messages) =>
             callModel({
               purpose: 'compaction',
@@ -771,7 +754,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               reacquire: (failed, renew) =>
                 rebind(cell)(renew ? 'renewed' : 'configured', failed),
               request: { ...request, messages },
-              settings: session.roots,
+              settings: roots,
               attribution,
               logger,
               record: {

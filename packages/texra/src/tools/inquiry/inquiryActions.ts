@@ -1,8 +1,6 @@
 import {
   previewLabel,
   truncateSummary,
-  type ExternalInquiryPermission,
-  type InquiryThreadId,
   type RunId,
   type RequestDecision,
 } from '@texra-ai/harness/schemas';
@@ -13,8 +11,8 @@ import { Effect } from 'effect';
  * request protocol; what stays here is what is specific to the kind. The
  * answer is recorded on the thread's cross-project record (the record stays,
  * cross-project scope is a real difference) and, because an inquiry never
- * parks its run, delivered to that run as a `[inquiry]` follow-up: "a
- * `request.decided` for a request its run is not parked on is delivered as
+ * makes its run wait, delivered to that run as a `[inquiry]` follow-up: "a
+ * `request.decided` for a request its run is not waiting on is delivered as
  * a follow-up".
  */
 
@@ -25,6 +23,8 @@ import { withLogChannel } from '@texra-ai/harness/host';
 import {
   InquiryRecords,
   inquiryThreadFact,
+  type InquiryRequest,
+  type InquiryThreadId,
   type InquiryThreadRecord,
   type InquiryThreadSummary,
 } from '@texra/shared/plugins/externalInquiry';
@@ -141,7 +141,7 @@ const closedByEarlierAttempt = Effect.fn('inquiryClosedByEarlierAttempt')(
 /**
  * Record one inquiry decision on its thread and deliver the continuation to
  * the run that asked (`inbox`), and commit the thread's panel row. The run
- * either drains it at its next turn boundary or resumes from the fold (the
+ * either drains it at its next turn boundary or resumes from the view (the
  * inbox owns that choice); a run that refuses it has nothing left to
  * continue and the thread is archived as such. A decision for a turn no longer open (a duplicate, a decision after a
  * follow-up reopened the thread) records nothing and delivers nothing.
@@ -155,7 +155,7 @@ const closedByEarlierAttempt = Effect.fn('inquiryClosedByEarlierAttempt')(
  */
 export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
   function* (
-    permission: ExternalInquiryPermission,
+    permission: InquiryRequest,
     decision: RequestDecision,
     inbox: (runId: RunId) => RunInbox,
     commit: CommitFacts,

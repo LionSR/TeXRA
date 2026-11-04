@@ -6,51 +6,41 @@
  *
  * Failure modes:
  * - a store failure during a resume reads as a refusal, or loses input;
- * - input sent while a resume reads the run, or from its host step, is
- *   lost, left unread, or delivered out of order;
- * - two resumes of one run both launch it;
- * - a run whose input closed while the resume read it is launched anyway;
- * - a resume whose launch fails loses input that raced it, keeps the run
- *   live here, or wedges the next resume;
+ * - input sent while a resume reads the run is lost or left unread;
  * - a host that cannot answer approval prompts has approval-gated tools
  *   offered to the run it resumed;
- * - a stop asked as the resumed run opens still runs a turn;
- * - a user's stop of the resumed run's turn is undone: the input typed
- *   behind that turn wakes the run again; or a message sent once the stop
- *   returns, before its halt commits, is left unread;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
- * - a run whose rows do not fold is reported as finished;
- * - a resume whose input the resumed turn's end takes with it answers only
- *   at a later rest, after the turn that input starts;
  * - a user's stop while a resume decides is lost: the stop writes the end,
  *   and the resume activates the stopped run anyway;
- * - the first caller of a resume leaving before admission takes a second
- *   SDK caller's resume down with it;
- * - every caller of a resume leaving before admission leaves the resume
- *   running with no owner, which then activates the run;
- * - a message sent while a resume decides only watches that resume, so the
- *   resume's caller leaving loses the wake.
+ * - R20: a message retried under its id once the run's input closed is
+ *   refused, sent again or resumes the run, instead of answering with the
+ *   first send's receipt; or a different message under that id is sent.
+ * - R13: a receipt answered before a crash changes once the resumed run
+ *   takes later input.
  */
-import '@test/support/sessionGraphTestSetup';
-
-import { writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-
-import { it } from '@effect/vitest';
-import { Cause, Effect, Fiber } from 'effect';
+import { layer } from '@effect/vitest';
+import { Deferred, Effect, Fiber, Context, Layer, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
-import { appendRow, positionRow } from '@agent/runtime/loop/rows';
+import {
+  ModelError,
+  originOf,
+  type Model,
+  type TurnEvent,
+} from '@texra-ai/llm';
+import { Conflict, type LocalSession, Sessions } from '@texra-ai/harness';
+import { ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { withProcessServices } from '@platform/processRuntime';
-import { type RunId } from '@shared/schemas';
+import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { Runs } from '@agent/runtime/runRegistry';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
   claimHolder,
+  crashedCopy,
+  parkedAfter,
   parkedRunAfterCrash,
   sessionStoreFaults,
   storedRows,
@@ -58,20 +48,29 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
+import type { RunId } from '@texra-ai/harness/schemas';
 
-/** A resume on the test process's runtime. */
-const resume = (runId: RunId, options: ResumeRunOptions) =>
-  withProcessServices(testRuntime(), resumeRun(runId, options));
+/** A resume in `session`. */
+const resume = (
+  runId: RunId,
+  {
+    session,
+    ...options
+  }: ResumeRunOptions & { readonly session: Context.Context<SessionServices> },
+) => resumeRun(runId, options).pipe(Effect.provide(session));
 
 /** Send `text` to the run as its user. */
-const send = (session: SessionHandle, runId: RunId, text: string) =>
-  session.followUps.send(runId, { from: { kind: 'user' }, text });
+const send = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+  text: string,
+) => Context.get(session, Inbox).send(runId, { from: { kind: 'user' }, text });
 
 /** The texts the run's rows still queue. */
-const queuedTexts = (session: SessionHandle, runId: RunId) =>
+const queuedTexts = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.map(queuedFollowUps(session, runId), (queued) =>
     queued.map((followUp) => followUp.text),
   );
@@ -102,353 +101,465 @@ const endsOf = (storage: string, runId: RunId) =>
     .filter((row) => row.run === runId && row.type === 'run.end')
     .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
 
-/** `session` as the package hands it to an embedder (`Sessions.open`). */
-const packageSession = (session: SessionHandle) =>
+/** `session` as the package hands it to an embedder (`Sessions.open`),
+ *  over the block's process services. */
+const packageSession = (session: Context.Context<SessionServices>) =>
   Effect.gen(function* () {
     const sessions = yield* makeSessions(
       // cast: the owner opens the one session this case holds.
       { open: () => Effect.succeed(session) } as never,
-      yield* testRuntime().contextEffect,
+      yield* (yield* SessionGraph.runtime).contextEffect,
     );
     return yield* sessions.open(testWorkspaceRoots());
   });
 
-/** What a resume that reached the run's next idle turn answers. */
-const DELIVERED = { started: true, delivered: true };
+/** What a resume that activated the run answers. */
+const ACTIVATED = { activation: expect.any(Number) };
 
 describe(
   'resumeRun over a crashed store',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    validationHost('texra-resume-');
+    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+      it.layer(validationHost('texra-resume-'), { buildPerTest: true })(
+        (it) => {
+          it.effect(
+            "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
+            () =>
+              Effect.gen(function* () {
+                const { session, runId, storage } =
+                  yield* parkedRunAfterCrash();
+                yield* send(session, runId, 'Keep this input.');
+                const faults = yield* sessionStoreFaults(storage);
+                // Under the claim, the resume reads the run's queued input and
+                // then its lineage (`persistedParentRunId`): that read fails.
+                const claim = yield* faults.holdNext('acquireClaims');
+                const resumed = yield* Effect.forkChild(
+                  Effect.flip(resume(runId, { session })),
+                );
+                yield* claim.reached;
+                const input = yield* faults.holdNext('readAggregate');
+                yield* claim.release;
+                yield* input.reached;
+                yield* faults.failNext('readRunRecords');
+                yield* input.release;
 
-    it.live(
-      "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          yield* send(session, runId, 'Keep this input.');
-          const faults = yield* sessionStoreFaults(storage);
-          // Under the claim, the resume reads the run's queued input and
-          // then its lineage (`persistedParentRunId`): that read fails.
-          const claim = yield* faults.holdNext('acquireClaims');
-          const resumed = yield* Effect.forkChild(
-            Effect.flip(resume(runId, { session })),
-          );
-          yield* claim.reached;
-          const input = yield* faults.holdNext('readAggregate');
-          yield* claim.release;
-          yield* input.reached;
-          yield* faults.failNext('readRunRecords');
-          yield* input.release;
-
-          const error = yield* Fiber.join(resumed);
-          expect(error.message).toContain('injected readRunRecords fault');
-          expect(activations(storage, runId)).toBe(1);
-          expect(claimHolder(storage, runId)).toBeNull();
-          expect(yield* queuedTexts(session, runId)).toEqual([
-            'Keep this input.',
-          ]);
-        }),
-    );
-
-    it.live(
-      'input sent while a resume reads the run reaches the resumed run',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          const faults = yield* sessionStoreFaults(storage);
-          // The first records read finds the run's owner; the second, its
-          // config, is inside the resume.
-          const owner = yield* faults.holdNext('readRunRecords');
-          const resumed = yield* Effect.forkChild(resume(runId, { session }));
-          yield* owner.reached;
-          const config = yield* faults.holdNext('readRunRecords');
-          yield* owner.release;
-          yield* config.reached;
-
-          expect(yield* send(session, runId, 'raced')).toEqual({
-            kind: 'queued',
-            read: false,
-          });
-          yield* config.release;
-          const result = yield* Fiber.join(resumed);
-          expect(result).toMatchObject(DELIVERED);
-          expect(answersOf(storage, runId).at(-1)).toContain('raced');
-
-          // A root's lifetime is the caller's to await past the
-          // acknowledgement: its input ending ends it.
-          if (!('started' in result)) throw new Error('resume refused');
-          yield* session.followUps.closeInput(runId);
-          expect((yield* result.completion)?.outcome).toBe('cancelled');
-        }),
-    );
-
-    it.live(
-      'a second resume of a run joins the one in flight, each admitted once',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          yield* send(session, runId, 'once');
-          const faults = yield* sessionStoreFaults(storage);
-          // The first resume waits on the run's claim, inside its resume.
-          const claim = yield* faults.holdNext('acquireClaims');
-          const admitted: string[] = [];
-          const admit =
-            (who: string) => (_: RunId, __: number, joined: boolean) =>
-              Effect.sync(() => void admitted.push(`${who} ${joined}`));
-          const first = yield* Effect.forkChild(
-            resume(runId, { session, onAdmitted: admit('first') }),
-          );
-          yield* claim.reached;
-          // Joined as it is forked: the resume is the run's activation.
-          const second = yield* Effect.forkChild(
-            resume(runId, { session, onAdmitted: admit('second') }),
-            { startImmediately: true },
-          );
-          yield* claim.release;
-
-          const joined = yield* Fiber.join(second);
-          expect(joined).toMatchObject(DELIVERED);
-          expect(yield* Fiber.join(first)).toEqual(joined);
-          expect(activations(storage, runId)).toBe(2);
-          expect(admitted.toSorted()).toEqual(['first false', 'second true']);
-        }),
-    );
-
-    it.live(
-      'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash({
-            interactions: { approvalPromptsUnavailable: true },
-          });
-          yield* send(session, runId, 'continue');
-
-          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
-          const [launched, resumed] = offeredTools(storage, runId);
-          expect(launched).toContain('bash');
-          expect(resumed).toContain('read_file');
-          expect(resumed).not.toContain('bash');
-        }),
-    );
-
-    it.live(
-      'a resume whose input the turn end takes with it answers at that commit',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          // The crash cut a turn short: its message taken, its answer not given.
-          yield* Effect.gen(function* () {
-            yield* session.log.hold(runId);
-            const parked = yield* session.runHistory.load(runId);
-            if (parked === null) throw new Error('The run has no history.');
-            const cell = yield* session.runHistory.open(runId);
-            yield* cell.append([
-              appendRow(runId, [
-                {
-                  role: 'user',
-                  content: [{ kind: 'text', text: 'answer me' }],
-                },
-              ]),
-              positionRow(runId, parked, 'turn.ready'),
-            ]);
-          }).pipe(Effect.scoped);
-          // Read at a turn's end, never mid-turn; the turn it starts holds
-          // its model call until released.
-          yield* session.followUps.send(
-            runId,
-            { from: { kind: 'user' }, text: 'GOLDEN-PARK then this' },
-            { hold: 'turn' },
+                const error = yield* Fiber.join(resumed);
+                expect(error.message).toContain(
+                  'injected readRunRecords fault',
+                );
+                expect(activations(storage, runId)).toBe(1);
+                expect(claimHolder(storage, runId)).toBeNull();
+                expect(yield* queuedTexts(session, runId)).toEqual([
+                  'Keep this input.',
+                ]);
+              }),
           );
 
-          expect(yield* resume(runId, { session })).toMatchObject(DELIVERED);
-          expect(answersOf(storage, runId)).toHaveLength(2);
-          writeFileSync(
-            join(testWorkspaceRoots().storage, 'golden-park.release'),
-            '',
+          it.effect(
+            'input sent while a resume reads the run reaches the resumed run',
+            () =>
+              Effect.gen(function* () {
+                const { session, runId, storage } =
+                  yield* parkedRunAfterCrash();
+                const faults = yield* sessionStoreFaults(storage);
+                // The first records read finds the run's owner; the second, its
+                // config, is inside the resume.
+                const owner = yield* faults.holdNext('readRunRecords');
+                const resumed = yield* Effect.forkChild(
+                  resume(runId, { session }),
+                );
+                yield* owner.reached;
+                const config = yield* faults.holdNext('readRunRecords');
+                yield* owner.release;
+                yield* config.reached;
+
+                expect(yield* send(session, runId, 'raced')).toEqual({
+                  kind: 'queued',
+                  read: false,
+                });
+                yield* config.release;
+                expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
+                yield* untilStored(
+                  storage,
+                  () =>
+                    answersOf(storage, runId).at(-1)?.includes('raced') ??
+                    false,
+                );
+
+                // A root outlives its resume: its input ending ends it.
+                yield* Context.get(session, Inbox).closeInput(runId);
+                yield* untilStored(
+                  storage,
+                  () => endsOf(storage, runId).at(-1) === 'cancelled',
+                );
+              }),
           );
-        }),
-    );
 
-    it.live(
-      'a run a live process elsewhere holds is refused before the host rearranges',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash({
-            owner: JSON.stringify(['other-host', 4321, 'start-1']),
-          });
-          let rearranged = false;
+          it.effect(
+            'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
+            () =>
+              Effect.gen(function* () {
+                const { session, runId, storage } = yield* parkedRunAfterCrash({
+                  interactions: { approvalPromptsUnavailable: true },
+                });
+                yield* send(session, runId, 'continue');
 
-          expect(
-            yield* resume(runId, {
-              session,
-              onAdmitted: () =>
-                Effect.sync(() => {
-                  rearranged = true;
-                }),
-            }),
-          ).toEqual({ failed: 'owned_elsewhere' });
-          expect(rearranged).toBe(false);
-          expect(activations(storage, runId)).toBe(1);
-        }),
-    );
-    it.live(
-      "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          const faults = yield* sessionStoreFaults(storage);
-          // Past its checks under the claim, the resume reads the run's
-          // input before it launches: the stop lands there.
-          const claim = yield* faults.holdNext('acquireClaims');
-          const resumed = yield* Effect.forkChild(
-            Effect.exit(resume(runId, { session })),
+                expect(yield* resume(runId, { session })).toMatchObject(
+                  ACTIVATED,
+                );
+                yield* untilStored(
+                  storage,
+                  () => offeredTools(storage, runId).length > 1,
+                );
+                const [launched, resumed] = offeredTools(storage, runId);
+                expect(launched).toContain('bash');
+                expect(resumed).toContain('read_file');
+                expect(resumed).not.toContain('bash');
+                // The notice names only the declared tools it withholds: `plan`,
+                // which the persona declares and the goal plugin also injects,
+                // once.
+                const withheld = storedRows(storage).flatMap((row) => {
+                  if (row.run !== runId || row.type !== 'log') return [];
+                  const { message } = JSON.parse(row.data) as {
+                    message: string;
+                  };
+                  const names = /^Not offering ([^:]+):/.exec(message)?.[1];
+                  return names === undefined ? [] : names.split(', ');
+                });
+                expect(withheld).toContain('bash');
+                expect(withheld.filter((name) => name === 'plan')).toEqual([
+                  'plan',
+                ]);
+              }),
           );
-          yield* claim.reached;
-          const input = yield* faults.holdNext('readAggregate');
-          yield* claim.release;
-          yield* input.reached;
 
-          const stop = session.runs.stop(runId, {
-            reason: 'user',
-            detachActiveChildren: false,
-          });
-          expect(session.runs.get(runId)?.stopReason).toBe('user');
-          yield* stop.settlement;
-          yield* input.release;
-          yield* Fiber.join(resumed);
+          it.effect(
+            'a run a live process elsewhere holds is refused before the host rearranges',
+            () =>
+              Effect.gen(function* () {
+                // A live pid (this process's parent) whose start identity was
+                // never read: no proof finds it dead.
+                const owner = JSON.stringify([
+                  'other-host',
+                  process.ppid,
+                  null,
+                ]);
+                const { session, runId, storage } = yield* parkedRunAfterCrash({
+                  owner,
+                });
 
-          expect(endsOf(storage, runId)).toEqual(['cancelled']);
-          expect(activations(storage, runId)).toBe(1);
-        }),
-    );
-
-    it.live(
-      "a user's stop after a resume launched its generation, before admission, ends the run cancelled once",
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          const faults = yield* sessionStoreFaults(storage);
-          // The resume reads the run's input and lineage, then launches its
-          // generation, whose first read the stop lands on.
-          const claim = yield* faults.holdNext('acquireClaims');
-          const resumed = yield* Effect.forkChild(
-            Effect.exit(resume(runId, { session })),
+                expect(yield* resume(runId, { session })).toEqual({
+                  failed: { kind: 'ownedElsewhere', owner },
+                });
+                expect(activations(storage, runId)).toBe(1);
+              }),
           );
-          yield* claim.reached;
-          const input = yield* faults.holdNext('readAggregate');
-          yield* claim.release;
-          yield* input.reached;
-          const lineage = yield* faults.holdNext('readRunRecords');
-          yield* input.release;
-          yield* lineage.reached;
-          const launched = yield* faults.holdNext('readRunRecords');
-          yield* lineage.release;
-          yield* launched.reached;
-          // Its generation holds the run here, not yet admitted.
-          expect(session.runs.get(runId)?.live).toBe(true);
+          it.effect(
+            "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
+            () =>
+              Effect.gen(function* () {
+                const { session, runId, storage } =
+                  yield* parkedRunAfterCrash();
+                const faults = yield* sessionStoreFaults(storage);
+                // Past its checks under the claim, the resume reads the run's
+                // input before it launches: the stop lands there.
+                const claim = yield* faults.holdNext('acquireClaims');
+                const resumed = yield* Effect.forkChild(
+                  Effect.exit(resume(runId, { session })),
+                );
+                yield* claim.reached;
+                const input = yield* faults.holdNext('readAggregate');
+                yield* claim.release;
+                yield* input.reached;
 
-          session.runs.stop(runId, {
-            reason: 'user',
-            detachActiveChildren: false,
-          });
-          expect(session.runs.get(runId)?.stopReason).toBe('user');
-          yield* launched.release;
-          yield* Fiber.join(resumed);
+                const stop = Context.get(session, Runs).stop(runId, 'user');
+                expect(Context.get(session, Runs).stopCause(runId)).toBe(
+                  'user',
+                );
+                yield* stop.settlement.pipe(Effect.provide(session));
+                yield* input.release;
+                yield* Fiber.join(resumed);
 
-          expect(endsOf(storage, runId)).toEqual(['cancelled']);
-          expect(activations(storage, runId)).toBe(1);
-        }),
-    );
-
-    it.live(
-      'a second SDK resumer is handed the run when the first leaves before admission',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          yield* send(session, runId, 'once');
-          const sdk = yield* packageSession(session);
-          const faults = yield* sessionStoreFaults(storage);
-          const claim = yield* faults.holdNext('acquireClaims');
-          const first = yield* Effect.forkChild(sdk.resume(runId), {
-            startImmediately: true,
-          });
-          yield* claim.reached;
-          const second = yield* Effect.forkChild(sdk.resume(runId), {
-            startImmediately: true,
-          });
-          yield* Fiber.interrupt(first);
-          yield* claim.release;
-
-          const run = yield* Fiber.join(second);
-          expect(run.runId).toBe(runId);
-          expect((yield* run.result).outcome).toBe('completed');
-          expect(activations(storage, runId)).toBe(2);
-        }),
-    );
-
-    it.live(
-      'a resume whose every caller leaves before it admits the run is stopped, activating nothing',
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          const faults = yield* sessionStoreFaults(storage);
-          const claim = yield* faults.holdNext('acquireClaims');
-          const first = yield* Effect.forkChild(resume(runId, { session }), {
-            startImmediately: true,
-          });
-          yield* claim.reached;
-          const second = yield* Effect.forkChild(resume(runId, { session }), {
-            startImmediately: true,
-          });
-          yield* Fiber.interrupt(first);
-          yield* Fiber.interrupt(second);
-          yield* claim.release;
-
-          // Nothing is left to activate it: no activation comes within a
-          // bound that a live resume meets many times over.
-          const activated = yield* untilStored(
-            storage,
-            () => activations(storage, runId) > 1,
-          ).pipe(Effect.timeout('3 seconds'), Effect.exit);
-          expect(
-            activated._tag === 'Failure' && Cause.squash(activated.cause),
-          ).toBeInstanceOf(Cause.TimeoutError);
-          expect(session.runs.get(runId)).toBeUndefined();
-        }),
-    );
-
-    it.live(
-      "a message sent while a resume decides wakes the run though the resume's caller leaves",
-      () =>
-        Effect.gen(function* () {
-          const { session, runId, storage } = yield* parkedRunAfterCrash();
-          const faults = yield* sessionStoreFaults(storage);
-          // The resume reads the run's config, before its claim.
-          const owner = yield* faults.holdNext('readRunRecords');
-          const resumed = yield* Effect.forkChild(resume(runId, { session }));
-          yield* owner.reached;
-          const config = yield* faults.holdNext('readRunRecords');
-          yield* owner.release;
-          yield* config.reached;
-
-          expect(
-            yield* submitFollowUp(
-              runId,
-              { from: { kind: 'user' }, text: 'woken' },
-              { session },
-            ),
-          ).toEqual({ status: 'queued' });
-          yield* Fiber.interrupt(resumed);
-          yield* config.release;
-
-          yield* untilStored(storage, () =>
-            answersOf(storage, runId).some((answer) =>
-              answer.includes('woken'),
-            ),
+                expect(endsOf(storage, runId)).toEqual(['cancelled']);
+                expect(activations(storage, runId)).toBe(1);
+              }),
           );
-        }),
-    );
+
+          it.effect(
+            'R20: a message retried under its id after its run took no more input answers with its receipt; a different message under it is a conflict',
+            () =>
+              Effect.gen(function* () {
+                const { session, runId, storage } =
+                  yield* parkedRunAfterCrash();
+                const sdk = yield* packageSession(session);
+                const message = {
+                  kind: 'followUp.send',
+                  runId,
+                  id: 'note-1',
+                  text: 'Add the lemma.',
+                } as const;
+                expect(yield* sdk.request(message)).toMatchObject({
+                  kind: 'followUp',
+                  id: 'note-1',
+                });
+                const { receipt } = yield* sdk.request({
+                  kind: 'followUp.receipt',
+                  runId,
+                  id: 'note-1',
+                  wait: true,
+                });
+                expect(receipt).toEqual({
+                  state: 'answered',
+                  turn: 2,
+                  answer: expect.any(Number),
+                });
+                // The acknowledgement is lost, and the run's input closes.
+                yield* Context.get(session, Inbox).closeInput(runId);
+                yield* untilStored(
+                  storage,
+                  () => endsOf(storage, runId).at(-1) === 'cancelled',
+                );
+
+                expect(yield* sdk.request(message)).toEqual({
+                  kind: 'followUp',
+                  id: 'note-1',
+                  status: 'sent',
+                  receipt,
+                });
+                const conflict = yield* Effect.flip(
+                  sdk.request({ ...message, text: 'Drop the lemma.' }),
+                );
+                expect(conflict).toBeInstanceOf(Conflict);
+                expect(conflict).toMatchObject({ runId, id: 'note-1' });
+                const queued = storedRows(storage).filter(
+                  (row) => row.run === runId && row.type === 'followup.queued',
+                );
+                expect(queued).toHaveLength(1);
+                expect(activations(storage, runId)).toBe(2);
+              }),
+          );
+        },
+      );
+    });
   },
 );
+
+/** The text of the user messages after the model's last answer. */
+const askedSinceAnswer = (
+  messages: Parameters<Model['streamTurn']>[0]['messages'],
+): string =>
+  messages
+    .slice(messages.findLastIndex((m) => m.role === 'assistant') + 1)
+    .flatMap((m) =>
+      m.role === 'user'
+        ? m.content.flatMap((part) => (part.kind === 'text' ? [part.text] : []))
+        : [],
+    )
+    .join('\n');
+
+/**
+ * The model of the receipt cases, behind the validation route: it answers
+ * each turn with what it was asked since its last answer, once the gate a
+ * `WAIT<n>` there names opens, and refuses, for good, a turn that asks
+ * `FAIL`. A gate tells a case when a turn reached it.
+ */
+const receiptModel = () => {
+  const gates = new Map<
+    string,
+    { reached: Deferred.Deferred<void>; open: Deferred.Deferred<void> }
+  >();
+  const gate = (name: string) => {
+    const found = gates.get(name);
+    if (found !== undefined) return found;
+    const made = {
+      reached: Deferred.makeUnsafe<void>(),
+      open: Deferred.makeUnsafe<void>(),
+    };
+    gates.set(name, made);
+    return made;
+  };
+  const layer = Layer.succeed(ValidationModel)({
+    enabled: Effect.succeed(true),
+    bind: (config) => {
+      const origin = originOf({
+        protocol: 'openai-responses',
+        requestedModel: config.id,
+        deployment: {
+          endpoint: 'https://validation.invalid/v1',
+          credentialScope: 'validation',
+        },
+      });
+      const model: Model = {
+        prepareTurn: (request) =>
+          Effect.succeed({
+            ...origin,
+            mode: 'foreground',
+            system: request.system,
+            messages: request.messages,
+            tools: request.tools ?? [],
+            transport: { kind: 'http' },
+            controls: {
+              temperature: 0,
+              maxOutputTokens:
+                request.maxOutputTokens ?? config.maxOutputTokens,
+              store: false,
+              toolChoice: request.toolChoice ?? 'auto',
+              reasoning: null,
+              serviceTier: null,
+            },
+          }),
+        streamTurn: (turn) =>
+          Stream.unwrap(
+            Effect.gen(function* () {
+              const asked = askedSinceAnswer(turn.messages);
+              const waits = /WAIT\d/.exec(asked)?.[0];
+              if (waits !== undefined) {
+                yield* Deferred.succeed(gate(waits).reached, undefined);
+                yield* Deferred.await(gate(waits).open);
+              }
+              const refused: Stream.Stream<TurnEvent, ModelError> = Stream.fail(
+                new ModelError({
+                  kind: 'invalid-request',
+                  message: 'The request was refused.',
+                  retryable: false,
+                }),
+              );
+              if (asked.includes('FAIL')) return refused;
+              return Stream.succeed<TurnEvent>({
+                kind: 'completed',
+                result: {
+                  kind: 'http',
+                  providerResponseId: `response-${asked.length}`,
+                  requestedOrigin: origin,
+                  returnedModel: config.id,
+                  modelFingerprint: null,
+                  content: [
+                    {
+                      kind: 'message',
+                      content: [{ kind: 'text', text: `Answered: ${asked}` }],
+                    },
+                  ],
+                  finishReason: 'stop',
+                  usage: null,
+                },
+              });
+            }),
+          ),
+      };
+      return { origin, model };
+    },
+  });
+  return { process: SessionGraph.with([], layer), gate };
+};
+
+/** The persona the receipt cases run. */
+const NOTES_AGENT = {
+  name: 'note_taker',
+  description: 'Answers each message.',
+  prompt: 'Answer each message.',
+  tools: [],
+};
+
+/**
+ * A run of the notes agent that answered its first turn and waits, then
+ * `before` on its session, in a process that then dies; and a session of a
+ * second process over the store the crash left. Both run on the calling
+ * case's process.
+ */
+const resumedNotesRun = <E = never>(
+  before: (
+    session: LocalSession,
+    runId: RunId,
+  ) => Effect.Effect<void, E> = () => Effect.void,
+) =>
+  Effect.gen(function* () {
+    const roots = testWorkspaceRoots();
+    const sessions = yield* Sessions;
+    const { runId, storage } = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const session = yield* sessions.open(roots, {
+          persistent: true,
+          host: {},
+        });
+        const run = yield* session.start({
+          agent: NOTES_AGENT,
+          instruction: 'Start the notes.',
+          model: 'openai/gpt-5.6-sol',
+          interactive: true,
+        });
+        yield* untilStored(
+          roots.storage,
+          parkedAfter(run.runId, 1, roots.storage),
+        );
+        yield* before(session, run.runId);
+        const storage = crashedCopy(roots.storage);
+        yield* sessions.close(roots);
+        return { runId: run.runId, storage };
+      }),
+    );
+    const session = yield* sessions.open(
+      { ...roots, storage },
+      { persistent: true, host: {} },
+    );
+    return { runId, storage, session };
+  });
+
+/** What `session` answers for the receipt of message `id` to `runId`,
+ *  once it has one. */
+const receiptOf = (session: LocalSession, runId: RunId, id: string) =>
+  Effect.map(
+    session.request({ kind: 'followUp.receipt', runId, id, wait: true }),
+    (answer) => answer.receipt,
+  );
+
+describe('input receipts', { timeout: REAL_RUN_TIMEOUT }, () => {
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-receipt-'), { buildPerTest: true })((it) => {
+      it.effect(
+        'R13: a receipt answered before a crash reads the same once the resumed run takes later input',
+        () => {
+          const { process, gate } = receiptModel();
+          return Effect.gen(function* () {
+            let answered: Effect.Success<ReturnType<typeof receiptOf>> | null =
+              null;
+            const { runId, session } = yield* resumedNotesRun(
+              (session, runId) =>
+                Effect.gen(function* () {
+                  yield* session.request({
+                    kind: 'followUp.send',
+                    runId,
+                    id: 'a',
+                    text: 'First point.',
+                  });
+                  answered = yield* receiptOf(session, runId, 'a');
+                }),
+            );
+            expect(answered).toEqual({
+              state: 'answered',
+              turn: 2,
+              answer: expect.any(Number),
+            });
+            // The next message resumes the run; its turn holds the model
+            // call, then answers.
+            yield* session.request({
+              kind: 'followUp.send',
+              runId,
+              id: 'b',
+              text: 'WAIT1 Second point.',
+            });
+            yield* Deferred.await(gate('WAIT1').reached);
+            expect(yield* receiptOf(session, runId, 'a')).toEqual(answered);
+            yield* Deferred.succeed(gate('WAIT1').open, undefined);
+            expect(yield* receiptOf(session, runId, 'b')).toEqual({
+              state: 'answered',
+              turn: 3,
+              answer: expect.any(Number),
+            });
+            expect(yield* receiptOf(session, runId, 'a')).toEqual(answered);
+          }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+        },
+      );
+    });
+  });
+});

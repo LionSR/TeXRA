@@ -1,13 +1,12 @@
 /**
- * The stderr status line of `texra run` (PRD one-fold-three-renderers,
- * 10.3). It reads the session view and derives nothing the fold already
+ * The stderr status line of `texra run`. It reads the session view and derives nothing the session view already
  * states; the renderer keeps only its own output state (what it last wrote).
  * The plain-text workflow lines are `scriptPlainOutput.ts`.
  */
 import path from 'node:path';
 import { formatCompactDuration, pluralize } from '@texra-ai/harness/transcript';
 
-import { Effect, type Fiber, type Scope, Stream } from 'effect';
+import { Effect, type Fiber, Schedule, type Scope, Stream } from 'effect';
 
 import {
   isLiveRun,
@@ -16,7 +15,6 @@ import {
   RUN_PHASE,
   type RunId,
   type RunPhase,
-  isTerminalOutcomePhase,
 } from '@texra-ai/harness/schemas';
 import { formatLoopPositionLabel, runStatusLabel } from '@ui/copy/runStatus';
 
@@ -38,7 +36,7 @@ interface RunProgressSession {
   readonly view: Pick<LocalSession['view'], 'changes'>;
 }
 
-/** The tool calls `run` has finished: its transcript's settled tool cards,
+/** The tool calls `run` has finished: its transcript's finished tool cards,
  *  which the view holds while some port subscribes the run (a launched
  *  run's own handle does, as does the chat for every run it lists). */
 export function finishedToolCalls(run: RunView): number {
@@ -98,7 +96,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   private wantedRunId: RunId | undefined;
   /** The last root phase the renderer painted; a repeat is not a change. */
   private paintedPhase: RunPhase | undefined;
-  private heartbeat: Fiber.Fiber<never> | undefined;
+  private heartbeat: Fiber.Fiber<number> | undefined;
   /** Open prompts holding the line ({@link suspend}). */
   private suspended = 0;
 
@@ -125,8 +123,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         Effect.andThen(
           Effect.forkScoped(
             Effect.scoped(
-              Stream.runForEach(session.view.changes, (view) =>
-                Effect.gen({ self: this }, function* () {
+              Stream.runForEach(
+                session.view.changes,
+                Effect.fnUntraced({ self: this }, function* (view) {
                   this.applyView(view);
                   if (this.rootRunTerminal || !this.rootRunId) {
                     this.stopHeartbeat();
@@ -137,11 +136,12 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
                   ) {
                     // A start waits a full interval. This stream's scope
                     // interrupts and joins the heartbeat when it ends.
-                    this.heartbeat = yield* Effect.sleep(
-                      this.heartbeatIntervalMs,
+                    this.heartbeat = yield* Effect.sync(() =>
+                      this.render(true),
                     ).pipe(
-                      Effect.andThen(Effect.sync(() => this.render(true))),
-                      Effect.forever,
+                      Effect.schedule(
+                        Schedule.spaced(this.heartbeatIntervalMs),
+                      ),
                       Effect.forkScoped({ startImmediately: true }),
                     );
                   }
@@ -188,7 +188,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 
   private get rootRunTerminal(): boolean {
-    return isTerminalOutcomePhase(this.root()?.status);
+    return this.root()?.durableOutcome != null;
   }
 
   private applyView(view: SessionView): void {
@@ -198,11 +198,10 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
       this.rootRunId ??= this.wantedRunId;
     const root = this.root();
     if (!root) return;
-    const wasTerminal = isTerminalOutcomePhase(
-      previous && this.rootRunId
-        ? previous.runs.get(this.rootRunId)?.status
-        : undefined,
-    );
+    const wasTerminal =
+      (previous && this.rootRunId
+        ? previous.runs.get(this.rootRunId)?.durableOutcome
+        : null) != null;
     const phase = root.status;
     const phaseChanged = phase !== 'ready' && phase !== this.paintedPhase;
     if (phaseChanged) this.paintedPhase = phase;
@@ -252,7 +251,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   } {
     const root = this.root();
     if (!root) return { line: '', state: '' };
-    // The fold's turn; a run whose loop has not moved yet carries none.
+    // The session view's turn; a run whose loop has not moved yet carries none.
     // The agent as the cards name it (`runIdentityDisplayName`): a recipe
     // launch's `source:name` key reads as its name.
     const agentName = root.identity.kind === 'agent' ? root.label : undefined;
@@ -275,7 +274,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         nameOnlySubagents,
         elapsed,
       );
-      parts.push(formatActiveChildren(children, descriptionColumns)!);
+      parts.push(
+        formatActiveChildren(children, descriptionColumns) ?? nameOnlySubagents,
+      );
     }
     const toolCallCount = finishedToolCalls(root);
     if (toolCallCount && !nameOnlySubagents) {
@@ -311,7 +312,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   }
 }
 
-/** The fold's label (G4, one table) for every state but a running run,
+/** The session view's label (G4, one table) for every state but a running run,
  *  whose live task is its description once the AI one-liner has arrived. */
 function livePhaseText(root: RunView): string | undefined {
   if (root.status === 'ready') return undefined;

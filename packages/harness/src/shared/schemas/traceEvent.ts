@@ -8,7 +8,7 @@ import { FileListEntrySchema, LogLevelSchema, MessageTypeSchema } from './log';
 import { ToolCallStatusSchema, ToolCardSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
 import { StageKindSchema } from './taskGroup';
-import { ExtendedTokenUsageStatsSchema } from './usage';
+import { TokenUsageStatsSchema } from './usage';
 
 function trace<T extends string, const F extends Schema.Struct.Fields>(
   type: T,
@@ -20,6 +20,11 @@ function trace<T extends string, const F extends Schema.Struct.Fields>(
     ...fields,
   });
 }
+
+const ResponseCutSchema = Schema.Literals(['length', 'content-filter']);
+/** The limit that ended an answer early: the model's output budget
+ *  (`length`), or the provider's content filter. */
+export type ResponseCut = typeof ResponseCutSchema.Type;
 
 /** Durable transcript vocabulary; session events extend each arm. */
 export const TranscriptEventSchema = Schema.Union([
@@ -68,10 +73,9 @@ export const TranscriptEventSchema = Schema.Union([
    * database projects one from each priced `model.message` response and
    * `context.edit` summary (`Database`'s display reads). A child's spend
    * is on the child's own run, never on its parent's. An
-   * agent-CLI child, which has no run history, stores one per turn. `elapsedTime`
-   * is the turn's response time in seconds.
+   * agent-CLI child, which has no run history, stores one per turn.
    */
-  trace('usage', { usage: ExtendedTokenUsageStatsSchema }),
+  trace('usage', { usage: TokenUsageStatsSchema }),
   trace('context.state', {
     inputTokens: ContextStateDataSchema.fields.inputTokens,
     contextWindow: ContextStateDataSchema.fields.contextWindow,
@@ -90,7 +94,12 @@ export const TranscriptEventSchema = Schema.Union([
    *  boundary, not only the terminal round. The round's MODEL_RESPONSE stream carries raw
    *  provider chunks, so subscribers reconcile that stream's entry to this
    *  text rather than assume the two match. */
-  trace('response.finalized', { text: Schema.String }),
+  /** The answer shown as final. `cut` names the limit that ended it early:
+   *  the model's output budget, or the provider's content filter. */
+  trace('response.finalized', {
+    text: Schema.String,
+    cut: Schema.optional(ResponseCutSchema),
+  }),
 ]);
 
 export type TranscriptEvent = typeof TranscriptEventSchema.Type;

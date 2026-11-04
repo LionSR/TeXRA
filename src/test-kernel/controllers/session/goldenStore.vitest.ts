@@ -6,10 +6,11 @@
  *
  * The fixture holds only cleanly finished runs. Failure modes: a stored
  * row that no longer decodes; a fold that reads the same rows to a different
- * run or state; a projection that rebuilds to other rows than its
- * incremental tables hold; a listing that differs from the fold over the
- * whole history; a store a newer build wrote that opens, or is rewritten;
- * and the durable harness's row shapes read back other than written: a fork
+ * run or state; a store a newer build wrote that opens, or is rewritten;
+ * a resume of a run holding an earlier build's row that fails untyped,
+ * sends the model a request, or adds a row; and the durable harness's row
+ * shapes read back
+ * other than written: a fork
  * whose `run.start` does not name its source, a fork's seed
  * `context.edit` missing, an awaited child without the call
  * that owns it. Interrupted states are the crash-point suite's
@@ -19,9 +20,6 @@
  * result committed. A resume that runs that command again, or reports it
  * as anything but an unknown outcome, fails.
  */
-// Test composition imports
-import '@test/support/defaultSessionTestSetup';
-
 // Node imports
 import {
   cpSync,
@@ -37,14 +35,31 @@ import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 // Third-party imports
-import { it } from '@effect/vitest';
-import { Effect, Layer, Schema, Stream, SubscriptionRef } from 'effect';
-import { afterAll, afterEach, beforeEach, describe, expect } from 'vitest';
+import { it, layer } from '@effect/vitest';
+import {
+  Deferred,
+  Effect,
+  Exit,
+  Layer,
+  Schema,
+  Stream,
+  SubscriptionRef,
+  Context,
+} from 'effect';
+import { afterAll, describe, expect, vi } from 'vitest';
 
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  qualifyAggregateId,
+  type RunId,
+  RunIdSchema,
+  type SessionView,
+} from '@texra-ai/harness/schemas';
+import { ResumeRefused, Sessions } from '@texra-ai/harness';
+import { AgentCatalog, ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import { validationModelLayer } from '@cli/runtime/validationModel';
 import { databaseLayer } from '@controllers/session/Database';
 import { EVENT_COLUMNS, EVENT_FROM } from '@controllers/session/rowCodec';
 import { rowReader } from '@controllers/session/rowReader';
@@ -57,34 +72,28 @@ import { SessionViewService } from '@controllers/session/SessionView';
 import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { makeSessionStore } from '@controllers/session/sessionStore';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
-import { withProcessServices } from '@platform/processRuntime';
-import {
-  qualifyAggregateId,
-  isDisplaySessionEvent,
-  ROW_KINDS,
-  RunIdSchema,
-  type RunId,
-} from '@shared/schemas';
+import { ROW_KINDS } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import type { SessionView } from '@shared/session/sessionView';
-import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
+import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { storePluginsLayer } from '@test/support/setupPlatform';
 import {
-  closeTestDefaultSession,
-  openTestDefaultSession,
-} from '@test/support/sessionEnd';
-import { setupPlatform, storePluginsLayer } from '@test/support/setupPlatform';
+  persistentTestSession,
+  REAL_RUN_TIMEOUT,
+  validationHost,
+} from '@test/support/storeFaults';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { testRuntime } from '@test/support/testProcessRuntime';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { texraPlugins } from '@texra/tools/registry';
-import { armsOf } from '@tools/plugins';
+import { factKindsOf } from '@tools/plugins';
+import type { Model } from '@texra-ai/llm';
 
 const GOLDEN = readFileSync(
   resolve(REPO_ROOT, 'src/test-kernel/fixtures/storage/golden-1.0.sql'),
@@ -113,7 +122,6 @@ const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-const TOMBSTONED = Schema.decodeUnknownSync(RunIdSchema)('a00000000011');
 /** The service's task, and the background command it sent, whose input the
  *  service's resume closed. */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
@@ -217,7 +225,7 @@ describe('the golden 1.0 store', () => {
           );
         const events = yield* rowReader(
           storage,
-          armsOf(texraPlugins({ name: 'vscode' })),
+          factKindsOf(texraPlugins({ name: 'vscode' })),
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
@@ -261,18 +269,16 @@ describe('the golden 1.0 store', () => {
           ),
         ]).toEqual(['openai/gpt-5.6-sol', 'google/gemini-3.8-flash@medium']);
         // Each request is a queued control, consumed in the batch that applies
-        // it: the switch's `run.config` (no edit), then the compaction's edit,
-        // right after its consumption.
+        // it, and its consumption says so: the switch's (`run.config`) and
+        // the compaction's (its edit).
         const applied = raw(storage, (db) =>
           db
             .prepare(
               `SELECT json_extract(q.data, '$.control.kind') AS kind,
-               (SELECT json_extract(x.data, '$.payload.trigger') FROM event c
-                JOIN event x ON x.aggregate = c.aggregate AND x.seq = c.seq + 1
-                  AND x.type = 'context.edit'
+               (SELECT json_extract(c.data, '$.disposition.kind') FROM event c
                 WHERE c.type = 'followup.consumed' AND c.aggregate = q.aggregate
                   AND json_extract(c.data, '$.followUpId')
-                    = json_extract(q.data, '$.followUpId')) AS trigger
+                    = json_extract(q.data, '$.followUpId')) AS disposition
              FROM event q JOIN event_sequence s ON s.id = q.aggregate
              WHERE s.logical_id = ? AND q.type = 'followup.queued'
                AND json_extract(q.data, '$.control') IS NOT NULL
@@ -281,8 +287,8 @@ describe('the golden 1.0 store', () => {
             .all(CHAT),
         );
         expect(applied).toEqual([
-          { kind: 'model', trigger: null },
-          { kind: 'compact', trigger: 'user' },
+          { kind: 'model', disposition: 'applied' },
+          { kind: 'compact', disposition: 'applied' },
         ]);
         // The durable harness's row shapes: a fork's start names its
         // source, and its first history row seeds the source's view; an
@@ -341,8 +347,9 @@ describe('the golden 1.0 store', () => {
               : [],
           ),
         ).toEqual([['read_file', 'executions', 'memory', 'plan']]);
-        // The plan the chat ran as a goal: a run on the goal's program, its
-        // agent the chat's, that ends with what its one round verified.
+        // The plan the chat ran as a goal: a run on the default strategy, its
+        // agent the chat's, that ends with the goal's result: what its one
+        // round verified, and what that round spent.
         const goal = qualifyAggregateId('run', GOAL);
         expect(
           events.flatMap((event) =>
@@ -352,8 +359,9 @@ describe('the golden 1.0 store', () => {
           ),
         ).toEqual([
           {
-            status: 'completed',
+            outcome: 'completed',
             rounds: 1,
+            spent: 0.000048,
             report: 'The golden chat is answered.',
           },
         ]);
@@ -452,8 +460,9 @@ describe('the golden 1.0 store', () => {
           messages: state?.messages.map((message) => message.role),
           openAttempt: state?.invocation != null,
         }));
+      // The stop kept where the loop stood: a halt records only the outcome.
       expect(yield* stateOf(PARENT)).toEqual({
-        at: 'halted',
+        at: 'waiting',
         phase: 'waiting',
         modelId: 'openai/gpt-5.6-sol',
         messages: [
@@ -524,32 +533,6 @@ describe('the golden 1.0 store', () => {
       });
     },
   );
-
-  it.effect('lists what the fold over the whole history holds', () => {
-    const storage = goldenRoot();
-    return Effect.gen(function* () {
-      const db = yield* Database;
-      const listing = yield* db.readListing();
-      const history = yield* Stream.runCollect(db.readDisplay(0));
-      const of = (events: readonly (typeof listing)[number][]) => {
-        const view = makeSessionViewUpdater('golden').apply(
-          events.filter(isDisplaySessionEvent).map((event) => ({
-            _tag: 'event' as const,
-            read: 'listing' as const,
-            event,
-          })),
-        );
-        return {
-          runs: runsOf(view),
-          order: view.order,
-          requests: view.requests,
-          queued: [...view.queuedFollowUps],
-        };
-      };
-      expect(of(listing)).toEqual(of([...history]));
-      expect(of(listing).runs.map((run) => run.id)).not.toContain(TOMBSTONED);
-    }).pipe(Effect.provide(substrate(storage)));
-  });
 });
 
 /**
@@ -566,99 +549,227 @@ describe('the golden run killed after its effect', () => {
     'src/test-kernel/fixtures/storage/golden-effect/approved.txt',
   );
   const tempDirs = useTempDirs();
-  setupPlatform(async () => {
-    const host = await createTempDirPlatform('texra-golden-kill-', tempDirs);
-    const agents = {
-      custom: () => Effect.succeed(AGENTS),
-      customConfigured: () => Effect.succeed(false),
-      builtIn: () => Effect.succeed(AGENTS),
-      builtInToolUse: () => Effect.succeed(AGENTS),
-    };
-    return {
-      ...host,
-      platform: { ...host.platform, agentDirectories: agents },
-    };
-  });
   const VALIDATION = {
     TEXRA_INTERNAL_VALIDATE_MODEL: '1',
     TEXRA_INTERNAL_VALIDATE_GOLDEN: '1',
   };
-  let restore: Record<string, string | undefined> = {};
-  beforeEach(async () => {
-    const { storage, workspace } = testWorkspaceRoots();
-    if (workspace === undefined) throw new Error('no test workspace');
-    const flag = join(storage, 'validation-flag');
-    restore = Object.fromEntries(
-      [...Object.keys(VALIDATION), 'TEXRA_INTERNAL_VALIDATE_MODEL_FLAG'].map(
-        (key) => [key, process.env[key]],
-      ),
-    );
-    Object.assign(process.env, VALIDATION, {
-      TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
-    });
-    cpSync(goldenRoot(), storage, { recursive: true });
-    mkdirSync(workspace, { recursive: true });
-    cpSync(EFFECT, join(workspace, 'approved.txt'));
-    raw(storage, (db) => {
-      // The path lands inside a JSON string, so it goes in escaped as one:
-      // a Windows path's backslashes would otherwise corrupt the row.
-      db.prepare(
-        `UPDATE event SET data = replace(data, '/golden/project', ?)
+  /** The test's host as the kill left it: the golden store and the effect on
+   *  a temp-dir host whose agents are the fixtures', loaded into the block's
+   *  catalog, with the validation model answering. The release puts the
+   *  environment back. */
+  const killedHost = Layer.effectDiscard(
+    Effect.gen(function* () {
+      const { storage, workspace } = (yield* FakeHost).roots;
+      if (workspace === undefined) throw new Error('no test workspace');
+      const flag = join(storage, 'validation-flag');
+      yield* Effect.acquireRelease(
+        Effect.sync(() => {
+          for (const [name, value] of Object.entries({
+            ...VALIDATION,
+            TEXRA_INTERNAL_VALIDATE_MODEL_FLAG: flag,
+          }))
+            vi.stubEnv(name, value);
+        }),
+        () => Effect.sync(() => vi.unstubAllEnvs()),
+      );
+      cpSync(goldenRoot(), storage, { recursive: true });
+      mkdirSync(workspace, { recursive: true });
+      cpSync(EFFECT, join(workspace, 'approved.txt'));
+      raw(storage, (db) => {
+        // The path lands inside a JSON string, so it goes in escaped as one:
+        // a Windows path's backslashes would otherwise corrupt the row.
+        db.prepare(
+          `UPDATE event SET data = replace(data, '/golden/project', ?)
          WHERE type IN ('run.start', 'run.config') AND aggregate =
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
-      ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
-      // The kill, on this host: an owner whose process is gone.
-      db.prepare(
-        'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
-      ).run(
-        JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
-        KILLED,
-      );
-    });
-    writeFileSync(flag, 'texra-cli-run-validation\n');
-    await testRuntime().runPromise(
-      AgentCatalog.use((catalog) => catalog.refresh),
-    );
-    await Effect.runPromise(closeTestDefaultSession);
-  });
-  afterEach(async () => {
-    await Effect.runPromise(closeTestDefaultSession);
-    for (const [key, value] of Object.entries(restore)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  });
-
-  it.live('reports the command as an unknown outcome and never reruns it', () =>
-    Effect.gen(function* () {
-      const { storage, workspace } = testWorkspaceRoots();
-      const session = yield* openTestDefaultSession({
-        roots: testWorkspaceRoots(),
+        ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
+        // The kill, on this host: an owner whose process is gone.
+        db.prepare(
+          'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
+        ).run(
+          JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
+          KILLED,
+        );
       });
-      const result = yield* withProcessServices(
-        testRuntime(),
-        resumeRun(KILLED, { session }),
-      );
-      expect(result).toMatchObject({ started: true });
-      yield* closeTestDefaultSession;
-      const settled = raw(storage, (db) =>
-        db
-          .prepare(
-            `SELECT json_extract(e.data, '$.payload') AS payload
+      writeFileSync(flag, 'texra-cli-run-validation\n');
+      yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
+    }),
+  ).pipe(
+    Layer.provideMerge(
+      FakeHost.layer(async () => {
+        const host = await createTempDirPlatform(
+          'texra-golden-kill-',
+          tempDirs,
+        );
+        const agents = {
+          custom: () => Effect.succeed(AGENTS),
+          customConfigured: () => Effect.succeed(false),
+          builtIn: () => Effect.succeed(AGENTS),
+          builtInToolUse: () => Effect.succeed(AGENTS),
+        };
+        return {
+          ...host,
+          platform: { ...host.platform, agentDirectories: agents },
+        };
+      }),
+    ),
+  );
+
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(killedHost, { buildPerTest: true })((it) => {
+      it.effect(
+        'reports the command as an unknown outcome and never reruns it',
+        () =>
+          Effect.gen(function* () {
+            const { storage, workspace } = testWorkspaceRoots();
+            // The resume, in a session that closes before the store is read.
+            yield* Effect.scoped(
+              Effect.gen(function* () {
+                const session = yield* persistentTestSession();
+                const result = yield* resumeRun(KILLED, {}).pipe(
+                  Effect.provide(session),
+                );
+                if (!('activation' in result))
+                  throw new Error('resume refused');
+                // The resumed activation rests, or ends.
+                yield* Stream.runHead(
+                  Stream.filter(
+                    Context.get(session, SessionViewAccess).changes,
+                    (view) => {
+                      const run = view.runs.get(KILLED);
+                      return (
+                        view.cursor > result.activation &&
+                        (run?.status === 'waiting' ||
+                          run?.durableOutcome != null)
+                      );
+                    },
+                  ),
+                );
+              }),
+            );
+            const settled = raw(storage, (db) =>
+              db
+                .prepare(
+                  `SELECT json_extract(e.data, '$.payload') AS payload
              FROM event e JOIN event_sequence s ON s.id = e.aggregate
              WHERE s.logical_id = ? AND e.type = 'tool.result'`,
-          )
-          .all(KILLED)
-          .map((row) => JSON.parse(String(row.payload)) as unknown),
+                )
+                .all(KILLED)
+                .map((row) => JSON.parse(String(row.payload)) as unknown),
+            );
+            expect(settled).toHaveLength(1);
+            expect(JSON.stringify(settled[0])).toContain('outcome is unknown');
+            // The effect the killed process left, and nothing more.
+            expect(
+              readFileSync(join(workspace!, 'approved.txt'), 'utf8')
+                .split(/\r?\n/)
+                .filter(Boolean),
+            ).toEqual(['approved']);
+          }),
       );
-      expect(settled).toHaveLength(1);
-      expect(JSON.stringify(settled[0])).toContain('outcome is unknown');
-      // The effect the killed process left, and nothing more.
-      expect(
-        readFileSync(join(workspace!, 'approved.txt'), 'utf8')
-          .split(/\r?\n/)
-          .filter(Boolean),
-      ).toEqual(['approved']);
-    }),
-  );
+    });
+  });
+});
+
+/**
+ * R11 of the harness 1.0 release acceptance: a resume of a golden run whose
+ * rows this build cannot continue is refused, with its reason, before the
+ * model's transport is sent anything, and the store gains no row. The
+ * golden chat holds input queued behind its stopped turn, so a resume that
+ * went ahead sends a turn at once, as it does over the unchanged store.
+ */
+describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
+  /** The validation model, counting the turns sent to it; `first` opens
+   *  with the first. */
+  const countedModel = () => {
+    const sent = { turns: 0, first: Deferred.makeUnsafe<void>() };
+    const model = Layer.effect(
+      ValidationModel,
+      Effect.map(ValidationModel, (inner) => ({
+        enabled: inner.enabled,
+        bind: (config: Parameters<typeof inner.bind>[0]) => {
+          const bound = inner.bind(config);
+          return {
+            ...bound,
+            model: {
+              ...bound.model,
+              streamTurn: (turn: Parameters<Model['streamTurn']>[0]) => {
+                sent.turns += 1;
+                Deferred.doneUnsafe(sent.first, Exit.void);
+                return bound.model.streamTurn(turn);
+              },
+            },
+          };
+        },
+      })),
+    ).pipe(Layer.provide(validationModelLayer));
+    return { sent, process: SessionGraph.with([], model) };
+  };
+  /** The chat's last model response. */
+  const RESPONSE = 605;
+  /** The golden store, with `rewrite` applied, and a session over it. */
+  const goldenSession = (rewrite?: string) =>
+    Effect.gen(function* () {
+      const storage = goldenRoot();
+      if (rewrite !== undefined) raw(storage, (db) => db.exec(rewrite));
+      const session = yield* (yield* Sessions).open(
+        { ...testWorkspaceRoots(), storage },
+        { persistent: true, host: {} },
+      );
+      return { storage, session };
+    });
+  /** The chat's stored rows. */
+  const chatRows = (storage: string) =>
+    raw(storage, (db) =>
+      db
+        .prepare(
+          `SELECT e.* FROM event e JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? ORDER BY e."commit"`,
+        )
+        .all(CHAT),
+    );
+
+  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-golden-resume-'), { buildPerTest: true })(
+      (it) => {
+        it.effect.each([
+          [
+            "an earlier build's row",
+            `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
+            { kind: 'earlierBuild', cause: expect.any(String) },
+          ],
+        ] as const)(
+          'refuses a run holding %s before any request, and adds no row',
+          ([, rewrite, reason]) => {
+            const { sent, process } = countedModel();
+            return Effect.gen(function* () {
+              const { storage, session } = yield* goldenSession(rewrite);
+              const before = chatRows(storage);
+              const refused = yield* Effect.flip(
+                session.resume(CHAT, { interactive: true }),
+              );
+              expect(refused).toBeInstanceOf(ResumeRefused);
+              expect(refused).toMatchObject({ runId: CHAT, reason });
+              expect(sent.turns).toBe(0);
+              expect(chatRows(storage)).toEqual(before);
+            }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+          },
+        );
+
+        it.effect('resumes the unchanged chat, which sends a turn', () => {
+          const { sent, process } = countedModel();
+          return Effect.gen(function* () {
+            const { session } = yield* goldenSession();
+            const run = yield* session.resume(CHAT, { interactive: true });
+            expect(run.runId).toBe(CHAT);
+            yield* Deferred.await(sent.first);
+          }).pipe(
+            Effect.timeout('20 seconds'),
+            Effect.scoped,
+            Effect.provide(process, { local: true }),
+          );
+        });
+      },
+    );
+  });
 });

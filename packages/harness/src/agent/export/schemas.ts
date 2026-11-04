@@ -9,7 +9,7 @@
 
 import { Schema } from 'effect';
 
-import { MediaAttachmentKindSchema } from '@shared/schemas';
+import { JsonValueSchema, MediaAttachmentKindSchema } from '@shared/schemas';
 
 // ============================================================
 // Intermediate representation — format-agnostic
@@ -41,7 +41,13 @@ export const ExportNodeSchema = Schema.Union([
     name: Schema.String,
     input: Schema.Unknown,
   }),
-  Schema.Struct({ kind: Schema.Literal('tool-result'), text: Schema.String }),
+  /** `text` is what the model read; `value`, the structured result the call
+   *  recorded (a script's return), when it recorded one. */
+  Schema.Struct({
+    kind: Schema.Literal('tool-result'),
+    text: Schema.String,
+    value: Schema.optional(JsonValueSchema),
+  }),
   Schema.Struct({ kind: Schema.Literal('web-search'), query: Schema.String }),
 ]);
 export type ExportNode = typeof ExportNodeSchema.Type;

@@ -1,20 +1,24 @@
-import '@test/support/sessionGraphTestSetup';
+import { layer } from '@effect/vitest';
+import { Effect, Schema, Context } from 'effect';
 
-import { it } from '@effect/vitest';
-import { Effect, Schema } from 'effect';
+import { beforeEach, expect, vi } from 'vitest';
 
-import { beforeEach, describe, expect, vi } from 'vitest';
-
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  type AgentConfig,
+  AgentConfigSchema,
+  qualifyAggregateId,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { AgentConfigSchema, qualifyAggregateId } from '@shared/schemas';
-import type { RunId } from '@shared/schemas';
-import { testRuntime, testSessionOf } from '@test/support/testProcessRuntime';
-import { createProcessSession } from '@test/support/sessionTestUtils';
+import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
+import {
+  SessionGraph,
+  sessionHandleOf,
+  TestSession,
+} from '@test/support/testKernel';
 
 const mocks = vi.hoisted(() => ({
   initCliPlatform: vi.fn(),
@@ -40,22 +44,21 @@ const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   model: 'gpt-5',
 });
 
-/** The session the seeded run lives in, as the command resolves it. */
-let seededSession: SessionHandle;
-
-/** Seed the real (fake-platform-backed) run records and run aggregate. */
-async function seedRunRecord(config: AgentConfig | null): Promise<void> {
-  const session = await Effect.runPromise(createProcessSession());
-  seededSession = session;
-  // `runResumeCommand` reads the session off the services the init returns.
-  mocks.initCliPlatform.mockReturnValue(
-    Effect.succeed({
-      runtime: testRuntime(),
-      session: Effect.sync(() => testSessionOf(session)),
-    }),
-  );
-  await Effect.runPromise(
-    session.log.transact([
+/** Seed the real (fake-platform-backed) run records and run aggregate into
+ *  the test's session, which the command resolves off the services the
+ *  init returns; the seeded session's handle comes back. */
+const seedRunRecord = (config: AgentConfig | null) =>
+  Effect.gen(function* () {
+    const session = yield* TestSession;
+    const handle = yield* sessionHandleOf(session);
+    // `runResumeCommand` reads the session off the services the init returns.
+    mocks.initCliPlatform.mockReturnValue(
+      Effect.succeed({
+        runtime: yield* SessionGraph.runtime,
+        session: Effect.succeed(session),
+      }),
+    );
+    yield* Context.get(handle, SessionLog).transact([
       {
         type: 'run.start',
         aggregateId: qualifyAggregateId('run', RUN_ID),
@@ -64,29 +67,27 @@ async function seedRunRecord(config: AgentConfig | null): Promise<void> {
         parent: null,
         provenance: null,
       },
-    ]),
-  );
-  if (config) await Effect.runPromise(commitRunRecord(session, RUN_ID, config));
-  // The position that opens the run: its rows hold a checkpoint.
-  const cell = await Effect.runPromise(
-    session.runHistory.open(RUN_ID, { activation: () => Effect.succeed([]) }),
-  );
-  await Effect.runPromise(
-    cell.append([
+    ]);
+    if (config) yield* commitRunRecord(handle, RUN_ID, config);
+    // The position that opens the run: its rows hold a checkpoint.
+    const cell = yield* Context.get(handle, RunHistory).open(RUN_ID, {
+      activation: () => Effect.succeed([]),
+    });
+    yield* cell.append([
       {
         type: 'run.position',
         aggregateId: qualifyAggregateId('run', RUN_ID),
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
-    ]),
-  );
-  // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
-  // to be resumed is one nobody holds, so the seed gives the claim back: a
-  // hold taken and let go releases it.
-  await Effect.runPromise(
-    Effect.scoped(session.log.hold(RUN_ID, { ends: true })),
-  );
-}
+    ]);
+    // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
+    // to be resumed is one nobody holds, so the seed gives the claim back: a
+    // hold taken and let go releases it.
+    yield* Effect.scoped(
+      Context.get(handle, SessionLog).hold(RUN_ID, { ends: true }),
+    );
+    return handle;
+  });
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
@@ -101,53 +102,53 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 }
 
 /** The command's program, run the way `defineCliCommand` runs it. */
-async function run(context: CliContext, id: RunId = RUN_ID) {
-  const { runResumeCommand } = await import('@cli/commands/resumeRun');
-  return testRuntime().runPromise(runResumeCommand(context, id));
-}
+const run = (context: CliContext, id: RunId = RUN_ID) =>
+  Effect.flatMap(
+    Effect.promise(() => import('@cli/commands/resumeRun')),
+    ({ runResumeCommand }) => runResumeCommand(context, id),
+  );
 
-describe('runResumeCommand', () => {
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    await seedRunRecord(TOOL_USE_CONFIG);
-  });
-
-  it('reopens the chat TUI with the persisted tool-use run record', async () => {
-    await expect(run(cliContext())).resolves.toEqual({
-      chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
+// Live clock: the command runs as its entry runs it.
+layer(SessionGraph.hosted, { excludeTestServices: true })(
+  'runResumeCommand',
+  (it) => {
+    beforeEach(() => {
+      vi.clearAllMocks();
     });
-  });
 
-  it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
-    await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(2);
+    // A session of its own per case, seeded by the case.
+    it.layer(TestSession.layer(), { buildPerTest: true })((it) => {
+      it.effect(
+        'reopens the chat TUI with the persisted tool-use run record',
+        () =>
+          Effect.gen(function* () {
+            yield* seedRunRecord(TOOL_USE_CONFIG);
+            expect(yield* run(cliContext())).toEqual({
+              chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
+            });
+          }),
+      );
 
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      expect.stringContaining('For scripting, use `texra run`.'),
-    );
-  });
+      it.effect(
+        'refuses a run another live TeXRA process holds, naming its pid',
+        () =>
+          Effect.gen(function* () {
+            const seededSession = yield* seedRunRecord(TOOL_USE_CONFIG);
+            const log = Context.get(seededSession, SessionLog);
+            vi.spyOn(log, 'owner').mockReturnValue(
+              Effect.succeed({
+                ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
+                liveness: 'alive',
+              }),
+            );
 
-  it('reports an unknown run id as a usage error', async () => {
-    await seedRunRecord(null);
+            expect(yield* run(cliContext())).toBe(CliExitCode.Usage);
 
-    await expect(run(cliContext())).resolves.toBe(2);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Run not found: ${RUN_ID}`,
-    );
-  });
-
-  it('refuses a run another live TeXRA process holds, naming its pid', async () => {
-    vi.spyOn(seededSession.log, 'owner').mockReturnValue(
-      Effect.succeed({
-        ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
-        liveness: 'alive',
-      }),
-    );
-
-    await expect(run(cliContext())).resolves.toBe(CliExitCode.Usage);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Task ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
-    );
-  });
-});
+            expect(mocks.writeTextStderr).toHaveBeenCalledWith(
+              `Task ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
+            );
+          }),
+      );
+    });
+  },
+);

@@ -6,12 +6,12 @@
  * {@link SubscriptionOAuthPolicy}; this class owns single-flight refresh,
  * generation supersede, and serialized storage writes.
  *
- * Every method is an Effect program the caller yields or settles at its own
+ * Every method is an Effect program the caller yields or runs at its own
  * edge. A program fails with {@link SubscriptionOAuthError} or with the
  * secret store's own {@link SecretsFailed}.
  */
 // Third-party imports
-import { Clock, Effect, Result, Schema } from 'effect';
+import { Clock, Effect, Exit, Result, Schema } from 'effect';
 
 // Local imports
 import { SharedAttempt } from './sharedAttempt.js';
@@ -21,58 +21,24 @@ import { SerializedWrites } from './authProgram.js';
 import {
   exchangeAuthorizationCode,
   refreshOAuthTokens,
-  type OAuthFormEndpoint,
 } from './formTokenClient.js';
 import { authorizeRequest } from './pkce.js';
 import { SubscriptionOAuthError } from './subscriptionOAuthError.js';
 import type { OAuthRequestError } from './oauthRequest.js';
-import type { SecretsFailed } from '../providers/credentials.js';
+import type {
+  CredentialStore,
+  SecretsFailed,
+} from '../providers/credentials.js';
 import type {
   SubscriptionAuthorizeRequest,
+  SubscriptionCallback,
   SubscriptionCoordinator,
+  SubscriptionOAuthPolicy,
   SubscriptionSession,
   SubscriptionSessionStatus,
   SubscriptionTokenResponse,
 } from './subscriptionCoordinator.js';
 import type { HttpClient } from 'effect/http';
-
-/** Secret-backed persistence for one session bundle. */
-export interface SubscriptionSessionStorage {
-  get(): Effect.Effect<string | undefined, SecretsFailed>;
-  store(value: string): Effect.Effect<void, SecretsFailed>;
-  delete(): Effect.Effect<void, SecretsFailed>;
-}
-
-/** Provider-specific policy: every magic URL/claim out of the machine. */
-export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
-  /** The persisted session bundle's schema. */
-  readonly sessionSchema: Schema.Codec<S, unknown>;
-  /** Form token endpoint the token grants go to. */
-  readonly tokenEndpoint: OAuthFormEndpoint;
-  readonly notSignedInMessage: string;
-  readonly sessionChangedMessage: string;
-  /** The provider's authorize endpoint, for the PKCE code flow (`./pkce.ts`). */
-  readonly authorize: {
-    readonly url: string;
-    readonly scope: string;
-    /** The loopback redirect for a bind on `port` (a pinned one ignores it). */
-    redirectUri(port: number): string;
-    /** The provider's parameters beyond the code flow's own. */
-    readonly params: Readonly<Record<string, string>>;
-  };
-  /** Token response to session. Must not throw: it runs in `Effect.succeed`. */
-  buildSession(
-    tokens: SubscriptionTokenResponse,
-    refreshToken: string,
-    nowMs: number,
-    previous?: S,
-  ): S;
-}
-
-interface SubscriptionOAuthCoordinatorInit<S extends SubscriptionSession> {
-  storage: SubscriptionSessionStorage;
-  policy: SubscriptionOAuthPolicy<S>;
-}
 
 type MachineFailure = SubscriptionOAuthError | SecretsFailed;
 
@@ -103,15 +69,40 @@ function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
 export class SubscriptionOAuthCoordinator<
   S extends SubscriptionSession,
 > implements SubscriptionCoordinator<S> {
-  private readonly storage: SubscriptionSessionStorage;
+  /**
+   * One coordinator per credential store for this provider. Refresh tokens
+   * may rotate on use, so callers sharing a store must share the same refresh
+   * attempt and write queue. Replacing the store starts an independent one.
+   */
+  static forProvider<S extends SubscriptionSession>(
+    policy: SubscriptionOAuthPolicy<S>,
+  ): (secrets: CredentialStore) => SubscriptionCoordinator<S> {
+    const coordinators = new WeakMap<
+      CredentialStore,
+      SubscriptionCoordinator<S>
+    >();
+    return (secrets) => {
+      let coordinator = coordinators.get(secrets);
+      if (coordinator === undefined) {
+        coordinator = new SubscriptionOAuthCoordinator(secrets, policy);
+        coordinators.set(secrets, coordinator);
+      }
+      return coordinator;
+    };
+  }
+
+  private readonly secrets: CredentialStore;
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly refreshes = new SharedAttempt<S, MachineFailure>();
   private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
 
-  constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
-    this.storage = init.storage;
-    this.policy = init.policy;
+  private constructor(
+    secrets: CredentialStore,
+    policy: SubscriptionOAuthPolicy<S>,
+  ) {
+    this.secrets = secrets;
+    this.policy = policy;
   }
 
   /**
@@ -123,7 +114,7 @@ export class SubscriptionOAuthCoordinator<
     function* (
       this: SubscriptionOAuthCoordinator<S>,
     ): Effect.fn.Return<S | null, SecretsFailed | SubscriptionOAuthError> {
-      const raw = yield* this.storage.get();
+      const raw = yield* this.secrets.get(this.policy.secretKey);
       if (!raw) return null;
       const parsed = Schema.decodeUnknownResult(
         Schema.fromJsonString(this.policy.sessionSchema),
@@ -152,9 +143,16 @@ export class SubscriptionOAuthCoordinator<
     );
   }
 
-  buildAuthorizeRequest(port: number): SubscriptionAuthorizeRequest {
-    return authorizeRequest(this.policy, port);
-  }
+  readonly buildAuthorizeRequest = Effect.fn(
+    'SubscriptionOAuthCoordinator.buildAuthorizeRequest',
+  )(function* (this: SubscriptionOAuthCoordinator<S>, port: number) {
+    const { registration } = this.policy;
+    return authorizeRequest(
+      this.policy,
+      port,
+      registration && (yield* registration(this.secrets)),
+    );
+  });
 
   /** Whether `session` needs a refresh at `now`, a `Clock` reading. */
   private isExpiringSoon(session: S, now: number): boolean {
@@ -178,18 +176,25 @@ export class SubscriptionOAuthCoordinator<
   }
 
   private store(session: S): Effect.Effect<void, SecretsFailed> {
-    return this.storage.store(JSON.stringify(session));
+    return this.secrets.set(this.policy.secretKey, JSON.stringify(session));
   }
 
   private buildSession(
     tokens: SubscriptionTokenResponse,
     previous?: S,
+    clientId: string | undefined = previous?.clientId,
   ): Effect.Effect<S, SubscriptionOAuthError> {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     return refreshToken
-      ? Effect.map(Clock.currentTimeMillis, (now) =>
-          this.policy.buildSession(tokens, refreshToken, now, previous),
-        )
+      ? Effect.map(Clock.currentTimeMillis, (now) => {
+          const session = this.policy.buildSession(
+            tokens,
+            refreshToken,
+            now,
+            previous,
+          );
+          return clientId === undefined ? session : { ...session, clientId };
+        })
       : Effect.fail(
           new SubscriptionOAuthError({
             message: 'OAuth response did not include a refresh token.',
@@ -219,28 +224,21 @@ export class SubscriptionOAuthCoordinator<
   };
 
   /**
-   * After a refresh is superseded (concurrent login/sign-out), take a stable
-   * storage snapshot and:
-   * - return a *replacement* session (different credentials) — concurrent
-   *   sign-in succeeded; do not force re-auth;
-   * - return a still-fresh same session (rare: supersede without replace);
-   * - fail `expired` when storage is empty (sign-out won);
-   * - fail `transient` when the pre-refresh session is still the only
-   *   stored value and still needs refresh (failed concurrent store, or a
-   *   server-rotated refresh that never landed) — never hand back a known-
-   *   stale token as if the refresh completed.
+   * After a refresh is superseded (a concurrent login or sign-out), the
+   * stored session from a stable snapshot: a replacement or a still-fresh
+   * one is returned; none fails `expired` (sign-out won); the pre-refresh
+   * one, still expiring, fails `transient` rather than hand back a stale
+   * token as if the refresh completed.
    */
   private readonly sessionAfterSupersede = Effect.fn(
     'SubscriptionOAuthCoordinator.sessionAfterSupersede',
   )(function* (this: SubscriptionOAuthCoordinator<S>, previous: S) {
     const { session } = yield* this.stableSession();
     if (!session) {
-      return yield* Effect.fail(
-        new SubscriptionOAuthError({
-          message: this.policy.sessionChangedMessage,
-          kind: 'expired',
-        }),
-      );
+      return yield* new SubscriptionOAuthError({
+        message: this.policy.sessionChangedMessage,
+        kind: 'expired',
+      });
     }
     const replaced =
       session.accessToken !== previous.accessToken ||
@@ -251,21 +249,30 @@ export class SubscriptionOAuthCoordinator<
     ) {
       return session;
     }
-    return yield* Effect.fail(
-      new SubscriptionOAuthError({
-        message: this.policy.sessionChangedMessage,
-        kind: 'transient',
-      }),
-    );
+    return yield* new SubscriptionOAuthError({
+      message: this.policy.sessionChangedMessage,
+      kind: 'transient',
+    });
   });
 
-  /** Delete the stored session, superseding any refresh in flight. */
+  /** End the stored (readable) session at the provider, then delete it either
+   *  way, superseding any refresh; a failed end is reported after. */
   readonly signOut = Effect.fn('SubscriptionOAuthCoordinator.signOut')(
     function* (this: SubscriptionOAuthCoordinator<S>) {
+      const { endSession } = this.policy;
+      const ended = yield* Effect.exit(
+        this.loadSession().pipe(
+          Effect.catchTag('SubscriptionOAuthError', () => Effect.succeed(null)),
+          Effect.flatMap((session) =>
+            session && endSession ? endSession(session) : Effect.void,
+          ),
+        ),
+      );
       yield* this.sessionMutations.run(
-        this.storage.delete(),
+        this.secrets.delete(this.policy.secretKey),
         this.supersedeInFlightRefresh,
       );
+      if (Exit.isFailure(ended)) return yield* Effect.failCause(ended.cause);
     },
   );
 
@@ -278,8 +285,9 @@ export class SubscriptionOAuthCoordinator<
     function* (
       this: SubscriptionOAuthCoordinator<S>,
       tokens: SubscriptionTokenResponse,
+      clientId?: string,
     ) {
-      const session = yield* this.buildSession(tokens);
+      const session = yield* this.buildSession(tokens, undefined, clientId);
       yield* this.sessionMutations.run(
         this.store(session),
         this.supersedeInFlightRefresh,
@@ -289,20 +297,43 @@ export class SubscriptionOAuthCoordinator<
   );
 
   /**
-   * The code exchange as a program: the loopback login yields it, so
-   * interrupting that login reaches the exchange and the store.
+   * The code exchange, yielded by the loopback login so its interruption
+   * reaches the exchange and the store. A registering attempt takes the
+   * client the callback names; a returning one rejects any other.
    */
   readonly loginWithCode = Effect.fn(
     'SubscriptionOAuthCoordinator.loginWithCode',
   )(function* (
     this: SubscriptionOAuthCoordinator<S>,
-    params: { code: string; verifier: string; redirectUri: string },
+    request: SubscriptionAuthorizeRequest,
+    callback: SubscriptionCallback,
   ) {
+    const clientId = request.registering ? callback.clientId : request.clientId;
+    if (
+      clientId === undefined ||
+      (callback.clientId !== undefined && callback.clientId !== clientId)
+    ) {
+      return yield* new SubscriptionOAuthError({
+        message: 'Sign-in did not confirm the client it used. Sign in again.',
+        kind: 'config',
+      });
+    }
     const tokens = yield* Effect.mapError(
-      exchangeAuthorizationCode(this.policy.tokenEndpoint, params),
+      exchangeAuthorizationCode(this.policy.tokenEndpoint, {
+        code: callback.code,
+        verifier: request.verifier,
+        redirectUri: request.redirectUri,
+        clientId,
+      }),
       grantFailure,
     );
-    return yield* this.storeTokens(tokens);
+    if (this.policy.acceptGrant)
+      yield* this.policy.acceptGrant(
+        tokens,
+        { ...request, clientId },
+        this.secrets,
+      );
+    return yield* this.storeTokens(tokens, clientId);
   });
 
   private readonly freshSession = Effect.fn(
@@ -310,12 +341,10 @@ export class SubscriptionOAuthCoordinator<
   )(function* (this: SubscriptionOAuthCoordinator<S>, rejected?: string) {
     const { generation, session } = yield* this.stableSession();
     if (!session) {
-      return yield* Effect.fail(
-        new SubscriptionOAuthError({
-          message: this.policy.notSignedInMessage,
-          kind: 'expired',
-        }),
-      );
+      return yield* new SubscriptionOAuthError({
+        message: this.policy.notSignedInMessage,
+        kind: 'expired',
+      });
     }
     if (
       session.accessToken !== rejected &&
@@ -340,6 +369,7 @@ export class SubscriptionOAuthCoordinator<
     const tokens = yield* refreshOAuthTokens(
       this.policy.tokenEndpoint,
       previous.refreshToken,
+      previous.clientId ?? this.policy.tokenEndpoint.clientId,
     ).pipe(
       Effect.mapError(grantFailure),
       // Fatal: clear the session unless a login or a refresh replaced it.
@@ -350,7 +380,7 @@ export class SubscriptionOAuthCoordinator<
                 stored?.refreshToken !== previous.refreshToken ||
                 generation !== this.sessionGeneration
                   ? Effect.void
-                  : this.storage.delete(),
+                  : this.secrets.delete(this.policy.secretKey),
               ),
             )
           : Effect.void,

@@ -7,11 +7,22 @@
  * which stay wire identifiers and never reach the screen.
  */
 
-import { formatCostUsd } from '@texra-ai/harness/transcript';
-import { absurd } from 'effect';
+import {
+  formatCostUsd,
+  transcriptText,
+  type ErrorRow,
+  type TranscriptText,
+} from '@texra-ai/harness/transcript';
+import { absurd, String as Str } from 'effect';
 import { codingPlanForUsageRoute } from '@texra/shared/model/codingPlans';
 import { CHATGPT_AUTH, GROK_AUTH } from '@ui/copy/accountAuth';
-import type { TokenUsageStats, UsageRoute } from '@texra-ai/harness/schemas';
+import { formatResetDuration } from '@ui/copy/format';
+import type {
+  DeclinableUsageRoute,
+  ErrorLogData,
+  TokenUsageStats,
+  UsageRoute,
+} from '@texra-ai/harness/schemas';
 
 /** The words for each `ModelOptionData.availability` kind. */
 export const MODEL_AVAILABILITY_LABEL = {
@@ -24,6 +35,118 @@ export const MODEL_AVAILABILITY_LABEL = {
   unserved: 'Unavailable',
   'unknown-model': 'Unknown model',
 } as const;
+
+/**
+ * Each plan a model call can bill through, as a person knows it: the name of
+ * its switch, which a used-up plan is called by, and what the model takes
+ * with the switch off, which a retry moves onto once the plan is used up.
+ * Keyed by the route that bills through the plan, the route the harness's
+ * failure and fallback notice record.
+ */
+const PLAN_NAMES = Object.freeze({
+  'chatgpt-subscription': {
+    plan: CHATGPT_AUTH.subscriptionLabel,
+    fallback: 'your own OpenAI API key',
+  },
+  'xai-subscription': {
+    plan: GROK_AUTH.subscriptionLabel,
+    fallback: 'your own xAI API key',
+  },
+  'kimi-code-subscription': {
+    plan: codingPlanForUsageRoute('kimi-code-subscription').preferenceLabel,
+    fallback: 'your own Moonshot API keys',
+  },
+  'glm-coding-plan-subscription': {
+    plan: codingPlanForUsageRoute('glm-coding-plan-subscription')
+      .preferenceLabel,
+    fallback: 'the regular GLM endpoint',
+  },
+} satisfies Record<DeclinableUsageRoute, { plan: string; fallback: string }>);
+
+/** What a model of `route`'s plan takes with the plan's switch off. */
+export function planFallbackName(route: DeclinableUsageRoute): string {
+  return PLAN_NAMES[route].fallback;
+}
+
+/** The account each subscription session signs in to, by the route it
+ *  bills: its switch and its sign-in, which a lapsed session names. */
+const SESSION_ACCOUNTS = Object.freeze({
+  'chatgpt-subscription': CHATGPT_AUTH,
+  'xai-subscription': GROK_AUTH,
+});
+
+/**
+ * A model call's failure as a person reads it, from the facts the run
+ * recorded: a used-up plan (the plan, its tier and when it resets), or a
+ * subscription that could not bill (the session's failure, and whether a
+ * sign-in fixes it), in these words; any other failure as the harness
+ * worded it.
+ */
+export function modelFailureText({
+  message,
+  classification,
+}: Pick<ErrorLogData, 'message' | 'classification'>): string {
+  if (classification === undefined) return message;
+  switch (classification.kind) {
+    case 'missing-api-key':
+    case 'context-window':
+    case 'upstream-credit':
+      return message;
+    case 'subscription-session': {
+      const { subscriptionLabel, signInLabel } =
+        SESSION_ACCOUNTS[classification.route];
+      const remedy = classification.needsReauth
+        ? `${signInLabel} again`
+        : 'Try again in a moment';
+      return `${subscriptionLabel} unavailable: ${classification.sessionError} ${remedy}, or turn off "${subscriptionLabel}".`;
+    }
+    default: {
+      const { plan, fallback } = PLAN_NAMES[classification.kind];
+      const tier = classification.planType
+        ? ` (${Str.capitalize(classification.planType)} plan)`
+        : '';
+      const reset =
+        classification.resetsInMs === undefined
+          ? ''
+          : ` Resets in ${formatResetDuration(classification.resetsInMs)}.`;
+      return `${plan} usage limit reached${tier}.${reset} Switch to ${fallback} to keep working, or wait until the limit resets.`;
+    }
+  }
+}
+
+/**
+ * An error row as a person reads it: its headline, and its details as one
+ * `key: value` line each (the block a copy or a full-output reader takes). A
+ * classified failure reads in {@link modelFailureText}'s words wherever the
+ * row shows the harness's message for it: its headline, or its `message`
+ * detail.
+ */
+export function errorRowText({ summary, details, failure }: ErrorRow): {
+  readonly summary: string;
+  readonly detailText: TranscriptText;
+} {
+  const worded = (text: string): string =>
+    failure !== undefined && text === failure.message
+      ? modelFailureText(failure)
+      : text;
+  return {
+    summary: worded(summary.full),
+    detailText: transcriptText(
+      details
+        .map(
+          ({ key, value }) =>
+            `${key}: ${key === 'message' ? worded(value) : value}`,
+        )
+        .join('\n'),
+    ),
+  };
+}
+
+/** The notice of a used-up plan's automatic retry on the model's own key. */
+export function quotaFallbackNoticeText(route: DeclinableUsageRoute): string {
+  const { plan, fallback } = PLAN_NAMES[route];
+  return `${plan} usage limit reached; retrying with ${fallback}.`;
+}
 
 /** Model calls paid for by your own provider accounts. */
 export const OWN_API_KEYS = {

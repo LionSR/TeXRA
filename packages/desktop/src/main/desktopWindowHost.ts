@@ -6,17 +6,16 @@
 import { app, dialog, shell, type BrowserWindow } from 'electron';
 import { Cause, Effect } from 'effect';
 
-import {
-  INSTRUCTION_ACTION,
-  type InstructionAction,
-  ensureError,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
 } from '@texra/hosts/uiHosts';
+import {
+  INSTRUCTION_ACTION,
+  type InstructionAction,
+} from '@ui/copy/instructionActions';
 import { texraGuideUrl } from '@ui/copy/guide';
 import { postDesktopSettingsView } from '../shared/desktopCommandSurface.js';
 import { createDesktopDialogs } from './desktopDialogs.js';
@@ -229,27 +228,26 @@ export function createDesktopWindowHost(options: {
      *  releases page rather than any network-provided URL, so an
      *  unauthenticated API response can never influence what
      *  `shell.openExternal` opens. */
-    announceRelease: (release: {
+    announceRelease: Effect.fn('announceRelease')(function* (release: {
       version: string;
-    }): Effect.Effect<void, Error> =>
-      Effect.gen(function* () {
-        const { response } = yield* Effect.tryPromise({
-          try: () =>
-            dialog.showMessageBox(window, {
-              type: 'info',
-              message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
-              buttons: ['Download', 'Later'],
-              defaultId: 0,
-              cancelId: 1,
-            }),
+    }): Effect.fn.Return<void, Error> {
+      const { response } = yield* Effect.tryPromise({
+        try: () =>
+          dialog.showMessageBox(window, {
+            type: 'info',
+            message: `TeXRA ${release.version} is available (you have ${app.getVersion()}).`,
+            buttons: ['Download', 'Later'],
+            defaultId: 0,
+            cancelId: 1,
+          }),
+        catch: ensureError,
+      });
+      if (response === 0)
+        yield* Effect.tryPromise({
+          try: () => shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
           catch: ensureError,
         });
-        if (response === 0)
-          yield* Effect.tryPromise({
-            try: () => shell.openExternal(DESKTOP_RELEASES_PAGE_URL),
-            catch: ensureError,
-          });
-      }),
+    }),
     /** The folder the user picked, or undefined when they cancelled. */
     pickFolder: (
       title: string,

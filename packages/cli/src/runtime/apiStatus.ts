@@ -36,7 +36,7 @@ interface CliModelAccessOverview {
 /**
  * Read the subscription sessions and the effective model-access route. A program,
  * because the coding-plan key status underneath it is one: the chat surface
- * yields it, and a Promise-facing caller settles it on its own runtime.
+ * yields it, and a Promise-facing caller runs it on its own runtime.
  */
 export const loadCliModelAccessOverview = Effect.fn(
   'apiStatus.loadCliModelAccessOverview',
@@ -100,27 +100,19 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
   // every read below forces a refresh, so the service is built over the caller's
   // stores here rather than held as a module singleton.
   const usageReader = new SubscriptionUsageService({ stores });
-  const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
-    [
-      access.subscriptions.chatgpt.signedIn
-        ? usageReader.getUsage('chatgpt', { forceRefresh: true })
-        : Effect.succeed(undefined),
-      Effect.forEach(
-        CODING_PLAN_SUBSCRIPTIONS,
-        (plan) => {
-          const status = cliCodingPlanStatus(access, plan);
-          return Effect.map(
-            status.keySet
-              ? usageReader.getUsage(plan.usageProvider, {
-                  forceRefresh: true,
-                })
-              : Effect.succeed(undefined),
-            (usage) => [plan.id, usage] as const,
-          );
-        },
-        { concurrency: 'unbounded' },
-      ),
-    ] as const,
+  const codingPlanUsageEntries = yield* Effect.forEach(
+    CODING_PLAN_SUBSCRIPTIONS,
+    (plan) => {
+      const status = cliCodingPlanStatus(access, plan);
+      return Effect.map(
+        status.keySet
+          ? usageReader.getUsage(plan.usageProvider, {
+              forceRefresh: true,
+            })
+          : Effect.succeed(undefined),
+        (usage) => [plan.id, usage] as const,
+      );
+    },
     { concurrency: 'unbounded' },
   );
   const codingPlanUsage = new Map(codingPlanUsageEntries);
@@ -146,10 +138,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
         subscriptionAccountLabel(subscription),
       ),
     );
-    // Only the ChatGPT session reports subscription usage.
-    if (line) {
-      lines.push(provider === 'chatgpt' ? withUsage(line, chatGptUsage) : line);
-    }
+    if (line) lines.push(line);
   }
 
   for (const plan of CODING_PLAN_SUBSCRIPTIONS) {

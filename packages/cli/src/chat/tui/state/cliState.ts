@@ -165,9 +165,9 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     interrupted: [],
     recent: [],
   };
-  // Top-level runs come in the fold's order. A child this terminal owns
+  // Top-level runs come in the session view's order. A child this terminal owns
   // under a parent outside the scope (detached from an earlier turn) is a
-  // root here but not in `view.order`: only these sort, after the fold's.
+  // root here but not in `view.order`: only these sort, after the session view's.
   const tops = view.order.flatMap((id) => view.runs.get(id) ?? []);
   const detached = [...view.runs.values()].filter(
     (run) =>
@@ -184,7 +184,8 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     rows.push({ kind: 'run', run, depth, expanded: open });
     if (open) {
       for (const id of run.childIds) {
-        if (included.has(id)) append(view.runs.get(id)!, depth + 1);
+        const child = view.runs.get(id);
+        if (child !== undefined && included.has(id)) append(child, depth + 1);
       }
     }
   };
@@ -384,7 +385,7 @@ export const interruptedNoticeHidden = signal(false);
 /** Single status-bar notice slot; later notices replace earlier ones. */
 export const transientNotice = signal<TransientNotice | undefined>(undefined);
 
-/** Why the session view stopped updating (the fold died), once it has: the
+/** Why the session view stopped updating (the session view died), once it has: the
  *  composer is closed on it, since nothing typed could be shown again. */
 export const sessionViewFailure = signal<string | undefined>(undefined);
 let transientNoticeTimer: ReturnType<typeof setTimeout> | undefined;

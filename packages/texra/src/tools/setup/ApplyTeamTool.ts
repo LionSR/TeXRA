@@ -6,9 +6,9 @@
  * with the same agent list. The discipline-picker
  * UI is never built — the setup agent asks in conversation and calls this.
  *
- * The workspace agents write is the same `WorkspaceAgentsController.applyTeam` the
- * Settings "apply team" action calls, so the two can't drift. Members that
- * aren't in the registry yet are reported rather than silently dropped.
+ * The workspace agents write is the same `applyTeam` the Settings "apply team"
+ * action calls, so the two can't drift. Members that aren't in the registry
+ * yet are reported rather than silently dropped.
  */
 
 import { Effect, Schema } from 'effect';
@@ -22,6 +22,7 @@ import {
   AGENT_MODE_PRESETS,
   STARTER_AGENT_MODE_PRESET,
 } from '@texra/shared/agentTeams';
+import { applyTeam } from '@texra/shared/teamPlan';
 
 /**
  * The built-in teams (the setup starter included), the list the agent list's
@@ -46,13 +47,18 @@ const ApplyTeamInputSchema = Schema.Struct({
 
 type ApplyTeamInput = typeof ApplyTeamInputSchema.Type;
 
-const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
+const execute = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
   const call = yield* ToolContext;
-  const workspaceAgents = (yield* AgentCatalog).workspaceAgents(call.env.roots);
+  const catalog = yield* AgentCatalog;
+  const workspaceAgents = catalog.workspaceAgents(call.env.roots);
 
-  const result = yield* workspaceAgents.applyTeam(input.teamId);
+  const result = yield* applyTeam(input.teamId, {
+    workspaceAgents,
+    repoState: call.env.roots.repoState,
+    resolveAgent: catalog.get,
+  });
 
   if (result.status === 'unknown') {
     // The schema gates ids, so this only fires if the enum and the preset
@@ -64,18 +70,21 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
     );
   }
 
-  const { preset } = result;
+  const {
+    preset,
+    agentKeys: active,
+    missingAgents: unresolvedNames,
+  } = result.plan;
   // The setup agent runs this mid-conversation: every process sharing the
   // store, a window over this task among them, repaints its agent lists
-  // from the default team's change (`agentCatalogFollower`).
+  // from the default team's change (`agentCatalogFollower`). The schema
+  // accepts built-in ids only, the ones a user default may name.
   yield* workspaceAgents.setDefaultTeam(preset.id);
-  const active = result.resolution.agentKeys;
   // `agentKeys` holds only the agent keys that resolved in the registry. Names
   // that didn't resolve are not dropped: the agent list stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
   // activates the moment it appears. Say so instead of letting it read as a
   // silent failure.
-  const unresolvedNames = result.resolution.missingAgents;
 
   const lines = [
     `Applied the ${preset.name} team to this workspace.`,
@@ -105,5 +114,5 @@ Sets which agents appear in this workspace's pickers, and saves the choice user-
 Teams:
 ${describeTeams()}`,
   schema: ApplyTeamInputSchema,
-  execute: applyTeam,
+  execute,
 });

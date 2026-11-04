@@ -40,7 +40,7 @@ export const chatCommand = withUsageSections(
     },
     setup: (ctx) => rejectHeadlessOnlyFlags(ctx.rawArgs, 'chat'),
     // The update check is the program; the session it hands the terminal to
-    // is `defineCliCommand`'s to mount once the check has settled. An unusable
+    // is `defineCliCommand`'s to mount once the check has finished. An unusable
     // terminal is refused here, in the builder, before the runtime installs.
     run: (context, ctx) => {
       const modelOverride = assertExplicitModelKnown(optString(ctx.args.model));
@@ -61,10 +61,15 @@ export const chatCommand = withUsageSections(
           }),
         });
       }
+      // An update that ran (or was cancelled) is the command's outcome: the
+      // next `texra` runs the new version, so no chat mounts.
       return notifyCliUpdate(context).pipe(
-        Effect.as({
-          chat: { agentOverride: optString(ctx.args.agent), modelOverride },
-        }),
+        Effect.map(
+          (code) =>
+            code ?? {
+              chat: { agentOverride: optString(ctx.args.agent), modelOverride },
+            },
+        ),
       );
     },
   }),

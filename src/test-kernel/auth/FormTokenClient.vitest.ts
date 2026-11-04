@@ -6,9 +6,9 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { postOAuth } from '../../../packages/llm/src/oauth/oauthRequest.js';
+import { postOAuthForm } from '../../../packages/llm/src/oauth/oauthRequest.js';
 
-describe('postOAuth', () => {
+describe('postOAuthForm', () => {
   it.effect('times out a response whose body stalls after the headers', () =>
     Effect.gen(function* () {
       // The stream never closes, so only a deadline over the body read can end
@@ -21,12 +21,10 @@ describe('postOAuth', () => {
 
       const request = yield* Effect.forkChild(
         Effect.flip(
-          postOAuth({
-            url: 'https://example.test/token',
-            headers: {},
-            body: '',
-            networkErrorMessage: 'Network error contacting token',
-          }).pipe(
+          postOAuthForm(
+            'https://example.test/token',
+            new URLSearchParams(),
+          ).pipe(
             Effect.provide(FetchHttpClient.layer),
             Effect.provideService(FetchHttpClient.Fetch, fetchMock),
           ),
@@ -38,7 +36,7 @@ describe('postOAuth', () => {
       expect(error).toMatchObject({
         _tag: 'OAuthNetworkError',
         message:
-          'Network error contacting token: The operation was aborted due to timeout',
+          'Network error contacting https://example.test/token: The operation was aborted due to timeout',
       });
       expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
     }),

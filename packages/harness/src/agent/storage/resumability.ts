@@ -1,55 +1,54 @@
 import { Effect } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { findInCauseChain } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
-import { recipeBlockOf, type OwnerId, type RunId } from '@shared/schemas';
+import { recipeBlockOf, type ResumeRefusal, type RunId } from '@shared/schemas';
 import { claimStanding, DatabaseRowEarlier } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
+import { SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'Resumability';
 
-/** Why this process cannot resume a run. Each kind is also a follow-up
- *  failure reason, so a sender's result names it as is. */
-export type RunRejection =
-  /** A live owner, or one not provably dead, holds its claim. */
-  | { readonly kind: 'owned_elsewhere'; readonly owner: OwnerId }
-  /** Its rows hold no point to continue from. */
-  | { readonly kind: 'finished' }
-  /** An earlier build wrote its rows. */
-  | { readonly kind: 'earlier_build'; readonly cause: string };
-
 /** Where a run continues from: a point its loop opened, none, rows an
- *  earlier build wrote, or unknown because they could not be read. */
+ *  earlier build wrote, a point whose plugin facts this process cannot
+ *  interpret, or unknown because they could not be read. */
 type ResumabilityDecision =
   | { readonly kind: 'checkpoint' }
   | { readonly kind: 'unreadable'; readonly cause: string }
-  | Exclude<RunRejection, { readonly kind: 'owned_elsewhere' }>;
+  | Extract<
+      ResumeRefusal,
+      { readonly kind: 'finished' | 'earlierBuild' | 'pluginUnavailable' }
+    >;
 
-/** The earlier-build refusal a failed read carries, if any. */
-const earlierRefusal = (error: unknown): DatabaseRowEarlier | undefined =>
-  [error, error instanceof Error ? error.cause : undefined].find(
-    (e): e is DatabaseRowEarlier => e instanceof DatabaseRowEarlier,
+/** The refusal of a run an earlier build wrote, when a failed read of it
+ *  was refused for one of that build's rows. */
+export const earlierBuildRefusal = (
+  error: unknown,
+): Extract<ResumeRefusal, { readonly kind: 'earlierBuild' }> | undefined => {
+  const row = findInCauseChain(error, (cause) =>
+    cause instanceof DatabaseRowEarlier ? cause : undefined,
   );
+  return row && { kind: 'earlierBuild', cause: row.message };
+};
 
 /**
  * The one answer to "can this run resume?", before ownership (`runRejection`
  * adds the claim). An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
  * left it. A task that ended does not: its recipe's result is
- * settled, so it runs again instead.
+ * settled, so it runs again instead. One holding a fact of a plugin this
+ * process does not load waits for it: the plugin's state is part of where
+ * it continues from.
  */
 export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<ResumabilityDecision> {
-  const read = yield* session.log.facts(runId).pipe(Effect.result);
-  // An earlier build's row: this build cannot open the run, and says so.
-  const refusal =
-    read._tag === 'Failure' ? earlierRefusal(read.failure) : undefined;
-  if (refusal !== undefined)
-    return { kind: 'earlier_build', cause: refusal.message };
+): Effect.fn.Return<ResumabilityDecision, never, SessionLog> {
+  const read = yield* (yield* SessionLog).facts(runId).pipe(Effect.result);
   if (read._tag === 'Failure') {
+    // An earlier build's row: this build cannot open the run, and says so.
+    const refusal = earlierBuildRefusal(read.failure);
+    if (refusal !== undefined) return refusal;
     const cause = `run state could not be read (${toErrorMessage(read.failure)})`;
     yield* Effect.logWarning(`Run ${runId}: ${cause}`).pipe(
       withLogChannel(CHANNEL),
@@ -57,14 +56,19 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
     return { kind: 'unreadable', cause };
   }
   const facts = read.success;
-  return facts?.start != null &&
-    continuesFromRows({
+  if (
+    facts?.start == null ||
+    !continuesFromRows({
       ended: facts.end !== null,
       recipe: facts.config === null ? null : recipeBlockOf(facts.config),
       identity: facts.start.identity,
     })
-    ? { kind: 'checkpoint' }
-    : { kind: 'finished' };
+  )
+    return { kind: 'finished' };
+  for (const { plugin, unavailable } of Object.values(facts.facts))
+    if (unavailable !== undefined)
+      return { kind: 'pluginUnavailable', plugin, cause: unavailable };
+  return { kind: 'checkpoint' };
 });
 
 /**
@@ -77,12 +81,11 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
  */
 export const runRejection = Effect.fn('runRejection')(function* (
   runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<RunRejection | null, Error> {
-  const standing = claimStanding(yield* session.log.owner(runId));
+): Effect.fn.Return<ResumeRefusal | null, Error, SessionLog> {
+  const standing = claimStanding(yield* (yield* SessionLog).owner(runId));
   if (standing.kind === 'held')
-    return { kind: 'owned_elsewhere', owner: standing.owner };
-  const decision = yield* deriveResumability(runId, session);
+    return { kind: 'ownedElsewhere', owner: standing.owner };
+  const decision = yield* deriveResumability(runId);
   if (decision.kind === 'unreadable')
     return yield* Effect.fail(
       new Error(`Could not read the state of run ${runId}: ${decision.cause}`),

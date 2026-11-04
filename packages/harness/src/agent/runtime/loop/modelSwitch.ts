@@ -6,6 +6,7 @@
 import { Effect, SynchronizedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
+import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runState';
@@ -35,9 +36,15 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     );
     const model = switches.at(-1)?.model;
     if (model === undefined) return yield* cell.current;
-    const consumed = consumedRows(run.runId, controls, 'model');
+    const requests = consumedRows(run.runId, 'model');
+    // The run's model is its newest `run.config`, the fold's; the binding
+    // is the resource bound for it. A switch to that model changes nothing.
+    if ((yield* cell.current).modelId === model)
+      return yield* cell.append(
+        requests(controls, { kind: 'dropped', reason: 'noop' }),
+      );
+    const consumed = requests(controls, { kind: 'applied' });
     const current = yield* SynchronizedRef.get(run.model);
-    if (current.modelId === model) return yield* cell.append(consumed);
     const selected = selectModel(model);
     // A switch that cannot apply fails the run: its `run.end` consumes the
     // request, so no resume meets it again.
@@ -46,8 +53,8 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     }
     const state = yield* beforeSwap(cell);
     let switched = state;
-    yield* run.swapModel(() =>
-      Effect.gen(function* () {
+    yield* run.swapModel(
+      Effect.fnUntraced(function* () {
         const next = yield* access.bind({
           modelId: model,
           config: selected.config,
@@ -60,7 +67,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
           ...consumed,
           configRow(run.runId, run.config, next.modelId, {
             backend: next.backend,
-            declinedRoutes: run.declinedRoutes,
+            declinedRoutes: next.declinedRoutes,
           }),
         ]);
         return next;
@@ -72,17 +79,25 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
 
 /** The host port's model switch: whether `model` can replace the run's, and
  *  the admission the loop applies at its next model boundary, answered once
- *  its row commits. */
+ *  its row commits. `opened` is the run's cell, once open: the switch is
+ *  admitted over the routes its state holds, the set the next bind decides
+ *  over. */
 export function modelSwitchPort(
   run: AgentRunShape,
   access: ModelAccess['Service'],
+  inbox: Inbox['Service'],
+  opened: Effect.Effect<RunCell, Error>,
 ) {
   /** Why `model` cannot replace the run's, decided as the next bind will. */
   const admission = (model: string) =>
-    access.admit(
-      model,
-      SynchronizedRef.getUnsafe(run.model),
-      run.declinedRoutes,
+    Effect.flatMap(opened, (cell) =>
+      Effect.flatMap(cell.current, (state) =>
+        access.admit(
+          model,
+          SynchronizedRef.getUnsafe(run.model),
+          state.declinedRoutes,
+        ),
+      ),
     );
   return {
     modelSwitchDisabledReason: (model: string) =>
@@ -94,7 +109,7 @@ export function modelSwitchPort(
       // Queued on the run's input, durable at once; the loop binds and
       // records it at its next model boundary, which consumes it. A switch
       // back to the current model is queued too: the latest request wins.
-      const sent = yield* run.session.followUps.send(run.runId, {
+      const sent = yield* inbox.send(run.runId, {
         text: `/model ${model}`,
         from: { kind: 'user' },
         control: { kind: 'model', model },

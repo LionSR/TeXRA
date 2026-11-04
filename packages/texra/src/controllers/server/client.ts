@@ -26,7 +26,8 @@ import {
 import { lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
-import { ensureError } from '@texra-ai/harness/schemas';
+import { isOutcomeOf, Rejected } from '@texra-ai/harness';
+import { ensureError, type RuntimeRequest } from '@texra-ai/harness/schemas';
 import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
@@ -36,7 +37,7 @@ import {
 
 import {
   BUILD_VERSION,
-  PROTOCOL_VERSION,
+  PROTOCOL,
   TexraRpcs,
   type ServiceInfo,
 } from './protocol';
@@ -48,6 +49,26 @@ export type ServiceClient = RpcClient.FromGroup<
   typeof TexraRpcs,
   RpcClientError.RpcClientError
 >;
+
+/**
+ * `request` to the session of `workspace` the service holds: the outcome its
+ * kind is answered with. An answer of another kind (a service from another
+ * build) is `Rejected`.
+ */
+export const requestOnService = <R extends RuntimeRequest>(
+  client: ServiceClient,
+  workspace: string,
+  request: R,
+) =>
+  client['task.request']({ workspace, request }).pipe(
+    Effect.filterOrFail(
+      (outcome) => isOutcomeOf<R['kind']>(request.kind, outcome),
+      (outcome) =>
+        new Rejected({
+          reason: `The TeXRA service answered a ${request.kind} with ${outcome.kind}.`,
+        }),
+    ),
+  );
 
 /** A connected client and the service it reached. */
 export interface ServiceConnection {
@@ -87,8 +108,8 @@ const HELLO_TIMEOUT = '10 seconds';
 /** A service the caller should retire: an older protocol, or an older
  *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
 function isOlder(info: ServiceInfo): boolean {
-  if (info.protocol !== PROTOCOL_VERSION)
-    return info.protocol < PROTOCOL_VERSION;
+  if (info.protocol !== PROTOCOL.version)
+    return info.protocol < PROTOCOL.version;
   return (
     semverValid(info.version) !== null &&
     semverValid(BUILD_VERSION) !== null &&
@@ -98,30 +119,26 @@ function isOlder(info: ServiceInfo): boolean {
 
 /** A client over `socket`, held for the caller's scope. `onDisconnect`
  *  runs whenever the connection ends, or an attempt to open it fails. */
-function connectService(
+const connectService = Effect.fn('connectService')(function* (
   socket: string,
   onDisconnect: Effect.Effect<void> = Effect.void,
-): Effect.Effect<ServiceClient, SocketError, Scope.Scope> {
-  return Effect.gen(function* () {
-    // The protocol lives in the caller's scope, not the client's build: a
-    // layer provided to `make` alone would close the socket once it returns.
-    const protocol = yield* Layer.build(
-      RpcClient.layerProtocolSocket().pipe(
-        Layer.provide(NodeSocket.layerNet({ path: socket })),
-        Layer.provide(RpcSerialization.layerNdjson),
-        Layer.provide(
-          Layer.succeed(RpcClient.ConnectionHooks, {
-            onConnect: Effect.void,
-            onDisconnect,
-          }),
-        ),
+): Effect.fn.Return<ServiceClient, SocketError, Scope.Scope> {
+  // The protocol lives in the caller's scope, not the client's build: a
+  // layer provided to `make` alone would close the socket once it returns.
+  const protocol = yield* Layer.build(
+    RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(NodeSocket.layerNet({ path: socket })),
+      Layer.provide(RpcSerialization.layerNdjson),
+      Layer.provide(
+        Layer.succeed(RpcClient.ConnectionHooks, {
+          onConnect: Effect.void,
+          onDisconnect,
+        }),
       ),
-    );
-    return yield* RpcClient.make(TexraRpcs).pipe(
-      Effect.provideContext(protocol),
-    );
-  });
-}
+    ),
+  );
+  return yield* RpcClient.make(TexraRpcs).pipe(Effect.provideContext(protocol));
+});
 
 /** Nothing accepts a connection on the socket: no service, or a dead one. */
 const nobodyListens = (error: {
@@ -143,7 +160,7 @@ export function probeService(
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
     Effect.flatMap(connectService(socket), (client) =>
-      client['service.hello']({ protocol: PROTOCOL_VERSION }),
+      client['service.hello']({ protocol: PROTOCOL.version }),
     ),
   ).pipe(
     Effect.timeout(HELLO_TIMEOUT),
@@ -262,7 +279,7 @@ function retireService(
 /** The refusal of a running service that speaks a newer protocol. */
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
-    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL_VERSION}. Update TeXRA, or stop the service with \`texra service stop\`.`,
+    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL.version}. Update TeXRA, or stop the service with \`texra service stop\`.`,
     newer: true,
   });
 
@@ -289,7 +306,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
     );
   let info = yield* probeRecordedService;
-  if (info !== null && info.protocol > PROTOCOL_VERSION)
+  if (info !== null && info.protocol > PROTOCOL.version)
     return yield* Effect.fail(newerService(info));
   let retired: number | null = null;
   if (info !== null && isOlder(info)) {
@@ -331,9 +348,9 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     info = yield* probeRecordedService.pipe(
       Effect.flatMap((answer) => {
-        if (answer !== null && answer.protocol > PROTOCOL_VERSION)
+        if (answer !== null && answer.protocol > PROTOCOL.version)
           return Effect.fail(newerService(answer));
-        return answer?.protocol === PROTOCOL_VERSION && answer.pid !== retired
+        return answer?.protocol === PROTOCOL.version && answer.pid !== retired
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
@@ -433,18 +450,19 @@ export const linkService = Effect.fn('server.linkService')(function* (
   ServiceUnavailable,
   Scope.Scope | GlobalValues
 > {
-  const connect = (begin: Effect.Effect<void, Error>) =>
-    Effect.gen(function* () {
-      const scope = yield* Scope.make();
-      const lost = yield* Deferred.make<void>();
-      const connection = yield* ensureService(storageRoot, begin, {
-        onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
-      }).pipe(
-        Scope.provide(scope),
-        Effect.onError(() => Scope.close(scope, Exit.void)),
-      );
-      return { connection, lost, scope };
-    });
+  const connect = Effect.fn('connect')(function* (
+    begin: Effect.Effect<void, Error>,
+  ) {
+    const scope = yield* Scope.make();
+    const lost = yield* Deferred.make<void>();
+    const connection = yield* ensureService(storageRoot, begin, {
+      onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
+    }).pipe(
+      Scope.provide(scope),
+      Effect.onError(() => Scope.close(scope, Exit.void)),
+    );
+    return { connection, lost, scope };
+  });
   let current = yield* connect(start);
   const client = yield* SubscriptionRef.make<ServiceClient | null>(
     current.connection.client,

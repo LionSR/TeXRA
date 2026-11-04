@@ -1,46 +1,24 @@
 /**
- * Focus-order rules over the session view (PRD one-fold-three-renderers,
- * 9): which stream the child list roots at, which stream Alt+N names, and
- * how a stream is presented. Surface decisions over fold facts; nothing
+ * Focus-order rules over the session view: which stream the child list roots at, which stream Alt+N names, and
+ * how a stream is presented. Surface decisions over session view facts; nothing
  * here derives topology.
  */
 import { formatCompactDuration } from '@texra-ai/harness/transcript';
-import {
-  RUN_PHASE,
-  type RunPhase,
-  type RunId,
-} from '@texra-ai/harness/schemas';
+import { type RunId } from '@texra-ai/harness/schemas';
 import { runViewOf } from './sessionView';
-import type { RunView, SessionView } from '@texra-ai/harness/schemas';
-
-/**
- * When a run's active time started, or nothing: a run parked on the user's
- * answer is not working, so no clock or spinner runs for it.
- */
-export function activeStartedAt(
-  run: Pick<RunView, 'group' | 'runStartedAt'> | undefined,
-): number | undefined {
-  if (run === undefined || run.group === 'waiting') return undefined;
-  return run.runStartedAt ?? undefined;
-}
+import type { SessionView } from '@texra-ai/harness/schemas';
 
 /**
  * How long a running child has been at it, formatted: the caller selects the
- * window (the fold's active-phase `runStartedAt`), and a child that is not
- * running shows none.
+ * window (the session view's `runStartedAt`, set only while the run is busy on a
+ * turn), and a child that is not shows none.
  */
 export function childElapsed(
-  child: {
-    readonly status: RunPhase | undefined;
-    readonly startedAt: number | undefined;
-  },
+  startedAt: number | undefined,
   nowMs: number,
 ): string | undefined {
-  if (child.status !== undefined && child.status !== RUN_PHASE.RUNNING) {
-    return undefined;
-  }
-  if (child.startedAt === undefined) return undefined;
-  return formatCompactDuration(Math.max(0, nowMs - child.startedAt));
+  if (startedAt === undefined) return undefined;
+  return formatCompactDuration(Math.max(0, nowMs - startedAt));
 }
 
 function hasChildren(view: SessionView, runId: RunId): boolean {

@@ -4,7 +4,6 @@ import {
   type ApiKeyProviderId,
   decideModelRoute,
   hasUsableApiKey,
-  type HostRouteFacts,
   isUnservedModel,
   MODEL_CONFIGS,
   modelConfig,
@@ -15,11 +14,15 @@ import {
   type ReasoningRequest,
   resolveModelSource,
   routeConfig,
+  type RouteFacts,
   selectModel,
 } from '@texra-ai/llm';
-import { StateWriteFailed } from '@platform/interfaces';
-import type { StateStore } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
+import {
+  StateWriteFailed,
+  type SettingsStores,
+  type StateStore,
+} from '@shared/config/settings';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   MODEL_AVAILABILITY_STATUS,
@@ -28,10 +31,8 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
-import type { SettingsStores } from '@shared/config/settings';
 import { readModelSettings, routeFactsFor } from './modelSettings';
 import {
-  reasoningRouteOf,
   routeReasoningOf,
   servingBackend,
   type RouteReasoning,
@@ -45,19 +46,6 @@ interface ModelAvailabilityStatus {
 }
 
 /**
- * Every kind whose {@link MODEL_AVAILABILITY_STATUS} entry is
- * `available: false` — derived, not hand-listed, so a kind can't be added to
- * one table (or have its `available` flip) without the other noticing.
- */
-type UnavailableAvailabilityKind = {
-  [
-    K in ModelAvailabilityKind
-  ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
-    ? never
-    : K;
-}[ModelAvailabilityKind];
-
-/**
  * Everything an unavailable-reason builder needs to word its message — all of
  * it data the route ladder already resolved, so no builder reads a host.
  */
@@ -68,15 +56,22 @@ interface UnavailableReasonContext {
 }
 
 /**
- * Per-kind unavailable-reason prose, compiler-checked the same way
- * {@link MODEL_AVAILABILITY_STATUS} is: omitting a kind here — including a
- * newly added `ModelAvailabilityKind` whose status is `available: false` —
- * is a type error instead of a silent fall-through to a generic message.
+ * Per-kind unavailable-reason prose, compiler-checked against
+ * {@link MODEL_AVAILABILITY_STATUS}: a kind whose status is
+ * `available: false` must have a builder, and an available one must have
+ * none, so a kind can't be added to one table (or have its `available` flip)
+ * without the other noticing.
  */
-const UNAVAILABLE_REASON_BUILDERS: Record<
-  UnavailableAvailabilityKind,
-  (reasonCtx: UnavailableReasonContext) => string
-> = {
+const UNAVAILABLE_REASON_BUILDERS: {
+  readonly [
+    K in ModelAvailabilityKind
+  ]: (typeof MODEL_AVAILABILITY_STATUS)[K]['available'] extends true
+    ? undefined
+    : (reasonCtx: UnavailableReasonContext) => string;
+} = {
+  'provider-key': undefined,
+  'subscription-access': undefined,
+  'xai-subscription-access': undefined,
   retired: ({ model }) =>
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   unserved: ({ model }) =>
@@ -111,22 +106,13 @@ type ProviderKeyStatuses = Partial<Record<ApiKeyProviderId, KeyStatus>>;
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
-  facts: HostRouteFacts;
+  facts: RouteFacts;
 }
 
 /** The route facts plus the key statuses the batch read resolved for them. */
 interface ModelAvailabilityContext extends ModelRouteContext {
   keyStatuses: ProviderKeyStatuses;
 }
-
-/** The one provider whose key decides a model, and the plan it pays through. */
-interface ProviderKeyGate {
-  needsProviderKey: ApiKeyProviderId;
-  usageRoute?: UsageRoute;
-}
-
-/** A route's availability: a verdict, or the provider key still to consult. */
-type RouteGate = ModelAvailabilityStatus | ProviderKeyGate;
 
 /**
  * What stage 1 decided for one model, and the only thing stage 3 reads about
@@ -140,7 +126,6 @@ interface RoutedModel {
   /** The effort, thinking and mode the model string asks for. */
   readonly request: ReasoningRequest;
   readonly route: ModelRoute;
-  readonly gate: RouteGate;
 }
 
 /**
@@ -150,46 +135,31 @@ interface RoutedModel {
 type RoutedModels = ReadonlyMap<string, RoutedModel>;
 
 /**
- * Stage 1: what the decided route means for availability, free of any key
- * status. A route that comes down to a direct provider key answers with that
- * provider, so the batch read that follows consults exactly the providers the
- * routes reached.
+ * Stage 3 — the per-model verdict over the route stage 1 decided and the
+ * provider key statuses stage 2 read. Retired models need no provider key.
+ *
+ * A provider absent from the map was never read, rather than read and missing:
+ * that is a defect in the batch read, not a request for the user to add a key.
  */
-function routeGate(route: ModelRoute): RouteGate {
+function resolveModelAvailability(
+  model: string,
+  { rawConfig, route }: RoutedModel,
+  keyStatuses: ProviderKeyStatuses,
+): ModelAvailabilityStatus {
+  if (rawConfig.retired) return { kind: 'retired' };
   switch (route.kind) {
     case 'chatgpt-subscription':
       return { kind: 'subscription-access', usageRoute: route.kind };
     case 'xai-subscription':
       return { kind: 'xai-subscription-access', usageRoute: route.kind };
     case 'api-key':
-      return route.usageRoute === 'api-key'
-        ? { needsProviderKey: route.provider }
-        : { needsProviderKey: route.provider, usageRoute: route.usageRoute };
+      break;
     case 'no-api-key':
       return { kind: 'missing-key' };
     case 'unserved':
       return { kind: 'unserved' };
-    case 'validation':
-      return { kind: 'provider-key' };
   }
-}
-
-/**
- * Stage 3 — the per-model verdict, pure: stage 1's own answer, or the one the
- * consulted provider's key status decides.
- *
- * A provider the map has no entry for was never read, which is a different
- * fact from "read, and no key is set". Reporting it as `missing-key` would
- * tell a user with a working key that they have none, so it throws: the only
- * way to reach it is a stage-1 decision the stage-2 batch did not see.
- */
-function resolveModelAvailability(
-  model: string,
-  gate: RouteGate,
-  keyStatuses: ProviderKeyStatuses,
-): ModelAvailabilityStatus {
-  if (!('needsProviderKey' in gate)) return gate;
-  const provider = gate.needsProviderKey;
+  const provider = route.provider;
   const usable = keyStatuses[provider];
   if (usable === undefined) {
     throw new Error(
@@ -198,7 +168,10 @@ function resolveModelAvailability(
   }
   if (usable === 'unreadable') return { kind: 'key-unreadable' };
   if (!usable) return { kind: 'missing-key' };
-  return { kind: 'provider-key', usageRoute: gate.usageRoute };
+  return {
+    kind: 'provider-key',
+    usageRoute: route.usageRoute === 'api-key' ? undefined : route.usageRoute,
+  };
 }
 
 /**
@@ -234,22 +207,25 @@ const hostFact = <A, E, R>(fact: string, read: Effect.Effect<A, E, R>) =>
  * call. The Kimi Code key status is a route fact (`readModelSettings` reads it),
  * so it seeds the key statuses.
  */
-function buildAvailabilityContext(
-  stores: SettingsStores,
-): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable, Secrets> {
-  return Effect.gen(function* () {
+const buildAvailabilityContext = Effect.fn('buildAvailabilityContext')(
+  function* (
+    stores: SettingsStores,
+  ): Effect.fn.Return<
+    ModelAvailabilityContext,
+    ModelHostFactUnreadable,
+    Secrets
+  > {
     const settings = yield* hostFact(
       'the model settings',
       readModelSettings(stores),
     );
-    const facts = routeFactsFor(settings, []);
     return {
       reasoningLevels: settings.reasoningLevels,
-      facts,
-      keyStatuses: { kimiCode: facts.kimiCodeKey },
+      facts: routeFactsFor(settings, []),
+      keyStatuses: { kimiCode: settings.kimiCodeKey },
     };
-  });
-}
+  },
+);
 
 /**
  * Stage 1: decide every model's route once, and keep the decision, so
@@ -268,15 +244,13 @@ function routeModels(
     const rawConfig = selected.config;
     const route = decideModelRoute(rawConfig, {
       ...ctx.facts,
-      validation: false,
       mode: selected.request.mode,
     });
     routed.set(model, {
       rawConfig,
-      config: routeConfig(rawConfig, route, ctx.facts),
+      config: routeConfig(rawConfig, route),
       request: selected.request,
       route,
-      gate: rawConfig.retired ? { kind: 'retired' } : routeGate(route),
     });
   }
   return routed;
@@ -292,12 +266,12 @@ function withConsultedKeyStatuses(
   ctx: ModelAvailabilityContext,
 ): Effect.Effect<ModelAvailabilityContext, never, Secrets> {
   const consulted = new Set<ApiKeyProviderId>();
-  for (const { gate } of routed.values()) {
+  for (const { route } of routed.values()) {
     if (
-      'needsProviderKey' in gate &&
-      ctx.keyStatuses[gate.needsProviderKey] === undefined
+      route.kind === 'api-key' &&
+      ctx.keyStatuses[route.provider] === undefined
     ) {
-      consulted.add(gate.needsProviderKey);
+      consulted.add(route.provider);
     }
   }
   if (consulted.size === 0) return Effect.succeed(ctx);
@@ -401,14 +375,14 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  * The models the pickers show — the single reader of
  * `GlobalStateKey.MODEL_SELECTION` for every host.
  */
-export function getEnabledModels(state: Pick<StateStore, 'get'>) {
-  return Effect.gen(function* () {
-    const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
-    const { selection, invalid } = selectionOf(stored);
-    yield* reportInvalid(invalid);
-    return enabledOrDefaults(selection);
-  });
-}
+export const getEnabledModels = Effect.fn('getEnabledModels')(function* (
+  state: Pick<StateStore, 'get'>,
+) {
+  const stored = yield* state.get(GlobalStateKey.MODEL_SELECTION);
+  const { selection, invalid } = selectionOf(stored);
+  yield* reportInvalid(invalid);
+  return enabledOrDefaults(selection);
+});
 
 /**
  * Enable or disable one model — the only writer of
@@ -531,21 +505,17 @@ function optionOf(
     };
   }
   const { route, config } = decision;
+  const source = modelSource(route, config);
   const { kind, usageRoute } = resolveModelAvailability(
     model,
-    decision.gate,
+    decision,
     keyStatuses,
   );
-  // cast: a kind the status table marks unavailable is one the builders
-  // cover; the compiler enforces that on the table, not at this call site.
-  const unavailableReason = MODEL_AVAILABILITY_STATUS[kind].available
-    ? undefined
-    : UNAVAILABLE_REASON_BUILDERS[kind as UnavailableAvailabilityKind]({
-        model,
-        source: modelSource(route, config),
-      });
+  const unavailableReason = UNAVAILABLE_REASON_BUILDERS[kind]?.({
+    model,
+    source,
+  });
   const savedEffort = reasoningLevels[config.ref];
-  const backend = servingBackend(config, route);
   return {
     model,
     availability: kind,
@@ -554,19 +524,19 @@ function optionOf(
     published: decision.rawConfig,
     config,
     route,
-    source: modelSource(route, config),
+    source,
     savedEffort,
     // The bind's own decision over the bind's inputs (`binding.ts`
     // `reasoningOf`): the routed config, the model string's request, the
-    // saved level, and the route a fresh run's backend serves.
+    // saved level and the route. A model no backend serves has none to show.
     reasoning:
-      backend === undefined
+      servingBackend(config) === undefined
         ? undefined
         : routeReasoningOf({
             config,
             request: decision.request,
             saved: savedEffort,
-            route: reasoningRouteOf(route, backend),
+            route,
           }),
   };
 }
@@ -614,15 +584,11 @@ function visibleModelsForAccess(
   { facts }: ModelRouteContext,
 ): readonly string[] {
   const models = new Set(configuredModels);
-  if (!facts.chatgptSubscription) return [...models];
+  if (!facts.plans.includes('chatgpt-subscription')) return [...models];
   for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
     if (
-      !isUnservedModel(config) &&
       !config.deprecated &&
-      decideModelRoute(config, {
-        ...facts,
-        validation: false,
-      }).kind === 'chatgpt-subscription'
+      decideModelRoute(config, facts).kind === 'chatgpt-subscription'
     ) {
       models.add(model);
     }

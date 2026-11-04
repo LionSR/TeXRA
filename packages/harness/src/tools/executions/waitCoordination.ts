@@ -3,7 +3,7 @@
  * decides which executions are worth blocking on.
  */
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { Runs } from '@agent/runtime/runRegistry';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { SessionView } from '@shared/session/sessionView';
@@ -12,7 +12,7 @@ import type { SessionView } from '@shared/session/sessionView';
  * Single-pass check: should the wait endpoint skip blocking on this run?
  *
  * Returns true when:
- * - No launch of it is in flight here (`LiveRun.launched`), OR
+ * - No launch of it is in flight here (`RunsShape.get`), OR
  * - The run left the canonical in-flight phases, OR
  * - The run is a subagent in WAITING (job done, result already delivered
  *   by the child-run loop's per-turn delivery — see childRunLoop.ts).
@@ -21,11 +21,11 @@ import type { SessionView } from '@shared/session/sessionView';
  * snapshot the caller judges every run against.
  */
 export function shouldSkipWait(
-  session: SessionHandle,
+  runs: Pick<Runs['Service'], 'get'>,
   view: SessionView,
   runId: RunId,
 ): boolean {
-  if (session.runs.get(runId)?.launched !== true) return true;
+  if (runs.get(runId) === undefined) return true;
 
   // A launched run whose start has not folded yet is running.
   const run = view.runs.get(runId);

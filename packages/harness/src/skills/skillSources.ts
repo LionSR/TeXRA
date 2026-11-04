@@ -13,6 +13,27 @@ export interface SkillSourceOptions {
   readonly additionalPaths?: readonly string[];
 }
 
+/**
+ * A process's skill sources (`ProcessLayerOptions.skills`,
+ * `Composition.skills`): its bundled resources tree, under which each of its
+ * tool plugins ships its bundled skills (`plugins/<id>/skills`), the folder
+ * it keeps in each project, and its process-wide source options (the CLI's
+ * flags). Discovery reads custom roots, project skills, user skills (the
+ * storage root's `skills/`) and the bundled ones in that precedence. A
+ * process given none discovers no skills at all.
+ */
+export interface HostSkillOptions {
+  readonly resourcesPath: string;
+  /**
+   * The folder the host keeps in each project, relative to a session's
+   * workspace (TeXRA's `.texra`): its `skills/` holds the project's own
+   * skills. Absent, a project has no skills but those a custom root or an
+   * interop listing reads.
+   */
+  readonly projectFolder?: string;
+  readonly skillSourceOptions?: SkillSourceOptions;
+}
+
 /** The other agent tools' folders whose `skills/` an interop listing reads. */
 export const INTEROP_SKILL_DIRS = Object.freeze([
   '.agents',
@@ -110,14 +131,6 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
       })),
   },
   {
-    id: 'core:project',
-    tier: 'project',
-    roots: ({ cwd }) =>
-      cwd === undefined
-        ? []
-        : [{ path: path.join(cwd, '.texra', 'skills'), label: 'project' }],
-  },
-  {
     id: 'core:interop-project',
     tier: 'interop-project',
     roots: ({ cwd, options }) =>
@@ -198,16 +211,27 @@ function pluginSkillContribution(pluginId: string): SkillSourceContribution {
 }
 
 /**
- * The contributions a host installs: the core sources, then the bundled
- * skills of each tool plugin. The ids come in as strings from the host
- * bootstrap, which reads the process's plugin list, so `@skills` keeps no
- * edge to `@tools`.
+ * The contributions a host installs: the core sources, the project skills
+ * in the folder it keeps in each project (`HostSkillOptions.projectFolder`),
+ * then the bundled skills of each tool plugin. The ids come in as strings
+ * from the host bootstrap, which reads the process's plugin list, so
+ * `@skills` keeps no edge to `@tools`.
  */
 export function hostSkillContributions(
   pluginIds: readonly string[],
+  projectFolder?: string,
 ): readonly SkillSourceContribution[] {
+  const project: SkillSourceContribution = {
+    id: 'core:project',
+    tier: 'project',
+    roots: ({ cwd }) =>
+      cwd === undefined || projectFolder === undefined
+        ? []
+        : [{ path: path.join(cwd, projectFolder, 'skills'), label: 'project' }],
+  };
   return [
     ...CORE_SKILL_CONTRIBUTIONS,
+    project,
     ...pluginIds.map(pluginSkillContribution),
   ];
 }
