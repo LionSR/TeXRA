@@ -179,8 +179,11 @@ export class Sessions extends Context.Service<
 export function processLayer(
   options: ProcessLayerOptions,
 ): Layer.Layer<ProcessServices | Sessions, PluginsRefused> {
-  return Layer.merge(
-    sessionsLayer(options).pipe(Layer.provide(Layer.succeed(RunLabels)(true))),
+  // Labels are read from the runtime's own context, so they are merged
+  // into this layer's output, not provided to the sessions' construction.
+  return Layer.mergeAll(
+    sessionsLayer(options),
+    Layer.succeed(RunLabels)(true),
     Layer.effectDiscard(Effect.sync(installProcessHttpDispatcher)),
   );
 }

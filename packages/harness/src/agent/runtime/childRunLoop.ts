@@ -818,7 +818,7 @@ const runChildLoop = <TTurn, R>(
   Effect.gen(function* () {
     const { params } = loop;
     const { runId } = params;
-    if (!loop.awaited)
+    if (params.childRun === undefined && !loop.awaited)
       loop.budget = yield* loop.runs.childRunBudget(
         yield* resolveChildRunConcurrencyBudget(yield* SessionRoots),
       );
