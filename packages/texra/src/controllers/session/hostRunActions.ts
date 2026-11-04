@@ -24,11 +24,10 @@ import {
   StateReadFailed,
   withLogChannel,
   launchNoticeOf,
-  presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
+import { Effect, FileSystem, Schema, type Scope } from 'effect';
 
 import { type ApiKeyProviderId, type SecretsFailed } from '@texra-ai/llm';
 import {
@@ -233,7 +232,6 @@ export interface HostRunActions {
   readonly runOutputs: {
     getOutputFiles(runId: RunId): ReturnType<typeof documentsOf>['files'];
   };
-  sendFollowUp(runId: RunId, text: string): Effect.Effect<void>;
 }
 
 export const createHostRunActions = Effect.fn(
@@ -442,35 +440,6 @@ export const createHostRunActions = Effect.fn(
 
   return {
     runOutputs,
-    sendFollowUp(runId, text) {
-      const present = (message: string) => ports.showWarning(message);
-      const deliver = session
-        .request({ kind: 'followUp.send', runId, text })
-        .pipe(
-          Effect.flatMap((outcome) => {
-            const shown = presentFollowUpResult(outcome);
-            return shown.severity === 'none'
-              ? Effect.void
-              : present(shown.message);
-          }),
-          Effect.catchCause((cause) => {
-            const message = toErrorMessage(Cause.squash(cause));
-            return Effect.logWarning(
-              `Failed to submit follow-up for stream ${runId}: ${message}`,
-            ).pipe(
-              Effect.annotateLogs({ data: { runId, error: message } }),
-              withLogChannel(CHANNEL),
-              Effect.andThen(
-                present(`Could not send the follow-up: ${message}`),
-              ),
-              Effect.ignore({ log: 'Warn' }),
-            );
-          }),
-        );
-      // Detached: a recovery resume can run a whole model turn, so no host
-      // request waits on the outcome.
-      return Effect.forkDetach(deliver).pipe(Effect.asVoid);
-    },
     /**
      * Resume a settled run, of either category, on the session that holds
      * it: it continues the run's own rows (a child's, with the parent

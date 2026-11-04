@@ -1,7 +1,3 @@
-// Node imports
-import { hash } from 'node:crypto';
-import path from 'node:path';
-
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
@@ -12,7 +8,6 @@ import { entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
 import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import type { AppSignals } from '@texra-ai/harness/host';
 import type { AgentConfig } from '@texra-ai/harness/schemas';
@@ -52,22 +47,11 @@ interface ProgressWorkflowFileActionsControllerDeps {
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
-  /** The window's run actions this controller starts or follows up. */
-  runs: Pick<HostRunActions, 'merge' | 'sendFollowUp'>;
+  /** The window's run actions this controller starts. */
+  runs: Pick<HostRunActions, 'merge'>;
 }
 
 export class ProgressWorkflowFileActionsController {
-  /**
-   * Per-stream digest of each output file's content at compare time. A
-   * digest, not the content: Accept only asks whether the file changed
-   * since. Kept while the file is still an output of its run.
-   */
-  private readonly modelOutputBackups = new PrunedNestedMap<
-    RunId,
-    string,
-    string
-  >();
-
   private readonly deps: ProgressWorkflowFileActionsControllerDeps;
   constructor(deps: ProgressWorkflowFileActionsControllerDeps) {
     this.deps = deps;
@@ -81,7 +65,7 @@ export class ProgressWorkflowFileActionsController {
     const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
-        return this.compareOriginal(request.file, base, request.runId);
+        return this.compareOriginal(request.file, base);
       case 'comparePrevious':
         return this.comparePrevious(request.file, request.prev ?? undefined);
       case 'accept':
@@ -122,21 +106,13 @@ export class ProgressWorkflowFileActionsController {
     ),
   );
 
-  /** `stream` is the run the file belongs to: it keys the compare-time
-   *  backup that a later Accept reads. */
-  compareOriginal(
-    file: string,
-    base?: string,
-    stream?: RunId,
-  ): FileAction<void> {
+  compareOriginal(file: string, base?: string): FileAction<void> {
     return this.executeWithBaseFile(
       file,
       base,
       'Compare original',
-      Effect.fnUntraced({ self: this }, function* (targetFile, baseFile) {
-        if (stream !== undefined) yield* this.backupModelOutput(stream, file);
-        yield* this.deps.host.compareFiles(baseFile, targetFile);
-      }),
+      (targetFile, baseFile) =>
+        this.deps.host.compareFiles(baseFile, targetFile),
     ).pipe(Effect.asVoid);
   }
 
@@ -148,62 +124,24 @@ export class ProgressWorkflowFileActionsController {
     return this.deps.host.compareFiles(previous, file);
   }
 
-  readonly acceptFile: (
+  acceptFile(
     file: string,
     base?: string,
     activeRun?: RunId,
     config?: AgentConfig,
-  ) => FileAction<void> = Effect.fn(
-    'ProgressWorkflowFileActionsController.acceptFile',
-  )(
-    { self: this },
-    function* (
-      file: string,
-      base?: string,
-      activeRun?: RunId,
-      config?: AgentConfig,
-    ) {
-      const backup =
-        file && activeRun
-          ? this.modelOutputBackups.get(activeRun, file)
-          : undefined;
-      // The file about to be accepted: a read that fails fails the accept,
-      // rather than dropping the run's "user modified the output" follow-up.
-      const currentContent =
-        backup === undefined ? undefined : yield* readOutputFile(file);
-
-      let copyMeta: AcceptCopyMeta | undefined;
-      if (activeRun && file) {
-        copyMeta = this.buildCopyMeta(activeRun, file, config);
-      }
-
-      const accepted = yield* this.executeWithBaseFile(
-        file,
-        base,
-        'Accept',
-        (targetFile, baseFile) =>
-          this.deps.host.acceptEditedFile(baseFile, targetFile, copyMeta),
-      );
-      if (!accepted) return;
-
-      if (
-        activeRun !== undefined &&
-        backup !== undefined &&
-        currentContent !== undefined &&
-        contentDigest(currentContent) !== backup
-      ) {
-        const fileName = path.basename(file);
-        yield* this.deps.runs.sendFollowUp(
-          activeRun,
-          `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
-        );
-      }
-
-      if (backup !== undefined && activeRun) {
-        this.modelOutputBackups.delete(activeRun, file);
-      }
-    },
-  );
+  ): FileAction<void> {
+    const copyMeta =
+      activeRun && file
+        ? this.buildCopyMeta(activeRun, file, config)
+        : undefined;
+    return this.executeWithBaseFile(
+      file,
+      base,
+      'Accept',
+      (targetFile, baseFile) =>
+        this.deps.host.acceptEditedFile(baseFile, targetFile, copyMeta),
+    ).pipe(Effect.asVoid);
+  }
 
   mergeFile(file: string, base?: string): FileAction<void> {
     return this.executeWithBaseFile(
@@ -238,39 +176,6 @@ export class ProgressWorkflowFileActionsController {
     return execute(file, base).pipe(Effect.map((result) => result !== false));
   }
 
-  private backupModelOutput(runId: RunId, file: string): FileAction<void> {
-    if (!file) return Effect.void;
-
-    return Effect.gen({ self: this }, function* () {
-      const content = yield* readOutputFile(file);
-      // A digest lives while its file is still an output of its run: a
-      // removed run, or a round that no longer lists the file, takes its
-      // digests with it, so the map is bounded by outputs that exist.
-      for (const [stream, digests] of [...this.modelOutputBackups.groups()]) {
-        const outputs = new Set(
-          Object.values(this.deps.state.getOutputFiles(stream))
-            .flat()
-            .map((info) => info.location.absolutePath),
-        );
-        for (const tracked of [...digests.keys()]) {
-          if (!outputs.has(tracked))
-            this.modelOutputBackups.delete(stream, tracked);
-        }
-      }
-      this.modelOutputBackups.set(runId, file, contentDigest(content));
-    }).pipe(
-      // Best-effort: backup only informs the accepted-edit follow-up, but a
-      // later Accept then cannot tell the run the user edited the output, so
-      // the miss is a warning.
-      Effect.catch((error) =>
-        Effect.logWarning(`Could not back up model output for ${file}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
-    );
-  }
-
   /** Resolve the agent/model/round for an output file so "Accept" can offer
    *  a postfixed copy. Returns undefined when the run's agent/model or the
    *  file's round can't be determined (the quick-pick then just replaces). */
@@ -296,23 +201,4 @@ export class ProgressWorkflowFileActionsController {
       round: Math.max(...rounds),
     };
   }
-}
-
-/** A full sha256 digest of a file's text: what a compare-time backup keeps. */
-function contentDigest(content: string): string {
-  return hash('sha256', content, 'hex');
-}
-
-/**
- * An output file's text with CRLF line endings normalized. The path is an
- * absolute one the controller already resolved, so this reads through the
- * process filesystem rather than a rooted view that would refuse a path the
- * user picked outside the workspace.
- */
-function readOutputFile(file: string): FileAction<string> {
-  return Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
-    Effect.map(fs.readFileString(file), (text) =>
-      text.replaceAll('\r\n', '\n'),
-    ),
-  );
 }
