@@ -59,7 +59,6 @@ import {
 import {
   type BasePollSubscriptionState,
   createBasePollState,
-  DEFAULT_POLLING_BACKOFF_CONFIG,
   type PollEventListener,
   PollHookRejected,
   PollingSourceBase,
@@ -67,10 +66,7 @@ import {
   type PollServices,
 } from './PollingSourceBase';
 import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
-import {
-  MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-  GITHUB_POLL_INTERVAL_MS,
-} from './prSubscriptionConstants';
+import { MAX_CONCURRENT_PR_SUBSCRIPTIONS } from './prSubscriptionConstants';
 import {
   isDefiniteMergeableState,
   GhPullRequestSchema,
@@ -211,9 +207,7 @@ export class PRPollingSource extends PollingSourceBase<
     super(
       {
         name: 'PRPollingSource',
-        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
         maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-        ...DEFAULT_POLLING_BACKOFF_CONFIG,
       },
       lifetime,
     );

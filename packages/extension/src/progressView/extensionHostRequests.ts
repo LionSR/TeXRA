@@ -72,7 +72,6 @@ import {
   setFirstRunDone,
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
-import { isMultipleDocumentFileType } from '@texra/shared/launcher/fileTypes';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import type {
@@ -353,21 +352,10 @@ export const createExtensionHostRequests = Effect.fn(
 
   function pickFiles(
     request: Extract<HostRequest, { kind: 'pickFiles' }>,
-  ): Effect.Effect<HostOutcome, Rejected | Cancelled> {
-    const { fileType } = request;
-    const pick = isMultipleDocumentFileType(fileType)
-      ? multipleFilePickers[fileType]
-      : undefined;
-    if (!pick) {
-      return Effect.fail(
-        new Rejected({
-          reason: `A picker for ${fileType} files is not available; choose one from the list.`,
-        }),
-      );
-    }
+  ): Effect.Effect<HostOutcome, Cancelled> {
     // The picker reports its own failures where they happen and answers
     // `null`, so the only outcomes left here are a selection and a cancel.
-    return pick().pipe(
+    return multipleFilePickers[request.fileType]().pipe(
       Effect.flatMap((selected) =>
         selected
           ? Effect.succeed<HostOutcome>({ kind: 'files', paths: selected })
@@ -447,11 +435,7 @@ export const createExtensionHostRequests = Effect.fn(
     // what is missing.
     recheckDependencies: snapshot.refreshHostBanners,
     // Every dependency the banner lists installs from the one guide page.
-    openInstallGuide: Effect.fn('extensionHostRequests.openInstallGuide')(
-      function* () {
-        yield* runHandler('openDoc', openGuidePage('installation'));
-      },
-    ),
+    openInstallGuide: runHandler('openDoc', openGuidePage('installation')),
     onboarding: {
       signInChatGpt: Effect.gen(function* () {
         yield* signInWithSubscription(roots, CHANNEL, 'chatgpt');

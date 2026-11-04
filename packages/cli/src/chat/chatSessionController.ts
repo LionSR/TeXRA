@@ -448,34 +448,49 @@ export function createChatSessionController(
   // startRootRun
   // -----------------------------------------------------------------------
 
-  const startRootRun = (
-    config: AgentConfigPayload,
-    runId: RunId = generateRunId(),
-  ): Effect.Effect<void> =>
+  /**
+   * The one root-run launch: claims the slot, then prepares and starts the
+   * run on its own fiber, so the claim names the run from the first instant.
+   * `shownInstruction` goes to the transcript when preparing failed before
+   * any run could show it. Completes with whether the session holds the run.
+   */
+  const launchRootRun = <R>(
+    resolveConfig: Effect.Effect<AgentConfigPayload, Error, R>,
+    shownInstruction?: string,
+  ): Effect.Effect<boolean, never, R> =>
     // The claim and the fork of the program that settles it are one
     // uninterruptible step: an interrupted caller never leaves a claim that
     // nothing will settle. Only the wait for the launch is interruptible.
     Effect.uninterruptibleMask((restore) =>
       Effect.suspend(() => {
+        const runId = generateRunId();
         // The slot has to be claimed before the chain that settles it exists, so
         // the claim holds the `await` of a `Deferred` the run chain completes.
         // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
         // node leaves the slot pending exactly as before.
         const claimedRun = Deferred.makeUnsafe<void, Error>();
         const claim = Deferred.await(claimedRun);
-        // Done once the session holds the run (or the launch failed): a
-        // message typed meanwhile, or a stop asked meanwhile, waits for it,
+        // Done once the session holds the run (or the launch did not happen):
+        // a message typed meanwhile, or a stop asked meanwhile, waits for it,
         // so it reaches a run that exists.
-        const launched = Deferred.makeUnsafe<void>();
-        const markLaunched = Effect.sync(() =>
-          Deferred.doneUnsafe(launched, Effect.void),
-        );
+        const launched = Deferred.makeUnsafe<boolean>();
+        const markLaunched = (held: boolean) =>
+          Effect.sync(() =>
+            Deferred.doneUnsafe(launched, Effect.succeed(held)),
+          );
         // Native launch may resolve its stream on this turn. Claim first so
         // marking the run pending cannot erase that run.
-        session.markRunPending(claim, Deferred.await(launched), runId);
+        session.markRunPending(
+          claim,
+          Effect.asVoid(Deferred.await(launched)),
+          runId,
+        );
+        let resolved = false;
         // Owned by the process's shutdown scope, as the chat's sends are.
         return recoverRun(
           Effect.gen(function* () {
+            const config = yield* resolveConfig;
+            resolved = true;
             yield* adoptRunConfig(config);
             const registeredConfig =
               yield* Schema.decodeUnknownEffect(AgentConfigSchema)(config);
@@ -495,15 +510,20 @@ export function createChatSessionController(
             rootRunId.set(run.runId);
             moveLocalTranscriptToRun(run.runId);
             focusRun(run.runId);
-            yield* markLaunched;
+            yield* markLaunched(true);
             const { outcome } = yield* run.result;
             session.settleExitCode(claim, runOutcomeExitCode(outcome));
           }),
-          (error) => reportRunFailure(error, claim),
+          (error) => {
+            if (!resolved && shownInstruction !== undefined) {
+              appendLocalUserTranscript(shownInstruction);
+            }
+            reportRunFailure(error, claim);
+          },
         ).pipe(
           Effect.ensuring(
             Effect.andThen(
-              markLaunched,
+              markLaunched(false),
               Effect.sync(() => session.markRunCompleted(claim)),
             ),
           ),
@@ -515,6 +535,9 @@ export function createChatSessionController(
         );
       }),
     );
+
+  const startRootRun = (config: AgentConfigPayload): Effect.Effect<void> =>
+    Effect.asVoid(launchRootRun(Effect.succeed(config)));
 
   // -----------------------------------------------------------------------
   // resume
@@ -798,78 +821,53 @@ export function createChatSessionController(
     );
   };
 
+  /** A fresh root run of the chat's agent on the model it selects now. */
   const startSession = (
     instruction: string,
     mediaFiles?: readonly string[],
     displayInstruction?: string,
-  ): Effect.Effect<boolean, Error, ProcessServices> =>
-    Effect.suspend(() => {
-      let started = false;
-      // The slot is claimed before the program runs, the way every other launch
-      // path claims it: `startRootRun` below re-claims it for the run, whose
-      // id is minted here so the claim names it from the first instant, and a
-      // refusal on the way there settles this deferred instead.
-      const runId = generateRunId();
-      const startSettled = Deferred.makeUnsafe<void, Error>();
-      const claim = Deferred.await(startSettled);
-      // Done once the launch handed over to the run's own claim, which
-      // names the same `runId`: a stop asked meanwhile lands on that run.
-      session.markRunPending(claim, Effect.ignoreCause(claim), runId);
-      return recoverRun(
-        Effect.gen(function* () {
-          const meta = sessionMetaSignal.get();
-          const selection = yield* selectCliRunnableModel(
-            [{ model: meta.model, reason: meta.modelSource }],
-            {
-              stores: { ...stores, runtime },
-              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-                CHAT_API_MODE_MODEL_RECOVERY,
-              ),
-            },
-          ).pipe(
-            Effect.mapError(
-              (cause) =>
-                // The selection's own failure is the user-facing text: it
-                // names the model, its availability status and the `/key`
-                // recovery. The tag carries that message verbatim, because the
-                // transcript renders `toErrorMessage` of this failure.
-                new ChatSessionCallFailed({
-                  message: toErrorMessage(cause),
-                  cause,
-                }),
+  ): Effect.Effect<boolean, never, ProcessServices> =>
+    launchRootRun(
+      Effect.gen(function* () {
+        const meta = sessionMetaSignal.get();
+        const selection = yield* selectCliRunnableModel(
+          [{ model: meta.model, reason: meta.modelSource }],
+          {
+            stores: { ...stores, runtime },
+            noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+              CHAT_API_MODE_MODEL_RECOVERY,
             ),
-          );
-          yield* setCliHelperModel(stores.globalState, selection.model);
-          yield* startRootRun(
-            {
-              agent: meta.agent,
-              agentSource: meta.agentSource,
-              model: selection.model,
-              instruction,
-              ...(displayInstruction !== undefined
-                ? { displayInstruction }
-                : {}),
-              workingDirectory: cwd,
-              ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
-              ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
-              ...(meta.delegationAgentScope
-                ? { delegationAgentScope: meta.delegationAgentScope }
-                : {}),
-            },
-            runId,
-          );
-          started = true;
-        }),
-        (error) => {
-          appendLocalUserTranscript(displayInstruction ?? instruction);
-          reportRunFailure(error, claim);
-          session.markRunCompleted(claim);
-        },
-      ).pipe(
-        settleClaimOnExit(startSettled),
-        Effect.map(() => started),
-      );
-    });
+          },
+        ).pipe(
+          Effect.mapError(
+            (cause) =>
+              // The selection's own failure is the user-facing text: it
+              // names the model, its availability status and the `/key`
+              // recovery. The tag carries that message verbatim, because the
+              // transcript renders `toErrorMessage` of this failure.
+              new ChatSessionCallFailed({
+                message: toErrorMessage(cause),
+                cause,
+              }),
+          ),
+        );
+        yield* setCliHelperModel(stores.globalState, selection.model);
+        return {
+          agent: meta.agent,
+          agentSource: meta.agentSource,
+          model: selection.model,
+          instruction,
+          ...(displayInstruction !== undefined ? { displayInstruction } : {}),
+          workingDirectory: cwd,
+          ...(mediaFiles?.length ? { mediaFiles: [...mediaFiles] } : {}),
+          ...(meta.cliTeamId ? { cli: { teamId: meta.cliTeamId } } : {}),
+          ...(meta.delegationAgentScope
+            ? { delegationAgentScope: meta.delegationAgentScope }
+            : {}),
+        } satisfies AgentConfigPayload;
+      }),
+      displayInstruction ?? instruction,
+    );
 
   // Where each message goes is decided one at a time, in the order typed,
   // so a message typed while the chat starts its run waits until the

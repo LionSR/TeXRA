@@ -17,7 +17,6 @@ import {
 } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   qualifyAggregateId,
@@ -78,10 +77,7 @@ export function runWithLaunchGuard<A, E, R>(
                   outcome,
                   ownerless: true,
                   ...(outcome === RUN_OUTCOME.FAILED && {
-                    error: {
-                      kind: classifyAgentError(error),
-                      message: getSdkErrorMessage(error),
-                    },
+                    error: classifyAgentError(error),
                   }),
                 }),
               );

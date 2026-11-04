@@ -573,9 +573,9 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /**
        * The batch that ends attempt `ref` as `failed` with `error`. One that
-       * asks opens its retry request first, with the credential move the
-       * failure offers and, where the policy or an automatic quota fallback
-       * answers at once, that answer, so no surface lists it pending.
+       * asks opens its retry request first, with the credential move a
+       * used-up `quota` offers and, where the policy or an automatic quota
+       * fallback answers at once, that answer, so no surface lists it pending.
        */
       const failedRows = Effect.fn('ModelInvoker.failedRows')(function* (
         cell: RunCell,
@@ -584,6 +584,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         next: FailedNext,
         bound: BoundModel,
         usage: NormalizedUsage | null,
+        quota: ModelError['quota'],
       ): Effect.fn.Return<readonly RunHistoryDraft[], never, SessionServices> {
         const failed: RunHistoryDraft = {
           type: 'model.message',
@@ -601,7 +602,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const { requestId } = next;
         const credentialSwitch = yield* access.credentialSwitch(
           bound,
-          error,
+          quota,
           (yield* cell.current).declinedRoutes,
         );
         const automatic =
@@ -659,11 +660,12 @@ export const modelInvokerLayer = (): Layer.Layer<
               : observeAccepted(cell, ref, bound, accepted),
           failed: Effect.fn('ModelInvoker.failed')(function* (
             ref,
-            { error, unsent },
+            { error },
             next,
             bound,
           ) {
-            const info = failureInfo(error, bound.config.provider, { unsent });
+            const info = failureInfo(error, bound.config.provider);
+            const quota = error instanceof ModelError ? error.quota : undefined;
             if (next.kind === 'ask' || next.kind === 'stop')
               yield* logProviderError(
                 logger,
@@ -687,7 +689,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 : null;
             yield* reportUsage(usageLog, bound, usage, attribution, roots);
             yield* cell.append(
-              yield* failedRows(cell, ref, info, next, bound, usage),
+              yield* failedRows(cell, ref, info, next, bound, usage, quota),
             );
             return info;
           }),
@@ -722,11 +724,11 @@ export const modelInvokerLayer = (): Layer.Layer<
                   {
                     message: INTERRUPTED_RETRY_MESSAGE,
                     provider: bound.config.provider,
-                    userRetryable: true,
                   },
                   { kind: 'ask', requestId: `retry-${randomUUID()}` },
                   bound,
                   null,
+                  undefined,
                 ),
               );
             }),

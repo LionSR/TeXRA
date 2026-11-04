@@ -244,8 +244,6 @@ export interface RegisterRunOptions {
   /** The run's `run.description`, durable at birth: a child's
    *  task label; a root's summary comes later as a second row. */
   readonly description?: string;
-  /** Who wrote it: the model, unless a fork copies its user's title. */
-  readonly descriptionBy?: 'model' | 'user';
   readonly provenance?: RunProvenance; // a fork's source and cut
   readonly grants?: ApprovalGrants; // the grants it starts with
   /** A fork's history, which its opening commits in place of a prompt
@@ -265,6 +263,18 @@ export interface Registration {
   readonly rows: readonly SessionEventDraft[];
   readonly start: Extract<SessionEventDraft, { type: 'run.start' }> | null;
 }
+
+/** The row that titles `runId`: the model's summary, or the user's rename. */
+export const descriptionRow = (
+  runId: RunId,
+  description: string,
+  by: 'model' | 'user',
+): Extract<SessionEventDraft, { type: 'run.description' }> => ({
+  type: 'run.description',
+  aggregateId: qualifyAggregateId('run', runId),
+  description,
+  by,
+});
 
 /** The rows that register a run, in commit order: a new run's (`born`)
  *  `run.start`, its configuration, its `run.activate` (a re-registration's with
@@ -299,12 +309,7 @@ export function registrationDrafts(
     ...(born ? [] : ended),
   ];
   if (options.description !== undefined)
-    rows.push({
-      type: 'run.description',
-      aggregateId: target,
-      description: options.description,
-      by: options.descriptionBy ?? 'model',
-    });
+    rows.push(descriptionRow(runId, options.description, 'model'));
   return { rows, start: born ? start : null };
 }
 

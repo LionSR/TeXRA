@@ -364,15 +364,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const instruction = asString(input.prompt);
   if (instruction) sections.push(textSection('Instruction:', instruction));
 
-  const badges = [
-    input.extractFigures ? 'Extract figures' : undefined,
-    input.extractTikz ? 'Extract TikZ' : undefined,
-    input.reflect ? 'Critic review' : undefined,
-  ].filter(Predicate.isNotNullish);
-  if (badges.length > 0) {
-    sections.push({ kind: 'badges', label: 'Extraction:', badges });
-  }
-
   const files = fileGroupsSection(
     getProposalFileGroups({
       inputFiles: toStringArray(input.inputFiles),

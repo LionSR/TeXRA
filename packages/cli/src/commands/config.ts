@@ -34,7 +34,7 @@ import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 
-function parseAgentKeys(value = ''): string[] {
+function parseAgentKeys(value: string): string[] {
   return [
     ...new Set(
       value
@@ -97,90 +97,78 @@ const configureWorkspaceAgents = Effect.fn('configureWorkspaceAgents')(
     context: CliContext,
     services: CliPlatformServices,
     input: {
-      readonly inherit: boolean;
-      readonly all: boolean;
-      readonly team?: string;
       readonly agents?: string;
       readonly defaultTeam?: string;
-      readonly clearDefault: boolean;
       readonly defaultAgent?: string;
-      readonly clearDefaultAgent: boolean;
     },
   ) {
     const roots = services.roots;
     const workspaceAgents = (yield* AgentCatalog).workspaceAgents(roots);
-    const workspaceChoices = [
-      input.inherit,
-      input.all,
-      Boolean(input.team),
-      input.agents !== undefined,
-    ].filter(Boolean).length;
-    if (workspaceChoices > 1) {
-      return yield* failUsage(
-        'Choose one set of workspace agents: --inherit, --all, --team, or a custom --agents list.',
-      );
+    // Each value is read once, trimmed; a keyword (`inherit`, `all`, `none`,
+    // the `team:` prefix) reads in any case, as a team's name does.
+    const agents = input.agents?.trim();
+    const defaultTeam = input.defaultTeam?.trim();
+    const defaultAgent = input.defaultAgent?.trim();
+    for (const [flag, value] of [
+      ['--agents', agents],
+      ['--default-team', defaultTeam],
+      ['--default-agent', defaultAgent],
+    ] as const) {
+      if (value === '') return yield* failUsage(`${flag} needs a value.`);
     }
-    if (input.defaultTeam && input.clearDefault) {
-      return yield* failUsage(
-        'Use either --default-team or --clear-default, not both.',
+    const keyword = (value: string | undefined) => value?.toLowerCase();
+    // A team is named by id, name or slug; a selection stores its id.
+    const teamNamed = (query: string) =>
+      Effect.map(workspaceTeams(roots.repoState), (teams) =>
+        findTeamPreset(teams, query),
       );
-    }
-    if (input.defaultAgent && input.clearDefaultAgent) {
-      return yield* failUsage(
-        'Use either --default-agent or --clear-default-agent, not both.',
-      );
-    }
 
-    if (input.inherit) yield* workspaceAgents.setInherited();
-    if (input.all) yield* workspaceAgents.setAll();
-    if (input.team) {
-      // `--team` names a team by id, name or slug; the selection stores the id.
-      const team = findTeamPreset(
-        yield* workspaceTeams(roots.repoState),
-        input.team,
-      );
-      if (!team) return yield* failUsage(`Unknown agent team: ${input.team}`);
+    if (keyword(agents) === 'inherit') yield* workspaceAgents.setInherited();
+    else if (keyword(agents) === 'all') yield* workspaceAgents.setAll();
+    else if (agents !== undefined && keyword(agents)?.startsWith('team:')) {
+      const query = agents.slice('team:'.length).trim();
+      if (query === '') return yield* failUsage('--agents team: needs a team.');
+      const team = yield* teamNamed(query);
+      if (!team) return yield* failUsage(`Unknown agent team: ${query}`);
       yield* workspaceAgents
         .setTeam(team.id)
         .pipe(Effect.mapError(asTeamUsageError));
+    } else if (agents !== undefined) {
+      yield* workspaceAgents.setEnabledAgentKeys(parseAgentKeys(agents));
     }
-    if (input.agents !== undefined) {
-      yield* workspaceAgents.setEnabledAgentKeys(parseAgentKeys(input.agents));
-    }
-    const defaultTeamId = input.defaultTeam;
-    if (defaultTeamId) {
+
+    if (keyword(defaultTeam) === 'none')
+      yield* workspaceAgents.clearDefaultTeam();
+    else if (defaultTeam !== undefined) {
+      const team = yield* teamNamed(defaultTeam);
+      if (!team) return yield* failUsage(`Unknown agent team: ${defaultTeam}`);
       // Only a built-in team can be the user default: a saved team belongs to
       // one workspace.
-      const team = (yield* workspaceTeams(roots.repoState)).find(
-        (preset) => preset.id === defaultTeamId,
-      );
-      if (team && team.source !== 'built-in') {
+      if (team.source !== 'built-in') {
         return yield* failUsage(
-          `Only a built-in team can be the user default: ${defaultTeamId}`,
+          `Only a built-in team can be the user default: ${defaultTeam}`,
         );
       }
       yield* workspaceAgents
-        .setDefaultTeam(defaultTeamId)
+        .setDefaultTeam(team.id)
         .pipe(Effect.mapError(asTeamUsageError));
     }
-    if (input.clearDefault) yield* workspaceAgents.clearDefaultTeam();
-    if (input.defaultAgent) {
+
+    if (keyword(defaultAgent) === 'none') {
+      yield* setWorkspaceCliChatAgent(roots, undefined);
+    } else if (defaultAgent !== undefined) {
       const available = yield* workspaceAgents.getVisibleAgents();
       const selected = available.find(
         (agent) =>
-          agent.name === input.defaultAgent ||
-          agentKeyOf(agent) === input.defaultAgent,
+          agent.name === defaultAgent || agentKeyOf(agent) === defaultAgent,
       );
       if (!selected) {
         const names = available.map((agent) => agent.name).join(', ');
         return yield* failUsage(
-          `Default chat agent "${input.defaultAgent}" is not in the workspace agents. Available agents: ${names || '(none)'}.`,
+          `Default chat agent "${defaultAgent}" is not in the workspace agents. Available agents: ${names || '(none)'}.`,
         );
       }
       yield* setWorkspaceCliChatAgent(roots, agentKeyOf(selected));
-    }
-    if (input.clearDefaultAgent) {
-      yield* setWorkspaceCliChatAgent(roots, undefined);
     }
 
     const record = yield* readCliWorkspaceAgents(roots);
@@ -200,48 +188,31 @@ const configAgentsCommand = defineCliCommand({
   },
   args: {
     ...GLOBAL_ARGS,
-    inherit: {
-      type: 'boolean',
-      description: 'Use the user default team, or all agents when none is set',
-    },
-    all: {
-      type: 'boolean',
-      description: 'Set the workspace agents to every agent',
-    },
-    team: { type: 'string', description: 'Use a built-in or saved team id' },
     agents: {
       type: 'string',
-      valueHint: 'agent,...',
-      description: 'Use an exact comma-separated agent list',
+      valueHint: 'inherit|all|team:<team>|agent,...',
+      description:
+        'The workspace agents: the user default (inherit), every agent (all), a team by id, name or slug, or an exact comma-separated agent list',
     },
     'default-team': {
       type: 'string',
-      description: 'Set the user default team used by inherited workspaces',
-    },
-    'clear-default': {
-      type: 'boolean',
-      description: 'Clear the user default team',
+      valueHint: 'team|none',
+      description:
+        'The user default team that inherited workspaces use, or none to clear it',
     },
     'default-agent': {
       type: 'string',
-      description: 'Set the default root agent for chats in this workspace',
-    },
-    'clear-default-agent': {
-      type: 'boolean',
-      description: 'Return chat-agent selection to the automatic default',
+      valueHint: 'agent|none',
+      description:
+        'The root agent new chats in this workspace start with, or none for the automatic default',
     },
   },
   run: Effect.fn('config.run')(function* (context, ctx) {
     const services = yield* initCliPlatform(context);
     return yield* configureWorkspaceAgents(context, services, {
-      inherit: ctx.args.inherit === true,
-      all: ctx.args.all === true,
-      team: optString(ctx.args.team),
       agents: optString(ctx.args.agents),
       defaultTeam: optString(ctx.args['default-team']),
-      clearDefault: ctx.args['clear-default'] === true,
       defaultAgent: optString(ctx.args['default-agent']),
-      clearDefaultAgent: ctx.args['clear-default-agent'] === true,
     });
   }),
 });

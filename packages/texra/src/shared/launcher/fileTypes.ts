@@ -7,17 +7,8 @@ export const DocumentFileTypeSchema = Schema.Literals([
 ]);
 export type DocumentFileType = typeof DocumentFileTypeSchema.Type;
 
-const MultipleDocumentFileTypeSchema = Schema.Literals([
-  ...DocumentFileTypeSchema.literals,
-  'output',
-]);
-export type MultipleDocumentFileType =
-  (typeof MultipleDocumentFileTypeSchema)['Type'];
-
-/** Narrows a broader file-type value to the `MultipleDocumentFileType` set. */
-export const isMultipleDocumentFileType = Schema.is(
-  MultipleDocumentFileTypeSchema,
-);
+/** The launcher's file lists: the document file types and the outputs. */
+export type MultipleDocumentFileType = DocumentFileType | 'output';
 
 /**
  * Values accepted by the "get/set current editor file" round trip

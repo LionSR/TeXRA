@@ -14,15 +14,12 @@ import {
 import { Runs } from '@agent/runtime/runRegistry';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
-import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import {
   type RunOutcome,
   emptyRunEndOutput,
   RUN_OUTCOME,
-  toRetryErrorInfo,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunReport } from './runReport';
@@ -125,7 +122,7 @@ export const endActivation = Effect.fn('endActivation')(
       error: unsaved,
     });
     const message = `The run's end could not be saved: ${unsaved.message}`;
-    const failed = { kind: classifyAgentError(unsaved), message };
+    const failed = { ...classifyAgentError(unsaved), message };
     return {
       event: { ...event, outcome: RUN_OUTCOME.FAILED, error: failed },
       persistFailure: unsaved,
@@ -186,10 +183,10 @@ const endWith = <R>(
 };
 
 /**
- * The single owner of provider/runtime failure exits: a flow carrying
- * structured error metadata (`carried`), or an exception that escaped it.
- * A stop that met the failure (`stopped`) outranks it: the failure rides
- * the cancelled row as its error.
+ * The single owner of provider/runtime failure exits: a flow's reported
+ * failure (an `AgentError` carrying it as recorded) or an exception that
+ * escaped the flow. A stop that met the failure (`stopped`) outranks it:
+ * the failure rides the cancelled row as its error.
  */
 const failedEnd = Effect.fn('failedEnd')(function* <R>(
   ctx: RunLaunch,
@@ -206,58 +203,46 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   // terminal: it falls back to an unexpected failure.
   const prologue = yield* Effect.exit(
     Effect.gen(function* () {
-      const kind = classifyAgentError(err);
-      // toRetryErrorInfo strips rawErrorBody, which the `run.end` error
-      // type omits and a bare object spread would smuggle past the check.
-      const info = toRetryErrorInfo(normalizeProviderError(err));
-      const { message: sdkMsg, ...providerErrorInfo } = info;
-      // An unexpected failure is named by the agent it stopped, unless it
-      // is classified (a used-up plan, a subscription that cannot bill):
-      // that one names its own cause, as the other kinds do, and a host may
+      const classified = classifyAgentError(err);
+      // An unexpected failure is named by the agent it stopped; a model
+      // failure names its own cause, as the other kinds do, and a host may
       // word it from its classification in place of this message.
-      const message =
-        kind === 'unexpected' && info.classification === undefined
-          ? `Error executing agent ${agentIdentifier}: ${sdkMsg}`
-          : sdkMsg;
+      const error: NonNullable<ResultEvent['error']> =
+        classified.kind === 'unexpected'
+          ? {
+              kind: 'unexpected',
+              message: `Error executing agent ${agentIdentifier}: ${classified.message}`,
+            }
+          : classified;
       // Root failures are logged here; a subagent's is delivered to its
       // orchestrator, so a second wrapper error would blame the parent.
       if (parentRunId === null) {
-        yield* logSdkError(ctx.logger, message, err, {
+        yield* logSdkError(ctx.logger, error.message, err, {
           operation: `execute ${agentIdentifier}`,
         });
       }
-      // `disk-full` never carries provider or credential fields: narrow it
-      // so runRecords' union stays honest.
-      const error: NonNullable<ResultEvent['error']> =
-        kind === 'disk-full'
-          ? {
-              kind,
-              message,
-              userRetryable: providerErrorInfo.userRetryable,
-              partialText: providerErrorInfo.partialText,
-            }
-          : { kind, message, ...providerErrorInfo };
-      return { message, error, info };
+      return error;
     }),
   );
-  const fallbackMsg = `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`;
-  const { message, error, info } = Exit.isSuccess(prologue)
+  const error: NonNullable<ResultEvent['error']> = Exit.isSuccess(prologue)
     ? prologue.value
     : yield* logLifecycleWarning('Run failure prologue failed', {
         runId,
         error: Cause.squash(prologue.cause),
       }).pipe(
         Effect.as({
-          message: fallbackMsg,
-          error: { kind: 'unexpected' as const, message: fallbackMsg },
-          info: { message: fallbackMsg, userRetryable: false },
+          kind: 'unexpected' as const,
+          message: `Error executing agent ${agentIdentifier}: ${toErrorMessage(err)}`,
         }),
       );
+  // The failure a child's report and a root's `AgentError` carry: the error
+  // without its kind, a model failure as recorded or the words alone.
+  const { kind: _kind, ...failure } = error;
   const outcome = stopped ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
   // A child's failure rides its result, the error its delivery reports.
   const subagentResult: RunReport | undefined =
     parentRunId !== null
-      ? { ...(carried ?? emptyReport(ctx, outcome)), failure: info }
+      ? { ...(carried ?? emptyReport(ctx, outcome)), failure }
       : undefined;
   // One finalize covers the three exits below.
   const finalized = yield* endWith(ctx, finish, {
@@ -276,7 +261,11 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   // presenter shows that row (`presentTerminalResult`), and a launch that
   // waits for the run's opening answers with the opening, not this; a run
   // that never opened has no row, so its launch's caller presents this.
-  return yield* new AgentError({ message, cause: err });
+  return yield* new AgentError({
+    message: error.message,
+    cause: err,
+    ...(error.kind === 'model' ? { failure } : {}),
+  });
 });
 
 /**
@@ -298,13 +287,12 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
   if (Exit.isSuccess(exit)) {
     const result = exit.value;
     if (result.failure) {
-      // The carried failure as an `Error`, so the one failure path
-      // classifies and logs it exactly as an exception that escaped the
-      // flow. `RetryErrorInfo` is a `ProviderError` minus the bulky
-      // `rawErrorBody`, so it attaches as-is: its classification is what
-      // the classifier reads.
-      const failure = new Error(result.failure.message);
-      attachProviderError(failure, result.failure);
+      // The reported failure takes the one failure path on an `AgentError`,
+      // which that path's log row and the root's error read it from.
+      const failure = new AgentError({
+        message: result.failure.message,
+        failure: result.failure,
+      });
       return yield* failedEnd(ctx, finish, failure, result);
     }
     // A completed flow supplies its outcome; an interrupted flow arrives

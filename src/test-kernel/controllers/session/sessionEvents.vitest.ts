@@ -510,12 +510,7 @@ describe('Sessions owner', () => {
         expect(
           yield* requests.request(request).pipe(Effect.provide(session)),
         ).toEqual({ kind: 'done' });
-        // A stop that leaves the child policy unset leaves it to the stop,
-        // which reads the session's "Keep subagents running".
-        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
-          detachActiveChildren: undefined,
-          reason: 'user',
-        });
+        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, 'user');
       }).pipe(withRequestServices),
   );
 });

@@ -251,7 +251,6 @@ export function createScriptRunStrategy(
     // It reports once, at its end: no progress follow-ups.
     launch: (_notify, turns) => native.launch(() => undefined, turns),
     stageLabel: `Script '${title}'`,
-    deliveryId: `${runId}:script:delivery`,
     formatDelivery: Effect.fn('scriptRun.formatDelivery')(function* () {
       const { script } = yield* scriptRunCalls(runId);
       if (script?.result.status === 'executed')
@@ -295,21 +294,24 @@ export function createScriptRunStrategy(
         attributes,
         message: `${toErrorMessage(err)}\n${resumeHint(runId)}`,
       }),
-    stopNotice: Effect.fn('scriptRun.stopNotice')(function* () {
-      const summary = yield* scriptRunSummary(
-        runId,
-        title,
-        'stopped',
-        null,
-        startedAt,
-      );
-      return formatDelivery({
-        tag: DELIVERY_TAG.scriptError,
-        runId,
-        attributes,
-        lines: [scriptSummaryElement(summary)],
-        message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
-      });
-    }),
+    script: {
+      deliveryId: `${runId}:script:delivery`,
+      stopNotice: Effect.fn('scriptRun.stopNotice')(function* () {
+        const summary = yield* scriptRunSummary(
+          runId,
+          title,
+          'stopped',
+          null,
+          startedAt,
+        );
+        return formatDelivery({
+          tag: DELIVERY_TAG.scriptError,
+          runId,
+          attributes,
+          lines: [scriptSummaryElement(summary)],
+          message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
+        });
+      }),
+    },
   };
 }

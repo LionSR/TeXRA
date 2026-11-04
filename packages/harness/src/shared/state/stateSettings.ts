@@ -11,10 +11,8 @@ import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
-  BASH_APPROVAL_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEBUG_MODE_KEY,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
@@ -203,10 +201,6 @@ const HARNESS_CONFIG_ROWS: Record<
   // workspace override stays honored (stranded values: #11173). Only
   // server-side state is a user choice (data retention); the transport knobs
   // have no settings-view row and live in `.texra/config.json`.
-  'model.gpt5ReasoningSummary': configToggle(
-    false,
-    "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-  ),
   'model.useGoogleInteractionsServerState': {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
@@ -326,25 +320,6 @@ const HARNESS_CONFIG_ROWS: Record<
       'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
   },
-  [TOOL_EDIT_APPROVAL_CONFIG_KEY]: {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    title: 'Require approval for file edits',
-    description:
-      'Show a diff and wait for your approval before an agent changes a project file.',
-    category: 'tools',
-    configTarget: 'local',
-  },
-  [BASH_APPROVAL_CONFIG_KEY]: {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    title: 'Require approval for shell commands',
-    description: 'Wait for your approval before an agent runs a shell command.',
-    category: 'tools',
-    configTarget: 'local',
-  },
 };
 
 /**
@@ -379,7 +354,7 @@ const APPROVAL_POLICY_SETTING: StateSettingEntry = {
   ),
   title: 'Approval policy',
   description:
-    'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
+    'Whether agents ask before running shell commands and editing files.',
   category: 'tools',
   slot: 'config',
   configTarget: 'local',

@@ -108,7 +108,7 @@ const SINGLE_FILE_FIELDS = { base: 'baseFile', edited: 'editedFile' } as const;
 /** Where a picked path list lands on the launch surface. */
 function withPickedPaths(
   launch: Surface['launch'],
-  fileType: Extract<HostRequest, { kind: 'pickFiles' }>['fileType'],
+  fileType: Extract<HostRequest, { kind: 'useCurrentFile' }>['fileType'],
   paths: readonly string[],
 ): Partial<Surface['launch']> {
   if (fileType === 'base' || fileType === 'edited') {

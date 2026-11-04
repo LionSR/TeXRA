@@ -203,7 +203,7 @@ export interface SharedHostRequestBindings {
   openGuide(page: string, anchor?: string): HostVerb<void>;
   readonly openCustomAgentDirectory: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
-  openInstallGuide(tool: string): HostVerb<void>;
+  readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
    *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
    *  takes. */
@@ -787,7 +787,7 @@ function answerShared(
         yield* host.recheckDependencies;
         return done;
       case 'openInstallGuide':
-        yield* host.openInstallGuide(request.tool);
+        yield* host.openInstallGuide;
         return done;
       case 'onboarding':
         switch (request.action) {

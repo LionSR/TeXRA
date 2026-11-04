@@ -184,7 +184,6 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
     operation: 'model request',
     errorDetails: {
       message,
-      userRetryable: true,
       classification: { kind: 'chatgpt-subscription' },
       provider: 'openai',
     },

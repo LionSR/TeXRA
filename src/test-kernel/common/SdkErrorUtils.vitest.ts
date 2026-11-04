@@ -5,8 +5,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { RouteUnavailable } from '@texra-ai/harness/host';
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
-import { attachProviderError } from '@common/errors/sdkError/errorMetadata';
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
 import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
 import { ModelError } from '../../../packages/llm/src/errors.js';
@@ -92,16 +90,5 @@ describe('a subscription that cannot bill', () => {
       needsReauth: true,
       sessionError: 'The refresh token was revoked.',
     });
-  });
-});
-
-describe('attachProviderError end-to-end', () => {
-  // A frozen error cannot take a symbol property: marking it must neither
-  // throw nor lose the mark.
-  it('marks a frozen error without throwing', () => {
-    const frozen = Object.freeze(new Error('overloaded'));
-    attachProviderError(frozen, { message: 'overloaded', userRetryable: true });
-
-    expect(normalizeProviderError(frozen).userRetryable).toBe(true);
   });
 });

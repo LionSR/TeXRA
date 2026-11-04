@@ -7,7 +7,7 @@ import {
   type AgentProposalPermission,
   getModelLabel,
 } from '@texra-ai/harness/schemas';
-import { Result, Schema } from 'effect';
+import { Record as Rec, Result, Schema } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
@@ -23,7 +23,10 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
+import {
+  DOCUMENT_TASK_OPTIONS,
+  DocumentTaskOptionsSchema,
+} from '@texra/shared/plugins/documents';
 import {
   DEFINED_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,
@@ -124,7 +127,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       ? this.renderScriptSummary(data, data.script)
       : html`${this.renderDefinedAgent(data)}
         ${this.renderInstruction(data.instruction)}
-        ${data.task ? this.renderExtractFlags(data) : nothing}
+        ${data.task ? this.renderOptionBadges(data) : nothing}
         ${this.renderProposalFiles(data)}`;
     return this.renderCard(
       body,
@@ -255,19 +258,18 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     </div>`;
   }
 
-  private renderExtractFlags(
+  private renderOptionBadges(
     data: AgentProposalPermission,
   ): TemplateResult | typeof nothing {
     // Options the documents plugin cannot read show no flags.
     const options = Result.getOrUndefined(
       Schema.decodeUnknownResult(DocumentTaskOptionsSchema)(data.options ?? {}),
     );
-    const flags: string[] = [];
-    if (options?.autoExtractFigure) flags.push('Extract figures');
-    if (options?.autoExtractTikzFigure) flags.push('Extract TikZ');
-    if (options?.reflect) flags.push('Critic review');
+    const flags = Rec.toEntries(DOCUMENT_TASK_OPTIONS)
+      .filter(([key]) => options?.[key] === true)
+      .map(([, row]) => row.label);
     if (flags.length === 0) return nothing;
-    return html`<div class="workflow-proposal__extract-flags">
+    return html`<div class="workflow-proposal__option-badges">
       ${repeat(
         flags,
         (flag) => flag,

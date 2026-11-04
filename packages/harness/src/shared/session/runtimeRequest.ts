@@ -39,7 +39,6 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.stop'),
     ...runScoped,
-    detachActiveChildren: Schema.optional(Schema.NullOr(Schema.Boolean)),
     reason: RunStopReasonSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('run.delete'), ...runScoped }),
