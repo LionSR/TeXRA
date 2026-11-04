@@ -146,7 +146,11 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // build's error without one would fail as damaged).
   // v5: the error's classification as `model.message` v10 (no upcaster: an
   // earlier build would fail a subscription's failure as damaged).
-  'run.end': { version: 5, upcast: [], listing: 'own' },
+  // v6: a cancelled end carries `reason` (`user` or `shutdown`), which the
+  // halt row carried as `closed` before, and the error kind `abort` is gone
+  // (no upcaster: an earlier build's shutdown end would read as a user's
+  // stop, holding a child's delivery back).
+  'run.end': { version: 6, upcast: [], listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   'run.description': { ...V1, listing: 'own' },
@@ -184,7 +188,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'approval.policy': { ...V1, listing: 'own' },
   // v2: a `turn.end` carries the turn's `outcome` (no upcaster, as
   // `run.config`: a v1 `turn.end` would fail its check).
-  'run.position': { version: 2, upcast: [], listing: 'own' },
+  // v3: a halt carries no `reason`; the end's `reason` says what stopped
+  // the run (no upcaster: an earlier build's closed halt would read as a
+  // crash and spend a retry).
+  'run.position': { version: 3, upcast: [], listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both (no upcaster, as `run.config`).
   // v3: a user message names its attached media by blob address (`media`),

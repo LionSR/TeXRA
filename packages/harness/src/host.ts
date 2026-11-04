@@ -228,10 +228,7 @@ export {
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
-export {
-  isModuleNotFoundError,
-  isUserAbort,
-} from '@common/errors/errorPredicates';
+export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { isNotADirectoryError } from '@utils/files/fsEntryExists';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.

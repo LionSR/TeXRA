@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A cancelled run says who stopped it.** The `run.end` row carries
+  `reason`: `user` for a person's stop, `shutdown` for the process's exit,
+  neither for a holder's release. A run the process closed mid-request
+  resumes without spending a retry, as before, and a child's delivery wakes
+  it, as after a crash; only a person's stop holds that delivery back. SDK:
+  `RunEnd.reason` and `RunStopReason` (from `@texra-ai/harness`); the halt
+  position carries no `reason`; the `abort` error kind, `isUserAbort` and
+  `AGENT_ERROR_OUTCOME` are gone, as a stop is the run fiber's interruption
+  and nothing else, and `outcomeFromCause` reads a cause alone.
 - **ChatGPT sign-in is OpenAI's "Sign in with ChatGPT" for open-source
   agents.** The ChatGPT plan now pays for calls to the public Responses API
   (`api.openai.com/v1`) through a client OpenAI registers for you at the

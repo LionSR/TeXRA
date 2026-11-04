@@ -315,7 +315,7 @@ ended failed.
 Host-neutral, so any host can reference it.
 A more specific error should be added only when a concrete thrower and
 catcher exist for it — anything else duplicates the existing
-`ProviderError` schema and `isUserAbort` machinery.
+`ProviderError` schema.
 
 ```ts
 class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
@@ -1244,14 +1244,6 @@ True if `target` is a strict descendant of `base` (excludes `target === base`).
 
 ```ts
 function isStrictlyWithin(base: string, target: string): boolean
-```
-
-## isUserAbort
-
-True if `err` is an `AbortController` abort (a DOM `AbortError`).
-
-```ts
-function isUserAbort(err: unknown): boolean
 ```
 
 ## launchNoticeOf

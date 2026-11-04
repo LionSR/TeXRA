@@ -360,7 +360,7 @@ export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   if ((yield* Runs).get(run.id) !== undefined) return;
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || !cutShort(facts)) return;
-  if (facts.end !== null && facts.position?.payload.reason !== 'closed') return;
+  if (facts.end !== null && facts.end.reason !== 'shutdown') return;
   if ((yield* owningCall(run.id)) !== null) return;
   const report = (why: string) => reportInterrupted(parent, run, facts, why);
   const rejection = yield* runRejection(run.id);

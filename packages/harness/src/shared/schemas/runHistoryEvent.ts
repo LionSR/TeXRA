@@ -108,8 +108,6 @@ export const RunPositionPayloadSchema = Schema.Struct({
    *  starts). A `turn.end`'s: how the turn ended, `completed` with its
    *  answer or `failed` without one, which a follow-up's receipt reads. */
   outcome: Schema.optional(Schema.NullOr(RunOutcomeSchema)),
-  /** `closed`: a clean session close forced the halt (`haltedPositionRow`). */
-  reason: Schema.optional(Schema.Literal('closed')),
 }).check(
   Schema.makeFilter(
     (p) => (p.at === 'halted' || p.at === 'turn.end') === (p.outcome != null),
