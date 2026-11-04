@@ -4,8 +4,8 @@
 // These blocks are queued follow-up messages addressed to the orchestrator
 // *model*, injected into the conversation as user turns.
 //
-// A child's delivery is collapsed to a terse status line
-// (summarizeSubagentFollowup) once, when its parent queues it, and stored as
+// A delivery or notice envelope is collapsed to a terse status line
+// (summarizeSubagentFollowup) once, when its recipient queues it, and stored as
 // the follow-up's `displayText`, which every surface shows. This module is
 // the single source of truth for the block parsing, entity decoding, and
 // progress-detail logic. It intentionally has NO host imports (no vscode, no

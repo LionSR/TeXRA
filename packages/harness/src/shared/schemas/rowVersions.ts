@@ -166,8 +166,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // `run.config`).
   // v3: attached media by blob address (`media`), no `mediaFiles` paths (no
   // upcaster: a v2 row's paths would be read as no media).
-  // v4: a child's delivery carries its summary as `displayText`, which every
-  // surface shows (no upcaster: a v3 delivery would show its raw envelope).
+  // v4: a delivery or notice carries its summary as `displayText`, which
+  // every surface shows (no upcaster: a v3 delivery would show its raw
+  // envelope).
   'followup.queued': { version: 4, upcast: [], listing: 'followup' },
   // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
   // it and fails to decode (no upcaster, as `run.config`).

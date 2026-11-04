@@ -57,13 +57,14 @@ export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
 const isChild = (from: FollowUpSender): boolean =>
   from.kind === 'run' && from.relation === 'child';
 
-/** What a child's delivery shows instead of its envelope: the envelope's
- *  summary, decided once as the row is queued. */
+/** What a delivery or notice shows instead of its envelope: the envelope's
+ *  summary, decided once as the row is queued. A person's own message is
+ *  shown as typed. */
 function deliveryDisplayText(
   text: string,
   from: FollowUpSender,
 ): string | undefined {
-  if (!isChild(from)) return undefined;
+  if (from.kind === 'user') return undefined;
   const summary = summarizeSubagentFollowup(text);
   return summary === text ? undefined : summary;
 }
@@ -82,7 +83,7 @@ export function userFollowUpInstruction(
 
 /** The `followup.queued` row one send writes, with the blobs its media
  *  brings: its id is the delivery id when the producer gave one, a run
- *  sender gets its relation to the recipient, and a child's delivery its
+ *  sender gets its relation to the recipient, and a delivery or notice its
  *  `displayText`. */
 export function queuedRow(
   item: InboxItem,

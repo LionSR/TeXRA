@@ -1043,7 +1043,7 @@ interface TranscriptText {
 ```ts
 interface UserRow extends TranscriptRowBase {
   readonly kind: 'user';
-  /** The message as its follow-up shows it: a child's delivery is its
+  /** The message as its follow-up shows it: a delivery or notice is its
    *  summary (`FollowUpContent.displayText`), not its envelope. */
   readonly text: TranscriptText;
   /** A workflow delivery's facts, typed. */
