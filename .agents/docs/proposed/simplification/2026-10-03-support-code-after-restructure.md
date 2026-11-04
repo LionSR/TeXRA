@@ -37,6 +37,9 @@ Done: `pinHook`, `hookShell` and `runHook` (`pluginHooks.ts`) resolve and
 spawn on the PATH extended with `CommandDirs`, as `externalFiles` and an MCP
 server's spawn do. A hook whose program is found only on the extended PATH
 now pins, so its plugin's digest changes and enabling asks for trust again.
+With PATH unset, `runHook` spawns on `/usr/bin:/bin` extended while the
+lookup would search the `CommandDirs` alone, so `pinHook` leaves the hook
+dynamic rather than pin a binary the spawn may not run.
 
 ## Rejected
 
