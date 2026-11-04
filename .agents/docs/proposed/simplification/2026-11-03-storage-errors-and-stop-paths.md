@@ -279,12 +279,15 @@ resume refusals decided three times._
   cancel already travels `ask` → `request.decided`.
   `ToolResultPayload.disposition: 'cancelled'` (`runHistoryEvent.ts:404-410`)
   has no producer; `dispositionOf` returns `executed` or `failed`.
-- **A truncated turn is a silent success.** `finishReason` is stored
-  (`packages/harness/src/shared/schemas/storedTurn.ts:125`) and read by nothing
-  outside the llm package; Anthropic `max_tokens` and OpenAI
-  `max_output_tokens` arrive as `'length'`, Anthropic's
-  `model_context_window_exceeded` as a finish reason while every other
-  provider's overflow is the `context-overflow` error (`verdict.ts:302`).
+- **A truncated turn was a silent success.** At the audit, `finishReason`
+  was stored (`packages/harness/src/shared/schemas/storedTurn.ts:125`) and read
+  by nothing outside the llm package. Since #14644 the loop names the limit on
+  `response.finalized` (`cut: 'length' | 'content-filter'`,
+  `packages/harness/src/agent/runtime/loop/rows.ts:44-51`) and both UIs show it
+  (`RESPONSE_CUT_NOTE`); the run still completes, by the owner's choice. The
+  Anthropic overflow finish is already the `context-overflow` error
+  (`packages/llm/src/api/anthropicMessages.ts:456`), the same as every other
+  provider's.
 - **An abnormal stream end lands on three kinds.** Google non-completed status
   → `malformed-output` (`googleInteractions.ts:482-484`) but the same status
   in a background snapshot → `provider-rejection` (`:672-682`); OpenAI
@@ -315,16 +318,15 @@ resume refusals decided three times._
   `scriptRun.ts:55` checks both.
 
 **Proposal.** Delete `cancel` from `FailedNextSchema` and `cancelled` from the
-disposition. The loop reads `finishReason`: `length` and overflow are one
-outcome it acts on (a warning row at least, a compaction or a stop by policy),
-not a success. One `terminalStatusFailure(status)` in `assembleTurn` and one
+disposition. The cut is named and shown (done); whether a cut turn should end
+the run is a product call, not a cleanup. One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
 two. The gate owns every wait: `pauseBefore`'s sleep goes and `retryAfterMs`
 is honoured. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.
 
-**Give up.** A silent success on truncation, which is the defect.
+**Give up.** Nothing observable.
 
 ## Rejected
 
@@ -347,5 +349,4 @@ values get a reader or go.
 are one PR per package side (llm's kinds, then the harness's unions and
 classifiers, then the app's wrappers). §5 is two PRs: the one decider and the
 one stop door. §6 is one PR for the dead literals, one for the stream end and
-the gate, and one for `finishReason`, which changes run behaviour and gets
-the one regression test the testing budget allows.
+the gate, and one for the tool failure shapes with the defect log.
