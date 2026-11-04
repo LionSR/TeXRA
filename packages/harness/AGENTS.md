@@ -52,7 +52,7 @@ points to a strictly lower layer:
   4. Its key shapes in `packages/harness/src/logger/redaction.ts`.
   5. The stored enums: `ModelBackendSchema` (`shared/schemas/runFacts.ts`, gated in `model/reasoningLevel.ts`) and `ApiKeyProviderIdSchema` (`shared/schemas/prompts.ts`, checked by assignment in `routeDecision.ts`).
   6. Its endpoint row and region toggle in `shared/state/providerSettings.ts` (gated in `model/modelSettings.ts`); the toggle's placement in `packages/texra/src/shared/settingsView/settingSurfaces.ts` is checked when the catalog loads (`placeRows`), not by the compiler.
-  7. The app's picker source (`MODEL_SOURCES`, `packages/texra/src/shared/settingsView/settingsViewMessages.ts`), key page (`KEY_PAGES`, `packages/texra/src/model/providerPresentation.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`).
+  7. The app's key page (`KEY_PAGES`, `packages/texra/src/model/providerPresentation.ts`) and setup probe model (`SETUP_MODEL_BY_PROVIDER`, `packages/texra/src/model/setupModelDefaults.ts`); the Models tab's source order is `API_KEY_PROVIDER_IDS` itself.
 
   A quirk outside the request (the DashScope, Gemini and Kimi reasoning rules in `routeControls`, `packages/llm/src/models/reasoningChoice.ts`) and a subscription plan (a `PLAN_ROUTES` row in `packages/llm/src/errors.ts` with its settings and usage adapter) are not enforced.
 
