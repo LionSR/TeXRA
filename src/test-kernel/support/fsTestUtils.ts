@@ -73,7 +73,8 @@ export async function pathExists(path: string): Promise<boolean> {
     await stat(path);
     return true;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT')
+      return false;
     throw error;
   }
 }
@@ -85,6 +86,7 @@ export async function pathExists(path: string): Promise<boolean> {
  * standing up a root nothing reads.
  */
 export function unusedGlobalStorageFs(): Layer.Layer<GlobalStorageFs> {
+  // cast: no program under test reads the service, so it holds nothing.
   return Layer.succeed(GlobalStorageFs)({} as RootedFileSystem);
 }
 

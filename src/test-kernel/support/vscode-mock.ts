@@ -17,9 +17,11 @@ export const window = {
   }),
 };
 
+const workspaceFolders: Array<{ uri: { fsPath: string } }> = [];
+
 export const workspace = {
   fs: {},
-  workspaceFolders: [] as Array<{ uri: { fsPath: string } }>,
+  workspaceFolders,
   getConfiguration: (_section?: string) => ({
     get: <T>(_key: string, defaultValue?: T): T | undefined => defaultValue,
     update: async (..._: unknown[]) => undefined,
