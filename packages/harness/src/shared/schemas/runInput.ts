@@ -2,7 +2,8 @@
  * The facts a run's rows carry beside its messages: its usage, its input
  * (system text, instruction, activated skills) and what it is bound to.
  * Host-neutral so the run history (`runHistoryEvent.ts`) composes them without reaching the agent
- * layer; the agent modules import them back.
+ * layer; the agent modules import them back. The facts read back from those
+ * rows are `session/runFacts.ts`.
  */
 import { Schema, Struct } from 'effect';
 

@@ -8,14 +8,14 @@ For a diff under `packages/cli/`, also load the **texra-cli** skill: the TUI has
 
 The full zone list lives in `AGENTS.md` → "Separation of concerns: VS Code coupling". Run these greps on the diff:
 
-- **`grep -nE "from ['\"]vscode['\"]"`** in every directory of `VSCODE_FREE_ZONE_DIRS` (`eslint.config.mjs`). Any hit is a finding.
+- **`grep -nE "from ['\"]vscode['\"]"`** in every VS Code-free zone (root `AGENTS.md`). Any hit is a finding.
 - **New `from '@agent/*'` imports in `packages/harness/src/shared/`** → finding. `packages/harness/src/shared/` is for wire contracts and UI-shared message types; host-neutral orchestration belongs under `packages/harness/src/controllers/`.
 - **Direct `vscode.workspace.getConfiguration` / `workspace.fs` / `secrets`** in agnostic code → finding. There is no ambient platform object: configuration is the `ConfigProvider` on the `WorkspaceRoots` the caller holds, files are Effect's own `FileSystem` through the rooted `WorkspaceFs`/`StorageFs`/`GlobalStorageFs` views (`@platform/rootedFs`), and secrets are the `Secrets` service. There is no `platform()` locator to reach for. Note: `Settings` (`packages/harness/src/shared/config/settings.ts`) is host-neutral (VS Code-free) and is called directly from agnostic code too, not only VS Code-allowed code.
 - **`instanceof vscode.FileSystemError`** → `absentReason(err)` from `@utils/files/fsEntryExists` (`@texra-ai/harness/node` outside the harness).
 - **`vscode.FileType.File` / `.Directory`** → the Effect `FileSystem`'s `stat(...).type === 'File'` / `'Directory'`.
 - **`vscode.window.show*Message()` in business logic** → return error results; let the command/frontend layer handle UI.
 - **`process.env`, `os.homedir()`, raw `fs/promises`, `child_process.exec`** in agnostic zones → platform interfaces or `executeCommand` from `@utils/system/execUtils`.
-- **`processLayer()`** imported outside a composition root (`COMPOSITION_ROOT_FILES` in `eslint.config.mjs`) → bug. Process services are read from the Effect context the runtime serves.
+- **`processLayer()`** imported outside a composition root (TeXRA's `texraProcessLayer.ts`, the harness's `effect/sessions.ts`, the test kernel's `support/testKernel.ts`) → bug. Process services are read from the Effect context the runtime serves.
 
 ## 2. Effect Schema correctness
 

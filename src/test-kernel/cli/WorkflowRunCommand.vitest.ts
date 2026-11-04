@@ -1,4 +1,3 @@
-/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 

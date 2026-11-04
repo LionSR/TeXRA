@@ -20,7 +20,7 @@ import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
-import { NormalizedUsageSchema, RunInputSchema } from './runFacts';
+import { NormalizedUsageSchema, RunInputSchema } from './runInput';
 import {
   StoredMessageSchema,
   StoredOperationSchema,
