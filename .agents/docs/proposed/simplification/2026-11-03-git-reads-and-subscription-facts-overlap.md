@@ -49,24 +49,31 @@ Net elements target: delete four helpers in `gitOps.ts` and one runner in the
 subscription tool, add none beyond the three new reads. Before landing, run
 `npm run typecheck`, `npm run test:changed` and `npm run check:dead-code-ratchet`.
 
-## 2. Subscription provider facts live in three modules, two sharing a file name
+## 2. Subscription provider facts: two files share a name
 
-- `packages/harness/src/shared/model/subscriptionAuth.ts`: provider ids and the
-  names text uses (`SUBSCRIPTION_AUTH_NAMES`).
+Checked again against `main` after #14598, which moved the display names out
+of the harness.
+
+- `packages/harness/src/shared/model/subscriptionAuth.ts`: the provider ids
+  (`SUBSCRIPTION_AUTH_PROVIDERS`); its doc leaves what a person calls each
+  subscription to the app.
 - `packages/texra/src/shared/model/subscriptionAuth.ts`: the sign-in status
   schema and account labels (`codexAccountLabel`, `xaiAccountLabel`). Same
   file name, unrelated contents; import paths differ only by `@shared` versus
   `@texra/shared`.
 - `packages/harness/src/model/subscriptionAccess.ts`: the config key of each
   provider's "prefer subscription" switch.
-- `packages/texra/src/shared/model/subscriptionUsage.ts` and `codingPlans.ts`:
-  further per-provider presentation.
+- The names a person reads: `displayName` in
+  `packages/texra/src/controllers/modelAccess/subscriptionProviders.ts` and
+  `SUBSCRIPTION_AUTH_COPY` in `packages/texra/src/ui/copy/accountAuth.ts`.
 
-Why it matters: adding a subscription provider means editing at least four
-files in two packages, and the identical name invites importing the wrong one.
+The coding plans (`kimiCode`, `glmCodingPlan`) are a separate set:
+`packages/texra/src/shared/model/codingPlans.ts` and `subscriptionUsage.ts`
+describe them, not the sign-in providers above.
+
+Why it matters: the identical name invites importing the wrong module.
 Proposed follow-up: rename the texra file to what it holds (for example
-`subscriptionStatus.ts`) and fold the per-provider config key into the harness
-table that already lists the providers. Smaller and less urgent than item 1.
+`subscriptionStatus.ts`), six importers. Smaller and less urgent than item 1.
 
 ## Not found
 
