@@ -128,8 +128,9 @@ export type CliPlatformServices = SettingsStores & {
  * hooks and the runtime disposal that drains the usage log, then the stderr
  * and stdout flushes `process.exit` would otherwise cut short. `cliExit`
  * below runs it before `process.exit`, for the platform's own signal policy
- * and for the chat TUI's teardown alike, so the two paths cannot drift; `bin/texra.ts`'s `ensuring` runs the same shutdown
- * on the ordinary return path, where the event loop drains the streams.
+ * and for the chat TUI's teardown alike, so the two paths cannot drift;
+ * `bin/texra.ts`'s `ensuring` runs the same shutdown on the ordinary return
+ * path, where the event loop drains the streams.
  *
  * A program, not a run: the caller runs it on the default runtime rather
  * than the process runtime, because the lifecycle shutdown below disposes the
