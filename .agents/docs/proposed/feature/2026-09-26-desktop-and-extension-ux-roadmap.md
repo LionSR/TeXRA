@@ -63,8 +63,9 @@ Each item is independent and small enough for one PR.
    (`packages/desktop/src/renderer/main.ts`) could list recent projects; the
    data already feeds File › Open Recent.
 4. **Command palette reach.** The palette
-   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has no Open
-   Terminal / Files / Browser or switch-project commands.
+   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has Show
+   Terminal, Show Files and Show Browser (done); a switch-project command is
+   still missing.
 5. **Settings search.** Each settings catalog has its own search field
    (`SettingsCatalog.ts`); there is still no filter across the tabs.
    Paragraph-length descriptions that expose internals remain (for example

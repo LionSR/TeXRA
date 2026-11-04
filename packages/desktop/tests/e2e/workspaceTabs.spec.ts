@@ -461,6 +461,28 @@ test('keeps browser menus above native content and close controls inside tab bou
   await expect.poll(attachedViews).toBe(baseline + 1);
   await close.click();
   await expect.poll(attachedViews).toBe(baseline);
+
+  // The command palette reaches the same browser tab.
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+k' : 'Control+k',
+  );
+  await page
+    .locator('.desktop-command-palette-input')
+    .locator('input')
+    .fill('browser');
+  await page
+    .locator(
+      '.desktop-command-palette-item[data-command-id="texra.desktop.showBrowser"]',
+    )
+    .click();
+  await expect(browser).toBeVisible();
+  await expect.poll(attachedViews).toBe(baseline + 1);
+  await page.screenshot({
+    path: test.info().outputPath('browser-from-command-palette.png'),
+    animations: 'disabled',
+  });
+  await close.click();
+  await expect.poll(attachedViews).toBe(baseline);
 });
 
 test('preserves each project’s grid and unsaved editor when switching projects', async () => {

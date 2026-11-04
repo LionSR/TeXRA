@@ -132,6 +132,7 @@ export function buildDesktopMenuTemplate(
       submenu: [
         commandItem(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
         commandItem(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
+        commandItem(DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER),
         commandItem(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS),
         { type: 'separator' },
         { role: 'resetZoom' },

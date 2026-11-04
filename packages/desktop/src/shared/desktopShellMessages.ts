@@ -8,7 +8,7 @@ export const DESKTOP_SHELL_COMMANDS = {
   TOGGLE_LAYOUT: 'desktop:toggleLayout',
 } as const;
 
-const DesktopWorkbenchKindSchema = Schema.Literals(['logs']);
+const DesktopWorkbenchKindSchema = Schema.Literals(['logs', 'browser']);
 export type DesktopWorkbenchKind = typeof DesktopWorkbenchKindSchema.Type;
 
 export const DesktopOpenWorkbenchMessageSchema = Schema.Struct({
