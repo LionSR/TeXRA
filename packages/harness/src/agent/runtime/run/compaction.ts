@@ -67,9 +67,6 @@ interface CompactionInput {
   readonly cell: RunCell;
   /** The session's setting slots: the threshold is a live per-check read. */
   readonly stores: SettingsStores;
-  /** Compact regardless of the threshold: a `/compact`, or a request the
-   *  window could not hold (`overflow`); `null` leaves it to the threshold. */
-  readonly force: 'request' | 'overflow' | null;
   /** The `/compact` requests it answers, consumed with its edit. */
   readonly answers?: readonly RunHistoryDraft[];
 }
@@ -259,26 +256,6 @@ const land = Effect.fn('compaction.land')(function* (
 });
 
 /**
- * Compact the run's history when it reaches the configured share of the
- * bound model's context window, or when asked to, waiting for the summary.
- * Returns the folded state after the `context.edit` row, or the state
- * unchanged when nothing was compacted (below the threshold, too short to
- * summarize, or a summary attempt that failed, which is logged and shown,
- * never a stop).
- */
-const compactIfNeeded = Effect.fn('compaction.check')(function* (
-  state: RunState,
-  input: CompactionInput,
-): Effect.fn.Return<RunState, CellError | StateReadFailed> {
-  const reason = input.force ?? 'threshold';
-  if (input.force === null && !(yield* overThreshold(state, input)))
-    return state;
-  const summary = yield* summarize(state, input, reason);
-  if (summary === null) return yield* input.cell.current; // its attempts
-  return yield* land(input, summary, state.lastEdit, reason);
-});
-
-/**
  * The tool-use loop's compaction. Crossing the threshold starts the summary
  * on a fiber in the run's scope, and a later request boundary of the turn,
  * or its end at the latest, lands it as the edit of messages `[0, to)` at
@@ -316,7 +293,7 @@ export interface BackgroundCompaction {
 
 export const backgroundCompaction = Effect.fn('compaction.background')(
   function* (
-    input: Omit<CompactionInput, 'force' | 'bound' | 'cell'>,
+    input: Omit<CompactionInput, 'bound' | 'cell'>,
   ): Effect.fn.Return<BackgroundCompaction, never, Scope.Scope> {
     const scope = yield* Effect.scope;
     /** The summary being made off the loop, of the view at `base`. */
@@ -408,7 +385,9 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
     });
 
     /** Compact now, after any summary being made has landed as this edit:
-     *  a `/compact`'s answers ride it; an overflow's closes the failed request. */
+     *  a `/compact`'s answers ride it; an overflow's closes the failed request.
+     *  A history too short to summarize, or a summary attempt that failed
+     *  (logged and shown, never a stop), leaves the state unchanged. */
     const forced = Effect.fn('compaction.forced')(function* (
       cell: RunCell,
       bound: BoundModel,
@@ -420,13 +399,18 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         `${force === 'request' ? 'a /compact' : 'an overflow'} replaces it`,
         force === 'overflow' ? 'overflow' : 'threshold',
       );
-      return yield* compactIfNeeded(settled, {
-        ...input,
-        cell,
-        bound,
+      const summary = yield* summarize(
+        settled,
+        { ...input, cell, bound },
         force,
-        answers,
-      });
+      );
+      if (summary === null) return yield* cell.current; // its attempts
+      return yield* land(
+        { ...input, answers },
+        summary,
+        settled.lastEdit,
+        force,
+      );
     });
 
     const afterOverflow = Effect.fn('compaction.afterOverflow')(function* (

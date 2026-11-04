@@ -212,10 +212,10 @@ pattern, so the "options" are one choice spelled as several.
   `schema`; `document_task` (`packages/texra/src/tools/documents/DocumentTaskTool.ts:79`)
   always passes a task, files and `schema: null`. A tagged union
   `{kind:'agent'} | {kind:'task'}` makes the invalid mixes unrepresentable.
-- **`CompactionInput.force: 'request' | null`** (`packages/harness/src/agent/runtime/run/compaction.ts:106`):
-  the one caller (`:390`) always passes `'request'`, so the `null` branch at
-  `:295` never runs; the threshold path is already separate (`:397-420`).
-  Delete the field.
+- **`CompactionInput.force`**: done. `compactIfNeeded`, whose one caller
+  `forced` always passed `'request'` or `'overflow'`, is inlined there with its
+  never-run threshold branch, and the field is gone (the reason is `forced`'s
+  argument).
 - **Strategy hooks with one implementer each**: `runTurn`, `pauseNotice`,
   `onTurnSuccess`, `releaseSessionOwnership` (only
   `packages/texra/src/tools/agentCli/agentCliShared.ts:482-503`),
