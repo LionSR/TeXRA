@@ -33,7 +33,7 @@ import {
   type CliProcessRuntime,
 } from './cliProcessRuntime';
 import {
-  flushNdjsonStdout,
+  flushStdout,
   flushTextStderr,
   silentLogSink,
   writeTextStderr,
@@ -125,11 +125,11 @@ export type CliPlatformServices = SettingsStores & {
 
 /**
  * The canonical "shut down the CLI platform" sequence: lifecycle shutdown
- * hooks, then the NDJSON stdout flush, then the runtime disposal that drains
- * the usage log. `cliExit` below runs it before `process.exit`, for the
- * platform's own signal policy and for the chat TUI's teardown alike, so the
- * two paths cannot drift; `bin/texra.ts`'s `ensuring` runs the same steps on
- * the ordinary return path.
+ * hooks and the runtime disposal that drains the usage log, then the stderr
+ * and stdout flushes `process.exit` would otherwise cut short. `cliExit`
+ * below runs it before `process.exit`, for the platform's own signal policy
+ * and for the chat TUI's teardown alike, so the two paths cannot drift; `bin/texra.ts`'s `ensuring` runs the same shutdown
+ * on the ordinary return path, where the event loop drains the streams.
  *
  * A program, not a run: the caller runs it on the default runtime rather
  * than the process runtime, because the lifecycle shutdown below disposes the
@@ -157,7 +157,7 @@ function cliPlatformShutdownSequence(): Effect.Effect<void> {
     // A closed stderr pipe must not prevent signal-based termination.
     yield* bestEffort('flushing stderr', flushTextStderr());
     // A closed stdout pipe must not prevent signal-based termination.
-    yield* bestEffort('flushing stdout', flushNdjsonStdout());
+    yield* bestEffort('flushing stdout', flushStdout());
   });
 }
 
@@ -354,14 +354,11 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         // extension and desktop hosts do: a background `bash` run is its own
         // process group (see execUtils), which its lifeline kills only once
         // `texra` is gone, and this close stops it first so its run finishes.
-        // Then the project scope with a final NDJSON flush, and the runtime
-        // last, draining the usage log.
+        // Then the project scope, and the runtime last, draining the usage
+        // log.
         const scope = Scope.makeUnsafe();
         yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
-        yield* Scope.addFinalizer(
-          scope,
-          closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
-        );
+        yield* Scope.addFinalizer(scope, closeProject);
         yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
         const platform = {
           roots,
