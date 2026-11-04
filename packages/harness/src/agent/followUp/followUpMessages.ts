@@ -48,14 +48,13 @@ interface FollowUpDisplay {
  *  renderers never re-extract it from the text. */
 export function followUpDisplay(followUp: FollowUpContent): FollowUpDisplay {
   const text = followUp.displayText ?? followUp.text;
-  const scriptSummary = isChild(followUp.from)
-    ? parseScriptDeliverySummary(followUp.text)
-    : undefined;
+  const { from } = followUp;
+  const scriptSummary =
+    from.kind === 'run' && from.relation === 'child'
+      ? parseScriptDeliverySummary(followUp.text)
+      : undefined;
   return scriptSummary ? { text, scriptSummary } : { text };
 }
-
-const isChild = (from: FollowUpSender): boolean =>
-  from.kind === 'run' && from.relation === 'child';
 
 /** What a delivery or notice shows instead of its envelope: the envelope's
  *  summary, decided once as the row is queued. A person's own message is
