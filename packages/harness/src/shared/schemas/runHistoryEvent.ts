@@ -168,6 +168,9 @@ export const ModelMessagePayloadSchema = Schema.Union([
     purpose: InvocationPurposeSchema,
     error: RetryErrorInfoSchema,
     next: FailedNextSchema,
+    /** The priced usage of a response the provider billed before refusing
+     *  it (Anthropic's overflowed turn), counted like a response's. */
+    usage: Schema.optional(NormalizedUsageSchema),
   }),
   /** The commit barrier: the accepted remote operation, committed before
    *  `observe` is called. `deadlineAtMs` is the limit admitted with the

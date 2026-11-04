@@ -397,7 +397,7 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
       return Result.succeed({
         ...state,
         messages,
-        invocation: state.invocation?.current.failed ? null : state.invocation,
+        invocation: p.trigger === 'overflow' ? null : state.invocation,
         overflowCompacted: state.overflowCompacted || p.trigger === 'overflow',
         continuation: null,
         // The next step renders the system text again, every change in it.

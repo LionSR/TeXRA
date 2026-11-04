@@ -247,8 +247,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // the session's own failure (no upcaster: an earlier build would fail the
   // classification as damaged).
   // v11: no `context-window-exceeded` finish reason: an overflow is the
-  // `context-overflow` failure on every protocol (no upcaster: an earlier
-  // build's overflowed turn would read as a completed one).
+  // `context-overflow` failure on every protocol, and a `failed` row carries
+  // the priced `usage` of a response the provider billed before refusing it
+  // (no upcaster: an earlier build's overflowed turn would read as a
+  // completed one).
   'model.message': { version: 11, upcast: [], listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (no upcaster, as
   // `run.config`: an earlier build's edit of another cause would fail its

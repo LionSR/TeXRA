@@ -197,6 +197,7 @@ const MESSAGE_HANDLERS: {
         ...updated,
         lastError: asked ? p.error : state.lastError,
         continuation: next.kind === 'unchain' ? null : state.continuation,
+        usage: addTurnUsage(state.usage, p.usage ?? null),
       });
     }),
   response: (state, p, copies) =>

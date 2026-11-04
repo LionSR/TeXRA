@@ -1394,9 +1394,12 @@ show` print the same notice, and the new `texra agents customize`,
   compact, or a single attachment larger than the window, still fails with
   the provider's message. Anthropic reports an overflowed request as a
   finished turn, which counted as a completed answer; it is now the same
-  `context-overflow` failure every other provider raises. SDK: the
+  `context-overflow` failure every other provider raises, and what Anthropic
+  billed for it still counts toward the run's usage. SDK: the
   `context-window-exceeded` finish reason is gone from `TurnResult` and the
-  stored turn, and a compaction's `trigger` may be `overflow`.
+  stored turn, a compaction's `trigger` may be `overflow`, `ModelError`
+  carries the `usage` of a response the provider billed before refusing it,
+  and a `failed` row carries that usage priced.
 - **An answer the model could not finish says so.** When a reply stopped at
   the model's output limit or at the provider's content filter, it was shown
   as a complete answer. The assistant row in the progress view and the

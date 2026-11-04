@@ -454,11 +454,16 @@ function anthropicWire() {
           'unsupported',
         );
       // The one overflow every protocol reports the same way: the error
-      // the other providers raise as an HTTP failure.
+      // the other providers raise as an HTTP failure. Anthropic billed the
+      // input it read before stopping, so the failure carries its usage.
       if (reason === 'model_context_window_exceeded')
-        return yield* fail(
-          "Anthropic stopped: the request exceeds the model's context window.",
-          'context-overflow',
+        return yield* Effect.fail(
+          new ModelError({
+            kind: 'context-overflow',
+            message:
+              "Anthropic stopped: the request exceeds the model's context window.",
+            usage: canonicalUsage(usage),
+          }),
         );
       stopped = true;
       const refusal = stop.stop_details;
