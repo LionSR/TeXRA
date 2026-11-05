@@ -91,7 +91,7 @@ A [`PluginDefinition`](./harness/plugins#plugindefinition) can declare:
 - **`processLayer` and `sessionLayer`**: lazy Effect `Layer`s ([`ProcessPluginLayer`](./harness/plugins#processpluginlayer), [`SessionPluginLayer`](./harness/plugins#sessionpluginlayer)) built when a step first pins the plugin. Work that outlives a step keeps the session layer alive with [`PluginHold`](./harness/plugins#pluginhold).
 - **`prompt`**: [`PromptSection`](./harness/plugins#promptsection) appended to the system prompt while active.
 - **`decision`**: [`RequestDecisionHook`](./harness/plugins#requestdecisionhook) run when a request of the plugin's kind is decided.
-- **`factKinds`**: [`FactKind`](./harness/plugins#factkind) schemas, upcasters and fork policy for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`; `fork: 'copy'` carries a run's row into its forks).
+- **`factKinds`**: [`FactKind`](./harness/plugins#factkind) schemas and fork policy for versioned `plugin.fact` rows committed by the plugin (latest values appear on `RunView.facts`; `fork: 'copy'` carries a run's row into its forks).
 - **`agentBlock`**: [`AgentBlock`](./harness/plugins#agentblock) claiming a top-level YAML key in agent definitions (read via [`agentBlockOf`](./harness/plugins#agentblockof)) to run a structured recipe script.
 
 An availability `check(inputs)` returns `{ available, statusLabel?, statusDetail? }` from one observation of the asking workspace. The check owns optional-detail failures: log the cause and retain an availability result already established. The harness owns the complete check's deadline, cached results and refresh.

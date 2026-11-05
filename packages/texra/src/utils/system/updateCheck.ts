@@ -54,7 +54,6 @@ export const UPDATE_CHECK_SKIP_ENV = 'TEXRA_NO_UPDATE_CHECK';
 export const UPDATE_CHECKS: ValueFamily<UpdateCheckRecord> = {
   name: 'update-check',
   schema: UpdateCheckRecordSchema,
-  deletable: false,
 };
 
 /** Each host's last update check and the last release it announced. */

@@ -192,7 +192,7 @@ highest version each kind was written at
 
 The store gate refuses a store that names a core kind this build lacks, or a
 known kind at a version above the one this build reads
-(`controllers/session/rowCodec.ts:372-398`). A plugin kind whose plugin this
+(`controllers/session/rowCodec.ts:369-395`). A plugin kind whose plugin this
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
 gate MUST run at open and inside every outermost transaction that writes or
@@ -206,22 +206,22 @@ retired, each with what its rows fed (`RETIRED_ROW_KINDS`,
 `shared/schemas/rowVersions.ts`): a `display` row is skipped on read, logged
 once, and its run still resumes; an `execution` row makes its run an earlier
 build's (`DatabaseRowEarlier`), failing only that run's reads
-(`controllers/session/rowCodec.ts`, `rowUpcasts`).
+(`controllers/session/rowCodec.ts`, `rowRefusal`).
 
-Before 1.0 a core kind changes with no upcaster. Its version is bumped when an
-older build's row would read wrong (`shared/schemas/rowVersions.ts:74-198`). A
-plugin's fact kind versions its own `value` and may carry upcasters for it
-(`tools/plugins.ts:78`, `controllers/session/rowCodec.ts:329`). A row is then
-classified by the reader (`controllers/session/rowCodec.ts:268-334`):
+A kind changes with no upcaster: its version is bumped when an older build's
+row would read wrong (`shared/schemas/rowVersions.ts`), and a stored row reads
+at its kind's version only. A plugin's fact kind versions its own `value` the
+same way (`tools/plugins.ts`). A row is then classified by the reader
+(`controllers/session/rowCodec.ts`):
 
 - **above the kind's current**: `DatabaseStoreNewer`
   (`controllers/session/rowCodec.ts:290-291`)
-- **below the lowest readable**: `DatabaseRowEarlier`, the run listed as an
+- **below the kind's current**: `DatabaseRowEarlier`, the run listed as an
   earlier build's (`controllers/session/rowCodec.ts:292-295`)
 - **readable, payload fails parse**: `DatabaseRowCorrupt`, naming its commit
   (`controllers/session/rowCodec.ts:308-320`)
-- **a plugin kind this build lacks**: read as written, its value neither
-  upcast nor checked, with `unavailable` saying why; the row is unchanged, and
+- **a plugin kind this build lacks**: read as written, its value not
+  checked, with `unavailable` saying why; the row is unchanged, and
   a run holding one is refused resume as `pluginUnavailable`, naming the plugin
   (`controllers/session/rowCodec.ts`, `agent/storage/resumability.ts`); a
   retired built-in kind (`RETIRED_PLUGIN_FACTS`) is an earlier build's

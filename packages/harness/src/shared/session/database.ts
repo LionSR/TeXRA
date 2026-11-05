@@ -203,29 +203,26 @@ export class DatabaseRowEarlier extends Schema.TaggedError<DatabaseRowEarlier>()
  * no longer decodes fails that read.
  */
 export interface CurrentValues {
-  readonly get: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
+  readonly get: <T>(
+    family: ValueFamily<T>,
     key: string,
   ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
   /**
    * Change one value from the one read under the write lock: `change`
    * answers with its result and the next value, with its result alone to
-   * write nothing, or refuses and nothing is written. Only a deletable
-   * family's change may answer `undefined`, which deletes the row.
+   * write nothing, or refuses and nothing is written. A next value of
+   * `undefined` deletes the row.
    */
-  readonly modify: <T, D extends boolean, A, E = never>(
-    family: ValueFamily<T, D>,
+  readonly modify: <T, A, E = never>(
+    family: ValueFamily<T>,
     key: string,
     change: (
       current: T | undefined,
-    ) => Result.Result<
-      readonly [A] | readonly [A, D extends true ? T | undefined : T],
-      E
-    >,
+    ) => Result.Result<readonly [A] | readonly [A, T | undefined], E>,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
-  readonly list: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
+  readonly list: <T>(
+    family: ValueFamily<T>,
   ) => Effect.Effect<
     readonly { readonly key: string; readonly value: T }[],
     DatabaseReadFailed
@@ -237,7 +234,7 @@ export interface CurrentValues {
    * retried, so no change is missed.
    */
   readonly changes: (
-    family: Pick<ValueFamily<unknown, boolean>, 'name'>,
+    family: Pick<ValueFamily<unknown>, 'name'>,
     keys: readonly string[],
   ) => Stream.Stream<void>;
 }

@@ -150,7 +150,6 @@ export type InquiryThreadRecord = typeof InquiryThreadRecordSchema.Type;
 export const INQUIRY_THREADS: ValueFamily<InquiryThreadRecord> = {
   name: 'external-inquiry/thread',
   schema: InquiryThreadRecordSchema,
-  deletable: false,
 };
 
 /** The row's value: the summary less its asking run, which is the row's
@@ -222,7 +221,6 @@ export const EXTERNAL_INQUIRY_THREAD_KIND = {
   kind: 'thread',
   version: 1,
   schema: InquiryThreadRowSchema,
-  upcasters: [],
   // A thread is the plugin's own aggregate, never a run's row.
   fork: 'drop',
   accepts: acceptsThreadRow,
