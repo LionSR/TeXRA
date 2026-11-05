@@ -54,6 +54,7 @@ import {
   type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
+  WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -298,21 +299,34 @@ function withCliService<A>(
   );
 }
 
+/** What the link's starter says instead of starting a service. */
+const NONE_RUNNING = 'no TeXRA service is running';
+
 /**
- * The storage root's running service, linked for the caller's scope, or a
- * failure naming why none is: `TEXRA_NO_SERVICE`, Windows, or none running.
- * A command never starts one; the chat and `texra tasks start` do
- * ({@link startCliService}, {@link connectCliService}).
+ * The storage root's running service, linked for the caller's scope, or
+ * undefined when there is none to link: `TEXRA_NO_SERVICE`, Windows, or no
+ * service running. A command never starts one; the chat and `texra tasks
+ * start` do ({@link startCliService}, {@link connectCliService}). A service
+ * that is there but cannot be linked (a newer build's, an unreadable
+ * record) fails, so no command works beside it on the project's store.
  */
 export function linkRunningCliService(
   storageRoot: string,
-): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
+): Effect.Effect<ServiceLink | undefined, Error, Scope.Scope | GlobalValues> {
   return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
     off
-      ? Effect.fail(new Error(`${NO_SERVICE} is set`))
-      : linkService(
-          storageRoot,
-          Effect.fail(new Error('no TeXRA service is running')),
+      ? Effect.succeed(undefined)
+      : linkService(storageRoot, Effect.fail(new Error(NONE_RUNNING))).pipe(
+          Effect.catch((error) =>
+            error.reason === WINDOWS_UNSUPPORTED ||
+            error.reason.endsWith(NONE_RUNNING)
+              ? Effect.succeed(undefined)
+              : Effect.fail(
+                  new Error(
+                    `The TeXRA service could not be reached: ${error.reason}`,
+                  ),
+                ),
+          ),
         ),
   );
 }

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, Exit, Result, Scope } from 'effect';
+import { Cause, Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
@@ -300,11 +300,9 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         // process links to it for its life and opens no store of the
         // project, as a window does. None running (or none possible) is
         // the in-process path below.
-        const linked = yield* linkRunningCliService(context.storageRoot).pipe(
+        const service = yield* linkRunningCliService(context.storageRoot).pipe(
           Scope.provide(projectScope),
-          Effect.result,
         );
-        const service = Result.isSuccess(linked) ? linked.success : undefined;
         // One process, one project: the process roots are the `--cwd` workspace,
         // over the config provider the startup read already opened — the project
         // `.texra/config.json` layered over the user-level

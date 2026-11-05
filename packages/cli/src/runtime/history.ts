@@ -7,6 +7,7 @@ import {
   isRunId,
   isTaskConfig,
   RUN_OUTCOME,
+  RUN_SUBSTATE,
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
@@ -223,20 +224,15 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     id: RunId,
     options: { includeFullConversation?: boolean } = {},
   ) {
-    const [exported, detail, generatedFiles] = yield* Effect.all(
-      [
-        reads.exportInput(id),
-        reads.detail(id),
-        listRunGeneratedFiles(id, storage),
-      ],
+    const [config, detail, generatedFiles] = yield* Effect.all(
+      [reads.config(id), reads.detail(id), listRunGeneratedFiles(id, storage)],
       { concurrency: 3 },
     );
-    const { config } = exported;
-    const conversation = exported.exportInput?.nodes ?? [];
     const {
       run,
       result,
       report,
+      conversation,
       workspaceFiles,
       resumable: checkpointPresent,
     } = detail;
@@ -252,7 +248,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const standing = cliRunStanding({
       resumable: config !== null && checkpointPresent,
       outcome: run?.durableOutcome,
-      paused: run?.paused,
+      paused: run?.substate === RUN_SUBSTATE.PAUSED,
     });
     const conversationPreview = createConversationPreview(conversation);
     const fullConversation = options.includeFullConversation

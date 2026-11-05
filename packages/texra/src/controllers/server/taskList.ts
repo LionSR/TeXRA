@@ -7,11 +7,15 @@
  */
 import * as path from 'node:path';
 
-import { Effect, Option, Result, Schema } from 'effect';
+import { Effect, Option, Result, Schema, Struct } from 'effect';
 
 import { type Session } from '@texra-ai/harness';
 import { GlobalValues, readSessionView } from '@texra-ai/harness/host';
-import { type SessionView, isLiveRun } from '@texra-ai/harness/schemas';
+import {
+  type RunView,
+  type SessionView,
+  isLiveRun,
+} from '@texra-ai/harness/schemas';
 import {
   resolveWorkspaceStoragePath,
   WORKSPACE_STORES,
@@ -99,3 +103,30 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
   ]);
   return newest.filter((task) => kept.has(task));
 });
+
+/** What a history detail prints of a run beyond its records: the launch
+ *  facts the view holds, by field (`task.detail` carries `RunViewSchema`
+ *  picked to them). */
+export const RUN_LAUNCH_FACT_FIELDS = [
+  'launchedAt',
+  'parentId',
+  'description',
+  'statusKey',
+  'durableOutcome',
+  'substate',
+  'model',
+] as const;
+/** A run's launch facts: `RunView` picked to `RUN_LAUNCH_FACT_FIELDS`. */
+export type RunLaunchFacts = Pick<
+  RunView,
+  (typeof RUN_LAUNCH_FACT_FIELDS)[number]
+>;
+/** The launch facts of `run`, or null for a run the view no longer lists. */
+export const runLaunchFacts = (
+  run: RunView | undefined,
+): RunLaunchFacts | null =>
+  run === undefined
+    ? null
+    : Struct.pick<RunView, typeof RUN_LAUNCH_FACT_FIELDS>(
+        RUN_LAUNCH_FACT_FIELDS,
+      )(run);

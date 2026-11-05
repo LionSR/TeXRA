@@ -7,21 +7,19 @@
  */
 import { Effect, SubscriptionRef } from 'effect';
 
-import {
-  Rejected,
-  type AgentRunListingEntry,
-  type LocalSession,
-  type RunDeletion,
-  type RunResult,
-  type SessionOpenError,
+import type {
+  AgentRunListingEntry,
+  ExportNode,
+  LocalSession,
+  RunDeletion,
+  RunResult,
+  SessionOpenError,
 } from '@texra-ai/harness';
 import type { AssembleTraceResult } from '@texra-ai/harness/host';
 import {
   ensureError,
-  RUN_SUBSTATE,
   type AgentConfig,
   type RunId,
-  type RunView,
   type RunWorkspaceFile,
 } from '@texra-ai/harness/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
@@ -30,27 +28,19 @@ import type {
   ServiceClient,
   ServiceLink,
 } from '@texra/controllers/server/client';
+import {
+  runLaunchFacts,
+  type RunLaunchFacts,
+} from '@texra/controllers/server/taskList';
 
-/** The launch facts of a run as its project's view holds them. */
-export interface CliRunFacts {
-  readonly launchedAt: number;
-  readonly parentId: RunId | null;
-  readonly description: string | null;
-  readonly statusKey: RunView['statusKey'];
-  readonly durableOutcome: RunView['durableOutcome'];
-  /** A stop rested the run (the fold's paused substate). */
-  readonly paused: boolean;
-  /** The model the run is on, as the view folds it. */
-  readonly model: string | null;
-}
-
-/** What `texra history show` prints of a run beyond its setup and its
- *  conversation. */
+/** What `texra history show` prints of a run beyond its setup. */
 export interface CliRunDetail {
-  /** Null for a run the view no longer lists. */
-  readonly run: CliRunFacts | null;
+  /** Its launch facts; null for a run the view no longer lists. */
+  readonly run: RunLaunchFacts | null;
   readonly result: RunResult | null;
   readonly report: string | null;
+  /** Its conversation as every conversation view renders it. */
+  readonly conversation: readonly ExportNode[];
   readonly workspaceFiles: readonly RunWorkspaceFile[];
   /** Its rows hold a point it continues from. */
   readonly resumable: boolean;
@@ -62,6 +52,16 @@ export interface CliRunExport {
   readonly config: AgentConfig | null;
   readonly exportInput: ChatExportInput | null;
 }
+
+/** What a read of a run the store does not hold answers. */
+const NO_DETAIL: CliRunDetail = {
+  run: null,
+  result: null,
+  report: null,
+  conversation: [],
+  workspaceFiles: [],
+  resumable: false,
+};
 
 export interface CliRunReads {
   /** The runs a person started in the project, newest first. */
@@ -85,24 +85,6 @@ export interface CliRunReads {
   ) => Effect.Effect<RunDeletion, Error>;
 }
 
-/** What a deletion of a run the service does not hold names: nothing. */
-const NO_RUNS: readonly RunId[] = [];
-
-/** The launch facts the detail carries, from the run's view row. */
-function runFacts(run: RunView | undefined): CliRunFacts | null {
-  return run === undefined
-    ? null
-    : {
-        launchedAt: run.launchedAt,
-        parentId: run.parentId,
-        description: run.description,
-        statusKey: run.statusKey,
-        durableOutcome: run.durableOutcome,
-        paused: run.substate === RUN_SUBSTATE.PAUSED,
-        model: run.model,
-      };
-}
-
 /** The reads over the session this process holds, opened by the first. */
 export function localRunReads(
   session: Effect.Effect<LocalSession, SessionOpenError>,
@@ -121,14 +103,15 @@ export function localRunReads(
         return Effect.all(
           {
             run: Effect.map(opened.view.read([runId]), (view) =>
-              runFacts(view.runs.get(runId)),
+              runLaunchFacts(view.runs.get(runId)),
             ),
             result: stored.readResult(),
             report: stored.readReport(),
+            conversation: stored.readConversation(),
             workspaceFiles: stored.readWorkspaceFiles(),
             resumable: stored.readResumable(),
           },
-          { concurrency: 5 },
+          { concurrency: 6 },
         );
       }),
     exportInput: (runId) =>
@@ -147,7 +130,9 @@ export function localRunReads(
 
 /**
  * The reads over the service that holds the project, through `link`. A
- * call while the link holds no service fails with why (`ServiceLink.away`).
+ * call while the link holds no service fails with why (`ServiceLink.away`);
+ * a run the service does not hold reads as absent, as the local store
+ * answers it.
  */
 export function serviceRunReads(
   link: ServiceLink,
@@ -183,10 +168,8 @@ export function serviceRunReads(
             ),
           ),
     );
-  const listRuns = () =>
-    ask((client) => client['tasks.history']({ workspace }));
   return {
-    listRuns,
+    listRuns: () => ask((client) => client['tasks.history']({ workspace })),
     exists: (runId) =>
       records(
         (client) =>
@@ -196,59 +179,24 @@ export function serviceRunReads(
     config: (runId) =>
       records((client) => client['task.config']({ workspace, runId }), null),
     detail: (runId) =>
-      ask((client) => client['task.detail']({ workspace, runId })),
+      records(
+        (client) => client['task.detail']({ workspace, runId }),
+        NO_DETAIL,
+      ),
     exportInput: (runId) =>
       records((client) => client['task.exportInput']({ workspace, runId }), {
         config: null,
         exportInput: null,
       }),
     trace: (runId) =>
-      ask((client) => client['task.exportTrace']({ workspace, runId })),
-    skills: (runId) =>
-      ask((client) => client['task.skills']({ workspace, runId })),
-    // Each run's deletion is the session's own request, so a run the
-    // service still runs is refused as it would be in a window; `all` is
-    // every listed task, whose deletion takes its children with it.
-    deleteRuns: (target) =>
-      Effect.gen(function* () {
-        const runIds =
-          target === 'all'
-            ? (yield* listRuns()).map((entry) => entry.id)
-            : yield* records(
-                (client) =>
-                  Effect.as(
-                    client['task.config']({ workspace, runId: target }),
-                    [target],
-                  ),
-                NO_RUNS,
-              );
-        const deleted: RunId[] = [];
-        const failed: RunDeletion['failed'][number][] = [];
-        for (const runId of runIds) {
-          const removal = yield* Effect.result(
-            Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
-              client === null
-                ? Effect.flatMap(SubscriptionRef.get(link.away), (reason) =>
-                    Effect.fail(new Rejected({ reason })),
-                  )
-                : client['task.request']({
-                    workspace,
-                    request: { kind: 'run.delete', runId },
-                  }).pipe(
-                    Effect.mapError((error) =>
-                      error._tag === 'RpcClientError'
-                        ? new Rejected({
-                            reason: `The TeXRA service did not answer: ${error.message}`,
-                          })
-                        : error,
-                    ),
-                  ),
-            ),
-          );
-          if (removal._tag === 'Success') deleted.push(runId);
-          else failed.push({ runId, error: removal.failure });
-        }
-        return { listed: runIds.length, deleted, active: [], failed };
+      records((client) => client['task.exportTrace']({ workspace, runId }), {
+        status: 'config_missing',
       }),
+    skills: (runId) =>
+      records((client) => client['task.skills']({ workspace, runId }), []),
+    // The service's own deletion, with the ownership checks a bulk delete
+    // keeps and a single one relaxes.
+    deleteRuns: (target) =>
+      ask((client) => client['tasks.delete']({ workspace, target })),
   };
 }

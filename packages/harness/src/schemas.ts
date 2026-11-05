@@ -46,6 +46,7 @@ export {
   isLiveRun,
   requestAnswerability,
   rollupOf,
+  RunViewSchema,
   sessionActivity,
   type Attention,
   type RequestAnswerability,

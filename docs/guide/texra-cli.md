@@ -477,10 +477,10 @@ can attach to it while it works. `texra resume <id>` of a conversation the
 service is running continues it there. When the service cannot start, or
 `TEXRA_NO_SERVICE=1` is set, the chat runs in its own process and says so
 once; other terminals then do not see it. While a service holds a project,
-every `texra` command in that folder reads the project's settings and tasks
-through it (`texra history`, `/resume`, `/status`) and opens no store of its
-own, as a window does. `texra run`, `-p` and `--output-format ndjson` always
-run in their own process.
+a `texra` command in that folder reads the project's settings and stored
+tasks through it (`texra history`, `texra resume`, the chat's `/resume` and
+`/status`) and opens no store of its own, as a window does. `texra run`,
+`-p` and `--output-format ndjson` always run in their own process.
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first

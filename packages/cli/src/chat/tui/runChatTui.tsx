@@ -66,6 +66,7 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { linkOutage, WINDOW_OUTDATED } from '@texra/controllers/server/client';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -183,6 +184,16 @@ export async function runChat(
         presentsStoreMovedAside: true,
       });
       const served = services.service !== undefined;
+      // A service that goes away mid-chat is started again, so the link
+      // reaches it; one that refuses this build (newer) is left alone.
+      if (services.service !== undefined)
+        yield* Effect.forkScoped(
+          Stream.runForEach(linkOutage(services.service), (reason) =>
+            reason === null || reason === WINDOW_OUTDATED
+              ? Effect.void
+              : Effect.ignore(startCliService(context.storageRoot)),
+          ),
+        ).pipe(Scope.provide(chatScope));
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;
       // Said once the view is bound, which the transcript rows need.

@@ -23,8 +23,8 @@
  *   `task.ended`: the outcome it ends with.
  * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
  *   setup, and what its transcript exports read, from the service's own
- *   records; `tasks.history`, `task.detail` and `task.skills`: what the
- *   CLI's history and status read of them beyond that.
+ *   records; `tasks.history`, `task.detail`, `task.skills` and
+ *   `tasks.delete`: what the CLI's history and status read and delete.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
@@ -40,9 +40,9 @@ import {
   LaunchNoticeSchema,
   RunEndSchema,
   RunIdSchema,
-  RunOutcomeSchema,
   RunRecordFieldsSchema,
   RunResultSchema,
+  RunViewSchema,
   RunWorkspaceFileSchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
@@ -65,7 +65,9 @@ import {
   HostCapabilitySchema,
   HostFrameSchema,
 } from './hostCalls';
-import type { ValueFamily } from '@texra-ai/harness/host';
+import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
+
+import { RUN_LAUNCH_FACT_FIELDS } from './taskList';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
@@ -91,7 +93,7 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 58,
+  version: 60,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
@@ -105,8 +107,9 @@ export const PROTOCOL: {
     'task.exportTrace': 'e14a1baf0863',
     'task.exportInput': 'fefc9f82f1e2',
     'tasks.history': '9de0043e6a9e',
-    'task.detail': 'efd931cc1f33',
+    'task.detail': '5a78e8b493e2',
     'task.skills': 'b842fcc8e960',
+    'tasks.delete': 'c7fc69cb1d9c',
     'host.attach': '153808303ff7',
     'state.get': '221cc7263384',
     'state.set': 'e377b902a4e3',
@@ -306,20 +309,12 @@ export const TexraRpcs = RpcGroup.make(
     payload: { workspace, runId: RunIdSchema },
     success: Schema.Struct({
       run: Schema.NullOr(
-        Schema.Struct({
-          launchedAt: Schema.Int.check(Schema.isGreaterThan(0)),
-          parentId: Schema.NullOr(RunIdSchema),
-          description: Schema.NullOr(Schema.String),
-          statusKey: Schema.Literals(RUN_STATUS_KEYS),
-          durableOutcome: Schema.NullOr(RunOutcomeSchema),
-          /** A stop rested the run (the fold's paused substate). */
-          paused: Schema.Boolean,
-          /** The model the run is on, as the view folds it. */
-          model: Schema.NullOr(Schema.String),
-        }),
+        RunViewSchema.mapFields(Struct.pick(RUN_LAUNCH_FACT_FIELDS)),
       ),
       result: Schema.NullOr(RunResultSchema),
       report: Schema.NullOr(Schema.String),
+      /** Its conversation as every conversation view renders it. */
+      conversation: Schema.Array(ExportNodeSchema),
       workspaceFiles: Schema.Array(RunWorkspaceFileSchema),
       resumable: Schema.Boolean,
     }),
@@ -330,6 +325,23 @@ export const TexraRpcs = RpcGroup.make(
     payload: { workspace, runId: RunIdSchema },
     success: Schema.Array(Schema.String),
     error: TaskRecordsFailed,
+  }),
+  /** Delete one stored run, or every one (`LocalSession.deleteRuns`): a run
+   *  the service still runs is skipped and reported as `active`. */
+  Rpc.make('tasks.delete', {
+    payload: {
+      workspace,
+      target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
+    },
+    success: Schema.Struct({
+      listed: Schema.Int,
+      deleted: Schema.Array(RunIdSchema),
+      active: Schema.Array(RunIdSchema),
+      failed: Schema.Array(
+        Schema.Struct({ runId: RunIdSchema, error: RequestErrorSchema }),
+      ),
+    }),
+    error: TaskFailed,
   }),
   Rpc.make('host.attach', {
     payload: {

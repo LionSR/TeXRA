@@ -1,4 +1,3 @@
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { defineCommand } from 'citty';
 import { Effect, absurd } from 'effect';
 
@@ -162,11 +161,8 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
   if (options.target === 'all' && !options.yes) {
-    // A full wipe clears every listed task, each with the children it
-    // spawned.
-    const count = (yield* stores.reads.listRuns()).length;
     writeTextStderr(
-      `Refusing to delete ${formatResultCount(count, 'stored task')}. Re-run with --yes to confirm.`,
+      `Refusing to delete every stored task in ${context.cwd}. Re-run with --yes to confirm.`,
     );
     return CliExitCode.Usage;
   }

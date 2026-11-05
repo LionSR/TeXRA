@@ -3137,7 +3137,9 @@ async function validateOpenTimePrompt() {
       env: project.ptyEnv,
       onData: (_data, pty) => {
         const plain = stripVTControlCharacters(pty.output);
-        if (phase !== 'opening' || !plain.includes('Idle')) return;
+        // A fresh chat has no run, so no status label: its input hint is
+        // the sign that it is open.
+        if (phase !== 'opening' || !plain.includes('/ commands')) return;
         phase = 'open';
         pty.setTimer(() => {
           // Nothing resumed on its own while the chat opened.
