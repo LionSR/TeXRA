@@ -13,33 +13,18 @@ import { GlobalValues } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { GlobalDatabase } from '@shared/session/database';
-import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
-import { teamMembers } from '@texra/shared/agentTeams';
-import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
-import type { Plugin } from '@tools/plugins';
-import { ToolRegistry, toolTable } from '@tools/toolTable';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
   FakeSecrets,
+  HARNESS_APP,
+  type TestApp,
   type FakeHostOverrides,
   type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
 import type { StateStore } from '@texra-ai/harness/host';
-
-/** TeXRA's plugins that own row kinds or an agent-file block, as those
- *  only: what a store under test reads their rows with, and a catalog under
- *  test scans the bundled agents with. */
-const FACT_KIND_PLUGINS: readonly Plugin[] = [
-  {
-    id: 'documents',
-    factKinds: APP_FACT_KINDS.documents,
-    agentBlock: DOCUMENT_TASK_BLOCK,
-  },
-  { id: 'external-inquiry', factKinds: APP_FACT_KINDS['external-inquiry'] },
-];
 
 /** The process's `GlobalValues` over a global database layer, as
  *  `processLayer` serves them, for a suite that opens a real global root. */
@@ -54,18 +39,13 @@ export const globalValuesOver = <E, R>(
     database,
   );
 
-/** The plugin table a store or catalog suite runs over: every row kind and
- *  agent-file block TeXRA's plugins own, and no tool. */
-export const storePluginsLayer = Layer.succeed(ToolRegistry)(
-  toolTable([...FACT_KIND_PLUGINS]),
-);
-
 /**
  * A host's process ports and the workspace roots installed beside them, plus the
  * setup platform a setup-tool suite provides (absent on every other host:
  * a setup-tool call there is a test error).
  */
 export interface FakeHost {
+  readonly app: TestApp;
   readonly platform: FakeProcessPorts;
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
@@ -87,6 +67,7 @@ export function createFakeHost(
     ...platformOverrides
   } = overrides;
   return {
+    app: options.app ?? HARNESS_APP,
     platform: createFakePlatform(options, platformOverrides),
     roots: createFakeWorkspaceRoots(options, {
       config,
@@ -133,26 +114,8 @@ export const installFakeHost = (
   );
 
 /**
- * The setup platform of every test's TeXRA plugin list: each member reads
- * the installed host's `setup` when called, so a suite that swaps hosts per
- * test swaps setup platforms with them. A host without one has none of its
- * members, as a host that passes no setup platform.
- */
-export const fakeSetupPlatform: SetupPlatformShape = {
-  get commands() {
-    return installedHost().setup?.commands;
-  },
-  get extensions() {
-    return installedHost().setup?.extensions;
-  },
-  get terminal() {
-    return installedHost().setup?.terminal;
-  },
-};
-
-/**
  * The `Secrets` and `AppState` services of every test process, in the shape
- * `fakeSetupPlatform` already uses: each member reads the installed host when
+ * `fakeSetupPlatform` (`texraApp.ts`) uses: each member reads the installed host when
  * it is called, because the process is built once per block while hosts are
  * swapped per test. A production root passes its own store here instead: it
  * has one before it builds its process, and this harness does not.
@@ -180,5 +143,7 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   customConfigured: () =>
     installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
-  teamMembers,
+  teamMembers: (repoState, teamId) =>
+    installedHost().app.teamMembers?.(repoState, teamId) ??
+    Effect.succeed(undefined),
 };

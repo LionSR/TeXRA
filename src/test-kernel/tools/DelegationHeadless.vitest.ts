@@ -45,8 +45,8 @@ import {
   validationHost,
   type StoredRow,
 } from '@test/support/storeFaults';
-import { SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 /** The parent's model, which its children inherit: the validation model
  *  answers it, and the host's OpenAI key makes it available. It is not the
@@ -163,112 +163,110 @@ const answerOpenedRequests = (
   });
 
 describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-    it.layer(validationHost('texra-delegation-'), { buildPerTest: true })(
-      (it) => {
-        it.effect(
-          'composes durable workflow calls through the native launch primitive',
-          () =>
-            Effect.gen(function* () {
-              const parent = yield* parkedParent();
-              const runId = generateRunId();
-              // The child holds its claim until its manifest is durable: another
-              // process taking it in between would find nothing to recover.
-              const faults = yield* sessionStoreFaults(parent.storage);
-              const persisting = yield* faults.holdNext(
-                'appendAll',
-                'run.result',
-              );
-              const running = yield* Effect.forkChild(runInBand(parent, runId));
-              yield* persisting.reached;
-              expect(claimHolder(parent.storage, runId)).not.toBeNull();
-              yield* persisting.release;
-              const result = yield* Fiber.join(running);
+  layer(texraHosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-delegation-', TEXRA_APP), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect(
+        'composes durable workflow calls through the native launch primitive',
+        () =>
+          Effect.gen(function* () {
+            const parent = yield* parkedParent();
+            const runId = generateRunId();
+            // The child holds its claim until its manifest is durable: another
+            // process taking it in between would find nothing to recover.
+            const faults = yield* sessionStoreFaults(parent.storage);
+            const persisting = yield* faults.holdNext(
+              'appendAll',
+              'run.result',
+            );
+            const running = yield* Effect.forkChild(runInBand(parent, runId));
+            yield* persisting.reached;
+            expect(claimHolder(parent.storage, runId)).not.toBeNull();
+            yield* persisting.release;
+            const result = yield* Fiber.join(running);
 
-              const rows = storedRows(parent.storage).filter(
-                (row) => row.run === result.runId,
-              );
-              expect(
-                rowOf(parent.storage, result.runId, 'run.start'),
-              ).toMatchObject({
-                identity: { kind: 'agent', agent: 'review' },
-                parent: { id: parent.runId },
-              });
-              expect(result.result.outcome).toBe('completed');
-              // The report and the manifest are durable once the call returns,
-              // and the child let its claim go.
-              expect(rows.map((row) => row.type)).toEqual(
-                expect.arrayContaining(['run.report', 'run.result', 'run.end']),
-              );
-              // A child keeps its agent name: no label request is sent for it.
-              expect(rows.map((row) => row.type)).not.toContain(
-                'run.description',
-              );
-              expect(claimHolder(parent.storage, result.runId)).toBeNull();
-              expect(
-                rowOf(parent.storage, result.runId, 'run.result')?.result,
-              ).toEqual({ producer: 'subagent', output: result.result.output });
-            }),
-        );
+            const rows = storedRows(parent.storage).filter(
+              (row) => row.run === result.runId,
+            );
+            expect(
+              rowOf(parent.storage, result.runId, 'run.start'),
+            ).toMatchObject({
+              identity: { kind: 'agent', agent: 'review' },
+              parent: { id: parent.runId },
+            });
+            expect(result.result.outcome).toBe('completed');
+            // The report and the manifest are durable once the call returns,
+            // and the child let its claim go.
+            expect(rows.map((row) => row.type)).toEqual(
+              expect.arrayContaining(['run.report', 'run.result', 'run.end']),
+            );
+            // A child keeps its agent name: no label request is sent for it.
+            expect(rows.map((row) => row.type)).not.toContain(
+              'run.description',
+            );
+            expect(claimHolder(parent.storage, result.runId)).toBeNull();
+            expect(
+              rowOf(parent.storage, result.runId, 'run.result')?.result,
+            ).toEqual({ producer: 'subagent', output: result.result.output });
+          }),
+      );
 
-        it.effect(
-          'keeps the completed child result when the caller stops during persistence',
-          () =>
-            Effect.gen(function* () {
-              const parent = yield* parkedParent();
-              const faults = yield* sessionStoreFaults(parent.storage);
-              const persisting = yield* faults.holdNext(
-                'appendAll',
-                'run.result',
-              );
-              const runId = generateRunId();
+      it.effect(
+        'keeps the completed child result when the caller stops during persistence',
+        () =>
+          Effect.gen(function* () {
+            const parent = yield* parkedParent();
+            const faults = yield* sessionStoreFaults(parent.storage);
+            const persisting = yield* faults.holdNext(
+              'appendAll',
+              'run.result',
+            );
+            const runId = generateRunId();
 
-              const running = yield* Effect.forkChild(runInBand(parent, runId));
-              yield* persisting.reached;
-              const interrupting = yield* Effect.forkChild(
-                Fiber.interrupt(running),
-                {
-                  startImmediately: true,
-                },
-              );
-              yield* persisting.release;
+            const running = yield* Effect.forkChild(runInBand(parent, runId));
+            yield* persisting.reached;
+            const interrupting = yield* Effect.forkChild(
+              Fiber.interrupt(running),
+              {
+                startImmediately: true,
+              },
+            );
+            yield* persisting.release;
 
-              yield* Fiber.join(interrupting);
-              expect(Exit.hasInterrupts(yield* Fiber.await(running))).toBe(
-                true,
-              );
-              expect(rowOf(parent.storage, runId, 'run.result')).toMatchObject({
-                result: { producer: 'subagent' },
-              });
-              expect(rowOf(parent.storage, runId, 'run.end')).toMatchObject({
-                outcome: 'completed',
-              });
-            }),
-        );
+            yield* Fiber.join(interrupting);
+            expect(Exit.hasInterrupts(yield* Fiber.await(running))).toBe(true);
+            expect(rowOf(parent.storage, runId, 'run.result')).toMatchObject({
+              result: { producer: 'subagent' },
+            });
+            expect(rowOf(parent.storage, runId, 'run.end')).toMatchObject({
+              outcome: 'completed',
+            });
+          }),
+      );
 
-        it.effect(
-          'denies a proposal under the never policy, as every other request kind',
-          () =>
-            Effect.gen(function* () {
-              // Failure modes: `never` approves the proposal because the run
-              // cannot present prompts, or opens a prompt nobody may answer.
-              const parent = yield* parkedParent(false);
-              setTestApprovalPolicy('never');
-              yield* Context.get(parent.session, Interactions).use({
-                approvalPromptsUnavailable: true,
-              });
-              const opened = yield* answerOpenedRequests(parent.session, {
-                action: 'approve',
-              });
+      it.effect(
+        'denies a proposal under the never policy, as every other request kind',
+        () =>
+          Effect.gen(function* () {
+            // Failure modes: `never` approves the proposal because the run
+            // cannot present prompts, or opens a prompt nobody may answer.
+            const parent = yield* parkedParent(false);
+            setTestApprovalPolicy('never');
+            yield* Context.get(parent.session, Interactions).use({
+              approvalPromptsUnavailable: true,
+            });
+            const opened = yield* answerOpenedRequests(parent.session, {
+              action: 'approve',
+            });
 
-              const result = yield* delegateReview(parent);
+            const result = yield* delegateReview(parent);
 
-              expect(opened).toEqual([]);
-              expect(result.status).toBe('error');
-              expect(childrenOf(parent)).toEqual([]);
-            }),
-        );
-      },
-    );
+            expect(opened).toEqual([]);
+            expect(result.status).toBe('error');
+            expect(childrenOf(parent)).toEqual([]);
+          }),
+      );
+    });
   });
 });

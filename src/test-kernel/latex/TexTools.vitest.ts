@@ -10,6 +10,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
+import { TEXRA_APP } from '@test/support/texraApp';
 
 const mocks = vi.hoisted(() => ({
   runTool: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('@texra/utils/system/toolChecks', async (importOriginal) => {
 const workspacePath = fakePath('workspace');
 
 // Exercises the real production code; only the subprocess call is mocked.
-layer(FakeHost.layer({ workspacePath }), {
+layer(FakeHost.layer({ app: TEXRA_APP, workspacePath }), {
   buildPerTest: true,
   excludeTestServices: true,
 })('compileLatex2Pdf structured return', (it) => {

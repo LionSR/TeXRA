@@ -51,9 +51,9 @@ import {
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import { SessionGraph } from '@test/support/testKernel';
 import { noPluginHold } from '@test/support/testPluginServices';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@texra/tools/agentCli/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@texra/tools/agentCli/agentCliSessionRegistry';
 import { ClaudeAgentTool } from '@texra/tools/agentCli/claudeAgent';
@@ -127,116 +127,110 @@ describe(
   'claude_agent tool launch and resume fallback',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-      it.layer(validationHost('texra-claude-resume-'), { buildPerTest: true })(
-        (it) => {
-          const setUp = Effect.gen(function* () {
-            mocks.query.mockReset();
-            mocks.buildClaudeAgentEnv.mockReset();
-            mocks.findClaudeBinaryPath.mockReset();
-            mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
-            mocks.findClaudeBinaryPath.mockReturnValue(
-              Effect.succeed(undefined),
-            );
-            return yield* parkedParent;
-          });
+    layer(texraHosted, { excludeTestServices: true })((it) => {
+      it.layer(validationHost('texra-claude-resume-', TEXRA_APP), {
+        buildPerTest: true,
+      })((it) => {
+        const setUp = Effect.gen(function* () {
+          mocks.query.mockReset();
+          mocks.buildClaudeAgentEnv.mockReset();
+          mocks.findClaudeBinaryPath.mockReset();
+          mocks.buildClaudeAgentEnv.mockReturnValue(Effect.succeed({}));
+          mocks.findClaudeBinaryPath.mockReturnValue(Effect.succeed(undefined));
+          return yield* parkedParent;
+        });
 
-          it.effect(
-            'launches one fallback loop when concurrent calls use the same stale session_id',
-            () =>
-              Effect.gen(function* () {
-                const parent = yield* setUp;
-                const envStarted = yield* Deferred.make<void>();
-                const envReady = yield* Deferred.make<NodeJS.ProcessEnv>();
-                const secondClaimLost = yield* Deferred.make<void>();
-                const { registry, claim } = contendedRegistry(secondClaimLost);
-                mocks.query.mockImplementation(() =>
-                  succeeded('stale-session'),
-                );
-                mocks.buildClaudeAgentEnv.mockImplementation(() =>
-                  Deferred.succeed(envStarted, undefined).pipe(
-                    Effect.andThen(Deferred.await(envReady)),
-                  ),
-                );
-                // The contention this case claims is a lost claim: the gate fires
-                // from inside the second call's own failed `claim`, the step that
-                // sends it into the fallback wait. Gating on anything earlier
-                // would let the first launch promote the id before the second
-                // call ever contended, and the follow-up assertions would pass on
-                // the plain already-active path.
-                const call = (prompt: string) =>
-                  ClaudeAgentTool.call({
-                    prompt,
-                    session_id: 'stale-session',
-                  }).pipe(Effect.provide(toolLayer(registry, parent)));
+        it.effect(
+          'launches one fallback loop when concurrent calls use the same stale session_id',
+          () =>
+            Effect.gen(function* () {
+              const parent = yield* setUp;
+              const envStarted = yield* Deferred.make<void>();
+              const envReady = yield* Deferred.make<NodeJS.ProcessEnv>();
+              const secondClaimLost = yield* Deferred.make<void>();
+              const { registry, claim } = contendedRegistry(secondClaimLost);
+              mocks.query.mockImplementation(() => succeeded('stale-session'));
+              mocks.buildClaudeAgentEnv.mockImplementation(() =>
+                Deferred.succeed(envStarted, undefined).pipe(
+                  Effect.andThen(Deferred.await(envReady)),
+                ),
+              );
+              // The contention this case claims is a lost claim: the gate fires
+              // from inside the second call's own failed `claim`, the step that
+              // sends it into the fallback wait. Gating on anything earlier
+              // would let the first launch promote the id before the second
+              // call ever contended, and the follow-up assertions would pass on
+              // the plain already-active path.
+              const call = (prompt: string) =>
+                ClaudeAgentTool.call({
+                  prompt,
+                  session_id: 'stale-session',
+                }).pipe(Effect.provide(toolLayer(registry, parent)));
 
-                const first = yield* Effect.forkChild(
-                  call('continue the refactor'),
-                );
-                yield* Deferred.await(envStarted);
-                const second = yield* Effect.forkChild(
-                  call('also update the tests'),
-                );
-                yield* Deferred.await(secondClaimLost);
+              const first = yield* Effect.forkChild(
+                call('continue the refactor'),
+              );
+              yield* Deferred.await(envStarted);
+              const second = yield* Effect.forkChild(
+                call('also update the tests'),
+              );
+              yield* Deferred.await(secondClaimLost);
 
-                expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(1);
-                expect(childrenOf(parent)).toEqual([]);
+              expect(mocks.buildClaudeAgentEnv).toHaveBeenCalledTimes(1);
+              expect(childrenOf(parent)).toEqual([]);
 
-                // The first launch's loop runs its turn, which promotes the id;
-                // the waiting call then queues onto that loop.
-                yield* Deferred.succeed(envReady, {});
-                expect((yield* Fiber.join(first)).status).toBe('executed');
-                expect((yield* Fiber.join(second)).status).toBe('executed');
-                yield* untilQueried(parent.storage, 2);
+              // The first launch's loop runs its turn, which promotes the id;
+              // the waiting call then queues onto that loop.
+              yield* Deferred.succeed(envReady, {});
+              expect((yield* Fiber.join(first)).status).toBe('executed');
+              expect((yield* Fiber.join(second)).status).toBe('executed');
+              yield* untilQueried(parent.storage, 2);
 
-                expect(childrenOf(parent)).toHaveLength(1);
-                expect(
-                  mocks.query.mock.calls.map(([args]) => args.prompt),
-                ).toEqual(['continue the refactor', 'also update the tests']);
-                // One claim apiece: the loser parked on the reservation until the
-                // launch promoted it, rather than re-claiming until the id went
-                // active. A spin would still reach the same follow-up, so the
-                // count is what distinguishes waiting from polling.
-                expect(claim).toHaveBeenCalledTimes(2);
-              }),
-          );
+              expect(childrenOf(parent)).toHaveLength(1);
+              expect(
+                mocks.query.mock.calls.map(([args]) => args.prompt),
+              ).toEqual(['continue the refactor', 'also update the tests']);
+              // One claim apiece: the loser parked on the reservation until the
+              // launch promoted it, rather than re-claiming until the id went
+              // active. A spin would still reach the same follow-up, so the
+              // count is what distinguishes waiting from polling.
+              expect(claim).toHaveBeenCalledTimes(2);
+            }),
+        );
 
-          it.effect(
-            'rejects a fork from a live session owned by another run',
-            () =>
-              Effect.gen(function* () {
-                const owner = yield* setUp;
-                const registry = new AgentCliSessionRegistry(noPluginHold);
-                mocks.query.mockImplementation(() =>
-                  succeeded('foreign-session'),
-                );
-                // A live Claude child of another root owns the session.
-                const other = yield* parkedParent;
-                yield* ClaudeAgentTool.call({ prompt: 'own the session' }).pipe(
-                  Effect.provide(toolLayer(registry, other)),
-                );
-                yield* untilStored(
-                  other.storage,
-                  () => registry.lookup('foreign-session') !== undefined,
-                );
+        it.effect(
+          'rejects a fork from a live session owned by another run',
+          () =>
+            Effect.gen(function* () {
+              const owner = yield* setUp;
+              const registry = new AgentCliSessionRegistry(noPluginHold);
+              mocks.query.mockImplementation(() =>
+                succeeded('foreign-session'),
+              );
+              // A live Claude child of another root owns the session.
+              const other = yield* parkedParent;
+              yield* ClaudeAgentTool.call({ prompt: 'own the session' }).pipe(
+                Effect.provide(toolLayer(registry, other)),
+              );
+              yield* untilStored(
+                other.storage,
+                () => registry.lookup('foreign-session') !== undefined,
+              );
 
-                const result = yield* ClaudeAgentTool.call({
-                  prompt: 'read a foreign branch',
-                  session_id: 'foreign-session',
-                  fork_session: true,
-                }).pipe(Effect.provide(toolLayer(registry, owner)));
+              const result = yield* ClaudeAgentTool.call({
+                prompt: 'read a foreign branch',
+                session_id: 'foreign-session',
+                fork_session: true,
+              }).pipe(Effect.provide(toolLayer(registry, owner)));
 
-                expect(result).toMatchObject({
-                  status: 'error',
-                  error: expect.stringContaining(
-                    'owned by a different session',
-                  ),
-                });
-                expect(childrenOf(owner)).toEqual([]);
-              }),
-          );
-        },
-      );
+              expect(result).toMatchObject({
+                status: 'error',
+                error: expect.stringContaining('owned by a different session'),
+              });
+              expect(childrenOf(owner)).toEqual([]);
+            }),
+        );
+      });
     });
   },
 );

@@ -19,9 +19,13 @@ import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { teamMembers } from '@texra/shared/agentTeams';
+import {
+  settingsCatalog,
+  type SettingsCatalog,
+} from '@shared/state/stateSettings';
+import type { Plugin } from '@tools/plugins';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
+import { harnessBuiltins } from '@texra-ai/harness/plugins';
 import type { SecretsFailed } from '@texra-ai/llm';
 
 // The worker's temp home and the directories made in it, kept on the
@@ -150,17 +154,36 @@ function seedFakeRoot(files: Record<string, string | Uint8Array>): void {
 }
 
 /**
+ * What an app adds to a fake host: the settings catalog its config reads,
+ * the plugins its process runs, and how it reads a team's members. A suite
+ * of the harness alone runs over {@link HARNESS_APP}; a suite of TeXRA's
+ * tools, settings or agents names `TEXRA_APP` (`support/texraApp.ts`).
+ */
+export interface TestApp {
+  readonly settings: SettingsCatalog;
+  readonly plugins: () => readonly Plugin[];
+  readonly teamMembers?: AgentDirectoriesPort['teamMembers'];
+}
+
+/** The harness alone: its own settings rows and built-in plugins, no teams. */
+export const HARNESS_APP: TestApp = Object.freeze({
+  settings: settingsCatalog({ namespace: 'texra', rows: [] }),
+  plugins: () => harnessBuiltins,
+});
+
+/**
  * The config every fake host reads: production's in-memory provider over
- * TeXRA's catalog, holding each seeded value where a person's setting of it
- * would sit (the scope its row is written to, else the workspace), so it
+ * the app's catalog, holding each seeded value where a person's setting of
+ * it would sit (the scope its row is written to, else the workspace), so it
  * resolves exactly as it does on a real host.
  */
 export function fakeConfig(
   values: Record<string, unknown> = {},
+  settings: SettingsCatalog = HARNESS_APP.settings,
 ): MemoryConfigProvider {
-  const config = new MemoryConfigProvider(TEXRA_SETTINGS.catalog);
+  const config = new MemoryConfigProvider(settings);
   for (const [key, value] of Object.entries(values)) {
-    const row = TEXRA_SETTINGS.catalog.byKey(key);
+    const row = settings.byKey(key);
     Effect.runSync(config.update(key, value, row?.configTarget ?? 'workspace'));
   }
   return config;
@@ -206,6 +229,8 @@ export class FakeSecrets implements PlatformSecrets {
 }
 
 export interface FakePlatformOptions {
+  /** The app the host runs: {@link HARNESS_APP} unless named. */
+  app?: TestApp;
   config?: Record<string, unknown>;
   globalState?: Record<string, unknown>;
   workspaceState?: Record<string, unknown>;
@@ -269,7 +294,9 @@ export function createFakeWorkspaceRoots(
     storageRoot: fakeStorageRoot(),
     storage: options.storagePath ?? fakePath('workspace/.texra/storage'),
     globalStorage: options.globalStoragePath ?? fakeGlobalStorage(),
-    config: overrides.config ?? fakeConfig(options.config),
+    config:
+      overrides.config ??
+      fakeConfig(options.config, (options.app ?? HARNESS_APP).settings),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
     repoState: overrides.repoState ?? new FakeStateStore(),
@@ -278,12 +305,14 @@ export function createFakeWorkspaceRoots(
   };
 }
 
-const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
+const fakeAgentDirectories = ({
+  teamMembers,
+}: TestApp): AgentDirectoriesPort => ({
   custom: () => Effect.sync(() => fakePath('workspace/.texra/agents')),
   customConfigured: () => Effect.succeed(false),
   builtIn: () => Effect.sync(() => fakePath('workspace/resources/agents')),
-  teamMembers,
-};
+  ...(teamMembers ? { teamMembers } : {}),
+});
 
 export function createFakePlatform(
   options: FakePlatformOptions = {},
@@ -292,7 +321,7 @@ export function createFakePlatform(
   seedFakeRoot(options.files ?? {});
   return {
     shutdownScope: Scope.makeUnsafe(),
-    agentDirectories: FAKE_AGENT_DIRECTORIES,
+    agentDirectories: fakeAgentDirectories(options.app ?? HARNESS_APP),
     ...overrides,
   };
 }

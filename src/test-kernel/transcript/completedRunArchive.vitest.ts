@@ -30,10 +30,10 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { seedRunRecord } from '@test/support/runRecordSeeds';
 import {
   FakeHost,
-  SessionGraph,
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { readCompletedRunConversation as readCompletedRunConversationEffect } from '@transcript/completedRunArchive';
 
@@ -50,14 +50,18 @@ function runConfig(
 }
 
 // Live clock: the session's publisher and the resume run on real turns.
-layer(SessionGraph.hosted, { excludeTestServices: true })(
+layer(texraHosted, { excludeTestServices: true })(
   'completedRunArchive facade',
   (it) => {
     // The built-in agents are the bundled personas, so a resume resolves the
     // run's `orchestrator` the way a real host does.
     it.layer(
       FakeHost.layer(async () => {
-        const host = await createTempDirPlatform('texra-archive-', tempDirs);
+        const host = await createTempDirPlatform(
+          'texra-archive-',
+          tempDirs,
+          TEXRA_APP,
+        );
         return {
           ...host,
           platform: {

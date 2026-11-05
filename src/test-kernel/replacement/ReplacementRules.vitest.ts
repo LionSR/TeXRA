@@ -6,6 +6,7 @@ import { describe, it } from 'vitest';
 import replacementEngine, { applyReplacements } from '@replacement/engine';
 import { FENCED_LATEX_BLOCK_REPLACEMENTS } from '@replacement/rulesRegex';
 import { fakeConfig } from '@test/support/FakePlatform';
+import { TEXRA_APP } from '@test/support/texraApp';
 
 // ---------------------------------------------------------------------------
 // fencedLatexBlocksRegex
@@ -50,7 +51,10 @@ describe('personal style contextual replacements', () => {
     ].join('\n');
 
     // A fake host's config, with every rule at its catalog default.
-    const result = replacementEngine.applyAll(input, fakeConfig()).text;
+    const result = replacementEngine.applyAll(
+      input,
+      fakeConfig({}, TEXRA_APP.settings),
+    ).text;
 
     const expected = [
       '\\newcommand{\\tr}{\\mathrm{Tr}}',

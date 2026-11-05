@@ -10,7 +10,7 @@ import { expect } from 'vitest';
 // Local imports
 import { scanDirectory } from '@agent/index/agentYamlScanner';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { storePluginsLayer } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/texraApp';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
 

@@ -79,7 +79,7 @@ import { SessionViewAccess } from '@shared/session/runHistory';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
-import { storePluginsLayer } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/texraApp';
 import {
   persistentTestSession,
   REAL_RUN_TIMEOUT,
@@ -91,6 +91,7 @@ import {
 } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { texraPlugins } from '@texra/tools/registry';
 import { factKindsOf } from '@tools/plugins';
 import type { Model } from '@texra-ai/llm';
@@ -606,6 +607,7 @@ describe('the golden run killed after its effect', () => {
         const host = await createTempDirPlatform(
           'texra-golden-kill-',
           tempDirs,
+          TEXRA_APP,
         );
         const agents = {
           custom: () => Effect.succeed(AGENTS),
@@ -621,7 +623,7 @@ describe('the golden run killed after its effect', () => {
     ),
   );
 
-  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
+  layer(texraHosted, { excludeTestServices: true })((it) => {
     it.layer(killedHost, { buildPerTest: true })((it) => {
       it.effect(
         'reports the command as an unknown outcome and never reruns it',
@@ -736,47 +738,47 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
         .all(CHAT),
     );
 
-  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-    it.layer(validationHost('texra-golden-resume-'), { buildPerTest: true })(
-      (it) => {
-        it.effect.each([
-          [
-            "an earlier build's row",
-            `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
-            { kind: 'earlierBuild', cause: expect.any(String) },
-          ],
-        ] as const)(
-          'refuses a run holding %s before any request, and adds no row',
-          ([, rewrite, reason]) => {
-            const { sent, process } = countedModel();
-            return Effect.gen(function* () {
-              const { storage, session } = yield* goldenSession(rewrite);
-              const before = chatRows(storage);
-              const refused = yield* Effect.flip(
-                session.resume(CHAT, { interactive: true }),
-              );
-              expect(refused).toBeInstanceOf(ResumeRefused);
-              expect(refused).toMatchObject({ runId: CHAT, reason });
-              expect(sent.turns).toBe(0);
-              expect(chatRows(storage)).toEqual(before);
-            }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
-          },
-        );
-
-        it.effect('resumes the unchanged chat, which sends a turn', () => {
+  layer(texraHosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-golden-resume-', TEXRA_APP), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect.each([
+        [
+          "an earlier build's row",
+          `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
+          { kind: 'earlierBuild', cause: expect.any(String) },
+        ],
+      ] as const)(
+        'refuses a run holding %s before any request, and adds no row',
+        ([, rewrite, reason]) => {
           const { sent, process } = countedModel();
           return Effect.gen(function* () {
-            const { session } = yield* goldenSession();
-            const run = yield* session.resume(CHAT, { interactive: true });
-            expect(run.runId).toBe(CHAT);
-            yield* Deferred.await(sent.first);
-          }).pipe(
-            Effect.timeout('20 seconds'),
-            Effect.scoped,
-            Effect.provide(process, { local: true }),
-          );
-        });
-      },
-    );
+            const { storage, session } = yield* goldenSession(rewrite);
+            const before = chatRows(storage);
+            const refused = yield* Effect.flip(
+              session.resume(CHAT, { interactive: true }),
+            );
+            expect(refused).toBeInstanceOf(ResumeRefused);
+            expect(refused).toMatchObject({ runId: CHAT, reason });
+            expect(sent.turns).toBe(0);
+            expect(chatRows(storage)).toEqual(before);
+          }).pipe(Effect.scoped, Effect.provide(process, { local: true }));
+        },
+      );
+
+      it.effect('resumes the unchanged chat, which sends a turn', () => {
+        const { sent, process } = countedModel();
+        return Effect.gen(function* () {
+          const { session } = yield* goldenSession();
+          const run = yield* session.resume(CHAT, { interactive: true });
+          expect(run.runId).toBe(CHAT);
+          yield* Deferred.await(sent.first);
+        }).pipe(
+          Effect.timeout('20 seconds'),
+          Effect.scoped,
+          Effect.provide(process, { local: true }),
+        );
+      });
+    });
   });
 });

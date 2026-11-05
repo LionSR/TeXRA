@@ -111,10 +111,8 @@ import {
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import {
-  storePluginsLayer,
-  globalValuesOver,
-} from '@test/support/setupPlatform';
+import { globalValuesOver } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/texraApp';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';

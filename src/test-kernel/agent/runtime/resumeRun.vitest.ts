@@ -50,6 +50,7 @@ import {
 } from '@test/support/storeFaults';
 import { SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 import type { RunId } from '@texra-ai/harness/schemas';
 
@@ -121,228 +122,215 @@ describe(
   'resumeRun over a crashed store',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-      it.layer(validationHost('texra-resume-'), { buildPerTest: true })(
-        (it) => {
-          it.effect(
-            "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } =
-                  yield* parkedRunAfterCrash();
-                yield* send(session, runId, 'Keep this input.');
-                const faults = yield* sessionStoreFaults(storage);
-                // Under the claim, the resume reads the run's queued input and
-                // then its lineage (`persistedParentRunId`): that read fails.
-                const claim = yield* faults.holdNext('acquireClaims');
-                const resumed = yield* Effect.forkChild(
-                  Effect.flip(resume(runId, { session })),
-                );
-                yield* claim.reached;
-                const input = yield* faults.holdNext('readAggregate');
-                yield* claim.release;
-                yield* input.reached;
-                yield* faults.failNext('readRunRecords');
-                yield* input.release;
+    layer(texraHosted, { excludeTestServices: true })((it) => {
+      it.layer(validationHost('texra-resume-', TEXRA_APP), {
+        buildPerTest: true,
+      })((it) => {
+        it.effect(
+          "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              yield* send(session, runId, 'Keep this input.');
+              const faults = yield* sessionStoreFaults(storage);
+              // Under the claim, the resume reads the run's queued input and
+              // then its lineage (`persistedParentRunId`): that read fails.
+              const claim = yield* faults.holdNext('acquireClaims');
+              const resumed = yield* Effect.forkChild(
+                Effect.flip(resume(runId, { session })),
+              );
+              yield* claim.reached;
+              const input = yield* faults.holdNext('readAggregate');
+              yield* claim.release;
+              yield* input.reached;
+              yield* faults.failNext('readRunRecords');
+              yield* input.release;
 
-                const error = yield* Fiber.join(resumed);
-                expect(error.message).toContain(
-                  'injected readRunRecords fault',
-                );
-                expect(activations(storage, runId)).toBe(1);
-                expect(claimHolder(storage, runId)).toBeNull();
-                expect(yield* queuedTexts(session, runId)).toEqual([
-                  'Keep this input.',
-                ]);
-              }),
-          );
+              const error = yield* Fiber.join(resumed);
+              expect(error.message).toContain('injected readRunRecords fault');
+              expect(activations(storage, runId)).toBe(1);
+              expect(claimHolder(storage, runId)).toBeNull();
+              expect(yield* queuedTexts(session, runId)).toEqual([
+                'Keep this input.',
+              ]);
+            }),
+        );
 
-          it.effect(
-            'input sent while a resume reads the run reaches the resumed run',
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } =
-                  yield* parkedRunAfterCrash();
-                const faults = yield* sessionStoreFaults(storage);
-                // The first records read finds the run's owner; the second, its
-                // config, is inside the resume.
-                const owner = yield* faults.holdNext('readRunRecords');
-                const resumed = yield* Effect.forkChild(
-                  resume(runId, { session }),
-                );
-                yield* owner.reached;
-                const config = yield* faults.holdNext('readRunRecords');
-                yield* owner.release;
-                yield* config.reached;
+        it.effect(
+          'input sent while a resume reads the run reaches the resumed run',
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              const faults = yield* sessionStoreFaults(storage);
+              // The first records read finds the run's owner; the second, its
+              // config, is inside the resume.
+              const owner = yield* faults.holdNext('readRunRecords');
+              const resumed = yield* Effect.forkChild(
+                resume(runId, { session }),
+              );
+              yield* owner.reached;
+              const config = yield* faults.holdNext('readRunRecords');
+              yield* owner.release;
+              yield* config.reached;
 
-                expect(yield* send(session, runId, 'raced')).toEqual({
-                  kind: 'queued',
-                  read: false,
-                });
-                yield* config.release;
-                expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
-                yield* untilStored(
-                  storage,
-                  () =>
-                    answersOf(storage, runId).at(-1)?.includes('raced') ??
-                    false,
-                );
+              expect(yield* send(session, runId, 'raced')).toEqual({
+                kind: 'queued',
+                read: false,
+              });
+              yield* config.release;
+              expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);
+              yield* untilStored(
+                storage,
+                () =>
+                  answersOf(storage, runId).at(-1)?.includes('raced') ?? false,
+              );
 
-                // A root outlives its resume: its input ending ends it.
-                yield* Context.get(session, Inbox).closeInput(runId);
-                yield* untilStored(
-                  storage,
-                  () => endsOf(storage, runId).at(-1) === 'cancelled',
-                );
-              }),
-          );
+              // A root outlives its resume: its input ending ends it.
+              yield* Context.get(session, Inbox).closeInput(runId);
+              yield* untilStored(
+                storage,
+                () => endsOf(storage, runId).at(-1) === 'cancelled',
+              );
+            }),
+        );
 
-          it.effect(
-            'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } = yield* parkedRunAfterCrash({
-                  interactions: { approvalPromptsUnavailable: true },
-                });
-                yield* send(session, runId, 'continue');
+        it.effect(
+          'a resume on a host that cannot answer approval prompts offers its run no approval-gated tool',
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* parkedRunAfterCrash({
+                interactions: { approvalPromptsUnavailable: true },
+              });
+              yield* send(session, runId, 'continue');
 
-                expect(yield* resume(runId, { session })).toMatchObject(
-                  ACTIVATED,
-                );
-                yield* untilStored(
-                  storage,
-                  () => offeredTools(storage, runId).length > 1,
-                );
-                const [launched, resumed] = offeredTools(storage, runId);
-                expect(launched).toContain('bash');
-                expect(resumed).toContain('read_file');
-                expect(resumed).not.toContain('bash');
-                // The notice names only the declared tools it withholds: `plan`,
-                // which the persona declares and the goal plugin also injects,
-                // once.
-                const withheld = storedRows(storage).flatMap((row) => {
-                  if (row.run !== runId || row.type !== 'log') return [];
-                  // cast: a `log` row's data holds its message.
-                  const { message } = JSON.parse(row.data) as {
-                    message: string;
-                  };
-                  const names = /^Not offering ([^:]+):/.exec(message)?.[1];
-                  return names === undefined ? [] : names.split(', ');
-                });
-                expect(withheld).toContain('bash');
-                expect(withheld.filter((name) => name === 'plan')).toEqual([
-                  'plan',
-                ]);
-              }),
-          );
+              expect(yield* resume(runId, { session })).toMatchObject(
+                ACTIVATED,
+              );
+              yield* untilStored(
+                storage,
+                () => offeredTools(storage, runId).length > 1,
+              );
+              const [launched, resumed] = offeredTools(storage, runId);
+              expect(launched).toContain('bash');
+              expect(resumed).toContain('read_file');
+              expect(resumed).not.toContain('bash');
+              // The notice names only the declared tools it withholds: `plan`,
+              // which the persona declares and the goal plugin also injects,
+              // once.
+              const withheld = storedRows(storage).flatMap((row) => {
+                if (row.run !== runId || row.type !== 'log') return [];
+                // cast: a `log` row's data holds its message.
+                const { message } = JSON.parse(row.data) as {
+                  message: string;
+                };
+                const names = /^Not offering ([^:]+):/.exec(message)?.[1];
+                return names === undefined ? [] : names.split(', ');
+              });
+              expect(withheld).toContain('bash');
+              expect(withheld.filter((name) => name === 'plan')).toEqual([
+                'plan',
+              ]);
+            }),
+        );
 
-          it.effect(
-            'a run a live process elsewhere holds is refused before the host rearranges',
-            () =>
-              Effect.gen(function* () {
-                // A live pid (this process's parent) whose start identity was
-                // never read: no proof finds it dead.
-                const owner = JSON.stringify([
-                  'other-host',
-                  process.ppid,
-                  null,
-                ]);
-                const { session, runId, storage } = yield* parkedRunAfterCrash({
-                  owner,
-                });
+        it.effect(
+          'a run a live process elsewhere holds is refused before the host rearranges',
+          () =>
+            Effect.gen(function* () {
+              // A live pid (this process's parent) whose start identity was
+              // never read: no proof finds it dead.
+              const owner = JSON.stringify(['other-host', process.ppid, null]);
+              const { session, runId, storage } = yield* parkedRunAfterCrash({
+                owner,
+              });
 
-                expect(yield* resume(runId, { session })).toEqual({
-                  failed: { kind: 'ownedElsewhere', owner },
-                });
-                expect(activations(storage, runId)).toBe(1);
-              }),
-          );
-          it.effect(
-            "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } =
-                  yield* parkedRunAfterCrash();
-                const faults = yield* sessionStoreFaults(storage);
-                // Past its checks under the claim, the resume reads the run's
-                // input before it launches: the stop lands there.
-                const claim = yield* faults.holdNext('acquireClaims');
-                const resumed = yield* Effect.forkChild(
-                  Effect.exit(resume(runId, { session })),
-                );
-                yield* claim.reached;
-                const input = yield* faults.holdNext('readAggregate');
-                yield* claim.release;
-                yield* input.reached;
+              expect(yield* resume(runId, { session })).toEqual({
+                failed: { kind: 'ownedElsewhere', owner },
+              });
+              expect(activations(storage, runId)).toBe(1);
+            }),
+        );
+        it.effect(
+          "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              const faults = yield* sessionStoreFaults(storage);
+              // Past its checks under the claim, the resume reads the run's
+              // input before it launches: the stop lands there.
+              const claim = yield* faults.holdNext('acquireClaims');
+              const resumed = yield* Effect.forkChild(
+                Effect.exit(resume(runId, { session })),
+              );
+              yield* claim.reached;
+              const input = yield* faults.holdNext('readAggregate');
+              yield* claim.release;
+              yield* input.reached;
 
-                const stop = Context.get(session, Runs).stop(runId, 'user');
-                expect(Context.get(session, Runs).stopCause(runId)).toBe(
-                  'user',
-                );
-                yield* stop.settlement.pipe(Effect.provide(session));
-                yield* input.release;
-                yield* Fiber.join(resumed);
+              const stop = Context.get(session, Runs).stop(runId, 'user');
+              expect(Context.get(session, Runs).stopCause(runId)).toBe('user');
+              yield* stop.settlement.pipe(Effect.provide(session));
+              yield* input.release;
+              yield* Fiber.join(resumed);
 
-                expect(endsOf(storage, runId)).toEqual(['cancelled']);
-                expect(activations(storage, runId)).toBe(1);
-              }),
-          );
+              expect(endsOf(storage, runId)).toEqual(['cancelled']);
+              expect(activations(storage, runId)).toBe(1);
+            }),
+        );
 
-          it.effect(
-            'R20: a message retried under its id after its run took no more input answers with its receipt; a different message under it is a conflict',
-            () =>
-              Effect.gen(function* () {
-                const { session, runId, storage } =
-                  yield* parkedRunAfterCrash();
-                const sdk = yield* packageSession(session);
-                const message = {
-                  kind: 'followUp.send',
-                  runId,
-                  id: 'note-1',
-                  text: 'Add the lemma.',
-                } as const;
-                expect(yield* sdk.request(message)).toMatchObject({
-                  kind: 'followUp',
-                  id: 'note-1',
-                });
-                const { receipt } = yield* sdk.request({
-                  kind: 'followUp.receipt',
-                  runId,
-                  id: 'note-1',
-                  wait: true,
-                });
-                expect(receipt).toEqual({
-                  state: 'answered',
-                  turn: 2,
-                  answer: expect.any(Number),
-                });
-                // The acknowledgement is lost, and the run's input closes.
-                yield* Context.get(session, Inbox).closeInput(runId);
-                yield* untilStored(
-                  storage,
-                  () => endsOf(storage, runId).at(-1) === 'cancelled',
-                );
+        it.effect(
+          'R20: a message retried under its id after its run took no more input answers with its receipt; a different message under it is a conflict',
+          () =>
+            Effect.gen(function* () {
+              const { session, runId, storage } = yield* parkedRunAfterCrash();
+              const sdk = yield* packageSession(session);
+              const message = {
+                kind: 'followUp.send',
+                runId,
+                id: 'note-1',
+                text: 'Add the lemma.',
+              } as const;
+              expect(yield* sdk.request(message)).toMatchObject({
+                kind: 'followUp',
+                id: 'note-1',
+              });
+              const { receipt } = yield* sdk.request({
+                kind: 'followUp.receipt',
+                runId,
+                id: 'note-1',
+                wait: true,
+              });
+              expect(receipt).toEqual({
+                state: 'answered',
+                turn: 2,
+                answer: expect.any(Number),
+              });
+              // The acknowledgement is lost, and the run's input closes.
+              yield* Context.get(session, Inbox).closeInput(runId);
+              yield* untilStored(
+                storage,
+                () => endsOf(storage, runId).at(-1) === 'cancelled',
+              );
 
-                expect(yield* sdk.request(message)).toEqual({
-                  kind: 'followUp',
-                  id: 'note-1',
-                  status: 'sent',
-                  receipt,
-                });
-                const conflict = yield* Effect.flip(
-                  sdk.request({ ...message, text: 'Drop the lemma.' }),
-                );
-                expect(conflict).toBeInstanceOf(Conflict);
-                expect(conflict).toMatchObject({ runId, id: 'note-1' });
-                const queued = storedRows(storage).filter(
-                  (row) => row.run === runId && row.type === 'followup.queued',
-                );
-                expect(queued).toHaveLength(1);
-                expect(activations(storage, runId)).toBe(2);
-              }),
-          );
-        },
-      );
+              expect(yield* sdk.request(message)).toEqual({
+                kind: 'followUp',
+                id: 'note-1',
+                status: 'sent',
+                receipt,
+              });
+              const conflict = yield* Effect.flip(
+                sdk.request({ ...message, text: 'Drop the lemma.' }),
+              );
+              expect(conflict).toBeInstanceOf(Conflict);
+              expect(conflict).toMatchObject({ runId, id: 'note-1' });
+              const queued = storedRows(storage).filter(
+                (row) => row.run === runId && row.type === 'followup.queued',
+              );
+              expect(queued).toHaveLength(1);
+              expect(activations(storage, runId)).toBe(2);
+            }),
+        );
+      });
     });
   },
 );
@@ -516,8 +504,10 @@ const receiptOf = (session: LocalSession, runId: RunId, id: string) =>
   );
 
 describe('input receipts', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-    it.layer(validationHost('texra-receipt-'), { buildPerTest: true })((it) => {
+  layer(texraHosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-receipt-', TEXRA_APP), {
+      buildPerTest: true,
+    })((it) => {
       it.effect(
         'R13: a receipt answered before a crash reads the same once the resumed run takes later input',
         () => {

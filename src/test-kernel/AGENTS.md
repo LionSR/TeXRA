@@ -54,7 +54,11 @@ decided by what it reaches, not by how many tests it has:
   (`support/testKernel.ts`: `FakeHost.layer`; `SessionGraph.layer` over the
   block's host, or `SessionGraph.hosted` with a default one; and
   `TestSession.layer`). No host is installed by default, and a block's scope
-  releases what it built, so nothing a file installs outlives it.
+  releases what it built, so nothing a file installs outlives it. A host runs
+  the harness alone (`HARNESS_APP`: its settings and built-in plugins) unless
+  it names TeXRA (`FakeHost.layer({ app: TEXRA_APP })`, `texraHosted`, in
+  `support/texraApp.ts`), which a suite of TeXRA's tools, settings or agents
+  does.
 - **`isolated`** — what a shared registry cannot serve, each file in its own
   registry and its own worker, several times the cost per suite: a suite that
   calls `vi.mock` / `vi.doMock` (its factory's module would be what the next

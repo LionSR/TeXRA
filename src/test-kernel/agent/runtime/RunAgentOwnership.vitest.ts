@@ -32,8 +32,8 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'assistant',
@@ -48,84 +48,84 @@ const launch = (session: Context.Context<SessionServices>, runId: RunId) =>
   );
 
 describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
-  layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-    it.layer(validationHost('texra-ownership-'), { buildPerTest: true })(
-      (it) => {
-        it.effect(
-          'refuses a second launch while the first is still running',
-          () =>
-            Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
-              const session = yield* persistentTestSession();
-              const runId = generateRunId();
-              const first = yield* Effect.forkChild(launch(session, runId));
-              yield* untilStored(
-                roots.storage,
-                parkedAfter(runId, 1, roots.storage),
-              );
+  layer(texraHosted, { excludeTestServices: true })((it) => {
+    it.layer(validationHost('texra-ownership-', TEXRA_APP), {
+      buildPerTest: true,
+    })((it) => {
+      it.effect(
+        'refuses a second launch while the first is still running',
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const session = yield* persistentTestSession();
+            const runId = generateRunId();
+            const first = yield* Effect.forkChild(launch(session, runId));
+            yield* untilStored(
+              roots.storage,
+              parkedAfter(runId, 1, roots.storage),
+            );
 
-              expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
-                message: `Run is already running: ${runId}`,
-              });
-              yield* Context.get(session, Runs)
-                .stop(runId, 'user')
-                .settlement.pipe(Effect.provide(session));
-              yield* Fiber.await(first);
-              expect(
-                storedRows(roots.storage).filter(
-                  (row) => row.run === runId && row.type === 'run.activate',
+            expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
+              message: `Run is already running: ${runId}`,
+            });
+            yield* Context.get(session, Runs)
+              .stop(runId, 'user')
+              .settlement.pipe(Effect.provide(session));
+            yield* Fiber.await(first);
+            expect(
+              storedRows(roots.storage).filter(
+                (row) => row.run === runId && row.type === 'run.activate',
+              ),
+            ).toHaveLength(1);
+          }),
+      );
+
+      it.effect(
+        'a launch whose opening is refused fails as itself and leaves no run or claim',
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const session = yield* persistentTestSession();
+            const runId = generateRunId();
+            const faults = yield* sessionStoreFaults(roots.storage);
+            yield* faults.failNext('appendAll', 'run.start');
+
+            const error = yield* Effect.flip(launch(session, runId));
+            expect(error.message).toContain('injected appendAll fault');
+            expect(claimHolder(roots.storage, runId)).toBeNull();
+            expect(
+              storedRows(roots.storage).filter((row) => row.run === runId),
+            ).toEqual([]);
+          }),
+      );
+
+      it.effect(
+        'a run whose claim the store refuses after its opening ends failed, naming the refusal',
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const session = yield* persistentTestSession();
+            const runId = generateRunId();
+            const faults = yield* sessionStoreFaults(roots.storage);
+            // The opening's append claims the run; the hold the run takes on
+            // its claim right after is the launch's first `acquireClaims`.
+            yield* faults.failNext('acquireClaims');
+
+            const error = yield* Effect.flip(launch(session, runId));
+            expect(error.message).toContain('injected acquireClaims fault');
+            const end = storedRows(roots.storage).findLast(
+              (row) => row.run === runId && row.type === 'run.end',
+            );
+            expect(end && JSON.parse(end.data)).toMatchObject({
+              outcome: 'failed',
+              error: {
+                message: expect.stringContaining(
+                  'injected acquireClaims fault',
                 ),
-              ).toHaveLength(1);
-            }),
-        );
-
-        it.effect(
-          'a launch whose opening is refused fails as itself and leaves no run or claim',
-          () =>
-            Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
-              const session = yield* persistentTestSession();
-              const runId = generateRunId();
-              const faults = yield* sessionStoreFaults(roots.storage);
-              yield* faults.failNext('appendAll', 'run.start');
-
-              const error = yield* Effect.flip(launch(session, runId));
-              expect(error.message).toContain('injected appendAll fault');
-              expect(claimHolder(roots.storage, runId)).toBeNull();
-              expect(
-                storedRows(roots.storage).filter((row) => row.run === runId),
-              ).toEqual([]);
-            }),
-        );
-
-        it.effect(
-          'a run whose claim the store refuses after its opening ends failed, naming the refusal',
-          () =>
-            Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
-              const session = yield* persistentTestSession();
-              const runId = generateRunId();
-              const faults = yield* sessionStoreFaults(roots.storage);
-              // The opening's append claims the run; the hold the run takes on
-              // its claim right after is the launch's first `acquireClaims`.
-              yield* faults.failNext('acquireClaims');
-
-              const error = yield* Effect.flip(launch(session, runId));
-              expect(error.message).toContain('injected acquireClaims fault');
-              const end = storedRows(roots.storage).findLast(
-                (row) => row.run === runId && row.type === 'run.end',
-              );
-              expect(end && JSON.parse(end.data)).toMatchObject({
-                outcome: 'failed',
-                error: {
-                  message: expect.stringContaining(
-                    'injected acquireClaims fault',
-                  ),
-                },
-              });
-            }),
-        );
-      },
-    );
+              },
+            });
+          }),
+      );
+    });
   });
 });
