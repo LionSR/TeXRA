@@ -132,7 +132,6 @@ catalogs:
 
 patchedDependencies:
   ink@8.0.0: d347d7170ee2204b4014057c768cba95f5330d5d21351aaf658f25363ace1a43
-  openai@7.51.0: 65d5ae6f5949ee7ffc8108010bc0e87e681e6b317f2c7db525f754b50bea6e7c
 
 importers:
 
@@ -197,7 +196,7 @@ importers:
         version: 30.1.3(@noble/hashes@2.2.0)
       openai:
         specifier: 'catalog:'
-        version: 7.51.0(patch_hash=65d5ae6f5949ee7ffc8108010bc0e87e681e6b317f2c7db525f754b50bea6e7c)(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
+        version: 7.51.0(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
       oxfmt:
         specifier: 0.76.0
         version: 0.76.0
@@ -584,7 +583,7 @@ importers:
         version: 0.28.2
       openai:
         specifier: 7.51.0
-        version: 7.51.0(patch_hash=65d5ae6f5949ee7ffc8108010bc0e87e681e6b317f2c7db525f754b50bea6e7c)(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
+        version: 7.51.0(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
       vitest:
         specifier: ^5.1.0
         version: 5.1.0(@opentelemetry/api@1.9.1)(@types/node@22.20.5)(jsdom@30.1.3(@noble/hashes@2.2.0))(vite@8.3.6(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.1))
@@ -680,7 +679,7 @@ importers:
         version: 3.2.4(chokidar@3.6.0)
       openai:
         specifier: 'catalog:'
-        version: 7.51.0(patch_hash=65d5ae6f5949ee7ffc8108010bc0e87e681e6b317f2c7db525f754b50bea6e7c)(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
+        version: 7.51.0(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5)
       pretty-bytes:
         specifier: 'catalog:'
         version: 7.2.0
@@ -8083,7 +8082,7 @@ snapshots:
       is-inside-container: 1.0.0
       wsl-utils: 0.1.0
 
-  openai@7.51.0(patch_hash=65d5ae6f5949ee7ffc8108010bc0e87e681e6b317f2c7db525f754b50bea6e7c)(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5):
+  openai@7.51.0(google-auth-library@10.9.1(supports-color@10.2.2))(undici@8.12.3)(ws@8.22.1)(zod@4.6.5):
     optionalDependencies:
       google-auth-library: 10.9.1(supports-color@10.2.2)
       undici: 8.12.3
