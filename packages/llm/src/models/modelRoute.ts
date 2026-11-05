@@ -19,12 +19,7 @@
  *    subscription" on and a Kimi Code key stored, and their wire ID differs
  *    (`kimi-k3` becomes `k3`, see {@link KIMI_CODE_WIRE_MODEL_IDS}).
  */
-import {
-  lookup,
-  ModelProvider,
-  type ModelConfig,
-  type ReasoningMode,
-} from 'llm-zoo';
+import { ModelProvider, type ModelConfig, type ReasoningMode } from 'llm-zoo';
 
 import { PLAN_ROUTES, type PlanRoute } from '../errors.js';
 import { isApiProvider } from '../providers/apiProviders.js';
@@ -128,29 +123,13 @@ const CODEX_MODEL_DATE_PIN = /-\d{4}-\d{2}-\d{2}$/;
  * The model id the Codex backend keys on: the API `id` with its llm-zoo date
  * pin stripped.
  *
- * Never the `shortName`. That is llm-zoo's display abbreviation, and for every
- * Codex-eligible model but one it happens to equal the backend slug — which is
- * why preferring it went unnoticed. The exception is the GPT-5.6 family, whose
- * members are `gpt-5.6-sol`, `-terra` and `-luna`: there is no bare `gpt-5.6`
- * model anywhere, but that is exactly the `shortName` llm-zoo gives Sol. We
- * sent it and the backend answered
- * `The 'gpt-5.6' model is not supported when using Codex with a ChatGPT
- * account.` — a message that reads as a subscription problem and sends users
- * to check their plan, when the id was simply not a model.
+ * Never the `shortName`: that is llm-zoo's display abbreviation, and for
+ * GPT-5.6 Sol it is a bare `gpt-5.6`, which is not a model. The backend
+ * answers it with "The 'gpt-5.6' model is not supported when using Codex with
+ * a ChatGPT account", which reads as a plan problem rather than a bad id.
  */
-export function codexBackendModelId(
-  config: Pick<ModelConfig, 'ref' | 'id'>,
-): string {
-  // The canonical registry `id`, not the caller's. A bound config may
-  // already carry the harness's short-name rewrite (`ModelAccess.ts`), which
-  // overwrites `id` with `shortName` when "Prefer short model names" is on — reinstating the exact
-  // `gpt-5.6` this function exists to never send. `ref` is the
-  // registry key and is not rewritten anywhere on this path, so it is the one
-  // field that still identifies the model. A config the registry does not
-  // know (a runtime-discovered entry) has no canonical entry to read, so its
-  // own `id` is the only answer available.
-  const canonical = lookup(config.ref)?.id;
-  return (canonical ?? config.id).replace(CODEX_MODEL_DATE_PIN, '');
+export function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string {
+  return config.id.replace(CODEX_MODEL_DATE_PIN, '');
 }
 
 /**
@@ -313,7 +292,6 @@ export function routeConfig(
       return {
         ...config,
         id: wireId,
-        shortName: wireId,
         ...zeroCostAccessOverrides(
           Math.min(KIMI_CODE_SUBSCRIPTION_CONTEXT_WINDOW, config.contextWindow),
         ),

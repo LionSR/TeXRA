@@ -9,10 +9,9 @@ import {
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
-  createNodeWorkspaceRoots,
   FileSecrets,
   nodeFileServices,
-  resolveWorkspaceStoragePath,
+  openNodeWorkspaceRoots,
   secretsDirectory,
 } from '@texra-ai/harness/node';
 import { emitAppSignal } from '@texra-ai/harness/host';
@@ -66,10 +65,6 @@ export const initializeElectronPlatform = Effect.fn(
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
   const dataRoot = yield* resolveDesktopDataRoot(userDataPath);
-  // The process roots are the no-workspace roots. Each open project gets its
-  // own roots (desktopProjects.ts); this pair only backs the window before a
-  // folder is open.
-  const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
   // The process identity and application state are acquired by the
   // runtime's own layers, over the spawner and database it serves.
   const { mainDir, resourcesPath, configStores } = yield* Effect.gen(
@@ -117,10 +112,6 @@ export const initializeElectronPlatform = Effect.fn(
     Error,
     ProcessServices
   > = Effect.gen(function* () {
-    const globalStateStore = yield* AppState;
-    const workspaceStateStore = yield* (yield* StateStores)
-      .project(storage, undefined)
-      .pipe(Scope.provide(processScope));
     // Keys another window or the service writes reach this one's surfaces.
     yield* Effect.forkIn(
       FileSecrets.watch(secretsDirectory(dataRoot), (key) =>
@@ -129,15 +120,16 @@ export const initializeElectronPlatform = Effect.fn(
       processScope,
     );
     repairLaunchPath();
-    const processRoots = createNodeWorkspaceRoots({
+    // The process roots are the no-workspace roots. Each open project gets
+    // its own roots (desktopProjects.ts); these only back the window before
+    // a folder is open.
+    const processRoots = yield* openNodeWorkspaceRoots({
       workspacePath: undefined,
       storageRoot: dataRoot,
-      storage,
       config: configStores,
-      workspaceState: workspaceStateStore,
-      repoState: yield* (yield* StateStores).repo(storage, undefined),
-      globalState: globalStateStore,
-    });
+      stateStores: yield* StateStores,
+      globalState: yield* AppState,
+    }).pipe(Scope.provide(processScope));
     return {
       processRoots,
       globalConfigStore: configStores.global,

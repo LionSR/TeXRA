@@ -52,7 +52,8 @@ interface ActiveFileGuardSuccess {
 }
 
 type ActiveFileGuardResult =
-  ActiveFileGuardSuccess | { status: ActiveFileGuardFailureReason };
+  | ActiveFileGuardSuccess
+  | { status: ActiveFileGuardFailureReason };
 
 /**
  * Retrieve the active text editor when it holds a `.tex` document, optionally

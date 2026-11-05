@@ -64,7 +64,10 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * worktree.
  */
 export type SettingStore =
-  'config' | 'workspaceState' | 'repoState' | 'globalState';
+  | 'config'
+  | 'workspaceState'
+  | 'repoState'
+  | 'globalState';
 
 export interface StateSettingEntry {
   /** The row's key, relative to its catalog's namespace (`memory.enabled`),
@@ -536,16 +539,6 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     title: 'Helper model',
     description:
       "Model used for auxiliary tasks: instruction polishing, merges, and session descriptions. When unset, a run's helper calls use the run's own model.",
-    category: 'model',
-    slot: 'globalState',
-  },
-  {
-    key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-    ),
-    title: 'Prefer short model names',
-    description: 'Show compact model names in pickers.',
     category: 'model',
     slot: 'globalState',
   },

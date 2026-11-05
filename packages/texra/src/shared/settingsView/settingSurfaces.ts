@@ -178,7 +178,6 @@ export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
     ]),
   ),
   [GlobalStateKey.HELPER_MODEL]: MODELS_ONLY,
-  [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: MODELS_ONLY,
   [GlobalStateKey.KIMI_CODE_PREFER]: providerToggle(
     { provider: 'kimiCode' },
     { invalidatesModelOptions: true },

@@ -20,6 +20,11 @@ All notable changes to this project will be documented in this file.
   `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
   file is always written beside the file it stands in for, where its
   relative inputs resolve. A stored value of either is ignored.
+- **"Prefer short model names" is gone.** A request always carries the
+  model's catalog id. The switch never changed what a picker shows: it
+  replaced the date-pinned id sent to the provider with its unpinned alias,
+  and toggling it during a run broke that run's continuations. A stored
+  value is ignored.
 - **A child launch is a chat or a task.** SDK: `ChildLaunch`
   (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
   and the `mediaFiles` on its prompt) or a task (`task` with its `files`:
@@ -541,7 +546,7 @@ All notable changes to this project will be documented in this file.
   run by returning it in its result's `facts`: the fact is committed with
   the call's result, never apart from it. A task an earlier build saved
   after it reached the model cannot be opened: the task list, `texra
-history`, a resume and a follow-up say it was "written by an earlier
+  history`, a resume and a follow-up say it was "written by an earlier
   build of TeXRA; it can't be opened by this one" instead of calling it
   damaged or offering to resume it.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
@@ -1299,7 +1304,7 @@ history`, a resume and a follow-up say it was "written by an earlier
   that was cut short continues under its own run instead of starting over.
   The tool belongs to the Multi-Agent Workflow plugin.
 - **Scripts can run in the background.** `script` with `run_in_background:
-true` returns at once with a run ID, and the script runs as a child run of
+  true` returns at once with a run ID, and the script runs as a child run of
   its own (shown as a Script run) with the same tools, model and working
   directory. When it ends, the parent receives one follow-up with the
   script's result and a summary line: how many calls succeeded, failed or
@@ -1372,7 +1377,7 @@ true` returns at once with a run ID, and the script runs as a child run of
   (a `basedOn:` line at the end of the file). When an update changes that
   agent, the settings Agents page marks the copy and offers View built-in,
   Reset to built-in, and Keep mine; `texra agents list` and `texra agents
-show` print the same notice, and the new `texra agents customize`,
+  show` print the same notice, and the new `texra agents customize`,
   `texra agents reset`, and `texra agents keep` commands make, reset, and
   keep a copy from the terminal. An agent you wrote yourself under a built-in's name
   is never flagged.
@@ -1583,6 +1588,12 @@ show` print the same notice, and the new `texra agents customize`,
   run gets in the run list and history comes from one helper-model request,
   which was billed but missing from the run's cost and token counts. It now
   counts, and the run's result and the run list show the same total.
+- **A script's `self()` round does its own part, not the whole task again.**
+  A round now reads its prompt as one part of the work its script is doing,
+  so it no longer repeats the request that started the script, with its own
+  `self()` rounds and the script's waits, before answering. The `script`
+  tool's description also lists the modules a script may import, so a
+  plugin's module is found without guessing its name.
 - **No model request runs only to title a subagent, and the SDK sends none
   you did not ask for.** A subagent or a script's `self()` round keeps its
   agent name instead of a generated title, so a loop of rounds no longer
@@ -1773,7 +1784,7 @@ show` print the same notice, and the new `texra agents customize`,
   example, which documents did not compile and where their logs are)
   between `FAILED` and the run-artifacts line. JSON output is unchanged.
 - **An awaited sub-agent's report is now kept and viewable.** `executions
-view` on a sub-agent the parent waited for shows its report instead of
+  view` on a sub-agent the parent waited for shows its report instead of
   "No report found".
 - **`--output` that can't be written now fails the command, not the
   recorded run.** `texra run` and `texra resume` copy a document task's

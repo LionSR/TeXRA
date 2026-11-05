@@ -123,8 +123,7 @@ no information across them:
 
 Two model-id string tests stand in for capabilities the catalog should carry:
 `config.id.startsWith('gpt-5')` (`responsesConfiguration.ts:84`) and
-`config.id.toLowerCase().startsWith('gpt')` (`:128`). Both read an id that may
-already be the short-name rewrite (`packages/harness/src/agent/runtime/modelAccess/ModelAccess.ts:165-172`).
+`config.id.toLowerCase().startsWith('gpt')` (`:128`).
 
 Smaller instances of the same shape:
 
@@ -226,12 +225,10 @@ pattern, so the "options" are one choice spelled as several.
   `schema`; `document_task` (`packages/texra/src/tools/documents/DocumentTaskTool.ts:79`)
   always passes a task, files and `schema: null`. A tagged union
   `{kind:'agent'} | {kind:'task'}` makes the invalid mixes unrepresentable.
-- **`CompactionInput.force: 'request' | 'overflow' | null`** (`packages/harness/src/agent/runtime/run/compaction.ts:72`):
-  its one caller (`forced`, `:412-430`) passes `'request'` (a `/compact`) or
-  `'overflow'` (#14639), never `null`, so the `null` branch and its threshold
-  read at `:273-275` never run; the threshold path is already separate
-  (`atBoundary`). Narrow the field to `'request' | 'overflow'` and delete the
-  `null` branch.
+- **`CompactionInput.force`**: done. `compactIfNeeded`, whose one caller
+  `forced` always passed `'request'` or `'overflow'`, is inlined there with its
+  never-run threshold branch, and the field is gone (the reason is `forced`'s
+  argument).
 - **Strategy hooks with one implementer each**: `runTurn`, `pauseNotice`,
   `onTurnSuccess`, `releaseSessionOwnership` (only
   `packages/texra/src/tools/agentCli/agentCliShared.ts:482-503`),

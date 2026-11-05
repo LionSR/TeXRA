@@ -2,9 +2,7 @@ import { Result } from 'effect';
 import * as CommandLine from 'effect/process/CommandLine';
 
 import {
-  descendantRuns,
   isEmptyUsage,
-  isLoopDriven,
   type RunId,
   type TokenUsageStats,
 } from '@texra-ai/harness/schemas';
@@ -14,16 +12,6 @@ import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { runViewOf } from './sessionView';
 import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
-
-export interface ResumeTarget {
-  readonly runId: string;
-  readonly label: string;
-}
-
-interface ResumeTargetsInput {
-  readonly view: SessionView;
-  readonly rootRunId: RunId | undefined;
-}
 
 export interface ResumeCommandOptions {
   readonly cwd?: string;
@@ -102,42 +90,19 @@ function formatResumeUsage(
     : `Token usage: ${lines.join(' ')}`;
 }
 
-export function collectResumeTargets({
-  view,
-  rootRunId,
-}: ResumeTargetsInput): readonly ResumeTarget[] {
-  const targets: ResumeTarget[] = [];
-  if (rootRunId) {
-    targets.push({ runId: rootRunId, label: 'task' });
-  }
-  for (const runId of descendantRuns(view, rootRunId, {
-    includeRoot: false,
-  })) {
-    const run = runViewOf(view, runId);
-    if (run === undefined || !isLoopDriven(run.identity)) continue;
-    targets.push({ runId: run.id, label: run.label });
-  }
-  return targets;
-}
-
+/** The exit hint: the task's usage, then the one command that resumes its
+ *  root run (a child resumes through its parent). */
 export function formatResumeHint(
-  targets: readonly ResumeTarget[],
+  runId: RunId,
   usage?: TokenUsageStats,
   commandName?: string,
   commandOptions?: ResumeCommandOptions,
-): string | undefined {
-  if (targets.length === 0) return undefined;
-  const lines = [formatResumeUsage(usage), TASK_ACTIONS.resumeHint].filter(
-    (line): line is string => Boolean(line),
-  );
-  for (const target of targets) {
-    lines.push(
-      `  ${formatResumeCommand(
-        commandName,
-        target.runId,
-        commandOptions,
-      )}  (${target.label})`,
-    );
-  }
-  return lines.join('\n');
+): string {
+  return [
+    formatResumeUsage(usage),
+    TASK_ACTIONS.resumeHint,
+    `  ${formatResumeCommand(commandName, runId, commandOptions)}`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
 }

@@ -93,7 +93,7 @@ other. Flatten, map, and filter do not need a barrier.
 - `Promise.all` rejects on the first failure, but the other calls keep
   running and their results are lost to it. For tolerant fan-out, catch
   inside each branch (`async (s) => { try { ... } catch (e) { return
-{ s, error: e.name } } }`) or use `Promise.allSettled` and keep the
+  { s, error: e.name } } }`) or use `Promise.allSettled` and keep the
   `status === 'fulfilled'` values. An uncaught rejection ends the script.
 - Retry with a loop and try/catch. Give each attempt its own `id`
   (``id: `${key}#${n}` ``): two calls of one script with the same prompt,

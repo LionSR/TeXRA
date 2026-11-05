@@ -32,21 +32,18 @@ npm run test:pure         # before a push (~30s): the host-free tier
 npm test                  # before opening a PR: the full suite, minutes long
 npm run format
 npm run lint
-npm run hooks:install     # optional pre-commit hooks (needs `pip install pre-commit`)
+pre-commit install        # optional hooks (needs `pip install pre-commit`)
 ```
 
 **Builds don't type check.** esbuild and Vite only strip types. Run
-`npm run typecheck` (or `compile:safe`) before committing; this is the most common way a change lands
-broken. `typecheck` composes `typecheck:{workspace,test-kernel,harness,llm,cli,trace-viewer,desktop}`;
-run the affected ones while developing. `typecheck:harness` is the full harness
-build and regenerates `packages/harness/dist/`. `build:initial` validates a
-full initial build (desktop app and VSIX).
+`npm run typecheck` before committing; this is the most common way a change lands
+broken. It runs `tsc` over the root and test configs, then each package's own
+check; the harness's is its full build, which regenerates
+`packages/harness/dist/`.
 
-The pre-commit hook (`scripts/format-staged.mjs`) formats and stages what you
-staged, and never overwrites unstaged edits: when they overlap the reformat it
-keeps the working-tree copy and asks you to run `npm run format` after the
-commit. Use `git add -p` for a partially staged file, and re-run
-`npm run hooks:install` after any manual `pre-commit install`.
+The pre-commit hook runs oxfmt on the staged paths; when it rewrites a file
+the commit stops, and you stage the output and commit again. CI runs
+`npm run format:check`.
 
 Commits use [Conventional Commits](https://www.conventionalcommits.org)
 (`fix:`, `feat:`, `docs:`), a present-tense summary under 72 characters. Changes
@@ -428,7 +425,7 @@ in review beyond this bar. Full rules: `src/test-kernel/AGENTS.md`.
 
 ## Code style
 
-oxlint (`.oxlintrc.json`) and Prettier check what they can. Beyond them:
+oxlint (`.oxlintrc.json`) and oxfmt (`.oxfmtrc.json`) check what they can. Beyond them:
 
 - Erasable TypeScript only: `erasableSyntaxOnly` (root and llm `tsconfig.json`)
   refuses syntax type stripping cannot run. No `enum` (an `as const` table with
