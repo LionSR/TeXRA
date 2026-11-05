@@ -156,7 +156,6 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
     detach: (job) => {
       Effect.runFork(publisher.withPermits(1)(job(append)));
     },
-    run: () => undefined,
   });
   const queuedRows = (runId: RunId) =>
     rows.flatMap((row) =>

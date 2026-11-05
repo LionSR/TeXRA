@@ -7,19 +7,16 @@
 // A delivery or notice envelope is collapsed to a terse status line
 // (summarizeSubagentFollowup) once, when its recipient queues it, and stored as
 // the follow-up's `displayText`, which every surface shows. This module is
-// the single source of truth for the block parsing, entity decoding, and
-// progress-detail logic. It intentionally has NO host imports (no vscode, no
-// Ink/React) so the browser-safe transcript entry can carry it.
+// the single source of truth for the block parsing and entity decoding. It
+// intentionally has NO host imports (no vscode, no Ink/React) so the
+// browser-safe transcript entry can carry it.
 
 import escapeRegExp from 'escape-string-regexp';
 import { Result, Schema } from 'effect';
 import { DELIVERY_TAG, DELIVERY_TAG_PATTERN } from '@shared/deliveryTags';
-import type {
-  SubagentProgressUpdate,
-  ScriptDeliverySummary,
-} from '@shared/schemas';
-import { planSummaryLine, ScriptDeliverySummarySchema } from '@shared/schemas';
-import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import type { ScriptDeliverySummary } from '@shared/schemas';
+import { ScriptDeliverySummarySchema } from '@shared/schemas';
+import { escapeText } from '@shared/utils/xmlEscape';
 import { formatScriptTally } from '@shared/transcript/workflowCall';
 import {
   formatCompactDuration,
@@ -35,8 +32,8 @@ import {
 // `\b` after the alternation is NOT a safe tag-name terminator here: `-` is a
 // non-word character, so `\b` also matches between `t` and `-` inside e.g.
 // `script-result-partial`, letting a hyphen-extended tag prefix-match an
-// existing one. Every producer (`formatDelivery`, `formatSubagentProgress`, a
-// plugin's activity wrapper) only ever follows a tag name with whitespace
+// existing one. Every producer (`formatDelivery`, a plugin's activity
+// wrapper) only ever follows a tag name with whitespace
 // (attributes), `>` (a bare open, as an activity report's), or the exact `/>`
 // self-closing delimiter, so anchor on those delimiters instead of accepting
 // any slash continuation.
@@ -101,33 +98,6 @@ export function decodeXmlEntities(text: string): string {
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>')
     .replaceAll('&amp;', '&');
-}
-
-function progressDetail(xml: string): string | undefined {
-  const type = attr(xml, 'type');
-  switch (type) {
-    case 'started':
-      return 'started';
-    case 'overview': {
-      const calls = attr(xml, 'tool-calls');
-      if (calls === undefined) return undefined;
-      const cost = attr(xml, 'cost');
-      const toolCalls = `${calls} tool call${calls === '1' ? '' : 's'}`;
-      return cost ? `${toolCalls} · $${cost}` : toolCalls;
-    }
-    case 'plan': {
-      const status = attr(xml, 'status');
-      if (status === 'cleared') return 'plan cleared';
-      // The producer (`formatSubagentProgress`) attaches the plan objective as
-      // `summary`; there is no step count on the wire.
-      const summary = attr(xml, 'summary');
-      return status === 'updated' && summary !== undefined
-        ? `plan · ${decodeXmlEntities(summary)}`
-        : undefined;
-    }
-    default:
-      return undefined;
-  }
 }
 
 /** Truncate an already-decoded result response for display in a status line. */
@@ -218,45 +188,6 @@ export function scriptSummaryElement(summary: ScriptDeliverySummary): string {
   return `<script-summary>${escapeText(JSON.stringify(summary))}</script-summary>`;
 }
 
-/** Format a typed progress update as XML for injection into orchestrator context. */
-export function formatSubagentProgress(
-  runId: string,
-  agentName: string,
-  update: SubagentProgressUpdate,
-): string {
-  const tag = DELIVERY_TAG.subagentProgress;
-  const idAttr = `id="${escapeAttr(runId)}"`;
-  const agentAttr = `agent="${escapeAttr(agentName)}"`;
-
-  switch (update.kind) {
-    case 'overview': {
-      const fileList =
-        update.filesChanged.length > 0
-          ? update.filesChanged.map((f) => escapeAttr(f)).join(', ')
-          : 'none';
-      const attrs = [
-        `type="overview"`,
-        `tool-calls="${update.toolCallCount}"`,
-        `files-changed="${fileList}"`,
-      ];
-      if (update.cost !== undefined) {
-        attrs.push(`cost="${update.cost.toFixed(4)}"`);
-      }
-      return `<${tag} ${idAttr} ${agentAttr} ${attrs.join(' ')} />`;
-    }
-
-    case 'plan': {
-      if (!update.plan) {
-        return `<${tag} ${idAttr} ${agentAttr} type="plan" status="cleared" />`;
-      }
-      return `<${tag} ${idAttr} ${agentAttr} type="plan" status="updated" summary="${escapeAttr(planSummaryLine(update.plan.objective))}" />`;
-    }
-
-    case 'started':
-      return `<${tag} ${idAttr} ${agentAttr} type="started" />`;
-  }
-}
-
 /**
  * What a child-run delivery says, without its envelope: a result's
  * `<response>` or an error's `<message>`, decoded, else the envelope's
@@ -289,12 +220,6 @@ export function summarizeSubagentFollowup(text: unknown): string {
   const trimmed = normalized.trim();
   const tag = deliveryTagOf(trimmed);
   if (!tag) return normalized;
-
-  if (tag === DELIVERY_TAG.subagentProgress) {
-    const agent = attr(trimmed, 'agent') ?? 'subagent';
-    const detail = progressDetail(trimmed);
-    return detail === undefined ? normalized : `⟳ ${agent} · ${detail}`;
-  }
 
   const summary = parseScriptDeliverySummary(trimmed);
   if (summary) return formatScriptDeliverySummary(summary);

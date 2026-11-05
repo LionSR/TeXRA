@@ -153,10 +153,15 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // row's paths would be read as no media).
   // v4: a delivery or notice carries its summary as `displayText`, which
   // every surface shows (a v3 delivery would show its raw envelope).
-  'followup.queued': { version: 4, listing: 'followup' },
+  // v5: no `holdUntil: 'generation'`: a child queues no progress notice, and
+  // a host's notification is known by its sender (a v4 row holding it would
+  // fail as damaged).
+  'followup.queued': { version: 5, listing: 'followup' },
   // v2: `disposition` says why the follow-up left the queue; a v1 row lacks
   // it and fails to decode.
-  'followup.consumed': { version: 2, listing: 'followup' },
+  // v3: no `stale` reason: nothing drops a notice of an ended child (a v2
+  // row dropped for it would fail as damaged).
+  'followup.consumed': { version: 3, listing: 'followup' },
   // v2: a task proposal carries its plugin's `options`, not `toolConfig`
   // v3: a retry's credential switch names no OpenRouter key.
   // v4: a task proposal records whether approving it may bypass later prompts

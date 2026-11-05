@@ -17,9 +17,8 @@ import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
 import { consumedRow } from '@shared/session/runFacts';
 import type { Conflict } from '@shared/session/runtimeRequest';
-import { pendingMessages, type QueuedFollowUp } from '@shared/session/runRows';
+import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
-import type { RunView } from '@shared/session/sessionView';
 import {
   afterCommit,
   type Append,
@@ -50,11 +49,6 @@ export interface InboxPort {
   >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
-  /** The run as the session view holds it: its parent (`null` at top
-   *  level) and its status (a notice of an ended child is stale). */
-  readonly run: (
-    runId: RunId,
-  ) => Pick<RunView, 'parentId' | 'status'> | undefined;
 }
 
 /** One message a producer sends. */
@@ -86,7 +80,8 @@ type Refusal = 'notResumable' | 'ownedElsewhere' | 'notParent';
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
-  /** When the row may be read (`readableMessages`). Absent: at once. */
+  /** When the row may be read (`readableMessages`). Absent: at once, or at
+   *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Only from the run's parent: its rows' edge, read in this job. */
   readonly fromParent?: boolean;
@@ -132,21 +127,6 @@ export class SessionInbox {
     );
   }
 
-  /** A notice for a generation already running (`holdUntil: 'generation'`:
-   *  read at a turn's end, never waking a run, stale once its sender ended),
-   *  from a producer with no fiber (a child's progress): enqueued on the
-   *  publisher now, so it commits in call order ahead of the turn's result;
-   *  `to` is read in that job (none: nothing queued). A failure is logged. */
-  sendNotice(to: Effect.Effect<RunId | null, Error>, item: InboxItem): void {
-    if (this.disposed) return;
-    const hold = { hold: 'generation' } as const;
-    this.port.detach((append) =>
-      Effect.flatMap(to, (runId) =>
-        runId === null ? Effect.void : this.admit(runId, item, hold, append),
-      ).pipe(Effect.catch(warnWith('A notice was not queued'))),
-    );
-  }
-
   /** Open the run's reader for the generation running it (the caller's
    *  scope); the registry admits one at a time, so a second is a defect. */
   open(runId: RunId): Effect.Effect<RunInput, never, Scope.Scope> {
@@ -159,7 +139,6 @@ export class SessionInbox {
             Effect.map(({ followUps }) => followUps),
             Effect.orDie,
           ),
-          this.port.run,
         );
         if (this.disposed) input.end();
         else this.readers.set(runId, input);
@@ -179,11 +158,7 @@ export class SessionInbox {
     if (!terminal) return;
     this.port.detach(
       Effect.fnUntraced({ self: this }, function* () {
-        if (
-          this.readers.has(runId) ||
-          queued(yield* this.read(runId), this.port.run)
-        )
-          return;
+        if (this.readers.has(runId) || queued(yield* this.read(runId))) return;
         yield* afterCommit(
           Effect.sync(() => this.notify({ kind: 'run', runId })),
         );
@@ -200,7 +175,7 @@ export class SessionInbox {
       yield* this.port.log.settled;
       if (this.disposed || this.readers.has(runId)) return false;
       const input = yield* this.read(runId);
-      return !input.inputClosed && needsWake(input, this.port.run);
+      return !input.inputClosed && needsWake(input);
     }).pipe(
       Effect.catch((error) =>
         Effect.as(
@@ -223,9 +198,8 @@ export class SessionInbox {
         Effect.gen({ self: this }, function* () {
           yield* this.port.log.hold(runId);
           const input = yield* this.read(runId);
-          if (queued(input, this.port.run)) return;
-          // A request the run never applied, and a notice of an ended
-          // child, close with its input.
+          if (queued(input)) return;
+          // A request the run never applied closes with its input.
           yield* tx.append([
             ...input.followUps.map(({ followUpId }) =>
               consumedRow(runId, followUpId, {
@@ -331,10 +305,7 @@ export class SessionInbox {
       if (!queuedStill && !input.taken.has(row.followUpId)) {
         // The row commits after every row read here.
         const followUps = [...input.followUps, { ...row, commit: Infinity }];
-        if (
-          options.wakesOnly === true &&
-          !needsWake({ ...input, followUps }, this.port.run)
-        )
+        if (options.wakesOnly === true && !needsWake({ ...input, followUps }))
           return only(CLOSED);
         const aggregate = qualifyAggregateId('run', runId);
         const queued = { type: 'followup.queued', ...row } as const;
@@ -391,6 +362,5 @@ const warnWith =
       withLogChannel(CHANNEL),
     );
 
-/** Whether a message is queued: not a request, nor an ended child's notice. */
-const queued = (input: RunRows, run: InboxPort['run']): boolean =>
-  pendingMessages(input.followUps, run).length > 0;
+/** Whether the run has a pending message, not just one of its own requests. */
+const queued = (input: RunRows): boolean => input.followUps.some(isMessage);

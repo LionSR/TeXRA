@@ -333,9 +333,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.invocation === null && tail?.role === 'tool') {
           const queued = yield* followUps.input.read('request');
           if (queued !== null)
-            state = (yield* followUps.consume(cell, queued, {
+            state = yield* followUps.consume(cell, queued, {
               position: false,
-            })).state;
+            });
         }
         // The step this request opens, its offered set recorded when changed.
         let step = yield* openStep(state, 'request');
@@ -445,8 +445,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
           );
         }
-        const consumed = yield* followUps.consume(cell, batch);
-        if (!consumed.turn) continue;
+        yield* followUps.consume(cell, batch);
       }
       const turn: RunExit = yield* start.turns
         ? start.turns.turnPermit(runTurn(cell))
@@ -485,10 +484,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state =
         next === null
           ? yield* cell.append([...hooks, ...ending], childTurn?.alongside)
-          : (yield* followUps.consume(cell, next, {
+          : yield* followUps.consume(cell, next, {
               rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
               alongside: childTurn?.alongside,
-            })).state;
+            });
       if (turn.outcome === 'completed') {
         const cost = state.usage.totalCost;
         run.callbacks.onProgress?.({

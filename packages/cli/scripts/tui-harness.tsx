@@ -258,8 +258,8 @@ const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
-// Deliveries a child run queued on the root (a `<subagent-result>` or
-// `<subagent-progress>` envelope), as opposed to the user's own messages.
+// Deliveries a child run queued on the root (a `<subagent-result>`
+// envelope), as opposed to the user's own messages.
 const QUEUED_DELIVERIES = parseList(process.env.HARNESS_QUEUED_DELIVERIES);
 const DELIVERING_CHILD_RUN_ID = harnessRunId('aaaa00c1f10e');
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
@@ -871,7 +871,6 @@ function seedSubagentFollowupTranscript(): void {
   const entries: HarnessLogRow[] = [];
   const timestamp = Date.now();
   const followups = [
-    '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
     [
       '<subagent-result id="child-b" agent="leanSolver" status="completed">',
       '<wall-time>2min, 3sec</wall-time>',

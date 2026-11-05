@@ -90,16 +90,15 @@ export interface FollowUps {
   /**
    * Commit a batch through the run's cell: its `followup.consumed` rows, its
    * user message, and the position it opens, in one batch, answering the
-   * state it folds to and whether a message was delivered (`turn` is false
-   * when every item was a notice of an ended child). On failure nothing is
-   * consumed and the run's rows still queue the batch.
+   * state it folds to. On failure nothing is consumed and the run's rows
+   * still queue the batch.
    */
   readonly consume: (
     cell: RunCell,
     batch: FollowUpBatch,
     options?: ConsumeOptions,
   ) => Effect.Effect<
-    { readonly state: RunState; readonly turn: boolean },
+    RunState,
     Error,
     FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   >;
@@ -181,16 +180,14 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const batchRows = Effect.fn('FollowUps.batchRows')(function* (
     state: RunState,
     batch: FollowUpBatch,
-    /** The turn the batch's message becomes part of; null for a batch with
-     *  no message (only notices of ended children). */
-    turn: number | null,
+    /** The turn the batch's message becomes part of. */
+    turn: number,
   ): Effect.fn.Return<
     BatchRows,
     Error,
     FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   > {
     const followUps = batch.kind === 'followUps' ? batch.followUps : [];
-    const stale = batch.kind === 'followUps' ? batch.stale : [];
     const built =
       batch.kind === 'synthetic'
         ? {
@@ -201,11 +198,6 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             kinds: [],
           }
         : yield* batchMessage(followUps);
-    if (stale.length > 0) {
-      logger.debug(
-        `Consumed ${stale.length} progress notice(s) of ended subagents without delivering them.`,
-      );
-    }
     const instruction = userFollowUpInstruction(
       followUps.map((followUp) => followUp.content),
     );
@@ -263,19 +255,11 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           state,
           instruction === undefined ? [] : [instruction],
         ),
-        ...(turn === null
-          ? []
-          : followUps.map((followUp) =>
-              consumedRow(runId, followUp.followUpId, { kind: 'turn', turn }),
-            )),
-        ...stale.map((followUp) =>
-          consumedRow(runId, followUp.followUpId, {
-            kind: 'dropped',
-            reason: 'stale',
-          }),
+        ...followUps.map((followUp) =>
+          consumedRow(runId, followUp.followUpId, { kind: 'turn', turn }),
         ),
         ...hooked.rows,
-        ...(turn === null ? [] : [appendRow(runId, [message], { input })]),
+        appendRow(runId, [message], { input }),
       ],
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => logFollowUps(followUps, built.kinds),
@@ -288,26 +272,21 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     batch: FollowUpBatch,
     options: ConsumeOptions = {},
   ): Effect.fn.Return<
-    { readonly state: RunState; readonly turn: boolean },
+    RunState,
     Error,
     FileSystem.FileSystem | ChildProcessSpawner | SessionServices
   > {
     const state = yield* cell.current;
-    // A batch with a message opens the next turn, or joins the one running.
-    const turn = batch.kind === 'synthetic' || batch.followUps.length > 0;
-    const opens = turn && options.position !== false;
-    const built = yield* batchRows(
-      state,
-      batch,
-      turn ? state.turn + (opens ? 1 : 0) : null,
-    );
+    // The batch's message opens the next turn, or joins the one running.
+    const opens = options.position !== false;
+    const built = yield* batchRows(state, batch, state.turn + (opens ? 1 : 0));
     const rows = [...(options.rows ?? []), ...built.rows];
     const committed = yield* cell.append(
       opens ? [...rows, positionRow(runId, state, 'turn.ready')] : rows,
       options.alongside,
     );
     built.delivered();
-    return { state: committed, turn };
+    return committed;
   });
 
   return {
