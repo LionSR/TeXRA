@@ -213,6 +213,8 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
 
 const HttpFailureSchema = Schema.Struct({
   status: Schema.Int.check(Schema.isBetween({ minimum: 400, maximum: 599 })),
+  // The reply's headers, so a 429's `retry-after` reaches the retry gate.
+  headers: Schema.optional(Schema.instanceOf(Headers)),
 });
 
 function sdkFailure(cause: unknown): ModelError {
@@ -220,7 +222,7 @@ function sdkFailure(cause: unknown): ModelError {
   const decoded = Schema.decodeUnknownResult(HttpFailureSchema)(cause);
   return sdkModelError(
     cause,
-    Result.isSuccess(decoded) ? { status: decoded.success.status } : undefined,
+    Result.isSuccess(decoded) ? decoded.success : undefined,
     'The Google transport failed.',
   );
 }
