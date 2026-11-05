@@ -353,7 +353,7 @@ const SCENARIOS = [
     cols: 120,
     env: {
       HARNESS_ENTRIES: '2',
-      HARNESS_QUEUED_FOLLOWUPS:
+      HARNESS_QUEUED_DELIVERIES:
         '<subagent-result id="child-q" agent="reviewer" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
     },
     bootExpect: 'queued 1',
@@ -371,7 +371,7 @@ const SCENARIOS = [
     cols: 140,
     env: {
       HARNESS_ENTRIES: '2',
-      HARNESS_QUEUED_FOLLOWUPS:
+      HARNESS_QUEUED_DELIVERIES:
         '<subagent-progress id="child-q" agent="review" type="plan" status="cleared"/>',
     },
     bootExpect: 'queued 1',
