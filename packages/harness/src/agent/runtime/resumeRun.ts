@@ -19,7 +19,12 @@ import {
  * acknowledge each resumed turn separately.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { Inbox, openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  Inbox,
+  openResume,
+  REFUSED,
+} from '@agent/followUp/ToolUseFollowUp';
 import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
@@ -84,6 +89,20 @@ export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
   readonly stopAfterCycle?: boolean;
+}
+
+/** A resume refusal's wording: a blocked one names the agent or plugin it
+ *  waits for; every other reads as its kind. */
+export function describeResumeRefusal(reason: ResumeRefusal): string {
+  if (reason.kind !== 'blocked') return describeFollowUpFailure(reason.kind);
+  switch (reason.blocker) {
+    case 'agentMissing':
+      return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
+    case 'pluginOff':
+      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
+    case 'pluginUntrusted':
+      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once the plugin is reviewed.`;
+  }
 }
 
 const CHANNEL = 'ResumeRun';

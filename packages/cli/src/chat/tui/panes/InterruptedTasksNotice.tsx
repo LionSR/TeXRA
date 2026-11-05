@@ -1,6 +1,6 @@
 // The open-time prompt above the input (GUI design 2026-10-02, J5): the tasks
 // a closed or crashed TeXRA left interrupted, from the shared list
-// (`@ui/copy/interruptedTasks`), with what blocks each and where to fix it.
+// (`@ui/copy/interruptedTasks`), by title, stop time and agent count.
 // It answers through `/resume all` and `/resume`, never through single keys:
 // a key on an input the user types into would fire on the first letter of a
 // message. Anything sent hides it until the next open.

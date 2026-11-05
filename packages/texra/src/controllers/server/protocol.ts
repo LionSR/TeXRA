@@ -48,7 +48,6 @@ import {
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
-  ResumeBlockedSchema,
 } from '@texra-ai/harness/transcript';
 import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 

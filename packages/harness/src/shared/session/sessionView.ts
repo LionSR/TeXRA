@@ -14,7 +14,6 @@ import { Schema } from 'effect';
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
-  ResumeBlockedSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,

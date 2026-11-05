@@ -8,7 +8,6 @@ import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
 import { AggregateIdSchema, OwnerIdSchema } from './identifiers';
-import { ResumeBlockedSchema } from './followUp';
 import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**

@@ -645,9 +645,8 @@ export function createChatSessionController(
         yield* Effect.forkIn(
           recoverRun(
             Effect.gen(function* () {
-              // A refusal, or a run that waits for what blocks it, is the
-              // resume's answer, not a failure: the chat says it in the
-              // session's words and exits as a usage error.
+              // A refusal is the resume's answer, not a failure: the chat
+              // says it in the session's words and exits as a usage error.
               const run = yield* resumeRun(runSession, id).pipe(
                 Effect.catchIf(isRequestRefusal, (refusal) =>
                   Effect.succeed(refusal),
