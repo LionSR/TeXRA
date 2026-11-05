@@ -146,7 +146,7 @@ ratchet shrinks by the deleted classes.
 
 | Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `isCredentialRetryFailure` (`packages/harness/src/shared/schemas/errors.ts:131-139`, re-reading the status after llm set the kind), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`)                                                                                                                                                                                                                    |
+| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`)                                                                                                                                                                                                                                                                                                                                                        |
 | Is this retryable        | `ModelError.retryable`, `notRetryable` (`verdict.ts:269`), `offersRetry` (`packages/harness/src/common/errors/sdkError/providerErrorFormat.ts:150`), `userRetryable`; `unsent` forces "no offer" twice (`failureInfo.ts:37`, `invocation.ts:288`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | Transient HTTP status    | `isRetryableStatus` (`packages/llm/src/errors.ts:142`), `isTransientHttpStatus` (`packages/harness/src/utils/core/httpStatus.ts:14`, the 409 split documented), an inline `status >= 500` (`packages/llm/src/oauth/chatgpt/chatgptProvider.ts:287`), a hand-rolled loop with its own error pair (`packages/texra/src/latex/arxivProcessor.ts:206-245`) beside `retryTransientFetch` (`packages/harness/src/tools/timeouts.ts:53`)                                                                                                                                                                                                                                                                                                           |
 | Is this an abort         | none in the harness since #14641 deleted `isUserAbort` (a stop is fiber interruption); the boundary signatures, inline `name === 'AbortError'` at `packages/llm/src/api/googleInteractions.ts:232` and `arxivProcessor.ts:419`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
@@ -156,7 +156,7 @@ ratchet shrinks by the deleted classes.
 | Word a used-up plan      | `usedUpPlanMessage` and `quotaFallbackMessage` (`providerErrorFormat.ts:89,116`) and again `modelFailureText` and `quotaFallbackNoticeText` (`packages/texra/src/ui/copy/modelAccess.ts:71,98`); the harness wording is `ProviderError.message` (`providerErrorOf`), stored on the run's error rows and read wherever no app copy words the classification (an embedder, a child's result to its parent)                                                                                                                                                                                                                                                                                                                                    |
 
 **Proposal.** One decider per row: `ModelError.kind` is the auth fact and
-`isCredentialRetryFailure` reads it; `offered` is computed once in
+the harness re-reads no status (`isCredentialRetryFailure` and `getExhaustionReason` are gone since #14655: the credential move is decided over llm's `quota` before it is recorded, and a subscription token is renewed once on any authentication failure); `offered` is computed once in
 `failureInfo`; the arXiv loop and the ChatGPT revoke use the existing
 transient helpers; `toErrorMessage`
 unwraps `PlatformError` once and the fifteen sites delete their copy; the harness
@@ -196,10 +196,11 @@ UI's, and the harness copies go.
   (`delegation/inBandSubagentRun.ts:354-371`). `SessionRequests.ts:335-355`
   and `ExecutionsTool.ts:485-492` are the same sequence; `RunStop.accepted`
   has one consumer.
-- **`RunStopOptions.detachActiveChildren`** is `optional(NullOr(Boolean))` on
-  the wire (`runtimeRequest.ts:52`); `true` and `null` have no producer, tests
-  included. A `shutdown` stop reads the detach setting in the TUI but forces
-  `false` headless and on session close.
+- **`RunStopOptions.detachActiveChildren`** was `optional(NullOr(Boolean))`
+  on the wire with no producer of `true` or `null`. Done (#14660): the field
+  is gone; a shutdown cascades, and a user stop reads the one "keep agents
+  running" setting (`runRegistry.ts`'s private `detachActiveChildren` is that
+  reading's implementation, not an option).
 - **Six end writers** share one block, built three ways:
   `{ kind: classifyAgentError(e), message: getSdkErrorMessage(e) }` at
   `runLaunchGuard.ts:80-85` and `childRunLoop.ts:724-730`, and `failedEnd`
@@ -262,9 +263,10 @@ behaviour, which is the documented one.
   `retryAfterMs`.
 - **Retry has several owners.** The invocation loop decides the budget and
   the next step (the documented one owner), but the wait is split: a fixed
-  `RETRY_BACKOFF_MS = 1000` sleep in `pauseBefore` (`invocation.ts:48,247-262`)
+  `RETRY_BACKOFF_MS = 1000` sleep in `pauseBefore` (`invocation.ts:245`)
   that ignores `retryAfterMs`, plus `ModelRetryGate`'s jittered backoff that
-  engages only when `scope` is set, so a scoped failure waits both. `maxRetries: 0`
+  engages only when `scope` is set, so a scoped failure waits both, and a
+  failure with no route (no `scope`) waits the flat sleep alone. `maxRetries: 0`
   is set at six SDK sites, and only Anthropic sets a request timeout.
 - **A tool fails three ways** (`throw new ToolError` ×160, `errorResult()`
   ×40, literal `status: 'error'` ×26) and a thrown error is converted twice
@@ -279,8 +281,8 @@ behaviour, which is the documented one.
 
 **Proposal.** The loop reads `finishReason` (landed: #14638, #14639). One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
-two. The gate owns every wait: `pauseBefore`'s sleep goes and `retryAfterMs`
-is honoured. One thrown-to-result converter; a non-`ToolError` defect is
+two. The gate owns every wait, the no-route failure's included: `pauseBefore`'s
+sleep goes and `retryAfterMs` is honoured. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.
 
