@@ -183,16 +183,8 @@ const OUTSIDE_CORE_RULES = {
   'type-assertions': 'type-assertions-outside-core',
 };
 
-/** The test trees: the cross-package kernel and each package's own suites. */
-const TEST_DIRS = (rootDir) => [
-  'src/test-kernel',
-  ...readdirSync(path.join(rootDir, 'packages'))
-    .map((name) => `packages/${name}/test`)
-    .filter((dir) => existsSync(path.join(rootDir, dir))),
-];
-
 /**
- * The rules the test trees (`TEST_DIRS`) are held to, under their own
+ * The rules the test trees (`testRoots`) are held to, under their own
  * names. The depth rules do not apply: a suite is not an interface.
  */
 const TEST_KERNEL_RULES = {
@@ -1658,7 +1650,7 @@ export async function measure(rootDir) {
   const tests = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
   measureAst(
     rootDir,
-    TEST_DIRS(rootDir)
+    testRoots(rootDir)
       .flatMap((dir) =>
         walkFiles(path.join(rootDir, dir), {
           include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
