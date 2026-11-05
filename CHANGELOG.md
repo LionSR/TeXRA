@@ -1425,9 +1425,10 @@ All notable changes to this project will be documented in this file.
   started.
 - **Choose the Codex subagent's model.** Codex was fixed to GPT-5.5; a new
   setting picks any model the Codex backend serves (default GPT-6.1 Sol).
-- **OpenAI fast processing** (`model.openaiFastTier` in `.texra/config.json`)
-  sends OpenAI requests on the fast tier where a model offers it, and run
-  costs use the fast-tier prices.
+- **OpenAI fast mode** sends OpenAI requests on the fast tier where a model
+  offers it, and run costs use the fast-tier prices. Turn it on under OpenAI
+  in Settings → Models, in the CLI's `/config`, or with `model.openaiFastTier`
+  in `config.json`.
 - **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
   (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
   $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats

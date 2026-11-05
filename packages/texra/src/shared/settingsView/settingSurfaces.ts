@@ -136,6 +136,7 @@ export const HARNESS_ROW_SURFACES: Readonly<Record<string, Placement>> = {
       ],
     },
   },
+  'model.openaiFastTier': providerToggle({ provider: 'openai' }),
   [MODEL_COMPACTION_THRESHOLD_SETTING.configKey]: AGENTS_AND_CLI,
   [MODEL_RETRY_MAX_ATTEMPTS_SETTING.configKey]: AGENTS_AND_CLI,
   // The `agents` snapshot controls rebroadcast routing, not tab placement; the

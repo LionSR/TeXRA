@@ -64,7 +64,7 @@ rather than a premium tier, for the hardest planning and long-horizon tasks. For
 also enable the `inquiry` tool and paste the answer from your own ChatGPT subscription instead of
 running a full agent turn against the API.
 
-**Fast processing.** Set `"texra.model.openaiFastTier": true` in `.texra/config.json` to send OpenAI requests on OpenAI's fast service tier, for models that offer it. Responses come back faster at a higher per-token price (for example $4 / $20 per 1M tokens for GPT-6.1 Sol), and run costs use the fast-tier prices. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
+**Fast mode.** Turn on **Fast mode** under OpenAI in Settings → Models (or in `/config` in the CLI, or set `"texra.model.openaiFastTier": true` in `config.json`) to send OpenAI requests on OpenAI's fast service tier, for models that offer it. Responses come back faster at a higher per-token price (for example $4 / $20 per 1M tokens for GPT-6.1 Sol), and run costs use the fast-tier prices. Read the [OpenAI API reference](https://developers.openai.com/api/docs) for
 full capabilities.
 
 ## Google models

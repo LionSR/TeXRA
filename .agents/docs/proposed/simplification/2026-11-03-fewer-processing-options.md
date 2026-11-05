@@ -102,10 +102,13 @@ every other reasoning model's does, and `BindSpec.options.reasoningSummary`
 is gone. `codeMode.scriptOnly` is its own slice: the canned
 validation model (CI's `validate` job, the golden store) calls `plan` and
 `bash` directly, so flipping to script-only first rewrites that conversation
-to call them from scripts, then runs the GLM and `agent()` journeys. Two
-keys wait for the owner's word, each a product-visible default:
+to call them from scripts, then runs the GLM and `agent()` journeys. One
+key waits for the owner's word, a product-visible default:
 `model.useGoogleBackgroundResponses` (off: Google text-only turns would stop
-streaming) and `model.openaiFastTier` (off: a documented, dearer tier)._
+streaming). `model.openaiFastTier` stays, on the owner's word (2026-11-05):
+paying more for a faster tier is the user's choice, not a fact the route
+holds, so the key keeps `BindSpec.options.fastTier` and has a settings-view
+row; it leaves the acceptance search above._
 
 ## 2. Declarative columns that are constants or restatements
 

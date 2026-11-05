@@ -108,14 +108,6 @@ export interface StateSettingEntry {
 // Row builders
 // ============================================================================
 
-/** A global provider knob with no settings-view row (`.texra/config.json`). */
-function configToggle(on: boolean, description: string) {
-  const schema = Schema.Boolean.pipe(
-    Schema.withDecodingDefault(Effect.succeed(on)),
-  );
-  return { configTarget: 'global', schema, description } as const;
-}
-
 /** A provider toggle: a boolean every host stores in GlobalState. */
 function globalProviderToggle(opts: {
   readonly key: string;
@@ -201,9 +193,10 @@ const HARNESS_CONFIG_ROWS: Record<
   // The provider toggles below are `configTarget: 'global'`: they describe how
   // you talk to a provider, not a property of one project. Writes go to the
   // global file past the open-workspace write guard; reads stay merged, so a
-  // workspace override stays honored (stranded values: #11173). Only
-  // server-side state is a user choice (data retention); the transport knobs
-  // have no settings-view row and live in `.texra/config.json`.
+  // workspace override stays honored (stranded values: #11173). Server-side
+  // state (data retention) and the fast tier (price) are user choices with a
+  // settings-view row; the transport knob has none and lives in
+  // `.texra/config.json`.
   'model.useGoogleInteractionsServerState': {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
@@ -214,14 +207,24 @@ const HARNESS_CONFIG_ROWS: Record<
       "Store Google Interactions conversation state on Google's servers via previous_interaction_id chaining, sending only the new turn each round. Google then retains the conversation for a limited period to enable chaining. Enabled by default. Disable to keep conversations off Google's servers — stateless mode resends the full transcript each round (store:false).",
     category: 'model',
   },
-  'model.useGoogleBackgroundResponses': configToggle(
-    false,
-    'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-  ),
-  'model.openaiFastTier': configToggle(
-    false,
-    "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
-  ),
+  'model.useGoogleBackgroundResponses': {
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+    ),
+    configTarget: 'global',
+    description:
+      'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
+  },
+  'model.openaiFastTier': {
+    schema: Schema.Boolean.pipe(
+      Schema.withDecodingDefault(Effect.succeed(false)),
+    ),
+    configTarget: 'global',
+    title: 'Fast mode',
+    description:
+      "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
+    category: 'model',
+  },
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `Settings.get`, so narrowing the row to the global scope would
   // hide (and block writes to) a workspace override the runtime honors.
