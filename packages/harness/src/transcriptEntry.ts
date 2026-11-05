@@ -58,7 +58,6 @@ export {
   type CommitOrdinal,
   type ExistenceReconciliation,
   type SessionViewInput,
-  type ResumeBlocked,
   type TextChunk,
   type TranscriptSubscription,
 } from '@shared/schemas';

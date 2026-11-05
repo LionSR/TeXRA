@@ -9,6 +9,9 @@ asarUnpack:
   # node-pty loads a native .node binary at runtime, which cannot be read from
   # inside an asar archive.
   - '**/node_modules/node-pty/**'
+# node-pty's published package ships its macOS spawn-helper without the
+# executable bit. The hook sets it in the packed app, before signing.
+afterPack: ./scripts/afterPack.mjs
 npmRebuild: false
 directories:
   output: dist-packaged

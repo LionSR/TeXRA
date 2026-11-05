@@ -228,7 +228,6 @@ export const bindModel = Effect.fn('llm.bindModel')(function* (
 });
 
 export { SubscriptionOAuthError } from './oauth/subscriptionOAuthError.js';
-export type { SubscriptionOAuthErrorKind } from './oauth/subscriptionOAuthError.js';
 export { SharedAttempt } from './oauth/sharedAttempt.js';
 export type {
   DeviceLoginOptions,
