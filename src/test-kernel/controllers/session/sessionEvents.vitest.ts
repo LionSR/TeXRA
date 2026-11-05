@@ -472,7 +472,7 @@ describe('Sessions owner', () => {
       yield* Effect.gen(function* () {
         const session = yield* (yield* Sessions).open(platform.roots, {
           persistent: true,
-          host: { interruptedTasks: 'list' },
+          host: {},
         });
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
         yield* Stream.runHead(
