@@ -8,8 +8,6 @@ import {
 
 import { failureIn } from './sdkError/providerErrorFormat';
 
-export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
-
 /**
  * Runtime aggregates put the primary failure first and retain later cleanup
  * failures for diagnostics. Follow that ordering through nested aggregates.

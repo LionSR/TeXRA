@@ -1012,16 +1012,6 @@ function isLiveRun(
 ): boolean
 ```
 
-## isLoopDriven
-
-Whether the harness's own loop drives the run, so a resume can continue
-it: a native agent's or a background script's. A process or an external CLI
-drives its own run.
-
-```ts
-function isLoopDriven(identity: RunIdentity): boolean
-```
-
 ## isModelOptionAvailable
 
 Whether an option row can be run as shipped: `readModelOptions`
@@ -1346,18 +1336,6 @@ A process identity that may hold a claim on an aggregate.
 
 ```ts
 type OwnerId = typeof OwnerIdSchema.Type;
-```
-
-## ownerIdentity
-
-Decode an owner already validated at the event or transport boundary.
-
-```ts
-function ownerIdentity(ownerId: OwnerId): {
-  hostname: string;
-  pid: number;
-  processStart: string | null;
-}
 ```
 
 ## OwnerLiveness
