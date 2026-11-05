@@ -21,7 +21,6 @@ import {
   isCtrlInput,
   isUnhandledControlInput,
   metaChordInput,
-  SYNTHETIC_SHIFT_RETURN_INPUT,
 } from '@cli/tui/inputKeys';
 import {
   clampCursor,
@@ -196,7 +195,7 @@ export function applyTerminalInputChunk(
   const chars = [...input];
   for (let index = 0; index < chars.length; index += 1) {
     const ch = chars[index];
-    if (ch === SYNTHETIC_SHIFT_RETURN_INPUT || ch === '\n') {
+    if (ch === '\n') {
       edit = insertText(edit.value, edit.cursor, '\n');
       continue;
     }
