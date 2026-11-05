@@ -194,7 +194,7 @@ interface OnboardingFunnelHost {
    * blank a user who has keys back down to the first-run welcome card.
    */
   readonly hasCredential: () => Effect.Effect<boolean, Error>;
-  /** The user-scoped flag store; onboarding is a fact about the user. */
+  /** The user-scoped flag store: the flags half of onboarding is a fact about the user; the credential is the shown project's. */
   readonly flags: StateStore;
   /**
    * Paint the derived state and take the arms this host answers. The
