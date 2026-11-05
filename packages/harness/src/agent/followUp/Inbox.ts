@@ -80,7 +80,8 @@ type Refusal = 'notResumable' | 'ownedElsewhere' | 'notParent';
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
-  /** When the row may be read (`readableMessages`). Absent: at once. */
+  /** When the row may be read (`readableMessages`). Absent: at once, or at
+   *  the turn's end for a host's notification (`queuedRow`). */
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Only from the run's parent: its rows' edge, read in this job. */
   readonly fromParent?: boolean;
