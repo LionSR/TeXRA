@@ -184,5 +184,8 @@ export const followDesktopAttention = Effect.gen(function* () {
     ),
     Stream.runForEach(([project, view]) => observe(project, view)),
   );
-  yield* Effect.all([follow, dismissActive], { concurrency: 'unbounded' });
+  yield* Effect.all([follow, dismissActive], {
+    concurrency: 'unbounded',
+    discard: true,
+  });
 });

@@ -46,7 +46,7 @@ export const withVSCodeProgress = Effect.fn('progress.withVSCodeProgress')(
     return yield* Effect.gen(function* () {
       const { progress, token } = yield* Deferred.await(started);
       const exit = yield* Effect.exit(body(progress, token));
-      yield* Effect.sync(() => taskSettled());
+      taskSettled();
       yield* Effect.promise(() => dismissed);
       return yield* exit;
     }).pipe(Effect.ensuring(Effect.sync(() => taskSettled())));
