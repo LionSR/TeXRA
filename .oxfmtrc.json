@@ -9,7 +9,6 @@
     "packages/extension/resources/traceViewer/",
     "packages/extension/resources/templates/",
     ".claude/",
-    "attic/",
     "packages/harness/docs/api/",
     "packages/llm/docs/api/"
   ]
