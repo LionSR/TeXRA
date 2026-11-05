@@ -138,13 +138,11 @@ const bindLoopbackServer = Effect.fnUntraced(function* (
       return { server, port: address.port };
   }
   const portList = ports.join(' or ');
-  return yield* Effect.fail(
-    new LoopbackTransportUnavailableError({
-      message:
-        `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
-        'Close whatever is using them, or use device-code sign-in instead.',
-    }),
-  );
+  return yield* new LoopbackTransportUnavailableError({
+    message:
+      `Could not bind the ${displayName} sign-in callback on port ${portList}. ` +
+      'Close whatever is using them, or use device-code sign-in instead.',
+  });
 });
 
 /**

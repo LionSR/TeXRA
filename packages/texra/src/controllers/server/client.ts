@@ -302,9 +302,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   Scope.Scope | GlobalValues
 > {
   if (process.platform === 'win32')
-    return yield* Effect.fail(
-      new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
-    );
+    return yield* new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED });
   let info = yield* probeRecordedService;
   if (info !== null && info.protocol > PROTOCOL.version)
     return yield* Effect.fail(newerService(info));

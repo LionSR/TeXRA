@@ -262,11 +262,9 @@ function downloadFileOnce(
     const response = yield* HttpClient.withScope(client).get(url);
 
     if (response.status === StatusCodes.NOT_FOUND) {
-      return yield* Effect.fail(
-        new ArxivSourcePermanentError({
-          message: 'Source not available for this arXiv ID',
-        }),
-      );
+      return yield* new ArxivSourcePermanentError({
+        message: 'Source not available for this arXiv ID',
+      });
     }
 
     if (response.status !== StatusCodes.OK) {
@@ -316,11 +314,9 @@ function downloadFileOnce(
       );
       if (contentType.includes('pdf')) {
         // No LaTeX source available: a permanent failure, not retried.
-        return yield* Effect.fail(
-          new ArxivSourcePermanentError({
-            message: PDF_ONLY_SUBMISSION_ERROR,
-          }),
-        );
+        return yield* new ArxivSourcePermanentError({
+          message: PDF_ONLY_SUBMISSION_ERROR,
+        });
       }
       destPath = destBasePath + getExtensionFromContentType(contentType);
     }
@@ -428,19 +424,17 @@ export const downloadArxivSource = Effect.fn('arxivProcessor.downloadSource')(
     // Normalize input (URL or ID) to plain arXiv ID
     const id = normaliseArxivIdentifier(input);
     if (!id) {
-      return yield* Effect.fail(
-        new ArxivSourcePermanentError({ message: INVALID_ARXIV_INPUT_ERROR }),
-      );
+      return yield* new ArxivSourcePermanentError({
+        message: INVALID_ARXIV_INPUT_ERROR,
+      });
     }
 
     yield* Effect.logInfo(`Downloading arXiv source for ID: ${id}`);
 
     if (!workspaceRoot) {
-      return yield* Effect.fail(
-        new ArxivSourcePermanentError({
-          message: 'No workspace folder is open',
-        }),
-      );
+      return yield* new ArxivSourcePermanentError({
+        message: 'No workspace folder is open',
+      });
     }
 
     // An old-style ID ('math/0501234') carries a slash, which would nest
@@ -660,9 +654,9 @@ const stageAndPlaceSource = Effect.fn('arxivProcessor.stageAndPlaceSource')(
 
     // Detect PDF-only submissions (no LaTeX source available)
     if (hasExtension(downloadedPath, '.pdf')) {
-      return yield* Effect.fail(
-        new ArxivSourcePermanentError({ message: PDF_ONLY_SUBMISSION_ERROR }),
-      );
+      return yield* new ArxivSourcePermanentError({
+        message: PDF_ONLY_SUBMISSION_ERROR,
+      });
     }
 
     yield* placeSourceFiles(
@@ -717,7 +711,7 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
       );
       if (collisions.length > 0) {
         const message = `Target already exists: ${collisions.map(placed).join(', ')}`;
-        return yield* Effect.fail(new ArxivSourcePermanentError({ message }));
+        return yield* new ArxivSourcePermanentError({ message });
       }
       progressCallback?.('Placing source files...', 80);
       yield* permanentFs(
@@ -760,11 +754,9 @@ const placeSourceFiles = Effect.fn('arxivProcessor.placeSourceFiles')(
     const targetPath = path.join(paperDirFull, 'main.tex');
     if (sourceFilePath !== targetPath) {
       if ((yield* permanentFs(entryTypeIn(fs, targetPath))) !== undefined) {
-        return yield* Effect.fail(
-          new ArxivSourcePermanentError({
-            message: `Target already exists: ${targetPath}`,
-          }),
-        );
+        return yield* new ArxivSourcePermanentError({
+          message: `Target already exists: ${targetPath}`,
+        });
       }
       yield* permanentFs(fs.rename(sourceFilePath, targetPath));
     }
