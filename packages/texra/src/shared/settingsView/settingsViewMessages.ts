@@ -93,7 +93,9 @@ export type DerivedSettingsSnapshot =
 
 /** Every settings-view snapshot: what a row's `surfaces.settingsView` names. */
 export type SettingsViewSnapshot =
-  DerivedSettingsSnapshot | 'models' | 'profile';
+  | DerivedSettingsSnapshot
+  | 'models'
+  | 'profile';
 
 /**
  * One snapshot's member of the outbound snapshot case: its name plus one

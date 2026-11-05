@@ -66,6 +66,8 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
   new Map([
     // A completed turn's tool-call count, which only the view showed.
     ['conversation.progress', 'display'],
+    // A run's model switch, projected from the `run.config` that carries it.
+    ['run.model', 'display'],
     // An external inquiry thread's state: an open request.
     ['inquiryThreadUpdated', 'execution'],
     // A compaction of the model context.
@@ -137,7 +139,6 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // fail as damaged).
   // v6: no Copilot backend (no upcaster, as v5).
   'run.config': { version: 6, upcast: [], listing: 'own' },
-  'run.model': { ...V1, listing: 'own' },
   'run.detach': { ...V1, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents` (no upcaster,
   // as `run.config`).

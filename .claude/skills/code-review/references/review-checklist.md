@@ -71,7 +71,7 @@ Design rules in `AGENTS.md` → "Effect Schema Patterns" (compat rules in "Compa
 
 ## 8. Build, lint, dead code
 
-- **Type-sensitive changes without mention of `npm run typecheck` / `compile:safe`** → `compile:fast`/`package:fast`/`build:fast` skip type checks entirely (esbuild/Vite only strip types).
+- **Type-sensitive changes without mention of `npm run typecheck`** → `compile:fast`/`package:fast`/`build:fast` skip type checks entirely (esbuild/Vite only strip types).
 - **Long relative imports** (`../../../../`) where a path alias exists.
 - **Re-export shims** for renamed/removed code, "// removed" comments, `_unused` placeholder vars — delete cleanly per `AGENTS.md` "Flattening abstraction layers".
 - **Dead exports** (declared, no consumer): `rg "exportedSymbol" src packages`.

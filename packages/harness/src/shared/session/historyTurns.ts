@@ -27,7 +27,8 @@ import type {
  * (`agent/runtime/storedTurn.ts`).
  */
 export type HistoryMessage =
-  Exclude<StoredMessage, { readonly role: 'assistant' }> | AssistantMessage;
+  | Exclude<StoredMessage, { readonly role: 'assistant' }>
+  | AssistantMessage;
 
 /** A string a draft stores with its row under its address (`blobAddress`):
  *  a media part's or a captured attachment's base64, which the row names by

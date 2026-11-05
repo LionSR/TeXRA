@@ -26,7 +26,8 @@ function wslInstallHint(): string {
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */
 type SdkBinaryStatus =
-  { ok: false; message: string } | { ok: true; binaryPath: string };
+  | { ok: false; message: string }
+  | { ok: true; binaryPath: string };
 
 /**
  * Human-readable probe shared by the SDK-backed CLI integrations: import

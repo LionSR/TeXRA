@@ -61,10 +61,7 @@ import {
   treeCostOf,
 } from './agentChild';
 import { selectAvailableDelegationModel } from './delegationAvailability';
-import {
-  executeSubagentInBand,
-  SubagentDurabilityError,
-} from './inBandSubagentRun';
+import { executeSubagentInBand } from './inBandSubagentRun';
 import {
   memoriesField,
   personaField,
@@ -314,8 +311,7 @@ export function failedResult(agentName: string, error: Error): ToolResult {
       { name: 'TimedOut', summary: `'${agentName}' timed out` },
     );
   return errorResult(toErrorMessage(error), {
-    // The child's own failure; a durability fault is the call's.
-    ...(!(error instanceof SubagentDurabilityError) && { name: 'AgentFailed' }),
+    name: 'AgentFailed',
     summary: `'${agentName}' failed`,
   });
 }

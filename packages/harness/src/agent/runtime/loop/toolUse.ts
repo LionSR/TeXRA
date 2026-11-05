@@ -304,7 +304,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const dispatched = yield* dispatchPendingResponse(
             cell,
             (yield* openStep(state, 'dispatch')).tools,
-            followUps.input.controls,
           );
           state = dispatched.state;
           if (dispatched.endTurn) return completeTurn(state);
