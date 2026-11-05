@@ -1101,12 +1101,13 @@ One helper call: bind the configured helper model (else `runModel`) for
 this call alone and run one completion through the one retry loop
 (`run/invocation.ts`), gated on the process's retry gate, priced and
 reported to the usage log as `attribution`. No row is written. Returns the
-turn's assistant text. `stores` are the asking session's setting slots: the
-binding, the retry limit and the usage consent read them, beside the
-process `Secrets`.
+turn's assistant text and its priced usage (`null`: the provider reported
+none), for a caller whose row records what the call cost. `stores` are the
+asking session's setting slots: the binding, the retry limit and the usage
+consent read them, beside the process `Secrets`.
 
 ```ts
-const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<string, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<{ readonly text: string; readonly usage: { readonly provider: string; readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly responseTimeMs: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; } | null; }, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
 ```
 
 ## HelperPrompt

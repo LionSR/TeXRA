@@ -1611,6 +1611,10 @@ All notable changes to this project will be documented in this file.
   the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
   the setup assistant and the guide say "OpenAI models" where they said
   "Codex models".
+- **A run's cost includes the request that titles it.** The short title a
+  run gets in the run list and history comes from one helper-model request,
+  which was billed but missing from the run's cost and token counts. It now
+  counts, and the run's result and the run list show the same total.
 - **A script's `self()` round does its own part, not the whole task again.**
   A round now reads its prompt as one part of the work its script is doing,
   so it no longer repeats the request that started the script, with its own

@@ -82,7 +82,7 @@ INSERT INTO event VALUES(16,1,16,'log',6,'["golden-host",1,"process-1"]',1767225
 INSERT INTO event VALUES(17,1,17,'stage.start',2,'["golden-host",1,"process-1"]',1767225617000,'{"id":"00000000-0000-4000-8000-000000000014","label":"Run: golden_parent","kind":"run"}');
 INSERT INTO event VALUES(18,1,18,'stage.start',2,'["golden-host",1,"process-1"]',1767225618000,'{"id":"00000000-0000-4000-8000-000000000015","label":"Tool-use turn","kind":"session"}');
 INSERT INTO event VALUES(19,1,19,'run.position',3,'["golden-host",1,"process-1"]',1767225619000,'{"payload":{"family":"toolUse","at":"turn.begin","turn":1}}');
-INSERT INTO event VALUES(20,1,20,'run.description',1,'["golden-host",1,"process-1"]',1767225620000,'{"description":"Working through the golden parent task","by":"model"}');
+INSERT INTO event VALUES(20,1,20,'run.description',2,'["golden-host",1,"process-1"]',1767225620000,'{"description":"Working through the golden parent task","by":"model","usage":{"inputTokens":1,"outputTokens":1,"cost":7.5e-7,"usageRoute":"api-key","responseTimeMs":0,"provider":"openai-responses"}}');
 INSERT INTO event VALUES(21,1,21,'context.blob',1,'["golden-host",1,"process-1"]',1767225621000,'{"payload":{"digest":"8d217dd4efc048540158d1e50532774c57d65444a8b33256b0ca6c7bfb5be388","value":"{\"agent\":\"golden_parent\",\"persona\":{\"prompt\":\"GOLDEN-PARENT: read the notes, plan, delegate.\",\"temperature\":1,\"tools\":[{\"name\":\"read_file\"},{\"name\":\"plan\"},{\"name\":\"agent\"},{\"name\":\"executions\"}]}}"}}');
 INSERT INTO event VALUES(22,1,22,'context.blob',1,'["golden-host",1,"process-1"]',1767225622000,'{"payload":{"digest":"55ea6d81fa4a6c11a26fb07b8a3da2403289172d241ad8421459a7c049fbd358","value":"{\"agent\":\"8d217dd4efc048540158d1e50532774c57d65444a8b33256b0ca6c7bfb5be388\",\"controls\":{\"maxOutputTokens\":128000,\"promptCacheKey\":\"a00000000001\",\"reasoning\":null,\"serviceTier\":null,\"store\":false,\"temperature\":0,\"toolChoice\":\"auto\"},\"mode\":\"foreground\",\"system\":\"494f105590aac4b393e4989f2cb08d1ea1384d1af58ca0b5a9b4d18800d54291\",\"tools\":[\"e91e224d8b27d5a42793b4de78c4187a549fd99bab9ee5c2bd43e62cd7aff0c1\",\"b3b2a3d44f4a95de0455196ad7ead418771471fafd4c8ed975d4774b7c4fe2a1\",\"af931a081959b3a5605e02ff5d932cf1c81253c2e9f2e748503c0f0c967c9255\",\"ca76026e676ae20fcaeb0440abbd77e56437c7ba5a0d503051208b08a8d6c0e9\",\"31e3e423b765cd10ac7574bb81a80053dea4120081a2a7b8c05bf8e2fa998020\"]}"}}');
 INSERT INTO event VALUES(23,1,23,'model.message',12,'["golden-host",1,"process-1"]',1767225623000,'{"payload":{"kind":"attempt","invocation":{"invocationId":"00000000-0000-4000-8000-000000000016","attempt":1},"purpose":"turn","request":"55ea6d81fa4a6c11a26fb07b8a3da2403289172d241ad8421459a7c049fbd358","origin":{"protocol":"openai-responses","requestedModel":"gpt-5.6-sol","deployment":{"endpoint":"https://validation.invalid/v1","credentialScope":"validation"},"codecVersion":1}}}');
@@ -170,7 +170,7 @@ INSERT INTO event VALUES(104,2,53,'run.end',7,'["golden-host",1,"process-1"]',17
 INSERT INTO event VALUES(105,2,54,'run.report',1,'["golden-host",1,"process-1"]',1767225705000,'{"report":"<subagent-result id=\"a00000000000000000000002\" agent=\"golden_child\" status=\"completed\">\n<wall-time>0s</wall-time>\n<working-directory>/golden/project</working-directory>\n<response>\nChild result.\n</response>\n</subagent-result>"}');
 INSERT INTO event VALUES(106,2,55,'run.result',2,'["golden-host",1,"process-1"]',1767225706000,'{"result":{"producer":"subagent","output":{"response":"Child result.","files":[]}}}');
 INSERT INTO event VALUES(107,2,56,'child.turn',1,'["golden-host",1,"process-1"]',1767225707000,'{"attemptId":"00000000-0000-4000-8000-000000000020","turnIndex":1,"phase":"settled"}');
-INSERT INTO event VALUES(108,1,52,'tool.result',3,'["golden-host",1,"process-1"]',1767225708000,'{"payload":{"responseId":"00000000-0000-4000-8000-00000000001d","callId":"validation-agent-3","attempt":1,"disposition":"executed","duplicateOf":null,"result":{"status":"executed","output":"<subagent-result id=\"a00000000000000000000002\" agent=\"golden_child\" status=\"completed\">\n<response>\nChild result.\n</response>\n</subagent-result>","summary":"Completed ''golden_child''","value":{"response":"Child result.","files":[],"runId":"a00000000000000000000002","outcome":"completed","cost":0.000036,"spent":0.000108}},"attachments":[]}}');
+INSERT INTO event VALUES(108,1,52,'tool.result',3,'["golden-host",1,"process-1"]',1767225708000,'{"payload":{"responseId":"00000000-0000-4000-8000-00000000001d","callId":"validation-agent-3","attempt":1,"disposition":"executed","duplicateOf":null,"result":{"status":"executed","output":"<subagent-result id=\"a00000000000000000000002\" agent=\"golden_child\" status=\"completed\">\n<response>\nChild result.\n</response>\n</subagent-result>","summary":"Completed ''golden_child''","value":{"response":"Child result.","files":[],"runId":"a00000000000000000000002","outcome":"completed","cost":0.000036,"spent":0.00010875000000000001}},"attachments":[]}}');
 INSERT INTO event VALUES(109,1,53,'tool.end',1,'["golden-host",1,"process-1"]',1767225709000,'{"logId":"00000000-0000-4000-8000-00000000001e","status":"completed"}');
 INSERT INTO event VALUES(110,1,54,'model.message',12,'["golden-host",1,"process-1"]',1767225710000,'{"payload":{"kind":"append","messages":[{"role":"tool","results":[{"callOrdinal":0,"status":"success","content":[{"kind":"text","text":"<subagent-result id=\"a00000000000000000000002\" agent=\"golden_child\" status=\"completed\">\n<response>\nChild result.\n</response>\n</subagent-result>"}]}]}],"sourceResponse":"00000000-0000-4000-8000-00000000001d"}}');
 INSERT INTO event VALUES(111,1,55,'run.position',3,'["golden-host",1,"process-1"]',1767225711000,'{"payload":{"family":"toolUse","at":"results.ready","turn":1}}');
@@ -483,7 +483,7 @@ INSERT INTO event VALUES(417,8,27,'request.decided',2,'["golden-host",5,"process
 INSERT INTO event VALUES(418,9,1,'run.start',2,'["golden-host",5,"process-5"]',1767226018000,'{"identity":{"kind":"script","title":"Goal"},"userFollowUpSupport":"unsupported","worktree":{"workingDirectory":"/golden/project"},"provenance":null,"approvalPolicy":{"own":{},"goal":["bash"]},"parent":{"id":"a00000000008","uid":"00000000-0000-4000-8000-000000000008","call":{"callId":"validation-plan-1","card":"00000000-0000-4000-8000-000000000058"}}}');
 INSERT INTO event VALUES(419,9,2,'run.config',6,'["golden-host",5,"process-5"]',1767226019000,'{"config":{"inputFiles":[],"contextFiles":[],"mediaFiles":[],"outputFiles":[],"editedFile":null,"agent":"golden_chat","agentSource":"custom","model":"openai/gpt-5.6-sol","instruction":"","displayInstruction":null,"memories":[],"workingDirectory":"/golden/project","cli":null,"delegationAgentScope":null,"outputSchema":null,"script":{"code":"const { goal } = await import(\"builtIn:goal\");\nreturn await goal(\"Answer the golden chat, then stop.\", { maxCostUsd: 5 });","title":"Goal","tools":["plan","codex","bash","memory"],"timeoutMs":86400000,"kind":"background"}}}');
 INSERT INTO event VALUES(420,9,3,'run.activate',1,'["golden-host",5,"process-5"]',1767226020000,'{}');
-INSERT INTO event VALUES(421,9,4,'run.description',1,'["golden-host",5,"process-5"]',1767226021000,'{"description":"Goal","by":"model"}');
+INSERT INTO event VALUES(421,9,4,'run.description',2,'["golden-host",5,"process-5"]',1767226021000,'{"description":"Goal","by":"model"}');
 INSERT INTO event VALUES(422,9,5,'model.message',12,'["golden-host",5,"process-5"]',1767226022000,'{"payload":{"kind":"append","messages":[{"role":"user","content":[{"kind":"text","text":"Run the script \"Goal\"."}]}],"sourceResponse":null}}');
 INSERT INTO event VALUES(423,9,6,'context.blob',1,'["golden-host",5,"process-5"]',1767226023000,'{"payload":{"digest":"96ea3484b122d281f2bd70dd001e84c802d575ebd550546bc207166edbe33011","value":"{\"sections\":{\"core plugin\":\"Find the project''s TeX sources with relative paths (e.g., `find . -name \\\"*.tex\\\"`).\\nFor math in responses, use $...$ or \\\\(...\\\\) for inline and $$...$$ or \\\\[...\\\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\\\begin{align}...\\\\end{align}$$) so they render correctly.\",\"memory-workflow plugin\":\"<memory_tool_instructions>\\nPinned memories are always loaded unless the user forbids memory use. At session start, `view` the `/memories` directory to find entries marked [pinned]. If the listing is truncated, continue until you have seen every [pinned] entry. Then `view` each pinned file so its content applies, regardless of how self-contained the request looks. Pinned entries are the core reusable insights (techniques, strategies, pitfalls) accumulated across sessions. The directory listing alone does not load their content. Beyond pinned entries, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context. For a self-contained request, do not read unpinned memory files or write memory merely because the tool is available. Listing the directory is still appropriate because it is needed to find pinned entries.\\n\\nYour memory persists across conversations. When memory is in play, record durable progress, decisions, and user preferences (writing style, conventions, formatting, workflow). Keep the folder current and organized by updating, renaming, or deleting files rather than duplicating them. Do not store what the workspace files already state. When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them. Use `pin` only for long-term reusable insights, never task-specific progress notes. Use `unpin` for entries that no longer earn their place.\\n</memory_tool_instructions>\\n<subagent_memory_protocol>\\nThe /memories directory is shared with the orchestrator and other subagents. Check it when your delegated task may depend on context from prior sessions or sibling agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.\\n</subagent_memory_protocol>\",\"tool-call\":\"When using a tool, follow the JSON schema exactly and include all required properties.\\nAlways produce valid JSON when calling a tool.\\nDo not call tools that are not provided or any multi_tool_use variants.\\nCall tools sequentially and wait for the output before calling another.\"},\"tools\":[\"script\",\"plan\",\"codex\",\"bash\",\"memory\",\"self\"]}"}}');
 INSERT INTO event VALUES(424,9,7,'context.blob',1,'["golden-host",5,"process-5"]',1767226024000,'{"payload":{"digest":"b0e5e05ef84d2ff8f919fba90c05dbf4eff11e42b9f61f690f328aa85183e90e","value":{"$b":"b96ae062c7f39114097a5d10f7f4981e7f02d8fe8c1be334163de3cdfb847713"}}}');
@@ -676,7 +676,7 @@ INSERT INTO event VALUES(610,8,124,'tool.intent',1,'["golden-host",5,"process-5"
 INSERT INTO event VALUES(611,11,1,'run.start',2,'["golden-host",5,"process-5"]',1767226211000,'{"identity":{"kind":"agent","agent":"codex","tool":"codex"},"userFollowUpSupport":"terminalBacked","worktree":{"workingDirectory":"/golden/project"},"provenance":null,"approvalPolicy":{"own":{},"goal":[]},"parent":{"id":"a00000000008","uid":"00000000-0000-4000-8000-000000000008","call":null}}');
 INSERT INTO event VALUES(612,11,2,'run.config',6,'["golden-host",5,"process-5"]',1767226212000,'{"config":{"inputFiles":[],"contextFiles":[],"mediaFiles":[],"outputFiles":[],"editedFile":null,"agent":"codex","model":"openai/gpt-6.1-sol","instruction":"Answer the Codex task.","memories":[],"workingDirectory":"/golden/project"}}');
 INSERT INTO event VALUES(613,11,3,'run.activate',1,'["golden-host",5,"process-5"]',1767226213000,'{}');
-INSERT INTO event VALUES(614,11,4,'run.description',1,'["golden-host",5,"process-5"]',1767226214000,'{"description":"Answer the Codex task.","by":"model"}');
+INSERT INTO event VALUES(614,11,4,'run.description',2,'["golden-host",5,"process-5"]',1767226214000,'{"description":"Answer the Codex task.","by":"model"}');
 INSERT INTO event VALUES(615,11,5,'stage.start',2,'["golden-host",5,"process-5"]',1767226215000,'{"id":"00000000-0000-4000-8000-000000000081","label":"Codex session"}');
 INSERT INTO event VALUES(616,11,6,'child.turn',1,'["golden-host",5,"process-5"]',1767226216000,'{"attemptId":"00000000-0000-4000-8000-000000000082","turnIndex":1,"phase":"accepted"}');
 INSERT INTO event VALUES(617,11,7,'log',6,'["golden-host",5,"process-5"]',1767226217000,'{"level":"info","message":"Answer the Codex task.","messageType":"userMessage"}');
@@ -972,7 +972,7 @@ INSERT INTO event VALUES(906,18,31,'tool.start',2,'["golden-host",12,"process-12
 INSERT INTO event VALUES(907,19,1,'run.start',2,'["golden-host",12,"process-12"]',1767226507000,'{"identity":{"kind":"process","tool":"bash"},"userFollowUpSupport":"unsupported","worktree":{"workingDirectory":"/golden/project"},"provenance":null,"approvalPolicy":{"own":{},"goal":[]},"parent":{"id":"a00000000012","uid":"00000000-0000-4000-8000-000000000012","call":null}}');
 INSERT INTO event VALUES(908,19,2,'run.config',6,'["golden-host",12,"process-12"]',1767226508000,'{"config":{"name":"bash","instruction":"node -e \"const wait = setInterval(() => { if (require(''fs'').existsSync(''../bash.release'')) { clearInterval(wait); console.log(''released''); } }, 50)\"","workingDirectory":"/golden/project"}}');
 INSERT INTO event VALUES(909,19,3,'run.activate',1,'["golden-host",12,"process-12"]',1767226509000,'{}');
-INSERT INTO event VALUES(910,19,4,'run.description',1,'["golden-host",12,"process-12"]',1767226510000,'{"description":"Wait for the release","by":"model"}');
+INSERT INTO event VALUES(910,19,4,'run.description',2,'["golden-host",12,"process-12"]',1767226510000,'{"description":"Wait for the release","by":"model"}');
 INSERT INTO event VALUES(911,18,32,'tool.result',3,'["golden-host",12,"process-12"]',1767226511000,'{"payload":{"responseId":"00000000-0000-4000-8000-0000000000b2","callId":"validation-bash-1","attempt":1,"disposition":"executed","duplicateOf":null,"result":{"status":"executed","output":"Command launched in background.\nRun ID: a00000000013\nResult arrives automatically as a follow-up message when complete. Continue other work or end your turn.\nTo read its output so far (works while it runs): executions tool with path=/executions/a00000000013/output\nOnly if you cannot proceed without the result, block with the executions tool: path=/executions/a00000000013 action=wait","summary":"Launched background: node -e \"const wait = setInterval(() => { if (require(''fs'')…"},"attachments":[]}}');
 INSERT INTO event VALUES(912,18,33,'tool.end',1,'["golden-host",12,"process-12"]',1767226512000,'{"logId":"00000000-0000-4000-8000-0000000000b3","status":"completed"}');
 INSERT INTO event VALUES(913,19,5,'stage.start',2,'["golden-host",12,"process-12"]',1767226513000,'{"id":"00000000-0000-4000-8000-0000000000b4","label":"Background command"}');
@@ -1074,7 +1074,7 @@ INSERT INTO stored_kind VALUES('request.opened',8);
 INSERT INTO stored_kind VALUES('response.finalized',2);
 INSERT INTO stored_kind VALUES('run.activate',1);
 INSERT INTO stored_kind VALUES('run.config',6);
-INSERT INTO stored_kind VALUES('run.description',1);
+INSERT INTO stored_kind VALUES('run.description',2);
 INSERT INTO stored_kind VALUES('run.detach',1);
 INSERT INTO stored_kind VALUES('run.end',7);
 INSERT INTO stored_kind VALUES('run.position',3);
@@ -1134,14 +1134,14 @@ CREATE TABLE projection_state (
     through_commit INTEGER NOT NULL
   ) STRICT, WITHOUT ROWID;
 INSERT INTO projection_state VALUES('listing',1,955);
-INSERT INTO projection_state VALUES('model',1,955);
-INSERT INTO projection_state VALUES('usage',2,955);
+INSERT INTO projection_state VALUES('usage',3,955);
 CREATE TABLE projected_row (
     "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
     type     TEXT NOT NULL,
     data     TEXT NOT NULL,
     PRIMARY KEY ("commit", type)
   ) STRICT, WITHOUT ROWID;
+INSERT INTO projected_row VALUES(20,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":7.5e-7,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(24,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(34,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(47,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key"}}');
@@ -1158,7 +1158,6 @@ INSERT INTO projected_row VALUES(480,'usage','{"usage":{"inputTokens":1,"outputT
 INSERT INTO projected_row VALUES(487,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(497,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(541,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"usageRoute":"api-key"}}');
-INSERT INTO projected_row VALUES(558,'run.model','{"model":"google/gemini-3.8-flash@medium"}');
 INSERT INTO projected_row VALUES(564,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.0000045,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(582,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.0000045,"usageRoute":"api-key"}}');
 INSERT INTO projected_row VALUES(589,'usage','{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.0000045,"usageRoute":"api-key"}}');
@@ -1319,7 +1318,7 @@ CREATE TABLE run_usage (
     "commit"  INTEGER NOT NULL,
     usage     TEXT NOT NULL
   ) STRICT;
-INSERT INTO run_usage VALUES(1,115,'{"usage":{"inputTokens":4,"outputTokens":4,"cost":0.000096,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
+INSERT INTO run_usage VALUES(1,115,'{"usage":{"inputTokens":5,"outputTokens":5,"cost":0.00009675000000000001,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(2,95,'{"usage":{"inputTokens":3,"outputTokens":3,"cost":0.000036,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(3,154,'{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(4,193,'{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
@@ -1335,29 +1334,6 @@ INSERT INTO run_usage VALUES(15,809,'{"usage":{"inputTokens":1,"outputTokens":1,
 INSERT INTO run_usage VALUES(16,839,'{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(17,865,'{"usage":{"inputTokens":1,"outputTokens":1,"cost":0.000024,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
 INSERT INTO run_usage VALUES(18,945,'{"usage":{"inputTokens":3,"outputTokens":3,"cost":0.000072,"cachedInputTokens":0,"cacheMissInputTokens":0,"cacheWriteTokens":0,"reasoningTokens":0,"toolUsePromptTokens":0,"usageRoute":"api-key"}}');
-CREATE TABLE run_model (
-    aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
-    model     TEXT NOT NULL,
-    "commit"  INTEGER
-  ) STRICT;
-INSERT INTO run_model VALUES(1,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(2,'openai/gpt-6.1-sol',NULL);
-INSERT INTO run_model VALUES(3,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(4,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(5,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(6,'openai/gpt-6.1-sol',NULL);
-INSERT INTO run_model VALUES(7,'openai/gpt-6.1-sol',NULL);
-INSERT INTO run_model VALUES(8,'google/gemini-3.8-flash@medium',558);
-INSERT INTO run_model VALUES(9,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(10,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(11,'openai/gpt-6.1-sol',NULL);
-INSERT INTO run_model VALUES(12,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(13,'openai/gpt-6.1-sol',NULL);
-INSERT INTO run_model VALUES(14,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(15,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(16,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(17,'openai/gpt-5.6-sol',NULL);
-INSERT INTO run_model VALUES(18,'openai/gpt-5.6-sol',NULL);
 DELETE FROM sqlite_sequence;
 INSERT INTO sqlite_sequence VALUES('aggregate_change',93);
 INSERT INTO sqlite_sequence VALUES('event',955);
