@@ -197,8 +197,9 @@ export interface HostRunActions {
   readonly runOutputs: {
     getOutputFiles(runId: RunId): ReturnType<typeof documentsOf>['files'];
   };
-  /** Send `text` to the run that launched `runId` (the chat that called a
-   *  document task); a run nothing launched has no one to send it to. */
+  /** Send `text` to the conversation that launched `runId` (the chat that
+   *  called a document task), past any background script it ran under; a
+   *  run nothing launched has no one to send it to. */
   followUpLauncher(runId: RunId, text: string): Effect.Effect<void>;
 }
 
@@ -359,7 +360,15 @@ export const createHostRunActions = Effect.fn(
   return {
     runOutputs,
     followUpLauncher(runId, text) {
-      const launcher = runView(runId)?.launchParentId ?? null;
+      // A background script replays its recorded program and reads no new
+      // input, so the note goes to the conversation that started the script.
+      let launcher = runView(runId)?.launchParentId ?? null;
+      for (
+        let parent = launcher === null ? undefined : runView(launcher);
+        parent?.identity.kind === 'script';
+        parent = launcher === null ? undefined : runView(launcher)
+      )
+        launcher = parent.launchParentId;
       if (launcher === null) return Effect.void;
       const present = (message: string) => ports.showWarning(message);
       const deliver = session

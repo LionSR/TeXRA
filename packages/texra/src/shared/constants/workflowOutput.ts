@@ -32,15 +32,18 @@ export function workflowOutputRoundDir(round: number): string {
 /**
  * The runDir-relative path where a revision keeps the model's version of
  * one of its outputs, as extraction wrote it: Accept diffs the accepted
- * file against it, so the model learns what the user changed. A
- * run-storage output keeps its path under the round, a workspace output its
- * workspace-relative path; an output outside both keeps none.
+ * file against it, so the model learns what the user changed. The copies
+ * live under `model/r{round}/`, beside latexdiff's `diff/r{round}/` and
+ * outside the `r{round}/` directories extraction writes into, so no
+ * extracted output can stand at a copy's path. A run-storage output keeps
+ * its path under the round, a workspace output its workspace-relative
+ * path; an output outside both keeps none.
  */
 export function modelOutputCopyPath(
   round: number,
   location: FileLocation,
 ): string | undefined {
-  const dir = `${workflowOutputRoundDir(round)}/model`;
+  const dir = `model/${workflowOutputRoundDir(round)}`;
   switch (location.kind) {
     case 'runStorage':
       return `${dir}/run/${stripWorkflowRoundDir(location.relativePath, round)}`;
