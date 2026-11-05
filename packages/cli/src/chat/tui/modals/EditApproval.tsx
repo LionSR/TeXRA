@@ -65,7 +65,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
     <ConfirmCard
       color={COLOR_HINT}
       title={title}
-      rejectionMode="feedback"
+      kind="toolEdit"
       alwaysAllowLabel="approve edits for session"
       compact={isCompactRows(
         props.availableRows,

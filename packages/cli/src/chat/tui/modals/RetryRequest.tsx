@@ -3,7 +3,10 @@ import { Text, useWindowSize } from 'ink';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
-import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import {
+  REQUEST_ACTIONS,
+  type SurfaceDecision,
+} from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -27,15 +30,11 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const errorText = modelFailureText(data.errorDetails);
   // The run decided the offer; the card only renders it.
   const canSwitchToPersonalKey = data.credentialSwitch != null;
-  // The modal only names the answer. `y` retries on the credentials the run
-  // already has; `approvalDecisionArm` turns a retry on personal credentials
-  // into the host's `useOwnApiKey`, which asks for the key when none is
-  // stored and then runs the retry on it.
-  const retryDecision: SurfaceDecision = { action: 'retry' };
-  const switchDecision: SurfaceDecision = {
-    action: 'retry',
-    credentials: 'personal',
-  };
+  // The modal only names the answers, as `REQUEST_ACTIONS` keys them. `y`
+  // retries on the credentials the run already has; `approvalDecisionArm`
+  // turns `k`, a retry on personal credentials, into the host's
+  // `useOwnApiKey`, which asks for the key when none is stored and then runs
+  // the retry on it.
   const guidanceText = canSwitchToPersonalKey
     ? 'Press k to use your own API key for this retry.'
     : undefined;
@@ -57,17 +56,16 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
     <ConfirmCard
       color={COLOR_WARNING}
       title={RETRY_REQUEST_TITLE}
+      kind="retry"
       approveLabel="retry"
-      approveDecision={retryDecision}
       rejectLabel="stop run"
-      rejectionMode="immediate"
       extraActions={
         canSwitchToPersonalKey
           ? [
               {
                 key: 'k',
                 action: 'retry with your own API key',
-                decision: switchDecision,
+                decision: REQUEST_ACTIONS.retry.k,
               },
             ]
           : []

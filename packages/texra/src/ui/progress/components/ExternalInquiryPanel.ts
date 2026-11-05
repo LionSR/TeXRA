@@ -178,10 +178,6 @@ export class ExternalInquiryPanel extends BaseRequestPanel<'plugin'> {
     return 'Submit';
   }
 
-  protected override get decline(): 'skip' {
-    return 'skip';
-  }
-
   protected override get declineTakesNote(): boolean {
     return false;
   }

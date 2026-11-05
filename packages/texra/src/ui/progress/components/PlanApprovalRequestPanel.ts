@@ -8,6 +8,7 @@ import { customElement } from 'lit/decorators.js';
 import { sp } from '@ui/styles';
 
 // Local imports - shared utilities
+import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 
@@ -36,17 +37,13 @@ export class PlanApprovalRequestPanel extends BaseRequestPanel<'planApproval'> {
     planApprovalRequestPanelStyles,
   ];
 
-  protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve' });
-  }
-
   protected override renderAsk(): string {
     return 'Approve this plan';
   }
 
   protected override handleExtraKey(key: string): boolean {
     if (key !== 'r') return false;
-    this.emitAction({ action: 'approve_and_goal' });
+    this.emitAction(REQUEST_ACTIONS.planApproval.r);
     return true;
   }
 
@@ -69,7 +66,7 @@ export class PlanApprovalRequestPanel extends BaseRequestPanel<'planApproval'> {
         title: `${PLAN_GOAL_COPY.action} (r)`,
         action: 'approve_and_goal',
         disabled: this.readOnly,
-        onClick: () => this.emitAction({ action: 'approve_and_goal' }),
+        onClick: () => this.emitAction(REQUEST_ACTIONS.planApproval.r),
       }),
     );
   }

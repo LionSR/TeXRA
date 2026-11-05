@@ -23,7 +23,7 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
 // Local imports - shared styles
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
-import { APPROVE_ALL_DELEGATED_WORK_ACTION } from '@texra/shared/session/surfaceDecision';
+import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   DOCUMENT_TASK_OPTIONS,
@@ -99,7 +99,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       label: RUN_GRANT_LABEL.superYolo,
       scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
       decision: {
-        action: APPROVE_ALL_DELEGATED_WORK_ACTION,
+        action: APPROVE_SESSION_ACTION,
         ...this.modelChange,
       },
     };

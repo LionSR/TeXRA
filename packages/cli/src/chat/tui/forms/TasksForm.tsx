@@ -11,7 +11,6 @@ import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   acceptsFollowUp,
   type RunId,
-  type ToolEditPermission,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { isEscapeInput } from '@cli/tui/inputKeys';
@@ -26,13 +25,16 @@ import {
   approvalDecisionArm,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
+import {
+  readToolEditPreview,
+  type ToolEditPreviewRead,
+} from '@texra/controllers/approval/ToolEditApprovalController';
 import type { ServiceConnection } from '@texra/controllers/server/client';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { BaseTextInput } from '../input/BaseTextInput';
 import { ApprovalModal } from '../modals/ApprovalModal';
-import { ConfirmCard } from '../modals/ConfirmCard';
 import {
   followAttachedTask,
   type AttachedTaskActions,
@@ -41,7 +43,6 @@ import {
 import { transcriptToLines } from '../state/transcriptLines';
 import { AsyncListForm } from './_shared/ListForm';
 import type { GlobalValues, ProcessRuntime } from '@texra-ai/harness/host';
-import type { ToolEditContent } from '@texra-ai/harness/schemas';
 import type {
   ApprovalPayload,
   PendingApprovalFact,
@@ -122,11 +123,6 @@ interface AttachedTaskProps {
   readonly onClose: () => void;
 }
 
-/** A pending request this view can present, with what it presents. */
-type Presentable =
-  | { readonly kind: 'modal'; readonly payload: ApprovalPayload }
-  | { readonly kind: 'edit'; readonly data: ToolEditPermission };
-
 function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const { task, runtime } = props;
   const { columns } = useWindowSize();
@@ -139,7 +135,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
   const [notice, setNotice] = useState<string>();
   const [decided, setDecided] = useState<ReadonlySet<string>>(new Set());
   const [previews, setPreviews] = useState<
-    ReadonlyMap<string, ToolEditContent | null>
+    ReadonlyMap<string, ToolEditPreviewRead>
   >(new Map());
   const actions = useRef<AttachedTaskActions>(undefined);
 
@@ -223,49 +219,32 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     if (asked.current.has(pending.requestId)) return;
     const { requestId } = pending;
     asked.current.add(requestId);
-    act(
-      (ready) =>
-        ready
-          .request({ kind: 'request.preview', runId: pending.runId, requestId })
-          .pipe(
-            Effect.map(({ preview }) =>
-              setPreviews((held) => new Map(held).set(requestId, preview)),
-            ),
-          ),
-      // No preview to be had: the card shows the edit from its path.
-      () => setPreviews((held) => new Map(held).set(requestId, null)),
+    act((ready) =>
+      readToolEditPreview(ready, pending.runId, requestId).pipe(
+        Effect.map((read) =>
+          setPreviews((held) => new Map(held).set(requestId, read)),
+        ),
+      ),
     );
   });
 
-  const presentable = ((): Presentable | undefined => {
+  const presentable = ((): ApprovalPayload | undefined => {
     if (!pending) return undefined;
     const { payload } = pending;
     switch (payload.kind) {
       case 'toolEdit': {
-        const preview = previews.get(pending.requestId);
-        if (preview === undefined) return undefined;
-        return preview === null
-          ? { kind: 'edit', data: payload.data }
-          : {
-              kind: 'modal',
-              payload: {
-                ...payload,
-                tui: { kind: 'preview', content: preview },
-              },
-            };
+        const tui = previews.get(pending.requestId);
+        return tui === undefined ? undefined : { ...payload, tui };
       }
       case 'retry':
         // Switching onto the user's own key is the host's that runs the
         // task; this view offers retry and stop only.
         return {
-          kind: 'modal',
-          payload: {
-            ...payload,
-            data: { ...payload.data, credentialSwitch: null },
-          },
+          ...payload,
+          data: { ...payload.data, credentialSwitch: null },
         };
       default:
-        return { kind: 'modal', payload };
+        return payload;
     }
   })();
 
@@ -292,8 +271,7 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
     );
   };
 
-  const answering =
-    presentable?.kind === 'modal' || presentable?.kind === 'edit';
+  const answering = presentable !== undefined;
   // The composer shows only for a run that takes a follow-up (the rule
   // every host reads).
   const composing =
@@ -381,26 +359,15 @@ function AttachedTask(props: AttachedTaskProps): React.JSX.Element {
         )}
         {notice && <Text color={COLOR_WARNING}>{notice}</Text>}
       </BorderedPanel>
-      {presentable?.kind === 'modal' && (
+      {presentable && (
         <ApprovalModal
           // A fresh modal per request: a question's answers or a card's
           // feedback never carry into the next one.
           key={pending?.requestId}
-          payload={presentable.payload}
+          payload={presentable}
           availableRows={10}
           onDecide={decide}
         />
-      )}
-      {presentable?.kind === 'edit' && (
-        <ConfirmCard
-          key={pending?.requestId}
-          color={COLOR_WARNING}
-          title="Apply edit?"
-          rejectionMode="feedback"
-          onDecide={decide}
-        >
-          <Text>{`${presentable.data.relativePath} (+${presentable.data.addedLines} −${presentable.data.removedLines}); the service holds no preview.`}</Text>
-        </ConfirmCard>
       )}
       {inquiries > 0 && (
         <Text dimColor>

@@ -50,8 +50,8 @@ export const commitCliProviderApiKey = (
  * Ask for a provider key and write it: the `promptForApiKey` the shared
  * retry controller calls when a run's fallback needs a credential the user
  * has not stored yet. A dismissed prompt is the answer "no key", not a
- * failure — the retry controller re-reads the store and reports `false`
- * itself.
+ * failure — the retry controller re-reads the store and says the retry did
+ * not switch.
  */
 export const promptForCliProviderApiKey = (
   stores: SettingsStores,

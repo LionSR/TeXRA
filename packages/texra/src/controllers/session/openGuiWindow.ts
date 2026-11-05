@@ -73,6 +73,7 @@ import {
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
@@ -225,8 +226,12 @@ interface GuiWindowHost extends Pick<
   readonly window: WindowHost;
   readonly runs: Pick<
     HostRunActionPorts,
-    'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
-  >;
+    'openFinalOutput' | 'revealProgress'
+  > &
+    Pick<
+      ConstructorParameters<typeof ProgressApiKeyRetryController>[0],
+      'promptForApiKey'
+    >;
   readonly files: Omit<
     ConstructorParameters<
       typeof ProgressWorkflowFileActionsController
@@ -479,6 +484,11 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     runs: runActions,
   });
 
+  const apiKeyRetry = new ProgressApiKeyRetryController({
+    promptForApiKey: host.runs.promptForApiKey,
+    session,
+  });
+
   const { bindings } = host;
   const latexdiff = latexdiffVerbs({
     host: bindings.latexdiff,
@@ -491,6 +501,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       bridge,
       snapshot,
       runActions,
+      apiKeyRetry,
       workflowFileActions,
       draftRequests,
       toolEditApprovals,
@@ -533,6 +544,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
 /** What the shared arms act on. */
 interface SharedParts extends GuiWindowParts {
   readonly runActions: Effect.Success<ReturnType<typeof createHostRunActions>>;
+  readonly apiKeyRetry: ProgressApiKeyRetryController;
   readonly workflowFileActions: ProgressWorkflowFileActionsController;
   readonly draftRequests: Effect.Success<
     ReturnType<HostDraftRequests['attach']>
@@ -693,7 +705,7 @@ function answerShared(
         yield* parts.runActions.runCompileFixer(request.runId);
         return done;
       case 'useOwnApiKey':
-        yield* parts.runActions.useOwnApiKey(request);
+        yield* parts.apiKeyRetry.useOwnApiKey(request);
         return done;
       case 'record':
       case 'polish':

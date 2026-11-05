@@ -30,7 +30,6 @@ import {
   type PromptFailed,
 } from '@texra/hosts/uiHosts';
 
-import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
@@ -47,7 +46,6 @@ import {
   DESKTOP_DOCS_URL,
   postDesktopSettingsView,
 } from '../shared/desktopCommandSurface.js';
-import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { WindowOnboarding } from './desktopWindowOnboarding.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -252,29 +250,11 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
               output ? host.openPath(output.absolutePath) : Effect.void,
             ),
           ),
-        // Only the "ask the user for a key" step is host-specific: on the
-        // desktop that means opening the Models tab rather than a modal
-        // prompt. The controller re-reads the secret store after this
-        // returns.
-        promptForApiKey: (provider: ApiKeyProviderId) =>
-          Effect.gen(function* () {
-            postDesktopSettingsView(options.postToRenderer, 'models/keys');
-            yield* host.showInfoMessage(
-              'Add a provider API key in Models, then use "Retry" on the request.',
-            );
-          }).pipe(
-            Effect.catchTag(
-              'NotificationFailed',
-              (failure): Effect.Effect<void, ApiKeyPromptFailed> =>
-                Effect.fail(
-                  new ApiKeyPromptFailed({
-                    provider,
-                    message:
-                      'The desktop could not show the API key instruction.',
-                    cause: failure.cause,
-                  }),
-                ),
-            ),
+        // The desktop asks for a key in its Models tab; the shared retry
+        // re-reads the secret store and says when none was added.
+        promptForApiKey: () =>
+          Effect.sync(() =>
+            postDesktopSettingsView(options.postToRenderer, 'models/keys'),
           ),
       },
       files: {
