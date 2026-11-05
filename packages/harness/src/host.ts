@@ -25,7 +25,7 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-export type { RunWorkspaceFile } from '@agent/storage/runWorkspaceFiles';
+export type { RunWorkspaceFile } from '@shared/schemas';
 export type { AssembleTraceResult } from '@transcript/traceAssembler';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
@@ -232,7 +232,6 @@ export {
 // chain, and a failure's message with its classification (`toErrorMessage`
 // is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { isNotADirectoryError } from '@utils/files/fsEntryExists';

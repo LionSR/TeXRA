@@ -385,9 +385,9 @@ const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
     ),
   );
   if (info.type !== 'Directory') {
-    return yield* Effect.fail(
-      new CliUsageError({ message: `--cwd: not a directory: ${requested}` }),
-    );
+    return yield* new CliUsageError({
+      message: `--cwd: not a directory: ${requested}`,
+    });
   }
   return canonicalizeWorkspacePath(requested);
 });

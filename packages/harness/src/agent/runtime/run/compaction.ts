@@ -329,7 +329,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
     ) {
       if (pending === null) return yield* cell.current;
       const running = pending.fiber;
-      const finished = yield* Effect.sync(() => running.pollUnsafe());
+      const finished = running.pollUnsafe();
       if (finished !== undefined)
         return yield* landPending(cell, finished, reason);
       yield* Fiber.interrupt(running);
@@ -359,7 +359,7 @@ export const backgroundCompaction = Effect.fn('compaction.background')(
         const running = pending.fiber;
         const finished = full
           ? yield* Fiber.await(running)
-          : yield* Effect.sync(() => running.pollUnsafe());
+          : running.pollUnsafe();
         if (finished === undefined) return state;
         const landed = yield* landPending(cell, finished);
         // One that produced no summary leaves the decision to this history.

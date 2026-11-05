@@ -5,9 +5,9 @@
  * releases it, and nothing is installed at import or held in a slot.
  *
  * `FakeHost.layer` installs a fake host for the block (`buildPerTest: true`
- * gives each test its own); `SessionGraph.layer` is the process every TeXRA
- * host composes (`processLayer` over TeXRA's plugins and the installed
- * host's ports), built over the block's host, with no `ManagedRuntime` and
+ * gives each test its own); `SessionGraph.layer` is the process a host
+ * composes (`processLayer` over the host's app and the installed host's
+ * ports), built over the block's host, with no `ManagedRuntime` and
  * no slot (`SessionGraph.hosted` brings a default host); and
  * `TestSession.layer` opens an ephemeral session on it. No host is
  * installed by default: a block names the host it runs over.
@@ -63,8 +63,6 @@ import {
   type SessionOpenError,
 } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
-import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
-import { texraPlugins } from '@texra/tools/registry';
 import type { Plugin } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 
@@ -73,7 +71,6 @@ import {
   fakeHostAgentDirectories,
   fakeHostAppState,
   fakeHostSecrets,
-  fakeSetupPlatform,
   installFakeHost,
   type FakeHost as InstalledHost,
 } from './setupPlatform';
@@ -152,7 +149,7 @@ const PROCESS_SERVICES = [
   SessionOwner,
 ] as const;
 
-/** The process over TeXRA's plugins and `extra`, its validation route
+/** The process over the host's app (its settings and plugins) and `extra`, its validation route
  *  served by `model`, built over the block's host. */
 const composedProcess = (
   extra: readonly Plugin[],
@@ -167,11 +164,8 @@ const composedProcess = (
         // Under the host's storage root, the worker's: its global storage,
         // and its mcp.json rather than the developer's `~/.texra/mcp.json`.
         storageRoot: host.roots.storageRoot,
-        settings: TEXRA_SETTINGS.catalog,
-        plugins: [
-          ...texraPlugins({ name: 'vscode', setup: fakeSetupPlatform }),
-          ...extra,
-        ],
+        settings: host.app.settings,
+        plugins: [...host.app.plugins(), ...extra],
         secrets: Secrets.layer(fakeHostSecrets),
         appState: AppState.layer(fakeHostAppState),
         agentDirectories: Layer.succeed(AgentDirectories)(
@@ -189,9 +183,9 @@ const composedProcess = (
   ) as Layer.Layer<ProcessServices | Sessions | SessionOwner, never, FakeHost>;
 
 /**
- * The process every TeXRA host composes, as a layer over the block's fake
- * host: `processLayer` over TeXRA's plugins (with the installed host's
- * setup platform) and the fake host's ports. The process reads the host as
+ * The process a host composes, as a layer over the block's fake host:
+ * `processLayer` over the host's app (`HARNESS_APP` unless the host names
+ * another) and the fake host's ports. The process reads the host as
  * it builds and after (its tool switches, whether a custom agents directory
  * is set), and its ports read the host installed when they are called, so
  * a block's graph follows its per-test hosts. Built once per block and
@@ -214,7 +208,7 @@ export const SessionGraph = {
   hosted: Layer.provideMerge(graph, FakeHost.layer()),
 
   /**
-   * The same process with `plugins` beside TeXRA's and `model` answering
+   * The same process with `plugins` beside the app's and `model` answering
    * every model call: for a case that composes two processes in turn, as a
    * restart with a changed plugin does.
    */

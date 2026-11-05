@@ -12,12 +12,7 @@ import {
   type RunOutcome,
   serializeFilteredConfig,
 } from '@texra-ai/harness/schemas';
-import {
-  type AgentRunListingEntry,
-  type LocalSession,
-  type RunResult,
-  type SessionOpenError,
-} from '@texra-ai/harness';
+import type { AgentRunListingEntry, RunResult } from '@texra-ai/harness';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
@@ -25,13 +20,13 @@ import {
 import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
+import type { CliRunReads } from './runReads';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -214,48 +209,33 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
   return isRunId(raw) ? raw : undefined;
 }
 
-/**
- * The history readers take the process session as the open that yields it
- * (`CliPlatformServices.session`), so the open runs inside the reader's own
- * program, on the runtime the calling surface holds.
- */
+/** The history readers take the project's reads (`CliPlatformServices.reads`):
+ *  this process's own store, or the service's, whichever holds the runs. */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
-  function* (session: Effect.Effect<LocalSession, SessionOpenError>) {
-    const opened = yield* session;
-    return (yield* opened.listRuns()).map(toCliHistoryEntry);
+  function* (reads: CliRunReads) {
+    return (yield* reads.listRuns()).map(toCliHistoryEntry);
   },
 );
 
 export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
   function* (
-    sessionOpen: Effect.Effect<LocalSession, SessionOpenError>,
+    reads: CliRunReads,
+    storage: string,
     id: RunId,
     options: { includeFullConversation?: boolean } = {},
   ) {
-    const session = yield* sessionOpen;
-    const store = session.records(id);
-    const [
+    const [config, detail, generatedFiles] = yield* Effect.all(
+      [reads.config(id), reads.detail(id), listRunGeneratedFiles(id, storage)],
+      { concurrency: 3 },
+    );
+    const {
       run,
-      config,
       result,
       report,
       conversation,
       workspaceFiles,
-      generatedFiles,
-      checkpointPresent,
-    ] = yield* Effect.all(
-      [
-        session.view.read([]).pipe(Effect.map((view) => view.runs.get(id))),
-        store.readConfig(),
-        store.readResult(),
-        store.readReport(),
-        store.readConversation(),
-        store.readWorkspaceFiles(),
-        listRunGeneratedFiles(id, session.roots.storage),
-        store.readResumable(),
-      ],
-      { concurrency: 8 },
-    );
+      resumable: checkpointPresent,
+    } = detail;
     if (!run && !config && conversation.length === 0 && !checkpointPresent) {
       return null;
     }
@@ -335,17 +315,14 @@ type CliHistoryExportInputResult =
  */
 export const readCliHistoryExportInput = Effect.fn(
   'cli.readCliHistoryExportInput',
-)(function* (
-  session: Effect.Effect<LocalSession, SessionOpenError>,
-  id: RunId,
-) {
-  const { run, config, conversation, exportInput } = yield* Effect.flatMap(
-    session,
-    (opened) => loadChatExportInput(id, opened),
+)(function* (reads: CliRunReads, id: RunId) {
+  const [exists, { config, exportInput }] = yield* Effect.all(
+    [reads.exists(id), reads.exportInput(id)],
+    { concurrency: 2 },
   );
   if (exportInput)
     return { status: 'ok', exportInput } satisfies CliHistoryExportInputResult;
-  if (!run && !config && conversation.length === 0) {
+  if (!exists && !config) {
     return { status: 'not_found' } satisfies CliHistoryExportInputResult;
   }
   return { status: 'incomplete' } satisfies CliHistoryExportInputResult;
@@ -380,12 +357,12 @@ export function readCliHistoryStandaloneTemplate(
   );
 }
 
-/** Delete indexed run lifetimes through the session's claim transaction. */
+/** Delete what `target` names among the stored runs, where they are held. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
-  session: LocalSession,
+  reads: CliRunReads,
   target: RunId | 'all',
 ) {
-  const { listed, deleted, active, failed } = yield* session.deleteRuns(target);
+  const { listed, deleted, active, failed } = yield* reads.deleteRuns(target);
   if (target === 'all')
     return {
       deleted: 'all',

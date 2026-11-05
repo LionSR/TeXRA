@@ -2,15 +2,12 @@
 
 import { Effect, Stream, Predicate } from 'effect';
 
-import { type AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
 import {
   qualifyAggregateId,
-  type RunId,
-  type RunIdentity,
+  type AgentRunListingEntry,
   RUN_SUBSTATE,
-  type RunOutcome,
 } from '@shared/schemas';
 import { recordsOf } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -19,37 +16,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveResumability } from './resumability';
 const CHANNEL = 'RunListing';
 const RUN_STORAGE_CONCURRENCY = 32;
-
-/**
- * A run a user started themselves, as a history list shows it: an agent run
- * with no parent. Background processes and scripts (`identity.kind`) and the
- * runs an agent spawned, which belong to their parent's transcript, are not
- * listed; a lookup by explicit id reads the run's records instead.
- */
-export interface AgentRunListingEntry {
-  id: RunId;
-  timestamp: string;
-  /** The run's durable outcome (its `run.end`), null while none has landed. */
-  outcome: RunOutcome | null;
-  /** A stop rested the run (the fold's paused substate), a status of its own. */
-  paused?: true;
-  /** AI-generated summary of what the session aimed to accomplish. */
-  description?: string;
-  /** The model the run is on, as the view folds it: its newest
-   *  `run.config`'s. */
-  model?: string;
-  /** `deriveResumability` finds a point to continue from. Ownership and
-   *  loadability are settled when the run is opened. */
-  resumable: boolean;
-  /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, an earlier build wrote them, or
-   *  they hold a fact of a plugin this process does not load. Absent when
-   *  it resumes or simply has nothing to continue from. */
-  resumeBlocked?: string;
-  /** What the run is — the durable authority, stamped at registration. */
-  identity: Extract<RunIdentity, { kind: 'agent' }>;
-  record: AgentConfig;
-}
 
 /**
  * The runs a user started, newest first, each with its private record: the

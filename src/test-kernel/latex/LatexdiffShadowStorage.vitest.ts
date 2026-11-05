@@ -15,6 +15,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
+import { TEXRA_APP } from '@test/support/texraApp';
 
 const mocks = vi.hoisted(() => ({
   executeCommand: vi.fn(),
@@ -50,6 +51,7 @@ describe('LaTeXdiffService shadow output', () => {
       yield* Layer.build(
         FakeHost.layer(
           {
+            app: TEXRA_APP,
             workspacePath: sourceDir,
             storagePath: resolveWorkspaceStoragePath(storageRoot, sourceDir),
             globalStoragePath: resolveGlobalStoragePath(storageRoot),

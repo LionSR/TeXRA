@@ -93,7 +93,6 @@ const CONFIGURE: {
             ? null
             : choice.effort,
         cache: config.capabilities.supportsPromptCaching ? '5m' : 'disabled',
-        stopSequences: [],
       },
     };
   },

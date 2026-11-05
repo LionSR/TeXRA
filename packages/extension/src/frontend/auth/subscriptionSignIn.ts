@@ -188,21 +188,21 @@ export function signInWithSubscription(
     );
     return true;
   }).pipe(
-    Effect.catchTag('SubscriptionSignInFailed', (failure) =>
-      failure.cause instanceof SubscriptionSignInCancelled
-        ? Effect.succeed(false)
-        : showLoggedErrorMessage(
-            channel,
-            `${displayName} sign-in failed`,
-            failure.cause,
-          ).pipe(Effect.as(false)),
-    ),
-    Effect.catchTag('SubscriptionPreferenceUpdateFailed', (failure) =>
-      showLoggedErrorMessage(
-        channel,
-        `${displayName} sign-in succeeded but subscription preference update failed`,
-        failure.cause,
-      ).pipe(Effect.as(false)),
-    ),
+    Effect.catchTags({
+      SubscriptionSignInFailed: (failure) =>
+        failure.cause instanceof SubscriptionSignInCancelled
+          ? Effect.succeed(false)
+          : showLoggedErrorMessage(
+              channel,
+              `${displayName} sign-in failed`,
+              failure.cause,
+            ).pipe(Effect.as(false)),
+      SubscriptionPreferenceUpdateFailed: (failure) =>
+        showLoggedErrorMessage(
+          channel,
+          `${displayName} sign-in succeeded but subscription preference update failed`,
+          failure.cause,
+        ).pipe(Effect.as(false)),
+    }),
   );
 }

@@ -48,11 +48,9 @@ function buildOverleafClonePorts(
         ? `${spec.tokenHint ?? ''} Create or copy a token at ${OVERLEAF_GIT_TOKEN_URL}. Instructions: ${OVERLEAF_TOKEN_DOCS_URL}`.trim()
         : spec.tokenHint;
       if (context.mode !== 'interactive' || context.outputFormat !== 'text') {
-        return yield* Effect.fail(
-          new CliUsageError({
-            message: `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
-          }),
-        );
+        return yield* new CliUsageError({
+          message: `No saved ${spec.tokenTitle} is available. ${tokenGuidance ? `${tokenGuidance} ` : ''}Run this command in an interactive terminal to enter and save one.`,
+        });
       }
       if (tokenGuidance) writeTextStderr(tokenGuidance);
       const token = yield* askCliQuestion(`${spec.tokenTitle}: `, {

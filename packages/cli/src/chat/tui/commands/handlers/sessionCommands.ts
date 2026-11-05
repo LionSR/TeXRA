@@ -88,9 +88,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const model = run?.model ?? meta.model;
     // The skills the run's latest step lists, read from its rows.
     const activeSkills =
-      activeRunId === undefined
-        ? []
-        : yield* context.runtimeSession.records(activeRunId).readSkills();
+      activeRunId === undefined ? [] : yield* context.reads.skills(activeRunId);
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
@@ -146,9 +144,9 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
 }
 
 /**
- * `/resume all`: the open-time notice's bulk answer. Each interrupted task
- * resumes on the session beside this chat and joins the agent list (Tab);
- * one a resume refuses says why on its own line.
+ * `/resume all`: every interrupted task resumes on the session beside this
+ * chat and joins the agent list (Tab); one a resume refuses says why on its
+ * own line.
  */
 export function resumeInterruptedTasks(
   runSession: Session,

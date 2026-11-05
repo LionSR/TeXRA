@@ -23,7 +23,7 @@ Node.js platform implementation and host building blocks for
   [`ProjectDatabases`](#projectdatabases), and
   [`ProcessIdentity`](#processidentity).
 - **Commands & atomic file I/O**:
-  [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
+  [`executeCommand`](#executecommand),
   [`writeFileAtomic`](#writefileatomic), and
   [`readNormalizedFile`](#readnormalizedfile).
 - **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
@@ -54,16 +54,6 @@ propagates.
 
 ```ts
 function canonicalizeWorkspacePath(workspacePath: string): string
-```
-
-## CommandDirs
-
-The directories an app adds to the PATH a command runs and resolves on:
-the package-manager and tool installs a GUI-launched process may lack.
-Absent, none.
-
-```ts
-const CommandDirs: Reference<() => readonly string[]>
 ```
 
 ## ConfigStore

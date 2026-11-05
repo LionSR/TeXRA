@@ -358,15 +358,6 @@ class SubscriptionOAuthError extends Schema.TaggedError<SubscriptionOAuthError>(
 )
 ```
 
-## SubscriptionOAuthErrorKind
-
-{@link SubscriptionOAuthErrorKindSchema}'s value.
-
-```ts
-type SubscriptionOAuthErrorKind =
-  typeof SubscriptionOAuthErrorKindSchema.Type;
-```
-
 ## SubscriptionSession
 
 Canonical stored session: the persisted base schema's shape (its single

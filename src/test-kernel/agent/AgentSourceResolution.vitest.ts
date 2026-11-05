@@ -26,8 +26,8 @@ import {
   createFakeHost,
   fakeHostAgentDirectories,
   installedHost,
-  storePluginsLayer,
 } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/texraApp';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeHost } from '@test/support/testKernel';

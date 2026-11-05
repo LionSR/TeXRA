@@ -99,7 +99,7 @@ export const WINDOWS_UNSUPPORTED =
 
 /** How long a started service has to answer its first hello: it loads the
  *  agent catalog first, which a loaded machine makes slow. */
-const START_TIMEOUT = '60 seconds';
+export const START_TIMEOUT = '60 seconds';
 /** A started service's probe before it answers this protocol. */
 const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
@@ -107,7 +107,7 @@ const HELLO_TIMEOUT = '10 seconds';
 
 /** A service the caller should retire: an older protocol, or an older
  *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
-function isOlder(info: ServiceInfo): boolean {
+export function isOlder(info: ServiceInfo): boolean {
   if (info.protocol !== PROTOCOL.version)
     return info.protocol < PROTOCOL.version;
   return (
@@ -302,9 +302,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   Scope.Scope | GlobalValues
 > {
   if (process.platform === 'win32')
-    return yield* Effect.fail(
-      new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED }),
-    );
+    return yield* new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED });
   let info = yield* probeRecordedService;
   if (info !== null && info.protocol > PROTOCOL.version)
     return yield* Effect.fail(newerService(info));

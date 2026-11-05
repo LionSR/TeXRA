@@ -7,6 +7,13 @@ import {
   parseGitHubSlug,
   type GitHubSlug,
 } from '@texra/tools/github/githubSlug';
+import {
+  currentBranch,
+  isGitRepository,
+  originDefaultBranch,
+  originUrl,
+  repositoryRoot,
+} from '@texra/utils/git/gitReads';
 
 import { CliExitCode } from '../runtime/exitCodes';
 import { tryOpenBrowser } from '../runtime/browser';
@@ -15,17 +22,7 @@ import {
   writeTextStderr,
   writeTextStdout,
 } from '../runtime/logSinks';
-import {
-  currentBranch,
-  defaultBranch,
-  gh,
-  ghAvailable,
-  git,
-  isGitRepo,
-  localBranchExists,
-  remoteUrl,
-  repoRoot,
-} from '../runtime/gitOps';
+import { gh, ghAvailable, git, localBranchExists } from '../runtime/gitOps';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
@@ -181,14 +178,15 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
 ) {
   const { cwd } = context;
 
-  if (!(yield* isGitRepo(cwd))) {
+  // No TeXRA settings: the command commits with the user's own git identity.
+  if (!(yield* isGitRepository(cwd, undefined))) {
     writeTextStderr(
       'Not inside a git repository. Run this from a cloned GitHub repo.',
     );
     return CliExitCode.Usage;
   }
 
-  const root = (yield* repoRoot(cwd)) ?? cwd;
+  const root = (yield* repositoryRoot(cwd, undefined)) ?? cwd;
   const workflowAbsPath = path.join(root, WORKFLOW_RELATIVE_PATH);
 
   // An unreadable workflow path is the command's failure, reported by the
@@ -203,11 +201,12 @@ const runInstallGithubAction = Effect.fn('runInstallGithubAction')(function* (
     return CliExitCode.Usage;
   }
 
-  const url = yield* remoteUrl(root);
+  const url = yield* originUrl(root, undefined);
   const slug = url ? parseGitHubSlug(url) : null;
-  const base = opts.base ?? (yield* defaultBranch(root)) ?? 'main';
+  const base =
+    opts.base ?? (yield* originDefaultBranch(root, undefined)) ?? 'main';
   const branch = opts.branch ?? DEFAULT_BRANCH_NAME;
-  const startBranch = yield* currentBranch(root);
+  const startBranch = yield* currentBranch(root, undefined);
 
   const branchExists = yield* localBranchExists(root, branch);
   if (branchExists && !opts.force) {

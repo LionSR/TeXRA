@@ -29,7 +29,6 @@ export const DESKTOP_PROJECTS: ValueFamily<ProjectLists> = {
     remembered: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
     recent: Schema.Array(Schema.String.check(Schema.isMinLength(1))),
   }),
-  deletable: false,
 };
 
 /**

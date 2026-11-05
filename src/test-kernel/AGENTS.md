@@ -54,7 +54,11 @@ decided by what it reaches, not by how many tests it has:
   (`support/testKernel.ts`: `FakeHost.layer`; `SessionGraph.layer` over the
   block's host, or `SessionGraph.hosted` with a default one; and
   `TestSession.layer`). No host is installed by default, and a block's scope
-  releases what it built, so nothing a file installs outlives it.
+  releases what it built, so nothing a file installs outlives it. A host runs
+  the harness alone (`HARNESS_APP`: its settings and built-in plugins) unless
+  it names TeXRA (`FakeHost.layer({ app: TEXRA_APP })`, `texraHosted`, in
+  `support/texraApp.ts`), which a suite of TeXRA's tools, settings or agents
+  does.
 - **`isolated`** — what a shared registry cannot serve, each file in its own
   registry and its own worker, several times the cost per suite: a suite that
   calls `vi.mock` / `vi.doMock` (its factory's module would be what the next
@@ -141,7 +145,7 @@ testing guides.
 
 - **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, which awaits nothing and runs no Effect at module scope: what a suite runs over is a layer its blocks build.
 
-- **No `!`, no unexplained `as`.** A fixture id or stored row decodes with its schema (`Schema.decodeUnknownSync(RunIdSchema)`), a lookup that may miss narrows with Vitest `assert`, and a deferred value is `Promise.withResolvers`. A partial test double keeps its `as` with a `// cast:` reason on its line or the line before. oxlint fails `value!` here and in `packages/*/test`; `npm run check:core-quality` holds `let x!` and an unexplained `as` at zero in both.
+- **No `!`, no unexplained `as`.** A fixture id or stored row decodes with its schema (`Schema.decodeUnknownSync(RunIdSchema)`), a lookup that may miss narrows with Vitest `assert`, and a deferred value is `Promise.withResolvers`. A partial test double keeps its `as` with a `// cast:` reason on its line or the line before. oxlint fails `value!` here and in `packages/*/test`.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 

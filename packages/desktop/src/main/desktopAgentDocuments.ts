@@ -26,20 +26,16 @@ export const resolveAgentDocument = Effect.fn('resolveAgentDocument')(
       identity &&
       (yield* AgentCatalog).get(agentKey(identity.source, identity.name));
     if (!entry?.path) {
-      return yield* Effect.fail(
-        new AgentDocumentUnavailable({
-          message:
-            'This agent definition is no longer available. Open its current definition from Settings.',
-        }),
-      );
+      return yield* new AgentDocumentUnavailable({
+        message:
+          'This agent definition is no longer available. Open its current definition from Settings.',
+      });
     }
     if (write && isPackagedAgentSource(entry.source)) {
-      return yield* Effect.fail(
-        new AgentDocumentUnavailable({
-          message:
-            'Built-in and plugin definitions are read-only. Customize the agent to edit a copy.',
-        }),
-      );
+      return yield* new AgentDocumentUnavailable({
+        message:
+          'Built-in and plugin definitions are read-only. Customize the agent to edit a copy.',
+      });
     }
     return entry.path;
   },

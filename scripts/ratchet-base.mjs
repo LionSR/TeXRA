@@ -1,7 +1,7 @@
 // The commit a ratchet judges the working tree against: its merge base with
 // the target branch, named by `--base <ref>` or TEXRA_RATCHET_BASE
 // (origin/main by default; CI passes the pull request's target).
-// check-core-quality.mjs and check-fact-spread.mjs measure the base's tree
+// check-fact-spread.mjs measures the base's tree
 // (`withBaseTree`); check-row-kinds-ever.mjs reads the base's row-kind list.
 
 // Node imports

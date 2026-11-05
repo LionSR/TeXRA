@@ -35,7 +35,6 @@ export {
   TurnResultSchema,
 } from './turn.js';
 export type {
-  BackgroundEvent,
   BackgroundSubmission,
   FileUpload,
   Model,

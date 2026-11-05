@@ -51,6 +51,9 @@ import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
+import { Sessions } from '@texra-ai/harness';
+import { nodePlatform, nodePlatformServices } from '@texra-ai/harness/node';
+
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@effect/sql-sqlite-node/SqliteClient')
@@ -108,15 +111,13 @@ import {
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import {
-  storePluginsLayer,
-  globalValuesOver,
-} from '@test/support/setupPlatform';
+import { globalValuesOver } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/texraApp';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { toolTable } from '@tools/toolTable';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import type { GlobalValues } from '@texra-ai/harness/host';
 import type { ProcessProbe } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -424,6 +425,78 @@ describe('session events and view', () => {
  * holds ends.
  */
 describe('Sessions owner', () => {
+  // A missing plugin must not clear a durable request whose answer it delivers.
+  it.live('keeps a plugin request pending when its plugin is absent', () =>
+    Effect.gen(function* () {
+      const directory = mkdtempSync(join(tmpdir(), 'texra-missing-plugin-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(directory, { recursive: true, force: true })),
+      );
+      const platform = nodePlatform({
+        agentsDir: join(directory, 'agents'),
+        storageDir: join(directory, 'storage'),
+        workspaceDir: directory,
+      });
+      mkdirSync(join(directory, 'agents'));
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.appendAll([
+          runStart,
+          waiting,
+          {
+            type: 'request.opened',
+            aggregateId: qualifyAggregateId('run', RUN),
+            requestId: 'plugin-answer',
+            payload: {
+              kind: 'plugin',
+              plugin: 'example',
+              blocksCaller: false,
+              answers: ['answer'],
+              data: { requestId: 'plugin-answer', runId: RUN },
+            },
+          },
+        ]);
+        yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
+      }).pipe(
+        Effect.provide(
+          databaseLayer('persistent').pipe(
+            Layer.provide(Layer.succeed(WorkspaceRoots)(platform.roots)),
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
+            Layer.provide(nodePlatformServices),
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const session = yield* (yield* Sessions).open(platform.roots, {
+          persistent: true,
+          host: {},
+        });
+        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
+        yield* Stream.runHead(
+          Stream.filter(session.view.changes, (view) =>
+            view.requests.some(
+              ({ requestId }) => requestId === 'plugin-answer',
+            ),
+          ),
+        );
+        const error = yield* Effect.flip(
+          session.request({
+            kind: 'request.decide',
+            runId: RUN,
+            requestId: 'plugin-answer',
+            decision: { action: 'answer', answer: 'Preserve this answer.' },
+          }),
+        );
+        expect(error).toMatchObject({
+          _tag: 'Unavailable',
+          reason: expect.stringContaining('example'),
+        });
+        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
+      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
+    }),
+  );
+
   /** The graph over one started run, with the global values and platform a
    *  request handler reads. */
   const withRequestServices = <A, E, R>(program: Effect.Effect<A, E, R>) =>

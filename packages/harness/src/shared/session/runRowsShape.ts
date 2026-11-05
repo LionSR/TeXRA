@@ -93,6 +93,9 @@ export type RunRows = RunPosition & {
   readonly position: RowOf<'run.position'> | null;
   /** Its title: the latest user `run.description`, else the latest one. */
   readonly title: RowOf<'run.description'> | null;
+  /** Its latest model `run.description`, whose priced request (`usage`) is
+   *  part of the run's spend whatever title stands. */
+  readonly label: RowOf<'run.description'> | null;
   /** Its own grants: the latest `approval.policy`, else the snapshot its
    *  `run.start` carried. */
   readonly grants: ApprovalGrants | null;

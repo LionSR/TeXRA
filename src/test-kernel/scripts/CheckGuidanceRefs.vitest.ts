@@ -32,13 +32,14 @@ function runGate(fixture: string): { status: number; output: string } {
 }
 
 describe('check-guidance-refs', () => {
-  it('fails on a dead path, a row the vocabulary does not declare, and a line citation past its file', () => {
+  it('fails on a dead path, a row the vocabulary does not declare, and a code citation its file does not hold', () => {
     const { status, output } = runGate('broken');
 
     expect(status).toBe(1);
     expect(output).toContain('run.neverWasARow');
     expect(output).toContain('missing.md');
     expect(output).toContain('src/README.md:999');
+    expect(output).toContain('src/README.md does not contain neverThere');
     expect(output).toContain('no such file packages/harness/src/missing.ts');
   });
 });

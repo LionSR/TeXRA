@@ -19,7 +19,7 @@
 import { Effect } from 'effect';
 
 import { executeCommand } from '@texra-ai/harness/node';
-import { isGitRepository } from '@texra/utils/git/isGitRepository';
+import { isGitRepository } from '@texra/utils/git/gitReads';
 
 import {
   COMMIT_LABEL_FORMAT,

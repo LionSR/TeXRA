@@ -7,13 +7,10 @@ import {
   withLogChannel,
   pathToLocationIn,
 } from '@texra-ai/harness/host';
-import {
-  absentReason,
-  executeCommand,
-  readNormalizedFile,
-} from '@texra-ai/harness/node';
+import { absentReason, readNormalizedFile } from '@texra-ai/harness/node';
 import { formatError, type FileLocation } from '@texra-ai/harness/schemas';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
+import { repositoryRoot } from '@texra/utils/git/gitReads';
 import { generateDiffFileName } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
@@ -244,9 +241,10 @@ export class LaTeXdiffService {
 
       // latexdiff-vc --git runs `git show <commit>:<file>`, which expects
       // a path relative to the repo root. Absolute paths break its temp
-      // path construction. Resolve via git rev-parse to get the repo root.
+      // path construction, so read the repo root. The roots of the workspace
+      // being diffed carry its git identity.
       const fileDir = path.dirname(inputFile);
-      const gitRoot = yield* this.getGitRoot(fileDir);
+      const gitRoot = yield* repositoryRoot(fileDir, this.roots);
       const cwd = gitRoot ?? fileDir;
       const filePath = gitRoot
         ? path.relative(gitRoot, inputFile)
@@ -282,21 +280,6 @@ export class LaTeXdiffService {
     }).pipe(
       Effect.catch(this.failure('Error running LaTeX diff VC')),
       withLogChannel(this.channel),
-    );
-  }
-
-  private getGitRoot(
-    cwd: string,
-  ): Effect.Effect<string | null, never, ChildProcessSpawner> {
-    return executeCommand(['git', 'rev-parse', '--show-toplevel'], {
-      channel: this.channel,
-      cwd,
-      // The roots of the workspace being diffed, held by this service.
-      settings: this.roots,
-    }).pipe(
-      Effect.map((result) =>
-        result.success && result.stdout ? result.stdout.trim() : null,
-      ),
     );
   }
 }

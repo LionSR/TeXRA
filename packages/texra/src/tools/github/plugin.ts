@@ -8,7 +8,7 @@ import { Effect } from 'effect';
 import { Secrets } from '@texra-ai/harness/host';
 import { definePlugin } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
-import { isGitRepository } from '@texra/utils/git/isGitRepository';
+import { isGitRepository } from '@texra/utils/git/gitReads';
 import { getGitHubToken, GITHUB_TOKEN_STORAGE_KEY } from './githubAuth';
 import { GitHubSubscriptionTool } from './githubSubscriptionTool';
 import {

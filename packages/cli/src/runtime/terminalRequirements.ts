@@ -4,11 +4,11 @@
  * and npm never disagree about what runs.
  *
  * The official Effect SQLite client requires the `node:sqlite` backup,
- * columns and setReturnArrays APIs, and the bundled undici 8.x requires
- * `>=22.19.0`. Node 22.19.0 and Node 24 satisfy both; Node 23 lacks
- * setReturnArrays.
+ * columns and setReturnArrays APIs (Node 23 lacks setReturnArrays), the
+ * bundled undici 8.x requires `>=22.19.0`, and `which` and
+ * `write-file-atomic` declare `^22.22.2 || ^24.15.0`.
  */
-export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.19.0 || >=24.0.0';
+export const TEXRA_CLI_SUPPORTED_NODE_RANGE = '^22.22.2 || >=24.15.0';
 
 type InteractiveTerminalFailureReason = 'headless' | 'dumb-terminal';
 

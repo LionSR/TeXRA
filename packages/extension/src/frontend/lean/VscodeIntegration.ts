@@ -311,12 +311,10 @@ const getClientProvider = Effect.fn('getClientProvider')(function* (
         ).pipe(withLogChannel(CHANNEL)),
       ),
     );
-    return yield* Effect.fail(
-      new LeanExtensionUnavailable({
-        reason: 'not-installed',
-        message: LEAN4_NOT_INSTALLED,
-      }),
-    );
+    return yield* new LeanExtensionUnavailable({
+      reason: 'not-installed',
+      message: LEAN4_NOT_INSTALLED,
+    });
   }
 
   const features = yield* Effect.tryPromise({

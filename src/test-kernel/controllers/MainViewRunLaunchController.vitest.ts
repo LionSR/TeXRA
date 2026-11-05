@@ -16,10 +16,8 @@ import {
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { BUNDLED_AGENTS } from '@test/support/storeFaults';
-import {
-  fakeHostAgentDirectories,
-  storePluginsLayer,
-} from '@test/support/setupPlatform';
+import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
+import { storePluginsLayer } from '@test/support/texraApp';
 import { FakeHost } from '@test/support/testKernel';
 import { LaunchSurfaceSchema } from '@texra/shared/session/surface';
 import type { HostRequest } from '@texra/shared/session/hostRequest';

@@ -390,7 +390,7 @@ const shouldUseInternalValidationModel = Effect.gen(function* () {
   }
 
   // An unreadable flag file dies with the filesystem error, which names it.
-  const flagContent = yield* Effect.sync(() => readFileSync(flagPath, 'utf8'));
+  const flagContent = readFileSync(flagPath, 'utf8');
   if (flagContent.trim() !== FLAG_CONTENT) {
     return yield* Effect.die(
       new Error(`${SWITCH}=1 received an invalid validation flag file.`),

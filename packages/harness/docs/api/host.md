@@ -331,12 +331,6 @@ class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 })
 ```
 
-## AgentErrorKind
-
-```ts
-type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
-```
-
 ## AgentRuntimeEmitOptions
 
 ```ts
@@ -809,29 +803,26 @@ no longer decodes fails that read.
 
 ```ts
 interface CurrentValues {
-  readonly get: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
+  readonly get: <T>(
+    family: ValueFamily<T>,
     key: string,
   ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
   /**
    * Change one value from the one read under the write lock: `change`
    * answers with its result and the next value, with its result alone to
-   * write nothing, or refuses and nothing is written. Only a deletable
-   * family's change may answer `undefined`, which deletes the row.
+   * write nothing, or refuses and nothing is written. A next value of
+   * `undefined` deletes the row.
    */
-  readonly modify: <T, D extends boolean, A, E = never>(
-    family: ValueFamily<T, D>,
+  readonly modify: <T, A, E = never>(
+    family: ValueFamily<T>,
     key: string,
     change: (
       current: T | undefined,
-    ) => Result.Result<
-      readonly [A] | readonly [A, D extends true ? T | undefined : T],
-      E
-    >,
+    ) => Result.Result<readonly [A] | readonly [A, T | undefined], E>,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
-  readonly list: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
+  readonly list: <T>(
+    family: ValueFamily<T>,
   ) => Effect.Effect<
     readonly { readonly key: string; readonly value: T }[],
     DatabaseReadFailed
@@ -843,7 +834,7 @@ interface CurrentValues {
    * retried, so no change is missed.
    */
   readonly changes: (
-    family: Pick<ValueFamily<unknown, boolean>, 'name'>,
+    family: Pick<ValueFamily<unknown>, 'name'>,
     keys: readonly string[],
   ) => Stream.Stream<void>;
 }
@@ -1101,12 +1092,13 @@ One helper call: bind the configured helper model (else `runModel`) for
 this call alone and run one completion through the one retry loop
 (`run/invocation.ts`), gated on the process's retry gate, priced and
 reported to the usage log as `attribution`. No row is written. Returns the
-turn's assistant text. `stores` are the asking session's setting slots: the
-binding, the retry limit and the usage consent read them, beside the
-process `Secrets`.
+turn's assistant text and its priced usage (`null`: the provider reported
+none), for a caller whose row records what the call cost. `stores` are the
+asking session's setting slots: the binding, the retry limit and the usage
+consent read them, beside the process `Secrets`.
 
 ```ts
-const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<string, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
+const helperCall: (stores: SettingsStores, args_1: HelperPrompt, attribution: UsageAttribution, args_3?: { readonly retries?: number | undefined; readonly runModel?: string | undefined; } | undefined) => Effect<{ readonly text: string; readonly usage: { readonly provider: string; readonly inputTokens: number; readonly outputTokens: number; readonly cost: number; readonly responseTimeMs: number; readonly cachedInputTokens?: number | undefined; readonly cacheMissInputTokens?: number | undefined; readonly cacheWriteTokens?: number | undefined; readonly reasoningTokens?: number | undefined; readonly toolUsePromptTokens?: number | undefined; readonly usageRoute?: "chatgpt-subscription" | "xai-subscription" | "kimi-code-subscription" | "glm-coding-plan-subscription" | "api-key" | undefined; readonly usagePlan?: string | undefined; } | null; }, Error | CallFailure, Secrets | HttpClient | UsageLog | RouteRetries>
 ```
 
 ## HelperPrompt
@@ -2201,11 +2193,7 @@ interface RuntimePresentationEventPayloads {
 A workspace file a run edited, as it stands now.
 
 ```ts
-interface RunWorkspaceFile {
-  readonly path: string;
-  readonly size: number;
-  readonly isDirectory: boolean;
-}
+type RunWorkspaceFile = typeof RunWorkspaceFileSchema.Type;
 ```
 
 ## Secrets
@@ -2683,15 +2671,13 @@ class ValidationModel extends Context.Service<
 
 ## ValueFamily
 
-One family of current values: its stored name, the schema its value
-decodes with, and whether a write may delete its row (`Deletable`), in
-which case a change may answer `undefined`.
+One family of current values: its stored name and the schema its value
+decodes with. A change that answers `undefined` deletes the row.
 
 ```ts
-interface ValueFamily<T, Deletable extends boolean = false> {
+interface ValueFamily<T> {
   readonly name: string;
   readonly schema: Schema.Codec<T, unknown>;
-  readonly deletable: Deletable;
 }
 ```
 

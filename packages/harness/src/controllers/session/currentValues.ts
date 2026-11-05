@@ -27,11 +27,10 @@ import {
   type DatabaseClaimRefused,
   type DatabaseNotOwner,
   type DatabaseReadFailed,
-  DatabaseStoreNewer,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { ValueFamily } from '@shared/session/valueFamily';
-import { CURRENT_VALUE_KIND, type SqlRow } from './rowCodec';
+import type { SqlRow } from './rowCodec';
 import type { SqlError } from 'effect/sql/SqlError';
 
 /** Replace one current value in place. */
@@ -58,13 +57,10 @@ export const READ_RETRY = Schedule.exponential('250 millis').pipe(
 const decodeString = Schema.decodeUnknownSync(Schema.String);
 const decodeHistoryRecord = Schema.decodeUnknownSync(InputHistoryRecordSchema);
 
-/** One current value, decoded by its family's schema: a row a newer build
- *  wrote is never read as this build's shape, and one that no longer
- *  decodes fails the read naming itself. */
-function decodeValue<T>(family: ValueFamily<T, boolean>, row: SqlRow): T {
-  const version = Schema.decodeUnknownSync(Schema.Int)(row.version);
-  if (version > VALUE_VERSION)
-    throw new DatabaseStoreNewer({ type: CURRENT_VALUE_KIND, version });
+/** One current value, decoded by its family's schema; one that no longer
+ *  decodes fails the read naming itself. A newer build's values refuse the
+ *  store at open (`storeGate`), so no row read here is one. */
+function decodeValue<T>(family: ValueFamily<T>, row: SqlRow): T {
   const parsed = Schema.decodeUnknownResult(
     Schema.fromJsonString(family.schema),
   )(decodeString(row.value));
@@ -101,7 +97,7 @@ export function currentValues(store: {
   const { exec, execOne, transact, query, level, valueWritten } = store;
   const valueRow = (family: string, key: string) =>
     execOne(
-      'SELECT key, version, value FROM current_value WHERE family = ? AND key = ?',
+      'SELECT key, value FROM current_value WHERE family = ? AND key = ?',
       [family, key],
     );
   const values: CurrentValues = {
@@ -151,7 +147,7 @@ export function currentValues(store: {
     list: (family) =>
       query(
         exec(
-          'SELECT key, version, value FROM current_value WHERE family = ? ORDER BY at DESC',
+          'SELECT key, value FROM current_value WHERE family = ? ORDER BY at DESC',
           [family.name],
         ).pipe(
           Effect.map((rows) =>

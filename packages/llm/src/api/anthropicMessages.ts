@@ -47,6 +47,7 @@ import {
   StopSchema,
   UsageSchema,
 } from './anthropicMessagesWire.js';
+import { messageThreads, type SdkSource } from './anthropicThreads.js';
 import type { InputPart, PartEvent } from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
@@ -287,7 +288,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     ...(controls.effort === null
       ? {}
       : { output_config: { effort: controls.effort } }),
-    stop_sequences: [...controls.stopSequences],
     thinking: wireThinking,
     ...(controls.cache === 'disabled'
       ? {}
@@ -314,7 +314,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
 const FINISH = {
   end_turn: 'stop',
   max_tokens: 'length',
-  stop_sequence: 'stop-sequence',
   tool_use: 'tool-calls',
   refusal: 'refusal',
 } as const;
@@ -412,7 +411,6 @@ function anthropicWire() {
       if (
         started ||
         message.stop_reason != null ||
-        message.stop_sequence != null ||
         message.stop_details != null ||
         message.container != null
       )
@@ -454,14 +452,12 @@ function anthropicWire() {
       // the other providers raise as an HTTP failure. Anthropic billed the
       // input it read before stopping, so the failure carries its usage.
       if (reason === 'model_context_window_exceeded')
-        return yield* Effect.fail(
-          new ModelError({
-            kind: 'context-overflow',
-            message:
-              "Anthropic stopped: the request exceeds the model's context window.",
-            usage: canonicalUsage(usage),
-          }),
-        );
+        return yield* new ModelError({
+          kind: 'context-overflow',
+          message:
+            "Anthropic stopped: the request exceeds the model's context window.",
+          usage: canonicalUsage(usage),
+        });
       stopped = true;
       const refusal = stop.stop_details;
       return [
@@ -470,9 +466,6 @@ function anthropicWire() {
           kind: 'finish',
           finish: {
             finishReason: FINISH[reason],
-            ...(stop.stop_sequence == null
-              ? {}
-              : { stopSequence: stop.stop_sequence }),
             ...(refusal === undefined
               ? {}
               : {
@@ -647,21 +640,30 @@ export function anthropicMessagesModel(
             toolChoice: input.toolChoice ?? 'auto',
             effort: config.defaults.effort,
             cache: config.defaults.cache,
-            stopSequences: config.defaults.stopSequences,
           },
         }),
       (turn) => invocationBody(turn, origin, config, uploads),
     );
 
+  const threads = messageThreads({
+    endpoint: config.deployment.endpoint,
+    open: (body) =>
+      Effect.flatMap(Effect.abortSignal, (signal) =>
+        Effect.tryPromise({
+          try: (): PromiseLike<SdkSource> =>
+            body.thread === undefined
+              ? client.messages.create(body, { signal })
+              : client.beta.messages.create(body, { signal }),
+          catch: sdkFailure,
+        }),
+      ),
+    lower: (turn) => invocationBody(turn, origin, config, uploads),
+  });
   const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const body = yield* invocationBody(input, origin, config, uploads);
-        const signal = yield* Effect.abortSignal;
-        const source = yield* Effect.tryPromise({
-          try: () => client.messages.create(body, { signal }),
-          catch: sdkFailure,
-        });
+        const { source, finalize } = yield* threads.send(input, body);
         const wire = anthropicWire();
         const chunks = yield* sdkStream(source, sdkFailure);
         return assembleTurn(
@@ -670,7 +672,7 @@ export function anthropicMessagesModel(
             // message_stop finishes the response; HTTP EOF is not an additional condition.
             Stream.takeUntil(() => wire.stopped()),
           ),
-          { origin, provider: 'Anthropic' },
+          { origin, provider: 'Anthropic', finalize },
         );
       }).pipe(
         Effect.mapError((error) =>

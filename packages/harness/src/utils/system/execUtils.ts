@@ -396,17 +396,20 @@ const awaitOutcome = Effect.fnUntraced(function* (
         ? { _tag: 'Exited', code: exit.success }
         : { _tag: 'Signalled', description: describeFailure(exit.failure) },
     ),
-    Effect.catchTag('OutputLimitExceeded', (error) =>
-      Effect.succeed<Outcome>({ _tag: 'LimitExceeded', stream: error.stream }),
-    ),
-    // A stream read failed while the child may still run: the scope's
-    // release, not an unref, ends it.
-    Effect.catchTag('PlatformError', (error) =>
-      Effect.succeed<Outcome>({
-        _tag: 'ReadFailed',
-        description: describeFailure(error),
-      }),
-    ),
+    Effect.catchTags({
+      OutputLimitExceeded: (error) =>
+        Effect.succeed<Outcome>({
+          _tag: 'LimitExceeded',
+          stream: error.stream,
+        }),
+      // A stream read failed while the child may still run: the scope's
+      // release, not an unref, ends it.
+      PlatformError: (error) =>
+        Effect.succeed<Outcome>({
+          _tag: 'ReadFailed',
+          description: describeFailure(error),
+        }),
+    }),
   );
   const timeout = options.timeout ?? 0;
   return yield* timeout > 0

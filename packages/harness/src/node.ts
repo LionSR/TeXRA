@@ -20,7 +20,7 @@
  *   [`ProjectDatabases`](#projectdatabases), and
  *   [`ProcessIdentity`](#processidentity).
  * - **Commands & atomic file I/O**:
- *   [`executeCommand`](#executecommand), [`CommandDirs`](#commanddirs),
+ *   [`executeCommand`](#executecommand),
  *   [`writeFileAtomic`](#writefileatomic), and
  *   [`readNormalizedFile`](#readnormalizedfile).
  * - **Diagnostics**: [`setLogSink`](#setlogsink) and [`LogSink`](#logsink)
@@ -67,8 +67,8 @@ export {
 // The global root's record of each workspace store under a storage root,
 // keyed by its storage directory's name: the root it serves.
 export { WORKSPACE_STORES } from '@shared/session/valueFamily';
-// Running a program on this machine: run it, the directories an app adds to
-// the PATH it runs on (`CommandDirs`), and that PATH for any other child.
+// Running a program on this machine: run it, and extend the PATH for any
+// other child with the directories an app adds.
 // The home directory, logged at warn where none resolves.
 export {
   executeCommand,
@@ -76,7 +76,6 @@ export {
 } from '@utils/system/execUtils';
 export type { ExecResult } from '@shared/schemas';
 export {
-  CommandDirs,
   existsAtAbsolute,
   homeDirectory,
   whichOnExtendedPath,

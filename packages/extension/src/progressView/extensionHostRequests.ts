@@ -284,12 +284,10 @@ export const createExtensionHostRequests = Effect.fn(
   ) {
     const currentOpenFile = yield* getCurrentFile(roots);
     if (!currentOpenFile) {
-      return yield* Effect.fail(
-        new Rejected({
-          reason:
-            'No file is currently open or the file is not part of the workspace.',
-        }),
-      );
+      return yield* new Rejected({
+        reason:
+          'No file is currently open or the file is not part of the workspace.',
+      });
     }
     // Opening a latexdiff artifact (`paper-diff1234abcd.tex`) as the base
     // file selects the file it was derived from instead, when that file is
@@ -508,9 +506,9 @@ export const createExtensionHostRequests = Effect.fn(
         yield* runHandler(request.action, gettingStarted(request.action));
         return done;
       case 'workspaceFile':
-        return yield* Effect.fail(
-          new Rejected({ reason: 'The file editor is a desktop feature.' }),
-        );
+        return yield* new Rejected({
+          reason: 'The file editor is a desktop feature.',
+        });
     }
   });
 

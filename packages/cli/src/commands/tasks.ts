@@ -183,9 +183,9 @@ const startCommand = defineCliCommand({
   run: Effect.fn('tasks.run')(function* (context, ctx) {
     const instruction = ctx.args.instruction.trim();
     if (!instruction)
-      return yield* Effect.fail(
-        new CliUsageError({ message: '--instruction must not be empty.' }),
-      );
+      return yield* new CliUsageError({
+        message: '--instruction must not be empty.',
+      });
     const services = yield* initCliPlatform(context);
     // The task runs in the service under the project's persisted policy,
     // with what this command asked for riding the launch

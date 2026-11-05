@@ -41,7 +41,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          fetch-depth: 0
+          # A pull_request checks out its merge commit; depth 2 brings its
+          # base parent, all the diff below needs (full history cost ~15 s
+          # on the path every job waits behind).
+          fetch-depth: 2
 
       - name: Detect non-docs changes
         id: detect
@@ -49,8 +52,11 @@ jobs:
           # Heavy validation (typecheck/lint/tests/build) only runs when a PR touches
           # something other than docs. Docs-only PRs fall through to the
           # lightweight docs-build job below, keeping CI spend down. Pushes to
-          # main and manual dispatches always run full validation.
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
+          # main and manual dispatches always run full validation, and so
+          # does a PR whose checkout is not its merge commit (a conflicted
+          # PR's checkout falls back to the head, where HEAD^1 is not the
+          # base).
+          if [ "${{ github.event_name }}" != "pull_request" ] || ! git rev-parse -q --verify HEAD^2 >/dev/null; then
             echo "Event '${{ github.event_name }}' -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
             echo "desktop=true" >> "$GITHUB_OUTPUT"
@@ -58,17 +64,16 @@ jobs:
             echo "packages=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base='${{ github.event.pull_request.base.sha }}'
-          head='${{ github.event.pull_request.head.sha }}'
-          # --no-renames lists a rename's source and destination as separate
-          # paths, so a rename out of code into docs/ still counts as code.
-          files="$(git diff --no-renames --name-only "$base...$head")"
+          # HEAD^1 is the base tip the merge commit was built on, so this is
+          # the PR's own change. --no-renames lists a rename's source and
+          # destination as separate paths, so a rename out of code into
+          # docs/ still counts as code.
+          files="$(git diff --no-renames --name-only HEAD^1 HEAD)"
           echo "Changed files in this PR:"
           printf '%s\n' "$files"
           # Here-strings, not `printf | grep -q`: an early grep exit would
           # SIGPIPE the writer and pipefail would misread that as no match.
-          # Code = any path outside docs/ and *.md; desktop = the same, minus
-          # the CLI (the window bundles the rest of src/ and packages/).
+          # Code = any path outside docs/ and *.md.
           if grep -qvE '^docs/|\.md$' <<<"$files"; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
@@ -76,7 +81,11 @@ jobs:
             echo "Docs-only change -> lightweight docs build only."
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
-          if grep -qvE '^packages/cli/|^docs/|\.md$' <<<"$files"; then
+          # Desktop host = the Electron app and the session layer and CLI
+          # service its windows drive, and this workflow. Everything else the
+          # app bundles is covered by the kernel tests, and every push to main
+          # still runs the desktop suite.
+          if grep -qE '^packages/desktop/|^packages/texra/src/controllers/(server|session)/|^packages/harness/src/controllers/session/|^packages/cli/src/(runtime/cliService|commands/service)\.ts$|^\.github/workflows/ci\.yml$' <<<"$files"; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -90,11 +99,11 @@ jobs:
             echo "vscode=false" >> "$GITHUB_OUTPUT"
           fi
           # Published packages = the two npm packages, what their bundles
-          # inline (two scripts/ files, and the patched OpenAI the llm build
+          # inline (two scripts/ files, and the OpenAI SDK the llm build
           # bundles), and every file that decides which versions a consumer's
           # install resolves: a PR touching any of them installs the packed
           # tarballs the way a consumer would.
-          if grep -qE '^packages/(harness|llm)/|^scripts/(code-sandbox-worker|stub-internal-validation-model)\.mjs$|^patches/openai@|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(\.build)?\.json)$|^\.github/workflows/ci\.yml$' <<<"$files"; then
+          if grep -qE '^packages/(harness|llm)/|^scripts/(code-sandbox-worker|stub-internal-validation-model)\.mjs$|^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|tsconfig(\.build)?\.json)$|^\.github/workflows/ci\.yml$' <<<"$files"; then
             echo "packages=true" >> "$GITHUB_OUTPUT"
           else
             echo "packages=false" >> "$GITHUB_OUTPUT"
@@ -129,8 +138,8 @@ jobs:
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (the
-          # core-quality counts, fact spread and row-kind list) judge this
+          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (fact
+          # spread and the row-kind list) judge this
           # tree against its merge base with the target: fetch the target tip
           # if it is missing, then deepen the target and HEAD until git finds
           # the merge base. The checks fail loudly if it still cannot.
@@ -380,9 +389,10 @@ jobs:
     # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
     # the app end to end, and it broke twice unnoticed before it ran here.
     # macOS because its window-lifecycle specs are macOS behaviour and the
-    # runner needs no virtual display; skipped on PRs confined to the CLI
-    # or docs, since macOS bills at 10x Linux rates.
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
+    # runner needs no virtual display. macOS bills at 10x Linux rates, so a
+    # pull request runs it only when it touches the desktop host
+    # (`changes.desktop`); every push to main runs it.
+    if: needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
     runs-on: macos-latest
     timeout-minutes: 20
 
@@ -462,7 +472,7 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
         with:
-          node-version: '22.19.0'
+          node-version: '22.22.2'
 
       - name: Validate CLI real-runtime run path
         run: |

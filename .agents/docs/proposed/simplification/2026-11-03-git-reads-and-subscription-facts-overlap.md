@@ -12,6 +12,13 @@ below are the significant ones found.
 
 ## 1. The same git reads are written in several places (most significant)
 
+Done: `packages/texra/src/utils/git/gitReads.ts` owns the five reads. The
+CLI's read helpers, latexdiff's root lookup and the subscription tool's
+runner are deleted, and a bare repository is not a repository for
+`install-github-action` either (there is no work tree to write the workflow
+into). `workspaceInfo.ts` keeps its documented difference. The table below is
+the state the audit found.
+
 | Read                                                      | Where it is written                                                                                                                                                                                                                                                           |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "is this a work tree" (`rev-parse --is-inside-work-tree`) | `packages/texra/src/utils/git/isGitRepository.ts` (success and stdout `true`); `packages/cli/src/runtime/gitOps.ts` `isGitRepo` (success only); `packages/harness/src/agent/prompt/workspaceInfo.ts` `getGitInfo` (success only, deliberately, with a comment explaining why) |

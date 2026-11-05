@@ -1,8 +1,8 @@
 /**
  * One connection's reader of selected rows: each decoded by the row codec
  * (`./rowCodec`), and the runs it cannot open, each with why: a row that
- * does not decode (damaged), or one an earlier build wrote at a version this
- * build has no upcaster for. Those are found as reads meet them, and the
+ * does not decode (damaged), or one an earlier build wrote at a lower
+ * version. Those are found as reads meet them, and the
  * earlier build's rows all at once on the first `damaged`, since the listing
  * never reads a run's history. The tool cards' read-time output
  * (`settleCards`) is settled over the decoded rows.
@@ -14,7 +14,6 @@ import { Effect, Result, Schema, Struct } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_EVENT_TYPES,
-  pluginFactFloor,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   type AggregateId,
@@ -216,11 +215,11 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  // Only a retired fact kind, or one with a floor, can hold an earlier
-  // build's fact.
+  // Only a retired fact kind, or one past its first version, can hold an
+  // earlier build's fact.
   const floored =
     RETIRED_PLUGIN_FACTS.size > 0 ||
-    Object.values(factKinds).some((factKind) => pluginFactFloor(factKind) > 1);
+    Object.values(factKinds).some((factKind) => factKind.version > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;

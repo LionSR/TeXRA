@@ -227,11 +227,9 @@ const resolveWorkspaceWritePath = Effect.fn(
   // as "no link here".
   const entryType = yield* entryTypeIn(fs, absolutePath);
   if (entryType === 'SymbolicLink') {
-    return yield* Effect.fail(
-      new WorkspaceRequestRefused({
-        message: 'Symbolic links cannot be recreated by the editor.',
-      }),
-    );
+    return yield* new WorkspaceRequestRefused({
+      message: 'Symbolic links cannot be recreated by the editor.',
+    });
   }
 
   const [canonicalRoot, canonicalParent] = yield* Effect.all(

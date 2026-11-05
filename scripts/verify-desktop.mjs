@@ -1084,6 +1084,25 @@ async function checkMacIcon(app, failures) {
   return true;
 }
 
+// node-pty starts every macOS terminal through `spawn-helper`, and its
+// published package ships that file without the executable bit.
+async function checkMacPtyHelpers(app, failures) {
+  if (!app.label.includes('.app/Contents/Resources/app.asar')) return;
+
+  const prebuilds = 'app.asar.unpacked/node_modules/node-pty/prebuilds';
+  const helpers = (await app.listDir(prebuilds))
+    .filter((platformArch) => platformArch.startsWith('darwin-'))
+    .map((platformArch) => `${prebuilds}/${platformArch}/spawn-helper`);
+  if (helpers.length === 0) {
+    failures.push(`Packaged macOS app has no node-pty helper: ${prebuilds}`);
+  }
+  for (const helper of helpers) {
+    if ((statSync(app.fsPath(helper)).mode & 0o111) !== 0o111) {
+      failures.push(`Packaged node-pty helper is not executable: ${helper}`);
+    }
+  }
+}
+
 async function verifyPackage() {
   const label = 'Desktop package check';
   const packageRoot =
@@ -1114,6 +1133,7 @@ async function verifyPackage() {
   await checkBundledResources(app, failures);
   await checkMonacoWorkerAssets(app, failures);
   const checkedMacIcon = await checkMacIcon(app, failures);
+  await checkMacPtyHelpers(app, failures);
   await checkNoBundledNativeCliPayload(app, failures);
   await checkNoVscodeRuntimeImport(app, failures);
   await checkDesktopMainDynamicRequireShim(app, failures);
@@ -1320,7 +1340,7 @@ async function waitForReadiness(application) {
         mainApp.isConnected &&
         (mainApp.shadowRoot?.childElementCount ?? 0) > 0;
       const project = document.querySelector(
-        '.shell-launcher-surface[data-session]',
+        '.shell-project-workbench[data-session]',
       );
       const projectReady =
         project instanceof HTMLElement && Boolean(project.dataset.session);

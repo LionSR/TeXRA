@@ -14,6 +14,7 @@ import {
 
 // Local file imports
 import { createFakeHost, type FakeHost } from './setupPlatform';
+import type { TestApp } from './FakePlatform';
 
 /**
  * Creates a fresh temp directory and records it on `tempDirs` for later
@@ -42,11 +43,13 @@ export async function makeTempDir(
 export async function createTempDirPlatform(
   prefix: string,
   tempDirs: string[],
+  app?: TestApp,
 ): Promise<FakeHost> {
   const tempDir = await makeTempDir(prefix, tempDirs);
   const workspaceDir = path.join(tempDir, 'workspace');
   const storageRoot = path.join(tempDir, 'storage');
   return createFakeHost({
+    ...(app ? { app } : {}),
     workspacePath: workspaceDir,
     storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
     globalStoragePath: resolveGlobalStoragePath(storageRoot),
