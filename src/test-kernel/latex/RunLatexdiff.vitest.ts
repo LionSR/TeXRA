@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import { Schema } from 'effect';
+import {
+  fileLocationDisplayPath,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import { createRunStorageLocation } from '@texra-ai/harness/host';
 import { latexdiffPairs } from '@latex/latexdiff/diffOperations';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
 describe('latexdiffPairs', () => {
-  const runId = 'abc123' as RunId;
+  const runId = Schema.decodeSync(RunIdSchema)('abc123');
   const file = (relativePath: string) =>
     createRunStorageLocation(`/run/${relativePath}`, relativePath, runId);
   const output = (round: number, source: string): OutputFileInfo => ({

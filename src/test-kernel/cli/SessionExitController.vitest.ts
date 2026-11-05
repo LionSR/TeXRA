@@ -77,6 +77,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     () =>
       Effect.gen(function* () {
         const session = new TuiSession();
+        // cast: the exit hint prints the id as held; nothing here decodes it.
         session.runId = 'exec-graceful-flush' as RunId;
         const { controller, terminal } = yield* createController(session);
 

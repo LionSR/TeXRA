@@ -1,3 +1,5 @@
+import { strict as assert } from 'node:assert';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -12,7 +14,8 @@ describe('desktop document identity', () => {
       kind: 'editor',
       target: String.raw`C:\papers\draft.tex`,
     });
-    const id = state.activeTabId!;
+    const id = state.activeTabId;
+    assert(id !== undefined);
     state = setWorkbenchTabDirty(state, id, true);
     state = openWorkbenchTab(state, { kind: 'files' });
     state = openWorkbenchTab(state, {

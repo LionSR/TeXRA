@@ -75,12 +75,6 @@ export function formatRunStatus(run: RunView): string {
   return notice === null ? run.status : `${run.status}: ${notice}`;
 }
 
-const RESUME_BLOCKER = {
-  agentMissing: 'is not installed',
-  pluginOff: 'is off',
-  pluginUntrusted: 'is not trusted as it is now',
-} as const;
-
 /** The fold's notice on `run` (`RunView.statusNotice`) as the model reads
  *  it; null when there is none. Hosts word it through the app's copy. */
 export function describeRunNotice(run: RunView): string | null {
@@ -92,10 +86,6 @@ export function describeRunNotice(run: RunView): string | null {
       return 'part of its saved history is damaged, so it cannot be opened or resumed';
     case 'earlierBuild':
       return 'an earlier build wrote it, and this build cannot open it';
-    case 'resumeBlocked': {
-      const { blocker, name } = notice.reason;
-      return `its ${blocker === 'agentMissing' ? 'agent' : 'plugin'} ${name} ${RESUME_BLOCKER[blocker]}; it can continue once that is fixed`;
-    }
     case 'interrupted':
       return 'the process running it stopped before it finished; resume it to continue';
     case 'held':

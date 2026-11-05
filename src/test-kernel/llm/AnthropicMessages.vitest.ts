@@ -181,6 +181,14 @@ describe('canonical Anthropic Messages protocol', () => {
       apiKey: 'selected-key',
       fetch: fetchModel,
     });
+  /** The JSON body the model sent on fetch call `index`. */
+  const sentBody = (index: number) => {
+    const body = fetchModel.mock.calls[index][1]?.body;
+    if (typeof body !== 'string') {
+      throw new Error(`fetch call ${index} sent no JSON text`);
+    }
+    return JSON.parse(body);
+  };
   beforeEach(() => {
     vi.stubEnv('ANTHROPIC_CUSTOM_HEADERS', '');
     fetchModel.mockReset();
@@ -276,8 +284,8 @@ describe('canonical Anthropic Messages protocol', () => {
             cacheCreation1hTokens: 19,
           },
         });
-        const first = JSON.parse(fetchModel.mock.calls[0][1]!.body as string);
-        const headers = new Headers(fetchModel.mock.calls[0][1]!.headers);
+        const first = sentBody(0);
+        const headers = new Headers(fetchModel.mock.calls[0][1]?.headers);
         expect(String(fetchModel.mock.calls[0][0])).toBe(
           'https://synthetic.invalid/v1/messages',
         );
@@ -344,7 +352,7 @@ describe('canonical Anthropic Messages protocol', () => {
           response([initial(), ...terminal()]),
         );
         yield* completedTurn(configured.streamTurn(next));
-        const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
+        const sent = sentBody(1);
         expect(sent.system).toEqual(first.system);
         expect(sent.cache_control).toEqual(first.cache_control);
         expect(sent.messages.slice(1)).toEqual([
@@ -452,7 +460,7 @@ describe('canonical Anthropic Messages protocol', () => {
           response([initial(), ...terminal()]),
         );
         yield* completedTurn(configured.streamTurn(next));
-        const sent = JSON.parse(fetchModel.mock.calls[1][1]!.body as string);
+        const sent = sentBody(1);
         expect(
           sent.messages[1].content.map(({ type }: { type: string }) => type),
         ).toEqual(['text', 'tool_use', 'tool_use']);

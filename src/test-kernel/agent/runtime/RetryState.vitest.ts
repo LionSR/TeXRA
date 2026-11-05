@@ -39,6 +39,7 @@ import {
 // Local imports
 import { DatabaseReadFailed } from '@texra-ai/harness';
 import {
+  RunIdSchema,
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   RUN_PHASE,
@@ -136,11 +137,10 @@ const PREPARED: ResolvedTurn = Schema.decodeUnknownSync(ResolvedTurnSchema)({
   },
 });
 
-const BACKGROUND_PREPARED: Extract<ResolvedTurn, { mode: 'background' }> =
-  Schema.decodeUnknownSync(ResolvedTurnSchema)({
-    ...PREPARED,
-    mode: 'background',
-  }) as Extract<ResolvedTurn, { mode: 'background' }>;
+const BACKGROUND_PREPARED = Schema.decodeUnknownSync(ResolvedTurnSchema)({
+  ...PREPARED,
+  mode: 'background',
+});
 
 const PROVIDER_RESPONSE_ID = 'resp-1';
 
@@ -264,7 +264,9 @@ let retryRunCounter = 0;
 
 /** Run ids are hex, so each scenario takes the next id in sequence. */
 function retryRunId(): RunId {
-  return `ac${(retryRunCounter++).toString(16).padStart(4, '0')}` as RunId;
+  return Schema.decodeUnknownSync(RunIdSchema)(
+    `ac${(retryRunCounter++).toString(16).padStart(4, '0')}`,
+  );
 }
 
 const CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({

@@ -4,6 +4,7 @@ import { expect } from 'vitest';
 import {
   AgentConfigSchema,
   qualifyAggregateId,
+  RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -99,12 +100,18 @@ function captureStreamWrites<E, R>(
   ).pipe(Effect.map(() => output));
 }
 
+const decodeRecord = Schema.decodeUnknownSync(
+  Schema.Record(Schema.String, Schema.Unknown),
+);
+
 function ndjsonRecords(output: string): Record<string, unknown>[] {
   return output
     .trim()
     .split('\n')
-    .map((line) => JSON.parse(line) as Record<string, unknown>);
+    .map((line) => decodeRecord(JSON.parse(line)));
 }
+
+const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
 
 // Live clock: the renderer paints on real event-loop turns.
 layer(SessionGraph.hosted, { excludeTestServices: true })(
@@ -135,7 +142,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       }),
                     );
                     const scope = yield* Scope.make();
-                    const runId = 'd4d4d4' as RunId;
+                    const runId = decodeRunId('d4d4d4');
                     yield* host
                       .attachRunProgressRenderer(session, runId)
                       .pipe(Scope.provide(scope));
@@ -165,8 +172,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         'writes projected subagent progress records to stdout in ndjson mode',
         () =>
           Effect.gen(function* () {
-            const parentRunId = 'a1a1a1' as RunId;
-            const childRunId = 'b1b1b1' as RunId;
+            const parentRunId = decodeRunId('a1a1a1');
+            const childRunId = decodeRunId('b1b1b1');
             const output = yield* captureStreamWrites(process.stdout, () =>
               Effect.gen(function* () {
                 const session = yield* TestSession;

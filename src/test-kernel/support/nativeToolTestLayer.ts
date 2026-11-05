@@ -44,6 +44,7 @@ type TestCallRun = Pick<RunCallShape['run'], 'runId' | 'toolPolicy'> &
 
 /** A run's live model cell holding only the id a tool reads off it. */
 export const testModelCell = (modelId: string) =>
+  // cast: a tool reads only the id off the run's model cell.
   SynchronizedRef.makeUnsafe({ modelId } as BoundModel);
 
 /** A run that has opened no step yet. */
@@ -165,7 +166,7 @@ export function nativeToolTestLayer(
                 })
                 .pipe(
                   Effect.map((decision) => ({
-                    // The fixture always answers the supplied request's kind.
+                    // cast: the answer is to the request supplied, of its kind.
                     payload: payload as Extract<
                       PermissionPayload,
                       { kind: P['kind'] }

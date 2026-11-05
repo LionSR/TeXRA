@@ -365,8 +365,8 @@ export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   const attempt = yield* openResume(run.id, {}, true);
   if (attempt === undefined) return;
   // A resume refused once it decides is reported; one blocked on a missing
-  // agent or plugin is the catalog follower's to retry, and one that failed
-  // is left for the next resume, said once.
+  // agent or plugin, or one that failed, is left for the next resume, said
+  // once.
   const told = (what: string) => (error: unknown) =>
     warn(undefined, `Child run ${run.id} ${what}`, { parent, error });
   yield* Effect.forkScoped(

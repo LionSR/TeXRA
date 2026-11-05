@@ -3,9 +3,10 @@
  * in what order, and how the status bar's attention list reads.
  */
 import { layer } from '@effect/vitest';
-import { Layer } from 'effect';
+import { Layer, Schema } from 'effect';
 import { afterEach, beforeEach, expect } from 'vitest';
 
+import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import {
   attentionRequests,
   currentApproval,
@@ -23,13 +24,12 @@ import {
   seedView,
   viewWith,
 } from './fixtures/sessionViewFixture';
-import type { RunId } from '@texra-ai/harness/schemas';
 
-const ROOT = 'chat-root' as RunId;
-const RUN_A = 'run-a' as RunId;
-const RUN_B = 'run-b' as RunId;
+const ROOT = Schema.decodeUnknownSync(RunIdSchema)('c0000a');
+const RUN_A = Schema.decodeUnknownSync(RunIdSchema)('a0000a');
+const RUN_B = Schema.decodeUnknownSync(RunIdSchema)('b0000b');
 
-function bashPayload(runId: RunId | '', requestId = `bash-${runId}`) {
+function bashPayload(runId: RunId, requestId = `bash-${runId}`) {
   return {
     kind: 'bash',
     data: { requestId, allowBypass: true, runId, command: 'echo ok' },
@@ -55,7 +55,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       ],
       {
         requests: [foreign, local].map((payload) => ({
-          runId: payload.data.runId as RunId,
+          runId: payload.data.runId,
           requestId: payload.data.requestId,
           payload,
         })),

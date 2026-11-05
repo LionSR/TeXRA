@@ -4,7 +4,11 @@ import { Effect, Schema, Context } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { AgentConfigSchema, type RunId } from '@texra-ai/harness/schemas';
+import {
+  RunIdSchema,
+  AgentConfigSchema,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { Runs } from '@agent/runtime/runRegistry';
 import { launchProcessChild } from '@agent/runtime/delegation/detachedChildRun';
@@ -16,7 +20,7 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 
-const parentRunId = 'c11112' as RunId;
+const parentRunId = Schema.decodeUnknownSync(RunIdSchema)('c11112');
 const config = Schema.decodeUnknownSync(AgentConfigSchema)({
   model: 'test-model',
   agent: 'test-agent',

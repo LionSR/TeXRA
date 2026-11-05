@@ -3,10 +3,15 @@ import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { layer } from '@effect/vitest';
 
-import { Effect, Layer, Context } from 'effect';
+import { Effect, Layer, Context, Schema } from 'effect';
 
 import { expect } from 'vitest';
 
+import {
+  AgentConfigSchema,
+  type RunId,
+  RunIdSchema,
+} from '@texra-ai/harness/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { seedEditedFiles, seedRunRecord } from '@test/support/runRecordSeeds';
@@ -23,7 +28,6 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import type { AgentConfig, RunId } from '@texra-ai/harness/schemas';
 
 const tempDirs = useTempDirs();
 
@@ -34,6 +38,7 @@ const sessionHandle = Effect.flatMap(TestSession, sessionHandleOf);
 const toolTestCall = Layer.unwrap(
   Effect.map(sessionHandle, (session) =>
     nativeToolTestLayer({
+      // cast: a fixture run id; no stored run is read under it.
       run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
     }),
   ),
@@ -74,14 +79,18 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               );
               // A stored run in this workspace whose settled calls edited
               // only `review.md`.
-              const runId = 'abc123' as RunId;
+              const runId = Schema.decodeSync(RunIdSchema)('abc123');
               publishTestRunStart(session, runId);
               yield* Context.get(session, SessionLog).settled;
-              yield* seedRunRecord(session, runId, {
-                agent: 'chat',
-                model: 'deepseek/deepseek-v4-flash',
-                workingDirectory: workspace,
-              } as AgentConfig);
+              yield* seedRunRecord(
+                session,
+                runId,
+                Schema.decodeUnknownSync(AgentConfigSchema)({
+                  agent: 'chat',
+                  model: 'deepseek/deepseek-v4-flash',
+                  workingDirectory: workspace,
+                }),
+              );
               yield* seedEditedFiles(session, runId, ['review.md']);
 
               const result = yield* ExecutionsTool.call({

@@ -20,11 +20,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { expect, test, type Page } from '@playwright/test';
 
-import {
-  closeTexraApp,
-  dismissOnboarding,
-  launchTexraApp,
-} from './electronApp.js';
+import { closeTexraApp, launchTexraApp } from './electronApp.js';
 import {
   NEXT_BUILD,
   alive,
@@ -166,11 +162,31 @@ test('a proposal edited in the app runs its child with the edits, Back leaves it
     const launched = await launchTexraApp({
       userDataPath: dataRoot,
       workspacePath: work,
-      env: { HOME: home },
+      // The runner's own keys are blanked: the project's `.env` is the one
+      // credential, so the launcher's onboarding answer comes from it.
+      env: {
+        HOME: home,
+        ...Object.fromEntries(
+          Object.keys(process.env)
+            .filter((name) => name.endsWith('_API_KEY'))
+            .map((name) => [name, '']),
+        ),
+      },
     });
     const { page } = launched;
     try {
-      await dismissOnboarding(page);
+      // The project's `.env` key counts as a credential: the launcher renders
+      // and no "Connect a model" card replaces it (#14633).
+      await page
+        .locator('session-composer')
+        .first()
+        .waitFor({ state: 'attached', timeout: 15_000 });
+      await expect(page.locator('onboarding-welcome-card')).toHaveCount(0);
+      await page.waitForFunction(
+        () => document.body.dataset.desktopReady === 'true',
+        undefined,
+        { timeout: 10_000 },
+      );
       // The native file picker answers with the project's macros file.
       await launched.app.evaluate(
         ({ dialog }, picked) => {

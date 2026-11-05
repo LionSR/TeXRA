@@ -50,6 +50,14 @@ function response(events: unknown[]): Response {
 
 describe('canonical Google Interactions protocol', () => {
   const fetchModel = vi.fn<typeof fetch>();
+  /** The Request the model sent on fetch call `index`. */
+  const sentRequest = (index: number): Request => {
+    const [input] = fetchModel.mock.calls[index];
+    if (!(input instanceof Request)) {
+      throw new Error(`fetch call ${index} was not sent a Request`);
+    }
+    return input;
+  };
 
   beforeEach(() => {
     fetchModel.mockReset().mockImplementation(async () =>
@@ -121,9 +129,7 @@ describe('canonical Google Interactions protocol', () => {
           operation,
           returnedModel: 'gemini-returned',
         });
-        const submitted = yield* Effect.promise(() =>
-          (fetchModel.mock.calls[0][0] as Request).json(),
-        );
+        const submitted = yield* Effect.promise(() => sentRequest(0).json());
         expect(submitted).toMatchObject({
           background: true,
           stream: false,
@@ -270,9 +276,7 @@ describe('canonical Google Interactions protocol', () => {
         // The observed turn anchors the next round: its steps are the ones
         // the interaction already holds, so the replay sends only what
         // follows them.
-        const replayed = yield* Effect.promise(() =>
-          (fetchModel.mock.calls[3][0] as Request).json(),
-        );
+        const replayed = yield* Effect.promise(() => sentRequest(3).json());
         expect(replayed).toMatchObject({
           background: false,
           stream: true,
@@ -297,8 +301,10 @@ describe('canonical Google Interactions protocol', () => {
         expect(
           fetchModel.mock.calls
             .slice(1, 3)
-            .every(([url]) =>
-              (url as Request).url.includes('include_input=false'),
+            .every(
+              ([url]) =>
+                url instanceof Request &&
+                url.url.includes('include_input=false'),
             ),
         ).toBe(true);
       }),

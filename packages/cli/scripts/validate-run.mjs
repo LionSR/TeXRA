@@ -8,7 +8,6 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -1778,109 +1777,6 @@ async function validateBackgroundCompaction() {
 }
 
 /**
- * Interrupted tasks at open (durable harness H5, gap 2): a chat killed
- * while it waits leaves its task interrupted. With its agent's file gone
- * and `texra.resumeOnOpen: auto`, the next `texra chat` finds it blocked
- * (agent missing) and does not resume it; once the file is back, the chat
- * resumes it by itself. The task's `run.activate` counts are the artifact.
- */
-async function validateInterruptedTasks() {
-  const cwd = makeScratch('texra-cli-interrupted-');
-  try {
-    const project = echoProject(cwd);
-    // The chat is its task's writer here, so killing it is the crash this
-    // recovers from: a service would keep the task running past the kill.
-    project.ptyEnv.TEXRA_NO_SERVICE = '1';
-    const globalStorage = path.join(
-      cwd,
-      'home',
-      '.texra',
-      'v1',
-      'global-storage',
-    );
-    writeFileSync(
-      path.join(globalStorage, 'config.json'),
-      `${JSON.stringify({ 'texra.resumeOnOpen': 'auto' })}\n`,
-    );
-    const source = project.firstRun('First message');
-    const activations = () =>
-      project.readStore(
-        `SELECT count(*) AS n FROM event e JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = '${source}' AND e.type = 'run.activate'`,
-      )[0].n;
-
-    // A resumed chat killed while it waits: the task is left interrupted.
-    let killed = false;
-    await runTexraPty(['resume', source], {
-      label: 'texra resume, then SIGKILL',
-      cwd: project.work,
-      cols: 160,
-      rows: 40,
-      timeoutMs: 40_000,
-      env: project.ptyEnv,
-      onData: (_data, pty) => {
-        if (!killed && stripVTControlCharacters(pty.output).includes('Idle')) {
-          killed = true;
-          pty.setTimer(() => pty.kill('SIGKILL'), 800);
-        }
-      },
-    });
-    const interrupted = activations();
-
-    // Its agent's file gone: the chat opens and leaves the task blocked.
-    const agentFile = path.join(
-      globalStorage,
-      'custom_agents',
-      'echo-validation.yaml',
-    );
-    renameSync(agentFile, `${agentFile}.off`);
-    let whileBlocked = null;
-    let resumed = null;
-    let phase = 'opening';
-    const chat = await runTexraPty(['chat'], {
-      label: 'texra chat with an interrupted task',
-      cwd: project.work,
-      cols: 160,
-      rows: 40,
-      timeoutMs: 60_000,
-      env: project.ptyEnv,
-      onData: (_data, pty) => {
-        if (phase !== 'opening') return;
-        if (!stripVTControlCharacters(pty.output).includes('/ commands'))
-          return;
-        phase = 'blocked';
-        pty.setTimer(() => {
-          whileBlocked = activations();
-          renameSync(`${agentFile}.off`, agentFile);
-          phase = 'restored';
-          const poll = () => {
-            const now = activations();
-            if (now > interrupted) {
-              resumed = now;
-              pty.setTimer(() => pty.write(ETX), 800);
-              pty.setTimer(() => pty.write(ETX), 2_000);
-            } else pty.setTimer(poll, 300);
-          };
-          poll();
-        }, 3_000);
-      },
-    });
-    const artifactPath = writeArtifact('interrupted-tasks.json', {
-      source,
-      activations: { interrupted, whileBlocked, resumed },
-    });
-    assert(
-      chat.exit.exitCode === 0 &&
-        whileBlocked === interrupted &&
-        resumed === interrupted + 1,
-      `the chat should leave the task blocked while its agent is missing and resume it once the agent is back (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
-    );
-  } finally {
-    removeScratch(cwd);
-  }
-}
-
-/**
  * Every chat is a client of the background service (D1–D4): a second
  * `texra chat` lists the first one's conversation with `/tasks` and attaches
  * to it live. The second chat's attached view is the artifact.
@@ -3193,9 +3089,8 @@ async function validateServiceSharedTask() {
 
 /**
  * The open-time prompt and rename (GUI lane G4): a chat killed while it
- * waits leaves its task interrupted; under the default
- * `texra.resumeOnOpen: ask`, the next `texra chat` lists it above the input
- * by title and resumes nothing until `/resume all`. A resumed chat's
+ * waits leaves its task interrupted; the next `texra chat` lists it above
+ * the input by title and resumes nothing until `/resume all`. A resumed chat's
  * `/rename` then writes the user's title. The notice's lines, the
  * activation counts and the task's `run.description` rows are the artifact.
  */
@@ -3556,7 +3451,6 @@ async function validateCliRunArtifacts(options = {}) {
   await validateTuiFork();
   await validateMidTurnDelivery();
   await validateBackgroundCompaction();
-  await validateInterruptedTasks();
   await validateOpenTimePrompt();
   await validateServiceSharedTask();
   await validateServiceTasksInTui();

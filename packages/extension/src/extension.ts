@@ -82,7 +82,6 @@ import {
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
@@ -440,7 +439,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   } else {
     const session = yield* (yield* Sessions).open(roots, {
       persistent: true,
-      host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
+      host: {},
     });
     yield* recordFirstCompletedRun(session);
     windowSession = { session, link: yield* hosts.localLink(session) };

@@ -231,6 +231,7 @@ const runHistoryRow = (
   Result.getOrThrow(
     runHistoryRows([
       Schema.decodeUnknownSync(SessionEventSchema)({
+        // cast: each case writes a run-history draft; the decode around it checks it.
         ...storedDraft({
           aggregateId: RUN_HISTORY_AGGREGATE,
           ...draft,
@@ -241,7 +242,7 @@ const runHistoryRow = (
         at: 0,
       }),
     ]),
-  )[0]!;
+  )[0];
 
 /** The same boundary, asked whether it accepts the draft at all. */
 const rowAccepted = (draft: Record<string, unknown>): boolean =>

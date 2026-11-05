@@ -14,8 +14,9 @@ import {
   Fiber,
   SubscriptionRef,
   Context,
+  Schema,
 } from 'effect';
-import { beforeEach, describe, expect, vi } from 'vitest';
+import { assert, beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   wakeRun: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => {
 });
 
 import {
+  RunIdSchema,
   generateRunId,
   qualifyAggregateId,
   type RunId,
@@ -79,7 +81,7 @@ const tempDirs = useTempDirs();
 
 let session: Context.Context<SessionServices>;
 
-const PARENT_RUN_ID = 'ffff01' as RunId;
+const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ffff01');
 
 /** The run id a fixture drives, with its `run.start` (a child of
  *  {@link PARENT_RUN_ID}, as a launch names it) already committed. */
@@ -122,16 +124,24 @@ interface FakeStrategyHandle {
  */
 function createFakeStrategy(): FakeStrategyHandle {
   const pendings: Deferred.Deferred<FakeTurn, Error>[] = [];
-  const started: Deferred.Deferred<void>[] = [];
+  const started = new Map<number, Deferred.Deferred<void>>();
 
   /** The start gate for the Nth call, created before that call exists. */
   const startedAt = (callIndex: number) =>
-    Effect.gen(function* () {
-      while (started.length < callIndex) {
-        started.push(yield* Deferred.make<void>());
-      }
-      return started[callIndex - 1]!;
+    Effect.sync(() => {
+      const existing = started.get(callIndex);
+      if (existing !== undefined) return existing;
+      const gate = Deferred.makeUnsafe<void>();
+      started.set(callIndex, gate);
+      return gate;
     });
+
+  /** The Nth call's pending turn: it exists once that call has started. */
+  const pendingAt = (callIndex: number) => {
+    const pending = pendings[callIndex - 1];
+    assert(pending !== undefined, `call ${callIndex} has not started`);
+    return pending;
+  };
 
   const runTurn = Effect.gen(function* () {
     const deferred = yield* Deferred.make<FakeTurn, Error>();
@@ -163,12 +173,12 @@ function createFakeStrategy(): FakeStrategyHandle {
     resolveTurn: (callIndex, turn) =>
       Effect.gen(function* () {
         yield* turnStarted(callIndex);
-        yield* Deferred.succeed(pendings[callIndex - 1]!, turn);
+        yield* Deferred.succeed(pendingAt(callIndex), turn);
       }),
     rejectTurn: (callIndex, err) =>
       Effect.gen(function* () {
         yield* turnStarted(callIndex);
-        yield* Deferred.fail(pendings[callIndex - 1]!, err);
+        yield* Deferred.fail(pendingAt(callIndex), err);
       }),
   };
 }
