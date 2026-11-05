@@ -143,9 +143,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   // v2: a model's summary carries its helper request's priced `usage`,
-  // which the run's spend counts (no upcaster: a v1 summary would read as
-  // free).
-  'run.description': { version: 2, upcast: [], listing: 'own' },
+  // which the run's spend counts (a v1 summary would read as free).
+  'run.description': { version: 2, listing: 'own' },
   'plugin.fact': { ...V1, listing: 'own' },
   // v2: `holdUntil` gained `turn` and `generation`, and a child's progress
   // notice is known by `holdUntil: 'generation'`, no longer by its text: a v1
