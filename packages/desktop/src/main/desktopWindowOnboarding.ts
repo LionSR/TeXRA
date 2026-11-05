@@ -6,6 +6,7 @@ import { Effect, Schema, Scope, SubscriptionRef } from 'effect';
 import {
   AppState,
   withProcessServices,
+  workspaceEnvironmentLayer,
   type ProcessRuntime,
   type ProcessServices,
   withLogChannel,
@@ -101,14 +102,19 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
     // CLI; the user launches setup explicitly via the card's "Run Setup"
     // button.
     const funnel = new OnboardingFunnelRefresher({
-      // Single source of truth for "does the user have a usable
-      // credential", shared by every host (extension, desktop, CLI) so this
-      // credential-gating logic can't drift between them.
-      hasCredential: () =>
-        withProcessServices(
+      // One source of truth for "does the user have a usable credential",
+      // shared by every host, asked under the shown project's `.env` over
+      // the process's: the key a run of that project would use, as every
+      // other read about its models is answered.
+      hasCredential: () => {
+        const project = projects.active();
+        return withProcessServices(
           runtime,
-          hasUsableSetupCredential(projects.active().roots),
-        ).pipe(withLogChannel('Setup Credentials')),
+          hasUsableSetupCredential(project.roots).pipe(
+            Effect.provide(workspaceEnvironmentLayer(project.root)),
+          ),
+        ).pipe(withLogChannel('Setup Credentials'));
+      },
       flags: state,
       apply: (transition) => SubscriptionRef.set(funnelState, transition.state),
     });

@@ -1540,6 +1540,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The desktop app no longer hides a task's Edit form behind "Connect a
+  model" when the project's `.env` holds the key.** The onboarding check
+  asked without the project's `.env`, the one per-project read that did; it
+  now asks under it, as every other read about that project's models does,
+  so the launcher and the Edit form render and the key the run would use is
+  the key that counts.
 - **A retired model is refused when a run binds it.** The route decision
   sent a model llm-zoo marks retired to its provider key (or a subscription
   still listing it), so a resumed or switched run failed at the provider
