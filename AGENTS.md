@@ -121,8 +121,11 @@ and harness, app and llm import no host layer. oxlint (`.oxlintrc.json`,
   the runtime entries named in its overrides; the SDK's entry files run
   nothing;
 - `new AbortController()` outside its one permanent resident;
-- in the harness and llm cores, `new Promise`, `.then(`, `!` and an
-  asserted object literal.
+- in the core, `new Promise`, `.then(`, `!` and an asserted object literal.
+  The core is the file list of the `.oxlintrc.json` override that bans
+  `.then(`: `packages/llm/src`, the harness's `agent/`, `effect/`,
+  `platform/`, `tools/`, session and schema directories, and its entry
+  files.
 
 A later override in `.oxlintrc.json` replaces an earlier one's options for a
 rule, so each import block restates every pattern that holds for its files.
