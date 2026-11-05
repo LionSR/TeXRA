@@ -66,7 +66,11 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { linkOutage, WINDOW_OUTDATED } from '@texra/controllers/server/client';
+import {
+  START_TIMEOUT,
+  WINDOW_OUTDATED,
+  linkOutage,
+} from '@texra/controllers/server/client';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -184,16 +188,19 @@ export async function runChat(
         presentsStoreMovedAside: true,
       });
       const served = services.service !== undefined;
-      // A service that goes away mid-chat is started again, and again
-      // every few seconds until the link reaches one, so a start that
-      // fails while the trouble lasts is not the last; one that refuses
-      // this build (newer) is left alone.
+      // A service that goes away mid-chat is started again once the
+      // link's own passive window has passed (a newer build that retired
+      // it is starting its replacement meanwhile, and must win the record),
+      // and again every few seconds until the link reaches one, so a start
+      // that fails while the trouble lasts is not the last; one that
+      // refuses this build (newer) is left alone.
       if (services.service !== undefined) {
         const link = services.service;
         const restarts = yield* FiberHandle.make<void, never>().pipe(
           Scope.provide(chatScope),
         );
         const restart = Effect.gen(function* () {
+          yield* Effect.sleep(START_TIMEOUT);
           while ((yield* SubscriptionRef.get(link.client)) === null) {
             yield* startCliService(context.storageRoot).pipe(
               Effect.catch((error) =>

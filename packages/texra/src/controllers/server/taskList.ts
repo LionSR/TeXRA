@@ -107,7 +107,7 @@ export const listTasks = Effect.fn('taskList.listTasks')(function* (
 /** What a history detail prints of a run beyond its records: the launch
  *  facts the view holds, by field (`task.detail` carries `RunViewSchema`
  *  picked to them). */
-export const RUN_LAUNCH_FACT_FIELDS = [
+export const RUN_LAUNCH_FACT_FIELDS = Object.freeze([
   'launchedAt',
   'parentId',
   'description',
@@ -115,7 +115,7 @@ export const RUN_LAUNCH_FACT_FIELDS = [
   'durableOutcome',
   'substate',
   'model',
-] as const;
+] as const);
 /** A run's launch facts: `RunView` picked to `RUN_LAUNCH_FACT_FIELDS`. */
 export type RunLaunchFacts = Pick<
   RunView,
