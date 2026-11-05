@@ -111,14 +111,14 @@ const KITTY_NO_MODIFIER_BITS = 0;
 
 // Kitty keyboard protocol: CSI codepoint ; modifiers [: eventType]
 // [; text-as-codepoints] u. Some terminals also emit the colon-only spelling
-// CSI codepoint : modifiers u for shifted Return, which Ink does not parse.
+// CSI codepoint : modifiers u for shifted Return; the ink patch reads it the
+// same way, so both spellings parse as Shift+Return.
 const KITTY_ENTER_INPUT_RE = new RegExp(
-  `${ESC}\\[(13|57414)(?:([;:])(\\d+)(?::(\\d+))?(?:;[\\d:]+)?)?u`,
+  `${ESC}\\[(13|57414)(?:[;:](\\d+)(?::(\\d+))?(?:;[\\d:]+)?)?u`,
   'g',
 );
 
 interface KittyEnterInput {
-  readonly delimiter?: ';' | ':';
   readonly eventType?: number;
   readonly key: 'mainEnter' | 'keypadEnter';
   readonly modifierBits: number;
@@ -126,7 +126,6 @@ interface KittyEnterInput {
 
 function parseKittyEnterInput(
   codepoint: string,
-  delimiter: string | undefined,
   modifier: string | undefined,
   eventType: string | undefined,
 ): KittyEnterInput {
@@ -134,10 +133,7 @@ function parseKittyEnterInput(
     modifier == null
       ? KITTY_NO_MODIFIER_BITS
       : Math.max(KITTY_NO_MODIFIER_BITS, Number(modifier) - 1);
-  const parsedDelimiter =
-    delimiter === ';' || delimiter === ':' ? delimiter : undefined;
   return {
-    delimiter: parsedDelimiter,
     eventType: eventType == null ? undefined : Number(eventType),
     key:
       codepoint === KITTY_KEYPAD_ENTER_CODEPOINT ? 'keypadEnter' : 'mainEnter',
@@ -154,7 +150,6 @@ function isInkParsedStandaloneShiftEnterInput(
   return (
     offset === 0 &&
     sequence.length === data.length &&
-    input.delimiter === ';' &&
     input.key === 'mainEnter' &&
     input.modifierBits === KITTY_SHIFT_MODIFIER_BITS
   );
@@ -195,7 +190,6 @@ export function rewriteKittyEnterInput(
     (
       sequence,
       codepoint: string,
-      delimiter: string | undefined,
       modifier: string | undefined,
       eventType: string | undefined,
       offset: number,
@@ -204,7 +198,7 @@ export function rewriteKittyEnterInput(
         data,
         sequence,
         offset,
-        parseKittyEnterInput(codepoint, delimiter, modifier, eventType),
+        parseKittyEnterInput(codepoint, modifier, eventType),
         options.shiftEnter,
       ),
   );
