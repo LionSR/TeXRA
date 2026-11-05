@@ -853,8 +853,6 @@ interface RunRecords {
     readonly string[],
     DatabaseReadFailed
   >;
-  /** A model call's failure stopped its turn, and nothing retired it. */
-  readonly readModelFailed: () => Effect.Effect<boolean, DatabaseReadFailed>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;

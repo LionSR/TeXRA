@@ -1,20 +1,10 @@
-import {
-  Cause,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  Result,
-  Scope,
-  Stream,
-} from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Result, Scope } from 'effect';
 
 import {
   RUN_OUTCOME,
   type RunId,
   type AgentConfigPayload,
   generateRunId,
-  isLiveRun,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -38,11 +28,8 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
-  advertisesInterruptedRun,
-  type CheckpointRefinement,
   formatInterruptedResumeHint,
   tryReadCliCwd,
-  writeInterruptedResumeHint,
 } from './interruptedResumeHint';
 import { attachScriptPlainOutput } from './scriptPlainOutput';
 import { attachCliSessionProgressProjection } from './sessionProgressSubscription';
@@ -78,12 +65,10 @@ export interface CliExecuteOptions {
     readonly runtime: ProcessRuntime;
     readonly shutdownScope: Scope.Scope;
   };
-  /** Called during signal shutdown once the run's CANCELLED end is
-   *  committed and its rows say it can be resumed, before the signal
-   *  handler exits. */
+  /** Called once when a shutdown stopped the run, after its end is
+   *  committed, if its rows say it can be resumed (`readResumable`): part
+   *  of the finalization a shutdown waits for within its deadline. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => Effect.Effect<void>;
-  /** Refine generic flow resumability for the launched workflow's state. */
-  readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
   /** What the command does with the run once its end is committed (a
    *  document task's output copy and result record), with its committed
    *  outcome: part of the finalization a shutdown waits for, so a signal
@@ -122,7 +107,7 @@ export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
       services: options.services,
       onInterruptedRunFinalized: options.recoveryInputIsDurable
         ? (runId) =>
-            writeInterruptedResumeHint(
+            writeTextStderrAndWait(
               formatInterruptedResumeHint(
                 runContext,
                 runId,
@@ -130,7 +115,6 @@ export const executeCliToolUseConfig = Effect.fn('executeCliToolUseConfig')(
                 workingDirectory,
                 recoveryProcessCwd,
               ),
-              true,
             )
         : undefined,
     });
@@ -272,44 +256,10 @@ export const executeCliConfig: (
       userQuiet
         ? Effect.void
         : writeTextStderrAndWait(`[warn] [cli.shutdown] ${what}: ${cause}`);
-    // Whether a shutdown reached this run: its finalization then drains the
-    // rows for the recovery notice, which a launch that failed has none of.
+    // Whether a shutdown reached this run: its finalization then reads
+    // whether the stopped run can be resumed, once its end is committed.
     let shutdown = false;
     const shutdownFinalizationDone = Deferred.makeUnsafe<void>();
-    /** The run's end as the view shows it: a level that holds the run (its
-     *  committed opening always appears) and shows it no longer live here, or
-     *  one without it once it was seen or once its rows are gone (it was
-     *  deleted). The wait also ends with the session view. */
-    const settledHere = (runId: RunId): Effect.Effect<void> =>
-      Effect.suspend(() => {
-        let seen = false;
-        return session.view.changes.pipe(
-          Stream.filterEffect((view) => {
-            const run = view.runs.get(runId);
-            if (run !== undefined) {
-              seen = true;
-              return Effect.succeed(!run.ownedHere || !isLiveRun(run));
-            }
-            if (seen) return Effect.succeed(true);
-            // Not in the view yet, or deleted before it was: its rows decide.
-            return session
-              .records(runId)
-              .exists()
-              .pipe(
-                Effect.map((exists) => !exists),
-                Effect.catch((error) =>
-                  sayShutdownFailure(
-                    `Whether run ${runId} still exists could not be read; its drain goes on without waiting`,
-                    toErrorMessage(error),
-                  ).pipe(Effect.as(true)),
-                ),
-              );
-          }),
-          Stream.runHead,
-          Effect.asVoid,
-        );
-      });
-    const recoveryNoticeStarted = Deferred.makeUnsafe<void>();
     const stopThroughSession = session
       .request({
         kind: 'run.stop',
@@ -317,12 +267,12 @@ export const executeCliConfig: (
         reason: 'shutdown',
       })
       .pipe(
-        Effect.as(true),
+        Effect.asVoid,
         Effect.catch((error) =>
           sayShutdownFailure(
             `Run ${launchRunId} was not stopped for the shutdown`,
             toErrorMessage(error),
-          ).pipe(Effect.as(false)),
+          ),
         ),
       );
     // Set as the session's acceptance opens the wait for the run's end,
@@ -365,65 +315,15 @@ export const executeCliConfig: (
             // session accepted the run; one accepted by then, or while the
             // interrupt was on its way, is stopped through the session, which
             // its own end answers (an ended run's stop is the registry's
-            // quiet no-op). A launch aborted before acceptance may have borne
-            // the run all the same: the finalization drains its rows, and the
-            // race below waits whole once that drain starts a recovery notice.
+            // quiet no-op).
             if (!accepted) yield* Effect.forkDetach(Fiber.interrupt(launched));
-            const stopped = accepted ? yield* stopThroughSession : false;
-            // A stop that reached no live run (it had ended) promises no
-            // recovery: the run's own end is what the handler waits for.
-            // Decided here, from the rows before the run's end, and again by
-            // the finalization's drain after it: this early verdict is what
-            // lets the wait below outrank the deadline, which a verdict read
-            // after the end could not. When it cannot be read the ordinary
-            // bounded path below remains authoritative (its race still sees
-            // the drain start a notice), and the shutdown says so.
-            const advertisesCheckpoint =
-              stopped &&
-              (yield* session
-                .records(launchRunId)
-                .readResumable()
-                .pipe(
-                  Effect.flatMap((inspection) =>
-                    advertisesInterruptedRun(
-                      launchRunId,
-                      inspection,
-                      options.canAdvertiseInterruptedRun,
-                    ),
-                  ),
-                  Effect.catch((error) =>
-                    sayShutdownFailure(
-                      `Run ${launchRunId}: whether it can be resumed could not be read before shutdown; its recovery notice waits only within the shutdown deadline`,
-                      toErrorMessage(error),
-                    ).pipe(Effect.as(false)),
-                  ),
-                ));
-            // Wait for the run's end and its recovery notice before the
-            // handler exits. A resumable run keeps shutdown alive until the
-            // promised notice is flushed: that wait outranks the deadline.
-            if (advertisesCheckpoint && options.onInterruptedRunFinalized) {
-              yield* Effect.uninterruptible(
-                Deferred.await(shutdownFinalizationDone),
-              );
-              return;
-            }
-            const first = yield* Effect.raceAll([
-              Deferred.await(shutdownFinalizationDone).pipe(
-                Effect.as('finalized' as const),
-              ),
-              ...(options.onInterruptedRunFinalized
-                ? [
-                    Deferred.await(recoveryNoticeStarted).pipe(
-                      Effect.as('recovery-started' as const),
-                    ),
-                  ]
-                : []),
-            ]);
-            if (first === 'recovery-started') {
-              yield* Effect.uninterruptible(
-                Deferred.await(shutdownFinalizationDone),
-              );
-            }
+            // Read again: acceptance may have landed while the interrupt was
+            // being forked, and an interrupt that reaches the launch after it
+            // waits on the uninterruptible acceptance instead of stopping it.
+            if (accepted) yield* stopThroughSession;
+            // The run's end, its recovery notice and the command's own
+            // finalization, within the deadline below.
+            yield* Deferred.await(shutdownFinalizationDone);
           }),
         );
       }),
@@ -440,12 +340,11 @@ export const executeCliConfig: (
       shutdownStatusScope,
       shutdownStatus.pipe(
         // The step's one deadline: the same budget a session close spends,
-        // so a run that never unwinds cannot hold SIGTERM open. Its
-        // uninterruptible wait for a promised recovery notice still finishes.
+        // so a run that never unwinds cannot hold SIGTERM open.
         Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
         Effect.catchCause((cause) =>
           sayShutdownFailure(
-            "The run's shutdown step failed; the exit does not wait for its recovery notice",
+            "The run's shutdown step failed; the exit does not wait for its finalization",
             Cause.pretty(cause),
           ),
         ),
@@ -469,7 +368,6 @@ export const executeCliConfig: (
     // the stopped run's end let it go (exit 130 as well).
     const interrupted =
       shutdown && Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause);
-    const launchAborted = interrupted && !accepted;
     if (Exit.isSuccess(exit)) {
       runResult = { ok: true as const, result: exit.value };
     } else if (!interrupted) {
@@ -507,43 +405,23 @@ export const executeCliConfig: (
 
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
-        // A run the shutdown stopped (it ended cancelled, or its result
-        // could not be read) has committed rows that say whether it can be
-        // resumed: read once its end is committed, and the recovery notice
-        // written from them. A drain that fails fails the run's
-        // finalization, after its end.
-        // A launch the shutdown aborted may have borne the run all the same
-        // (the interrupt landed in the acceptance's tail, which stops the
-        // run): its rows decide, once its end is committed.
-        const born =
-          launchAborted && (yield* session.records(launchRunId).exists());
-        if (born) yield* settledHere(launchRunId);
+        // A run the shutdown stopped after the session accepted it (it ended
+        // cancelled, or its result could not be read): its committed rows
+        // say whether it can be resumed, read once its end is committed;
+        // rows that cannot be read (logged) say no. A launch the shutdown
+        // aborted before acceptance gets no notice: it has no end here to
+        // read after.
         const stopped =
           shutdown &&
-          (born ||
-            (!launchAborted &&
-              (!runResult.ok ||
-                runResult.result.outcome === RUN_OUTCOME.CANCELLED)));
-        if (stopped) {
-          const drain = Effect.gen(function* () {
-            const resumability = yield* session
-              .records(launchRunId)
-              .readResumable();
-            const onFinalized = options.onInterruptedRunFinalized;
-            if (
-              onFinalized !== undefined &&
-              (yield* advertisesInterruptedRun(
-                launchRunId,
-                resumability,
-                options.canAdvertiseInterruptedRun,
-              ))
-            ) {
-              yield* Deferred.succeed(recoveryNoticeStarted, undefined);
-              yield* onFinalized(launchRunId);
-            }
-          });
-          yield* drain;
-        }
+          accepted &&
+          (!runResult.ok || runResult.result.outcome === RUN_OUTCOME.CANCELLED);
+        const onFinalized = options.onInterruptedRunFinalized;
+        if (
+          stopped &&
+          onFinalized !== undefined &&
+          (yield* session.records(launchRunId).readResumable())
+        )
+          yield* onFinalized(launchRunId);
         // A failed run's end reaches the host through the session's
         // presenter, which `settled` waits for: the presentation host stays
         // attached until it has.
