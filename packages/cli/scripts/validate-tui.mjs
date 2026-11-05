@@ -127,10 +127,16 @@ const STATIC_TRANSCRIPT_CWD = mkdtempSync(
 // costs decides how many rows are left for the scrollable prompt. Left to the
 // default, the cwd is the harness's own short temp dir in a plain run and the
 // long per-scenario workspace under `--snapshot-dir`, so the two runs render
-// different prompt budgets. Pin it to the harness's own naming so the card
-// costs the same either way.
+// different prompt budgets. The temp dir itself differs by platform too
+// (`/tmp` on Linux, a ~50-column `/var/folders/…/T` on macOS), so the name is
+// long enough that `Directory: <cwd>` always takes exactly two rows of the
+// 76-column card wherever the temp dir is: one row on Linux and two on macOS
+// had made the scroll expectations hold on one platform only.
 const AGENT_PROPOSAL_CWD = mkdtempSync(
-  path.join(tmpdir(), 'texra-tui-harness-'),
+  path.join(
+    tmpdir(),
+    'texra-tui-harness-agent-proposal-working-directory-wraps-to-two-rows-',
+  ),
 );
 process.on('exit', () => {
   rmSync(STATIC_TRANSCRIPT_CWD, { recursive: true, force: true });
@@ -2743,7 +2749,17 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab agents',
-    keys: ['\t', RIGHT, '\t', { input: ESC, delayMs: 80 }, '3'],
+    // The focus chord is the platform's (shortcutLabels.ts): macOS sends a
+    // bare Esc and then the digit, which the App holds as a pending chord;
+    // elsewhere Alt-3 arrives as one `ESC 3` burst.
+    keys: [
+      '\t',
+      RIGHT,
+      '\t',
+      ...(process.platform === 'darwin'
+        ? [{ input: ESC, delayMs: 80 }, '3']
+        : [`${ESC}3`]),
+    ],
     frame: 'viewport',
     expect: ['Idle', 'root active', 'Tab agents'],
     unexpect: [
