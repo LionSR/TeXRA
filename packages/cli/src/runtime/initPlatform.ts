@@ -15,11 +15,7 @@ import {
   withProcessServices,
   StateStores,
 } from '@texra-ai/harness/host';
-import {
-  createNodeWorkspaceRoots,
-  resolveWorkspaceStoragePath,
-  setLogSink,
-} from '@texra-ai/harness/node';
+import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
@@ -284,31 +280,20 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
       const projectScope = yield* Scope.make();
       const closeProject = Scope.close(projectScope, Exit.void);
       return yield* Effect.gen(function* () {
-        // The project's `texra.db` lives in its storage directory and is
-        // owned by the project scope; AppState (global) is the runtime's.
-        const { storageRoot } = context;
-        const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
-        const workspaceState = yield* (yield* StateStores)
-          .project(storage, context.cwd)
-          .pipe(Scope.provide(projectScope));
-        const repoState = yield* (yield* StateStores).repo(
-          storage,
-          context.cwd,
-        );
         // One process, one project: the process roots are the `--cwd` workspace,
         // over the config provider the startup read already opened — the project
         // `.texra/config.json` layered over the user-level
         // `~/.texra/v1/global-storage/config.json`. One provider per process is
         // what keeps a value `texra config` writes readable at the next startup.
-        const roots = createNodeWorkspaceRoots({
+        // The project's `texra.db` is owned by the project scope; AppState
+        // (global) is the runtime's.
+        const roots = yield* openNodeWorkspaceRoots({
           workspacePath: context.cwd,
-          storageRoot,
-          storage,
+          storageRoot: context.storageRoot,
           config: context.config,
-          workspaceState,
-          repoState,
+          stateStores: yield* StateStores,
           globalState,
-        });
+        }).pipe(Scope.provide(projectScope));
         // The one open of the process session, over the roots published below,
         // memoized so the first entry point that needs a session opens it and
         // every later one gets the same handle; an entry that needs none never

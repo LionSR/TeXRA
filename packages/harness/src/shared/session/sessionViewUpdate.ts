@@ -738,12 +738,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         recipe: recipeBlockOf(config),
       };
     }
-    case 'run.model':
-      return {
-        ...run,
-        model: event.model,
-        modelLabel: getModelLabel(event.model),
-      };
     case 'context.state':
       return {
         ...run,

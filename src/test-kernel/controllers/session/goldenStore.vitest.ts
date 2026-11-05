@@ -230,16 +230,14 @@ describe('the golden 1.0 store', () => {
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
         const types = new Set(events.map((event) => event.type));
-        // Every row kind is in the fixture, the decode test of a released store,
-        // but `run.model`, projected at read time. The list only shrinks.
-        const notStored = ['run.model'];
+        // Every row kind is in the fixture, the decode test of a released store.
         expect(
           Object.keys(ROW_KINDS)
             .filter(
               (kind) => !types.has(kind as (typeof events)[number]['type']),
             )
             .toSorted(),
-        ).toEqual(notStored);
+        ).toEqual([]);
         for (const type of [
           'tool.result',
           'request.decided',

@@ -264,7 +264,7 @@ export function crashAt(
       .get(n)?.at;
     db.exec(`
       DELETE FROM projection_state; DELETE FROM projected_row;
-      DELETE FROM listing_entry; DELETE FROM run_usage; DELETE FROM run_model;
+      DELETE FROM listing_entry; DELETE FROM run_usage;
       DELETE FROM event_blob WHERE "commit" > ${n};
       DELETE FROM event WHERE "commit" > ${n};
       DELETE FROM event_sequence WHERE id NOT IN (SELECT aggregate FROM event);
