@@ -4,11 +4,11 @@
 
 import { attentionOf } from '@texra-ai/harness/schemas';
 import { postMessage } from '@texra/shared/hostBridge';
-import type { Shell } from '@texra/shared/session/shell';
 import type { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { toggleSidebar } from '../shared/desktopShellState';
+import type { Shell } from './shell';
 import type { RailProject } from './desktopShell';
 import type { createProjectWorkbench } from './projectWorkbench';
 

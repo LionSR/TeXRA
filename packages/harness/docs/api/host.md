@@ -761,6 +761,17 @@ interface ConversationFormatOptions {
 }
 ```
 
+## countLineChanges
+
+Added/removed line counts folded over hunks a caller already holds.
+
+```ts
+function countLineChanges(hunks: readonly Hunk[]): {
+  added: number;
+  removed: number;
+}
+```
+
 ## createExternalLocation
 
 ```ts
@@ -1186,6 +1197,16 @@ interface HostSkillOptions {
 }
 ```
 
+## Hunk
+
+A hunk as its readers see it: jsdiff's, or one carried as data.
+
+```ts
+type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+  readonly lines: readonly string[];
+};
+```
+
 ## InstalledPlugin
 
 ```ts
@@ -1202,7 +1223,7 @@ session's `WorkspaceRoots` is one), so a host acts on the record its
 process opened.
 
 ```ts
-const InstalledPlugins: Readonly<{ readonly unloadedComponents: readonly ("LSP servers" | "output styles" | "apps")[]; readonly origin: (input: string, cwd: string, ref: string | undefined) => Result<PluginOrigin, PluginRequestError>; readonly install: (origin: PluginOrigin, only: readonly string[], env: PluginEnv) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], Error, FileSystem | ChildProcessSpawner>; readonly update: (names: readonly string[], env: PluginEnv) => Effect<PluginUpdate[], PluginError | PluginRequestError, FileSystem | ChildProcessSpawner>; readonly remove: (name: string, env: PluginEnv) => Effect<{ name: string; path: string; local: boolean; leftover: boolean; }, PluginError | PluginRequestError, FileSystem>; readonly list: (env: PluginEnv) => Effect<PluginListing[], PluginError, FileSystem>; readonly enable: <E, R>(name: string, env: PluginEnv, confirm: (review: PluginReview) => Effect<boolean, E, R>) => Effect<"enabled" | "declined", PluginError | PluginRequestError | E, FileSystem | R>; readonly disable: (name: string, env: PluginEnv) => Effect<undefined, PluginError | PluginRequestError, never>; readonly loaded: (env: Pick<PluginEnv, "globalState">) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], never, FileSystem>; readonly describeHook: (hook: ConfiguredHook) => string; }>
+const InstalledPlugins: Readonly<{ readonly unloadedComponents: readonly ("LSP servers" | "output styles" | "apps")[]; readonly origin: (input: string, cwd: string, ref: string | undefined) => Result<PluginOrigin, PluginRequestError>; readonly install: (origin: PluginOrigin, only: readonly string[], env: PluginEnv) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], Error, FileSystem | ChildProcessSpawner>; readonly update: (names: readonly string[], env: PluginEnv) => Effect<PluginUpdate[], PluginError | PluginRequestError, FileSystem | ChildProcessSpawner>; readonly remove: (name: string, env: PluginEnv) => Effect<{ name: string; path: string; local: boolean; leftover: boolean; }, PluginError | PluginRequestError, FileSystem>; readonly list: (env: PluginEnv) => Effect<PluginListing[], PluginError, FileSystem>; readonly enable: <E, R>(name: string, env: PluginEnv, confirm: (review: PluginReview) => Effect<boolean, E, R>) => Effect<"enabled" | "declined", PluginError | PluginRequestError | E, FileSystem | R>; readonly disable: (name: string, env: PluginEnv) => Effect<undefined, PluginError | PluginRequestError, never>; readonly loaded: (env: Pick<PluginEnv, "globalState">) => Effect<{ readonly name: string; readonly path: string; readonly source: string; readonly skills: readonly string[]; readonly enabled: boolean; readonly description?: string | undefined; readonly commit?: string | undefined; readonly version?: string | undefined; readonly ref?: string | undefined; readonly trust?: { readonly version: string | null; readonly digest: string; } | undefined; }[], never, FileSystem>; readonly describeHook: (hook: ConfiguredHook) => Effect<string, never, never>; }>
 ```
 
 ## InvalidAgentTeamError
@@ -1947,6 +1968,16 @@ function replayTrace<E>(
   activation: CommitOrdinal,
   result: Effect.Effect<unknown, E>,
 ): Stream.Stream<AgentEvent, E>
+```
+
+## reportDiffTimeout
+
+Warn that a diff pass fell back to a whole-file replacement, if it did.
+
+```ts
+function reportDiffTimeout(
+  timeout: string | undefined,
+): Effect.Effect<void>
 ```
 
 ## RootedFileSystem

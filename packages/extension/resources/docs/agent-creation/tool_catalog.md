@@ -77,7 +77,7 @@ Grant only the tools the agent needs; start from the recommended groups below.
   and `document_task` call in the script and shows its source. There are no timers, no
   `Date.now()`, no `Math.random()`, and no imports, so an interrupted script
   replays exactly and finished calls are not run again. `run_in_background:
-true` runs it as its own background run that delivers one result and a
+  true` runs it as its own background run that delivers one result and a
   summary as a follow-up; `timeoutMs` is the wall clock (1 s to 24 h,
   default 60 min). Use it when the whole fan-out and join is known up front;
   call `agent` directly when the next step depends on reading the last

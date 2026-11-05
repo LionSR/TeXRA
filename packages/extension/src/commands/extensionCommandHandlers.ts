@@ -57,7 +57,8 @@ type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
  * page argument no palette invocation could supply.
  */
 type ExtensionRegistryCommandId =
-  ExtensionRegistryCatalogCommandId | 'texra.openDoc';
+  | ExtensionRegistryCatalogCommandId
+  | 'texra.openDoc';
 
 /**
  * A command's program. The registration boundary in

@@ -15,10 +15,7 @@ import {
   flagFromArg,
   type AnyCommand,
 } from '@cli/runtime/completionCommandTree';
-import {
-  editDistance,
-  typoSuggestionThreshold,
-} from '@texra/utils/text/editDistance';
+import { editDistance, typoSuggestionThreshold } from './editDistance';
 import {
   GLOBAL_ARGS,
   GLOBAL_BOOL_FLAGS,

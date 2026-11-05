@@ -75,8 +75,8 @@ const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * The configs `npm run typecheck` composes, in home-config-first order:
  * tsconfig.json owns src/** and packages/extension/src/**,
  * tsconfig.test-kernel.json owns the test surface the root config excludes,
- * tsconfig.build.json owns packages/harness/src (typecheck:harness runs the
- * package build, whose tsc step is this config), and each remaining package
+ * tsconfig.build.json owns packages/harness/src (`npm run typecheck`
+ * runs the package build, whose tsc step is this config), and each remaining package
  * config owns its package's sources.
  */
 const PROJECT_CONFIGS = [
@@ -452,9 +452,10 @@ function scanSourceFile(checker, sourceFile) {
   const isEffectType = makeIsEffectType(checker);
   // Shape 5 is production-only: a test's background fiber that fails shows up
   // as that test's failure or timeout, not as silently lost work.
-  const forksScanned = !sourceFile.fileName.includes(
-    `${sep}src${sep}test-kernel${sep}`,
-  );
+  const forksScanned =
+    !/[\\/](?:src[\\/]test-kernel|packages[\\/][^\\/]+[\\/]test)[\\/]/.test(
+      sourceFile.fileName,
+    );
   const findings = [];
   const record = (kind, node, detail) => {
     const { line, character } = sourceFile.getLineAndCharacterOfPosition(

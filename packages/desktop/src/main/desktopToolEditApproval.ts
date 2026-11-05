@@ -11,6 +11,7 @@
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
+import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { NotificationFailed, type DiffSource } from '@texra/hosts/uiHosts';
 import type {
@@ -129,11 +130,9 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
         // The handler's parameter names the channel's whole error type, so a
         // second tag added here fails to compile instead of being dropped.
         Effect.catch((failure: NotificationFailed) =>
-          Effect.sync(() => {
-            console.error(
-              `Tool-edit notice could not be shown: ${failure.message}`,
-            );
-          }),
+          Effect.logError(
+            `Tool-edit notice could not be shown: ${failure.message}`,
+          ).pipe(withLogChannel('desktop')),
         ),
       ),
     );

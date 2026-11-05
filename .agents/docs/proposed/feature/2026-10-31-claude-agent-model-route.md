@@ -45,12 +45,12 @@ never "Claude Code".
   `xai-subscription` (`packages/llm/src/oauth/`), where TeXRA holds the OAuth
   token and calls the vendor's HTTP endpoint itself.
 - **A delegate tool that already uses the plan.**
-  `packages/texra/src/tools/claudeAgent.ts` starts a separate Claude Code
+  `packages/texra/src/tools/agentCli/claudeAgent.ts` starts a separate Claude Code
   agent through the Agent SDK. That agent uses Claude Code's own tools, prompt,
   settings and login, including a Pro/Max login, and its result comes back to
   the parent run as a delivery. The SDK is already a dependency of
   `packages/texra`, and the binary lookup (`findClaudeBinaryPath`,
-  `packages/texra/src/tools/claudeAgentImport.ts`) already handles packaged
+  `packages/texra/src/tools/agentCli/claudeAgentImport.ts`) already handles packaged
   Electron and VSIX builds.
 
 The gap: the plan can run a sub-agent, but it cannot be the model of a TeXRA
@@ -209,7 +209,10 @@ exact prefix, never the authority. That is the doctrine
 connection-scoped Responses anchor is never stored. A new activation pays for
 one checkpoint message and a cold prompt cache. Benefits:
 
-- No storage-format change and no new continuation member.
+- No new continuation member. The `claude-agent` protocol and route are
+  still new stored values (a `model.message` origin, a run's declined routes
+  on `run.config`, the usage log's `provider`), so the row kinds holding them
+  take a version bump, as `model.message` v9 did for the GLM plan's route.
 - No session forking (OpenCode's largest module, `claude/sessions.ts`, 467
   lines).
 - `persistSession: false`, so TeXRA leaves no transcripts under `~/.claude`.
@@ -225,8 +228,10 @@ measured change.
   can, TeXRA's loop owns retries as everywhere else. If not, the route
   reports failures as final and the note records the exception.
 - **Failures.** A failed turn leaves the process in an unknown state, so the
-  binding reports `persistentConnection: true`. The existing `rebound` path
-  then rebinds before the next attempt, as it does for a dead WebSocket.
+  model replaces it before the next turn, as `openaiResponsesWebSocketModel`
+  replaces a dead connection (a `ScopedRef` that a turn finding it unusable
+  reopens first). The harness's `rebound` path rebinds only on a person's
+  retry answer, and there is no `persistentConnection` flag.
   Failures are classified into `ModelError` kinds from the SDK's result
   subtypes and the account's limit messages. A plan-limit message is shown
   once.
@@ -246,7 +251,8 @@ way, so compaction thresholds keep working.
 ### The Effect boundary
 
 - The SDK's input is a `Queue` exposed as `Stream.toAsyncIterable`, and its
-  output is `Stream.fromAsyncIterable`, as `claudeAgent.ts` already does.
+  output is `Stream.fromAsyncIterable`. `claudeAgent.ts` already reads the
+  output this way but sends one string prompt, so streaming input is new.
 - The MCP `tools/call` handler is the one place a foreign callback must
   return a promise that waits on Effect state (the call's `Deferred`). That is
   an SDK boundary in the sense of the root guide. It needs either a runtime
@@ -254,8 +260,9 @@ way, so compaction thresholds keep working.
   entry in `EFFECT_RUN_ENTRIES`. A reviewer decides which. Hand-rolled
   promise plumbing is out (`CORE_QUALITY_DIRS` covers `packages/llm/src`).
 - `@anthropic-ai/claude-agent-sdk` becomes a dependency of `packages/llm`,
-  loaded on demand like the other protocol SDKs, at the workspace catalog's
-  version. The app's bundling rules for it (`claudeAgentImport.ts`) apply
+  loaded on demand like the other protocol SDKs, pinned to an exact version
+  (the catalog's caret range would raise the core-quality
+  `ranged-dependencies` count, which fails the check). The app's bundling rules for it (`claudeAgentImport.ts`) apply
   unchanged.
 
 ## Costs

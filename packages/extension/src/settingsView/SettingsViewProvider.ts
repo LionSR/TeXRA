@@ -3,11 +3,11 @@ import { Effect, Predicate } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
-import { BundledViewContentProvider } from '@common/webview';
 import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SubscriptionProviderId } from '@texra/controllers/modelAccess/subscriptionProviders';
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
+import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 // Local file imports
 import {

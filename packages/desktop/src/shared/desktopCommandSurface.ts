@@ -1,9 +1,5 @@
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
-  toElectronAccelerator,
-  type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
-import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
@@ -15,6 +11,7 @@ import {
 } from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
 import { texraGuideUrl } from '@ui/copy/guide';
+import { toElectronAccelerator, type DesktopPlatform } from './accelerators';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopOpenSettingsMessageSchema,
@@ -81,7 +78,9 @@ type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
 type DesktopFileCommandId = (typeof DESKTOP_FILE_COMMANDS)[number];
 type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
 export type DesktopCommandId =
-  DesktopFileCommandId | DesktopMenuCommandId | DesktopHelpCommandId;
+  | DesktopFileCommandId
+  | DesktopMenuCommandId
+  | DesktopHelpCommandId;
 
 const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
   ...DESKTOP_FILE_COMMANDS,

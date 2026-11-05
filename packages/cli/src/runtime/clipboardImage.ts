@@ -22,7 +22,7 @@ import { Effect, FileSystem, type Path, Schema, Stream } from 'effect';
 import * as ChildProcess from 'effect/process/ChildProcess';
 
 import { withSessionFs } from '@texra-ai/harness/host';
-import { executeCommand } from '@texra-ai/harness/node';
+import { absentReason, executeCommand } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { generatePastedImageName } from '@texra/shared/utils/pastedImageName';
 import {
@@ -186,7 +186,7 @@ function readClipboardPngLinux(): Effect.Effect<
       }
       const failure: ClipboardImageTooLarge | PlatformError = outcome.failure;
       if (failure._tag === 'ClipboardImageTooLarge') return 'too-large';
-      if (failure.reason._tag === 'NotFound') continue; // tool not installed → try next
+      if (absentReason(failure)) continue; // tool not installed → try next
       toolFound = true; // tool ran but the clipboard had no image
     }
     return toolFound ? 'none' : 'unsupported';

@@ -43,22 +43,21 @@ export function runRelation(
  * job reads parentage or grants from. `read` answers a run's rows, or null
  * for one that is not there; a parent that is not there ends its line.
  */
-export const ancestryRows = <
+export const ancestryRows = Effect.fnUntraced(function* <
   Rows extends { readonly parent: { readonly id: RunId } | null },
   E,
 >(
   read: (runId: RunId) => Effect.Effect<Rows | null, E>,
   ...starts: readonly (RunId | null)[]
-): Effect.Effect<ReadonlyMap<RunId, Rows>, E> =>
-  Effect.gen(function* () {
-    const rows = new Map<RunId, Rows>();
-    for (const start of starts) {
-      for (let id = start; id !== null && !rows.has(id);) {
-        const own = yield* read(id);
-        if (own === null) break;
-        rows.set(id, own);
-        id = own.parent?.id ?? null;
-      }
+): Effect.fn.Return<ReadonlyMap<RunId, Rows>, E> {
+  const rows = new Map<RunId, Rows>();
+  for (const start of starts) {
+    for (let id = start; id !== null && !rows.has(id);) {
+      const own = yield* read(id);
+      if (own === null) break;
+      rows.set(id, own);
+      id = own.parent?.id ?? null;
     }
-    return rows;
-  });
+  }
+  return rows;
+});

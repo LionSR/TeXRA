@@ -541,7 +541,7 @@ All notable changes to this project will be documented in this file.
   run by returning it in its result's `facts`: the fact is committed with
   the call's result, never apart from it. A task an earlier build saved
   after it reached the model cannot be opened: the task list, `texra
-history`, a resume and a follow-up say it was "written by an earlier
+  history`, a resume and a follow-up say it was "written by an earlier
   build of TeXRA; it can't be opened by this one" instead of calling it
   damaged or offering to resume it.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
@@ -1299,7 +1299,7 @@ history`, a resume and a follow-up say it was "written by an earlier
   that was cut short continues under its own run instead of starting over.
   The tool belongs to the Multi-Agent Workflow plugin.
 - **Scripts can run in the background.** `script` with `run_in_background:
-true` returns at once with a run ID, and the script runs as a child run of
+  true` returns at once with a run ID, and the script runs as a child run of
   its own (shown as a Script run) with the same tools, model and working
   directory. When it ends, the parent receives one follow-up with the
   script's result and a summary line: how many calls succeeded, failed or
@@ -1372,7 +1372,7 @@ true` returns at once with a run ID, and the script runs as a child run of
   (a `basedOn:` line at the end of the file). When an update changes that
   agent, the settings Agents page marks the copy and offers View built-in,
   Reset to built-in, and Keep mine; `texra agents list` and `texra agents
-show` print the same notice, and the new `texra agents customize`,
+  show` print the same notice, and the new `texra agents customize`,
   `texra agents reset`, and `texra agents keep` commands make, reset, and
   keep a copy from the terminal. An agent you wrote yourself under a built-in's name
   is never flagged.
@@ -1535,6 +1535,11 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **A retired model is refused when a run binds it.** The route decision
+  sent a model llm-zoo marks retired to its provider key (or a subscription
+  still listing it), so a resumed or switched run failed at the provider
+  instead. It is now unserved, as the picker already treated it, and the run
+  says the model is retired.
 - **A request the model's context window cannot hold is compacted and sent
   again.** When the provider refused a request as too long, or the run's
   own estimate did, the run ended failed. The run now compacts its history
@@ -1764,7 +1769,7 @@ show` print the same notice, and the new `texra agents customize`,
   example, which documents did not compile and where their logs are)
   between `FAILED` and the run-artifacts line. JSON output is unchanged.
 - **An awaited sub-agent's report is now kept and viewable.** `executions
-view` on a sub-agent the parent waited for shows its report instead of
+  view` on a sub-agent the parent waited for shows its report instead of
   "No report found".
 - **`--output` that can't be written now fails the command, not the
   recorded run.** `texra run` and `texra resume` copy a document task's

@@ -16,7 +16,8 @@ export function spyOnStreamWrite(
     .mockImplementation((chunk: unknown, ...rest: unknown[]) => {
       onChunk(String(chunk));
       const callback = rest.find((arg) => typeof arg === 'function') as
-        ((error?: Error | null) => void) | undefined;
+        | ((error?: Error | null) => void)
+        | undefined;
       callback?.(null);
       return true;
     }) as unknown as ReturnType<typeof vi.spyOn>;
