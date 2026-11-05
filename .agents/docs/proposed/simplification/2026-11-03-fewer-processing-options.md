@@ -91,7 +91,7 @@ with the background decision. The route decides each from facts it holds:
 **Give up.** A per-user override of a transport. Nobody has a settings-view
 row for one today.
 
-**Acceptance.** `rg "useBackgroundResponses|useGoogleBackgroundResponses|gpt5ReasoningSummary|openaiFastTier|openaiParallelToolCalls|codeMode.scriptOnly" packages` is empty; `BindSpec.options` holds `maxOutputTokens`, `temperature`, `reasoning`, `webSocket` and `fetch`; `readBackgroundToggles` is gone.
+**Acceptance.** `rg "useBackgroundResponses|useGoogleBackgroundResponses|gpt5ReasoningSummary|openaiParallelToolCalls|codeMode.scriptOnly" packages` is empty; `BindSpec.options` holds `maxOutputTokens`, `temperature`, `reasoning`, `fastTier`, `webSocket` and `fetch`; `readBackgroundToggles` is gone.
 
 _Landed 2026-11-04 (first part): `model.useBackgroundResponses` (its default
 was already the rule) and `model.openaiParallelToolCalls` are gone, with
@@ -102,10 +102,13 @@ every other reasoning model's does, and `BindSpec.options.reasoningSummary`
 is gone. `codeMode.scriptOnly` is its own slice: the canned
 validation model (CI's `validate` job, the golden store) calls `plan` and
 `bash` directly, so flipping to script-only first rewrites that conversation
-to call them from scripts, then runs the GLM and `agent()` journeys. Two
-keys wait for the owner's word, each a product-visible default:
+to call them from scripts, then runs the GLM and `agent()` journeys. One
+key waits for the owner's word, a product-visible default:
 `model.useGoogleBackgroundResponses` (off: Google text-only turns would stop
-streaming) and `model.openaiFastTier` (off: a documented, dearer tier)._
+streaming). `model.openaiFastTier` stays, on the owner's word (2026-11-05):
+paying more for a faster tier is the user's choice, not a fact the route
+holds, so the key keeps `BindSpec.options.fastTier` and has a settings-view
+row; the acceptance above no longer names it._
 
 ## 2. Declarative columns that are constants or restatements
 
