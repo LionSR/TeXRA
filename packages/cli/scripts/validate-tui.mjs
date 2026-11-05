@@ -624,11 +624,14 @@ const SCENARIOS = [
     unexpect: ['//agent', 'Harness received: //agent', '/agent - error'],
   },
   {
-    name: 'slash-palette-csi-escape-ignored',
+    // The colon spelling of Shift+Return some terminals send acts exactly
+    // like `ESC[13;2u` (the palette accepts its selection) and never leaks
+    // into the draft as text.
+    name: 'slash-palette-colon-shift-enter',
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '4' },
     keys: ['/', `${ESC}[13:2u`],
-    expect: ['│ › /'],
+    expect: ['`/exit` (`/quit`) — Exit texra'],
     unexpect: ['[13:2u', 'Harness received'],
   },
   {

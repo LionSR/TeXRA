@@ -188,6 +188,27 @@ index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..f07a7434444d1bcfc3e0b8b30f163bdb
      patchConsole() {
          if (this.options.debug) {
              return;
+diff --git a/build/parse-keypress.js b/build/parse-keypress.js
+index ad09449243b19539e0746e129f0f3b3d2c87ae9a..27eb0091f57ada00199f9f081fbcb01f8516e108 100644
+--- a/build/parse-keypress.js
++++ b/build/parse-keypress.js
+@@ -274,7 +274,16 @@ function parseKittyModifiers(modifiers) {
+         numLock: !!(modifiers & kittyModifiers.numLock),
+     };
+ }
++// Some terminals spell a modified Return as CSI 13:modifiers u (colon, no
++// semicolon). Read as the protocol grammar, the number after the colon is a
++// shifted-key code and Shift+Return arrives as a plain Return, which submits
++// instead of inserting a newline. Read it as modifiers. (TeXRA patch)
++const colonModifiedEnterRe = /^\x1b\[(13|57414):(\d+)u$/;
+ const parseKittyKeypress = (s) => {
++    const colonEnter = colonModifiedEnterRe.exec(s);
++    if (colonEnter) {
++        s = `\x1b[${colonEnter[1]};${colonEnter[2]}u`;
++    }
+     const match = kittyKeyRe.exec(s);
+     if (!match)
+         return null;
 diff --git a/build/render.d.ts b/build/render.d.ts
 index 63c59ec147214d98a2be2f73df390fd3ee59bb40..e7754007cdb5a6cba48602937829eff004e82db0 100644
 --- a/build/render.d.ts
