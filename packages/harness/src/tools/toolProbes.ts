@@ -49,7 +49,10 @@ export type ToolProbeError = ToolProbeFailed | SecretsFailed;
  * extensions) it closes over.
  */
 export type ToolProbeServices =
-  Secrets | FileSystem.FileSystem | HttpClient.HttpClient | ChildProcessSpawner;
+  | Secrets
+  | FileSystem.FileSystem
+  | HttpClient.HttpClient
+  | ChildProcessSpawner;
 
 /** A plugin that is probed but needs nothing installed: always available. */
 export const ALWAYS_AVAILABLE: ToolAvailabilityChecks = {

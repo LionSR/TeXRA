@@ -35,6 +35,7 @@ export async function loadSourceModule<K extends keyof TestSourceModules>(
   if (root === undefined) {
     throw new Error(`No source root registered for alias "${alias}".`);
   }
+  // cast: a computed import is untyped; the alias table maps K to this file.
   return import(moduleFileUrl(`${resolve(root, ...segments)}.ts`)) as Promise<
     TestSourceModules[K]
   >;

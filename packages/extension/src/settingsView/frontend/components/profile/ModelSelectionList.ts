@@ -84,7 +84,8 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   @property({ attribute: false }) models: readonly ModelSelectionItem[] = [];
   /** Null until the profile state arrives; a group then shows no key icon. */
   @property({ attribute: false }) providerKeyStatuses:
-    readonly ProviderKeyStatus[] | null = null;
+    | readonly ProviderKeyStatus[]
+    | null = null;
 
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();
@@ -400,30 +401,6 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
           icon: 'server',
         })}
         ${this.renderHelperModelDropdown()}
-        <div class="short-names-toggle">
-          <wa-switch
-            ?checked=${settingSignal<boolean>(
-              GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-            ).get()}
-            @change=${(e: Event) => {
-              if (!(e.target instanceof WaSwitch)) return;
-              const enabled = e.target.checked;
-              postStateSetting(
-                GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-                enabled,
-              );
-            }}
-          >
-            Use short model names
-            <span slot="hint" class="visually-hidden"
-              >Use unpinned names, such as gpt-5.5 instead of
-              gpt-5.5-2026-04-15.</span
-            >
-          </wa-switch>
-          <span class="short-names-description" aria-hidden="true">
-            Use unpinned names, such as gpt-5.5 instead of gpt-5.5-2026-04-15.
-          </span>
-        </div>
         <div class="settings-disclosure-list">
           ${groups.map((g) => this.renderProviderGroup(g))}
         </div>

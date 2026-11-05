@@ -1,12 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 import {
   RUN_OUTCOME,
-  type RunId,
+  RunIdSchema,
   type RunOutcome,
 } from '@texra-ai/harness/schemas';
 import { resolveWorkflowOutput } from '@cli/runtime/workflowOutput';
@@ -25,7 +25,7 @@ const resolveOutput = (...args: Parameters<typeof resolveWorkflowOutput>) =>
 
 const tempDirs = useTempDirs();
 
-const TEST_RUN_ID = 'workflow-output-test' as RunId;
+const TEST_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('ef0001');
 
 /** Writes a generated file under `<cwd>/run/` and returns its absolute path. */
 async function writeRunFile(

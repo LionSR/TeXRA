@@ -28,48 +28,38 @@ Deno.test('parseRepositoryClaim rejects malformed paths', () => {
   }
 });
 
-Deno.test(
-  'validateWorkflowIdentity returns the repository workflow path',
-  () => {
-    const path = validateWorkflowIdentity(claims, repository);
-    if (path !== '.github/workflows/texra.yml') {
-      throw new Error(`unexpected workflow path: ${path}`);
-    }
-  },
-);
+Deno.test('validateWorkflowIdentity returns the repository workflow path', () => {
+  const path = validateWorkflowIdentity(claims, repository);
+  if (path !== '.github/workflows/texra.yml') {
+    throw new Error(`unexpected workflow path: ${path}`);
+  }
+});
 
-Deno.test(
-  'validateWorkflowIdentity accepts pull-request refs for later content validation',
-  () => {
-    const path = validateWorkflowIdentity(
+Deno.test('validateWorkflowIdentity accepts pull-request refs for later content validation', () => {
+  const path = validateWorkflowIdentity(
+    {
+      ...claims,
+      workflowRef: 'owner/repo/.github/workflows/texra.yml@refs/pull/123/merge',
+    },
+    repository,
+  );
+  if (path !== '.github/workflows/texra.yml') {
+    throw new Error(`unexpected workflow path: ${path}`);
+  }
+});
+
+Deno.test('validateWorkflowIdentity rejects a workflow from another repository', () => {
+  throws(() =>
+    validateWorkflowIdentity(
       {
         ...claims,
         workflowRef:
-          'owner/repo/.github/workflows/texra.yml@refs/pull/123/merge',
+          'attacker/repo/.github/workflows/texra.yml@refs/heads/main',
       },
       repository,
-    );
-    if (path !== '.github/workflows/texra.yml') {
-      throw new Error(`unexpected workflow path: ${path}`);
-    }
-  },
-);
-
-Deno.test(
-  'validateWorkflowIdentity rejects a workflow from another repository',
-  () => {
-    throws(() =>
-      validateWorkflowIdentity(
-        {
-          ...claims,
-          workflowRef:
-            'attacker/repo/.github/workflows/texra.yml@refs/heads/main',
-        },
-        repository,
-      ),
-    );
-  },
-);
+    ),
+  );
+});
 
 Deno.test('validateWorkflowIdentity verifies immutable identities', () => {
   throws(() =>

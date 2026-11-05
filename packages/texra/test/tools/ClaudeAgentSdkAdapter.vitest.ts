@@ -9,6 +9,7 @@ import { claudeResultUsage } from '@texra/tools/agentCli/claudeAgentShared';
 
 describe('Claude Agent SDK adapter', () => {
   it('folds authoritative modelUsage across main and nested model calls', () => {
+    // cast: the SDK's ModelUsage type changes across versions; usage reads only these fields.
     const usage = claudeResultUsage({
       modelUsage: {
         main: {

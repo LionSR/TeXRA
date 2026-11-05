@@ -13,6 +13,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import {
   generateRunId,
   qualifyAggregateId,
+  RunIdSchema,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -96,6 +97,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
       }
       const committed = events.map(
         (event) =>
+          // cast: a committed draft is the event the log would return.
           ({
             ...event,
             seq: rows.length + 1,
@@ -107,6 +109,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
       rows.push(...committed);
       return Effect.succeed(committed);
     });
+  // cast: the fake log serves only what a follow-up reads.
   const log = {
     transact: <A, E>(
       work:
@@ -211,6 +214,7 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
         if (!resumed)
           return Effect.succeed({ failed: { kind: 'notResumable' as const } });
         live.add(runId);
+        // cast: the fake resume commits at the first ordinal.
         return Effect.as(activated(1 as CommitOrdinal), {
           started: true as const,
           delivered: true,
@@ -245,6 +249,7 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
     wake: () => {},
   });
   // The registry's records, but a generation `live` here as the case says.
+  // cast: Object.create keeps the registry's prototype, so it is one.
   const runs = Object.assign(Object.create(registry) as RunRegistry, {
     get: (runId: RunId) =>
       state === 'live' || live.has(runId)
@@ -255,6 +260,7 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
   const session = Context.make(Runs, runs).pipe(
     Context.add(SessionViewAccess, view),
     Context.add(SessionLog, log),
+    // cast: a follow-up only emits interactions.
     Context.add(Interactions, {
       emit: () => Effect.void,
     } as unknown as Interactions['Service']),
@@ -267,7 +273,7 @@ const user = (text: string) => ({ text, from: { kind: 'user' as const } });
 
 const childResult = (deliveryId: string) => ({
   text: 'child result',
-  from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+  from: { kind: 'run' as const, runId: RunIdSchema.make('c41dc41dc41d') },
   deliveryId,
 });
 

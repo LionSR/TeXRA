@@ -1,17 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
 import {
   MESSAGE_TYPES,
   qualifyAggregateId,
-  type RunId,
+  RunIdSchema,
   type TraceDocument,
+  TraceDocumentSchema,
 } from '@texra-ai/harness/schemas';
 import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
 import { LOG_LEVELS } from '@shared/schemas';
 import { injectStandaloneTrace } from '@texra/agent/export/standaloneTraceHtml';
 
-const RUN_ID = 'ab0001' as RunId;
+const RUN_ID = Schema.decodeSync(RunIdSchema)('ab0001');
 
 function trace(message = 'hello'): TraceDocument {
   return {
@@ -39,8 +40,10 @@ const TEMPLATE =
 
 function embeddedTrace(html: string): TraceDocument {
   const match = /window\.__TEXRA_TRACE__ = (.*?);<\/script>/s.exec(html);
-  expect(match).not.toBeNull();
-  return JSON.parse(match![1]) as TraceDocument;
+  assert.isNotNull(match);
+  return Schema.decodeUnknownSync(Schema.fromJsonString(TraceDocumentSchema))(
+    match[1],
+  );
 }
 
 describe('injectStandaloneTrace', () => {

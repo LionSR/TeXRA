@@ -48,7 +48,8 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
+  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | StreamChunkEvent;
 ```
 
 ## AgentNotFound
@@ -391,17 +392,20 @@ interface ITool<E = Error, R = never> {
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never>;
   /**
-   * A description rendered from the other tools the run declares, in place
-   * of `definition.description`: rendered at the step that freezes the
-   * run's system text and kept as that step recorded it until a compaction
-   * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
-   * its text, and the cached prefix through it, as it was. The tool that has
-   * one is the script tool, which reaches nothing but the run's other tools
-   * and its own agent: a child is offered it, and its script-only functions,
-   * whatever its parent was.
+   * A description rendered from the other tools the run declares and the
+   * modules its scripts may import, in place of `definition.description`:
+   * rendered at the step that freezes the run's system text and kept as
+   * that step recorded it until a compaction opens the freeze again
+   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * prefix through it, as it was. The tool that has one is the script tool,
+   * which reaches nothing but the run's other tools and its own agent: a
+   * child is offered it, and its script-only functions, whatever its parent
+   * was.
    */
   readonly describe?: (
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    /** The specifiers of the modules the step's scripts may import. */
+    modules: readonly string[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
@@ -535,17 +539,11 @@ interface OpenOptions {
    * Set when a person is present to answer the runs' requests from the
    * view (`request.decide`), as in an editor window. Absent, nobody can
    * answer until a host with an `approve` handler attaches
-   * ({@link Session.attach}), so every request is denied.
-   *
-   * `interruptedTasks` is what the session does at open with the root
-   * runs a closed or crashed process left unfinished, the one place that
-   * decides it. Both values mark what blocks each one (an agent, a plugin:
-   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
-   * leaves them for the host to list and resume; `resume` continues them,
-   * and a blocked one once it is back. Absent, the session recovers
-   * nothing at open.
+   * ({@link Session.attach}), so every request is denied. A session
+   * resumes nothing at open either way: a run a closed or crashed process
+   * left unfinished is listed as interrupted and continues on a resume.
    */
-  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
+  readonly host?: Record<string, never>;
 }
 ```
 
@@ -852,8 +850,6 @@ interface RunRecords {
     readonly string[],
     DatabaseReadFailed
   >;
-  /** A model call's failure stopped its turn, and nothing retired it. */
-  readonly readModelFailed: () => Effect.Effect<boolean, DatabaseReadFailed>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
@@ -985,7 +981,9 @@ failed, or it is open over the other store.
 
 ```ts
 type SessionOpenError =
-  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
+  | DatabaseOpenFailed
+  | DatabaseReadFailed
+  | SessionOptionsConflict;
 ```
 
 ## SessionOptionsConflict

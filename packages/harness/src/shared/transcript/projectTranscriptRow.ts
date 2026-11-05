@@ -18,10 +18,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { normalizeToolUse } from '@shared/toolUse';
-import {
-  hasIncompleteEmbeddedSubagentFollowup,
-  summarizeSubagentFollowup,
-} from '@shared/subagentFollowup';
+import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -237,12 +234,10 @@ export function logPayloadRow(
 ): TranscriptRow | undefined {
   switch (payload.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE: {
-      const measured = transcriptText(text);
       return {
         ...base,
         kind: 'user',
-        text: measured,
-        summary: transcriptText(summarizeSubagentFollowup(measured.full)),
+        text: transcriptText(text),
         ...(payload.data?.scriptSummary
           ? { scriptSummary: payload.data.scriptSummary }
           : {}),

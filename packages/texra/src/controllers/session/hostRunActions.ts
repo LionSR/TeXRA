@@ -443,9 +443,8 @@ export const createHostRunActions = Effect.fn(
     /**
      * Resume a settled run, of either category, on the session that holds
      * it: it continues the run's own rows (a child's, with the parent
-     * that owns it). A run that does not take it refuses the request (its
-     * reason already told); one that waits for what blocks it is asked
-     * for, and its own line says what it waits for; one whose launch is
+     * that owns it). A run that does not take it refuses the request with
+     * its reason, a missing agent or plugin included; one whose launch is
      * refused (a model this build does not know) shows the notice the
      * failure carries, in this window. A workflow settles with its whole
      * run, whose output opens then.
@@ -459,7 +458,7 @@ export const createHostRunActions = Effect.fn(
             : Effect.as(presentRunFailure(ports.present, failure), null),
         ),
       );
-      if (run === null || run === 'waiting') return;
+      if (run === null) return;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
       const result = yield* run.result.pipe(

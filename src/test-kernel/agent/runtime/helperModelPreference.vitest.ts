@@ -1,12 +1,12 @@
 import { layer } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
+import { AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { applyHelperModelPreference } from '@agent/runtime/helperModelName';
 import { installedHost } from '@test/support/setupPlatform';
 import { withEnv } from '@test/support/testEnv';
 import { SessionGraph } from '@test/support/testKernel';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'applyHelperModelPreference',
@@ -19,10 +19,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       () =>
         Effect.gen(function* () {
           const selected = 'anthropic/claude-sonnet-4-6';
-          const config = {
+          const config = Schema.decodeUnknownSync(AgentConfigSchema)({
             agent: 'latexFixer',
             model: selected,
-          } as unknown as AgentConfig;
+          });
 
           const result = yield* applyHelperModelPreference(
             config,

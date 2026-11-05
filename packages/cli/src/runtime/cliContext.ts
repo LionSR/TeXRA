@@ -240,7 +240,8 @@ function readCliPackageManifest(): CliPackageManifest | undefined {
 }
 
 let cachedManifest:
-  { readonly value: CliPackageManifest | undefined } | undefined;
+  | { readonly value: CliPackageManifest | undefined }
+  | undefined;
 
 /** The one cached read of the CLI's `package.json`; `readCliVersion` and
  *  `readCliBugsUrl` both derive from it. */

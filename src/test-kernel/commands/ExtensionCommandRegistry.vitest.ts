@@ -28,7 +28,8 @@ function dispatch(
   );
   return program === false
     ? Promise.resolve(false)
-    : Effect.runPromise(program as Effect.Effect<unknown, Error>);
+    : // cast: every extension command handler fails with an Error.
+      Effect.runPromise(program as Effect.Effect<unknown, Error>);
 }
 
 describe('extension command surface', () => {

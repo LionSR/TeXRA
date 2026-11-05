@@ -145,9 +145,18 @@ describe('executeCommand', () => {
     PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 
-  it.live(
-    'ends a shell command with its host when the host is SIGKILLed',
-    () =>
+  // Each command writes its shell's pid, the group id, once it is running.
+  // The backgrounded job writes it a second later, when the command's own
+  // subshell has long returned and only the job still holds the output.
+  it.live.each([
+    ['a foreground command', 'echo $$ > "$PID_FILE"; sleep 30 && touch marker'],
+    [
+      'a job the command backgrounded',
+      '(sleep 1; echo $$ > "$PID_FILE"; sleep 30 && touch marker) &',
+    ],
+  ] as const)(
+    'ends %s with its host when the host is SIGKILLed',
+    ([, command]) =>
       Effect.gen(function* () {
         if (process.platform === 'win32') return;
 
@@ -165,7 +174,7 @@ describe('executeCommand', () => {
             "import { nodePlatformServices } from '@platform/defaults/nodePlatform';",
             "import { executeCommand } from '@utils/system/execUtils';",
             'Effect.runFork(',
-            '  executeCommand(\'echo $$ > "$PID_FILE"; sleep 30 && touch marker\', {',
+            '  executeCommand(process.env.COMMAND!, {',
             '    cwd: process.cwd(),',
             '    settings: undefined,',
             '    timeout: 60_000,',
@@ -189,7 +198,7 @@ describe('executeCommand', () => {
         );
         const host = spawn(process.execPath, [join(dir, 'host.cjs')], {
           cwd: dir,
-          env: { ...process.env, PID_FILE: pidFile },
+          env: { ...process.env, PID_FILE: pidFile, COMMAND: command },
           stdio: 'ignore',
         });
         // The shell leads its own process group, so its pid is the group id.

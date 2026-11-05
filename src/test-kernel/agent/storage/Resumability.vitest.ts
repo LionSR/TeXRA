@@ -3,6 +3,7 @@ import { Effect, Schema, Context } from 'effect';
 import { expect } from 'vitest';
 
 import {
+  RunIdSchema,
   AgentConfigSchema,
   emptyRunEndOutput,
   qualifyAggregateId,
@@ -61,7 +62,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       it.effect('keeps a failed run resumable while its rows stand', () =>
         Effect.gen(function* () {
           const session = yield* processSession;
-          const runId = 'ac0000' as RunId;
+          const runId = Schema.decodeUnknownSync(RunIdSchema)('ac0000');
           yield* start(session, runId);
           yield* fail(session, runId);
           yield* open(session, runId);
@@ -79,7 +80,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* processSession;
-            const runId = 'ac0001' as RunId;
+            const runId = Schema.decodeUnknownSync(RunIdSchema)('ac0001');
             yield* start(session, runId);
             yield* seedRows(Context.get(session, SessionLog))([
               {

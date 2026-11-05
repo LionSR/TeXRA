@@ -7,11 +7,12 @@
  *   1 — setup             credential present, first run not yet completed
  *   2 — done              a run has completed (or the user opted out)
  *
- * All inputs are user-scoped (global state / secrets), never
- * workspace-scoped: onboarding is a fact about the user, and a fresh
- * workspace must never demote a veteran back to State 0/1. Each host
- * (extension, CLI, desktop) computes `hasCredential` with its own credential
- * sources and reads and writes the flags below through its `AppState` store.
+ * The flags are user-scoped (global state), so a fresh workspace never
+ * demotes a veteran back to State 0/1: `firstRunDone` wins. The credential
+ * is the shown project's: each host (extension, CLI, desktop) computes
+ * `hasCredential` under that project's `.env` over the process environment,
+ * the key a run of that project would use, and reads and writes the flags
+ * below through its `AppState` store.
  *
  * The derivation is the planner below; the in-session loop around it — probe,
  * plan, publish, clear a stale skip, serialized against itself — is
@@ -193,7 +194,7 @@ interface OnboardingFunnelHost {
    * blank a user who has keys back down to the first-run welcome card.
    */
   readonly hasCredential: () => Effect.Effect<boolean, Error>;
-  /** The user-scoped flag store; onboarding is a fact about the user. */
+  /** The user-scoped flag store: the flags half of onboarding is a fact about the user; the credential is the shown project's. */
   readonly flags: StateStore;
   /**
    * Paint the derived state and take the arms this host answers. The

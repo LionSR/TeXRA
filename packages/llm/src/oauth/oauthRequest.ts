@@ -47,7 +47,9 @@ export class OAuthUnexpectedResponse extends Schema.TaggedError<OAuthUnexpectedR
 
 /** Every failure one OAuth request can raise. */
 export type OAuthRequestError =
-  OAuthNetworkError | OAuthHttpError | OAuthUnexpectedResponse;
+  | OAuthNetworkError
+  | OAuthHttpError
+  | OAuthUnexpectedResponse;
 
 /** 4xx grant rejections are the session's end; everything else may pass. */
 export function oauthTokenErrorKind(

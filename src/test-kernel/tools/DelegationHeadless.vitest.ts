@@ -124,7 +124,10 @@ const rowOf = (
   const row = storedRows(storage).findLast(
     (r: StoredRow) => r.run === run && r.type === type,
   );
-  return row && (JSON.parse(row.data) as Record<string, unknown>);
+  return (
+    row &&
+    Schema.decodeUnknownSync(Schema.fromJsonString(Schema.JsonObject))(row.data)
+  );
 };
 
 /**

@@ -63,9 +63,6 @@ export type TexraStateKey = (typeof TexraStateKey)[keyof typeof TexraStateKey];
 /** Config key for the usage-telemetry opt-in. */
 export const TELEMETRY_ENABLED_KEY = 'telemetry.enabled';
 
-/** Config key for what a window does with interrupted tasks at open. */
-export const RESUME_ON_OPEN_KEY = 'resumeOnOpen';
-
 /** Standalone preamble used when extracting a TikZ figure for compilation. */
 const DEFAULT_TIKZ_TEMPLATE =
   '\\documentclass[tikz,border=10pt]{standalone}\n' +
@@ -134,19 +131,6 @@ const TEXRA_CONFIG_ROWS: Record<
     schema: CliOutputFormatSchema,
     description:
       'How `texra` prints results: human text, one JSON object, or NDJSON records. `--output-format` and `TEXRA_OUTPUT_FORMAT` override it.',
-  },
-  // Global: how one person wants their windows to open.
-  [RESUME_ON_OPEN_KEY]: {
-    schema: Schema.Literals(['ask', 'auto']).pipe(
-      Schema.withDecodingDefault(Effect.succeed('ask' as const)),
-    ),
-    configTarget: 'global',
-    title: 'Interrupted tasks',
-    description:
-      'On opening, when tasks stopped before they finished: list them so you can choose, or continue them all.',
-    category: 'agents',
-    enumLabels: ['Ask', 'Resume automatically'],
-    surfaces: { settingsView: 'approval', cliConfig: true },
   },
   'agentOutputs.autoOpenFinal': {
     schema: Schema.Boolean.pipe(

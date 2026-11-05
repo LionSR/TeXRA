@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
 import {
   qualifyAggregateId,
-  type RunId,
+  RunIdSchema,
   type TraceDocument,
 } from '@texra-ai/harness/schemas';
 import { DisplaySessionEventSchema } from '@texra-ai/harness/transcript';
@@ -15,7 +15,7 @@ import { traceFrame } from '../../../packages/trace-viewer/src/traceFrames';
 // the real replay pipeline (`@ui/progress`'s dispatcher + slices),
 // so a plain relative import is the simplest way to reach it.
 
-const RUN_ID = 'abc123' as RunId;
+const RUN_ID = Schema.decodeSync(RunIdSchema)('abc123');
 const AGGREGATE = qualifyAggregateId('run', RUN_ID);
 
 /** The view the trace's rows build, with the run's transcript
@@ -29,14 +29,16 @@ function foldTrace(trace: TraceDocument) {
     cursor: 0,
     aggregates: [{ id: AGGREGATE, fromSeq: 0 }],
   });
+  const { existence } = frame;
+  assert.exists(existence);
   const view = makeSessionViewUpdater('trace').apply([
     { _tag: 'subscriptions', set: [{ id: AGGREGATE, fromSeq: 0 }] },
     ...frame.events,
     {
       _tag: 'local',
-      local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
+      local: { self: [], dead: [], unreadable: [] },
     },
-    { _tag: 'replay.complete', existence: frame.existence! },
+    { _tag: 'replay.complete', existence },
   ]);
   return view.runs.get(trace.runId);
 }

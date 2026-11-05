@@ -40,7 +40,10 @@ import { deriveRunId } from '@utils/core/idHash';
 
 /** What a read of a run's records takes from its session. */
 type RecordServices =
-  SessionLog | SessionViewAccess | RunHistory | SessionRoots;
+  | SessionLog
+  | SessionViewAccess
+  | RunHistory
+  | SessionRoots;
 
 /** A read of a run's records, over the session services `R`. */
 type RecordRead<A, R = SessionLog> = Effect.Effect<A, DatabaseReadFailed, R>;
@@ -340,9 +343,6 @@ export function getRunRecords(runId: RunId) {
     /** The skills the run's latest `tools.offered` row listed. */
     readSkills: (): RecordRead<readonly string[], RecordServices> =>
       Effect.map(folded, (state) => state?.offeredWith.skills ?? []),
-    /** A model failure stopped the run's turn (its folded `lastError`). */
-    readModelFailed: (): RecordRead<boolean, RecordServices> =>
-      Effect.map(folded, (state) => state?.lastError != null),
     readResultMeta: (): RecordRead<ResultMeta | null> =>
       read((held) => held?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the

@@ -66,8 +66,9 @@ Each item is independent and small enough for one PR.
    with one click; settings-backed, one list per project. Its home is the
    same open question as 1.
 3. **Command palette reach.** The palette
-   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has Show Terminal
-   and Show Files, but no Open Browser or switch-project commands.
+   (`packages/desktop/src/shared/desktopCommandSurface.ts`) has Show
+   Terminal, Show Files and Show Browser (done); a switch-project command is
+   still missing.
 4. **Settings search.** Each settings catalog has its own search field
    (`SettingsCatalog.ts`); there is still no filter across the tabs.
    The example once given for descriptions that expose internals,

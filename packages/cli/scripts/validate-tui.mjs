@@ -210,7 +210,7 @@ const SCENARIOS = [
     // descendant of the selection) and the selection stays on main: no
     // child focus, so no "Esc parent".
     bootExpect: 'Run command?',
-    expect: ['Run command?', '$ npm run compile:safe', 'y approve'],
+    expect: ['Run command?', '$ npm run typecheck', 'y approve'],
     unexpect: ['Esc parent'],
   },
   {
@@ -1455,7 +1455,7 @@ const SCENARIOS = [
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
-      '$ npm run compile:safe',
+      '$ npm run typecheck',
       'Directory:',
       'y approve',
       'a approve commands for session',
@@ -1485,7 +1485,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Run command?',
-      '$ npm run compile:safe',
+      '$ npm run typecheck',
       'Directory:',
       'y approve',
       'n reject',
@@ -2362,7 +2362,7 @@ const SCENARIOS = [
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
-      '$ npm run compile:safe',
+      '$ npm run typecheck',
       'y approve',
     ],
     unexpect: [

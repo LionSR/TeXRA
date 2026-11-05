@@ -172,7 +172,8 @@ const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
   function* (
     runId: RunId,
     files:
-      { readonly op: 'copy'; readonly to: string } | { readonly op: 'remove' },
+      | { readonly op: 'copy'; readonly to: string }
+      | { readonly op: 'remove' },
   ) {
     const storageFs = yield* StorageFs;
     const runDir = path.posix.join(WORKSPACE_STORAGE_LAYOUT.runs, runId);

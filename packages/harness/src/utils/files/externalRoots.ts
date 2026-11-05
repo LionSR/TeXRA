@@ -1,6 +1,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+// Third-party imports
+import { Predicate } from 'effect';
+
 import { isPathWithin } from '@utils/core/pathCore';
 import { absentReason } from '@utils/files/fsEntryExists';
 
@@ -133,10 +136,14 @@ function canonicalizeFollowingLinks(p: string, linkHops: number): string {
 function readLinkOrUndefined(entry: string): string | undefined {
   try {
     return fs.readlinkSync(entry);
-  } catch {
+  } catch (err) {
     // EINVAL (not a link), or ENOENT or ENOTDIR (nothing there): not a
-    // dangling link.
-    return undefined;
+    // dangling link. Anything else (EACCES, ELOOP, ...) propagates, so a
+    // path that cannot be verified fails closed.
+    const notALink =
+      Predicate.hasProperty(err, 'code') && err.code === 'EINVAL';
+    if (notALink || absentReason(err)) return undefined;
+    throw err;
   }
 }
 

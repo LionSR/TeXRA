@@ -27,7 +27,6 @@ import {
 
 import {
   Rejected,
-  ResumeRefused,
   RunFailure,
   ToolsRefused,
   type ITool,
@@ -41,7 +40,6 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  describeFollowUpFailure,
   replayTrace,
 } from '@texra-ai/harness/host';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
@@ -612,18 +610,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
       ).pipe(
         Effect.flatMap((resumed) =>
-          // Waiting for what blocks it (its agent, a plugin): the service
-          // clears the mark once that is back, and under `resumeOnOpen:
-          // auto` continues it.
-          'kind' in resumed
-            ? Effect.fail(
-                new ResumeRefused({
-                  runId,
-                  reason: resumed,
-                  message: describeFollowUpFailure('blocked'),
-                }),
-              )
-            : runOf(resumed, resumed.runId === runId ? undefined : runId),
+          runOf(resumed, resumed.runId === runId ? undefined : runId),
         ),
       );
     },

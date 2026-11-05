@@ -444,14 +444,13 @@ Inside the chat, `/fork` continues a new task holding the conversation
 A fork holds the conversation as it stood at the end of its last turn and
 leaves the original task unchanged.
 
-When `texra chat` opens without a task to resume, it looks for tasks a
-closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
-"auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
-default, `ask`, lists them above the input, where `/resume all` continues
-them and anything else you send hides the list. A task whose agent is missing, or
-comes from a plugin that is off or not trusted, waits until that is fixed;
-under `auto` it then continues by itself, under `ask` it is listed again.
-`texra run` never resumes anything on its own.
+When `texra chat` opens without a task to resume, it lists the tasks a
+closed or crashed TeXRA stopped mid-way above the input; nothing resumes on
+its own. `/resume all` continues them, `/resume` picks one, and anything
+else you send hides the list. A task whose agent is missing, or comes from
+a plugin that is off or not trusted, stays listed with what it needs until
+that is fixed and it is resumed again. `texra run` never resumes anything
+either.
 
 A run another TeXRA process still holds is refused, and the message names
 that process's pid and host. A holder that cannot be reached (it ran on another

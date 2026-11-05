@@ -147,10 +147,10 @@ row and `tool.intent` names the response. A nested call has no response,
 so:
 
 - **`script.call`** (`shared/schemas/runHistoryEvent.ts`): `{ scriptCallId,
-seq, callId, toolName, input, replay, logId, stageId, phase }`, committed
+  seq, callId, toolName, input, replay, logId, stageId, phase }`, committed
   with the call's first `tool.intent`. `callId` is `<scriptCallId>/<seq>`.
 - **`tool.intent`**'s origin is `{ kind: 'response', responseId } |
-{ kind: 'script', scriptCallId }`.
+  { kind: 'script', scriptCallId }`.
 - `tool.result`, `request.opened` and `request.decided` are unchanged.
 
 The fold pairs only the script's own `tool.result` with the model's call, so
