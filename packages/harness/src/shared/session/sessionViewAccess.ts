@@ -4,11 +4,7 @@
  * (`sessionInputs.ts`).
  */
 
-import type {
-  ResumeBlocked,
-  RunId,
-  TranscriptSubscription,
-} from '@shared/schemas';
+import type { RunId, TranscriptSubscription } from '@shared/schemas';
 import type { Context, Effect, Stream, SubscriptionRef } from 'effect';
 import type { SessionInputs } from './sessionInputs';
 import type { RunView, SessionView } from './sessionView';
@@ -39,12 +35,5 @@ export interface SessionViewAccessShape {
   subscribe(
     port: string,
     set: readonly TranscriptSubscription[],
-  ): Effect.Effect<void>;
-  /** Record what a resume of a run waits for in this process, or null when
-   *  nothing blocks it any more: a fact about this process's catalog, never
-   *  a row. */
-  markResumeBlocked(
-    runId: RunId,
-    blocked: ResumeBlocked | null,
   ): Effect.Effect<void>;
 }

@@ -21,7 +21,6 @@ import {
   type Session,
 } from '@texra-ai/harness';
 import {
-  describeFollowUpFailure,
   launchNoticeOf,
   normalizeProviderError,
   presentFollowUpResult,
@@ -599,15 +598,6 @@ export function createChatSessionController(
           );
           yield* Effect.forkDetach(
             resumeRun(runSession, id).pipe(
-              Effect.flatMap((resumed) =>
-                resumed === 'waiting'
-                  ? Effect.sync(() =>
-                      appendLocalErrorTranscript(
-                        describeFollowUpFailure('blocked'),
-                      ),
-                    )
-                  : Effect.void,
-              ),
               Effect.catch((refused) =>
                 Effect.sync(() =>
                   showFailure(
@@ -663,12 +653,8 @@ export function createChatSessionController(
                   Effect.succeed(refusal),
                 ),
               );
-              if (run === 'waiting' || isRequestRefusal(run)) {
-                if (run === 'waiting')
-                  appendLocalErrorTranscript(
-                    describeFollowUpFailure('blocked'),
-                  );
-                else appendLocalRequestRefusal(run);
+              if (isRequestRefusal(run)) {
+                appendLocalRequestRefusal(run);
                 session.settleExitCode(claim, CliExitCode.Usage);
                 return;
               }

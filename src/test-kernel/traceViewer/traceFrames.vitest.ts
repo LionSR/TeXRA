@@ -36,7 +36,7 @@ function foldTrace(trace: TraceDocument) {
     ...frame.events,
     {
       _tag: 'local',
-      local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
+      local: { self: [], dead: [], unreadable: [] },
     },
     { _tag: 'replay.complete', existence },
   ]);

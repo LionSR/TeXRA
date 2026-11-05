@@ -12,7 +12,7 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
-import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
+import { interruptedTasks } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
@@ -98,8 +98,6 @@ export abstract class BaseRunContent extends LitElement {
    */
   protected renderEndedLine(run: RunView): TemplateResult {
     const live = isLiveRun(run);
-    // What a blocked resume waits for has its fix in Settings › Plugins.
-    const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     let explanation = `${runStatusLabel(run.statusKey)}.`;
@@ -123,24 +121,6 @@ export abstract class BaseRunContent extends LitElement {
               size="s"
               @click=${request('resume')}
               >${waIcon('forward-step', { slot: 'start' })}Resume</wa-button
-            >`
-          : nothing
-      }
-      ${
-        fix
-          ? html`<wa-button
-              id="resumeBlockerFixBtn"
-              appearance="outlined"
-              variant="neutral"
-              size="s"
-              @click=${() =>
-                this.dispatchEvent(
-                  SessionUiEvents.host({
-                    kind: 'openSettings',
-                    target: 'plugins',
-                  }),
-                )}
-              >${fix}</wa-button
             >`
           : nothing
       }

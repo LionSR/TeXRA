@@ -453,7 +453,6 @@ describe('Sessions owner', () => {
             self: [OTHER],
             dead: [],
             unreadable: [],
-            resumeBlocked: [],
           }),
         );
         const stop = vi.fn(() => ({

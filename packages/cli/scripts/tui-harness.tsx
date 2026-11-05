@@ -1878,21 +1878,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     local({
       self: [OWNER],
       dead: [OTHER_OWNER],
-      // What a resume of the interrupted root waits for, as the session's
-      // follower marks it at open.
-      resumeBlocked:
-        process.env.HARNESS_RESUME_BLOCKED === '1'
-          ? [
-              {
-                runId: interrupted,
-                reason: {
-                  kind: 'blocked',
-                  blocker: 'pluginOff',
-                  name: 'zotero',
-                },
-              },
-            ]
-          : [],
     }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));

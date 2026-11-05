@@ -12,7 +12,6 @@ import { hiddenRowsText } from '@cli/tui/overflowText';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import {
   INTERRUPTED_NOTICE,
-  resumeBlockerLine,
   type InterruptedTask,
 } from '@ui/copy/interruptedTasks';
 import { formatRelativeTime } from '@ui/copy/format';
@@ -37,9 +36,6 @@ function taskLine(task: InterruptedTask): string {
       ? undefined
       : `stopped ${formatRelativeTime(task.stoppedAt)}`,
     task.agents ?? undefined,
-    task.blocked
-      ? `${resumeBlockerLine(task.blocked)}${task.blocked.blocker === 'agentMissing' ? '' : ': /plugins'}`
-      : undefined,
   ]
     .filter(Boolean)
     .join(' · ');

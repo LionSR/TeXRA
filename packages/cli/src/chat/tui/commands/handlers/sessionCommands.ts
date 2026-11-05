@@ -3,7 +3,6 @@ import { Effect, Result, Stream } from 'effect';
 
 import { isLiveRun, planOf, runBypasses } from '@texra-ai/harness/schemas';
 import { isRequestRefusal, type Session } from '@texra-ai/harness';
-import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -178,11 +177,6 @@ export function resumeInterruptedTasks(
             ),
           );
         return resumeRun(runSession, task.runId).pipe(
-          Effect.flatMap((resumed) =>
-            resumed === 'waiting'
-              ? notResumed(describeFollowUpFailure('blocked'))
-              : Effect.void,
-          ),
           Effect.catch((refused) =>
             notResumed(
               isRequestRefusal(refused)

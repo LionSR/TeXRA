@@ -35,11 +35,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import {
-  RunHistoryRefused,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+import { RunHistoryRefused, SessionLog } from '@shared/session/runHistory';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -218,12 +214,11 @@ export const decideResume = Effect.fn('decideResume')(function* (
   // Nothing to continue from, or rows this build cannot open.
   const rejected = yield* runRejection(runId);
   if (rejected !== null) return { failed: rejected };
-  // An agent or plugin this process cannot run now leaves the run
-  // interrupted with the reason, never failed, for the session's follower to
-  // resume once it is back; nothing is launched. Another process's run
-  // is refused as such above, whatever this process lacks.
+  // An agent or plugin this process cannot run now refuses the resume with
+  // the reason; the run stays interrupted, never failed, and nothing is
+  // launched. Another process's run is refused as such above, whatever this
+  // process lacks.
   const blocker = yield* resumeBlocker(config);
-  yield* (yield* SessionViewAccess).markResumeBlocked(runId, blocker);
   if (blocker !== null) return { failed: blocker };
   // The launched run is admitted once its `run.activate` commits.
   return yield* resumeQueuedToolUse(runId, config, options, activated);

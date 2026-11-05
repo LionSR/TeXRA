@@ -6,6 +6,16 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A blocked resume is a refusal, not a state.** Resuming a task whose
+  agent is missing, or whose plugin is off or not trusted, is refused with
+  that reason at the click, like any other refusal; nothing about it shows
+  before a resume is asked for. Gone: the "needs the zotero plugin, which
+  is off" line and its "Turn on" / "Review" button on the task's ended line
+  and in the interrupted-tasks notice, and the same words in the model's
+  `/executions` text. SDK: `RunView.resumeBlocked`,
+  `LocalRuntimeState.resumeBlocked`, `SessionViewAccess.markResumeBlocked`
+  and the `resumeBlocked` run notice are gone; the service's `task.resume`
+  answers the task only (protocol bump).
 - **Nothing resumes on its own.** The `resumeOnOpen` setting (Settings ›
   General › Interrupted tasks) and the notice's "Always resume" link are
   gone: a window or `texra chat` that opens on tasks a closed or crashed

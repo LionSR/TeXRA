@@ -490,7 +490,7 @@ export const createHostRunActions = Effect.fn(
             : Effect.as(presentRunFailure(ports.present, failure), null),
         ),
       );
-      if (run === null || run === 'waiting') return;
+      if (run === null) return;
       const config = yield* readConfig(run.runId);
       if (config === undefined || !isTaskConfig(config)) return;
       const result = yield* run.result.pipe(
