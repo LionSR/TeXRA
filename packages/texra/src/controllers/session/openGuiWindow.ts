@@ -712,11 +712,9 @@ function answerShared(
       case 'toolEdit':
         yield* parts.toolEditApprovals.handleAction(request);
         return done;
-      case 'fileAction': {
-        const config = yield* parts.runActions.readConfig(request.runId);
-        yield* parts.workflowFileActions.handle(request, config);
+      case 'fileAction':
+        yield* parts.workflowFileActions.handle(request);
         return done;
-      }
       case 'exportTranscript':
         if (!parts.session.view.current().runs.has(request.runId))
           return yield* new Unavailable({

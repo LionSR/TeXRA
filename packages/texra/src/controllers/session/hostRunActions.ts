@@ -190,9 +190,6 @@ export interface HostRunActions {
     | RunConfigUnreadable
     | RunFailure
   >;
-  readConfig(
-    runId: RunId,
-  ): Effect.Effect<AgentConfig | undefined, RunConfigUnreadable>;
   /** The toolbar's latexdiff; `undefined` (a no-op) with no workflow config. */
   workflowDiffRequest(
     runId: RunId,
@@ -533,7 +530,6 @@ export const createHostRunActions = Effect.fn(
       );
       if (config !== null) yield* startAgentRequest(config);
     }),
-    readConfig,
     workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
       function* (runId) {
         yield* requireAction(runId, 'files');

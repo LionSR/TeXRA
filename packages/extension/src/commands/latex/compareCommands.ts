@@ -9,7 +9,6 @@ import * as vscode from 'vscode';
 import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage, type FileLocation } from '@texra-ai/harness/schemas';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
-import { quickPick } from '@frontend/ui/dialogs';
 import { executeVscodeCommand } from '@frontend/system/commandUtils';
 import { refreshDiffOnLayoutChange } from '@frontend/ui/diffView';
 import {
@@ -19,46 +18,34 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import {
   acceptEditedFileReplace,
-  commitAcceptedFile,
-  getAcceptedFileTarget,
-  siblingLocation,
   type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
-import { workflowOutputCopyStem } from '@texra/utils/files/outputFileUtils';
-import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 
 const CHANNEL = 'CompareCommands';
 
 /**
- * The host-neutral accept sequence, or the quick pick in front of it, faulted.
- * Both sides answer their ordinary outcomes as values — a cancelled pick is
- * `undefined`, a refused replace is `false` — so reaching here is a fault.
- *
- * `message` names the step and ends with the rejection's own text, because
- * the reporting tail shows `toErrorMessage` of this failure and the reason
- * the call gave is the part the user can act on.
+ * The host-neutral replace sequence, faulted. It answers a refused replace as
+ * `false`, so reaching here is a fault. `message` ends with the rejection's
+ * own text, because the reporting tail shows `toErrorMessage` of this failure
+ * and the reason the call gave is the part the user can act on.
  */
 class AcceptEditedFailed extends Schema.TaggedError<AcceptEditedFailed>()(
   'AcceptEditedFailed',
   {
-    step: Schema.Literals(['pick-target', 'replace', 'commit']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
 ) {}
 
-/** Word one step's rejection as the failure the reporting tail shows. */
-const acceptEditedFailure =
-  (step: AcceptEditedFailed['step'], summary: string) => (cause: unknown) =>
-    new AcceptEditedFailed({
-      step,
-      message: `${summary}: ${toErrorMessage(cause)}`,
-      cause,
-    });
+const replaceFailed = (cause: unknown) =>
+  new AcceptEditedFailed({
+    message: `The edited file could not replace the original: ${toErrorMessage(cause)}`,
+    cause,
+  });
 
 /**
  * VS Code bindings for the host-neutral accept-edited sequence that the
- * filesystem cannot answer, shared by the replace and save-as-copy paths.
+ * filesystem cannot answer.
  * The reads and writes themselves are the sequence's own, against the
  * `FileSystem` the host entry's runtime carries.
  */
@@ -151,133 +138,24 @@ export const handleCompare = Effect.fn('compareCommands.handleCompare')(
   ),
 );
 
-type ReplaceOrCopyTarget = {
-  targetLocation: FileLocation;
-  targetFileName: string;
-};
-
-/** Build the legacy `<base>_<agent>_r<round>_<model>` copy target beside the
- *  base file, preserving the base's location kind. */
-function buildCopyTarget(
-  baseLocation: FileLocation,
-  copyMeta: AcceptCopyMeta,
-): ReplaceOrCopyTarget {
-  const parsed = path.parse(baseLocation.absolutePath);
-  const stem = workflowOutputCopyStem({
-    base: parsed.name,
-    agent: copyMeta.agent,
-    model: copyMeta.model,
-    round: copyMeta.round,
-  });
-  const targetFileName = `${stem}${parsed.ext}`;
-  return {
-    targetLocation: siblingLocation(baseLocation, targetFileName),
-    targetFileName,
-  };
-}
-
-/** Offer a quick-pick between replacing the original and saving a postfixed
- *  copy, used when run metadata is available. Returns undefined when the user
- *  cancels. */
-function pickReplaceOrCopyTarget(
-  baseLocation: FileLocation,
-  editedPath: string,
-  copyMeta: AcceptCopyMeta,
-): Effect.Effect<ReplaceOrCopyTarget | undefined, AcceptEditedFailed> {
-  const replaceTarget = getAcceptedFileTarget(baseLocation, editedPath);
-  const copyTarget = buildCopyTarget(baseLocation, copyMeta);
-  type AcceptItem = vscode.QuickPickItem & {
-    target: ReplaceOrCopyTarget;
-  };
-  const acceptItems: AcceptItem[] = [
-    {
-      label: '$(replace) Replace original',
-      description: replaceTarget.targetFileName,
-      target: replaceTarget,
-    },
-    {
-      label: '$(files) Save as copy',
-      description: copyTarget.targetFileName,
-      target: copyTarget,
-    },
-  ];
-
-  return quickPick(acceptItems, {
-    title: 'Accept edits',
-    placeHolder: `Accept '${path.basename(editedPath)}' into the workspace`,
-    ignoreFocusOut: true,
-    prompt: `Edited file: ${path.basename(editedPath)}`,
-  }).pipe(
-    Effect.map((pick) => pick?.target),
-    Effect.mapError(
-      acceptEditedFailure(
-        'pick-target',
-        'The accept target could not be chosen',
-      ),
-    ),
-  );
-}
-
 export const handleAcceptEdited = Effect.fn(
   'compareCommands.handleAcceptEdited',
 )(
-  function* (
-    baseLocation: FileLocation,
-    editedLocation: FileLocation,
-    copyMeta?: AcceptCopyMeta,
-  ) {
+  function* (baseLocation: FileLocation, editedLocation: FileLocation) {
     if (!(yield* validateFilesExist(baseLocation, editedLocation))) {
       return false;
     }
-    const fs = yield* FileSystem.FileSystem;
-
-    // No run metadata: single-confirm replace flow shared with the desktop host.
-    if (!copyMeta) {
-      const replaceFailed = acceptEditedFailure(
-        'replace',
-        'The edited file could not replace the original',
-      );
-      return yield* acceptEditedFileReplace(baseLocation, editedLocation, {
-        ...acceptPorts,
-        confirm: (message) =>
-          vscodeUi
-            .confirm(message, { confirmLabel: 'Replace file' })
-            .pipe(Effect.mapError(replaceFailed)),
-      }).pipe(
-        Effect.catchTag('PlatformError', (error) =>
-          Effect.fail(replaceFailed(error)),
-        ),
-      );
-    }
-
-    // Run metadata present: let the user replace the original or save a
-    // postfixed copy, then commit the chosen target.
-    const resolved = yield* pickReplaceOrCopyTarget(
-      baseLocation,
-      editedLocation.absolutePath,
-      copyMeta,
-    );
-    if (!resolved) return false;
-
-    const targetExisted = yield* fs.exists(
-      resolved.targetLocation.absolutePath,
-    );
-
-    yield* commitAcceptedFile(
-      baseLocation,
-      editedLocation,
-      resolved,
-      targetExisted,
-      acceptPorts,
-    ).pipe(
-      Effect.mapError(
-        acceptEditedFailure(
-          'commit',
-          'The accepted file could not be committed',
-        ),
+    return yield* acceptEditedFileReplace(baseLocation, editedLocation, {
+      ...acceptPorts,
+      confirm: (message) =>
+        vscodeUi
+          .confirm(message, { confirmLabel: 'Replace file' })
+          .pipe(Effect.mapError(replaceFailed)),
+    }).pipe(
+      Effect.catchTag('PlatformError', (error) =>
+        Effect.fail(replaceFailed(error)),
       ),
     );
-    return true;
   },
   Effect.catchCause((cause) =>
     showLoggedErrorMessage(

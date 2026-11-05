@@ -67,7 +67,6 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
@@ -546,15 +545,8 @@ export const createExtensionHostRequests = Effect.fn(
           'compare',
           handleCompare(at(base), at(edited), diffRefresh),
         ),
-      acceptEditedFile: (
-        base: string,
-        edited: string,
-        copyMeta?: AcceptCopyMeta,
-      ) =>
-        runFileAction(
-          'acceptEdited',
-          handleAcceptEdited(at(base), at(edited), copyMeta),
-        ),
+      acceptEditedFile: (base: string, edited: string) =>
+        runFileAction('acceptEdited', handleAcceptEdited(at(base), at(edited))),
       latexdiffFile: (base: string, edited: string) =>
         runFileAction(
           'latexdiff',
