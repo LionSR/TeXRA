@@ -262,9 +262,9 @@ behaviour, which is the documented one.
   `turn.ts:617-623`, `ModelInvoker.ts:336-345`). A `SyntaxError` is
   pre-checked twice before `sdkModelError` already maps it
   (`openaiResponsesCodec.ts:455-461`, `openaiResponses.ts:180-187`). The
-  Google wrapper passes only `status` to `sdkModelError`
-  (`googleInteractions.ts:219-227`), so Google 429s never carry
-  `retryAfterMs`.
+  Google wrapper passed only `status` to `sdkModelError`, so Google 429s
+  never carried `retryAfterMs` (done 2026-11-05: it passes the reply's
+  headers too).
 - **Retry has several owners.** The invocation loop decides the budget and
   the next step (the documented one owner), but the wait is split: a fixed
   `RETRY_BACKOFF_MS = 1000` sleep in `pauseBefore` (`invocation.ts:245`)
@@ -285,7 +285,7 @@ behaviour, which is the documented one.
 
 **Proposal.** The loop reads `finishReason` (landed: #14638, #14639). One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
-two. The gate owns every wait, the no-route failure's included: `pauseBefore`'s
+two (done). The gate owns every wait, the no-route failure's included: `pauseBefore`'s
 sleep goes and `retryAfterMs` is honoured. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.

@@ -309,4 +309,40 @@ describe('canonical Google Interactions protocol', () => {
         ).toBe(true);
       }),
   );
+
+  // A Google 429 names its wait in `retry-after`; the retry gate reads it
+  // from the failure, so the reply's headers must reach it.
+  it.effect('carries a 429 reply’s retry-after to the failure', () =>
+    Effect.gen(function* () {
+      fetchModel.mockImplementationOnce(async () =>
+        Response.json(
+          { error: { code: 429, message: 'Resource exhausted.' } },
+          { status: 429, headers: { 'retry-after': '7' } },
+        ),
+      );
+      const configured = googleInteractionsModel(
+        {
+          protocol: 'google-interactions',
+          requestedModel: 'gemini-test',
+          background: 'supported',
+          deployment: {
+            endpoint: 'https://synthetic.invalid',
+            credentialScope: 'test-account',
+          },
+          defaults: {
+            maxOutputTokens: 2048,
+            store: true,
+            thinkingLevel: 'high',
+          },
+        },
+        { apiKey: 'synthetic-key' },
+      );
+      const turn = yield* configured.prepareTurn(REQUEST);
+      assert(turn.mode === 'foreground');
+      const failure = yield* Effect.flip(
+        completedTurn(configured.streamTurn(turn)),
+      );
+      expect(failure).toMatchObject({ status: 429, retryAfterMs: 7000 });
+    }),
+  );
 });
