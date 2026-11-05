@@ -1,8 +1,8 @@
 /**
  * The crash-point conformance suite: the durability
- * contract checked at every commit point of one run, under TeXRA's plugins
- * (the block's `SessionGraph`), a superset of the harness's built-ins: every
- * scenario runs only harness code.
+ * contract checked at every commit point of one run, under the harness's
+ * built-ins (the block's `SessionGraph` over `HARNESS_APP`): every scenario
+ * runs only harness code.
  *
  * A clean pass drives `golden_crash` (`goldenTurn` in the validation model)
  * in-process over a persistent store: a response with two calls (a read and
