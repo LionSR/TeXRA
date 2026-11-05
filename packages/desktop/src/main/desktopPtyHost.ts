@@ -122,14 +122,13 @@ function ptyEnvironment(): Record<string, string> {
  * Restores the executable bit on node-pty's `spawn-helper`.
  *
  * On macOS, node-pty shells out to a small `spawn-helper` binary to allocate the
- * pty. It ships in the package's `prebuilds/<platform>-<arch>/` directory, but
- * pnpm's content-addressed store extracts it without the executable bit — so
- * every `pty.spawn()` fails with a bare `posix_spawnp failed.` and no hint as to
- * why. (A plain npm install happens to preserve the mode, which is why this is
- * easy to miss.)
+ * pty. The published package ships it in `prebuilds/<platform>-<arch>/`
+ * without the executable bit, so every `pty.spawn()` fails with a bare
+ * `posix_spawnp failed.` and no hint as to why.
  *
- * Fixed here rather than in a postinstall script so it survives any install
- * path, including a packaged app whose files were copied by the builder.
+ * This repairs a development checkout. A packaged app keeps the helper in
+ * `app.asar.unpacked`, which this path does not reach and which the app may
+ * not be allowed to change; `scripts/afterPack.mjs` sets the bit at packaging.
  */
 function ensureSpawnHelperExecutable(): void {
   if (osPlatform() === 'win32') return;
