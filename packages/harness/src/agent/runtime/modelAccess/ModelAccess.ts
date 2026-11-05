@@ -165,22 +165,12 @@ const bindOver = Effect.fn('ModelAccess.bind')(function* (
   }
   const ask = selected?.request ?? {};
   const settings = yield* settingsOf(stores);
-  // The wire id "prefer short model names" promises; a provider mode
-  // (OpenAI `pro`) keeps the pinned id.
-  const short = catalog.shortName;
-  const requested =
-    ask.mode === undefined &&
-    settings.preferShortModelNames &&
-    short &&
-    short !== catalog.id
-      ? { ...catalog, id: short }
-      : catalog;
-  const decision = yield* decideRoute(requested, settings, {
+  const decision = yield* decideRoute(catalog, settings, {
     ...request,
     mode: ask.mode,
   });
   return yield* bindRoute(
-    { request, requested, ask, settings, decision },
+    { request, requested: catalog, ask, settings, decision },
     stores,
   );
 });

@@ -542,16 +542,6 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slot: 'globalState',
   },
-  {
-    key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-    ),
-    title: 'Prefer short model names',
-    description: 'Show compact model names in pickers.',
-    category: 'model',
-    slot: 'globalState',
-  },
 
   // --- Provider routing & region toggles --------------------------------------
   globalProviderToggle({

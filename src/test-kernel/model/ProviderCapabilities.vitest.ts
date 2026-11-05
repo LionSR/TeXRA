@@ -3,9 +3,7 @@ import { describe, expect } from 'vitest';
 
 import { Effect, Layer } from 'effect';
 import {
-  codexBackendModelId,
   DEFAULT_MODEL_CAPABILITIES,
-  MODEL_CONFIGS,
   type ModelConfig,
   ModelProvider,
   ReasoningEffort,
@@ -73,21 +71,4 @@ describe('provider capabilities', () => {
         });
       }),
   );
-});
-
-describe('codexBackendModelId', () => {
-  // The bug this pins: llm-zoo's `shortName` for GPT-5.6 Sol is the bare
-  // `gpt-5.6`, which is not a model the Codex backend serves — it answers
-  // "The 'gpt-5.6' model is not supported when using Codex with a ChatGPT
-  // account", which reads as a plan problem rather than a bad id.
-  // #12873: "Prefer short model names" rewrites `id` to `shortName`
-  // before the binding reaches here, so the slug must come from the registry.
-  it('ignores an id the short-name preference already swapped', () => {
-    expect(
-      codexBackendModelId({
-        ...MODEL_CONFIGS['openai/gpt-5.6-sol'],
-        id: 'gpt-5.6',
-      }),
-    ).toBe('gpt-5.6-sol');
-  });
 });

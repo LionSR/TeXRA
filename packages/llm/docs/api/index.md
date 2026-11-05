@@ -235,20 +235,13 @@ interface ChooseReasoningOptions {
 The model id the Codex backend keys on: the API `id` with its llm-zoo date
 pin stripped.
 
-Never the `shortName`. That is llm-zoo's display abbreviation, and for every
-Codex-eligible model but one it happens to equal the backend slug — which is
-why preferring it went unnoticed. The exception is the GPT-5.6 family, whose
-members are `gpt-5.6-sol`, `-terra` and `-luna`: there is no bare `gpt-5.6`
-model anywhere, but that is exactly the `shortName` llm-zoo gives Sol. We
-sent it and the backend answered
-`The 'gpt-5.6' model is not supported when using Codex with a ChatGPT
-account.` — a message that reads as a subscription problem and sends users
-to check their plan, when the id was simply not a model.
+Never the `shortName`: that is llm-zoo's display abbreviation, and for
+GPT-5.6 Sol it is a bare `gpt-5.6`, which is not a model. The backend
+answers it with "The 'gpt-5.6' model is not supported when using Codex with
+a ChatGPT account", which reads as a plan problem rather than a bad id.
 
 ```ts
-function codexBackendModelId(
-  config: Pick<ModelConfig, 'ref' | 'id'>,
-): string
+function codexBackendModelId(config: Pick<ModelConfig, 'id'>): string
 ```
 
 ## completedTurn
