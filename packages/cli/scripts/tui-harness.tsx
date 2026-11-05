@@ -28,6 +28,7 @@ import {
 } from '@texra-ai/harness/host';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -257,6 +258,10 @@ const FAILED_CHILD_AGENT = process.env.HARNESS_FAILED_CHILD?.trim();
 const TEAM_NAME = process.env.HARNESS_TEAM_NAME?.trim() || undefined;
 let canInterrupt = process.env.HARNESS_CAN_INTERRUPT === '1';
 const QUEUED_FOLLOW_UPS = parseList(process.env.HARNESS_QUEUED_FOLLOWUPS);
+// Deliveries a child run queued on the root (a `<subagent-result>` or
+// `<subagent-progress>` envelope), as opposed to the user's own messages.
+const QUEUED_DELIVERIES = parseList(process.env.HARNESS_QUEUED_DELIVERIES);
+const DELIVERING_CHILD_RUN_ID = harnessRunId('aaaa00c1f10e');
 const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
@@ -1209,7 +1214,9 @@ async function appendHarnessPlanDecision(
 // Queued follow-ups or an active (non-idle) plan simulate an in-flight run;
 // an idle plan instead parks the run in a waiting state.
 const HARNESS_RUN_ACTIVE =
-  QUEUED_FOLLOW_UPS.length > 0 || (SHOW_PLAN && !SHOW_IDLE_PLAN);
+  QUEUED_FOLLOW_UPS.length > 0 ||
+  QUEUED_DELIVERIES.length > 0 ||
+  (SHOW_PLAN && !SHOW_IDLE_PLAN);
 // A root that has finished a turn and waits, as a real chat after its first
 // message: the state an approval grant applies to.
 const HARNESS_RUN_IDLE =
@@ -1243,12 +1250,24 @@ seedRun(HARNESS_RUN_ID);
 focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
+// Built as the run's inbox builds them (`queuedRow`), so a delivery carries
+// the summary (`displayText`) every surface shows and a message from the user
+// is kept as typed.
 publish(
-  ...QUEUED_FOLLOW_UPS.map((text, index) => ({
+  ...[
+    ...QUEUED_FOLLOW_UPS.map((text) => ({
+      text,
+      from: { kind: 'user' as const },
+    })),
+    ...QUEUED_DELIVERIES.map((text) => ({
+      text,
+      from: { kind: 'run' as const, runId: DELIVERING_CHILD_RUN_ID },
+    })),
+  ].map((item, index) => ({
     type: 'followup.queued' as const,
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     followUpId: `harness-follow-up-${index + 1}`,
-    content: { text, from: { kind: 'user' as const } },
+    content: queuedRow(item, undefined, () => 'child').content,
   })),
 );
 const HARNESS_INITIAL_RUN_PHASE = harnessInitialRunStatus();
