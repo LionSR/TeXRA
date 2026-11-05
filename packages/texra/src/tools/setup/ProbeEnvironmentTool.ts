@@ -19,8 +19,10 @@ import { executed, ToolError } from '@texra-ai/harness/plugins';
 import { commandDirs } from '@texra/platform/defaults/commandDirs';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
 import {
+  IMAGE_LATEX_TOOLS,
   IMAGE_TOOL_LABEL,
   LATEX_WORKSHOP_EXT_ID,
+  missingLatexTools,
   PROBED_LATEX_TOOLS,
 } from '@texra/shared/constants/latexToolchain';
 import {
@@ -36,7 +38,7 @@ import {
   SetupHost,
   SetupPlatform,
 } from './platform';
-import { locateTool, missingCoreTools } from './toolProbing';
+import { locateTool } from './toolProbing';
 
 const CHANNEL = 'Setup Credentials';
 const ProbeEnvironmentInputSchema = Schema.Struct({
@@ -81,16 +83,15 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     // full report names a missing image tool; the agent naturally reuses
     // that token.
     if (name === IMAGE_TOOL_LABEL) {
-      const [gm, magick] = yield* Effect.all(
-        [locateTool('gm'), locateTool('magick')],
-        { concurrency: 'unbounded' },
-      );
-      const ok = gm.installed || magick.installed;
+      const images = yield* Effect.all(IMAGE_LATEX_TOOLS.map(locateTool), {
+        concurrency: 'unbounded',
+      });
+      const found = images.find((tool) => tool.installed);
       return executed(
-        ok
-          ? `Verified: ${gm.installed ? '"gm"' : '"magick"'} is installed and on PATH.`
-          : `Not found: neither "gm" nor "magick" is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
-        `Verify ${IMAGE_TOOL_LABEL}: ${ok ? 'ok' : 'missing'}`,
+        found
+          ? `Verified: "${found.name}" is installed and on PATH.`
+          : `Not found: none of ${IMAGE_LATEX_TOOLS.map((name) => `"${name}"`).join(', ')} is on PATH. The install may not have completed, or the shell PATH needs to be refreshed.`,
+        `Verify ${IMAGE_TOOL_LABEL}: ${found ? 'ok' : 'missing'}`,
       );
     }
     // First char must be alphanumeric — rejects punctuation-only
@@ -135,10 +136,9 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     storedKeys,
   ] = yield* Effect.all(
     [
-      Effect.all(
-        PROBED_LATEX_TOOLS.map((name) => locateTool(name)),
-        { concurrency: 'unbounded' },
-      ),
+      Effect.all(PROBED_LATEX_TOOLS.map(locateTool), {
+        concurrency: 'unbounded',
+      }),
       Effect.all(
         OPTIONAL_TOOLS.map((name) => locateTool(name)),
         { concurrency: 'unbounded' },
@@ -195,7 +195,14 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     { concurrency: 'unbounded' },
   );
 
-  const missingCore = missingCoreTools(coreTools);
+  const missing = missingLatexTools(
+    coreTools.map((tool) => [tool.name, tool.installed] as const),
+  );
+  // One entry for the image capability: either tool satisfies it.
+  const missingCore = [
+    ...missing.filter((tool) => !tool.interchangeable).map((tool) => tool.name),
+    ...(missing.some((tool) => tool.interchangeable) ? [IMAGE_TOOL_LABEL] : []),
+  ];
   const latexWorkshopInstalled = platform.extensions?.isInstalled(
     LATEX_WORKSHOP_EXT_ID,
   );

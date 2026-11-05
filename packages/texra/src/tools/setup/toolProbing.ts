@@ -4,8 +4,6 @@ import { Effect } from 'effect';
 // Local imports
 import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
-  IMAGE_LATEX_TOOLS,
-  IMAGE_TOOL_LABEL,
   LATEX_TOOL_ENTRIES,
   type LatexToolName,
 } from '@texra/shared/constants/latexToolchain';
@@ -19,8 +17,6 @@ interface ToolStatus {
   installed: boolean;
   path?: string;
 }
-
-const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_LATEX_TOOLS);
 
 /**
  * Resolve a tool as installed by (1) the catalog tool's version probe, or
@@ -47,19 +43,3 @@ export const locateTool = Effect.fn('locateTool')(function* (
     path: found?.resolvedPath,
   };
 });
-
-/**
- * Names of the missing core dependencies, given statuses for the whole of
- * `PROBED_LATEX_TOOLS`. Either image tool satisfies the image
- * requirement, so both absent report a single {@link IMAGE_TOOL_LABEL} entry.
- */
-export function missingCoreTools(statuses: readonly ToolStatus[]): string[] {
-  const missing = statuses
-    .filter((tool) => !tool.installed && !IMAGE_TOOL_NAMES.has(tool.name))
-    .map((tool) => tool.name);
-  const hasImageTool = statuses.some(
-    (tool) => IMAGE_TOOL_NAMES.has(tool.name) && tool.installed,
-  );
-  if (!hasImageTool) missing.push(IMAGE_TOOL_LABEL);
-  return missing;
-}
