@@ -1584,6 +1584,12 @@ All notable changes to this project will be documented in this file.
   the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
   the setup assistant and the guide say "OpenAI models" where they said
   "Codex models".
+- **A script's `self()` round does its own part, not the whole task again.**
+  A round now reads its prompt as one part of the work its script is doing,
+  so it no longer repeats the request that started the script, with its own
+  `self()` rounds and the script's waits, before answering. The `script`
+  tool's description also lists the modules a script may import, so a
+  plugin's module is found without guessing its name.
 - **No model request runs only to title a subagent, and the SDK sends none
   you did not ask for.** A subagent or a script's `self()` round keeps its
   agent name instead of a generated title, so a loop of rounds no longer
