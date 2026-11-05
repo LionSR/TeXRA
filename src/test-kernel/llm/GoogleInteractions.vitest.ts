@@ -116,7 +116,6 @@ describe('canonical Google Interactions protocol', () => {
             deployment: turn.deployment,
           },
           providerResponseId: 'int_1',
-          afterSequence: null,
         });
         fetchModel.mockImplementationOnce(async () =>
           Response.json({
@@ -220,11 +219,9 @@ describe('canonical Google Interactions protocol', () => {
         yield* Deferred.await(firstPoll);
         yield* TestClock.adjust('5 seconds');
         const events = yield* Fiber.join(observation);
-        expect(
-          events.map((event) => [event.kind, event.afterSequence]),
-        ).toEqual([
-          ['identified', null],
-          ['completed', null],
+        expect(events.map((event) => event.kind)).toEqual([
+          'identified',
+          'completed',
         ]);
         const completed = events.at(-1);
         assert(completed?.kind === 'completed');

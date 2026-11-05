@@ -8,10 +8,10 @@ import { Cause, Clock, Effect, Stream } from 'effect';
 
 import {
   ModelError,
-  type BackgroundEvent,
   type Model,
   type RemoteOperation,
   type ResolvedTurn,
+  type TurnEvent,
   type TurnResult,
 } from '@texra-ai/llm';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
@@ -54,7 +54,7 @@ export const observeBackground = <E>(
     readonly operation: RemoteOperation;
     readonly deadlineAtMs: number;
   },
-  onEvent: (event: BackgroundEvent) => Effect.Effect<void, E>,
+  onEvent: (event: TurnEvent) => Effect.Effect<void, E>,
 ) => {
   const { operation, deadlineAtMs } = accepted;
   const id = operation.providerResponseId;
@@ -116,7 +116,7 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
   resolved: BackgroundTurn,
   invocation: InvocationRef,
   bound: BoundModel,
-  onEvent: (event: BackgroundEvent) => Effect.Effect<void, InvokeError>,
+  onEvent: (event: TurnEvent) => Effect.Effect<void, InvokeError>,
   completed: { value: TurnResult | null },
 ): Effect.fn.Return<void, ModelError | InvokeError, Runs> {
   const background = bound.model.background;

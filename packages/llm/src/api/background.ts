@@ -15,12 +15,11 @@ import {
 // Local imports - canonical model contract
 import { sameModelOrigin, type ModelOrigin } from '../protocol.js';
 import {
-  BackgroundEventSchema,
   BackgroundSubmissionSchema,
   ObservationPolicySchema,
-  type BackgroundEvent,
   type Model,
   type ResolvedTurn,
+  type TurnEvent,
   type TurnResult,
 } from '../turn.js';
 import {
@@ -133,7 +132,7 @@ export function backgroundLifecycle<
         readonly stream: (
           operation: RemoteOperation,
           learned: Ref.Ref<Partial<ModelErrorFields>>,
-        ) => Stream.Stream<BackgroundEvent, ModelError>;
+        ) => Stream.Stream<TurnEvent, ModelError>;
       };
   readonly cancel: (
     operation: RemoteOperation,
@@ -205,15 +204,12 @@ export function backgroundLifecycle<
         const events =
           'poll' in wire.observe
             ? Stream.concat(
-                Stream.succeed(
-                  Schema.decodeUnknownSync(BackgroundEventSchema)({
-                    kind: 'identified',
-                    afterSequence: null,
-                    providerResponseId: operation.providerResponseId,
-                    requestedOrigin: origin,
-                    returnedModel: null,
-                  }),
-                ),
+                Stream.succeed<TurnEvent>({
+                  kind: 'identified',
+                  providerResponseId: operation.providerResponseId,
+                  requestedOrigin: origin,
+                  returnedModel: null,
+                }),
                 Stream.fromEffect(
                   Effect.repeat(wire.observe.poll(operation, learned), {
                     schedule: Schedule.spaced('5 seconds'),
@@ -222,23 +218,21 @@ export function backgroundLifecycle<
                 ).pipe(
                   // The repeat ends only on the snapshot of finished work.
                   Stream.filter(Predicate.isNotUndefined),
-                  Stream.map((result): BackgroundEvent => ({
+                  Stream.map((result): TurnEvent => ({
                     kind: 'completed',
-                    afterSequence: null,
                     result,
                   })),
                 ),
               )
             : wire.observe.stream(operation, learned);
         return events.pipe(
-          Stream.mapEffect(
-            (event): Effect.Effect<BackgroundEvent, ModelError> =>
-              event.kind === 'completed'
-                ? Effect.map(wire.finalize(turn, event.result), (result) => ({
-                    ...event,
-                    result,
-                  }))
-                : Effect.succeed(event),
+          Stream.mapEffect((event): Effect.Effect<TurnEvent, ModelError> =>
+            event.kind === 'completed'
+              ? Effect.map(wire.finalize(turn, event.result), (result) => ({
+                  ...event,
+                  result,
+                }))
+              : Effect.succeed(event),
           ),
           Stream.interruptWhen(
             Effect.sleep(remaining).pipe(Effect.andThen(Effect.fail(deadline))),

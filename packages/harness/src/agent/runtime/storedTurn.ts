@@ -17,7 +17,6 @@ import {
   ModelOriginSchema,
   RemoteOperationSchema,
   TurnResultSchema,
-  type RemoteOperation,
 } from '@texra-ai/llm';
 import {
   ContextEditPayloadSchema,
@@ -103,17 +102,6 @@ const live = (value: unknown) =>
     return { kind, ...data };
   });
 
-const storedOperation = ({
-  origin,
-  providerResponseId,
-  ...cursor
-}: RemoteOperation) => ({
-  origin,
-  providerResponseId,
-  // Wrapped once, by `stored`, like every other evidence value.
-  evidence: { kind: origin.protocol, ...cursor },
-});
-
 /** A run history row as the store keeps it. */
 export function storedDraft(
   row: RunHistoryDraft,
@@ -130,11 +118,7 @@ export function storedDraft(
   return {
     ...row,
     payload: Schema.decodeUnknownSync(ModelMessagePayloadSchema)(
-      stored(
-        payload.kind === 'accepted'
-          ? { ...payload, operation: storedOperation(payload.operation) }
-          : payload,
-      ),
+      stored(payload),
     ),
   };
 }
@@ -188,17 +172,11 @@ function livePayload(
       };
     case 'append':
       return { ...p, messages: liveMessages(p.messages) };
-    case 'accepted': {
-      const { origin, providerResponseId, evidence } = p.operation;
+    case 'accepted':
       return {
         ...p,
-        operation: Schema.decodeUnknownSync(RemoteOperationSchema)({
-          origin,
-          providerResponseId,
-          ...evidence.data,
-        }),
+        operation: Schema.decodeUnknownSync(RemoteOperationSchema)(p.operation),
       };
-    }
   }
 }
 
