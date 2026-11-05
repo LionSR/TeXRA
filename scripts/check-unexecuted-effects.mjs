@@ -718,16 +718,53 @@ const forks = Effect.gen(function* () {
   }
 }
 
+/**
+ * A compiler host whose parsed source files are shared by every program the
+ * gate builds. The configs overlap heavily (lib files, effect's declarations,
+ * the harness sources most packages import), so each file is parsed and
+ * bound once instead of once per config. A parse depends on the options in
+ * the key, so files are shared only between programs that would parse them
+ * identically.
+ */
+function sharedSourceFileHost(options, cache) {
+  const host = ts.createCompilerHost(options);
+  const parse = host.getSourceFile;
+  host.getSourceFile = (fileName, languageVersionOrOptions, ...rest) => {
+    const { languageVersion, impliedNodeFormat, jsDocParsingMode } =
+      typeof languageVersionOrOptions === 'object'
+        ? languageVersionOrOptions
+        : { languageVersion: languageVersionOrOptions };
+    const key = [
+      fileName,
+      languageVersion,
+      impliedNodeFormat,
+      jsDocParsingMode,
+      options.moduleDetection,
+      options.jsx,
+    ].join('|');
+    let sourceFile = cache.get(key);
+    if (sourceFile == null) {
+      sourceFile = parse(fileName, languageVersionOrOptions, ...rest);
+      if (sourceFile != null) cache.set(key, sourceFile);
+    }
+    return sourceFile;
+  };
+  return host;
+}
+
 function main() {
   selfTest();
   const scanned = new Set();
+  const sourceFiles = new Map();
   let fileCount = 0;
   const violations = [];
   for (const configRel of PROJECT_CONFIGS) {
     const parsed = parseProjectConfig(configRel);
+    const options = { ...parsed.options, noEmit: true };
     const program = ts.createProgram({
       rootNames: parsed.fileNames,
-      options: { ...parsed.options, noEmit: true },
+      options,
+      host: sharedSourceFileHost(options, sourceFiles),
     });
     const checker = program.getTypeChecker();
     for (const sourceFile of program.getSourceFiles()) {

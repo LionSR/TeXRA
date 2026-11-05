@@ -5,6 +5,7 @@
   "description": "TeXRA, the app: its plugins, LaTeX, the UI kit and the host-side controllers over @texra-ai/harness",
   "license": "Apache-2.0",
   "dependencies": {
+    "@altmetric/identifiers": "catalog:",
     "@anthropic-ai/claude-agent-sdk": "catalog:",
     "@awesome.me/webawesome": "^3.14.0",
     "@effect/platform-node": "catalog:",
@@ -26,7 +27,6 @@
     "highlight.js": "^11.12.0",
     "highlightjs-lean": "^1.2.0",
     "http-status-codes": "catalog:",
-    "identifiers-arxiv": "catalog:",
     "katex": "^0.19.1",
     "lit": "^3.3.3",
     "lru-cache": "catalog:",
@@ -37,14 +37,13 @@
     "openai": "catalog:",
     "pretty-bytes": "catalog:",
     "pretty-ms": "catalog:",
-    "semver": "^7.8.5",
+    "semver": "^7.8.6",
     "sortablejs": "^1.15.7",
     "tar": "catalog:",
     "which": "catalog:"
   },
   "devDependencies": {
     "@types/diff-match-patch": "^1.0.36",
-    "@types/identifiers-arxiv": "^0.1.2",
     "@types/nunjucks": "^3.2.6",
     "@types/semver": "^7.8.0",
     "@types/sortablejs": "^1.15.9"
