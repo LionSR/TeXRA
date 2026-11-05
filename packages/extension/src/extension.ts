@@ -327,7 +327,7 @@ export async function activate(context: vscode.ExtensionContext) {
 const activateExtension = Effect.fn('activateExtension')(function* (
   context: vscode.ExtensionContext,
 ) {
-  yield* installUnhandledRejectionSurface();
+  yield* installUnhandledRejectionSurface(context.extensionPath);
   if (vscode.workspace.workspaceFolders?.length !== 1) {
     // Credential-only platform. Every sign-in path stores into the shared
     // secrets file (the `Secrets` service) and the global `~/.texra` config — none of it

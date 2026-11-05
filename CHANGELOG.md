@@ -1614,6 +1614,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The VS Code extension no longer reports another extension's error as
+  its own.** VS Code runs every extension in one process, and TeXRA showed
+  "The extension host encountered an unrecoverable error" for a failure in
+  any of them (a LaTeX Workshop file-watcher error, for example) and raised
+  it again in that process. It now acts only on an error from TeXRA's own
+  code.
 - **The desktop app no longer hides a task's Edit form behind "Connect a
   model" when the project's `.env` holds the key.** The onboarding check
   asked without the project's `.env`, the one per-project read that did; it

@@ -1,7 +1,7 @@
 /**
- * The extension host's last-resort surface for a promise rejection nothing
- * owned: log it, tell the user, then rethrow so the host still takes Node's
- * fatal path.
+ * The last-resort surface for an `Error` rejected in this extension's own
+ * code that nothing owned: log it, tell the user, then rethrow so the host
+ * still takes Node's fatal path. Any other rejection is left to the host.
  */
 // Third-party imports
 import { Effect, Queue } from 'effect';
@@ -21,10 +21,15 @@ const CHANNEL = 'extension';
  * logs it with the diagnostics the runtime would serve (the runtime may not
  * exist yet). The listener is acquired after the fork, so it is removed
  * before the fiber is interrupted.
+ *
+ * VS Code runs every extension in one host process, so the listener hears
+ * their rejections too. It acts only on an error whose stack enters
+ * `extensionPath`, this extension's install directory; any other is another
+ * extension's, which the host logs itself.
  */
 export const installUnhandledRejectionSurface = Effect.fn(
   'installUnhandledRejectionSurface',
-)(function* () {
+)(function* (extensionPath: string) {
   const entries = yield* Queue.unbounded<{
     readonly message: string;
     readonly data: unknown;
@@ -44,11 +49,22 @@ export const installUnhandledRejectionSurface = Effect.fn(
   const logError = (message: string, data: unknown): void => {
     Queue.offerUnsafe(entries, { message, data });
   };
+  // Windows paths differ in case between the install directory VS Code
+  // reports and the frames Node prints.
+  const comparable = (text: string): string =>
+    process.platform === 'win32' ? text.toLowerCase() : text;
+  const ownDirectory = comparable(extensionPath);
   const report = (error: unknown) => {
+    if (
+      !(error instanceof Error) ||
+      !comparable(error.stack ?? '').includes(ownDirectory)
+    ) {
+      return;
+    }
     logError('Unhandled extension-host rejection', error);
     void vscode.window
       .showErrorMessage(
-        `The extension host encountered an unrecoverable error: ${formatFatalErrorDetail(error)}`,
+        `TeXRA encountered an unrecoverable error: ${formatFatalErrorDetail(error)}`,
       )
       .then(undefined, (notificationError: unknown) => {
         logError(
