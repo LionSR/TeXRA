@@ -176,8 +176,7 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
     });
   });
 
-  // The process every TeXRA host composes, with the notes plugin beside
-  // TeXRA's.
+  // The harness's process, with the notes plugin beside its built-ins.
   layer(
     Layer.provideMerge(
       SessionGraph.with([notesPlugin], validationModelLayer),
