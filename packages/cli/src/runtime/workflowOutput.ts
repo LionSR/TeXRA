@@ -5,6 +5,7 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 // swap; safe here since these paths come from getSafeDocumentRelativePath /
 // path.relative on the workflow's own generated outputs, never user input.
 import { toPosixPath, isNotADirectoryError } from '@texra-ai/harness/host';
+import { absentReason } from '@texra-ai/harness/node';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
@@ -71,7 +72,7 @@ function outputPathError(
       message: `${flagLabel} is not writable (permission denied): ${target}`,
     });
   }
-  if (error.reason._tag === 'NotFound') {
+  if (absentReason(error)) {
     return new CliUsageError({
       message:
         flagLabel === '--output-dir'

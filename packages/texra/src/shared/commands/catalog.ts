@@ -314,6 +314,12 @@ export const commandCatalog = [
     keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
   },
   {
+    id: 'texra.desktop.showBrowser',
+    host: 'desktop',
+    title: 'Show Browser',
+    category: 'View',
+  },
+  {
     id: 'texra.desktop.saveFile',
     host: 'desktop',
     title: 'Save',

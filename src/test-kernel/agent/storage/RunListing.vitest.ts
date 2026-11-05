@@ -4,6 +4,7 @@ import { expect, vi } from 'vitest';
 
 import { DatabaseReadFailed } from '@texra-ai/harness';
 import {
+  RunIdSchema,
   type AgentConfig,
   AgentConfigSchema,
   qualifyAggregateId,
@@ -70,7 +71,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* processSession;
-            const id = 'eee556' as RunId;
+            const id = Schema.decodeUnknownSync(RunIdSchema)('eee556');
             yield* writeRun(session, id, 'assistant');
             vi.spyOn(
               session.pipe(Context.get(SessionLog)),

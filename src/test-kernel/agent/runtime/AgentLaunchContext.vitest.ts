@@ -2,9 +2,9 @@ import { layer } from '@effect/vitest';
 import { Effect, Schema, Context } from 'effect';
 import { expect } from 'vitest';
 import {
+  RunIdSchema,
   AgentConfigSchema,
   runBypasses,
-  type RunId,
 } from '@texra-ai/harness/schemas';
 import { goalGrant, humanGrant } from '@agent/runtime/runApprovalQueue';
 
@@ -26,7 +26,7 @@ import {
   SessionGraph,
 } from '@test/support/testKernel';
 
-const EXECUTION_ID = 'a00101' as RunId;
+const EXECUTION_ID = Schema.decodeUnknownSync(RunIdSchema)('a00101');
 
 const tempDirs = useTempDirs();
 

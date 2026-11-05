@@ -5,7 +5,7 @@ Status: accepted (owner, 2026-11-04)
 Origin: the deeper pass the owner asked for after
 [fewer processing options](./2026-11-03-fewer-processing-options.md), over the
 SQLite and storage layer, error definitions and catch sites, interruption and
-stop, and the model-call failure path. Surveyed on `main` at `6ae3ae0`. The
+stop, and the model-call failure path. Surveyed on `main` at `b411a6d`. The
 rule is the same: an option, a mode literal, an error kind or a reason value is
 a decision; one nothing branches on is a name, not a decision, and one decided
 in several places has no owner. The settled constraints this note works
@@ -20,13 +20,13 @@ and the stop and liveness rules
 | Item                              | Where                                                                                                               | Evidence                                                                                                                                                                                                                                                                                                                                                                 |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `databaseLayer(mode)`             | `packages/harness/src/controllers/session/Database.ts:187-230`                                                      | Three values (`persistent` ×2, `ephemeral` ×1, `existing` ×1 producer) become `create = mode !== 'existing'`, a `?mode=rw` URI branch, `disableWAL`, and a re-mapped two-value mode that `openStore` and `prepareStore` branch on again five times (`packages/harness/src/controllers/session/storeSchema.ts:261-387`). It is `{ file: path \| null, create: boolean }`. |
-| `Database.readAggregate` `types?` | `Database.ts:835-836`, SQL at `:315-317`                                                                            | Both callers (`packages/harness/src/controllers/session/sessionStore.ts:329,332`) always pass `types`; the untyped `aggregate` statement is dead.                                                                                                                                                                                                                        |
+| `Database.readAggregate` `types?` | `Database.ts:835-836`, SQL at `:315-317`                                                                            | Done (2026-11-04): `types` is required and the untyped `aggregate` statement is deleted; the session-store suite and the desktop lifecycle E2E pass every row type.                                                                                                                                                                                                      |
 | `DeletionMode`                    | `packages/harness/src/shared/session/database.ts:49`                                                                | `single` \| `bulk` \| `automatic`, read once as `mode === 'single'` (`Database.ts:533`). A boolean.                                                                                                                                                                                                                                                                      |
 | Transaction `gated`               | `Database.ts:436-457`                                                                                               | A fourth axis beside `'read' \| 'write' \| 'derive'`; `gated: false` has one caller (`releaseClaims`, `:986`), `'derive'` one (`:560`).                                                                                                                                                                                                                                  |
-| Row upcast machinery              | `packages/harness/src/shared/schemas/rowVersions.ts:123-270`, `controllers/session/rowCodec.ts:128-170,295,325-327` | All 22 row and plugin-fact kinds declare an empty upcast list; no upcaster exists. The per-row upcast loop, the `readableFrom` floor, the plugin upcaster reduce and the per-kind `EARLIER_RUNS` scan still run on every read. `packages/harness/AGENTS.md` "Storage format" says before 1.0 a kind changes with no upcaster.                                            |
+| Row upcast machinery              | `packages/harness/src/shared/schemas/rowVersions.ts:123-270`, `controllers/session/rowCodec.ts:128-170,295,325-327` | Done (2026-11-05): `RowKind.upcast`, `FactKind.upcasters`, `TraceFactKind.upcasters`, `pluginFactFloor` and the per-row loops are gone; a row reads at its kind's version (`rowRefusal`), an earlier build's below it.                                                                                                                                                   |
 | The global database               | `Database.ts:1045-1059`                                                                                             | Opens the full event store with an empty tool registry to serve two tables (`values`, `inputHistory`); every project database carries `input_history`, whose only consumers are global (`packages/cli/src/chat/tui/history/inputHistory.ts:33,49`).                                                                                                                      |
-| `ValueFamily.deletable`           | `packages/harness/src/shared/session/valueFamily.ts:24`                                                             | Set at seven sites, never read at runtime; deletion happens whenever `next === undefined` (`controllers/session/currentValues.ts:126`).                                                                                                                                                                                                                                  |
-| Two version gates on values       | `currentValues.ts:65-67` and `rowCodec.ts:377`                                                                      | Each read checks `version > VALUE_VERSION`; the store gate checks `CURRENT_VALUE_KIND` too; each write upserts `stored_kind`.                                                                                                                                                                                                                                            |
+| `ValueFamily.deletable`           | `packages/harness/src/shared/session/valueFamily.ts:24`                                                             | Done (2026-11-05): the field and the `Deletable` type parameter are gone; any family's `modify` may answer `undefined`.                                                                                                                                                                                                                                                  |
+| Two version gates on values       | `currentValues.ts:65-67` and `rowCodec.ts:377`                                                                      | Done (2026-11-05): the per-read check is gone; `storeGate` over `stored_kind` is the one gate. The `current_value.version` column, now written and never read, goes with the next DDL re-baseline.                                                                                                                                                                       |
 | Busy and lock handling            | `Database.ts:227`, `storeSchema.ts:309`, `storeAside.ts:37,47,153`, `currentValues.ts:52`                           | A 5 s driver timeout, then a 25 ms pragma, `retryBusy` on `query` and the outer transaction but not on `prepareStore` or `underCopy`, two retry schedules, and `busyTimeout: 0` for the elsewhere probe.                                                                                                                                                                 |
 
 **Proposal.** `databaseLayer({ file, create })` with WAL derived from
@@ -97,9 +97,9 @@ on is a message, and belongs in `message`.
   `packages/harness/src/agent/runtime/run/invocation.ts:157` and
   `packages/harness/src/shared/schemas/errors.ts:131-140`.
 - **`AgentErrorKind`** (`packages/harness/src/shared/schemas/runRecords.ts:49-58`):
-  `AGENT_ERROR_OUTCOME` (`packages/harness/src/common/errors/agentErrorClassification.ts:20-29`)
-  is six rows of which five are `FAILED`, with one consumer;
-  `agentErrorPresentation` (`:77-101`) has four identical branches. The
+  `AGENT_ERROR_OUTCOME` went with the `abort` kind (#14641);
+  `agentErrorPresentation` (`packages/harness/src/common/errors/agentErrorClassification.ts:54-92`)
+  has four identical branches. The
   "missing key" fact travels `RouteUnavailable.reason` →
   `ProviderErrorClassification.kind` → `AgentErrorKind`, three spellings;
   `RouteUnavailable.reason: 'unavailable'` has seven producers and no branch.
@@ -113,7 +113,7 @@ on is a message, and belongs in `message`.
   `PromptFailed.reason` (`packages/texra/src/hosts/uiHosts.ts:98`, a one-literal
   union); `SubscriptionOAuthError.kind` (`packages/llm/src/oauth/subscriptionOAuthError.ts`,
   read only through `needsReauth`).
-- **`ProviderError.userRetryable`** (`packages/harness/src/shared/schemas/errors.ts:346-353`)
+- **`ProviderError.userRetryable`** (`packages/harness/src/shared/schemas/errors.ts:68-75`)
   is required, documented as gating the retry UI, and read by no host.
 - **Tagged classes with no discriminator**: of 149 `TaggedError` classes
   across the five packages, about 58 have no production `catchTag`,
@@ -133,8 +133,8 @@ on is a message, and belongs in `message`.
 text into `message`; `ModelError` keeps `retryable`, `scope`, `status` and
 `quota` as the decided facts and the kinds that are branched on. The run
 record carries `ModelError.kind` or `RouteUnavailable` directly, deleting the
-two re-spelled unions. `AGENT_ERROR_OUTCOME` becomes
-`kind === 'abort' ? CANCELLED : FAILED`, and goes with `abort` once §5 lands.
+two re-spelled unions. `AGENT_ERROR_OUTCOME` and `abort` are gone
+(#14641).
 `userRetryable` is wired to the retry panel or deleted. One tagged error per
 host edge (`HostCallFailed` with the capability as a field), one
 `ScriptLimitExceeded { limit }`, and the 1:1 re-wraps gone: the dead-code
@@ -142,72 +142,51 @@ ratchet shrinks by the deleted classes.
 
 **Give up.** Catching a failure by a name nobody catches it by.
 
-_Landed 2026-11-04 (#14641, #14646, #14655): the `abort` kind, `isUserAbort`
-and `AGENT_ERROR_OUTCOME` are gone, and `agentErrorPresentation` returns a
-presentation from every branch; a run's failure is one value from the model
-call to its end (`classifyAgentError` returns the `run.end` error value, the
-error-object cache is gone), and `userRetryable` left every row (`model.message`
-v12, `request.opened` v8, `run.end` v7, `log` v6): whether a person is offered a
-retry is the `failed` row's `next` alone. Open: the `ModelError` kinds nothing
-branches on, the reason unions, and the tagged classes with no discriminator._
-
 ## 4. Errors: one classifier per question
 
-| Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `isCredentialRetryFailure` (`packages/harness/src/shared/schemas/errors.ts:131-139`, re-reading the status after llm set the kind), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`) |
-| Is this retryable        | `ModelError.retryable`, `notRetryable` (`verdict.ts:269`), `offersRetry` (`packages/harness/src/common/errors/sdkError/providerErrorFormat.ts:150`), `userRetryable`; `unsent` forces "no offer" twice (`failureInfo.ts:37`, `invocation.ts:288`)                                                                                                                                                                                                                                                                        |
-| Transient HTTP status    | `isRetryableStatus` (`packages/llm/src/errors.ts:142`), `isTransientHttpStatus` (`packages/harness/src/utils/core/httpStatus.ts:14`, the 409 split documented), an inline `status >= 500` (`packages/llm/src/oauth/chatgpt/chatgptProvider.ts:287`), a hand-rolled loop with its own error pair (`packages/texra/src/latex/arxivProcessor.ts:206-245`) beside `retryTransientFetch` (`packages/harness/src/tools/timeouts.ts:53`)                                                                                        |
-| Is this an abort         | `isUserAbort` (`packages/harness/src/common/errors/errorPredicates.ts:35`), inline `name === 'AbortError'` at `packages/llm/src/api/googleInteractions.ts:232` and `arxivProcessor.ts:419`                                                                                                                                                                                                                                                                                                                               |
-| Is nothing there         | `absentReason`, plus twelve inline `reason._tag === 'NotFound'` (eight in texra, four in the CLI); EACCES-as-absent decided at `packages/harness/src/platform/defaults/workspaceStorage.ts:37` and `packages/harness/src/utils/system/nodeWorkspace.ts:28`                                                                                                                                                                                                                                                               |
-| Walk a cause chain       | `causeChain` in `packages/harness/src/utils/errors/errorMessage.ts:7` and `verdict.ts:211`; `toErrorMessage` in the harness and `packages/llm/src/oauth/support.ts:4`                                                                                                                                                                                                                                                                                                                                                    |
-| Unwrap a `PlatformError` | fifteen hand-written `reason.cause` unwraps (`jsonStore.ts:25`, `nodeProcesses.ts:58`, `execUtils.ts:277`, `arxivProcessor.ts:92,573`, `clone.ts:83,104`, `doctor.ts:196`, …)                                                                                                                                                                                                                                                                                                                                            |
-| Word a used-up plan      | `usedUpPlanMessage` and `quotaFallbackMessage` (`providerErrorFormat.ts:89,116`) and again `modelFailureText` and `quotaFallbackNoticeText` (`packages/texra/src/ui/copy/modelAccess.ts:71,98`); the harness wording reaches only logs                                                                                                                                                                                                                                                                                   |
+| Question                 | Deciders                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Is this 401/403          | `authOrRejectionKind` (`packages/llm/src/errors.ts:227`), `isCredentialRetryFailure` (`packages/harness/src/shared/schemas/errors.ts:131-139`, re-reading the status after llm set the kind), `oauthTokenErrorKind` (`packages/llm/src/oauth/oauthRequest.ts:53`), GitHub `classifyFailure` (`packages/texra/src/tools/github/githubClient.ts:96`), `packages/texra/src/controllers/modelAccess/subscriptionUsage/SubscriptionUsageService.ts:319`, `isCloneAuthError` (`packages/texra/src/latex/overleafClone.ts:266`)                                                                                                                                                                                                                    |
+| Is this retryable        | `ModelError.retryable`, `notRetryable` (`verdict.ts:269`), `offersRetry` (`packages/harness/src/common/errors/sdkError/providerErrorFormat.ts:150`), `userRetryable`; `unsent` forces "no offer" twice (`failureInfo.ts:37`, `invocation.ts:288`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Transient HTTP status    | `isRetryableStatus` (`packages/llm/src/errors.ts:142`), `isTransientHttpStatus` (`packages/harness/src/utils/core/httpStatus.ts:14`, the 409 split documented), an inline `status >= 500` (`packages/llm/src/oauth/chatgpt/chatgptProvider.ts:287`), a hand-rolled loop with its own error pair (`packages/texra/src/latex/arxivProcessor.ts:206-245`) beside `retryTransientFetch` (`packages/harness/src/tools/timeouts.ts:53`)                                                                                                                                                                                                                                                                                                           |
+| Is this an abort         | none in the harness since #14641 deleted `isUserAbort` (a stop is fiber interruption); the boundary signatures, inline `name === 'AbortError'` at `packages/llm/src/api/googleInteractions.ts:232` and `arxivProcessor.ts:419`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Is nothing there         | `absentReason` (eleven of the twelve inline `NotFound` checks now call it: done; `packages/cli/src/commands/clone.ts:82` keeps NotFound-only on purpose, since its destination under a regular file cannot be created and stays unreadable); still inline: NotFound-only `Effect.catchReason` at `packages/cli/src/runtime/initConfig.ts:50,103` and `packages/cli/src/runtime/workflowOutput.ts:112`, and `Effect.catchReasons` at `packages/texra/src/housekeeping/utils.ts:119-122`, which counts every `BadResource` as absent (`ELOOP` included), broader than `absentReason`; EACCES-as-absent decided at `packages/harness/src/platform/defaults/workspaceStorage.ts:37` and `packages/harness/src/utils/system/nodeWorkspace.ts:28` |
+| Walk a cause chain       | `causeChain` in `packages/harness/src/utils/errors/errorMessage.ts:7` and `verdict.ts:211`; `toErrorMessage` in the harness and `packages/llm/src/oauth/support.ts:4`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Unwrap a `PlatformError` | fifteen hand-written `reason.cause` unwraps (`jsonStore.ts:25`, `nodeProcesses.ts:58`, `execUtils.ts:277`, `arxivProcessor.ts:92,573`, `clone.ts:85,106`, `doctor.ts:196`, …)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Word a used-up plan      | `usedUpPlanMessage` and `quotaFallbackMessage` (`providerErrorFormat.ts:89,116`) and again `modelFailureText` and `quotaFallbackNoticeText` (`packages/texra/src/ui/copy/modelAccess.ts:71,98`); the harness wording is `ProviderError.message` (`providerErrorOf`), stored on the run's error rows and read wherever no app copy words the classification (an embedder, a child's result to its parent)                                                                                                                                                                                                                                                                                                                                    |
 
 **Proposal.** One decider per row: `ModelError.kind` is the auth fact and
 `isCredentialRetryFailure` reads it; `offered` is computed once in
 `failureInfo`; the arXiv loop and the ChatGPT revoke use the existing
-transient helpers; the twelve inline `NotFound` checks call `absentReason`
-(the rule in review-checklist §15 already forbids them); `toErrorMessage`
-unwraps `PlatformError` once and the fifteen sites delete their copy; the llm
-package imports the harness's browser-safe `toErrorMessage` and `causeChain`
-or the harness imports llm's, not both; the plan wording has one owner, the
+transient helpers; `toErrorMessage`
+unwraps `PlatformError` once and the fifteen sites delete their copy; the harness
+imports llm's `toErrorMessage` and `causeChain` once llm has a browser-safe
+entry (the harness depends on `@texra-ai/llm`, so llm cannot import the
+harness's), not both; the plan wording has one owner, the
 UI's, and the harness copies go.
 
 **Give up.** Nothing observable.
 
-_Landed 2026-11-04 (#14655): `isCredentialRetryFailure` and
-`getExhaustionReason` are gone; the credential move is decided over llm's
-`quota` before it is recorded, and a subscription token is renewed once on any
-authentication failure, so "is this 401/403" has one decider fewer. Open: the
-retryable notions, the inline `NotFound` checks, the `PlatformError` unwraps,
-the abort and cause-chain copies, the plan wording._
+## 5. Stop and interruption: one answer to "did it stop or fail"
 
-## 5.
-
-Stop and interruption: one answer to "did it stop or fail"
-
-- **Eleven deciders.** `outcomeFromCause`
+- **Nine deciders.** `outcomeFromCause`
   (`packages/harness/src/shared/runs/runStatus.ts:27`) is the named owner;
   `endRun` (`packages/harness/src/agent/runtime/AgentRunLifecycle.ts:325-341`)
   re-derives it by hand and says so in a comment; `endChildLoop`
-  (`packages/harness/src/agent/runtime/childRunLoop.ts:777-783`) adds "a
-  not-owner error means stopped"; `writeEnd` (`:710`) re-reads `stopCause`;
-  `classifyAgentError` maps a DOM `AbortError` to kind `abort` → `CANCELLED`
-  (an error turned into a cancellation, with no harness producer of
-  `AbortError`); `isTurnInterrupted` turns a `CANCELLED` report into
+  (`packages/harness/src/agent/runtime/childRunLoop.ts:776-781`) asks again;
+  `writeEnd` (`:712`) re-reads `stopCause`; `isTurnInterrupted` turns a `CANCELLED` report into
   `Effect.interrupt` (`childRunLoop.ts:605-606`, a value turned into an
   interruption); `runLaunchGuard.ts:96,101`, `sessionDescription.ts:215-217`,
-  `executeCli.ts:474,486` (`hasInterruptsOnly || isUserAbort`) and
+  `executeCli.ts:472` (`hasInterruptsOnly`) and
   `runRegistry.ts:235-238` each ask again. Three sites re-raise a bare
   `Effect.interrupt` that drops finalizer failures (`invocation.ts:216`,
   `ModelInvoker.ts:319-320`, `compaction.ts:209-211`).
-- **`StopCause`** (`packages/harness/src/agent/runtime/runs.ts:89`) is
-  `'user' | 'shutdown' | 'released'`. Correction (2026-11-04): `released` has
-  a consumer, the lifecycle writes an end with no reason for it
-  (`packages/harness/src/agent/runtime/AgentRunLifecycle.ts:106`); only its
-  default-argument form (`interrupt(runId, cause = 'released')`,
-  `runRegistry.ts:456`) hides which callers mean it.
+- **`StopCause`** (`packages/harness/src/agent/runtime/runs.ts:84`) is
+  `'user' | 'shutdown' | 'released'`; `'released'` is the default argument of
+  `interrupt` (`packages/harness/src/agent/runtime/runRegistry.ts:459`), ranks
+  below a reason in `markStopped` (`:569`), and is the one cause `endRun`
+  records with no `run.end.reason` (`AgentRunLifecycle.ts:109`); the `closed`
+  halt reason is gone (#14641).
 - **Ten functions stop a run**: `stop`, `interrupt`, `terminate`, `stopAll`,
   `stopEnd` (written from `stop` and again from `start`'s resume body,
   `runRegistry.ts:293-295,484`), `dispose`, `rootRun`'s `Fiber.interrupt`
@@ -225,9 +204,8 @@ Stop and interruption: one answer to "did it stop or fail"
   `{ kind: classifyAgentError(e), message: getSdkErrorMessage(e) }` at
   `runLaunchGuard.ts:80-85` and `childRunLoop.ts:724-730`, and `failedEnd`
   (`AgentRunLifecycle.ts:207-231`) through `normalizeProviderError`.
-- **`halted` means two things**: a `run.position` row that changes no phase,
-  and the loop phase `turn.end` maps to (`runStatus.ts:98,105`); readers of
-  `phase === 'halted'` and `at === 'halted'` see different facts.
+- **`halted` means two things** (done 2026-11-04: the loop phase `turn.end`
+  maps to is now `turn.ended`; `halted` is only the `run.position` row).
 - **The stopped vocabulary**: `RUN_OUTCOME.CANCELLED`, `RunGroup 'interrupted'`,
   `RunNotice` (six values), `ScriptCallStatus` (`interrupted`, `cancelled`,
   `skipped`), `ScriptDeliverySummary.outcome 'stopped'` (one producer,
@@ -241,56 +219,35 @@ Stop and interruption: one answer to "did it stop or fail"
   and `notResumable` are only worded; `pluginUnavailable` is lumped with two
   others by its one consumer.
 - `COMPACTION_REASONS[reason].trigger` is written to `context.edit`
-  (`compaction.ts:262`). Correction (2026-11-04): the run state reads it
-  (`packages/harness/src/shared/session/runState.ts:416-417`, since #14639),
-  so it stays.
+  (`compaction.ts:228`) and, since #14639, read by the run-state fold: an
+  `overflow` edit closes the failed invocation (`runState.ts:416-417`).
 
 **Proposal.** `stopOrFailure(cause)` beside `outcomeFromCause` is the one
 decider; `endRun`, `endChildLoop`, `runLaunchGuard` and the CLI call it;
-`abort` leaves `AgentErrorKind`. `StopCause` is `'user' | 'shutdown'` and
+`abort` left `AgentErrorKind` in #14641. `StopCause` is `'user' | 'shutdown'` and
 `released` callers say which. Every stop goes through `RunRegistry.interrupt`
 so a stop record always exists; `stopEnd` has one caller; `accepted` folds
 into the result. `detachActiveChildren` leaves the wire; `shutdown` implies
-cascade inside the registry. One `runEndError(cause)`. The loop phase is
-renamed so `halted` has one meaning. The script delivery summary says
-`cancelled`. Ownership and build are decided once, in `runRejection`, and the
-earlier checks go. The two `released` callers name their cause.
+cascade inside the registry. One `runEndError(cause)`. The script delivery
+summary says `cancelled`. Ownership and build are decided once, in
+`runRejection`, and the earlier checks go. `trigger` is read by the run-state
+fold (landed, #14639).
 
 **Give up.** Nothing observable; the hosts converge on the registry's
 behaviour, which is the documented one.
 
-_Landed 2026-11-04 (#14641, #14650, #14651, #14660): `run.end.reason`
-(`user` or `shutdown`) is the one stored representation of why a run stopped;
-the halt row's `closed`, `outcomeFromCause`'s second parameter and the
-lost-claim-as-stop branch are gone, and a stop is fiber interruption.
-`RunStopOptions.detachActiveChildren` and its wire field are gone: a shutdown
-cascades and owes no end row, a user stop reads the one setting. The session
-fold computes `RunView.working` once (`isWorkingRun` and `isActivePhase`
-deleted). The CLI's exit is one `Deferred<ChatExit>`: `claim.stop`,
-`stopRequested`, `askStop` and the teardown memo are gone, `process.exit` has
-one home, and headless the six shutdown flags are the launch fiber's `Exit`
-plus one boolean. Open: the `released` default argument, the remaining stop-or-failure
-deciders, the two meanings of `halted`, the resume refusals decided three
-times._
-
 ## 6. The model-call failure path
 
-- **Dead outcomes.** `FailedNextSchema` (`packages/harness/src/shared/schemas/runHistoryEvent.ts:67-76`)
-  admits `cancel`; `failedNext` (`packages/harness/src/shared/session/inFlight.ts:269-286`)
-  and `afterFailure` (`invocation.ts:332`) never produce it, and its two
-  consumers (`inFlight.ts:236-237`, `invocation.ts:376`) are dead. A person's
-  cancel already travels `ask` → `request.decided`.
-  `ToolResultPayload.disposition: 'cancelled'` (`runHistoryEvent.ts:404-410`)
-  has no producer; `dispositionOf` returns `executed` or `failed`.
-- **A truncated turn was a silent success.** At the audit, `finishReason`
-  was stored (`packages/harness/src/shared/schemas/storedTurn.ts:125`) and read
-  by nothing outside the llm package. Since #14644 the loop names the limit on
-  `response.finalized` (`cut: 'length' | 'content-filter'`,
-  `packages/harness/src/agent/runtime/loop/rows.ts:44-51`) and both UIs show it
-  (`RESPONSE_CUT_NOTE`); the run still completes, by the owner's choice. The
-  Anthropic overflow finish is already the `context-overflow` error
-  (`packages/llm/src/api/anthropicMessages.ts:456`), the same as every other
-  provider's.
+- **Dead outcomes.** Done: `FailedNext` `cancel` and the `tool.result`
+  disposition `cancelled` are deleted with their dead readers (a person's
+  cancel travels `ask` → `request.decided`).
+- **A truncated turn was a silent success (landed).** #14638 stamps
+  `response.finalized` with `cut` (`length` or `content-filter`,
+  `packages/harness/src/agent/runtime/loop/rows.ts:38-54`) and the hosts end
+  such an answer with a note; #14639 makes Anthropic's
+  `model_context_window_exceeded` the `context-overflow` failure
+  (`packages/llm/src/api/anthropicMessages.ts:456`), which the loop answers by
+  compacting once and resending.
 - **An abnormal stream end lands on three kinds.** Google non-completed status
   → `malformed-output` (`googleInteractions.ts:482-484`) but the same status
   in a background snapshot → `provider-rejection` (`:672-682`); OpenAI
@@ -318,20 +275,16 @@ times._
   model-visible error with no log. `diagnostics.code` values (`hook_denied`,
   `tool_unavailable`) and `diagnostics.name` have no reader; "skipped" is
   signalled both as a disposition and as `name: 'Skipped'`, and
-  `scriptRun.ts:55` checks both.
+  `scriptRun.ts:53` checks both.
 
-**Proposal.** Delete `cancel` from `FailedNextSchema` and `cancelled` from the
-disposition. The cut is named and shown (done); whether a cut turn should end
-the run is a product call, not a cleanup. One `terminalStatusFailure(status)` in `assembleTurn` and one
+**Proposal.** The loop reads `finishReason` (landed: #14638, #14639). One `terminalStatusFailure(status)` in `assembleTurn` and one
 "no completed turn" check; the Google wrapper passes headers like the other
-two. The gate owning every wait needs a decision first: for a failure llm scoped
-to no route (a transport error with no status, a malformed stream),
-`pauseBefore`'s flat sleep is the only wait, so deleting it means either no
-wait or cooling the wire route for a failure that says nothing about it. One thrown-to-result converter; a non-`ToolError` defect is
+two. The gate owns every wait: `pauseBefore`'s sleep goes and `retryAfterMs`
+is honoured. One thrown-to-result converter; a non-`ToolError` defect is
 logged at `warn` before it becomes a result; one skip signal; `diagnostics`
 values get a reader or go.
 
-**Give up.** Nothing observable.
+**Give up.** A silent success on truncation, which is the defect.
 
 ## Rejected
 
@@ -340,7 +293,7 @@ values get a reader or go.
   re-proposed.
 - **The vendor phrase and code tables in `verdict.ts`**: per-provider by
   nature (a vendor's wording), and already the single owner; no `if (provider
-=== X)` exists elsewhere in the failure path.
+  === X)` exists elsewhere in the failure path.
 - **The 408/409 split between `isRetryableStatus` and `isTransientHttpStatus`**:
   documented as deliberate (a tool fetch and a model call differ on 409);
   the inline third copy is the find, not the split.
@@ -354,4 +307,4 @@ values get a reader or go.
 are one PR per package side (llm's kinds, then the harness's unions and
 classifiers, then the app's wrappers). §5 is two PRs: the one decider and the
 one stop door. §6 is one PR for the dead literals, one for the stream end and
-the gate, and one for the tool failure shapes with the defect log.
+the gate, and the `finishReason` one, which landed (#14638, #14639).

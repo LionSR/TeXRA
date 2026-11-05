@@ -62,7 +62,7 @@ export type PartEvent =
        *  finish when it holds calls, else a plain stop. */
       readonly finish: Pick<
         TurnResult,
-        'stopSequence' | 'finishEvidence' | 'refusalEvidence'
+        'finishEvidence' | 'refusalEvidence'
       > & { readonly finishReason: TurnResult['finishReason'] | null };
       /** The terminal item list. It supplies content only for a turn with
        *  no item events, or the items a resumed observation joined too late

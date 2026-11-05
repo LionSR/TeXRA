@@ -15,7 +15,7 @@ import { join } from 'node:path';
 
 import { layer } from '@effect/vitest';
 import { Context, Effect, Schema } from 'effect';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
 import { InstalledPlugins } from '@texra-ai/harness/host';
@@ -53,11 +53,13 @@ const linesOf = (file: string): string[] =>
 const rowsOf = (storage: string, runId: RunId, type: string) =>
   storedRows(storage)
     .filter((row: StoredRow) => row.run === runId && row.type === type)
+    // cast: every stored row's data is the JSON object its writer encoded.
     .map((row) => JSON.parse(row.data) as Record<string, unknown>);
 
 /** The commands the model's own responses asked `bash` for. */
 const commandsAsked = (storage: string, runId: RunId) =>
   rowsOf(storage, runId, 'model.message').flatMap((row) => {
+    // cast: a `model.message` row's payload is its ModelMessagePayload.
     const { payload } = row as {
       payload: {
         kind: string;
@@ -69,7 +71,8 @@ const commandsAsked = (storage: string, runId: RunId) =>
     if (payload.kind !== 'response') return [];
     return (payload.turn?.content ?? []).flatMap((part) =>
       part.kind === 'local-call' && part.argumentsText !== undefined
-        ? [(JSON.parse(part.argumentsText) as { command: string }).command]
+        ? // cast: `bash`'s arguments, as the scripted model wrote them.
+          [(JSON.parse(part.argumentsText) as { command: string }).command]
         : [],
     );
   });
@@ -125,8 +128,10 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
         () =>
           Effect.gen(function* () {
             const roots = testWorkspaceRoots();
-            const effects = join(roots.workspace!, 'effects.log');
-            const hookRuns = join(roots.workspace!, 'hook-runs.log');
+            const { workspace } = roots;
+            assert(workspace !== undefined);
+            const effects = join(workspace, 'effects.log');
+            const hookRuns = join(workspace, 'hook-runs.log');
             const original = `echo original >> ${effects}`;
             const rewritten = `echo rewritten >> ${effects}`;
             yield* installRewriteHook(
@@ -170,9 +175,11 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(rowsOf(storage, runId, 'hook.outcome')).toMatchObject([
               { payload: { updatedInput: { command: rewritten } } },
             ]);
+            // cast: a `request.opened` row's data carries its request's id.
             const [pending] = rowsOf(storage, runId, 'request.opened') as {
               requestId: string;
             }[];
+            assert(pending !== undefined);
 
             // A fresh process resumes the run; the person approves.
             const session = yield* persistentTestSession({ ...roots, storage });
@@ -183,7 +190,7 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(
               yield* Context.get(session, SessionRequests).decide(
                 runId,
-                pending!.requestId,
+                pending.requestId,
                 { action: 'approve' },
               ),
             ).toBe(true);

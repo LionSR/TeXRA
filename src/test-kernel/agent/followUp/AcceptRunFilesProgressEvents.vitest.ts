@@ -2,12 +2,13 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 // Local imports
 import { WorkspaceFs } from '@texra-ai/harness/host';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -20,9 +21,8 @@ import { AcceptRunFilesTool } from '@texra/tools/AcceptRunFilesTool';
 
 // Local file imports
 import { autoDecideRequests } from '../progressTestUtils';
-import type { RunId } from '@texra-ai/harness/schemas';
 
-const runId = 'abcdef' as RunId;
+const runId = Schema.decodeUnknownSync(RunIdSchema)('abcdef');
 const storagePath = '/storage';
 
 // The process session over the host's roots, opened as a host whose

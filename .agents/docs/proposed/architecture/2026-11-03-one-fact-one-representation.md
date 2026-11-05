@@ -240,11 +240,12 @@ fold computes.
 | A clock is ticking     | `runStartedAt`, nulled by the fold unless working | the three clock rules (`RunHeader.ts:562`, `BackgroundTasksPanel.ts:464`, `childControls.ts:22,38`)                                                                                                                                                                                                                                               | 3     |
 | Stop is offered        | `actions`                                         | the TUI stop predicate over `isActivePhase` (`sessionRunState.ts:229-242`)                                                                                                                                                                                                                                                                        | 1     |
 
-Today's divergences, each a user-visible defect: an interrupted run keeps
-`status: running`, so the TUI status bar shows it active, the live-assistant
-row renders, `/clear` is refused ("wait for the active response"); the header
-clock keeps ticking on an interrupted run while the background panel stops it;
-a service handler invents `CANCELLED` for a run with no end row.
+The divergences at `b411a6d6`, each a user-visible defect: an interrupted run
+kept `status: running`, so the TUI status bar showed it active, the
+live-assistant row rendered, `/clear` was refused ("wait for the active
+response"); the header clock kept ticking on an interrupted run while the
+background panel stopped it (all fixed 2026-11-04, below); a service handler
+still invents `CANCELLED` for a run with no end row (`handlers.ts:213`).
 
 Acceptance: no host file imports `isActivePhase`, `isTerminalOutcomePhase` or
 `isLiveRun`; `grep -rn 'view.status\|run.status' packages/{cli,texra,extension,desktop}/src`
@@ -262,7 +263,7 @@ predicate reads `working`, not `actions`: it asks whether a turn is in
 progress, and `actions` offers a stop at a wait too, where the TUI's exit
 leaves the run resumable. Still open: `runsHere` and the
 `ownedHere && isLiveRun` sites, `handlers.ts`'s `durableOutcome ?? CANCELLED`
-and `/clear`'s `isTranscriptSettlementPhase` read, which change meaning under
+and the TUI's agent-finished bell's `isTranscriptSettlementPhase` read (`runChatTui.tsx:758`; `/clear` already reads `working`), which change meaning under
 slice 3 (the service holds the run) and land with it._
 
 ### C. Host attachment and the CLI process lifecycle
@@ -281,9 +282,9 @@ written in `packages/desktop/src/main/desktopProjects.ts:292-297`,
 | The exit code                 | one `setExitCode`, written through `settleExitCode`               | the seven direct `runExitCode =` writes; the nine `process.exit` sites outside the one owner                                                                                                                                                    | 6     |
 | Signal policy                 | one registry in `initPlatform`; TUI and `serve` register policies | the five install sites (`initPlatform.ts:188-210`, `foregroundCommand.ts:37`, `sessionExitController.ts:136-145,254-266`, `commands/service.ts:92-98`)                                                                                          | 4     |
 
-Today's defect: `reportRunFailure` (`packages/cli/src/chat/chatSessionController.ts:417-420`)
-writes exit code 0 whenever a stop was requested, `leaving` included, so a run
-that fails while the user quits exits 0 and bypasses `settleExitCode`.
+The defect at `b411a6d6` (gone 2026-11-04, below): `reportRunFailure`
+wrote exit code 0 whenever a stop was requested, `leaving` included, so a run
+that failed while the user quit exited 0 and bypassed `settleExitCode`.
 
 Acceptance: `grep -rn 'process.exit(' packages/cli/src` returns one file;
 `grep -rn "process.on('SIG" packages/cli/src` returns one file.
@@ -348,12 +349,11 @@ before it is recorded, and a failure is one value from the model call to
 
 ### E. The parent edge
 
-Audit verdict: partial. Rows and view are both read as the attached parent in
-one job: `packages/harness/src/agent/followUp/Inbox.ts:314` refuses by the
-rows, `:318` stamps `relation` from the view, and
-`followUpMessages.ts:219` recomputes `relation` from the view when comparing
-a retry with its stored row, so a retry after a detach fails with a spurious
-`Conflict`.
+Audit verdict (at `b411a6d6`): partial. Rows and view were both read as the
+attached parent in one job: `Inbox.ts` refused by the rows, stamped
+`relation` from the view, and `followUpMessages.ts` recomputed `relation`
+from the view when comparing a retry with its stored row, so a retry after a
+detach failed with a spurious `Conflict` (fixed 2026-11-04, below).
 
 | Fact                | Keep                                               | Delete                                                                                                                    | Files |
 | ------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----- |
@@ -372,10 +372,10 @@ waits for O5's slice._
 
 ### F. Approval grants
 
-Audit verdict: not this disease. One evaluator, one vocabulary. One item goes
-with E: `grantsKept` reads the ancestry from the view
-(`runRegistry.ts:602-609`) while `activationRows` reads it from the rows
-(`runApprovalQueue.ts:128-141`). A claim that the guarding ratchet
+Audit verdict: not this disease. One evaluator, one vocabulary. One item went
+with E (landed 2026-11-04): `grantsKept` read the ancestry from the view
+while `activationRows` read it from the rows; both now take `grantSource`
+over `ancestryRows` (`runRegistry.ts:614-615`, `runApprovalQueue.ts:128-129`). A claim that the guarding ratchet
 (`src/test-kernel/architecture/approvalPolicyAuthorityRatchet.vitest.ts`)
 names a missing file was checked on 2026-11-04 and withdrawn: every path it
 lists exists.
@@ -393,7 +393,17 @@ one source and derived types (O10). _The command list landed 2026-11-04: the
 catalog's `setupInvokable` column is the one list, and the tool derives its
 allowlist from it. The provider list waits on a browser-safe llm entry:
 `shared/schemas` and the settings webview cannot import llm's root, which
-is not browser-safe, so deriving it is a packaging decision first._ The run actions of
+is not browser-safe, so deriving it is a packaging decision first._ _The
+provider list landed 2026-11-04 as far as the rulings in the code allow: the
+Models tab's source order is llm's `API_KEY_PROVIDER_IDS` itself (the hand
+list and its compile gate are gone). The stored enums (`ModelBackendSchema`,
+`ApiKeyProviderIdSchema`) and the settings rows (`providerSettings.ts`) stay
+owned by storage, each covered against the catalog by a compile-time check:
+the harness pins llm by a caret range, so a catalog that grew in a newer llm
+would otherwise widen a stored union in the field without a harness release,
+which `prompts.ts` and `providerSettings.ts` rule out in so many words. The
+packaging block itself was stale: `shared/` and the settings webview already
+import llm's root._ The run actions of
 `packages/harness/src/shared/schemas/run.ts:114` were listed here beside
 `openGuiWindow.ts:106`, which is the host request kinds, an unrelated set; no
 second spelling of the run actions was found, so that pair is dropped.
@@ -418,6 +428,19 @@ checks below green. No slice keeps two representations "for now".
 4. **A4 + A5: one resume, one refusal, children through tool results** (O5).
    Amends the session-messaging note.
 5. **A6 + A7: no ownerless stop, list at open** (O4). Deletes the setting.
+   _Landed 2026-11-05 (A7, list at open): the `resumeOnOpen` setting,
+   `OpenOptions.host.interruptedTasks`, `followInterruptedTasks` and
+   `resumeBlocks()` are gone; a session resumes nothing at open._
+   _Landed 2026-11-05 (second part): the blocked mark
+   (`LocalRuntimeState.resumeBlocked`, `RunView.resumeBlocked`,
+   `markResumeBlocked`, the `resumeBlocked` notice) and the `'waiting'`
+   answer are gone; a blocked resume is refused with its reason at the click,
+   on every host and over the service._
+   _Landed 2026-11-05 (third part): the interrupted-tasks notice in both
+   hosts, its "Not now" state and the TUI's hide-on-send are gone; the
+   list's one home is the task list's `interrupted` group with each task's
+   Resume, and `/resume all`. The other refusal kinds wait for the lock, with
+   A6 (no ownerless stop)._
 6. **B: the fold fields and the host deletions** (O6).
 7. **C: the CLI exit owner** (O7).
 8. **D: llm's verdict and the row fold** (O8).

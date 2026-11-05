@@ -27,7 +27,7 @@ import {
   TRACE_ROW_TYPES,
 } from '@shared/schemas';
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
-import { closesRunWindow, recordOf } from '@shared/session/runRowReads';
+import { closesRunWindow } from '@shared/session/runRowReads';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type {
   ClosureFact,
@@ -36,7 +36,7 @@ import type {
 } from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import type { InflightText, InflightTextChunk } from './sessionSources';
+import { textSince, type InflightText } from './sessionSources';
 
 /** A session's trace sink, and the tail's hand-off of each committed row. */
 export interface RunTraceSink extends Pick<
@@ -90,26 +90,19 @@ export function makeRunTrace({
     return true;
   };
   const readText = (runId: RunId, id: string): string | undefined => {
-    let chunk = SubscriptionRef.getUnsafe(text).get(`${runId}/${id}`);
-    if (chunk === undefined) return undefined;
-    const pieces: string[] = [];
-    while (chunk !== undefined) {
-      pieces.push(chunk.text);
-      chunk = chunk.previous;
-    }
-    return pieces.reverse().join('');
+    const chunk = SubscriptionRef.getUnsafe(text).get(runId)?.get(id);
+    return chunk === undefined ? undefined : textSince(chunk).text;
   };
   const appendText = (runId: RunId, id: string, chunk: string) =>
     SubscriptionRef.update(text, (held) => {
-      const next = new Map(held);
-      const key = `${runId}/${id}`;
-      const previous = next.get(key);
-      next.set(key, {
+      const rows = new Map(held.get(runId));
+      const previous = rows.get(id);
+      rows.set(id, {
         previous,
         text: chunk,
         length: (previous?.length ?? 0) + chunk.length,
       });
-      return next;
+      return new Map(held).set(runId, rows);
     });
   function closure(runId: RunId): StreamClosure[];
   function closure(runId: RunId, outcome: RunOutcome): ClosureFact[];
@@ -182,27 +175,34 @@ export function makeRunTrace({
       }),
     closure,
     committed: (row) => {
-      const runId = aggregateTarget(row.aggregateId).id;
-      let closes: ((key: string) => boolean) | null = null;
-      if (row.type === 'stream.end')
-        closes = (key) => key === `${runId}/${row.id}`;
+      const target = aggregateTarget(row.aggregateId);
+      if (target.kind !== 'run') return Effect.void;
+      // The row whose text is done with (null: every row of the run), or
+      // nothing to drop.
+      let closes: { readonly row: string | null } | undefined;
+      if (row.type === 'stream.end') closes = { row: row.id };
       else if (
         row.type === 'tool.end' &&
         row.status !== TOOL_CALL_STATUS.IN_PROGRESS
       )
-        closes = (key) => key === `${runId}/${row.logId}`;
-      else if (recordOf(row).removed !== null || closesRunWindow(row))
-        closes = (key) => key.startsWith(`${runId}/`);
+        closes = { row: row.logId };
+      else if (row.type === 'run.removed' || closesRunWindow(row))
+        closes = { row: null };
       const dropping = closes;
-      if (dropping === null) return Effect.void;
+      if (dropping === undefined) return Effect.void;
       return SubscriptionRef.update(text, (held) => {
-        let next: Map<string, InflightTextChunk> | null = null;
-        for (const key of held.keys()) {
-          if (!dropping(key)) continue;
-          next ??= new Map(held);
-          next.delete(key);
+        const rows = held.get(target.id);
+        const { row: dropped } = dropping;
+        if (rows === undefined || (dropped !== null && !rows.has(dropped)))
+          return held;
+        const next = new Map(held);
+        if (dropped === null || rows.size === 1) next.delete(target.id);
+        else {
+          const remaining = new Map(rows);
+          remaining.delete(dropped);
+          next.set(target.id, remaining);
         }
-        return next ?? held;
+        return next;
       });
     },
   };
@@ -294,7 +294,7 @@ export function replayTrace<E>(
       seq = row.seq;
       // Its end, the next activation, or the run's removal ends the read.
       ended ||=
-        recordOf(row).removed !== null ||
+        row.type === 'run.removed' ||
         lastLifecycleRow([row], runId) !== undefined;
       if (!STORED_TRACE.has(row.type)) return [];
       // cast: a stored trace row is its trace event plus the envelope the store and `runEventDraft` add.

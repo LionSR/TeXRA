@@ -48,7 +48,10 @@ describe('dangling output symlinks', () => {
           },
         );
         if (linkError !== undefined) {
-          const code = (linkError as NodeJS.ErrnoException | undefined)?.code;
+          const code =
+            linkError instanceof Error && 'code' in linkError
+              ? linkError.code
+              : undefined;
           if (
             typeof code === 'string' &&
             ['EACCES', 'EINVAL', 'ENOSYS', 'ENOTSUP', 'EPERM'].includes(code)

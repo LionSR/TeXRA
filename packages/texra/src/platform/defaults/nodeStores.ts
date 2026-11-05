@@ -67,13 +67,16 @@ export const openTexraWorkspaceConfigStores = Effect.fn(
   'nodeStores.openTexraWorkspaceConfigStores',
 )(function* (
   catalog: SettingsCatalog,
-  workspaceStoragePath: string,
+  storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
   follow?: boolean,
 ) {
   const openLocal = JsonStore.open(
-    path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
+    path.join(
+      resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
+      TEXRA_CONFIG_FILE_NAME,
+    ),
     { follow },
   );
   if (!workspaceRoot) {
@@ -125,7 +128,7 @@ export const openTexraConfigStores = Effect.fn(
     [
       openTexraWorkspaceConfigStores(
         catalog,
-        resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
+        storageRoot,
         workspaceRoot,
         warn,
         follow,

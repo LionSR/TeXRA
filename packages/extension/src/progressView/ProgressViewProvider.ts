@@ -27,7 +27,6 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { AppSignals, appSignalStream } from '@texra-ai/harness/host';
-import { BundledViewContentProvider } from '@common/webview';
 import { VscodeToolEditApprovalHost } from '@frontend/approval/VscodeToolEditApprovalHost';
 import {
   createAgentPresentationHost,
@@ -69,7 +68,8 @@ import type {
 } from '@texra/controllers/session/SessionBridge';
 import { workspaceFileOptions } from '@texra/controllers/session/workspaceFileOptions';
 import { hasUsableSetupCredential } from '@texra/model/setupCredentialAccess';
-import { checkCoreDependencies } from '@texra/utils/system/checkCoreDependencies';
+import { checkCoreDependencies } from './checkCoreDependencies';
+import { BundledViewContentProvider } from '../common/webview/BundledViewContentProvider';
 
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';

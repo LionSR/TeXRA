@@ -8,7 +8,6 @@ import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
 import { AggregateIdSchema, OwnerIdSchema } from './identifiers';
-import { ResumeBlockedSchema } from './followUp';
 import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
 
 /**
@@ -38,22 +37,18 @@ export const TextChunkSchema = Schema.TaggedStruct('chunk', {
 export type TextChunk = typeof TextChunkSchema.Type;
 
 /** Why this build cannot open a run's rows: one does not decode
- *  (`damaged`), or an earlier build wrote one it has no upcaster for, the
+ *  (`damaged`), or an earlier build wrote one at a lower version, the
  *  resume refusal of the same name. */
 const RunUnreadableSchema = Schema.Literals(['damaged', 'earlierBuild']);
 
 /**
  * Why a run's banner speaks, as a key and the data its words need; the
  * app's `@ui/copy/runStatus` words it. In priority order: its rows cannot
- * be read here, a resume found it blocked, its process stopped before it
- * finished, another process (by pid) holds it, its end lost its result.
+ * be read here, its process stopped before it finished, another process
+ * (by pid) holds it, its end lost its result.
  */
 export const RunNoticeSchema = Schema.Union([
   Schema.Struct({ kind: RunUnreadableSchema }),
-  Schema.Struct({
-    kind: Schema.Literal('resumeBlocked'),
-    reason: ResumeBlockedSchema,
-  }),
   Schema.Struct({ kind: Schema.Literal('interrupted') }),
   Schema.Struct({ kind: Schema.Literal('held'), pid: Schema.Int }),
   Schema.Struct({ kind: Schema.Literal('lost'), message: Schema.String }),
@@ -62,19 +57,13 @@ export const RunNoticeSchema = Schema.Union([
 /**
  * Process-local liveness evidence: self, explicitly proved-dead owners, and
  * unreadable runs. A current claimant absent from these verdicts is
- * unprovable and remains held until a probe establishes otherwise. Beside
- * it, the runs a resume found blocked here, each with what it waits for;
- * whether the run then continues by itself is what the session was opened
- * to do with interrupted tasks, not a fact of the run.
+ * unprovable and remains held until a probe establishes otherwise.
  */
 export const LocalRuntimeStateSchema = Schema.Struct({
   self: Schema.Array(OwnerIdSchema),
   dead: Schema.Array(OwnerIdSchema),
   unreadable: Schema.Array(
     Schema.Struct({ runId: RunIdSchema, reason: RunUnreadableSchema }),
-  ),
-  resumeBlocked: Schema.Array(
-    Schema.Struct({ runId: RunIdSchema, reason: ResumeBlockedSchema }),
   ),
 });
 export type LocalRuntimeState = typeof LocalRuntimeStateSchema.Type;

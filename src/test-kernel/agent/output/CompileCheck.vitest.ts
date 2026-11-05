@@ -4,10 +4,11 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { expect, vi } from 'vitest';
 
 // Local imports
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import type { CompileLatex2PdfResult } from '@latex/texTools';
 import { fakePath } from '@test/support/FakePlatform';
 import {
@@ -23,7 +24,6 @@ import {
   latexHost,
   outputFile,
 } from './compileCheckTestUtils';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 // The compiled PDF the fake engine reports; no test seeds it, so artifact
 // publication is a no-op — the path only has to be a plausible absolute one.
@@ -46,7 +46,7 @@ layer(latexHost({}), { excludeTestServices: true })('runCompileCheck', (it) => {
     'counts a per-file exception as a failure, never a silent skip',
     () =>
       Effect.gen(function* () {
-        const runId = 'compile-exception' as RunId;
+        const runId = Schema.decodeUnknownSync(RunIdSchema)('c0e0e1');
         const outputState: OutputState = { rounds: new Map() };
         ensureRoundData(outputState, 0).outputs = [
           outputFile(runId, path.join('r0', 'main.tex'), 'main.tex', 0),

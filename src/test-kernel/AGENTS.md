@@ -92,7 +92,7 @@ only by hand, never in CI or `npm test`, and skips a model whose key is not set.
 
 ## Scoping the test run
 
-The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". `test:pure` includes the architecture ratchets, which read the repository from disk and are never selected by a module graph. Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
+The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
 
 ## Writing tests that earn a place
 
@@ -127,9 +127,10 @@ testing guides.
   duplicate rendering, or the wrong element cannot pass. Never use
   `waitForTimeout`.
 - Extend the module's existing suite rather than adding a new test file. Add
-  one only when the module has no existing suite (one suite per module,
-  path-mirrored under `src/test-kernel/`) or for one named cross-module
-  scenario, stated in the PR body. Collapse 4+ structurally identical cases
+  one only when the module has no existing suite (one suite per module, in
+  its package's `test/` when it tests one package, otherwise path-mirrored
+  under `src/test-kernel/`) or for one named cross-module scenario, stated in
+  the PR body. Collapse 4+ structurally identical cases
   into `test.each`.
 - Do not test what `npm run typecheck` or a schema already guarantees, and
   do not create tests for speculative abstractions, trivial data plumbing,
@@ -138,10 +139,12 @@ testing guides.
 
 ## Test fixtures and fakes
 
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, where a module-scope `await` or `Effect.run*` is an ESLint error that no disable comment reaches: what a suite runs over is a layer its blocks build.
+- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, which awaits nothing and runs no Effect at module scope: what a suite runs over is a layer its blocks build.
+
+- **No `!`, no unexplained `as`.** A fixture id or stored row decodes with its schema (`Schema.decodeUnknownSync(RunIdSchema)`), a lookup that may miss narrows with Vitest `assert`, and a deferred value is `Promise.withResolvers`. A partial test double keeps its `as` with a `// cast:` reason on its line or the line before. oxlint fails `value!` here and in `packages/*/test`; `npm run check:core-quality` holds `let x!` and an unexplained `as` at zero in both.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 
-- **Effect-based tests use `@effect/vitest`.** A test body that executes an `Effect` program uses `it.effect` (`import { it } from '@effect/vitest'`; `describe`/`expect` stay on `vitest`) with `Effect.gen` + `yield*` instead of `await Effect.runPromise(...)`; rejection assertions use `Effect.flip` or `Effect.exit` plus `expect`. `it.effect` provides a `TestContext` whose clock starts at 0, so tests that depend on real time (real sleeps, polling loops, subprocess or network timeouts) use `it.live` instead. Keep `Effect.runPromise` only in hooks and non-test helpers. Inside `it.effect`/`it.live`, cleanup goes through `Effect.addFinalizer` or `Effect.acquireRelease` (the tester already provides a `Scope`), never `try/finally` around `yield*`: Effect's generator driver does not resume the generator's `finally` after a failed yield. Exemplar: `src/test-kernel/tools/Cancellation.vitest.ts`.
+- **Effect-based tests use `@effect/vitest`.** A test body that executes an `Effect` program uses `it.effect` (`import { it } from '@effect/vitest'`; `describe`/`expect` stay on `vitest`) with `Effect.gen` + `yield*` instead of `await Effect.runPromise(...)`; rejection assertions use `Effect.flip` or `Effect.exit` plus `expect`. `it.effect` provides a `TestContext` whose clock starts at 0, so tests that depend on real time (real sleeps, polling loops, subprocess or network timeouts) use `it.live` instead. Keep `Effect.runPromise` only in hooks and non-test helpers. Inside `it.effect`/`it.live`, cleanup goes through `Effect.addFinalizer` or `Effect.acquireRelease` (the tester already provides a `Scope`), never `try/finally` around `yield*`: Effect's generator driver does not resume the generator's `finally` after a failed yield. Exemplar: `packages/harness/test/tools/Cancellation.vitest.ts`.
 
 - **`expect` and `node:assert` are both supported.** New `src/test-kernel/` suites use Vitest `expect`. Existing `node:assert` suites stay as they are; convert only in a dedicated mechanical PR (one file or directory, no behavior changes) using the strict mapping: `assert.equal` to `toBe`, `assert.deepEqual` to `toStrictEqual` (never `toEqual`), `assert.ok` to `toBeTruthy()`. `shared/stateSettings.vitest.ts` keeps `node:assert` for its per-key message argument.

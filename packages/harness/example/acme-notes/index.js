@@ -46,7 +46,6 @@ export const acmeNotes = definePlugin({
       kind: 'note',
       version: 1,
       schema: NoteSchema,
-      upcasters: [],
       fork: 'copy',
     },
   ],

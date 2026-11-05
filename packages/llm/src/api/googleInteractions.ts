@@ -752,7 +752,6 @@ export function googleInteractionsModel(
       const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
         origin,
         providerResponseId: identity.success.id,
-        afterSequence: null,
       });
       yield* Ref.set(learned, { operation });
       const interaction = yield* snapshot(raw, operation);

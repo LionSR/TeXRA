@@ -59,7 +59,7 @@ const RIGHT = ESC + '[C';
 const LEFT = ESC + '[D';
 const PAGE_DOWN = ESC + '[6~';
 const ANSI_SGR_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*m`, 'g');
-const RUNNING_STATUS_PATTERN = /◆ [-|\/\\] Running/;
+const RUNNING_STATUS_PATTERN = /◆ [-|/\\] Running/;
 const STOPPED_SUBAGENT_INPUT_MESSAGE_START =
   // A retired notice; scenarios assert it never comes back.
   'This background task is no longer accepting follow-ups; press Tab to select a session';
@@ -210,7 +210,7 @@ const SCENARIOS = [
     // descendant of the selection) and the selection stays on main: no
     // child focus, so no "Esc parent".
     bootExpect: 'Run command?',
-    expect: ['Run command?', '$ npm run compile:safe', 'y approve'],
+    expect: ['Run command?', '$ npm run typecheck', 'y approve'],
     unexpect: ['Esc parent'],
   },
   {
@@ -993,7 +993,7 @@ const SCENARIOS = [
     env: { HARNESS_ENTRIES: '4', HARNESS_PLAN: '1' },
     frame: 'viewport',
     expectPatterns: [
-      /◆ [-|\/\\] Running (?:[1-9]\d*s|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
+      /◆ [-|/\\] Running (?:[1-9]\d*s|[1-9]\d*(?:m|h|d)(?: [1-9]\d*(?:s|m|h))?)/,
     ],
     unexpect: ['✻ Working', '✻ Thinking'],
   },
@@ -1455,7 +1455,7 @@ const SCENARIOS = [
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
-      '$ npm run compile:safe',
+      '$ npm run typecheck',
       'Directory:',
       'y approve',
       'a approve commands for session',
@@ -1485,7 +1485,7 @@ const SCENARIOS = [
     frame: 'viewport',
     expect: [
       'Run command?',
-      '$ npm run compile:safe',
+      '$ npm run typecheck',
       'Directory:',
       'y approve',
       'n reject',
@@ -2098,7 +2098,6 @@ const SCENARIOS = [
       'Interrupted',
       'Recent',
       'nested Interrupted',
-      '1 task was interrupted',
     ],
     ordered: [
       { before: 'Running', after: 'Waiting on you' },
@@ -2106,35 +2105,6 @@ const SCENARIOS = [
       { before: '\n  Interrupted', after: 'Recent' },
     ],
     unexpect: ['ERROR', 'signal read during notification phase'],
-  },
-  {
-    // The open-time notice above the input: the interrupted root by title,
-    // what blocks it and where to fix it, and the two commands that answer
-    // it. Anything submitted hides it.
-    name: 'interrupted-notice',
-    cols: 150,
-    env: {
-      HARNESS_ENTRIES: '0',
-      HARNESS_SESSION_TREE: '1',
-      HARNESS_RESUME_BLOCKED: '1',
-    },
-    keys: [],
-    expect: [
-      '1 task was interrupted',
-      'interrupted · stopped',
-      'needs the zotero plugin, which is off: /plugins',
-      '/resume all continues it',
-    ],
-    ordered: [{ before: '1 task was interrupted', after: '› ' }],
-    unexpect: ['ERROR', 'signal read during notification phase'],
-  },
-  {
-    name: 'interrupted-notice-hides-on-submit',
-    cols: 150,
-    env: { HARNESS_ENTRIES: '0', HARNESS_SESSION_TREE: '1' },
-    keys: ['/status', '\r'],
-    expect: ['model access:'],
-    unexpect: ['1 task was interrupted', 'ERROR'],
   },
   {
     // Enter resumes the selected interrupted run. The list opens on the
@@ -2362,7 +2332,7 @@ const SCENARIOS = [
     expect: [
       'agent: chat · model: harness-model',
       'Run command?',
-      '$ npm run compile:safe',
+      '$ npm run typecheck',
       'y approve',
     ],
     unexpect: [
@@ -2482,7 +2452,7 @@ const SCENARIOS = [
     // publisher stamps, so a fixture cannot backdate the elapsed time. What
     // this scenario is about is the separators at 30 columns, not a
     // particular duration.
-    expectPatterns: [/◆ [-|\/\\] Running \d+[smhd]/],
+    expectPatterns: [/◆ [-|/\\] Running \d+[smhd]/],
     unexpect: ['◆Running', 'agt2', 'Tab agents·'],
   },
   {

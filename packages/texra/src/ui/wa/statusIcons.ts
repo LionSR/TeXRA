@@ -17,7 +17,10 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
  * module is the single source of truth for which icon each bucket gets.
  */
 export type TerminalStatusKind =
-  'cancelled' | 'completed' | 'failed' | 'running';
+  | 'cancelled'
+  | 'completed'
+  | 'failed'
+  | 'running';
 
 const TERMINAL_STATUS_ICON: Readonly<Record<TerminalStatusKind, IconName>> = {
   failed: 'circle-exclamation',

@@ -54,6 +54,7 @@ const callsOf = (session: LocalSession, runId: RunId) =>
       event.type === 'tool.start'
         ? [
             {
+              id: event.logId,
               tool: event.toolName,
               input: event.input,
               status: ends.get(event.logId)?.status ?? 'open',

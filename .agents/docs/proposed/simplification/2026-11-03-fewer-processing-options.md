@@ -31,8 +31,8 @@ What follows is the inventory, strongest first. Each item names its producers
 and consumers so an implementing PR can follow the trail. The settings removed
 here are not persisted beyond `config.json`, which is additive-only: a deleted
 key is simply no longer read (`AGENTS.md` "Compatibility and format
-retirement"), with a `warn` on first read of an unknown key the catalog once
-had.
+retirement"). Nothing warns about a stale key: the two keys #14642 deleted went
+without one, and the catalog keeps no list of retired keys.
 
 ## 1. Model wire knobs that the route can decide
 
@@ -123,8 +123,7 @@ no information across them:
 
 Two model-id string tests stand in for capabilities the catalog should carry:
 `config.id.startsWith('gpt-5')` (`responsesConfiguration.ts:84`) and
-`config.id.toLowerCase().startsWith('gpt')` (`:128`). Both read an id that may
-already be the short-name rewrite (`packages/harness/src/agent/runtime/modelAccess/ModelAccess.ts:165-172`).
+`config.id.toLowerCase().startsWith('gpt')` (`:128`).
 
 Smaller instances of the same shape:
 
@@ -142,7 +141,9 @@ Smaller instances of the same shape:
   `supportsNativePdf: false` (`packages/llm/src/models/modelRoute.ts:304`) and
   read back as `supportsDocumentInput` (`responsesConfiguration.ts:101`).
 - `isUnservedModel` (`modelRoute.ts:118-122`) and `decideModelRoute`'s
-  `'unserved'` (`:216`) disagree on retired models.
+  `'unserved'` (`:215`) disagree on retired models. _Done 2026-11-04:
+  `decideModelRoute` gates on `isUnservedModel`, so a retired model is
+  refused at bind._
 
 **Proposal.** Delete the four constant or derived columns and their dead
 branches; replace the two id-prefix tests with llm-zoo capability flags
@@ -224,10 +225,10 @@ pattern, so the "options" are one choice spelled as several.
   `schema`; `document_task` (`packages/texra/src/tools/documents/DocumentTaskTool.ts:79`)
   always passes a task, files and `schema: null`. A tagged union
   `{kind:'agent'} | {kind:'task'}` makes the invalid mixes unrepresentable.
-- **`CompactionInput.force: 'request' | null`** (`packages/harness/src/agent/runtime/run/compaction.ts:106`):
-  the one caller (`:390`) always passes `'request'`, so the `null` branch at
-  `:295` never runs; the threshold path is already separate (`:397-420`).
-  Delete the field.
+- **`CompactionInput.force`**: done. `compactIfNeeded`, whose one caller
+  `forced` always passed `'request'` or `'overflow'`, is inlined there with its
+  never-run threshold branch, and the field is gone (the reason is `forced`'s
+  argument).
 - **Strategy hooks with one implementer each**: `runTurn`, `pauseNotice`,
   `onTurnSuccess`, `releaseSessionOwnership` (only
   `packages/texra/src/tools/agentCli/agentCliShared.ts:482-503`),
@@ -236,8 +237,8 @@ pattern, so the "options" are one choice spelled as several.
   A closed union of the concrete strategies instead of a bag of optionals.
 - **`RegisterRunOptions.provenance` + `descriptionBy`**
   (`packages/harness/src/shared/session/runFacts.ts:246-248`) are set only by
-  `packages/harness/src/agent/runtime/forkRun.ts:240-243`, always together: one
-  `fork` field.
+  `packages/harness/src/agent/runtime/forkRun.ts:240-244` (`provenance` always,
+  `descriptionBy` when the source has a title): one `fork` field.
 - **`ProcessLayerOptions.labelRuns` and `seedToolSwitches`**
   (`packages/harness/src/effect/processLayer.ts:64,68`): each set once, by
   `packages/texra/src/controllers/texraProcessLayer.ts:140,146`, the second
@@ -299,7 +300,10 @@ show three. The YAML `task.rewrite` field is set by one bundled agent
 (`packages/extension/resources/agents/write/paper2poster.yaml:13`) and read
 once (`packages/texra/src/tools/documents/documentTools.ts:309`), while
 `paper2slide`, `ocr` and `transcribe_audio` declare their own `outputs:` and
-keep the default; `rewrite` is `outputs.length === 0`.
+keep the default (`true`), so `rewrite` is not `outputs.length === 0` today:
+deriving it turns lineage off for those three (`suppressLineage = !rewrite`,
+`packages/texra/src/agent/output/diffComputation.ts:124`), a behaviour change
+the owner confirms first.
 
 **Proposal.** One table `{key, label, description}` owned by the documents
 plugin, from which the tool's input schema, the CLI flags, the launch form's
@@ -356,14 +360,15 @@ above.
   each.
 - `goal.strategy` admits any `builtIn:*` but only `builtIn:goal` exports
   `goal()` (`packages/harness/src/tools/plan/goalScript.ts:55`).
-- `latexdiff.tempFileLocation`, `latexdiff.changesOnly` and
-  `latex.wrapCritiqueInAlign` are one-reader two-path toggles with no UI row.
+- `latexdiff.tempFileLocation` and `latex.wrapCritiqueInAlign` are one-reader
+  two-path toggles with no UI row. (`latexdiff.changesOnly` has one, in the
+  LaTeX tab: `packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts:490`.)
 - `git.markCommits` gates `git.authorName` and `git.authorEmail`
   (`packages/harness/src/utils/system/execUtils.ts:53-64`): a present name is
   the switch.
 - `followUp.receipt` (`packages/harness/src/shared/session/runtimeRequest.ts:122`)
   has producers only in `packages/harness/example/`; keep it only as public SDK.
-- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:153-191`);
+- CLI: `clone` names its destination twice (`packages/cli/src/commands/clone.ts:155-193`);
   `config agents` has eight flags for three choices
   (`packages/cli/src/commands/config.ts:111-131,201-232`); `--input`,
   `--context`, `--instruction-file` and `--model` are declared in two to four

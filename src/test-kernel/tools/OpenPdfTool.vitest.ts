@@ -68,6 +68,7 @@ layer(perTest, { buildPerTest: true, excludeTestServices: true })(
             Effect.provide(
               nativeToolTestLayer({
                 workingDirectory: fakePath('workspace'),
+                // cast: a fixture run id; no stored run is read under it.
                 run: { session, runId: 'tool-test' as RunId, toolPolicy: {} },
               }),
             ),

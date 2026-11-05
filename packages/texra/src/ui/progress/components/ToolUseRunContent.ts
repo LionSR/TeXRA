@@ -41,7 +41,6 @@ export class ToolUseRunContent extends BaseRunContent {
       </div>
       <div class="conversation-composer-dock">
         <div class="conversation-column">
-          ${this.renderInterruptedNotice()}
           ${
             showComposer
               ? html`<session-composer

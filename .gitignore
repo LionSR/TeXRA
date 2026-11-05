@@ -78,3 +78,6 @@ packages/agent/**
 # Real-model acceptance runs (`example:acceptance`): the session database a
 # run copies beside its text evidence stays local.
 .agents/docs/evidence/*-harness-real-model/**/store/
+
+# Raw DeepSeek acceptance records for the 2026-11-03 evidence summary stay local.
+.agents/docs/evidence/2026-11-03-harness-real-model/deepseek-deepseek-flash-*/

@@ -86,19 +86,20 @@ const offeredTools = (storage: string, runId: RunId) => {
   const rows = storedRows(storage).filter(
     (row) => row.run === runId && row.type === 'tools.offered',
   );
-  return rows.map((row) =>
-    (
-      JSON.parse(row.data) as {
-        payload: { tools: readonly { name: string }[] };
-      }
-    ).payload.tools.map((tool) => tool.name),
-  );
+  return rows.map((row) => {
+    // cast: a `tools.offered` row's data holds its ToolsOfferedPayload.
+    const { payload } = JSON.parse(row.data) as {
+      payload: { tools: readonly { name: string }[] };
+    };
+    return payload.tools.map((tool) => tool.name);
+  });
 };
 
 /** The outcomes of the run's `run.end` rows, in order. */
 const endsOf = (storage: string, runId: RunId) =>
   storedRows(storage)
     .filter((row) => row.run === runId && row.type === 'run.end')
+    // cast: a `run.end` row's data holds the run's outcome.
     .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
 
 /** `session` as the package hands it to an embedder (`Sessions.open`),
@@ -221,6 +222,7 @@ describe(
                 // once.
                 const withheld = storedRows(storage).flatMap((row) => {
                   if (row.run !== runId || row.type !== 'log') return [];
+                  // cast: a `log` row's data holds its message.
                   const { message } = JSON.parse(row.data) as {
                     message: string;
                   };
