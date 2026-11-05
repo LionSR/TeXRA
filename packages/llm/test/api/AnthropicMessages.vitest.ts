@@ -10,8 +10,8 @@ import {
   completedTurn,
   type TurnRequest,
 } from '@texra-ai/llm';
-import { anthropicMessagesModel } from '../../../packages/llm/src/api/anthropicMessages.js';
-import type { AnthropicMessagesConfiguration } from '../../../packages/llm/src/turn.js';
+import { anthropicMessagesModel } from '../../src/api/anthropicMessages.js';
+import type { AnthropicMessagesConfiguration } from '../../src/turn.js';
 
 const CONFIG: AnthropicMessagesConfiguration = {
   protocol: 'anthropic-messages',

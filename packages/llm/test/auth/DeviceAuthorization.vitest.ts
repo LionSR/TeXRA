@@ -6,7 +6,7 @@ import { describe, expect } from 'vitest';
 import {
   DeviceAuthorizationPending,
   pollDeviceAuthorization,
-} from '../../../packages/llm/src/oauth/deviceAuthorization.js';
+} from '../../src/oauth/deviceAuthorization.js';
 
 /** A poll that answers from a queue: `'pending'`, `'slow_down'`, a value, or an Error. */
 function queuedPoll<T>(queue: Array<'pending' | 'slow_down' | T | Error>) {

@@ -6,7 +6,7 @@ import { FetchHttpClient } from 'effect/http';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { postOAuthForm } from '../../../packages/llm/src/oauth/oauthRequest.js';
+import { postOAuthForm } from '../../src/oauth/oauthRequest.js';
 
 describe('postOAuthForm', () => {
   it.effect('times out a response whose body stalls after the headers', () =>
