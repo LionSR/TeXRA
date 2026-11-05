@@ -1320,7 +1320,7 @@ async function waitForReadiness(application) {
         mainApp.isConnected &&
         (mainApp.shadowRoot?.childElementCount ?? 0) > 0;
       const project = document.querySelector(
-        '.shell-launcher-surface[data-session]',
+        '.shell-project-workbench[data-session]',
       );
       const projectReady =
         project instanceof HTMLElement && Boolean(project.dataset.session);
