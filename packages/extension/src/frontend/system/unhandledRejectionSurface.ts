@@ -1,7 +1,7 @@
 /**
- * The last-resort surface for a promise rejection in this extension that
- * nothing owned: log it, tell the user, then rethrow so the host still takes
- * Node's fatal path.
+ * The last-resort surface for an `Error` rejected in this extension's own
+ * code that nothing owned: log it, tell the user, then rethrow so the host
+ * still takes Node's fatal path. Any other rejection is left to the host.
  */
 // Third-party imports
 import { Effect, Queue } from 'effect';
@@ -49,8 +49,16 @@ export const installUnhandledRejectionSurface = Effect.fn(
   const logError = (message: string, data: unknown): void => {
     Queue.offerUnsafe(entries, { message, data });
   };
+  // Windows paths differ in case between the install directory VS Code
+  // reports and the frames Node prints.
+  const comparable = (text: string): string =>
+    process.platform === 'win32' ? text.toLowerCase() : text;
+  const ownDirectory = comparable(extensionPath);
   const report = (error: unknown) => {
-    if (!(error instanceof Error && error.stack?.includes(extensionPath))) {
+    if (
+      !(error instanceof Error) ||
+      !comparable(error.stack ?? '').includes(ownDirectory)
+    ) {
       return;
     }
     logError('Unhandled extension-host rejection', error);
