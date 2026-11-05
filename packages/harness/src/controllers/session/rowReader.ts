@@ -64,15 +64,14 @@ export const DISPLAY_READ_TYPES = JSON.stringify([
   ...DISPLAY_EVENT_TYPES,
   'tool.result',
 ]);
-/** The listing (each aggregate's `listing_entry` rows, each run's spend on
- *  its newest priced row's envelope and its latest model switch, in commit
- *  order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
+/** The listing (each aggregate's `listing_entry` rows and each run's spend
+ *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
  *  store is never `ANALYZE`d), each by its event's primary key. */
 const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
   ${EVENT_JOINS}`;
 
-/** The cold listing: the latest listing row per aggregate and type, the
- *  runs' priced usage and model switches, in commit order. */
+/** The cold listing: the latest listing row per aggregate and type and the
+ *  runs' priced usage, in commit order. */
 export const READ_LISTING = `SELECT * FROM (
   SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   UNION ALL
@@ -82,9 +81,6 @@ export const READ_LISTING = `SELECT * FROM (
   FROM run_usage u
     JOIN event e ON e."commit" = u."commit"
     JOIN event_sequence s ON s.id = u.aggregate
-  UNION ALL
-  SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
-    JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
 ) ORDER BY "commit"`;
 
 /** One open run's listing rows, its requests and follow-ups left out:
