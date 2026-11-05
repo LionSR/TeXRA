@@ -22,7 +22,9 @@ import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   getInstallGuide,
   LATEX_TOOL_ENTRIES,
+  SYSTEM_PACKAGE_MANAGERS,
   type LatexToolName,
+  type SystemPackageManager,
 } from '@texra/shared/constants/latexToolchain';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -146,11 +148,6 @@ export const runTool = Effect.fn('toolChecks.runTool')(function* (
   }
   return result;
 });
-
-/** Package managers TeXRA knows how to install dependencies with. */
-export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
-
-export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
 
 // Platform-aware probe order: check the platform's native PM first so that
 // cross-platform installs (e.g. Linuxbrew on Linux) don't shadow the PM that

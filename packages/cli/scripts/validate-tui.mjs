@@ -372,17 +372,16 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_DELIVERIES:
-        '<subagent-progress id="child-q" agent="review" type="plan" status="cleared"/>',
+        '<subagent-error id="child-q" agent="review" retryable="true"><message>rate limit</message></subagent-error>',
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
     expect: [
       'Queued follow-ups (1)',
-      '1. ⟳ review · plan cleared',
+      '1. ✗ review failed (retryable)',
       'queued 1',
-      '⟳ review · plan cleared',
     ],
-    unexpect: ['<subagent-progress'],
+    unexpect: ['<subagent-error'],
   },
   {
     name: 'compact-queued-followups',
@@ -412,13 +411,12 @@ const SCENARIOS = [
     frame: 'scrollback',
     env: { HARNESS_ENTRIES: '0', HARNESS_SUBAGENT_FOLLOWUPS: '1' },
     expect: [
-      '⟳ strategy · 3 tool calls',
       '✓ leanSolver completed · 2min, 3sec',
       'Proved </response> is escaped & visible.',
       '✗ reviewer failed (retryable)',
       'rate limit: <tokens> & retries exhausted',
     ],
-    unexpect: ['<subagent-progress', '<subagent-result', '<subagent-error'],
+    unexpect: ['<subagent-result', '<subagent-error'],
   },
   {
     name: 'long-tool-output-elided',

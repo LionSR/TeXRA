@@ -12,7 +12,7 @@ import { RetryRequest } from './RetryRequest';
 import { UserQuestion } from './UserQuestion';
 import type { ApprovalPayload } from '../state/approvalQueue';
 
-export interface ApprovalModalProps {
+interface ApprovalModalProps {
   readonly availableRows?: number;
   readonly payload: ApprovalPayload;
   /** Land the user's decision on the request. */

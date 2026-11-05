@@ -84,13 +84,6 @@ export function isGenericOutputStem(name: string): boolean {
   return GENERIC_OUTPUT_STEMS.has(name);
 }
 
-/** Run identity used when accepting an edited file as a postfixed copy. */
-export interface AcceptCopyMeta {
-  readonly agent: string;
-  readonly model: string;
-  readonly round: number;
-}
-
 /**
  * The file location a diff should render against: the explicit `diffBase`
  * when the file was rewritten in place (so a diff against the current path

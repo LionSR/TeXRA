@@ -50,7 +50,7 @@ const CODEX_MODEL_RULE: AgentCliModelRule = {
 // ============================================================================
 
 /** What one Codex thread runs: the backend slug and the effort to send. */
-export interface CodexRun {
+interface CodexRun {
   /** The model's llm-zoo reference, the run's model label. */
   readonly ref: string;
   /** The Codex backend's model slug (`--model`). */

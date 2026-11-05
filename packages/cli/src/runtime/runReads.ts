@@ -34,7 +34,7 @@ import {
 } from '@texra/controllers/server/taskList';
 
 /** What `texra history show` prints of a run beyond its setup. */
-export interface CliRunDetail {
+interface CliRunDetail {
   /** Its launch facts; null for a run the view no longer lists. */
   readonly run: RunLaunchFacts | null;
   readonly result: RunResult | null;
@@ -48,7 +48,7 @@ export interface CliRunDetail {
 
 /** A run's setup and the input its transcript export reads, each null
  *  when the run has none. */
-export interface CliRunExport {
+interface CliRunExport {
   readonly config: AgentConfig | null;
   readonly exportInput: ChatExportInput | null;
 }

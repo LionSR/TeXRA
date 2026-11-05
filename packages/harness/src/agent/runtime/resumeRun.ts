@@ -25,13 +25,12 @@ import {
   openResume,
   REFUSED,
 } from '@agent/followUp/ToolUseFollowUp';
-import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
   persistedParentRunId,
 } from '@agent/storage/runRecords';
-import { findInCauseChain } from '@common/errors/errorPredicates';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type CommitOrdinal,
@@ -40,7 +39,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import { RunHistoryRefused, SessionLog } from '@shared/session/runHistory';
+import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -67,7 +66,7 @@ import type { SessionServices } from './rootLaunch';
 
 /** A resume answers once the run rests with the input it was resumed for
  *  taken, or once the run ends, whether or not it took that input. */
-export type ResumeRunResult =
+type ResumeRunResult =
   | { readonly started: true; readonly delivered: boolean }
   | { readonly failed: ResumeRefusal };
 
@@ -79,7 +78,7 @@ export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
 /** What a resume's caller hears: the commit of the activation it opened or
  *  joined, which it now holds, or, before any, the refusal or the owning
  *  parent its decision answered. */
-export type ResumeHandOff =
+type ResumeHandOff =
   | { readonly activation: CommitOrdinal }
   | Exclude<ResumeAttempt, { readonly started: true }>;
 
@@ -106,23 +105,6 @@ export function describeResumeRefusal(reason: ResumeRefusal): string {
 }
 
 const CHANNEL = 'ResumeRun';
-
-/**
- * Only a run history refusal of the saved rows names an unusable checkpoint:
- * rows that cannot be applied, a history the package's rules refuse, or turns
- * on a protocol the run's binding no longer speaks. Ownership, metadata and
- * lease failures remain operational errors.
- */
-function namesUnusableCheckpoint(error: unknown): boolean {
-  const reason = findInCauseChain(error, (cause) =>
-    cause instanceof RunHistoryRefused ? cause.reason : undefined,
-  );
-  return (
-    reason === 'inconsistent' ||
-    reason === 'unprepared-history' ||
-    reason === 'foreign-protocol'
-  );
-}
 
 /**
  * Resume `runId` as a caller of its resume, joined or opened here, until
@@ -195,13 +177,9 @@ export const decideResume = Effect.fn('decideResume')(function* (
   const records = yield* Effect.result(
     Effect.all([store.readConfig(), store.exists()]),
   );
-  // A record read refuses a run holding an earlier build's row, wherever
-  // the row sits: this build cannot open the run.
-  if (Result.isFailure(records)) {
-    const earlier = earlierBuildRefusal(records.failure);
-    if (earlier === undefined) return yield* Effect.fail(records.failure);
-    return { failed: earlier };
-  }
+  // A record read fails on a row this build cannot use, wherever it sits.
+  if (Result.isFailure(records))
+    return yield* refusalFor(records.failure, runId);
   const [config, exists] = records.success;
   if (!config || !exists) {
     // A run whose records are gone: with nothing queued its input ends.
@@ -215,23 +193,17 @@ export const decideResume = Effect.fn('decideResume')(function* (
   // neither launches from a state read before the other ran, and a host is
   // refused before it rearranges itself. A claim this process holds, or one
   // whose owner is provably dead, is taken over.
-  const heldBy = yield* log.hold(runId).pipe(
-    Effect.as(null),
-    Effect.catch((error) => {
-      const holder = heldElsewhereBy(error);
-      return holder === null ? Effect.fail(error) : Effect.succeed(holder);
-    }),
-  );
-  if (heldBy !== null)
-    return { failed: { kind: 'ownedElsewhere', owner: heldBy } };
+  const held = yield* Effect.result(log.hold(runId));
+  if (Result.isFailure(held)) return yield* refusalFor(held.failure, runId);
   // Whether an open call owns it, read under its claim in this resume's
   // job, so the answer and the activation below are one decision.
   const owner = yield* owningCall(runId);
   if (owner !== null) return { ownedBy: owner.parentRunId };
   // What its children hold for it, it reads once it runs here.
   yield* deliverHeld(runId);
-  // Nothing to continue from, or rows this build cannot open.
-  const rejected = yield* runRejection(runId);
+  // Nothing to continue from, or rows this build cannot use; the claim is
+  // this resume's now, so ownership is not asked again.
+  const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return { failed: rejected };
   // An agent or plugin this process cannot run now refuses the resume with
   // the reason; the run stays interrupted, never failed, and nothing is
@@ -277,28 +249,33 @@ const restsWith = (
   );
 };
 
-/** Classify the expected launch refusals; unexpected failures propagate. */
+/**
+ * The one reading of a resume's failure, at each step that can fail (its
+ * record read, its claim, its launch): a launch already here, a claim a
+ * live owner holds, or stored rows this build cannot use refuse the
+ * resume; any other failure, the disk's, fails it.
+ */
 function refusalFor(
-  error: unknown,
+  error: Error,
   runId: RunId,
-): Effect.Effect<ResumeRunResult | undefined> {
+): Effect.Effect<ResumeRunResult, Error> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
   // A live owner refused the claim, or took it after its owner was proved dead.
   const owner = heldElsewhereBy(error);
   if (owner !== null)
     return Effect.succeed({ failed: { kind: 'ownedElsewhere', owner } });
-  const earlier = earlierBuildRefusal(error);
-  if (earlier !== undefined) return Effect.succeed({ failed: earlier });
-  if (namesUnusableCheckpoint(error)) {
-    return Effect.logWarning(
-      `Refusing to resume ${runId}: its saved state cannot be continued: ${toErrorMessage(error)}`,
-    ).pipe(
-      Effect.annotateLogs({ data: error }),
-      withLogChannel(CHANNEL),
-      Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const),
-    );
-  }
-  return Effect.succeed(undefined);
+  const refused = runReadRefusal(error);
+  if (refused === undefined) return Effect.fail(error);
+  const cause = toErrorMessage(error);
+  if (refused === 'earlierBuild')
+    return Effect.succeed({ failed: { kind: 'earlierBuild', cause } });
+  return Effect.logWarning(
+    `Refusing to resume ${runId}: its saved state cannot be used (${refused}): ${cause}`,
+  ).pipe(
+    Effect.annotateLogs({ data: error }),
+    withLogChannel(CHANNEL),
+    Effect.as({ failed: { kind: 'unusableCheckpoint' } } as const),
+  );
 }
 
 /**
@@ -383,11 +360,8 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       return { rested, batch };
     }),
   );
-  if (Result.isFailure(resumed)) {
-    const refusal = yield* refusalFor(resumed.failure, runId);
-    if (refusal) return refusal;
-    return yield* Effect.fail(resumed.failure);
-  }
+  if (Result.isFailure(resumed))
+    return yield* refusalFor(resumed.failure, runId);
   const { rested, batch } = resumed.success;
   // A run that ended first delivered the batch if its rows took it.
   const delivered = rested || taken(yield* inbox.read(runId), batch);

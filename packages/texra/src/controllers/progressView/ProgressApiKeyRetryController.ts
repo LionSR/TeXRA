@@ -5,30 +5,28 @@ import {
   hasUsableApiKey,
   isApiProvider,
   lookupApiKey,
+  providerDisplayName,
   type ApiKeyProviderId,
 } from '@texra-ai/llm';
-import { type RequestRefusal } from '@texra-ai/harness';
+import {
+  isRequestRefusal,
+  Rejected,
+  type RequestRefusal,
+  type Session,
+  Unavailable,
+} from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
-import type { RunId } from '@texra-ai/harness/schemas';
-
-interface ProgressApiKeyRetryRequest {
-  stream: RunId;
-  requestId: string;
-  /** The key the retry will run on, as the run's offer names it. */
-  provider: ApiKeyProviderId;
-  /** The stored key is the broken credential: only a changed one proceeds. */
-  requireNewKey: boolean;
-}
+import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 /**
  * The host could not ask the user for a provider key.
  *
- * One reason, by measurement: both implementations put the request in front of
- * the user through the host's own surface (the extension runs its set-key
- * command, the desktop opens the Models tab and posts a notice), and either
- * that surface accepts the request or it faults. A user who closes the prompt
- * without entering a key is not a failure — the controller re-reads the store
- * and answers `false`.
+ * One reason, by measurement: every implementation puts the request in front
+ * of the user through the host's own surface (the extension runs its set-key
+ * command, the desktop opens the Models tab, the TUI its key form), and
+ * either that surface accepts the request or it faults. A user who closes the
+ * prompt without entering a key is not a failure of the prompt: the
+ * controller re-reads the store and says the retry did not switch.
  */
 export class ApiKeyPromptFailed extends Schema.TaggedError<ApiKeyPromptFailed>()(
   'ApiKeyPromptFailed',
@@ -45,20 +43,18 @@ interface ProgressApiKeyRetryControllerDeps {
   promptForApiKey(
     provider: ApiKeyProviderId,
   ): Effect.Effect<void, ApiKeyPromptFailed, Secrets>;
-  isRetryPending(stream: RunId, requestId: string): boolean;
-  /** Finishes the retry on the user's own key; a refusal fails it, for the
-   *  host case that took the request to present. */
-  triggerRetry(
-    stream: RunId,
-    requestId: string,
-  ): Effect.Effect<void, RequestRefusal>;
+  /** The session holding the retry: its view says whether the retry still
+   *  waits, and the decision lands through its requests. */
+  readonly session: Pick<Session, 'request'> & {
+    readonly view: Pick<Session['view'], 'current'>;
+  };
 }
 
 /**
- * The key-entry half of a retry's move onto the user's own credential. Which
- * provider and whether a changed key is required are the run's decision,
- * carried on the retry request; this only makes sure that key exists before
- * the retry is finished on it.
+ * A retry's move onto the user's own credential, the same on every host.
+ * Which provider and whether a changed key is required are the run's
+ * decision, carried on the retry request; this makes sure that key exists
+ * and then finishes the retry on it.
  */
 export class ProgressApiKeyRetryController {
   private readonly deps: ProgressApiKeyRetryControllerDeps;
@@ -66,30 +62,61 @@ export class ProgressApiKeyRetryController {
     this.deps = deps;
   }
 
-  /** Switch this retry onto the user's own key and relaunch it. The host
-   *  case that took the request runs this where it stands. */
+  /**
+   * Switch this retry onto the user's own key and relaunch it. A retry
+   * another surface answered meanwhile is left alone; one the user gave no
+   * usable key for fails with a `Rejected` saying so, and stays pending.
+   */
   readonly useOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.useOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
-    request: ProgressApiKeyRetryRequest,
+    request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
   ) {
+    const { runId, requestId, credentialSwitch } = request;
+    const { provider } = credentialSwitch;
     const proceeded = yield* this.ensureOwnApiKey(
-      request.provider,
-      request.requireNewKey,
+      provider,
+      credentialSwitch.kind === 'new-key',
     );
-    if (
-      !proceeded ||
-      !this.deps.isRetryPending(request.stream, request.requestId)
-    ) {
-      return;
+    const pending = this.deps.session.view
+      .current()
+      .requests.some(
+        (r) =>
+          r.runId === runId &&
+          r.requestId === requestId &&
+          r.payload.kind === 'retry',
+      );
+    if (!pending) return;
+    if (!proceeded) {
+      return yield* new Rejected({
+        reason: `The retry did not switch to your own ${providerDisplayName(provider)} API key: no usable key was entered. Add one, then retry with your own key again.`,
+      });
     }
 
     // The decision is the whole switch: the run reads `credentials:
     // 'personal'` off its own run history and declines the exhausted route for
     // itself when it rebinds. No preference of the user's is rewritten, so
-    // two runs falling back at once cannot undo each other's choice.
-    yield* this.deps.triggerRetry(request.stream, request.requestId);
+    // two runs falling back at once cannot undo each other's choice. A
+    // refused decision leaves the retry pending, and fails with the refusal.
+    yield* this.deps.session
+      .request({
+        kind: 'request.decide',
+        runId,
+        requestId,
+        decision: { action: 'retry', credentials: 'personal' },
+      })
+      .pipe(
+        Effect.asVoid,
+        Effect.mapError((error): RequestRefusal =>
+          isRequestRefusal(error)
+            ? error
+            : new Unavailable({
+                runId,
+                reason: 'The retry could not be settled.',
+              }),
+        ),
+      );
   });
 
   /**
@@ -99,7 +126,7 @@ export class ProgressApiKeyRetryController {
    * stored key, so an existing one is consent enough and the prompt appears
    * only when there is none.
    */
-  readonly ensureOwnApiKey = Effect.fn(
+  private readonly ensureOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.ensureOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,

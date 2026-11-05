@@ -3,7 +3,6 @@
 import {
   Cancelled,
   DatabaseReadFailed,
-  isRequestRefusal,
   Rejected,
   type RequestError,
   type RequestRefusal,
@@ -17,10 +16,8 @@ import {
 } from '@texra-ai/harness';
 import {
   type AgentCatalog,
-  AppState,
   getHelperModelName,
   type ModelHostFactUnreadable,
-  type Secrets,
   StateReadFailed,
   withLogChannel,
   launchNoticeOf,
@@ -30,7 +27,6 @@ import {
 } from '@texra-ai/harness/host';
 import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
-import { type ApiKeyProviderId, type SecretsFailed } from '@texra-ai/llm';
 import {
   toErrorMessage,
   isTaskConfig,
@@ -44,10 +40,7 @@ import { decodeLaunchConfig } from '@texra/controllers/session/launchConfig';
 import { forkRun, resumeRun } from '@texra/controllers/session/runActionPolicy';
 import { documentTaskConfig } from '@texra/agent/output/documentRecipe';
 import { packDestination } from '@texra/tools/documents/runOutputs';
-import type {
-  FileOpResult,
-  HostRequest,
-} from '@texra/shared/session/hostRequest';
+import type { FileOpResult } from '@texra/shared/session/hostRequest';
 import {
   DOCUMENT_TASK_BLOCK,
   documentsOf,
@@ -55,10 +48,6 @@ import {
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
 import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 
-import {
-  ApiKeyPromptFailed,
-  ProgressApiKeyRetryController,
-} from '../progressView/ProgressApiKeyRetryController';
 import {
   planCompileFixer,
   type CompileFixerPlanFailed,
@@ -134,14 +123,6 @@ export interface HostRunActionPorts {
     Parameters<typeof planCompileFixer>[0]['modelOptions'],
     ModelHostFactUnreadable | StateReadFailed
   >;
-  /**
-   * Ask the user for a provider key; the controller re-reads the store. A
-   * host that could not ask fails with `ApiKeyPromptFailed`; a user who
-   * closes the prompt without entering a key is not a failure.
-   */
-  promptForApiKey(
-    provider: ApiKeyProviderId,
-  ): Effect.Effect<void, ApiKeyPromptFailed, Secrets>;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who
    *  ignores the notice is not a failure. */
@@ -190,9 +171,6 @@ export interface HostRunActions {
     | RunConfigUnreadable
     | RunFailure
   >;
-  readConfig(
-    runId: RunId,
-  ): Effect.Effect<AgentConfig | undefined, RunConfigUnreadable>;
   /** The toolbar's latexdiff; `undefined` (a no-op) with no workflow config. */
   workflowDiffRequest(
     runId: RunId,
@@ -209,20 +187,6 @@ export interface HostRunActions {
   ): Effect.Effect<
     WorkflowFileOperationResult | undefined,
     RequestError | RunConfigUnreadable
-  >;
-  /** The retry's switch onto the user's own key. The host arm that took the
-   *  request runs it where it stands. */
-  useOwnApiKey(
-    request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-  ): Effect.Effect<
-    void,
-    | ApiKeyPromptFailed
-    | NotificationFailed
-    | RequestRefusal
-    | RunConfigUnreadable
-    | SecretsFailed
-    | StateReadFailed,
-    AppState | Secrets
   >;
   /** A new task holding the run's conversation up to `at` (its latest
    *  settled point when null), continued here so it takes a message: the
@@ -392,54 +356,6 @@ export const createHostRunActions = Effect.fn(
     return config;
   });
 
-  const isRetryPending = (runId: RunId, requestId: string) =>
-    view().requests.some(
-      (request) =>
-        request.runId === runId &&
-        request.requestId === requestId &&
-        request.payload.kind === 'retry',
-    );
-
-  // A settle the session refuses fails with its refusal, which the host
-  // arm that took the request presents: a retry left parked must not look
-  // like one that went through. Defects go to that same boundary.
-  const settleRetry = (
-    runId: RunId,
-    requestId: string,
-    decision:
-      | { action: 'retry'; credentials: 'configured' | 'personal' }
-      | { action: 'cancel' },
-  ): Effect.Effect<void, RequestRefusal> =>
-    session
-      .request({
-        kind: 'request.decide',
-        runId,
-        requestId,
-        decision,
-      })
-      .pipe(
-        Effect.asVoid,
-        Effect.mapError((error): RequestRefusal =>
-          isRequestRefusal(error)
-            ? error
-            : new Unavailable({
-                runId,
-                reason: 'The retry could not be settled.',
-              }),
-        ),
-      );
-
-  const apiKeyRetry = new ProgressApiKeyRetryController({
-    // A host that could not ask returns the port's `ApiKeyPromptFailed`.
-    promptForApiKey: (provider) => ports.promptForApiKey(provider),
-    isRetryPending,
-    triggerRetry: (runId, requestId) =>
-      settleRetry(runId, requestId, {
-        action: 'retry',
-        credentials: 'personal',
-      }),
-  });
-
   return {
     runOutputs,
     followUpLauncher(runId, text) {
@@ -539,7 +455,6 @@ export const createHostRunActions = Effect.fn(
       );
       if (config !== null) yield* startAgentRequest(config);
     }),
-    readConfig,
     workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
       function* (runId) {
         yield* requireAction(runId, 'files');
@@ -618,15 +533,6 @@ export const createHostRunActions = Effect.fn(
         });
       }
     }),
-    useOwnApiKey(request) {
-      const offer = request.credentialSwitch;
-      return apiKeyRetry.useOwnApiKey({
-        stream: request.runId,
-        requestId: request.requestId,
-        provider: offer.provider,
-        requireNewKey: offer.kind === 'new-key',
-      });
-    },
     fork: Effect.fn('HostRunActions.fork')(function* (runId, at) {
       const forked = yield* forkRun(session, runId, at);
       // The fork waits for its host: continuing it waits on the user's

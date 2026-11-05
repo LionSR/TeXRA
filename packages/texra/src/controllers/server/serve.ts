@@ -76,7 +76,7 @@ export class ServiceAlreadyRunning extends Schema.TaggedError<ServiceAlreadyRunn
 }
 
 /** The service could not listen on its socket. */
-export class ServiceListenFailed extends Schema.TaggedError<ServiceListenFailed>()(
+class ServiceListenFailed extends Schema.TaggedError<ServiceListenFailed>()(
   'ServiceListenFailed',
   {
     socket: Schema.String,

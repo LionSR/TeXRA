@@ -60,7 +60,7 @@ export interface RouteDecision {
 }
 
 /** What the decision is asked for besides the model. */
-export interface RouteAsk {
+interface RouteAsk {
   /** A resumed run's backend: the decision fails when today's route would
    *  serve the model from another one. */
   readonly backend?: ModelBackend;

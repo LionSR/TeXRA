@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Schema } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { parseFrontmatter } from '@agent/memory/memoryMeta';

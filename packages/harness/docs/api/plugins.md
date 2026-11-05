@@ -1620,9 +1620,6 @@ How one input is delivered to a run.
 
 ```ts
 interface RunInboxSendOptions {
-  /** A notification for a generation already running: read at a turn's
-   *  end, never resuming the run (`readableMessages`). */
-  readonly hold?: 'generation';
   /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
   readonly fromParent?: boolean;
 }

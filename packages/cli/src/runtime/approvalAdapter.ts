@@ -45,6 +45,11 @@ import {
   parseUserQuestionAnswer,
   userQuestionDecision,
 } from './userQuestionAnswer';
+import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
+import {
+  declineDecision,
+  REQUEST_ACTIONS,
+} from '@texra/shared/session/surfaceDecision';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
 import type { Session } from '@texra-ai/harness';
@@ -160,27 +165,18 @@ export function createHeadlessCliHostInteractions(
       );
 
   /** The prompt content for a tool edit: the session's preview of it, else
-   *  the payload's own summary. */
+   *  the payload's own summary and why there is no diff. */
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
     function* (
       runId: RunId,
       payload: Extract<PermissionPayload, { kind: 'toolEdit' }>,
     ) {
-      const { requestId } = payload.data;
-      const outcome = yield* Effect.result(
-        session.request({ kind: 'request.preview', runId, requestId }),
-      );
-      const preview = Result.isSuccess(outcome)
-        ? outcome.success.preview
-        : null;
-      if (preview !== null)
-        return buildToolEditApprovalContent({ ...payload.data, ...preview });
-      yield* Effect.logWarning(
-        `No preview is held for tool edit ${requestId}: prompting without the diff.`,
-      ).pipe(withLogChannel(CHANNEL));
       const { data } = payload;
+      const read = yield* readToolEditPreview(session, runId, data.requestId);
+      if (read.kind === 'preview')
+        return buildToolEditApprovalContent({ ...data, ...read.content });
       return {
-        summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (+${data.addedLines} / -${data.removedLines})`,
+        summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (+${data.addedLines} / -${data.removedLines})\nPreview unavailable: ${read.reason}`,
       } satisfies CliApprovalContent;
     },
   );
@@ -242,17 +238,15 @@ export function createHeadlessCliHostInteractions(
           }),
         );
         if (decision.action === 'approve') {
-          return yield* decide(runId, requestId, { action: 'retry' });
+          return yield* decide(runId, requestId, REQUEST_ACTIONS.retry.y);
         }
-        // A dismissed retry is the operator cancelling this call, not a
-        // policy refusal; the note they left goes to stderr beside it.
+        // A dismissed retry is the operator stopping the task, not a policy
+        // refusal; the note they left goes to stderr beside it.
         const note =
-          decision.action === 'reject' ? decision.feedback : decision.cause;
+          (decision.action === 'reject' ? decision.feedback : decision.cause) ??
+          undefined;
         writeTextStderr(note ? `${summary}\n${note}` : summary);
-        return yield* decide(runId, requestId, {
-          action: 'cancel',
-          cause: note ?? null,
-        });
+        return yield* decide(runId, requestId, declineDecision('retry', note));
       }
       case 'userQuestion':
         return yield* decide(

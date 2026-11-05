@@ -35,7 +35,7 @@ import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 const ATTACH_PORT = 'attach';
 
 /** How the attached task is printed. */
-export interface TaskAttachOutput {
+interface TaskAttachOutput {
   readonly format: 'text' | 'ndjson';
   /** Text layout width. */
   readonly columns: number;
@@ -43,7 +43,7 @@ export interface TaskAttachOutput {
 }
 
 /** The service stopped sending the task before it ended. */
-export class TaskWatchEnded extends Schema.TaggedError<TaskWatchEnded>()(
+class TaskWatchEnded extends Schema.TaggedError<TaskWatchEnded>()(
   'TaskWatchEnded',
   {
     runId: Schema.String,
@@ -155,11 +155,10 @@ export const attachTask = Effect.fn('attachTask')(function* (
   const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
   const aggregate = qualifyAggregateId('run', task.runId);
   let printed = 0;
-  const printSettled = (run: RunView, ended: boolean): void => {
+  const printSettled = (run: RunView): void => {
     if (output.format !== 'text') return;
     const { rows, settledRows } = run.transcript;
-    const until = ended ? rows.length : settledRows;
-    for (; printed < until; printed += 1) {
+    for (; printed < settledRows; printed += 1) {
       const { lines } = fullTranscriptEntryLayout(
         rows[printed],
         output.columns,
@@ -175,9 +174,7 @@ export const attachTask = Effect.fn('attachTask')(function* (
     Stream.map((view) => view.runs.get(task.runId)),
     Stream.filter(Predicate.isNotUndefined),
     Stream.takeUntil((run) => run.durableOutcome !== null),
-    Stream.tap((run) =>
-      Effect.sync(() => printSettled(run, run.durableOutcome !== null)),
-    ),
+    Stream.tap((run) => Effect.sync(() => printSettled(run))),
     Stream.runLast,
   );
   return Option.match(last, {

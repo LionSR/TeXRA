@@ -25,7 +25,7 @@ import {
 } from '@agent/runtime/childRunLoop';
 import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { withLogChannel } from '@logger/effectLog';
 import { SessionLog } from '@shared/session/runHistory';

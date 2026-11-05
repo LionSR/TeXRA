@@ -16,7 +16,7 @@ import {
 } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import { SessionRoots } from '@platform/rootedFs';
 import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import {

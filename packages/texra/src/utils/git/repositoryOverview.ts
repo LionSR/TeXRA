@@ -37,7 +37,7 @@ const MAX_BUFFER_BYTES = 8 * 1024 * 1024;
 
 const GIT_TIMEOUT_MS = 10_000;
 
-export interface GitReadOptions {
+interface GitReadOptions {
   /**
    * Setting slots of the workspace being read, held as data by the host that
    * asked (its session roots): the spawned `git` carries that project's
@@ -76,7 +76,7 @@ const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   return undefined;
 });
 
-export interface GitRecentCommits {
+interface GitRecentCommits {
   commits: string[];
   isGitRepo: boolean;
 }

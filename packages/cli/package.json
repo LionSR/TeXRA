@@ -49,7 +49,6 @@
     "build": "npm run typecheck && npm run smoke:react-compiler && npm run prepare:trace-viewer-assets && npm run bundle && npm run copy:resources && npm run copy:docs",
     "prepack": "npm run build",
     "validate:run": "node scripts/validate-run.mjs",
-    "validate:pack": "node scripts/validate-pack.mjs",
     "validate:tui": "node scripts/validate-tui.mjs",
     "golden:store": "node scripts/generate-golden-store.mjs"
   },

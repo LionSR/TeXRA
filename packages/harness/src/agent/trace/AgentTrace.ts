@@ -5,8 +5,7 @@
  * reaches the sinks the trace was built with ({@link AgentTraceSink}). Every other method on this interface is sugar
  * over `emit()` so the trace channel remains a single source of truth.
  *
- * App-specific helpers (`logSdkError`/`logProgressStatus`/
- * `logUserMessage`/etc.) are plain functions in `helpers.ts` that operate on
+ * App-specific helpers (`logSdkError`/`logUserMessage`/etc.) are plain functions in `helpers.ts` that operate on
  * this interface — there is no host subtype. SDK consumers program directly
  * against `AgentTrace`.
  */

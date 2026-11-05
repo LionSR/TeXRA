@@ -205,11 +205,6 @@ export function normalizeProviderError(err: unknown): ProviderError {
     : { message: failure.message };
 }
 
-/** The user-facing message of any failure. */
-export function getSdkErrorMessage(err: unknown): string {
-  return normalizeProviderError(err).message;
-}
-
 /** Builds consistent error data for logging with MESSAGE_TYPES.ERROR. */
 export function buildErrorLogData(
   err: unknown,

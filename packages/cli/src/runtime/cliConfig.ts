@@ -38,10 +38,10 @@ import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 export const CLI_CHEAP_START_MODEL = 'deepseek/deepseek-v4-pro';
 
 /** The `texra.*` command sections: `texra.chat` and `texra.run`. */
-export type CliCommandRole = 'chat' | 'run';
+type CliCommandRole = 'chat' | 'run';
 
 /** Agent and model for one command, after the section/top-level fallthrough. */
-export interface CliCommandDefaults {
+interface CliCommandDefaults {
   readonly agent?: string;
   readonly model?: string;
   /**

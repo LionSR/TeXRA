@@ -11,11 +11,11 @@
  */
 import { Cause, Effect, Exit, Fiber, type Scope } from 'effect';
 
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import {
   logContextManagementEvent,
   startCompactionActivity,
-  type AgentTrace,
-} from '@agent/trace';
+} from '@agent/trace/helpers';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { Settings, type SettingsStores } from '@shared/config/settings';
 import type { StateReadFailed } from '@shared/config/settings';
@@ -265,7 +265,7 @@ const land = Effect.fn('compaction.land')(function* (
  * past the window waits for the summary; a `/compact` or an overflow
  * settles, then summarizes the whole history.
  */
-export interface BackgroundCompaction {
+interface BackgroundCompaction {
   /** At a request boundary, no attempt open; `requests` consume `/compact`s.
    *  Each operation commits through `cell` and answers its state. */
   readonly atBoundary: (

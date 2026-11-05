@@ -14,10 +14,7 @@ import {
   type TaskGroup,
   type ToolUseLog,
 } from '@shared/schemas';
-import {
-  createCompactionActivityProjection,
-  type CompactionActivityProjection,
-} from '@shared/runs/compactionActivityProjection';
+import type { CompactionActivityProjection } from '@shared/runs/compactionActivityProjection';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import type { RunLabels } from '@shared/tools/executionsDisplay';
 import {
@@ -137,7 +134,11 @@ export function emptyTranscriptIndexes(): TranscriptIndexes {
   return {
     rowIndex: new Map(),
     taskGroupIndex: new Map(),
-    compactionState: createCompactionActivityProjection(),
+    compactionState: {
+      blocks: [],
+      indexByOperationId: new Map(),
+      maxAppliedSeqNo: 0,
+    },
     slots: new Map(),
     appended: 0,
     settled: 0,

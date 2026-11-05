@@ -5,7 +5,7 @@
  * structurally, so callers pass either the full input or an ad-hoc object of
  * the same shape without building a whole `ChatExportInput` for a filename.
  */
-export interface ExportFilenameInput {
+interface ExportFilenameInput {
   readonly timestamp: string;
   readonly config: { readonly agent?: string; readonly model?: string };
 }

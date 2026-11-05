@@ -6,7 +6,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { renderBannerFrame } from './bannerFrame';
 import { waIcon } from './webAwesomeIcons';
 
-export interface SettingsBannerOptions {
+interface SettingsBannerOptions {
   readonly id: string;
   readonly title: string;
   readonly description: string | TemplateResult;

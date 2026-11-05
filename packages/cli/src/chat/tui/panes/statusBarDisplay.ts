@@ -49,7 +49,7 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
 export type BypassState = ReturnType<typeof runBypasses>;
 
 /** What the pending-interaction count names: approvals, questions, or both. */
-export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
+type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 function statusKindForApproval(
   kind: PendingApprovalKind,
@@ -122,7 +122,7 @@ interface StatusBarSegment {
  * reads straight off the `RunView` (`buildStatusBarDisplay`'s `run`): the
  * turn clock, the session chrome, and which surface owns input.
  */
-export interface StatusBarChrome {
+interface StatusBarChrome {
   /** Liveness of the running turn: omitted entirely in tests/headless runs,
    *  same as each of its fields individually. */
   readonly turn?: StatusBarTurnInput;
@@ -832,13 +832,13 @@ export function buildStatusBarDisplay(
   // Routine activity, not caution: these sit onscreen for whole turns, and
   // painting them yellow trains the eye to ignore the color that also
   // announces auto-approval bypasses and quota exhaustion.
-  if (run?.compactingActive === true && active) {
+  if (run?.compactingActive === true) {
     left.push({
       text: 'compacting...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
-  } else if (run?.thinkingActive === true && active) {
+  } else if (run?.thinkingActive === true) {
     left.push({
       text: 'thinking...',
       color: 'dim',

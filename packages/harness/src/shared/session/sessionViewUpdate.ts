@@ -34,7 +34,7 @@ import {
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
-  ownerPid,
+  ownerIdentity,
   blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
@@ -44,7 +44,6 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type DisplaySessionEvent,
-  type RunEnd,
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
@@ -63,7 +62,7 @@ import {
   applyRunRow,
   freshRunRows,
   isSharedRunRow,
-  pendingMessages,
+  isMessage,
   type SharedRunRow,
 } from './runRows';
 import { phaseMoveOf } from './runRowReads';
@@ -181,6 +180,8 @@ function reconcileExistence(
   u: Update,
   existence: ExistenceReconciliation,
 ): void {
+  const unread = [...u.state.ownerUnread];
+  u.state.ownerUnread.clear();
   for (const { aggregateId, ownerId } of existence.claims) {
     const runId = runIdOf(aggregateId);
     const run = runId === null ? undefined : u.view.runs.get(runId);
@@ -188,6 +189,7 @@ function reconcileExistence(
     setRun(u, { ...run, ownerId });
     walkUp(u, run.id);
   }
+  for (const id of unread) walkUp(u, id);
   const present = new Set(
     existence.claims.map(({ aggregateId }) => aggregateId),
   );
@@ -235,6 +237,10 @@ interface SessionState {
   readonly latest: Map<string, number>;
   /** Each run's transcript working state (`transcriptState.ts`). */
   readonly transcripts: Map<RunId, TranscriptIndexes>;
+  /** The runs created since the last existence marker: who holds them is
+   *  not read yet, so none counts as interrupted toward `turnOver`, which
+   *  would mark its open rows final. */
+  readonly ownerUnread: Set<RunId>;
   /** The latest local runtime snapshot. */
   local: LocalRuntimeState;
 }
@@ -245,6 +251,7 @@ function emptySessionState(): SessionState {
     rows: new Map(),
     latest: new Map(),
     transcripts: new Map(),
+    ownerUnread: new Set(),
     local: { self: [], dead: [], unreadable: [] },
   };
 }
@@ -308,6 +315,7 @@ function runIdOf(aggregateId: AggregateId): RunId | null {
  *  comes from the existence marker that ends the same batch. */
 function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
   u.state.transcripts.set(id, emptyTranscriptIndexes());
+  u.state.ownerUnread.add(id);
   const label = runIdentityDisplayName(event.identity);
   const common = {
     id,
@@ -336,6 +344,9 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     turnStartedAt: null,
     runStartedAt: null,
     working: false,
+    turnOver: false,
+    live: false,
+    runsHere: false,
     lastTimestamp: event.at,
     turn: null,
     followUpSupport: event.userFollowUpSupport,
@@ -421,12 +432,13 @@ function refreshAncestors(u: Update, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * A run's derived fields (group, approval, status copy, rollup, tree usage,
- * actions, notice), from its facts, the local snapshot and its children. A
- * run that has not ended and that nobody holds is interrupted, pending
- * request or not. A run waits only while a held owner has a request that
- * blocks its tool; unheld, it reads as interrupted, since nothing listens
- * for the answer, and the request stays listed so a resume can ask again.
+ * A run's derived fields (group, approval, status copy, liveness, rollup,
+ * tree usage, actions, notice), from its facts, the local snapshot and its
+ * children. A run that has not ended and that nobody holds is interrupted,
+ * pending request or not. A run waits only while a held owner has a request
+ * that blocks its tool; unheld, it reads as interrupted, since nothing
+ * listens for the answer, and the request stays listed so a resume can ask
+ * again. When `turnOver` changes, the transcript facts follow it.
  */
 function withAggregates(u: Update, run: RunView): RunView {
   const { view } = u;
@@ -446,6 +458,10 @@ function withAggregates(u: Update, run: RunView): RunView {
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
   const working = !interrupted && !paused && run.status === RUN_PHASE.RUNNING;
+  const turnOver =
+    isTranscriptSettlementPhase(run.status) ||
+    (interrupted && !u.state.ownerUnread.has(run.id));
+  const live = held && !paused && durableOutcome === null;
   const unreadable = local.unreadable.find(
     (entry) => entry.runId === run.id,
   )?.reason;
@@ -470,16 +486,16 @@ function withAggregates(u: Update, run: RunView): RunView {
   });
   const stranded = heldBy === null && unreadable !== undefined;
   const readOnly = heldBy !== null || stranded;
-  const actions = runActions({ ...run, readOnly, group }, stranded);
+  const actions = runActions({ ...run, readOnly, group, live }, stranded);
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   let statusNotice: RunView['statusNotice'] = null;
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
   else if (heldBy !== null)
-    statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
+    statusNotice = { kind: 'held', pid: ownerIdentity(heldBy).pid };
   else if (run.lost !== null)
     statusNotice = { kind: 'lost', message: run.lost };
-  return withDerived(run, {
+  const next = withDerived(run, {
     group,
     approval,
     readOnly,
@@ -488,12 +504,29 @@ function withAggregates(u: Update, run: RunView): RunView {
     forceExpanded,
     durableOutcome,
     working,
+    turnOver,
+    live,
+    runsHere: own && live,
     runStartedAt: working && !waiting ? run.turnStartedAt : null,
     rollup: rollupOf(children),
     treeUsage,
     ...status,
     statusNotice,
   });
+  if (turnOver === run.turnOver) return next;
+  // A turn its rows ended finished its compactions at the transcript's
+  // boundary; one whose holder went away has written no such row.
+  const transcript = turnOver
+    ? finishOpenCompactions(
+        next.transcript,
+        transcriptWork(u, next.id),
+        next.lastTimestamp,
+      )
+    : next.transcript;
+  return withTranscriptFacts(
+    u,
+    transcript === next.transcript ? next : { ...next, transcript },
+  );
 }
 
 /**
@@ -520,25 +553,6 @@ function walkUp(u: Update, startId: RunId | null): void {
     if (next !== current) setRun(u, next);
     id = current.parentId;
   }
-}
-
-/** Once the run waits or has ended, finish the compactions its transcript
- *  still shows open; record a result its end lost. */
-function withTurnFinished(
-  u: Update,
-  run: RunView,
-  at: number,
-  e?: RunEnd['error'],
-): RunView {
-  if (e?.kind === 'result-lost')
-    run = { ...run, lost: e.message ?? 'Result lost' };
-  if (!isTranscriptSettlementPhase(run.status)) return run;
-  const transcript = finishOpenCompactions(
-    run.transcript,
-    transcriptWork(u, run.id),
-    at,
-  );
-  return transcript === run.transcript ? run : { ...run, transcript };
 }
 
 // ---------------------------------------------------------------------------
@@ -602,13 +616,13 @@ function latestConversationLine(
  * Advance `settledRows`, the contiguous leading prefix of settled rows: an
  * append-only scrollback prints rows in order, so a row is settled for
  * printing only once every row before it is. Only the tail past the previous
- * frontier is walked. A finished run settles every open row except a
- * compaction block, which cleanup can still replace.
+ * frontier is walked. A run whose turn is over settles every open row
+ * except a compaction block, which cleanup can still replace.
  */
 function advanceSettledRows(
   rows: TranscriptView['rows'],
   start: number,
-  runFinal: boolean,
+  turnOver: boolean,
 ): number {
   let index = Math.min(start, rows.length);
   while (index < rows.length) {
@@ -617,28 +631,26 @@ function advanceSettledRows(
       // Bridge cleanup can still replace a planned/running compaction after
       // a cancellation, so it settles only on its own typed terminal state,
       // never on the final stream status.
-      if (row.kind === 'compactionActivity' || !runFinal) break;
+      if (row.kind === 'compactionActivity' || !turnOver) break;
     }
     index += 1;
   }
   return index;
 }
 
-/** The transcript-derived fields of a run, after its rows or its phase
- *  moved: `settledRows`, `thinkingActive`, `compactingActive`, and
- *  `latestLine`. */
+/** The transcript-derived fields of a run, after its rows moved or its turn
+ *  started or ended: `settledRows`, `thinkingActive`, `compactingActive`,
+ *  and `latestLine`. Once the turn is over nothing streams or compacts. */
 function withTranscriptFacts(u: Update, run: RunView): RunView {
-  const { transcript } = run;
-  const runFinal = isTranscriptSettlementPhase(run.status);
+  const { transcript, turnOver } = run;
   const settledRows = advanceSettledRows(
     transcript.rows,
     transcript.settledRows,
-    runFinal,
+    turnOver,
   );
-  const { thinkingActive, compactingActive } = transcriptActivity(
-    transcript,
-    transcriptWork(u, run.id).ix,
-  );
+  const activity = transcriptActivity(transcript, transcriptWork(u, run.id).ix);
+  const thinkingActive = !turnOver && activity.thinkingActive;
+  const compactingActive = !turnOver && activity.compactingActive;
   const latestLine =
     latestConversationLine(transcript.rows, settledRows) ??
     operationalLatestLine(transcript.rows) ??
@@ -678,7 +690,7 @@ type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
 
 /** What the event changes on its own run (topology, session-level fields and
  *  the transcript are the caller's). */
-function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
+function applyRunEvent(run: RunView, event: OwnEvent): RunView {
   switch (event.type) {
     case 'log':
     case 'stage.start':
@@ -719,7 +731,7 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
     case 'run.config': {
       // A process has no model; any other run is on its newest config's.
       const { config } = event;
-      const kept = config.model ?? run.model ?? null;
+      const kept = config.model ?? run.model;
       const model = run.identity.kind === 'process' ? null : kept;
       return {
         ...run,
@@ -750,7 +762,7 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
     case 'child.park':
-      run = movePhase(u, run, event.phase !== 'resumed', event.at);
+      run = movePhase(run, event.phase !== 'resumed', event.at);
       return { ...run, substate: parkSubstate(event) };
     case 'run.detach': // the attached parent goes; the launch parent stays
       return run.parentId === null ? run : { ...run, parentId: null };
@@ -767,29 +779,22 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
           };
     case 'run.end':
       // The run ended: its outcome and output, and any result its end lost.
-      return withTurnFinished(
-        u,
-        {
-          ...run,
-          status: event.outcome,
-          output: event.output,
-          substate: null,
-          turnStartedAt: null,
-        },
-        event.at,
-        event.error,
-      );
+      return {
+        ...run,
+        status: event.outcome,
+        output: event.output,
+        substate: null,
+        turnStartedAt: null,
+        ...(event.error?.kind === 'result-lost'
+          ? { lost: event.error.message }
+          : {}),
+      };
   }
 }
 
 /** The run's loop position, read from what `runRows.ts` recorded, moved to
  *  the phase {@link phaseMoveOf} names. */
-function withPosition(
-  u: Update,
-  run: RunView,
-  rows: RunRows,
-  row: SharedRunRow,
-) {
+function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
   if (rows.family === null || rows.at === null) return run;
   if (
     row.type === 'run.position' &&
@@ -800,26 +805,20 @@ function withPosition(
   const phase = phaseMoveOf(row);
   return phase === null
     ? { ...run, turn }
-    : movePhase(u, { ...run, turn }, phase === RUN_PHASE.WAITING, row.at);
+    : movePhase({ ...run, turn }, phase === RUN_PHASE.WAITING, row.at);
 }
 
-/** Set the run waiting (its turn is over: `turnStartedAt` clears and the
- *  transcript's open compactions finish) or running. The one phase writer
- *  for both rows that make a run wait: a loop's `run.position` at `waiting`
- *  and an agent-CLI child's `child.park`. */
-function movePhase(
-  u: Update,
-  run: RunView,
-  waiting: boolean,
-  at: number,
-): RunView {
-  const moved: RunView = {
+/** Set the run waiting (its turn is over: `turnStartedAt` clears) or
+ *  running. The one phase writer for both rows that make a run wait: a
+ *  loop's `run.position` at `waiting` and an agent-CLI child's
+ *  `child.park`. */
+function movePhase(run: RunView, waiting: boolean, at: number): RunView {
+  return {
     ...run,
     status: waiting ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING,
     substate: null,
     turnStartedAt: waiting ? null : (run.turnStartedAt ?? at),
   };
-  return waiting ? withTurnFinished(u, moved, at) : moved;
 }
 
 /** The session-level fields an event changes, applied before the run's own
@@ -882,7 +881,7 @@ function applyRowFacts(u: Update, run: RunView, event: SharedRunRow): RunView {
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(u.view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(u, run.id, after);
-  return moved.at === undefined ? run : withPosition(u, run, after, event);
+  return moved.at === undefined ? run : withPosition(run, after, event);
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
@@ -908,7 +907,7 @@ function projectRequests(view: ViewDraft, runId: RunId, rows: RunRows) {
 /** The run's untaken messages (not its own requests), as the view shows them. */
 function projectFollowUps(u: Update, runId: RunId, rows: RunRows) {
   const { view } = u;
-  const messages = pendingMessages(rows.followUps, (id) => view.runs.get(id));
+  const messages = rows.followUps.filter(isMessage);
   if (messages.length === 0) {
     view.queuedFollowUps = without(u, view.queuedFollowUps, runId);
     return;
@@ -1014,7 +1013,7 @@ function applyEvent(
     };
   } else {
     applySessionFacts(u, runId, event);
-    own = applyRunEvent(u, before, event);
+    own = applyRunEvent(before, event);
   }
   if (event.type === 'run.end') {
     // A run can end with a row unfinalized: its end drops all live text.
@@ -1032,11 +1031,7 @@ function applyEvent(
   const linked = u.view.runs.get(next.id);
   if (!linked) throw new Error(`Run ${next.id} left the view while relinking`);
   next = linked;
-  const statusMoved = own.status !== before.status;
-  const aggregated = statusMoved
-    ? withAggregates(u, withTranscriptFacts(u, next))
-    : withAggregates(u, next);
-  setRun(u, aggregated);
+  setRun(u, withAggregates(u, next));
   walkUp(u, next.parentId);
   return true;
 }
@@ -1118,9 +1113,9 @@ function removeRun(u: Update, runId: RunId): boolean {
 }
 
 /** A new local snapshot can change how any run reads (held here or
- *  elsewhere, interrupted, unreadable, blocked), so every run is re-derived;
- *  `withDerived` keeps an unchanged one as it was. The reader sends a
- *  snapshot only when it changed. */
+ *  elsewhere, interrupted, unreadable, blocked, its turn over), so every run
+ *  is re-derived; `withDerived` keeps an unchanged one as it was. The reader
+ *  sends a snapshot only when it changed. */
 function applyLocal(u: Update, local: LocalRuntimeState): void {
   u.state.local = local;
   for (const id of [...u.view.runs.keys()]) walkUp(u, id);

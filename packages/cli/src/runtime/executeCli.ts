@@ -315,8 +315,14 @@ export const executeCliConfig: (
             // session accepted the run; one accepted by then, or while the
             // interrupt was on its way, is stopped through the session, which
             // its own end answers (an ended run's stop is the registry's
-            // quiet no-op).
-            if (!accepted) yield* Effect.forkDetach(Fiber.interrupt(launched));
+            // quiet no-op). A launch the session already holds is stopped
+            // for the shutdown first, so the run it opens records that, not
+            // the launch's release, and resumes as a shutdown's.
+            if (!accepted) {
+              if (session.held(launchRunId) !== undefined)
+                yield* stopThroughSession;
+              yield* Effect.forkDetach(Fiber.interrupt(launched));
+            }
             // Read again: acceptance may have landed while the interrupt was
             // being forked, and an interrupt that reaches the launch after it
             // waits on the uninterruptible acceptance instead of stopping it.

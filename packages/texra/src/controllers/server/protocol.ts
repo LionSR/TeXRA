@@ -93,18 +93,18 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 60,
+  version: 61,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
     'tasks.list': 'f53aa5564aa8',
-    'task.watch': 'e44e66772744',
-    'task.request': 'f055ca5a4858',
+    'task.watch': '82082a7324f2',
+    'task.request': '96bc304e28f8',
     'task.start': 'bd10b36a735a',
     'task.resume': 'ac37fb4d0261',
     'task.ended': 'b8a10423576c',
     'task.config': 'ee42ee67ab23',
-    'task.exportTrace': 'e14a1baf0863',
+    'task.exportTrace': '7899739d717e',
     'task.exportInput': 'fefc9f82f1e2',
     'tasks.history': '9de0043e6a9e',
     'task.detail': '5a78e8b493e2',

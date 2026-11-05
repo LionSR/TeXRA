@@ -78,11 +78,6 @@ export function ownerIdentity(ownerId: OwnerId): {
   return { hostname, pid, processStart };
 }
 
-/** The recorded pid shown when another process holds a run. */
-export function ownerPid(ownerId: OwnerId): number {
-  return ownerIdentity(ownerId).pid;
-}
-
 /**
  * A verdict about an owner is a proof or an admission that no proof exists.
  * `unprovable` means "do not touch automatically": every acquire path treats
@@ -145,7 +140,7 @@ export function qualifyAggregateId(
 }
 
 /** A decoded aggregate key: the `run` arm carries its logical id as a `RunId`. */
-export type AggregateTarget =
+type AggregateTarget =
   | { readonly kind: 'run'; readonly id: RunId }
   | { readonly kind: Exclude<AggregateKind, 'run'>; readonly id: string };
 

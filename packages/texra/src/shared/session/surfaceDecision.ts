@@ -1,8 +1,9 @@
 /**
- * What a surface does with one decision on a pending request: the
- * `request.decide` or `host.request` case it names. Both surfaces that
- * present requests, the progress view's request panels and the TUI's
- * approval modal, map through here, so one decision means one thing on both.
+ * What a surface offers and sends for a pending request: the answers each
+ * kind offers ({@link REQUEST_ACTIONS}) and the `request.decide` or
+ * `host.request` case one decision names. The progress view's request
+ * panels, the TUI's approval modal and the headless prompt read here, so one
+ * answer means one thing on all of them.
  *
  * Pure and host-neutral: it reaches the harness's schemas and the two request
  * protocols, and nothing else.
@@ -19,20 +20,12 @@ import type {
 import type { HostRequest } from './hostRequest';
 
 /**
- * Surface-only approval action emitted by the inline edit/command approval
- * button / `a` shortcut on the edit and bash approval prompts. It never
- * becomes a durable decision: {@link approvalDecisionArm} sends it as a
- * plain approve that grants the session bypass.
+ * Surface-only approval action emitted by the run-grant item and `a` key on
+ * the command, edit and agent-proposal prompts. It never becomes a durable
+ * decision: {@link approvalDecisionArm} sends it as a plain approve that
+ * grants the request kind's bypass for the run.
  */
 export const APPROVE_SESSION_ACTION = 'approveSession';
-
-/**
- * Surface-only approval action emitted by the approve-all-delegated-work item
- * on the agent-proposal Approve menu. Like {@link APPROVE_SESSION_ACTION},
- * {@link approvalDecisionArm} sends it as a plain proposal approve that
- * grants the run's delegated-work bypass.
- */
-export const APPROVE_ALL_DELEGATED_WORK_ACTION = 'approveSuperYolo';
 
 /** A tool-edit prompt's verbs over the preview the host staged; they leave
  *  the request pending. */
@@ -40,13 +33,75 @@ type ToolEditPreviewAction = 'openDiff' | 'showLatexdiff' | 'previewProposed';
 
 /**
  * What a surface emits for one request: a durable {@link RequestDecision},
- * one of the two session-bypass approvals, or a tool-edit preview verb.
+ * the run-grant approval, or a tool-edit preview verb.
  */
 export type SurfaceDecision =
   | RequestDecision
-  | { readonly action: typeof APPROVE_SESSION_ACTION }
-  | { readonly action: typeof APPROVE_ALL_DELEGATED_WORK_ACTION }
+  | {
+      readonly action: typeof APPROVE_SESSION_ACTION;
+      /** The model an agent-proposal card picked, when it is not the
+       *  proposal's. */
+      readonly model?: string;
+    }
   | { readonly action: ToolEditPreviewAction };
+
+/** How a prompt declines: with a note the agent reads (`reject`), by passing
+ *  on it (`skip`), or by stopping the task (`stop`, sent as a `cancel`). */
+type RequestDecline = 'reject' | 'skip' | 'stop';
+
+const APPROVE = Object.freeze({ action: 'approve' });
+
+/**
+ * The answers each request kind offers, by the key every surface binds them
+ * to: `y` the primary answer (none for a question, whose answers are its
+ * form's), `n` how it declines, and the kind's own keys. Labels are each
+ * surface's; what a key sends is this table's. The `a` run grant of a kind
+ * with a bypass is {@link APPROVE_SESSION_ACTION}, and a key the request
+ * itself must allow (a retry's move onto the user's own key) is checked by
+ * the surface and again by {@link approvalDecisionArm}.
+ */
+export const REQUEST_ACTIONS = Object.freeze({
+  bash: Object.freeze({ y: APPROVE, n: 'reject' }),
+  toolEdit: Object.freeze({ y: APPROVE, n: 'reject' }),
+  proposal: Object.freeze({ y: APPROVE, n: 'reject' }),
+  planApproval: Object.freeze({
+    y: APPROVE,
+    n: 'reject',
+    /** Run as goal, auto-approving commands only. */
+    r: Object.freeze({ action: 'approve_and_goal' }),
+    /** Run as goal, also approving edits and agent work. */
+    a: Object.freeze({ action: 'approve_and_goal', autoApproveAll: true }),
+  }),
+  retry: Object.freeze({
+    y: Object.freeze({ action: 'retry' }),
+    n: 'stop',
+    k: Object.freeze({ action: 'retry', credentials: 'personal' }),
+  }),
+  userQuestion: Object.freeze({ n: 'skip' }),
+  plugin: Object.freeze({ n: 'skip' }),
+}) satisfies {
+  readonly [K in PermissionPayload['kind']]: {
+    readonly n: RequestDecline;
+    readonly [key: string]: SurfaceDecision | RequestDecline;
+  };
+};
+
+/** The decision a `kind` request's decline sends, with the user's note on
+ *  it when there is one. */
+export function declineDecision(
+  kind: PermissionPayload['kind'],
+  note?: string,
+): RequestDecision {
+  const decline: RequestDecline = REQUEST_ACTIONS[kind].n;
+  switch (decline) {
+    case 'reject':
+      return { action: 'reject', feedback: note };
+    case 'skip':
+      return { action: 'skip', feedback: note };
+    case 'stop':
+      return { action: 'cancel', cause: note };
+  }
+}
 
 /**
  * The wire case a decision names: a request to the run's runtime, or a
@@ -90,8 +145,7 @@ export function approvalDecisionArm(
     runtime: { kind: 'request.decide', runId, requestId, decision: d, grant },
   });
   switch (decision.action) {
-    case APPROVE_SESSION_ACTION:
-    case APPROVE_ALL_DELEGATED_WORK_ACTION: {
+    case APPROVE_SESSION_ACTION: {
       const bypass = BYPASS_OF_KIND[permission.kind];
       // A command prompt for another tool's call (an MCP tool, codex) does
       // not offer the grant: the only bypass a bash request names is the
@@ -104,7 +158,15 @@ export function approvalDecisionArm(
           `A ${permission.kind} request has no session bypass to enable.`,
         );
       }
-      return decide({ action: 'approve' }, bypass);
+      return decide(
+        {
+          action: 'approve',
+          ...('model' in decision && decision.model !== undefined
+            ? { model: decision.model }
+            : {}),
+        },
+        bypass,
+      );
     }
     case 'openDiff':
     case 'showLatexdiff':

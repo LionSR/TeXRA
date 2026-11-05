@@ -9,6 +9,22 @@ export const proposalRequestPanelStyles: CSSResult = css`
     border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
+  /* The model menu sits in the ask's sentence, in the ask's type. */
+  .proposal-model {
+    display: inline-block;
+    vertical-align: baseline;
+  }
+
+  .proposal-model__trigger::part(label) {
+    font-size: inherit;
+    font-weight: inherit;
+  }
+
+  .proposal-model wa-dropdown-item {
+    font-size: var(--font-size-sm);
+    font-weight: normal;
+  }
+
   /* A script request's lede. */
   .proposal-card__lede {
     display: flex;

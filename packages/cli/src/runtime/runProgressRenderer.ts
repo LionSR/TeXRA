@@ -9,7 +9,6 @@ import { formatCompactDuration, pluralize } from '@texra-ai/harness/transcript';
 import { Effect, type Fiber, Schedule, type Scope, Stream } from 'effect';
 
 import {
-  isLiveRun,
   type SessionView,
   type RunView,
   RUN_PHASE,
@@ -45,7 +44,7 @@ export function finishedToolCalls(run: RunView): number {
   ).length;
 }
 
-export interface RunProgressRenderer {
+interface RunProgressRenderer {
   /** Follow the session's view until the scope closes, describing `runId`. */
   attach(
     session: RunProgressSession,
@@ -215,7 +214,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root || this.rootRunTerminal) return [];
     return root.childIds.flatMap((childId) => {
       const child = this.view?.runs.get(childId);
-      return child && isLiveRun(child) ? [child] : [];
+      return child?.live ? [child] : [];
     });
   }
 

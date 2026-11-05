@@ -160,7 +160,7 @@ export function staticTranscriptRowBudget({
   return Math.max(0, optionalRows - liveTranscriptReserveRows);
 }
 
-export interface StaticScrollbackTarget {
+interface StaticScrollbackTarget {
   readonly ownerKey: string;
   readonly runId: RunId | undefined;
 }

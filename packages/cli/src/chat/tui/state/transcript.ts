@@ -39,7 +39,7 @@ export const paintedRunIds = computed((): readonly RunId[] => {
   return [...sessionRunIds.get(), ...(reader ? [reader] : [])];
 });
 
-export interface LocalNotice {
+interface LocalNotice {
   readonly runId: RunId;
   /** The settlement seq of the row the notice follows; 0 before any. */
   readonly afterSeq: number;

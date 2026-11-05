@@ -10,6 +10,7 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
 import { getModelLabel, type RetryPermission } from '@texra-ai/harness/schemas';
+import { REQUEST_ACTIONS } from '@texra/shared/session/surfaceDecision';
 import { modelFailureText } from '@ui/copy/modelAccess';
 import type { IconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -28,16 +29,8 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
     return 'rotate-right';
   }
 
-  protected override get decline(): 'stop' {
-    return 'stop';
-  }
-
   protected override get primaryLabel(): string {
     return 'Retry';
-  }
-
-  protected override submitPrimary(): void {
-    this.emitAction({ action: 'retry' });
   }
 
   protected override renderAsk(): string {
@@ -49,7 +42,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
 
   protected override handleExtraKey(key: string): boolean {
     if (key !== 'k' || !this.canUseOwnApiKey()) return false;
-    this.emitAction({ action: 'retry', credentials: 'personal' });
+    this.emitAction(REQUEST_ACTIONS.retry.k);
     return true;
   }
 
@@ -85,8 +78,7 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
             title: `${ownKeyLabel} (k)`,
             action: 'useOwnApiKey',
             disabled: this.readOnly,
-            onClick: () =>
-              this.emitAction({ action: 'retry', credentials: 'personal' }),
+            onClick: () => this.emitAction(REQUEST_ACTIONS.retry.k),
           })
         : nothing,
     );

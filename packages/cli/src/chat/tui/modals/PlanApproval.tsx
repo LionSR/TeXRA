@@ -8,7 +8,10 @@ import {
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { fillRows, truncateToWidth } from '@cli/runtime/terminalText';
-import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import {
+  REQUEST_ACTIONS,
+  type SurfaceDecision,
+} from '@texra/shared/session/surfaceDecision';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 
 import { ConfirmCard, ConfirmCardFeedback } from './ConfirmCard';
@@ -34,18 +37,18 @@ const PLAN_APPROVAL_GOAL_NOTICE_ROWS = 2;
 const PLAN_APPROVAL_HIDDEN_NOUN = 'plan rows';
 /** Run as goal: `r` auto-approves commands only; `a`, the card grammar's
  *  "approve broadly" key, also approves edits and agent work. */
-const PLAN_APPROVAL_GOAL_ACTIONS = [
+const PLAN_APPROVAL_GOAL_ACTIONS: readonly ConfirmCardKeyRow[] = [
   {
     key: 'r',
     action: 'run as goal',
-    decision: { action: 'approve_and_goal' },
+    decision: REQUEST_ACTIONS.planApproval.r,
   },
   {
     key: 'a',
     action: 'goal, approve all',
-    decision: { action: 'approve_and_goal', autoApproveAll: true },
+    decision: REQUEST_ACTIONS.planApproval.a,
   },
-] as const satisfies readonly ConfirmCardKeyRow[];
+];
 
 function isCompactPlanApprovalRows(availableRows: number | undefined): boolean {
   return (
@@ -75,6 +78,7 @@ function planApprovalCompactBodyRowsBudget({
 }): number | undefined {
   if (availableRows === undefined) return undefined;
   const chromeRows = confirmCardCompactChromeRows({
+    kind: 'planApproval',
     title: PLAN_APPROVAL_TITLE,
     columns,
     extraActions: PLAN_APPROVAL_GOAL_ACTIONS,
@@ -114,7 +118,7 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
       color={COLOR_INFO}
       compact={compact}
       title={PLAN_APPROVAL_TITLE}
-      rejectionMode="feedback"
+      kind="planApproval"
       extraActions={goalActionVisible ? PLAN_APPROVAL_GOAL_ACTIONS : []}
       onDecide={onDecide}
     >

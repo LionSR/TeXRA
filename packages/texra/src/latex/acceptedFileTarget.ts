@@ -23,7 +23,7 @@ import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';
 
-export type AcceptedFileTarget = {
+type AcceptedFileTarget = {
   targetLocation: FileLocation;
   targetFileName: string;
   isNewFile: boolean;
@@ -34,7 +34,7 @@ export type AcceptedFileTarget = {
  * {@link targetFileName}, preserving the base's location kind (workspace,
  * runStorage, or external) and propagating its workspace-relative directory.
  */
-export function siblingLocation(
+function siblingLocation(
   baseLocation: FileLocation,
   targetFileName: string,
 ): FileLocation {
@@ -117,7 +117,7 @@ export interface CommitAcceptedFilePorts<E = never> {
  * dialog) and the desktop bridge (dialog IPC) without each side
  * re-implementing the confirm / commit sequence.
  */
-export interface AcceptEditedFileReplacePorts<
+interface AcceptEditedFileReplacePorts<
   E = never,
 > extends CommitAcceptedFilePorts<E> {
   /** Confirm the (possibly overwriting) write; return false to abort. */
@@ -127,18 +127,16 @@ export interface AcceptEditedFileReplacePorts<
 /**
  * Write `editedLocation`'s content into `target`, emitting a workspace-write
  * notification, cleaning up the stale diff companion, and reporting success.
- * Shared by every "accept edited content" path once a target has already
- * been resolved and (if needed) confirmed — replace, save-as-copy, or the
- * desktop bridge's single-confirm flow. `targetExisted` (whether the target
- * already had content, for the "replaced" vs "created" wording) is the
- * caller's to compute, since the replace path already needs it to word its
+ * Runs once the target has been resolved and confirmed. `targetExisted`
+ * (whether the target already had content, for the "replaced" vs "created"
+ * wording) is the caller's to compute, since it already needs it to word its
  * confirmation prompt and shouldn't check twice.
  *
  * A location's absolute path is where its file is, inside the workspace or
  * not, so every read and write goes through the `FileSystem` the caller's
  * runtime carries, at that path.
  */
-export const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
+const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   baseLocation: FileLocation,
   editedLocation: FileLocation,
   target: { targetLocation: FileLocation; targetFileName: string },
@@ -217,9 +215,7 @@ const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
  * Resolve the accept target beside the base file, confirm the write, then
  * commit it via {@link commitAcceptedFile}. Returns whether the write
  * happened (false when the user declined the confirmation). Shared by the
- * desktop file actions and the VS Code compare command's replace branch; the
- * latter wraps this with its own replace-vs-copy quick pick when run
- * metadata is available.
+ * desktop file actions and the VS Code compare command.
  */
 export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
   function* <E>(
@@ -343,7 +339,7 @@ export const cleanupAcceptedWorkspaceDiffFiles = Effect.fn(
   return stale.filter((_, index) => removed[index]);
 });
 
-export function getAcceptedFileTarget(
+function getAcceptedFileTarget(
   baseLocation: FileLocation,
   editedPath: string,
 ): AcceptedFileTarget {

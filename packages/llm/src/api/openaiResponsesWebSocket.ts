@@ -7,7 +7,6 @@ import {
   Clock,
   Effect,
   Exit,
-  Result,
   Schema,
   type Scope,
   ScopedRef,
@@ -26,7 +25,7 @@ import {
   WebSocketErrorSchema,
 } from './openaiResponsesWire.js';
 import { originOf } from '../protocol.js';
-import { rejoin } from './transport.js';
+import { decodeWireOrFail, rejoin, wireFail } from './transport.js';
 import {
   ResponseAuthenticationSchema,
   prepareResponsesTurn,
@@ -35,11 +34,7 @@ import {
 } from './openaiResponsesRequest.js';
 import type { ClientRequest, IncomingMessage } from 'node:http';
 
-const decodeFrame = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Unknown),
-);
-const decodeEnvelope = Schema.decodeUnknownResult(WebSocketEnvelopeSchema);
-const decodeRejection = Schema.decodeUnknownResult(WebSocketErrorSchema);
+const JsonFrameSchema = Schema.fromJsonString(Schema.Unknown);
 
 /** A connection older than this is replaced before its next turn. */
 const MAX_CONNECTION_AGE_MS = 55 * 60_000;
@@ -251,42 +246,30 @@ const connect = Effect.fnUntraced(function* (
             pendingRead = undefined;
             if (next.done) return yield* closed;
             if (typeof next.value !== 'string')
-              return yield* new ModelError({
-                kind: 'malformed-output',
-                message: 'The Responses connection returned a binary frame.',
-              });
-            const raw = yield* decodeFrame(next.value).pipe(
-              Effect.mapError(
-                (cause) =>
-                  new ModelError({
-                    kind: 'malformed-output',
-                    message: 'The Responses connection returned invalid JSON.',
-                    cause,
-                  }),
-              ),
+              return yield* wireFail(
+                'The Responses connection returned a binary frame.',
+              );
+            const raw = yield* decodeWireOrFail(
+              JsonFrameSchema,
+              'The Responses connection returned invalid JSON.',
+              next.value,
             );
-            const envelope = decodeEnvelope(raw);
-            if (!Result.isSuccess(envelope))
+            const envelope = yield* decodeWireOrFail(
+              WebSocketEnvelopeSchema,
+              'The Responses event does not belong to the implicit lane.',
+              raw,
+            );
+            if (envelope.type === 'error') {
+              const rejected = yield* decodeWireOrFail(
+                WebSocketErrorSchema,
+                'The Responses connection returned a malformed error.',
+                raw,
+              );
               return yield* new ModelError({
-                kind: 'malformed-output',
-                message:
-                  'The Responses event does not belong to the implicit lane.',
-                cause: envelope.failure,
-              });
-            if (envelope.success.type === 'error') {
-              const rejected = decodeRejection(raw);
-              if (!Result.isSuccess(rejected))
-                return yield* new ModelError({
-                  kind: 'malformed-output',
-                  message:
-                    'The Responses connection returned a malformed error.',
-                  cause: rejected.failure,
-                });
-              return yield* new ModelError({
-                kind: authOrRejectionKind(rejected.success.status),
-                message: rejected.success.error.message,
-                status: rejected.success.status,
-                cause: rejected.success.error,
+                kind: authOrRejectionKind(rejected.status),
+                message: rejected.error.message,
+                status: rejected.status,
+                cause: rejected.error,
               });
             }
             return [raw] as const;

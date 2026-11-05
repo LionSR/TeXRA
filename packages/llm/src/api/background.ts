@@ -29,29 +29,7 @@ import {
   type ModelErrorFields,
   type RemoteOperation,
 } from '../errors.js';
-
-/** `turn`, provided it is a background turn from the `origin` binding. */
-function admitTurn<P extends ResolvedTurn['protocol']>(
-  turn: ResolvedTurn,
-  origin: ModelOrigin & { readonly protocol: P },
-): Effect.Effect<
-  Extract<ResolvedTurn, { protocol: P; mode: 'background' }>,
-  ModelError
-> {
-  // The origin comparison includes the protocol.
-  const admitted = (
-    candidate: ResolvedTurn,
-  ): candidate is Extract<ResolvedTurn, { protocol: P; mode: 'background' }> =>
-    candidate.mode === 'background' && sameModelOrigin(candidate, origin);
-  return admitted(turn)
-    ? Effect.succeed(turn)
-    : Effect.fail(
-        new ModelError({
-          kind: 'unsupported',
-          message: 'The admitted turn belongs to another model binding.',
-        }),
-      );
-}
+import { boundTurn } from './turnInput.js';
 
 /** The operation `input` names, provided it belongs to the `origin` binding. */
 const boundOperation = Effect.fn('llm.boundOperation')(function* (
@@ -148,7 +126,7 @@ export function backgroundLifecycle<
   const submit = Effect.fn('llm.background.submit')(function* (
     input: ResolvedTurn,
   ) {
-    const turn = yield* admitTurn(input, origin);
+    const turn = yield* boundTurn(input, origin, 'background');
     const learned = yield* Ref.make<Partial<ModelErrorFields>>({});
     return yield* Effect.scoped(wire.submit(turn, learned)).pipe(
       Effect.flatMap((result) =>
@@ -176,7 +154,7 @@ export function backgroundLifecycle<
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const turn = yield* admitTurn(input, origin);
+        const turn = yield* boundTurn(input, origin, 'background');
         const operation = yield* boundOperation(claimed, origin);
         const learned = yield* Ref.make<Partial<ModelErrorFields>>({
           operation,

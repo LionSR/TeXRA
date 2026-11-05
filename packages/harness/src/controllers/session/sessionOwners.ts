@@ -168,16 +168,15 @@ const requestsLayer = Layer.effect(
   }),
 );
 
-/** The session's follow-up inbox, over its log, its publisher and its view,
- *  disposed after its runs. */
+/** The session's follow-up inbox, over its log and its publisher, disposed
+ *  after its runs. */
 const inboxLayer = Layer.effect(
   Inbox,
   Effect.gen(function* () {
     const log = yield* SessionLog;
     const { detach } = (yield* SessionStoreParts).store;
-    const { run } = yield* SessionViewAccess;
     return yield* Effect.acquireRelease(
-      Effect.sync(() => new SessionInbox({ log, detach, run })),
+      Effect.sync(() => new SessionInbox({ log, detach })),
       (inbox) => Effect.sync(() => inbox.dispose()),
     );
   }),

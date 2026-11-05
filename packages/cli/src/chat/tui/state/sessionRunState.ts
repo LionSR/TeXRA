@@ -5,7 +5,6 @@ import {
   RUN_PHASE,
   type RunPhase,
   type RunId,
-  isLiveRun,
 } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
@@ -29,7 +28,7 @@ export type RootRunSettled = Effect.Effect<void, Error>;
  * reactively instead of calling impure session closures that memoized
  * renders would cache stale (#8273). Written only through `TuiSession`.
  */
-export interface RootRunClaim {
+interface RootRunClaim {
   readonly runId: RunId | undefined;
   readonly runSettled: RootRunSettled | undefined;
   readonly runCompleted: boolean;
@@ -202,7 +201,7 @@ export class TuiSession {
    *  a model switch reaches. */
   runLive(): boolean {
     const run = runViewOf(sessionView().get(), this.runId);
-    return run !== undefined && isLiveRun(run);
+    return run !== undefined && run.live;
   }
 
   /** Model selection is open with no pending run, or at a tool-use wait. */

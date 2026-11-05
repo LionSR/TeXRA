@@ -24,7 +24,10 @@ import {
   type ToolUseLog,
   type TranscriptEvent,
 } from '@shared/schemas';
-import { applyCompactionActivityEvent } from '@shared/runs/compactionActivityProjection';
+import {
+  applyCompactionActivityEvent,
+  settleCompactionActivities,
+} from '@shared/runs/compactionActivityProjection';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { decodeToolUseLog } from '@shared/toolUse';
 
@@ -277,8 +280,9 @@ function closeText(
 }
 
 /** A phase move ({@link phaseMoveOf}) moves the transcript boundary: a
- *  waiting or ended run closes every open stream and fails every open card
- *  as cut by the run's end (`ToolRow.cutByRunEnd`). */
+ *  waiting or ended run closes every open stream, fails every open card as
+ *  cut by the run's end (`ToolRow.cutByRunEnd`) and finishes every open
+ *  compaction as interrupted. */
 function moveBoundary(d: Draft, phase: RunPhase): void {
   const { ix } = d;
   if (phase === RUN_PHASE.RUNNING) {
@@ -302,6 +306,11 @@ function moveBoundary(d: Draft, phase: RunPhase): void {
     write(d, slot);
   }
   ix.activeTools.clear();
+  const compactions = settleCompactionActivities(ix.compactionState, d.at);
+  if (compactions.length > 0) {
+    upsertCompactionRows(d, d.next, compactions);
+    d.touched = true;
+  }
 }
 
 /**

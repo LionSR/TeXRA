@@ -538,8 +538,12 @@ describe('Sessions owner', () => {
           // cast: the stop handler reads only the view's ref and its runs.
           viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
         ).pipe(
-          // cast: the stop handler calls only `stop` of the runs.
-          Context.add(Runs, { stop } as unknown as Runs['Service']),
+          // No launch of the run is held here.
+          // cast: the stop handler calls only `get` and `stop` of the runs.
+          Context.add(Runs, {
+            get: () => undefined,
+            stop,
+          } as unknown as Runs['Service']),
           Context.add(
             SessionRoots,
             createFakeWorkspaceRoots({

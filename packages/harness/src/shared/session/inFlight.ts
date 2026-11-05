@@ -247,7 +247,7 @@ export function nextAttempt(
 }
 
 /** What one failure says about the step after it. */
-export interface FailureFacts {
+interface FailureFacts {
   /** The vendor no longer holds the response this attempt chained on;
    *  true only for an attempt that sent a continuation. */
   readonly unchain: boolean;
@@ -330,7 +330,7 @@ export interface AttemptRequests {
 
 /** The attempt a call runs at and what it asked; `mayHaveRun`, a replay of
  *  a started body with nothing to re-enter ({@link resumedAttempt}). */
-export type ResumedAttempt = AttemptRequests & {
+type ResumedAttempt = AttemptRequests & {
   readonly attempt: number;
   readonly mayHaveRun: boolean;
 };

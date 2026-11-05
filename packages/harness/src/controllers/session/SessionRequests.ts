@@ -90,7 +90,7 @@ type SessionRequestLog = Pick<
   Pick<SessionEventsShape, 'removeRun'>;
 
 /** What the session layer builds a session's requests over. */
-export interface SessionRequestsInit {
+interface SessionRequestsInit {
   /** The root's log: admission reads and removal. */
   readonly log: SessionRequestLog;
   /** This process's liveness snapshot (`self`, `dead`). */
@@ -136,8 +136,7 @@ const withRunClaim = <A, R>(
       );
 
 /** Refuse a gated request the run's `actions` no longer hold; a run not
- *  folded yet, or held elsewhere, is left to `admit` and the claim; a stop
- *  is ungated. */
+ *  folded yet, or held elsewhere, is left to `admit` and the claim. */
 const requireRunAction = (
   deps: RequestDeps,
   req: RuntimeRequest,
@@ -321,27 +320,12 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 
 const handle = (
   deps: RequestDeps,
-  req: Exclude<RuntimeRequest, { kind: `followUp.${'send' | 'receipt'}` }>,
+  req: Exclude<RuntimeRequest, { kind: 'run.stop' | `followUp.${string}` }>,
   admitted: AggregateState,
   heldHere: boolean,
   runs: RunRegistry,
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
-    case 'run.stop':
-      return runs.stop(req.runId, req.reason).settlement.pipe(
-        // A setting that would not read, or a refused terminal row (a live
-        // foreign owner, a rolled-back transaction): the run is still in
-        // flight, so the requester hears that rather than `done`.
-        Effect.mapError(
-          (error): RequestError =>
-            new Unavailable({
-              runId: req.runId,
-              reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
-            }),
-        ),
-        Effect.as(done),
-        Effect.uninterruptible,
-      );
     case 'run.delete':
       return deleteAdmittedRun(deps, req.runId, admitted, 'single', runs);
     case 'run.compact':
@@ -431,13 +415,30 @@ export function sessionRequests(
       });
       return { kind: 'followUp' as const, id, ...result, receipt };
     }
+    const runs = registryOf(yield* Runs);
+    if (req.kind === 'run.stop') {
+      // Admitted on its rows unless a launch here holds it, opened or not.
+      if (runs.get(req.runId) === undefined) yield* admit(deps, req);
+      return yield* runs.stop(req.runId, req.reason).settlement.pipe(
+        // An unread setting or a refused end row: the run is still in flight.
+        Effect.mapError(
+          (error): RequestError =>
+            new Unavailable({
+              runId: req.runId,
+              reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+            }),
+        ),
+        Effect.as(done),
+        Effect.uninterruptible,
+        Effect.provideContext(yield* sessionServices),
+      );
+    }
     yield* requireRunAction(deps, req);
     const admitted = yield* admit(deps, req);
     // This process holds the run's claim: a blocked request has a fiber here.
     const heldHere =
       admitted.ownerId !== null &&
       SubscriptionRef.getUnsafe(deps.local).self.includes(admitted.ownerId);
-    const runs = registryOf(yield* Runs);
     return yield* handle(deps, req, admitted, heldHere, runs).pipe(
       Effect.provideContext(
         Context.merge(servicesOf(deps.services), yield* sessionServices),

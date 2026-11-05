@@ -1104,9 +1104,10 @@ All notable changes to this project will be documented in this file.
   delegate to. Change what you need and **Approve** starts it, as the
   agent's own child run, with your changes; **Back to …** leaves the
   proposal waiting. A finished task's **Run again…** opens the same form
-  filled from that task instead of relaunching it at once. Edit replaces
-  the card's agent and model pickers and its **Change and start myself**
-  button, which ended the proposal without opening anything; Run again…
+  filled from that task instead of relaunching it at once. The card keeps
+  a model menu on the model's name, so switching only the model takes one
+  pick; Edit replaces the card's agent picker and its **Change and start
+  myself** button, which ended the proposal without opening anything; Run again…
   replaces **Run again from scratch**. A script's request card no longer
   offers either: it approves the script as a whole. SDK: a proposal's
   `approve` decision may carry `instruction`, `inputFiles`, `contextFiles`,
@@ -1425,9 +1426,10 @@ All notable changes to this project will be documented in this file.
   started.
 - **Choose the Codex subagent's model.** Codex was fixed to GPT-5.5; a new
   setting picks any model the Codex backend serves (default GPT-6.1 Sol).
-- **OpenAI fast processing** (`model.openaiFastTier` in `.texra/config.json`)
-  sends OpenAI requests on the fast tier where a model offers it, and run
-  costs use the fast-tier prices.
+- **OpenAI fast mode** sends OpenAI requests on the fast tier where a model
+  offers it, and run costs use the fast-tier prices. Turn it on under OpenAI
+  in Settings → Models, in the CLI's `/config`, or with
+  `"texra.model.openaiFastTier": true` in the global `config.json`.
 - **Claude Sonnet 5.5 and GPT-6.1 Sol** — TeXRA adds Claude Sonnet 5.5
   (`sonnet55`, thinking always on) and GPT-6.1 Sol (`gpt61-`), both at
   $2 / $10 per 1M tokens. GPT-6.1 Sol is the new default model for new chats
@@ -1613,6 +1615,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The VS Code extension no longer reports another extension's error as
+  its own.** VS Code runs every extension in one process, and TeXRA showed
+  "The extension host encountered an unrecoverable error" for a failure in
+  any of them (a LaTeX Workshop file-watcher error, for example) and raised
+  it again in that process. It now acts only on an error from TeXRA's own
+  code.
 - **The desktop app no longer hides a task's Edit form behind "Connect a
   model" when the project's `.env` holds the key.** The onboarding check
   asked without the project's `.env`, the one per-project read that did; it

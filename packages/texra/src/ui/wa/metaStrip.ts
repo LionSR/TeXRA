@@ -1,7 +1,7 @@
 // Third-party imports
 import { css, html, nothing, type CSSResult, type TemplateResult } from 'lit';
 
-export type MetaPart = string | TemplateResult;
+type MetaPart = string | TemplateResult;
 
 /** Render a compact one-line metadata strip with parts joined by " · ". */
 export function renderDotMeta(parts: readonly MetaPart[]): TemplateResult {

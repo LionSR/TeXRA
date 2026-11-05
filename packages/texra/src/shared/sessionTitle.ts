@@ -5,7 +5,7 @@ import type { SessionTitleState } from '@texra-ai/harness/schemas';
  * is a few characters wide and competes with sibling tabs, so it gets the
  * brand mark and glyph markers; a native window title has room for words.
  */
-export interface SessionTitleStyle {
+interface SessionTitleStyle {
   /** Product name as rendered: compact mark or spelled-out name. */
   readonly brand: string;
   /** Placed between the brand and the project name. */
@@ -32,7 +32,7 @@ export const NATIVE_WINDOW_TITLE: SessionTitleStyle = Object.freeze({
   }),
 });
 
-export interface SessionTitleOptions {
+interface SessionTitleOptions {
   /** Live activity, e.g. a spinner frame; REPLACES the running marker. */
   readonly detail?: string;
   readonly style: SessionTitleStyle;

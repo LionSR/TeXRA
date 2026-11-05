@@ -14,7 +14,10 @@ import {
 import { POINTER } from '@cli/tui/ui/glyphs';
 import { CONFIRM_CARD_HORIZONTAL_DECORATION } from '@cli/tui/ui/theme';
 import { useLiveNowMs } from '@cli/tui/useLiveNowMs';
-import type { SurfaceDecision } from '@texra/shared/session/surfaceDecision';
+import {
+  declineDecision,
+  type SurfaceDecision,
+} from '@texra/shared/session/surfaceDecision';
 import {
   confirmCardCompactHintLayout,
   confirmCardFeedbackHints,
@@ -24,7 +27,6 @@ import {
   confirmCardPulsedTitle,
   type ConfirmCardHintOptions,
   type ConfirmCardKeyRow,
-  type ConfirmCardRejectionMode,
 } from './ConfirmCardState';
 import { confirmCardFeedbackRows } from './confirmCardRowsBudget';
 import { BaseTextInput } from '../input/BaseTextInput';
@@ -40,7 +42,6 @@ export const ConfirmCardFeedback = createContext({ mode: false, rows: 0 });
 interface ConfirmCardProps extends ConfirmCardHintOptions<ConfirmCardKeyRow> {
   readonly color: string;
   readonly title: string;
-  readonly rejectionMode: ConfirmCardRejectionMode;
   readonly compact?: boolean;
   readonly children: React.ReactNode;
   readonly onDecide: (decision: SurfaceDecision) => void;
@@ -78,7 +79,7 @@ export function ConfirmCard({
             setFeedback('');
           }}
           onSubmit={(value) =>
-            onDecide({ action: 'reject', feedback: value.trim() })
+            onDecide(declineDecision(keyOptions.kind, value.trim()))
           }
         />
       </Box>
@@ -87,7 +88,12 @@ export function ConfirmCard({
 
   useInput(
     (input, key) => {
-      const decision = confirmCardKeyDecision(input, key, keyRows);
+      const decision = confirmCardKeyDecision(
+        input,
+        key,
+        keyOptions.kind,
+        keyRows,
+      );
       if (decision === 'feedback') setFeedbackMode(true);
       else if (decision) onDecide(decision);
     },

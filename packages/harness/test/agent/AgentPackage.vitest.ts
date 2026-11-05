@@ -21,7 +21,7 @@ import {
   type SessionView as RuntimeSessionView,
 } from '@shared/session/sessionView';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { runView } from '../../../packages/harness/src/effect/runHandle';
+import { runView } from '../../src/effect/runHandle';
 import type { TranscriptSubscription } from '@texra-ai/harness/transcript';
 
 /** A session view run entry as the package's fold keys it. */

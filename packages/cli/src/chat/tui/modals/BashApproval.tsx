@@ -51,7 +51,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
     <ConfirmCard
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
-      rejectionMode="feedback"
+      kind="bash"
       // Another tool's call offers no grant: the one this prompt could turn
       // on is the run's shell bypass.
       alwaysAllowLabel={

@@ -143,6 +143,9 @@ export class RunRegistry implements RunsShape {
   /** The session's child-run concurrency budget, made on first use. */
   private budget: Semaphore.Semaphore | undefined;
   private disposed = false;
+  /** Why each run held at disposal was stopping: one still ending past
+   *  the close's deadline reads it ({@link stopCause}). */
+  private readonly stoppedAtDisposal = new Map<RunId, StopCause>();
   /** Set by {@link stopAll}: the session is closing. */
   private closing = false;
 
@@ -167,7 +170,7 @@ export class RunRegistry implements RunsShape {
       : this.liveRun(runId)) as RunsShape['get'];
 
   readonly stopCause = (runId: RunId): StopCause | undefined =>
-    this.activations.get(runId)?.stop;
+    this.activations.get(runId)?.stop ?? this.stoppedAtDisposal.get(runId);
 
   private liveRun(runId: RunId): LiveRun | undefined {
     const activation = this.activations.get(runId);
@@ -383,9 +386,16 @@ export class RunRegistry implements RunsShape {
         );
         // A stop that reached the launch before its program ran.
         if (activation?.stop) fiber.interruptUnsafe();
-        // An interrupted join interrupts the fiber and awaits its cleanup.
+        // An interrupted join interrupts the fiber and awaits its cleanup;
+        // a generation's launch interrupted so (its caller left) stops it as
+        // a release, recorded like every other stop.
         return yield* Fiber.join(fiber).pipe(
-          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+          Effect.onInterrupt(() =>
+            Effect.suspend(() => {
+              if (activation !== undefined) this.markStopped(runId, 'released');
+              return Fiber.interrupt(fiber);
+            }),
+          ),
         );
       });
       return withPerKeyLane(this.lanes, runId, refuse)(run);
@@ -655,10 +665,13 @@ export class RunRegistry implements RunsShape {
   }
 
   /** Drop every activation at session disposal, releasing a drain waiting
-   *  on them; the session's fork ends their fibers, and a step admitted but
-   *  not started is refused as it starts ({@link admit}). */
+   *  on them, keeping why each was stopping; the session's fork ends their
+   *  fibers, and a step admitted but not started is refused as it starts
+   *  ({@link admit}). */
   dispose(): void {
     this.disposed = true;
+    for (const [runId, { stop }] of this.activations)
+      if (stop !== undefined) this.stoppedAtDisposal.set(runId, stop);
     this.activations.clear();
   }
 }

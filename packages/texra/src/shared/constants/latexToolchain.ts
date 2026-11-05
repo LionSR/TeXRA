@@ -56,6 +56,11 @@ export type LatexRecommendedSettingField =
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';
 
+/** Package managers TeXRA knows how to install dependencies with. */
+export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
+
+export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
+
 // ============================================================
 // Install guide builders
 // ============================================================
@@ -329,7 +334,7 @@ interface LatexToolEntry {
  * setup assistant's (`@texra/tools/setup/toolProbing`), the settings view's LaTeX
  * status (`@texra/controllers/settingsView/LatexToolingController`), and the
  * dependency banner (`checkCoreDependencies` in
- * `@texra/utils/system/checkCoreDependencies`).
+ * `packages/extension/src/progressView/checkCoreDependencies.ts`).
  *
  * The order is the doctor's row order, which is user-visible CLI output.
  *
@@ -482,7 +487,7 @@ type DoctorEntry = Extract<
 >;
 
 /** A dependency the setup assistant and the settings view both probe. */
-export type ProbedLatexTool = EntryWith<'required' | 'image'>['name'];
+type ProbedLatexTool = EntryWith<'required' | 'image'>['name'];
 
 /** One of the interchangeable image tools. */
 type ImageLatexTool = EntryWith<'image'>['name'];
@@ -493,14 +498,20 @@ type SupportedLatexCompiler = CompilerEntry['name'];
 /**
  * The dependency set the setup assistant and the settings view probe: the
  * LaTeX toolchain plus both image-tool candidates. One spelling of that list;
- * the copies it replaces were kept in step by hand.
+ * the copies it replaces were kept in step by hand. Wider than
+ * {@link CORE_DEPENDENCY_TOOLS} on purpose: setup installs a whole toolchain,
+ * while the banner names only what TeXRA's own features run.
  */
 export const PROBED_LATEX_TOOLS: readonly ProbedLatexTool[] =
   LATEX_TOOLS.filter(
     (tool): tool is EntryWith<'required' | 'image'> => tool.probe !== 'none',
   ).map((tool) => tool.name);
 
-/** The named tools the dependency banner probes; derived, not restated. */
+/**
+ * The named tools the dependency banner probes, with the image tools: the
+ * ones TeXRA's own features (formatting, figure conversion) run, whatever
+ * toolchain compiles the document. Derived, not restated.
+ */
 export const CORE_DEPENDENCY_TOOLS: readonly CoreEntry['name'][] =
   LATEX_TOOLS.filter((t): t is CoreEntry => 'core' in t).map((t) => t.name);
 
@@ -529,6 +540,34 @@ export const DEPENDENCY_USE: Readonly<
  * installed: one entry, not two, because either tool satisfies it.
  */
 export const IMAGE_TOOL_LABEL = 'gm/magick';
+
+const IMAGE_TOOL_NAMES: ReadonlySet<string> = new Set(IMAGE_LATEX_TOOLS);
+
+/** A probed tool that is missing. */
+export interface MissingLatexTool<T extends string> {
+  readonly name: T;
+  /** One of the image tools, any one of which would do. */
+  readonly interchangeable: boolean;
+}
+
+/**
+ * The missing tools among `probed` (each tool with whether it is installed).
+ * Either image tool satisfies the image capability, so the image tools are
+ * missing only when none of them is installed, and then all are reported,
+ * marked interchangeable.
+ */
+export function missingLatexTools<T extends string>(
+  probed: readonly (readonly [T, boolean])[],
+): MissingLatexTool<T>[] {
+  const missing = probed
+    .filter(([name, installed]) => !installed && !IMAGE_TOOL_NAMES.has(name))
+    .map(([name]) => ({ name, interchangeable: false }));
+  const images = probed.filter(([name]) => IMAGE_TOOL_NAMES.has(name));
+  if (images.length > 0 && !images.some(([, installed]) => installed)) {
+    missing.push(...images.map(([name]) => ({ name, interchangeable: true })));
+  }
+  return missing;
+}
 
 /** A dependency `texra doctor` renders a row for. */
 type DoctorLatexToolName = DoctorEntry['name'];

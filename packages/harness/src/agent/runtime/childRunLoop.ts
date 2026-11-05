@@ -1,18 +1,15 @@
 import { randomUUID } from 'node:crypto';
-import {
-  Cause,
-  Clock,
-  Context,
-  Effect,
-  Exit,
-  type Fiber,
-  type Semaphore,
-} from 'effect';
+import { Cause, Clock, Effect, Exit, type Fiber, type Semaphore } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
-import type { AgentTrace, StageHandle, TraceEmitter } from '@agent/trace';
-import { endActivation } from '@agent/runtime/AgentRunLifecycle';
+import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
+import type { TraceEmitter } from '@agent/trace/TraceEmitter';
+import {
+  endActivation,
+  endVerdict,
+  type EndVerdict,
+} from '@agent/runtime/AgentRunLifecycle';
 import { Inbox, followUpServices } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpServices } from '@agent/followUp/ToolUseFollowUp';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
@@ -27,7 +24,6 @@ import {
   childTurnResult,
   commitPart,
   deliverIn,
-  parentEdgeIn,
   partServices,
   sendToParent,
   traceLog,
@@ -55,7 +51,6 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Alongside } from '@shared/session/sessionEvents';
-import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -139,11 +134,12 @@ export interface NativeChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  /** `notify` is best-effort live progress. A child reports no spend: its
-   *  priced calls are rows on its own run, summed over the run tree. Its
-   *  run calls `turns` within this effect, under the services it runs with. */
+  /** `notify` is an awaiting caller's live progress; a background child
+   *  reports none. A child reports no spend: its priced calls are rows on
+   *  its own run, summed over the run tree. Its run calls `turns` within
+   *  this effect, under the services it runs with. */
   launch(
-    notify: (update: SubagentProgressUpdate) => void,
+    notify: ((update: SubagentProgressUpdate) => void) | undefined,
     turns: ChildRunTurns<TTurn, R | FollowUpServices>,
   ): Effect.Effect<TTurn, Error, R>;
   /** An interrupted turn has no new result to record. */
@@ -200,8 +196,8 @@ interface ChildRunLoopShared {
   /** The child's run: its input and its interrupt target. */
   readonly runId: RunId;
   readonly agentName: string;
-  /** Replaces follow-up delivery of progress, for an awaiting caller whose
-   *  blocked parent cannot read it (e.g. onto the parent's trace). */
+  /** Where an awaiting caller shows the child's progress while it runs (its
+   *  call's card). A background child's parent hears its turn results only. */
   readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
@@ -386,25 +382,6 @@ const waitingRow = (runId: RunId, phase: 'parked' | 'resumed') =>
     aggregateId: qualifyAggregateId('run', runId),
     phase,
   }) as const;
-
-/** A native child's progress reaches its parent as a held follow-up, enqueued
- *  on the publisher where it is reported, ahead of the turn's result. */
-const progressNotify =
-  <TTurn, R>(
-    loop: ChildLoop<TTurn, R>,
-    strategy: NativeChildStrategy<TTurn, R>,
-    services: Context.Context<Inbox | SessionLog>,
-  ) =>
-  (update: SubagentProgressUpdate): void => {
-    const { notify, runId, agentName, parentRunId } = loop.params;
-    if (notify) return notify(update);
-    if (loop.awaited) return;
-    const to = parentEdgeIn(runId, parentRunId).pipe(Effect.provide(services));
-    Context.get(services, Inbox).sendNotice(to, {
-      text: formatSubagentProgress(runId, agentName, update),
-      from: { kind: 'run', runId },
-    });
-  };
 
 /**
  * Accept the next turn: its `child.turn accepted` row, the fact the
@@ -602,11 +579,12 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   strategy: NativeChildStrategy<TTurn, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R | AgentRunServices> {
   const { runId } = loop.params;
-  const notify = progressNotify(loop, strategy, yield* partServices);
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
     loop,
-    Effect.suspend(() => strategy.launch(notify, nativeTurns(loop, strategy))),
+    Effect.suspend(() =>
+      strategy.launch(loop.params.notify, nativeTurns(loop, strategy)),
+    ),
   );
   const { turn } = turned;
   // A turn that reports itself stopped stops the child.
@@ -708,19 +686,12 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
  */
 const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
-  stopped: boolean,
+  verdict: EndVerdict,
 ): Effect.fn.Return<void, Error, R | AgentRunServices> {
   const { params } = loop;
   const { runId } = params;
-  const { end, failure } = loop;
-  // Re-read: a stop landing after the body's exit is still its verdict,
-  // and outranks a failure.
-  const failed =
-    failure !== undefined ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED;
-  const outcome =
-    stopped || loop.runs.stopCause(runId) !== undefined
-      ? RUN_OUTCOME.CANCELLED
-      : failed;
+  const { end } = loop;
+  const { outcome, reason, error } = verdict;
   const lastTurn =
     end.kind === 'finished' && !end.handedOff
       ? turnResultPart(end.result, loop.trace)
@@ -732,10 +703,8 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
         runId,
         ownerless,
         outcome,
-        ...(outcome === RUN_OUTCOME.FAILED &&
-          failure?.cause != null && {
-            error: classifyAgentError(failure.cause),
-          }),
+        reason,
+        ...(error != null && { error: classifyAgentError(error) }),
         stage: loop.stage,
         lastTurn: () => Effect.succeed(lastTurn),
       }),
@@ -782,16 +751,21 @@ const endChildLoop = <TTurn, R>(
 ): Effect.Effect<void, Error, R | AgentRunServices> =>
   Effect.uninterruptible(
     Effect.gen(function* () {
-      const stopped = Exit.isFailure(body) && Cause.hasInterrupts(body.cause);
-      if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause))
-        loop.failure ??= { cause: Cause.squash(body.cause) };
+      const { failure } = loop;
+      // A turn's failure fails a body that returned; a body that did not
+      // return ends by its cause.
+      const verdict = endVerdict(
+        Exit.isSuccess(body) && failure !== undefined
+          ? Exit.fail(failure.cause)
+          : Exit.map(body, () => RUN_OUTCOME.COMPLETED),
+        loop.runs.stopCause(loop.params.runId),
+      );
       // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
         runId: loop.params.runId,
-        stopped,
-        failed: loop.failure !== undefined,
+        outcome: verdict.outcome,
       });
-      const terminal = yield* Effect.exit(writeEnd(loop, stopped));
+      const terminal = yield* Effect.exit(writeEnd(loop, verdict));
       // Provider ids stay reserved until the terminal (or pause) row is
       // written, so a call naming one finds this run, not a gap.
       const owned = yield* Effect.exit(

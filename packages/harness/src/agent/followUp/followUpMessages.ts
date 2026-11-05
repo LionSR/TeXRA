@@ -70,8 +70,8 @@ export function userFollowUpInstruction(
 
 /** The `followup.queued` row one send writes, with the blobs its media
  *  brings: its id is the delivery id when the producer gave one, a run
- *  sender gets its relation to the recipient, and a delivery or notice its
- *  `displayText`. */
+ *  sender gets its relation to the recipient, a delivery or notice its
+ *  `displayText`, and a host's notification waits for the turn's end. */
 export function queuedRow(
   item: InboxItem,
   hold: QueuedFollowUp['holdUntil'],
@@ -87,9 +87,10 @@ export function queuedRow(
   const summary = from.kind === 'user' ? text : summarizeSubagentFollowup(text);
   const displayText =
     item.displayText ?? (summary === text ? undefined : summary);
+  const holdUntil = hold ?? (from.kind === 'notification' ? 'turn' : undefined);
   return {
     followUpId: deliveryId ?? randomUUID(),
-    ...(hold ? { holdUntil: hold } : {}),
+    ...(holdUntil ? { holdUntil } : {}),
     ...(control ? { control } : {}),
     ...(blobs !== undefined && { blobs }),
     content: {

@@ -1,11 +1,11 @@
 /**
- * Canonical user-facing vocabulary for a task and the work nested under it
- * ("task" and "agent" are the only nouns).
+ * Canonical user-facing vocabulary for a task and the work nested under it.
  *
  * | Concept | Term | Never say |
  * | --- | --- | --- |
  * | What the user started | task | run, session |
- * | Anything a task started (an agent, a background script or command) | agent | subagent, background task, child run |
+ * | An agent a task started | agent | subagent, child run |
+ * | A background command or script a task started | command, script | agent, background task |
  * | The internal run-tree relationship | child run — code only | in any UI string |
  *
  * The CLI's Tab list of those rows is the **agent list**: Tab opens it,
@@ -17,7 +17,18 @@
  * "Copy diagnostics" output, which is for bug reports.
  */
 
-/** Anything a task started. */
+// Local imports
+import type { RunIdentity } from '@texra-ai/harness/schemas';
+
+/** What a task started, by the kind of its run: the noun a count of them
+ *  takes, in the order a summary lists them. */
+export const NESTED_NOUNS = {
+  agent: 'agent',
+  process: 'command',
+  script: 'script',
+} as const satisfies Record<RunIdentity['kind'], string>;
+
+/** The agents a task started. */
 export const NESTED_AGENT = {
   /** Count noun (singular; pair with a formatter): "3 agents". */
   countNoun: 'agent',
@@ -27,11 +38,12 @@ export const NESTED_AGENT = {
   compactLiveSuffix: 'live',
   /** Expand-toggle aria when the tree is open. */
   collapseAction: 'Collapse agents',
-  /** The dispatch card's heading while any of them is still working. */
-  workingSummary: (count: string) => `${count} working in the background`,
-  /** The same heading once all of them have finished. */
-  settledSummary: (count: string) => `${count} in the background`,
 } as const;
+
+/** The dispatch card's heading over the counts of what it lists ("3 agents,
+ *  4 commands"); how many of them still run is its badge. */
+export const dispatchSummary = (counts: string): string =>
+  `${counts} in the background`;
 
 /**
  * CLI agent-list navigation. The list shows the task and the agents it

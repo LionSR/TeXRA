@@ -267,7 +267,10 @@ write's gate refuses the store; a plugin kind whose plugin this build lacks
 reads unavailable and passes the gate
 (`controllers/session/rowCodec.ts#'an unknown kind'`,
 `controllers/session/Database.ts#gated`). A run whose rows do not decode
-cannot be opened or resumed (`shared/session/runHistory.ts#unloadable`,
+cannot be opened or resumed: a resume of it, and a message to it, is refused as
+`earlierBuild` for an earlier build's row and as `unusableCheckpoint` for a
+corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefusal`,
+`agent/storage/resumability.ts#deriveResumability`,
 `agent/runtime/resumeRun.ts#refusalFor`).
 
 ## 3. Row kinds
@@ -689,7 +692,7 @@ lock, and the transaction runs again with that verdict
 (`controllers/session/storeAside.ts#reclaimable`).
 
 Liveness is proven from the owner's pid and start identity alone, with no clock
-and no hostname (`agent/storage/leaseOwnerLiveness.ts#proveOwnerLiveness`):
+and no hostname (`controllers/session/ownerLiveness.ts#proveOwnerLiveness`):
 
 | Observed                                     | Verdict      |
 | -------------------------------------------- | ------------ |
@@ -826,8 +829,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 
 The crash-point suite is the source of truth for this section
 (`src/test-kernel/support/crashConformance.ts#crashConformanceSuite`). It runs
-under a full app's plugins, which include every harness built-in
-(`src/test-kernel/controllers/session/crashConformanceResume.vitest.ts#crashConformanceSuite`
+under the harness's built-ins alone
+(`packages/harness/test/controllers/session/crashConformanceResume.vitest.ts#crashConformanceSuite`
 and its siblings, one file per scenario).
 
 Its method: drive a clean run over a real store, record the event commit each
@@ -971,7 +974,7 @@ its title.
 - **8 requests**:
   `src/test-kernel/support/crashConformance.ts#'resumes from every commit point to the clean outcome, running nothing twice'`
 - **9 crash guarantees**:
-  `src/test-kernel/controllers/session/crashConformance*.vitest.ts`,
+  `packages/harness/test/controllers/session/crashConformance*.vitest.ts`,
   `src/test-kernel/controllers/session/goldenStore.vitest.ts#'reports the command as an unknown outcome and never reruns it'`
 
 ## 11. Non-goals

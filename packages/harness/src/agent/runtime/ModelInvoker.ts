@@ -40,12 +40,11 @@ import {
 } from '@texra-ai/llm';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
+import type { StreamHandle } from '@agent/trace/AgentTrace';
 import {
   logContextManagementEvent,
-  logProgressStatus,
   logProviderError,
-  type StreamHandle,
-} from '@agent/trace';
+} from '@agent/trace/helpers';
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
 import {
   ModelAccess,
@@ -730,7 +729,9 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (ended.kind === 'response') return ended;
         const state = yield* cell.current;
         if (ended.kind === 'failed') return { kind: 'failed', state };
-        logProgressStatus(logger, 'Retry cancelled by user');
+        logger.info('Retry cancelled by user', {
+          messageType: MESSAGE_TYPES.PROGRESS_STATUS,
+        });
         return { kind: 'cancelled', state };
       });
 

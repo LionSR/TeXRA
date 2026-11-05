@@ -245,8 +245,6 @@ export function createScriptRunStrategy(
   const native = createNativeSubagentStrategy(params);
   return {
     ...native,
-    // It reports once, at its end: no progress follow-ups.
-    launch: (_notify, turns) => native.launch(() => undefined, turns),
     stageLabel: `Script '${title}'`,
     formatDelivery: Effect.fn('scriptRun.formatDelivery')(function* () {
       const { script } = yield* scriptRunCalls(runId);

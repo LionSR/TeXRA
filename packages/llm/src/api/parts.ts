@@ -7,7 +7,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Predicate } from 'effect';
+import { Predicate, Schema } from 'effect';
 
 // Local imports - canonical model contract
 import type { ResolvedTurn, TurnResult } from '../turn.js';
@@ -19,6 +19,20 @@ export type InputPart = Extract<
   ResolvedTurn['messages'][number],
   { role: 'user' }
 >['content'][number];
+
+/**
+ * The image MIME types Anthropic and Responses take, matched exactly. The
+ * pinned `openai` typings name no input-image formats (only image
+ * generation's output formats), so this is the conservative raster set; an
+ * exact match also keeps a value carrying data-URL delimiters out of a URL
+ * built from it.
+ */
+export const ImageMimeTypeSchema = Schema.Literals([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+]);
 
 /**
  * What every codec reports a response as. A part opens at its position in

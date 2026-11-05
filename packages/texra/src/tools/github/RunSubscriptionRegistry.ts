@@ -22,7 +22,7 @@ import type { RunId } from '@texra-ai/harness/schemas';
 
 import type { PollEventListener, PollServices } from './PollingSourceBase';
 
-export interface SubscriptionBinding<K extends string> {
+interface SubscriptionBinding<K extends string> {
   key: K;
   runIds: readonly RunId[];
 }
@@ -38,7 +38,7 @@ interface PollingSourceLike<K extends string, Input> {
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
 
-export interface RunSubscriptionRegistryOptions<K extends string, Input> {
+interface RunSubscriptionRegistryOptions<K extends string, Input> {
   /** Log channel for this registry's messages. */
   name: string;
   /** The polling source that owns the subscription. */
@@ -150,7 +150,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
             withLogChannel(this.opts.name),
           );
         const from = { kind: 'notification', source: 'github' } as const;
-        return owner.send({ text, from }, { hold: 'generation' }).pipe(
+        return owner.send({ text, from }).pipe(
           Effect.asVoid,
           Effect.catch(reportDeliveryFailure),
           // A defect (e.g. publish throwing) got the same warn through the old
