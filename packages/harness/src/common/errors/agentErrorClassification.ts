@@ -26,7 +26,7 @@ export function classifyAgentError(err: unknown): NonNullable<RunEnd['error']> {
 }
 
 /** How a host presents an agent error: an instruction, or a plain error. */
-export type AgentErrorPresentation =
+type AgentErrorPresentation =
   | {
       readonly type: 'instruction';
       readonly payload: RequestShowInstructionPayload;

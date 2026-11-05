@@ -2,7 +2,7 @@ import { Schema } from 'effect';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { logUserMessage } from '@agent/trace';
+import { logUserMessage } from '@agent/trace/helpers';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import type { AgentTrace } from '@texra-ai/harness/plugins';
 

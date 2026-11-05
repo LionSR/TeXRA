@@ -85,15 +85,6 @@ function logErrorData(
   trace.error(message, { messageType: MESSAGE_TYPES.ERROR, data });
 }
 
-/**
- * Emit a user-visible progress/status note. A status note is its message
- * alone and takes no payload: its row's schema refuses one, so an arbitrary
- * payload (a request, headers, config) cannot reach the transcript there.
- */
-export function logProgressStatus(trace: AgentTrace, message: string): void {
-  trace.info(message, { messageType: MESSAGE_TYPES.PROGRESS_STATUS });
-}
-
 const COMPACTION_ACTIVITY_LOG_TEXT: Record<
   CompactionActivityData['state'],
   string
@@ -105,7 +96,7 @@ const COMPACTION_ACTIVITY_LOG_TEXT: Record<
   skipped: 'Conversation context compaction skipped',
 };
 
-export interface CompactionActivityOperation {
+interface CompactionActivityOperation {
   /** Emit the first terminal result; later calls are no-ops. */
   finish(outcome: CompactionActivityOutcome): void;
 }

@@ -16,11 +16,7 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
  * classify their own domain-specific status into one of these buckets; this
  * module is the single source of truth for which icon each bucket gets.
  */
-export type TerminalStatusKind =
-  | 'cancelled'
-  | 'completed'
-  | 'failed'
-  | 'running';
+type TerminalStatusKind = 'cancelled' | 'completed' | 'failed' | 'running';
 
 const TERMINAL_STATUS_ICON: Readonly<Record<TerminalStatusKind, IconName>> = {
   failed: 'circle-exclamation',
@@ -44,7 +40,7 @@ interface SetStatusFallback {
 /** `wa-tag` reads compact and inline; `wa-badge` reads as a filled pill. */
 type StatusBadgeAppearance = 'badge' | 'tag';
 
-export interface StatusBadgeOptions {
+interface StatusBadgeOptions {
   /** Pre-rendered leading icon (a `waIcon()` call, a spinner, ...). */
   readonly icon: TemplateResult;
   readonly label: string;
@@ -71,7 +67,7 @@ export function renderStatusBadge({
   return html`<wa-tag variant="neutral" size="s" class=${ifDefined(className)}>${icon} ${label}</wa-tag>`;
 }
 
-export interface SetStatusIconOptions<Status extends string> {
+interface SetStatusIconOptions<Status extends string> {
   readonly status: Status;
   readonly fallbacks: Partial<Record<Status, SetStatusFallback>>;
   /** Tooltip text for the green check rendered when `status` is not in `fallbacks`. */

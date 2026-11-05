@@ -26,7 +26,7 @@ import { TEXRA_SERVICE, type ServiceRecord } from './protocol';
 const MAX_UNIX_SOCKET_PATH = 100;
 
 /** The files of one storage root's service. */
-export interface ServicePaths {
+interface ServicePaths {
   /** The private directory beside the store: `<storageRoot>/run`. */
   readonly runDirectory: string;
   /** `serve.log`: what a detached service writes. */

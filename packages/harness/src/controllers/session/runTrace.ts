@@ -39,7 +39,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { textSince, type InflightText } from './sessionSources';
 
 /** A session's trace sink, and the tail's hand-off of each committed row. */
-export interface RunTraceSink extends Pick<
+interface RunTraceSink extends Pick<
   SessionLogShape,
   'publish' | 'lost' | 'closure'
 > {
@@ -50,7 +50,7 @@ export interface RunTraceSink extends Pick<
 }
 
 /** What a trace sink is built over. */
-export interface RunTraceInit {
+interface RunTraceInit {
   /** The root, named in what the sink logs. */
   readonly storage: string;
   readonly events: Pick<SessionEventsShape, 'detach' | 'openWork'>;

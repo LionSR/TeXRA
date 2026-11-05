@@ -34,7 +34,7 @@ import {
 } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpBatch, RunInput } from '@agent/followUp/RunInput';
-import { logUserMessage } from '@agent/trace';
+import { logUserMessage } from '@agent/trace/helpers';
 import {
   ACTIVATED_SKILLS_MAX,
   type MediaAttachmentKind,
@@ -71,7 +71,7 @@ interface BatchRows {
 }
 
 /** How one batch commits. */
-export interface ConsumeOptions {
+interface ConsumeOptions {
   /** Rows committed before the batch's: a turn's end and a child's
    *  delivery, so one batch carries the boundary and the next input. */
   readonly rows?: readonly RunHistoryDraft[];

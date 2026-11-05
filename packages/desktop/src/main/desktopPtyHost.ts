@@ -51,7 +51,7 @@ interface PtySessionHandle {
   dispose(): void;
 }
 
-export interface DesktopPtyHostOptions {
+interface DesktopPtyHostOptions {
   /** Working directory for every session, decided by the owner. */
   readonly cwd: string;
   /** Streams pty output to the renderer. */

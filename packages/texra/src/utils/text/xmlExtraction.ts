@@ -68,7 +68,7 @@ function extractNamedDocuments(content: string): NamedDocument[] {
   }));
 }
 
-export interface MultipleExtractionResult {
+interface MultipleExtractionResult {
   documents: NamedDocument[] | null;
   method: 'simple' | 'latex' | 'none';
 }

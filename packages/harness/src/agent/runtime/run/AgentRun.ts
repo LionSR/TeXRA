@@ -12,7 +12,7 @@ import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import {
   declaredToolNames,
   type StepToolInputs,

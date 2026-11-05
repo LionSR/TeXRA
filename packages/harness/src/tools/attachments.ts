@@ -72,7 +72,7 @@ const attachmentFailure =
           cause: error,
         });
 
-export interface BuildBytesAttachmentOptions {
+interface BuildBytesAttachmentOptions {
   /** Display path surfaced to the model. */
   path: string;
   mimeType: string;

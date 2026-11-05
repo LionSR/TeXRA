@@ -47,7 +47,7 @@ class ClipboardImageTooLarge extends Schema.TaggedError<ClipboardImageTooLarge>(
  * threw, wrapped here so the channel stays typed. `message` is the cause's
  * own message, which is what the input bar's error hook prints.
  */
-export class ClipboardImageProbeFailed extends Schema.TaggedError<ClipboardImageProbeFailed>()(
+class ClipboardImageProbeFailed extends Schema.TaggedError<ClipboardImageProbeFailed>()(
   'ClipboardImageProbeFailed',
   {
     message: Schema.String,

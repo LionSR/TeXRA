@@ -1,5 +1,5 @@
 import { Effect, Context } from 'effect';
-import { TraceEmitter } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {

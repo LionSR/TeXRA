@@ -45,7 +45,7 @@ export function formatCliMemoryList(items: readonly MemoryViewItem[]): string {
   return lines.join('\n');
 }
 
-export interface CliMemoryDetail {
+interface CliMemoryDetail {
   readonly path: string;
   readonly lineCount?: number;
   readonly preview?: string;

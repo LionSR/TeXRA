@@ -20,7 +20,7 @@ import type { RunRows } from '@shared/session/runRowsShape';
 
 /** Where in its loop a run reads its input: before a model request inside
  *  a turn, at the turn's end, or while it waits for input. */
-export type InputPoint = 'request' | 'turn' | 'idle';
+type InputPoint = 'request' | 'turn' | 'idle';
 
 /**
  * The pending messages a run reads at `at`, in commit order. A row held

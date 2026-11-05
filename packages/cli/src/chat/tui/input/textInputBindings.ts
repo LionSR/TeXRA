@@ -40,7 +40,7 @@ import {
 } from './textInputEditing';
 
 /** Structural subset of Ink's `Key` consulted by the keymap matchers. */
-export interface TextInputKey {
+interface TextInputKey {
   readonly backspace?: boolean;
   readonly delete?: boolean;
   readonly leftArrow?: boolean;

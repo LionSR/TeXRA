@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 import { isStrictlyWithin } from '@texra-ai/harness/host';
 
-export interface AgentWorkspaceOptions {
+interface AgentWorkspaceOptions {
   workingDirectory?: string;
   additionalDirectories?: string[];
 }

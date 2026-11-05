@@ -16,7 +16,7 @@ import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import { findTeamPreset, type TeamRunPlan } from '@texra/shared/teamPlan';
 import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
 
-export type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
+type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 
 interface CliTeamLaunchBlockMessageOptions {
   readonly requestedTeam?: string;

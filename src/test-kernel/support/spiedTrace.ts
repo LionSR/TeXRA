@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { noopTrace } from '@test/support/noopTrace';
 
 interface SpiedTraceOptions {

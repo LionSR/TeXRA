@@ -148,7 +148,7 @@ export function buildCliModelAccessItems(
   return [...oauthPreferenceItems, ...codingPlanItems];
 }
 
-export interface CliAccountAccessRow {
+interface CliAccountAccessRow {
   readonly provider: SubscriptionAuthStatus['provider'];
   readonly operation: 'sign-in' | 'sign-out';
   readonly label: string;

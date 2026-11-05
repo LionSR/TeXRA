@@ -33,7 +33,7 @@ import type { HttpClient } from 'effect/http';
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
 
 /** What a binding carries out: the request, as decided over one settings read. */
-export interface BindPlan {
+interface BindPlan {
   readonly request: BindRequest;
   /** The catalog config, or the route overlay the request keeps. */
   readonly requested: ModelConfig;

@@ -91,7 +91,7 @@ export class RunHistoryRefused extends Schema.TaggedError<RunHistoryRefused>()(
 /** A write the store refused: the disk, the run history, or a claim this
  *  process does not hold (a write outside the run history raises the
  *  claim's own refusal). */
-export type StorageRefusal =
+type StorageRefusal =
   | DatabaseWriteFailed
   | RunHistoryRefused
   | DatabaseNotOwner

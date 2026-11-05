@@ -48,7 +48,7 @@ export class LocalRuntimeSource extends Context.Service<
 }
 
 /** An immutable append and its preceding text, shared by successive reads. */
-export interface InflightTextChunk {
+interface InflightTextChunk {
   readonly previous: InflightTextChunk | undefined;
   readonly text: string;
   readonly length: number;

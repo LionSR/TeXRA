@@ -106,7 +106,7 @@ export interface SkillLoadIssue {
   name?: string;
 }
 
-export interface LoadedSkill {
+interface LoadedSkill {
   skill?: Skill;
   errors: SkillLoadIssue[];
 }

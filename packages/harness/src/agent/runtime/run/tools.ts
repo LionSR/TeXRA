@@ -9,13 +9,13 @@
 import { Effect, Predicate, Result, Schema } from 'effect';
 import type { ResolvedTools } from '@agent/runtime/agentToolResolution';
 import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts } from '@shared/schemas';
 import type { HistoryMessage } from '@shared/session/historyTurns';
 
 /** One local call of a pending response. */
-export interface LocalCall {
+interface LocalCall {
   readonly callId: string;
   readonly name: string;
   readonly argumentsText: string;

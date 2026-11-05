@@ -18,7 +18,7 @@ import {
   type SlashPickIntent,
 } from './slashRegistry';
 
-export interface SlashPaletteProps {
+interface SlashPaletteProps {
   /** The current input value (excluding the leading `/`, after the slash). */
   readonly query: string;
   /** Accepted: caller should replace the input with the chosen command name. */

@@ -52,7 +52,7 @@ const PREVIEW_SCAN_BYTES = 64 * 1024;
 const MEMORY_LISTING_CONCURRENCY = 8;
 
 /** Options controlling how far and how much {@link walkMemoryDirectory} descends. */
-export interface MemoryWalkOptions {
+interface MemoryWalkOptions {
   /** Number of levels below the walk root to include. Unlimited when omitted. */
   maxDepth?: number;
   /** Include directory entries themselves in the yielded results. */
@@ -60,7 +60,7 @@ export interface MemoryWalkOptions {
 }
 
 /** One filesystem entry discovered while walking the memory tree. */
-export interface MemoryWalkEntry {
+interface MemoryWalkEntry {
   /** Path relative to the walk root (matches the `relativeRoot` passed in). */
   relativePath: string;
   storagePath: string;

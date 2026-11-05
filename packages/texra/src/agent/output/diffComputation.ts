@@ -24,7 +24,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
-import { traceFileLineage } from './lineageMapping';
+import { pairOutputsWithBases } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
 
 const CHANNEL = 'OutputDiffStats';
@@ -122,7 +122,7 @@ export const computeOutputDiffStats = Effect.fn(
   lineage: boolean,
 ) {
   const roundOutputs = ensureRoundData(state, currRound).outputs;
-  const mapping = traceFileLineage(state, baseFiles, currRound);
+  const mapping = pairOutputsWithBases(baseFiles, roundOutputs);
 
   return yield* Effect.forEach(
     roundOutputs,
@@ -136,7 +136,7 @@ export const computeOutputDiffStats = Effect.fn(
 
         const entry = mapping.get(locationPath);
         const originalLocation = entry?.origin ?? null;
-        // `traceFileLineage` coalesces `base: origin ?? …`, so an entry with
+        // `pairOutputsWithBases` coalesces `base: origin ?? …`, so an entry with
         // an origin always carries a base: there is no "origin but no base"
         // case left to fall back on, and `!diffBaseLocation` implies no
         // origin.

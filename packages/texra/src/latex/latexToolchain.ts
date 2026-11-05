@@ -10,7 +10,7 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 type LatexToolStatus = DoctorLatexTool & { readonly installed: boolean };
 
-export interface LatexToolchainProbe {
+interface LatexToolchainProbe {
   readonly tools: readonly LatexToolStatus[];
   readonly hasCompiler: boolean;
 }

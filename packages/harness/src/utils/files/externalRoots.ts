@@ -55,7 +55,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
  *  only and must not be used as keys. */
 export type ExternalRootKind = 'builtIn' | 'custom' | 'agentDocs';
 
-export interface ExternalRoot {
+interface ExternalRoot {
   /** Stable key, independent of UI text. */
   readonly kind: ExternalRootKind;
   /** Absolute, canonical filesystem path. */

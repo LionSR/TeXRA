@@ -22,7 +22,7 @@ import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { positionRow } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
-import { TraceEmitter } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import {
   ModelAccess,
   type BoundModel,

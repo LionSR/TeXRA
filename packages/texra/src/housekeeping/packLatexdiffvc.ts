@@ -19,7 +19,7 @@ import {
  * pack and clean through one function: a clean-only run, and a pack run that
  * found nothing but temp files to discard.
  */
-export type LatexdiffPackResult =
+type LatexdiffPackResult =
   | Extract<FileOpResult, { status: 'noFiles' }>
   | (Extract<FileOpResult, { status: 'success' }> & { outputFolder: string })
   | { status: 'cleaned' }

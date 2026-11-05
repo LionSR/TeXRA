@@ -169,7 +169,7 @@ export interface FinalizeRunInput<R = never> {
 }
 
 /** The `run.end` held (`wrote`: this call's); none if unborn or held back. */
-export interface FinalizedRun {
+interface FinalizedRun {
   readonly end: Omit<RunEnd, 'usage'> | null;
   readonly wrote: boolean;
 }

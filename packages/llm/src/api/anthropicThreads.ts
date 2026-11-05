@@ -24,7 +24,7 @@ import type { BetaMessageThreadParam } from '@anthropic-ai/sdk/resources/beta/me
 const MESSAGE_THREADS_BETA = 'message-threads-2026-08-12';
 
 /** A request body, with the thread it creates or continues and its beta. */
-export type ThreadedBody = MessageCreateParamsStreaming & {
+type ThreadedBody = MessageCreateParamsStreaming & {
   readonly thread?: BetaMessageThreadParam;
   readonly betas?: Array<typeof MESSAGE_THREADS_BETA>;
 };

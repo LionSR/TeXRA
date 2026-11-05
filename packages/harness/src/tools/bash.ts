@@ -3,7 +3,7 @@ import { Clock, Effect, Schema, type Scope } from 'effect';
 // Third-party imports
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { registerRun } from '@agent/storage/runLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,

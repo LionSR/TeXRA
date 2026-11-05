@@ -76,7 +76,7 @@ const GrepInputSchema = Schema.Struct({
   }),
 });
 
-export type GrepInput = typeof GrepInputSchema.Type;
+type GrepInput = typeof GrepInputSchema.Type;
 
 const CHANNEL = 'GrepTool';
 // Pagination and total counts require draining all of ripgrep's output. Keep

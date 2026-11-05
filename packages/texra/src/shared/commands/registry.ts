@@ -27,10 +27,7 @@ export type CommandHandler<TActions, TResult = boolean | Promise<boolean>> =
  * type stays inside the closure `definedHandler` builds, so a registry map
  * holds entries with different argument tuples under one type.
  */
-export interface TypedCommandHandler<
-  TActions,
-  TResult = boolean | Promise<boolean>,
-> {
+interface TypedCommandHandler<TActions, TResult = boolean | Promise<boolean>> {
   readonly dispatch: (
     actions: TActions,
     rawArgs: readonly unknown[],
@@ -68,7 +65,7 @@ export function definedHandler<
   };
 }
 
-export type CommandDispatchFailure<TId extends string> =
+type CommandDispatchFailure<TId extends string> =
   | { kind: 'unhandled'; id: TId }
   | { kind: 'invalidArguments'; id: TId; error: Schema.SchemaError };
 

@@ -23,7 +23,7 @@ import { generateDiffFileName } from '@latex/latexdiff/diffFileNameManager';
 
 const CHANNEL = 'AcceptedFileTarget';
 
-export type AcceptedFileTarget = {
+type AcceptedFileTarget = {
   targetLocation: FileLocation;
   targetFileName: string;
   isNewFile: boolean;
@@ -117,7 +117,7 @@ export interface CommitAcceptedFilePorts<E = never> {
  * dialog) and the desktop bridge (dialog IPC) without each side
  * re-implementing the confirm / commit sequence.
  */
-export interface AcceptEditedFileReplacePorts<
+interface AcceptEditedFileReplacePorts<
   E = never,
 > extends CommitAcceptedFilePorts<E> {
   /** Confirm the (possibly overwriting) write; return false to abort. */

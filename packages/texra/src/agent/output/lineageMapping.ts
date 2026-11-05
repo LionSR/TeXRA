@@ -18,14 +18,12 @@ import {
 
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 
-import type { OutputState } from './outputState';
-
 /** File relationship facts for a single output path. All fields optional — absence means no match. */
 interface RoundFileEntry {
   /** Base FileLocation for round-based diffs (rewrite agents). */
   base?: FileLocation;
   /**
-   * Original base FileLocation for lineage tracking. `traceFileLineage`
+   * Original base FileLocation for lineage tracking. `pairOutputsWithBases`
    * coalesces `base: origin ?? …`, so `origin` set implies `base` set — do
    * not reintroduce an "origin but no base" fallback.
    */
@@ -191,16 +189,4 @@ export function pairOutputsWithBases(
   }
 
   return mapping;
-}
-
-/** Traces file lineage for a round's outputs. */
-export function traceFileLineage(
-  state: OutputState,
-  baseFiles: FileLocation[],
-  currRound: number,
-): Map<string, RoundFileEntry> {
-  return pairOutputsWithBases(
-    baseFiles,
-    state.rounds.get(currRound)?.outputs ?? [],
-  );
 }

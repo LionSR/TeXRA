@@ -9,7 +9,7 @@ import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
 
 /** The hosts that check for updates, each with its own record. */
-export type UpdateCheckHost = 'cli' | 'desktop';
+type UpdateCheckHost = 'cli' | 'desktop';
 
 /** Persisted update notification state, isolated by host and configured storage root. */
 const UpdateCheckRecordSchema = Schema.Struct({

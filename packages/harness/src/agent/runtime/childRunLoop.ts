@@ -11,7 +11,8 @@ import {
 
 // Shared child accounting and durable delivery for native runs and processes.
 
-import type { AgentTrace, StageHandle, TraceEmitter } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
+import type { TraceEmitter } from '@agent/trace/TraceEmitter';
 import { endActivation } from '@agent/runtime/AgentRunLifecycle';
 import { Inbox, followUpServices } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpServices } from '@agent/followUp/ToolUseFollowUp';

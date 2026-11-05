@@ -15,7 +15,7 @@ type MessageHandler<T, A = void> = (data: T) => A;
  * command to the shared schema without deciding it for a given host is a
  * compile error there, not a message that silently no-ops at runtime.
  */
-export interface Unsupported {
+interface Unsupported {
   readonly unsupported: string;
 }
 
@@ -58,7 +58,7 @@ export type HandlerRegistry<TMessage extends CommandMessage, A = void> = {
     | Unsupported;
 };
 
-export type DispatcherFn<TMessage extends CommandMessage> = (
+type DispatcherFn<TMessage extends CommandMessage> = (
   raw: unknown,
   handlers: HandlerRegistry<TMessage>,
   onError?: (error: unknown) => void,

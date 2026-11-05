@@ -167,7 +167,7 @@ function SessionRow({
   );
 }
 
-export interface SubagentListProps {
+interface SubagentListProps {
   readonly activeRunId?: RunId;
   readonly keyboardActive?: boolean;
   readonly maxRows?: number;

@@ -148,14 +148,14 @@ class LeanFileReadError extends Schema.TaggedError<LeanFileReadError>()(
   },
 ) {}
 
-export type LeanSessionError =
+type LeanSessionError =
   | LeanSessionDisposed
   | LeanSessionNotRunning
   | LeanFileReadError
   | JsonRpcRequestError
   | JsonRpcConnectionDisposed;
 
-export interface LeanServerOptions {
+interface LeanServerOptions {
   readonly workspaceRoot: string;
   readonly lakeCommand: string;
   /** The owning pool's roster: registered here, dropped by this scope. */

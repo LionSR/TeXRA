@@ -122,7 +122,7 @@ export interface LoadedPluginTools {
  * run that names it holds its `spec` and revision in its project's catalog,
  * whose steps offer its tools while the run holds them.
  */
-export interface McpServerPlugin {
+interface McpServerPlugin {
   /** `mcp:<server>`, or the installed plugin's id. */
   readonly id: string;
   /** What the holds are counted by, with the revision. */
