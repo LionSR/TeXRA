@@ -28,4 +28,6 @@ interface StartedProgressUpdate {
 }
 
 export type SubagentProgressUpdate =
-  PlanProgressUpdate | OverviewProgressUpdate | StartedProgressUpdate;
+  | PlanProgressUpdate
+  | OverviewProgressUpdate
+  | StartedProgressUpdate;

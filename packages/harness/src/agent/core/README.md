@@ -12,7 +12,7 @@
 
 Not here:
 
-- Run facts and usage totals are schemas (`runFacts.ts`, `usage.ts` in
+- Run facts and usage totals are schemas (`runInput.ts`, `usage.ts` in
   `@shared/schemas`); the state the loop continues from is `RunState`
   (`@shared/session/runState`), rebuilt from rows.
 - The run program, its per-run services and the model call are in

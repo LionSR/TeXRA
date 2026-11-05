@@ -195,5 +195,5 @@ Ruled by the owner on 2026-10-02 (PR #13612).
    the app `@texra-ai/texra` at `packages/texra`
    ([package split](./2026-10-02-harness-package-split.md), §8).
 6. **Resuming an owned child goes through its parent (D4): yes.** A user cannot
-resume an awaited child on its own; a detached child keeps independent resume.
+   resume an awaited child on its own; a detached child keeps independent resume.
 </content>

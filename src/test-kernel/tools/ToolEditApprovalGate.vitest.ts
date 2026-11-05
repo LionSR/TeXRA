@@ -60,7 +60,8 @@ let runId: RunId;
 // must park one returns null and decides it later with `decideRequest`.
 let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
 let decisions:
-  Effect.Success<ReturnType<typeof autoDecideRequests>> | undefined;
+  | Effect.Success<ReturnType<typeof autoDecideRequests>>
+  | undefined;
 let policyDenials = 0;
 // The tool edits the run opened, as their rows reached the log; tests
 // override the decision when they need to reject or adjust, and assert on
