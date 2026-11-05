@@ -15,10 +15,21 @@ index 3aca51bd7da892eb5cfb1df671c46155b5011892..8311e3ebd234980357fa5333edcb2274
      registerInputControl(pauseInput: () => void, resumeInput: () => void): void;
      suspendTerminal(callback: () => void | Promise<void>): Promise<void>;
 diff --git a/build/ink.js b/build/ink.js
-index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..fcde4072787fd351d02097ad9ec84fd45d798a22 100644
+index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..f07a7434444d1bcfc3e0b8b30f163bdb93e89a8b 100644
 --- a/build/ink.js
 +++ b/build/ink.js
-@@ -132,22 +132,48 @@ export default class Ink {
+@@ -109,6 +109,10 @@ export default class Ink {
+     rootNode;
+     // Accumulated <Static> output. Only kept in debug mode, where every frame rewrites it, and on the alternate screen, where it has to be replayed on full clears because there is no scrollback to keep it in.
+     fullStaticOutput;
++    // Every <Static> line written so far, on either screen. Ink 8 keeps
++    // fullStaticOutput only for the alternate screen, but repaint() clears the
++    // scrollback too and must reprint the whole transcript. (TeXRA patch)
++    repaintStaticOutput = '';
+     // Whether any <Static> output has been written. The final unmount render is skipped once it has, since rendering again would duplicate <Static> children on exit (#397).
+     hasRenderedStaticOutput;
+     exitPromise;
+@@ -132,22 +136,48 @@ export default class Ink {
      Whether this instance is using concurrent rendering mode.
      */
      isConcurrent;
@@ -79,7 +90,31 @@ index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..fcde4072787fd351d02097ad9ec84fd4
      };
      resolveExitPromise = () => { };
      rejectExitPromise = () => { };
-@@ -754,6 +780,13 @@ export default class Ink {
+@@ -205,6 +235,7 @@ export default class Ink {
+     // Resets the accumulated static output when the <Static> identity changes so stale items from a previous instance are not replayed on future rewrites.
+     handleStaticChange = () => {
+         this.fullStaticOutput = '';
++        this.repaintStaticOutput = '';
+         this.hasRenderedStaticOutput = false;
+     };
+     onRender = () => {
+@@ -383,6 +414,7 @@ export default class Ink {
+             this.lastOutputHeight = 0;
+             if (hasStaticOutput) {
+                 this.options.stdout.write(staticOutput);
++                this.repaintStaticOutput += staticOutput;
+                 if (this.alternateScreen) {
+                     this.fullStaticOutput += staticOutput;
+                 }
+@@ -402,6 +434,7 @@ export default class Ink {
+         }
+         if (hasStaticOutput) {
+             this.hasRenderedStaticOutput = true;
++            this.repaintStaticOutput += staticOutput;
+             if (this.alternateScreen) {
+                 this.fullStaticOutput += staticOutput;
+             }
+@@ -754,6 +787,13 @@ export default class Ink {
              return;
          }
          this.isUnmounting = true;
@@ -93,7 +128,7 @@ index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..fcde4072787fd351d02097ad9ec84fd4
          if (this.beforeExitHandler) {
              process.off('beforeExit', this.beforeExitHandler);
              this.beforeExitHandler = undefined;
-@@ -922,6 +955,56 @@ export default class Ink {
+@@ -922,6 +962,59 @@ export default class Ink {
          // Keep lastOutput so that unmount's final onRender sees it as unchanged, but no rows remain on screen.
          this.lastOutputHeight = 0;
      }
@@ -117,12 +152,15 @@ index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..fcde4072787fd351d02097ad9ec84fd4
 +        const nextStaticOutput = hasStaticOutput ? staticOutput : '';
 +        const previousStaticOutput = options.preserveStatic === false
 +            ? ''
-+            : (this.fullStaticOutput ?? '');
++            : this.repaintStaticOutput;
 +        if (options.preserveStatic === false) {
-+            this.fullStaticOutput = nextStaticOutput;
++            this.repaintStaticOutput = nextStaticOutput;
 +        }
 +        else if (hasStaticOutput) {
-+            this.fullStaticOutput += staticOutput;
++            this.repaintStaticOutput += staticOutput;
++        }
++        if (this.alternateScreen) {
++            this.fullStaticOutput = this.repaintStaticOutput;
 +        }
 +        const outputToRender = outputHeight >= getWindowSize(this.options.stdout).rows
 +            ? output

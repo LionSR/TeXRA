@@ -131,7 +131,7 @@ catalogs:
       version: 2.9.1
 
 patchedDependencies:
-  ink@8.0.0: 028c1c2d7c0f8e7a4a195ad22735b322dddfeb08c5377de2372f5bdd201aea93
+  ink@8.0.0: d347d7170ee2204b4014057c768cba95f5330d5d21351aaf658f25363ace1a43
   openai@7.51.0: 65d5ae6f5949ee7ffc8108010bc0e87e681e6b317f2c7db525f754b50bea6e7c
 
 importers:
@@ -287,7 +287,7 @@ importers:
         version: 14.0.3
       ink:
         specifier: ^8.0.0
-        version: 8.0.0(patch_hash=028c1c2d7c0f8e7a4a195ad22735b322dddfeb08c5377de2372f5bdd201aea93)(@types/react@19.3.0)(react@19.3.1)
+        version: 8.0.0(patch_hash=d347d7170ee2204b4014057c768cba95f5330d5d21351aaf658f25363ace1a43)(@types/react@19.3.0)(react@19.3.1)
       lru-cache:
         specifier: ^11.5.3
         version: 11.5.3
@@ -7538,7 +7538,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ink@8.0.0(patch_hash=028c1c2d7c0f8e7a4a195ad22735b322dddfeb08c5377de2372f5bdd201aea93)(@types/react@19.3.0)(react@19.3.1):
+  ink@8.0.0(patch_hash=d347d7170ee2204b4014057c768cba95f5330d5d21351aaf658f25363ace1a43)(@types/react@19.3.0)(react@19.3.1):
     dependencies:
       '@alcalzone/ansi-tokenize': 0.3.1
       ansi-escapes: 7.3.0
