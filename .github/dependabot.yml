@@ -11,12 +11,6 @@ updates:
     ignore:
       - dependency-name: '@types/node'
       - dependency-name: '@types/vscode'
-      # openai stays on the patched line: the patch named under
-      # patchedDependencies in pnpm-workspace.yaml teaches the Responses
-      # accumulator response.metadata, and the shipped bundles carry that
-      # patched realization. A bump must port the patch and re-verify the
-      # accumulator contract (OpenaiResponses.vitest).
-      - dependency-name: 'openai'
     # Aggregate routine updates into as few PRs as possible: one grouped PR for
     # all production minor/patch bumps, one for all dev minor/patch bumps. Major
     # bumps stay individual (reviewed one at a time).
