@@ -93,6 +93,7 @@ describe('LatexMediaManager figure extraction', () => {
 
   it.effect('processInputFiles records and mirrors an included figure', () =>
     Effect.gen(function* () {
+      // cast: a fixture run id; the run's file service only names a directory with it.
       const runId = 'extract-figure' as RunId;
       const { texPath, figurePath, host } = yield* Effect.promise(writeFixture);
       yield* Layer.build(FakeHost.layer(host));

@@ -21,6 +21,7 @@ function entryInfo(
   type: FileSystem.File.Type,
   size: number,
 ): FileSystem.File.Info {
+  // cast: the memory tree reads only the type, mtime and size of a stat.
   return {
     type,
     mtime: Option.some(new Date(TEST_TIMESTAMP)),
@@ -34,6 +35,7 @@ function entryInfo(
  * answers relative to that root, as the tool now does.
  */
 function storageView(view: Partial<RootedFileSystem>): RootedFileSystem {
+  // cast: a case supplies every operation the memory tree calls on its path.
   return view as RootedFileSystem;
 }
 

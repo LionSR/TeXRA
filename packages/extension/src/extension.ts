@@ -31,12 +31,10 @@ import {
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
-  createNodeWorkspaceRoots,
-  resolveWorkspaceStoragePath,
+  openNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   effectDiagnosticsLayer,
   FileSecrets,
-  JsonConfigProvider,
   secretsDirectory,
   setLogSink,
 } from '@texra-ai/harness/node';
@@ -84,7 +82,6 @@ import {
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
@@ -127,12 +124,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     >;
   } = {},
 ) {
-  // `~/.texra` is one history across CLI/desktop/extension (#8622). The
-  // process runtime precedes the config stores below, which open on it.
-  const storage = resolveWorkspaceStoragePath(
-    defaultNodeStorageRoot(),
-    workspaceRoot,
-  );
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -155,6 +146,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // The editor's commands, extensions and terminal, for the setup tools
         // and the Lean 4 probe.
         setup: vscodeSetupPlatform,
+        // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
         agentIssues: showLoggedMessageWithDocs,
@@ -193,7 +185,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   return yield* withProcessServices(
     managed,
     Effect.gen(function* () {
-      const globalState = yield* AppState;
       const reached: Result.Result<ServiceLink, Error> =
         extras.service === undefined || workspaceRoot === undefined
           ? Result.fail(new Error('a window with no folder uses no service'))
@@ -202,44 +193,38 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             yield* Effect.result(
               extras.service.pipe(Scope.provide(projectScope)),
             );
-      const projectState =
-        Result.isSuccess(reached) && workspaceRoot !== undefined
-          ? serviceProjectState(reached.success, workspaceRoot)
-          : yield* (yield* StateStores)
-              .project(storage, workspaceRoot)
-              .pipe(Scope.provide(projectScope));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
-      const config = new JsonConfigProvider(
-        yield* openTexraConfigStores(
-          TEXRA_SETTINGS.catalog,
-          defaultNodeStorageRoot(),
-          workspaceRoot,
-          (message) => {
-            runtime.runFork(
-              Effect.logWarning(message).pipe(
-                withLogChannel(EXTENSION_CHANNEL),
-                Effect.andThen(
-                  announce(
-                    EXTENSION_CHANNEL,
-                    vscodeUi.showWarningMessage(message),
-                    undefined,
-                  ),
+      const config = yield* openTexraConfigStores(
+        TEXRA_SETTINGS.catalog,
+        defaultNodeStorageRoot(),
+        workspaceRoot,
+        (message) => {
+          runtime.runFork(
+            Effect.logWarning(message).pipe(
+              withLogChannel(EXTENSION_CHANNEL),
+              Effect.andThen(
+                announce(
+                  EXTENSION_CHANNEL,
+                  vscodeUi.showWarningMessage(message),
+                  undefined,
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       );
-      const roots = createNodeWorkspaceRoots({
+      const roots = yield* openNodeWorkspaceRoots({
         workspacePath: workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
-        storage,
         config,
-        workspaceState: projectState,
-        repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
-        globalState,
-      });
+        ...(Result.isSuccess(reached) &&
+          workspaceRoot !== undefined && {
+            workspaceState: serviceProjectState(reached.success, workspaceRoot),
+          }),
+        stateStores: yield* StateStores,
+        globalState: yield* AppState,
+      }).pipe(Scope.provide(projectScope));
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
       const notice = vscode.env.isTelemetryEnabled
@@ -454,7 +439,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   } else {
     const session = yield* (yield* Sessions).open(roots, {
       persistent: true,
-      host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
+      host: {},
     });
     yield* recordFirstCompletedRun(session);
     windowSession = { session, link: yield* hosts.localLink(session) };

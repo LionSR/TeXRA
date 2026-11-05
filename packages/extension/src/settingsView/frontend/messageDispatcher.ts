@@ -95,9 +95,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
     modelSelectionItems.set(data.models);
     settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
-    settingSignal<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES).set(
-      data.preferShortModelNames,
-    );
   },
 
   // Agent selection.

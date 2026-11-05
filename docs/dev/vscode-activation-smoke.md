@@ -34,8 +34,8 @@ requests. It makes no model call: it seeds no API key.
 
 ```bash
 corepack pnpm install
-npm run compile:safe
-npm run check:extension-package-invariants
+npm run typecheck && npm run compile:fast
+node scripts/verify-extension-package-invariants.mjs
 
 SMOKE_ROOT="$(mktemp -d /tmp/vsh-XXXXXX)" # keep it short: VS Code's IPC socket path limit is ~100 chars
 mkdir -p "$SMOKE_ROOT/workspace" "$SMOKE_ROOT/user-data" "$SMOKE_ROOT/extensions"
@@ -62,7 +62,7 @@ Using a fresh `SMOKE_ROOT` created the same way as in [Development Host](#develo
 
 ```bash
 npm run build:fast
-npm run check:vsix-contents
+node scripts/verify-vsix-contents.mjs
 
 VSIX="releases/texra-$(node -p "require('./packages/extension/package.json').version").vsix"
 

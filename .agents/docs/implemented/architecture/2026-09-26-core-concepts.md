@@ -287,9 +287,9 @@ reason and reopen trigger):
   "multi-agent preset" retire.
 - Plugin skills and agents are gated by the plugin switch.
 - Typed RPC, `History.writer` and the open schema registry are not built until a
-named plugin cannot be MCP + hooks + data. The 2026-10-02 durable-harness ruling
-narrowed the same ruling's `PluginModule` half: a first-party plugin is a code
-value ([durable harness](./2026-10-02-durable-harness.md), "Owner rulings").
+  named plugin cannot be MCP + hooks + data. The 2026-10-02 durable-harness ruling
+  narrowed the same ruling's `PluginModule` half: a first-party plugin is a code
+  value ([durable harness](./2026-10-02-durable-harness.md), "Owner rulings").
 </content>
 
 </invoke>

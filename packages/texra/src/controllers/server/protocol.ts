@@ -48,7 +48,6 @@ import {
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
-  ResumeBlockedSchema,
 } from '@texra-ai/harness/transcript';
 import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
@@ -87,18 +86,18 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 53,
+  version: 55,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
     'tasks.list': 'f53aa5564aa8',
-    'task.watch': 'f3cdd07e24f8',
+    'task.watch': '643a817fd4a5',
     'task.request': 'f055ca5a4858',
     'task.start': 'bd10b36a735a',
-    'task.resume': 'df1eb0f607ad',
+    'task.resume': 'ac37fb4d0261',
     'task.ended': 'b8a10423576c',
     'task.config': 'ee42ee67ab23',
-    'task.exportTrace': 'f005493cb0c1',
+    'task.exportTrace': 'd984c3d58161',
     'task.exportInput': 'fefc9f82f1e2',
     'host.attach': '153808303ff7',
     'state.get': '221cc7263384',
@@ -235,10 +234,8 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: RunIdSchema },
-    /** The run that resumed: the asked one, or the parent that owns it;
-     *  or what it needs (its agent, a plugin) and is missing, so it stays
-     *  interrupted. */
-    success: Schema.Union([TaskAdmitted, ResumeBlockedSchema]),
+    /** The run that resumed: the asked one, or the parent that owns it. */
+    success: TaskAdmitted,
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its

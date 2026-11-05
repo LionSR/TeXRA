@@ -13,7 +13,8 @@ export type CliLogoutTarget = SubscriptionProviderId | 'all';
  *  (browser by default, `--device` for the device-code flow). Every value
  *  parses through `parseChatLoginSlashArgs`. */
 export type LoginFormValue =
-  SubscriptionProviderId | `${SubscriptionProviderId} --device`;
+  | SubscriptionProviderId
+  | `${SubscriptionProviderId} --device`;
 
 // `--device` and `--no-browser` are distinct sign-in transports, not
 // refinements of each other (device-code shows no loopback URL), and the

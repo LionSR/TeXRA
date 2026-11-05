@@ -111,8 +111,9 @@ const ModelErrorFieldsSchema = Schema.Struct({
   /**
    * What the failure is evidence about beyond this request: `model` for a
    * limit the provider scoped to one model, `route` for the shared provider,
-   * credential and endpoint (an unscoped rate limit, a server failure, the
-   * network). Absent when it says nothing about either.
+   * credential and endpoint (an unscoped rate limit, a server failure, a
+   * timeout or conflict, the network). Absent when it says nothing about
+   * either.
    */
   scope: Schema.optional(Schema.Literals(['model', 'route'])),
   /**

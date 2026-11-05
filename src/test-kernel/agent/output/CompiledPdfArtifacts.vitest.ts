@@ -4,16 +4,16 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
 import { createRunStorageLocation } from '@texra-ai/harness/host';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { publishCompiledPdfArtifact } from '@texra/agent/output/compiledPdfArtifacts';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 layer(FakeHost.layer(), { excludeTestServices: true })(
   'compiled PDF artifacts',
@@ -22,7 +22,7 @@ layer(FakeHost.layer(), { excludeTestServices: true })(
 
     it.effect('preserves source subdirectories for duplicate basenames', () =>
       Effect.gen(function* () {
-        const runId = 'dup123' as RunId;
+        const runId = Schema.decodeUnknownSync(RunIdSchema)('dd0123');
         const runDirectory = yield* Effect.promise(() =>
           makeTempDir('texra-pdf-artifact-', tempDirs),
         );

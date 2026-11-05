@@ -59,6 +59,7 @@ const TEST_ORIGIN = {
 } as const;
 
 /** A `Model` the harness never invokes: the invoker seam is faked above it. */
+// cast: every property read throws, so nothing reads the empty target.
 const unusedModel = new Proxy({} as Model, {
   get(_target, property) {
     throw new Error(`The harness model has no ${String(property)}.`);

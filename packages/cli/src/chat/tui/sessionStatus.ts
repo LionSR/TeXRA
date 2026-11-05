@@ -1,4 +1,3 @@
-import { summarizeSubagentFollowup } from '@texra-ai/harness/transcript';
 import {
   getModelLabel,
   truncateSummary,
@@ -98,7 +97,7 @@ function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
     ...messages.map(
       (message, index) =>
         `${index + 1}. ${truncateSummary(
-          summarizeSubagentFollowup(message),
+          message,
           QUEUED_FOLLOW_UP_STATUS_LENGTH,
         )}`,
     ),

@@ -56,15 +56,10 @@ function launchBackgroundRun(
   emit: (sink: ExecChunkSink) => void,
 ) {
   return Effect.gen(function* () {
-    let release!: (result: ExecResult) => void;
-    const processExit = new Promise<ExecResult>((resolve) => {
-      release = resolve;
-    });
-
-    let emitted!: () => void;
-    const outputEmitted = new Promise<void>((resolve) => {
-      emitted = resolve;
-    });
+    const { promise: processExit, resolve: release } =
+      Promise.withResolvers<ExecResult>();
+    const { promise: outputEmitted, resolve: emitted } =
+      Promise.withResolvers<void>();
     vi.spyOn(execUtils, 'executeCommand').mockImplementation(
       (_command, options) =>
         Effect.suspend(() => {

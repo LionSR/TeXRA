@@ -20,8 +20,6 @@ import {
 } from '@test/support/scriptedRunLayers';
 import { isolatedTestSession, SessionGraph } from '@test/support/testKernel';
 
-import type { ITool } from '@texra-ai/harness';
-
 // ---------------------------------------------------------------------------
 // The loop harness: the run's own services over a real session run history, with
 // the model faked at the `ModelInvoker` seam. The rows the fake writes are the
@@ -84,7 +82,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       status: 'executed' as const,
                       output: 'done',
                     }),
-                } as ITool,
+                },
               },
               script: [
                 toolCallTurn(
@@ -125,7 +123,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     status: 'executed' as const,
                     output: 'done',
                   }),
-              } as ITool,
+              },
             },
             script: [
               toolCallTurn([{ id: 'call-1', name: 'probe' }], 'Checking.'),

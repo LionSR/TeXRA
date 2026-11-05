@@ -37,7 +37,11 @@ function memoryStorage(initial?: ChatgptSession): CredentialStore & {
       Effect.sync(() => {
         value = undefined;
       }),
-    peek: () => (value ? (JSON.parse(value) as ChatgptSession) : undefined),
+    peek: () =>
+      value
+        ? // cast: `set` stores only what this store was handed, a ChatgptSession.
+          (JSON.parse(value) as ChatgptSession)
+        : undefined,
   };
 }
 

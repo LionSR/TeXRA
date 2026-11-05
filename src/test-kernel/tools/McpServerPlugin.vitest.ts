@@ -19,9 +19,11 @@ import {
   Layer,
   Scope,
   Context,
+  Schema,
 } from 'effect';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import { SessionLog } from '@shared/session/runHistory';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -38,7 +40,6 @@ import {
   createRecordingHost,
   decideRequest,
 } from '../agent/progressTestUtils';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 /** The per-install key env values are digested under, fixed. */
 const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
@@ -193,7 +194,7 @@ describe('MCP server plugins', () => {
 
             // The call goes through the loop's guard: a bash request the
             // session's approval authority opens, answered here.
-            const runId = 'a99f0000c0d1' as RunId;
+            const runId = Schema.decodeSync(RunIdSchema)('a99f0000c0d1');
             publishTestRunStart(session, runId);
             yield* Context.get(session, SessionLog).settled;
             const requestOpened = yield* Deferred.make<void>();
@@ -201,7 +202,8 @@ describe('MCP server plugins', () => {
               Deferred.doneUnsafe(requestOpened, Effect.void);
               return null;
             });
-            const tool = resolved.registry.get('mcp__fixture__echo')!;
+            const tool = resolved.registry.get('mcp__fixture__echo');
+            assert.exists(tool);
             const call = yield* Effect.forkChild(
               guardedToolCall(tool, { text: 'hi' }).pipe(
                 Effect.provide(
@@ -212,7 +214,7 @@ describe('MCP server plugins', () => {
               ),
             );
             yield* Deferred.await(requestOpened);
-            const opened = requests.opened[0]!;
+            const opened = requests.opened[0];
             expect(opened.payload).toMatchObject({
               kind: 'bash',
               data: { command: 'mcp fixture echo {"text":"hi"}' },
@@ -267,7 +269,8 @@ describe('MCP server plugins', () => {
             injectTools: false,
             roots: installedHost().roots,
           }).pipe(Effect.provideContext(services));
-          const tool = resolved.registry.get('mcp__fixture__echo')!;
+          const tool = resolved.registry.get('mcp__fixture__echo');
+          assert.exists(tool);
 
           const call = yield* Effect.forkChild(tool.call({ text: 'hi' }));
           const requestId = Number(yield* writtenText(`${pidFile}.called`));

@@ -39,9 +39,13 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
-import { CORE_FILE_LINES, RULES, measure } from './core-quality-measure.mjs';
+import {
+  CORE_FILE_LINES,
+  CORE_QUALITY_DIRS,
+  RULES,
+  measure,
+} from './core-quality-measure.mjs';
 import { ratchetBase, renamesSince, withBaseTree } from './ratchet-base.mjs';
 
 const rootDir = path.resolve(
@@ -58,13 +62,16 @@ const ZERO_RULES = new Set([
   'durable-invariants',
   'effect-run',
   'import-cycles',
+  'lint-disable',
   'new-promise',
   'no-explicit-any',
   'no-non-null-assertion',
+  'no-non-null-assertion-test-kernel',
   'promise-then',
   'try-catch-effect',
   'type-assertions',
   'type-assertions-outside-core',
+  'type-assertions-test-kernel',
 ]);
 
 function describeSites(entry) {

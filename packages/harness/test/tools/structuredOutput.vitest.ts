@@ -45,6 +45,7 @@ describe('normalizeStructuredOutputSchema', () => {
     ).toThrow(/cannot use \$ref/);
     // Real sandbox schemas arrive via JSON.parse, which creates an own
     // "__proto__" key (an object literal would set the prototype instead).
+    // cast: the literal parsed here is an object.
     const polluting = JSON.parse(
       '{"type":"object","properties":{"__proto__":{"type":"string"}}}',
     ) as Record<string, unknown>;

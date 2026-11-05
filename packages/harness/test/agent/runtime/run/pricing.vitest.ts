@@ -36,6 +36,7 @@ const NON_WRITE_COST =
   1e6;
 
 /** A `Model` the pricing function never calls: it prices reported counts. */
+// cast: every property read throws, so the empty target never acts as a Model.
 const unusedModel = new Proxy({} as Model, {
   get(_target, property) {
     throw new Error(`Pricing must not reach the model (${String(property)}).`);

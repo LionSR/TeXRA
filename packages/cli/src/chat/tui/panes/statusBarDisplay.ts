@@ -87,7 +87,10 @@ const STATUS_BAR_HORIZONTAL_PADDING = 2;
 // 'dim' is not an Ink color name — it is a sentinel this file's own renderer
 // (`StatusBar.tsx`) reads to apply `dimColor` instead of an explicit `color`.
 type StatusBarColor =
-  typeof COLOR_HINT | typeof COLOR_WARNING | typeof COLOR_ERROR | 'dim';
+  | typeof COLOR_HINT
+  | typeof COLOR_WARNING
+  | typeof COLOR_ERROR
+  | 'dim';
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
 /** Choose the quota owner, preferring the route of completed usage. */

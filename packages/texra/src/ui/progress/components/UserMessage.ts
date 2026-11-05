@@ -16,12 +16,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared styles
-import {
-  decodeXmlEntities,
-  deliveryBodyEscaped,
-  deliveryTagOf,
-  formatScriptDeliverySummary,
-} from '@texra-ai/harness/transcript';
 import { CopyButtonController } from '@ui/litControllers/CopyButtonController';
 import { designTokens } from '@ui/styles';
 import { buttonStyles, focusRingStyles } from '@ui/styles/controlStyles';
@@ -54,16 +48,6 @@ export interface ForkFromHere {
   readonly media: readonly (typeof StoredMediaSchema.Type)[];
 }
 const FORK_FROM_HERE = 'fork-from-here';
-
-type DisplayState = {
-  isStructuredDelivery: boolean;
-  hasRawMessage: boolean;
-  displayText: string;
-  /** What the copy action yields: the presented content — the formatted
-   *  workflow summary when one renders, the display text otherwise. */
-  copyText: string;
-  structuredMarkdownHtml: string;
-};
 
 @customElement('user-message')
 export class UserMessage extends LitElement {
@@ -161,8 +145,8 @@ export class UserMessage extends LitElement {
 
   /**
    * Typed workflow-delivery facts carried beside the text on the log row
-   * (`UserMessagePayloadSchema`). When present, the bubble renders these —
-   * the text is never re-parsed for structured data.
+   * (`UserMessagePayloadSchema`). When present, the text is the delivery's
+   * summary and the bubble renders it as Markdown.
    */
   @property({ attribute: false })
   scriptSummary: ScriptDeliverySummary | null = null;
@@ -180,22 +164,9 @@ export class UserMessage extends LitElement {
     defaultTitle: 'Copy message',
   });
 
-  private rawMessageCopyController = new CopyButtonController(this, {
-    defaultTitle: 'Copy raw message',
-  });
-
-  private displayCache: DisplayState & {
-    text: string;
-    summary: ScriptDeliverySummary | null;
-  } = {
-    text: '',
-    summary: null,
-    isStructuredDelivery: false,
-    hasRawMessage: false,
-    displayText: '',
-    copyText: '',
-    structuredMarkdownHtml: '',
-  };
+  /** A delivery's rendered Markdown, by its text: message text is immutable
+   *  after creation, so the parse must not rerun on every render. */
+  private markdownCache = { text: '', html: '' };
 
   private forkFromHere(): void {
     if (this.forkAt === null) return;
@@ -212,41 +183,14 @@ export class UserMessage extends LitElement {
     );
   }
 
-  private getDisplayState(): DisplayState {
-    if (
-      this.displayCache.text === this.text &&
-      this.displayCache.summary === this.scriptSummary
-    ) {
-      return this.displayCache;
+  private markdownHtml(): string {
+    if (this.markdownCache.text !== this.text) {
+      this.markdownCache = {
+        text: this.text,
+        html: processMarkdownContent(this.text),
+      };
     }
-
-    const tag = deliveryTagOf(this.text);
-    const isStructuredDelivery =
-      tag !== undefined || this.scriptSummary !== null;
-    const hasRawMessage = tag !== undefined && deliveryBodyEscaped(tag);
-    const displayText = hasRawMessage
-      ? decodeXmlEntities(this.text)
-      : this.text;
-    // A workflow delivery renders its typed summary from the row's structured
-    // field; the text is never mined for presentation metadata.
-    const structuredDisplayText = this.scriptSummary
-      ? formatScriptDeliverySummary(this.scriptSummary)
-      : displayText;
-
-    this.displayCache = {
-      text: this.text,
-      summary: this.scriptSummary,
-      isStructuredDelivery,
-      hasRawMessage,
-      displayText,
-      copyText: structuredDisplayText,
-      // Cached alongside displayText: message text is immutable after
-      // creation, so the Markdown parse must not rerun on every render.
-      structuredMarkdownHtml: isStructuredDelivery
-        ? processMarkdownContent(structuredDisplayText)
-        : '',
-    };
-    return this.displayCache;
+    return this.markdownCache.html;
   }
 
   override render(): TemplateResult {
@@ -256,17 +200,7 @@ export class UserMessage extends LitElement {
       'minute',
     );
     const copyState = this.copyController.state;
-    const rawMessageCopyState = this.rawMessageCopyController.state;
-    // processMarkdownContent uses MarkdownIt with html:false and escapes
-    // restored LaTeX reference labels before the renderer output reaches
-    // unsafeHTML.
-    const {
-      isStructuredDelivery,
-      hasRawMessage,
-      displayText,
-      copyText,
-      structuredMarkdownHtml,
-    } = this.getDisplayState();
+    const isStructuredDelivery = this.scriptSummary !== null;
 
     return html`
       <div class="user-message-container">
@@ -308,7 +242,7 @@ export class UserMessage extends LitElement {
                 label: copyState.ariaLabel,
                 tooltip: copyState.title,
                 className: `user-message-copy message-copy ${copyState.copied ? copyState.successClass : ''}`,
-                onClick: () => this.copyController.copy(copyText),
+                onClick: () => this.copyController.copy(this.text),
               })}
               ${
                 this.forkAt !== null && !isStructuredDelivery
@@ -322,19 +256,6 @@ export class UserMessage extends LitElement {
                     })
                   : nothing
               }
-              ${
-                hasRawMessage
-                  ? renderIconActionButton({
-                      id: 'user-message-raw-copy-button',
-                      icon: 'code',
-                      label: rawMessageCopyState.ariaLabel,
-                      tooltip: rawMessageCopyState.title,
-                      className: `user-message-copy ${rawMessageCopyState.copied ? rawMessageCopyState.successClass : ''}`,
-                      onClick: () =>
-                        this.rawMessageCopyController.copy(this.text),
-                    })
-                  : nothing
-              }
             </span>
           </div>
           ${
@@ -345,12 +266,16 @@ export class UserMessage extends LitElement {
                   tabindex="0"
                   aria-label="User message details"
                 >
-                  ${unsafeHTML(structuredMarkdownHtml)}
+                  ${
+                    // processMarkdownContent uses MarkdownIt with html:false
+                    // and escapes restored LaTeX reference labels.
+                    unsafeHTML(this.markdownHtml())
+                  }
                 </div>`
               : html`<div
                   class="user-message-content"
                   data-log-id=${this.logId}
-                  .textContent=${displayText}
+                  .textContent=${this.text}
                 ></div>`
           }
         </wa-details>

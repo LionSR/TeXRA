@@ -1,7 +1,7 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
 import { Effect, Fiber } from 'effect';
-import { expect } from 'vitest';
+import { assert, expect } from 'vitest';
 
 // Local imports
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
@@ -15,7 +15,7 @@ import { seedDisabledToolDefaults } from '@tools/toolAvailability';
 
 /** A host whose DISABLED_TOOLS list is already seeded, and empty. */
 const seeded = FakeHost.layer({
-  globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] as string[] },
+  globalState: { [GlobalStateKey.DISABLED_TOOLS]: [] },
 });
 
 layer(seeded, { buildPerTest: true })('seedDisabledToolDefaults', (it) => {
@@ -47,9 +47,11 @@ layer(SessionGraph.hosted)('external tool availability probes', (it) => {
   it.effect('an interrupted version probe stops the process it spawned', () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawnerLayer(() => 'hang');
+      const { availability } = wolfram;
+      assert.exists(availability);
       const fiber = yield* Effect.forkChild(
-        wolfram
-          .availability!.check(installedHost().roots)
+        availability
+          .check(installedHost().roots)
           .pipe(Effect.provide(spawner.layer)),
       );
 
