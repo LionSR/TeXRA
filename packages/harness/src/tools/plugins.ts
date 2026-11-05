@@ -58,14 +58,14 @@ export interface PluginRow {
 }
 
 /**
- * One row kind a plugin owns (`plugin.fact`): the version it writes, the
- * schema of that version's value, and adjacent upcasters from
- * `version - upcasters.length` to `version`, oldest first.
- * The store checks every row of the kind against its fact kind, and reads a
- * row whose fact kind the process's plugins lack (its plugin removed, or not
- * listed here) as written, marked `unavailable`; a run holding one does not
- * resume. Fact kinds live beside their readers, in modules webviews can
- * import.
+ * One row kind a plugin owns (`plugin.fact`): the version it writes and
+ * reads, and the schema of that version's value; a stored row at a lower
+ * version is an earlier build's, and one at a higher version refuses the
+ * store. The store checks every row of the kind against its fact kind, and
+ * reads a row whose fact kind the process's plugins lack (its plugin
+ * removed, or not listed here) as written, marked `unavailable`; a run
+ * holding one does not resume. Fact kinds live beside their readers, in
+ * modules webviews can import.
  */
 export interface FactKind {
   /** The plugin's id: a fact kind is its own plugin's, never another's. */
@@ -73,7 +73,6 @@ export interface FactKind {
   readonly kind: string;
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
-  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
   /** What a fork of a run (a conversation's, or a script's `self()` child)
    *  starts with of the run's own row of the kind: `copy` the row the run
    *  held at the cut, `drop` none. A row about the plugin's own aggregate

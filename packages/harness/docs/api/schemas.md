@@ -1561,13 +1561,11 @@ type ReadonlyDeep<T> = T extends
 
 A parsed trace with each plugin fact checked as the store checks it,
 against the harness's built-in fact kind (the goal's plan) and the app's
-plugin fact kinds (`appFactKinds`). A fact outside its kind's versions
-(`pluginFactFloor`), or whose value the kind's schema rejects, throws,
-naming it, as does a retired built-in fact no current plugin owns; one
-whose plugin this build lacks is kept as written, marked `unavailable`, as
-the store reads it. A trace is display data and runs no upcaster, so a
-version an upcaster would bring forward is rejected by the schema, never
-misread.
+plugin fact kinds (`appFactKinds`). A fact at another version than its
+kind's, or whose value the kind's schema rejects, throws, naming it, as
+does a retired built-in fact no current plugin owns; one whose plugin
+this build lacks is kept as written, marked `unavailable`, as the store
+reads it.
 
 ```ts
 function readTraceFacts(
@@ -2416,7 +2414,6 @@ interface TraceFactKind {
   readonly kind: string;
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
-  readonly upcasters: readonly unknown[];
 }
 ```
 

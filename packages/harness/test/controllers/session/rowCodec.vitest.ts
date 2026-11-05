@@ -32,9 +32,9 @@ const read = (factKinds: FactKinds, version: number, value: number) =>
     new Map(),
   );
 
-// Failure modes: a compatibility chain starting after version 1 skips steps,
-// a current value is converted twice, or an unsupported version is accepted.
-it('reads every supported version from the start of its compatibility chain', () => {
+// Failure modes: a fact at a lower or a higher version than its kind's is
+// read as the kind's, or one at the kind's version is refused.
+it("reads a fact at its kind's version and refuses any other", () => {
   const factKinds: FactKinds = {
     'example/count': {
       plugin: 'example',
@@ -42,22 +42,14 @@ it('reads every supported version from the start of its compatibility chain', ()
       version: 4,
       schema: Schema.Int,
       fork: 'drop',
-      upcasters: [
-        (value) => Schema.decodeUnknownSync(Schema.Int)(value) + 10,
-        (value) => Schema.decodeUnknownSync(Schema.Int)(value) * 2,
-      ],
     },
   };
-  for (const [version, value] of [
-    [2, 2],
-    [3, 12],
-    [4, 24],
-  ]) {
-    const result = read(factKinds, version, value);
-    expect(Result.getOrThrow(result)).toMatchObject({ version: 4, value: 24 });
-  }
+  expect(Result.getOrThrow(read(factKinds, 4, 24))).toMatchObject({
+    version: 4,
+    value: 24,
+  });
   for (const [version, tag] of [
-    [1, 'DatabaseRowEarlier'],
+    [3, 'DatabaseRowEarlier'],
     [5, 'DatabaseStoreNewer'],
   ] as const) {
     const result = read(factKinds, version, 2);
@@ -67,7 +59,7 @@ it('reads every supported version from the start of its compatibility chain', ()
 });
 
 // Failure modes: a fact whose plugin is absent is dropped from the read, or
-// read as interpreted (upcast, or with no reason it is not).
+// read as interpreted (checked, or with no reason it is not).
 it('reads a fact of an absent plugin as written, saying why', () => {
   expect(Result.getOrThrow(read({}, 3, 7))).toMatchObject({
     type: 'plugin.fact',

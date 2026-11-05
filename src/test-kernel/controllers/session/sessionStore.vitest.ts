@@ -86,7 +86,6 @@ const notesPlugin = definePlugin({
       kind: 'broken',
       version: 1,
       schema: Schema.String,
-      upcasters: [],
       fork: 'drop',
       writes: () => {
         throw new Error('The notes plugin lost track of its files.');
@@ -97,7 +96,6 @@ const notesPlugin = definePlugin({
       kind: 'written',
       version: 1,
       schema: Schema.String,
-      upcasters: [],
       fork: 'drop',
       writes: (value) => [Schema.decodeUnknownSync(Schema.String)(value)],
     },
