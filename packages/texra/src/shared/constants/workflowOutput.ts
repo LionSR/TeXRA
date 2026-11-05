@@ -5,6 +5,7 @@
  * Per-run isolation (executions/{id}/...) provides uniqueness;
  * agent/model/round-in-basename tokens are no longer needed.
  */
+import type { FileLocation } from '@texra-ai/harness/schemas';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
@@ -26,4 +27,26 @@ export function stripWorkflowRoundDir(
 /** The runDir-relative `r{round}` directory segment for a document task revision. */
 export function workflowOutputRoundDir(round: number): string {
   return `r${round}`;
+}
+
+/**
+ * The runDir-relative path where a revision keeps the model's version of
+ * one of its outputs, as extraction wrote it: Accept diffs the accepted
+ * file against it, so the model learns what the user changed. A
+ * run-storage output keeps its path under the round, a workspace output its
+ * workspace-relative path; an output outside both keeps none.
+ */
+export function modelOutputCopyPath(
+  round: number,
+  location: FileLocation,
+): string | undefined {
+  const dir = `${workflowOutputRoundDir(round)}/model`;
+  switch (location.kind) {
+    case 'runStorage':
+      return `${dir}/run/${stripWorkflowRoundDir(location.relativePath, round)}`;
+    case 'workspace':
+      return `${dir}/workspace/${location.relativePath}`;
+    case 'external':
+      return undefined;
+  }
 }

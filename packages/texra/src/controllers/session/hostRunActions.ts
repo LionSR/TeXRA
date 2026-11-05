@@ -24,10 +24,11 @@ import {
   StateReadFailed,
   withLogChannel,
   launchNoticeOf,
+  presentFollowUpResult,
   presentRunFailure,
   type SessionHostInteractions,
 } from '@texra-ai/harness/host';
-import { Effect, FileSystem, Schema, type Scope } from 'effect';
+import { Cause, Effect, FileSystem, Schema, type Scope } from 'effect';
 
 import { type ApiKeyProviderId, type SecretsFailed } from '@texra-ai/llm';
 import {
@@ -232,6 +233,9 @@ export interface HostRunActions {
   readonly runOutputs: {
     getOutputFiles(runId: RunId): ReturnType<typeof documentsOf>['files'];
   };
+  /** Send `text` to the run that launched `runId` (the chat that called a
+   *  document task); a run nothing launched has no one to send it to. */
+  followUpLauncher(runId: RunId, text: string): Effect.Effect<void>;
 }
 
 export const createHostRunActions = Effect.fn(
@@ -438,6 +442,39 @@ export const createHostRunActions = Effect.fn(
 
   return {
     runOutputs,
+    followUpLauncher(runId, text) {
+      const launcher = runView(runId)?.launchParentId ?? null;
+      if (launcher === null) return Effect.void;
+      const present = (message: string) => ports.showWarning(message);
+      const deliver = session
+        .request({ kind: 'followUp.send', runId: launcher, text })
+        .pipe(
+          Effect.flatMap((outcome) => {
+            const shown = presentFollowUpResult(outcome);
+            return shown.severity === 'none'
+              ? Effect.void
+              : present(shown.message);
+          }),
+          Effect.catchCause((cause) => {
+            const message = toErrorMessage(Cause.squash(cause));
+            return Effect.logWarning(
+              `Failed to send a follow-up to run ${launcher}: ${message}`,
+            ).pipe(
+              Effect.annotateLogs({
+                data: { runId: launcher, error: message },
+              }),
+              withLogChannel(CHANNEL),
+              Effect.andThen(
+                present(`Could not send the follow-up: ${message}`),
+              ),
+              Effect.ignore({ log: 'Warn' }),
+            );
+          }),
+        );
+      // Detached: the follow-up can wake the launcher for a whole model
+      // turn, so no host request waits on the outcome.
+      return Effect.forkDetach(deliver).pipe(Effect.asVoid);
+    },
     /**
      * Resume a settled run, of either category, on the session that holds
      * it: it continues the run's own rows (a child's, with the parent

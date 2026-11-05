@@ -48,6 +48,7 @@ import { checkExpectedOutputs } from '@texra/agent/output/outputValidation';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import {
+  keepModelOutputs,
   keepReply,
   openDocuments,
   rejectsOnCompileFailure,
@@ -309,6 +310,16 @@ export const DocumentExtractTool = defineTool({
       // A task that names no outputs rewrites its inputs: its outputs descend
       // from them.
       docs.task.outputs.length === 0,
+    );
+    // Without the model's version, a later Accept cannot tell the model
+    // what the user changed: reported, and the revision keeps its outputs.
+    yield* keepModelOutputs(docs, round.outputs).pipe(
+      recoverOutputFailure({
+        logger,
+        level: 'warn',
+        label: "Keeping the model's outputs",
+        recover: () => Effect.void,
+      }),
     );
     checkExpectedOutputs(docs.state, docs.deps, revision);
     const missing = round.missingOutputs;

@@ -13,7 +13,7 @@
  * then each earlier request with the persona's reply to it, then this
  * revision's request with the compile failures that rejected the last one.
  */
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
@@ -38,6 +38,7 @@ import {
 import { LatexMediaManager } from '@latex/LatexMediaManager';
 import { getTeXCountStats } from '@latex/texcount';
 import {
+  modelOutputCopyPath,
   WORKFLOW_OUTPUT_BASENAME,
   workflowOutputRoundDir,
 } from '@texra/shared/constants/workflowOutput';
@@ -47,7 +48,10 @@ import {
   documentTaskOptions,
   type DocumentTask,
 } from '@texra/shared/plugins/documents';
-import type { DocumentDiffs } from '@texra/shared/plugins/documentOutputs';
+import type {
+  DocumentDiffs,
+  OutputFileInfo,
+} from '@texra/shared/plugins/documentOutputs';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { documentTaskKey } from '@texra/agent/output/documentRecipe';
 import {
@@ -377,6 +381,25 @@ export const keepReply = Effect.fn('documents.keepReply')(function* (
   yield* fs.writeFileString(location.absolutePath, reply);
   return location;
 });
+
+/** Keep the model's version of each of a revision's `outputs`
+ *  (`modelOutputCopyPath`), as extraction wrote them. */
+export const keepModelOutputs = Effect.fn('documents.keepModelOutputs')(
+  function* (docs: Documents, outputs: readonly OutputFileInfo[]) {
+    const fs = yield* FileSystem.FileSystem;
+    yield* Effect.forEach(
+      outputs,
+      Effect.fnUntraced(function* ({ round, location }) {
+        const copyPath = modelOutputCopyPath(round, location);
+        if (copyPath === undefined) return;
+        const copy = join(docs.deps.fileService.runDirectory, copyPath);
+        yield* fs.makeDirectory(dirname(copy), { recursive: true });
+        yield* fs.copyFile(location.absolutePath, copy);
+      }),
+      { discard: true },
+    );
+  },
+);
 
 /** The workspace files a run mirrors into its storage, so the documents'
  *  relative `\input` and figure references resolve there. */
