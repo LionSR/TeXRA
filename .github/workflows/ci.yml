@@ -70,8 +70,7 @@ jobs:
           printf '%s\n' "$files"
           # Here-strings, not `printf | grep -q`: an early grep exit would
           # SIGPIPE the writer and pipefail would misread that as no match.
-          # Code = any path outside docs/ and *.md; desktop = the same, minus
-          # the CLI (the window bundles the rest of src/ and packages/).
+          # Code = any path outside docs/ and *.md.
           if grep -qvE '^docs/|\.md$' <<<"$files"; then
             echo "Non-docs changes detected -> full validation."
             echo "code=true" >> "$GITHUB_OUTPUT"
@@ -79,7 +78,11 @@ jobs:
             echo "Docs-only change -> lightweight docs build only."
             echo "code=false" >> "$GITHUB_OUTPUT"
           fi
-          if grep -qvE '^packages/cli/|^docs/|\.md$' <<<"$files"; then
+          # Desktop host = the Electron app and the session layer and CLI
+          # service its windows drive, and this workflow. Everything else the
+          # app bundles is covered by the kernel tests, and every push to main
+          # still runs the desktop suite.
+          if grep -qE '^packages/desktop/|^packages/texra/src/controllers/(server|session)/|^packages/harness/src/controllers/session/|^packages/cli/src/(runtime/cliService|commands/service)\.ts$|^\.github/workflows/ci\.yml$' <<<"$files"; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -383,9 +386,10 @@ jobs:
     # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
     # the app end to end, and it broke twice unnoticed before it ran here.
     # macOS because its window-lifecycle specs are macOS behaviour and the
-    # runner needs no virtual display; skipped on PRs confined to the CLI
-    # or docs, since macOS bills at 10x Linux rates.
-    if: needs.changes.outputs.code == 'true' && needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
+    # runner needs no virtual display. macOS bills at 10x Linux rates, so a
+    # pull request runs it only when it touches the desktop host
+    # (`changes.desktop`); every push to main runs it.
+    if: needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
     runs-on: macos-latest
     timeout-minutes: 20
 
