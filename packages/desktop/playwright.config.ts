@@ -17,10 +17,9 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e',
   outputDir: './tests/e2e/test-results',
-  // Every launch gets its own profile, home and CLI bundle under a temp dir,
-  // so files run side by side; two workers fit the 3-core macOS CI runner.
-  // Visual matrices are a separate, explicitly requested project.
-  workers: 2,
+  // Offscreen apps use isolated profiles. Serialize resource-heavy integration
+  // journeys; visual matrices are a separate, explicitly requested project.
+  workers: 1,
   fullyParallel: false,
   projects: [
     {
