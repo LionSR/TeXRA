@@ -64,6 +64,7 @@ import {
 } from '@shared/session/database';
 
 import { generateRunId } from '@shared/schemas';
+import type { TestApp } from './FakePlatform';
 import { REPO_ROOT } from './repoScan';
 import { createTempDirPlatform } from './tempDirPlatform';
 import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
@@ -372,13 +373,15 @@ const VALIDATION = {
  * The host a test runs on, as a layer built per test (`buildPerTest: true`)
  * inside a `SessionGraph` block, whose agent catalog it loads: a temp-dir
  * host whose agents are the golden fixtures and the bundled personas and
- * whose model is the validation model, where a golden agent plays its
+ * whose model is the validation model, running `app` (the harness's
+ * unless named), where a golden agent plays its
  * script and any other answers with what it was sent. No provider key comes
  * from the shell: its keys are the ones its secrets store. The release puts
  * the environment back and removes the temp dir.
  */
 export const validationHost = (
   prefix: string,
+  app?: TestApp,
 ): Layer.Layer<FakeHost, never, AgentCatalog> =>
   Layer.effect(
     FakeHost,
@@ -394,7 +397,7 @@ export const validationHost = (
       const host = Context.get(
         yield* Layer.build(
           FakeHost.layer(async () => {
-            const host = await createTempDirPlatform(prefix, tempDirs);
+            const host = await createTempDirPlatform(prefix, tempDirs, app);
             const agents = {
               custom: () => Effect.succeed(AGENTS),
               customConfigured: () => Effect.succeed(false),

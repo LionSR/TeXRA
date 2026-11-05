@@ -9,6 +9,7 @@ import { fakePath } from '@test/support/FakePlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
+import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { OutputState } from '@texra/agent/output/outputState';
@@ -73,6 +74,7 @@ export function compileContext(
  *  through. */
 export function latexHost(files: Record<string, string>) {
   return FakeHost.layer({
+    app: TEXRA_APP,
     files,
     storagePath,
     workspacePath,

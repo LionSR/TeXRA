@@ -1,4 +1,5 @@
-// Shared fakes for exercising the host-aware `Settings` accessor. Builds
+// Shared fakes for exercising the host-aware `Settings` accessor over
+// TeXRA's catalog. Builds
 // the `SettingsStores` shape from the canonical platform fakes so the store
 // contract lives in one place (`FakePlatform.ts`) rather than being re-rolled
 // per suite.
@@ -7,6 +8,8 @@ import { Effect } from 'effect';
 
 import type { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import type { SettingsStores } from '@shared/config/settings';
+
+import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 
 import { fakeConfig, FakeStateStore } from './FakePlatform';
 import type { StateStore, StateReadFailed } from '@texra-ai/harness/host';
@@ -20,7 +23,7 @@ interface FakeSettingsStores {
 }
 
 export function makeFakeSettingsStores(): FakeSettingsStores {
-  const config = fakeConfig();
+  const config = fakeConfig({}, TEXRA_SETTINGS.catalog);
   const workspaceState = new FakeStateStore();
   const repoState = new FakeStateStore();
   const globalState = new FakeStateStore();

@@ -15,6 +15,7 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { FakeHost } from '@test/support/testKernel';
+import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LatexDiffManager } from '@texra/agent/output/LatexDiffManager';
@@ -74,6 +75,7 @@ const files = ['original', 'r0', 'r1'].flatMap((dir) =>
 // same flat `diff/r1/main_diff.tex`, the second overwriting the first.
 layer(
   FakeHost.layer({
+    app: TEXRA_APP,
     files: Object.fromEntries(
       files.map((file) => [path.join(runDir(runId), file), document(file)]),
     ),

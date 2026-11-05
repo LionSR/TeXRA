@@ -33,12 +33,9 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import {
-  SessionGraph,
-  sessionHandleOf,
-  TestSession,
-} from '@test/support/testKernel';
+import { sessionHandleOf, TestSession } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 
 /** What a run of a launch was offered and asked, and how its calls ended,
  *  read from its rows. */
@@ -93,154 +90,154 @@ describe(
   'native agent launch activation',
   { timeout: REAL_RUN_TIMEOUT },
   () => {
-    layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
-      it.layer(validationHost('texra-activation-'), { buildPerTest: true })(
-        (it) => {
-          // A root's refused opening is the ownership suite's
-          // (`RunAgentOwnership.vitest.ts`); a child's ends failed, for its parent.
-          it.effect(
-            'a child launch whose opening is refused leaves no run and ends failed for its parent',
-            () =>
-              Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
-                const session = yield* persistentTestSession();
-                const parentRunId = generateRunId();
-                yield* rootRun({
-                  config: config('Parent.'),
-                  runId: parentRunId,
-                  interactive: true,
-                }).pipe(Effect.provide(session), Effect.forkChild);
-                yield* untilStored(
-                  roots.storage,
-                  parkedAfter(parentRunId, 1, roots.storage),
-                );
-                const faults = yield* sessionStoreFaults(roots.storage);
-                yield* faults.failNext('appendAll', 'run.start');
-                const runId = generateRunId();
+    layer(texraHosted, { excludeTestServices: true })((it) => {
+      it.layer(validationHost('texra-activation-', TEXRA_APP), {
+        buildPerTest: true,
+      })((it) => {
+        // A root's refused opening is the ownership suite's
+        // (`RunAgentOwnership.vitest.ts`); a child's ends failed, for its parent.
+        it.effect(
+          'a child launch whose opening is refused leaves no run and ends failed for its parent',
+          () =>
+            Effect.gen(function* () {
+              const roots = testWorkspaceRoots();
+              const session = yield* persistentTestSession();
+              const parentRunId = generateRunId();
+              yield* rootRun({
+                config: config('Parent.'),
+                runId: parentRunId,
+                interactive: true,
+              }).pipe(Effect.provide(session), Effect.forkChild);
+              yield* untilStored(
+                roots.storage,
+                parkedAfter(parentRunId, 1, roots.storage),
+              );
+              const faults = yield* sessionStoreFaults(roots.storage);
+              yield* faults.failNext('appendAll', 'run.start');
+              const runId = generateRunId();
 
-                const ended = yield* prepareAgentDefinition({
-                  config: config('Refused.'),
-                }).pipe(
-                  Effect.flatMap((definition) =>
-                    executeAgent(definition, runId, {
-                      registration: {
-                        identity: { kind: 'agent', agent: 'assistant' },
-                        parentRunId,
-                      },
+              const ended = yield* prepareAgentDefinition({
+                config: config('Refused.'),
+              }).pipe(
+                Effect.flatMap((definition) =>
+                  executeAgent(definition, runId, {
+                    registration: {
+                      identity: { kind: 'agent', agent: 'assistant' },
+                      parentRunId,
+                    },
+                  }),
+                ),
+                Effect.provide(session),
+              );
+              expect(ended).toMatchObject({
+                outcome: 'failed',
+                failure: {
+                  message: expect.stringContaining('injected appendAll'),
+                },
+              });
+              expect(
+                storedRows(roots.storage).filter((row) => row.run === runId),
+              ).toEqual([]);
+            }),
+        );
+
+        it.effect(
+          'R6: an agent file and its equivalent inline persona are offered the same tools and asked the same approvals',
+          () =>
+            Effect.gen(function* () {
+              const roots = testWorkspaceRoots();
+              /** Launch `agent` on `session` with the launch's `approval`, and
+               *  read what it was offered and asked once `ready` holds. */
+              const launch = (
+                session: Context.Context<SessionServices>,
+                agent: typeof FILE_AGENT | typeof INLINE_AGENT,
+                approval: { readonly delegated?: boolean } | undefined,
+                ready: (
+                  permissions: ReturnType<typeof permissionsOf>,
+                ) => boolean,
+              ) =>
+                Effect.gen(function* () {
+                  const runId = generateRunId();
+                  yield* rootRun({
+                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                      ...agent,
+                      model: 'openai/gpt-5.6-sol',
+                      instruction: 'Run the command.',
                     }),
-                  ),
-                  Effect.provide(session),
-                );
-                expect(ended).toMatchObject({
-                  outcome: 'failed',
-                  failure: {
-                    message: expect.stringContaining('injected appendAll'),
-                  },
+                    runId,
+                    ...(approval && { approval }),
+                  }).pipe(Effect.provide(session));
+                  yield* untilStored(roots.storage, () =>
+                    ready(permissionsOf(roots.storage, runId)),
+                  );
+                  return permissionsOf(roots.storage, runId);
                 });
-                expect(
-                  storedRows(roots.storage).filter((row) => row.run === runId),
-                ).toEqual([]);
-              }),
-          );
 
-          it.effect(
-            'R6: an agent file and its equivalent inline persona are offered the same tools and asked the same approvals',
-            () =>
-              Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
-                /** Launch `agent` on `session` with the launch's `approval`, and
-                 *  read what it was offered and asked once `ready` holds. */
-                const launch = (
-                  session: Context.Context<SessionServices>,
-                  agent: typeof FILE_AGENT | typeof INLINE_AGENT,
-                  approval: { readonly delegated?: boolean } | undefined,
-                  ready: (
-                    permissions: ReturnType<typeof permissionsOf>,
-                  ) => boolean,
-                ) =>
-                  Effect.gen(function* () {
-                    const runId = generateRunId();
-                    yield* rootRun({
-                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                        ...agent,
-                        model: 'openai/gpt-5.6-sol',
-                        instruction: 'Run the command.',
-                      }),
-                      runId,
-                      ...(approval && { approval }),
-                    }).pipe(Effect.provide(session));
-                    yield* untilStored(roots.storage, () =>
-                      ready(permissionsOf(roots.storage, runId)),
-                    );
-                    return permissionsOf(roots.storage, runId);
-                  });
+              // A host that answers: with no bypass `bash` asks; a launch that
+              // starts its work approved grants it the bypass, and it runs. The
+              // file and the persona are offered the same tools (the plugins
+              // inject theirs into both) and asked the same.
+              const answered = yield* persistentTestSession(roots);
+              const [fileAsks, inlineAsks, fileGranted, inlineGranted] = [
+                yield* launch(
+                  answered,
+                  FILE_AGENT,
+                  undefined,
+                  (p) => p.asked.length > 0,
+                ),
+                yield* launch(
+                  answered,
+                  INLINE_AGENT,
+                  undefined,
+                  (p) => p.asked.length > 0,
+                ),
+                yield* launch(
+                  answered,
+                  FILE_AGENT,
+                  { delegated: true },
+                  (p) => p.ran.length > 0,
+                ),
+                yield* launch(
+                  answered,
+                  INLINE_AGENT,
+                  { delegated: true },
+                  (p) => p.ran.length > 0,
+                ),
+              ];
+              expect(fileAsks).toMatchObject({ asked: ['bash'], ran: [] });
+              expect(fileAsks.offered[0]).toContain('bash');
+              expect(inlineAsks).toEqual(fileAsks);
+              expect(fileGranted).toMatchObject({
+                asked: [],
+                ran: ['executed'],
+              });
+              expect(inlineGranted).toEqual(fileGranted);
+              yield* Sessions.use((sessions) => sessions.close(roots));
 
-                // A host that answers: with no bypass `bash` asks; a launch that
-                // starts its work approved grants it the bypass, and it runs. The
-                // file and the persona are offered the same tools (the plugins
-                // inject theirs into both) and asked the same.
-                const answered = yield* persistentTestSession(roots);
-                const [fileAsks, inlineAsks, fileGranted, inlineGranted] = [
-                  yield* launch(
-                    answered,
-                    FILE_AGENT,
-                    undefined,
-                    (p) => p.asked.length > 0,
-                  ),
-                  yield* launch(
-                    answered,
-                    INLINE_AGENT,
-                    undefined,
-                    (p) => p.asked.length > 0,
-                  ),
-                  yield* launch(
-                    answered,
-                    FILE_AGENT,
-                    { delegated: true },
-                    (p) => p.ran.length > 0,
-                  ),
-                  yield* launch(
-                    answered,
-                    INLINE_AGENT,
-                    { delegated: true },
-                    (p) => p.ran.length > 0,
-                  ),
-                ];
-                expect(fileAsks).toMatchObject({ asked: ['bash'], ran: [] });
-                expect(fileAsks.offered[0]).toContain('bash');
-                expect(inlineAsks).toEqual(fileAsks);
-                expect(fileGranted).toMatchObject({
-                  asked: [],
-                  ran: ['executed'],
-                });
-                expect(inlineGranted).toEqual(fileGranted);
-                yield* Sessions.use((sessions) => sessions.close(roots));
-
-                // Nobody can answer: neither is offered `bash`.
-                const unanswered = yield* Effect.flatMap(
-                  TestSession.open(roots, { persistent: true }),
-                  sessionHandleOf,
-                );
-                const [fileWithheld, inlineWithheld] = [
-                  yield* launch(
-                    unanswered,
-                    FILE_AGENT,
-                    undefined,
-                    (p) => p.offered.length > 0,
-                  ),
-                  yield* launch(
-                    unanswered,
-                    INLINE_AGENT,
-                    undefined,
-                    (p) => p.offered.length > 0,
-                  ),
-                ];
-                expect(fileWithheld.offered[0]).not.toContain('bash');
-                expect(inlineWithheld).toEqual(fileWithheld);
-              }),
-          );
-        },
-      );
+              // Nobody can answer: neither is offered `bash`.
+              const unanswered = yield* Effect.flatMap(
+                TestSession.open(roots, { persistent: true }),
+                sessionHandleOf,
+              );
+              const [fileWithheld, inlineWithheld] = [
+                yield* launch(
+                  unanswered,
+                  FILE_AGENT,
+                  undefined,
+                  (p) => p.offered.length > 0,
+                ),
+                yield* launch(
+                  unanswered,
+                  INLINE_AGENT,
+                  undefined,
+                  (p) => p.offered.length > 0,
+                ),
+              ];
+              expect(fileWithheld.offered[0]).not.toContain('bash');
+              expect(inlineWithheld).toEqual(fileWithheld);
+            }),
+        );
+      });
     });
   },
 );

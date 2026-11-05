@@ -14,11 +14,13 @@ import { setWorkspaceCliChatAgent } from '@cli/runtime/cliConfig';
 import { errnoError } from '@test/support/fsTestUtils';
 import { FakeHost } from '@test/support/testKernel';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { TEXRA_APP } from '@test/support/texraApp';
 
 const tempDirs = useTempDirs();
 
 layer(
   FakeHost.layer({
+    app: TEXRA_APP,
     config: {
       model: 'deepseek/deepseek-v4-flash',
       chat: {
