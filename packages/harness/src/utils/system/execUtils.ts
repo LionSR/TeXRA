@@ -26,17 +26,40 @@ const DEFAULT_MAX_BUFFER = 100_000_000;
 /**
  * A POSIX shell's script around `command`: a sentinel reading the lifeline
  * on fd 3, then the command in a subshell, so a `wait` in it does not wait
- * on the sentinel. Once the command ends the shell stops the sentinel and
- * reaps it itself: an orphaned sentinel would stay in the process group as
- * a zombie until init reaps it, and the spawner's teardown waits for the
- * group to empty (seconds per command under a slow-reaping init). The
- * command starts on line 2, so the shell's error messages number its lines
- * as before.
+ * on the sentinel. The sentinel kills the group when the lifeline ends
+ * without a line (this process died) and exits quietly when it reads one
+ * ({@link releaseLifeline}, sent once the command's stdout and stderr have
+ * closed). Once the command's subshell returns the shell closes its own
+ * copies of those streams, so they close when the last background job
+ * holding them exits, and waits for the sentinel: a job backgrounded with
+ * `&` stays covered for as long as this process waits on its output. The
+ * shell reaps the sentinel itself: an orphaned one would stay in the
+ * process group as a zombie until init reaps it, and the spawner's teardown
+ * waits for the group to empty (seconds per command under a slow-reaping
+ * init). The command starts on line 2, so the shell's error messages number
+ * its lines as before.
  */
 const withLifeline = (command: string): string =>
-  '(read x <&3; kill -s KILL 0) >/dev/null 2>&1 & texra_lifeline=$!; exec 3<&-; (\n' +
+  '(read x <&3 || kill -s KILL 0) >/dev/null 2>&1 & texra_lifeline=$!; exec 3<&-; (\n' +
   `${command}\n)\n` +
-  'texra_status=$?; kill $texra_lifeline 2>/dev/null; wait $texra_lifeline 2>/dev/null; exit $texra_status\n';
+  'texra_status=$?; exec >/dev/null 2>&1; wait $texra_lifeline; exit $texra_status\n';
+
+/**
+ * Sends {@link withLifeline}'s sentinel its line and ends the lifeline, so the
+ * sentinel exits without killing the group and the shell can exit. A command
+ * with no lifeline (the array form, Windows) has no fd 3, and the spawner
+ * hands back a sink that discards the line. A failed write means the sentinel
+ * is already gone; the exit code then says how the shell ended.
+ */
+const releaseLifeline = (handle: ChildProcessHandle): Effect.Effect<void> =>
+  Stream.make(new TextEncoder().encode('\n')).pipe(
+    Stream.run(handle.getInputFd(3)),
+    Effect.ignore({
+      log: 'Warn',
+      message: "Could not release a shell command's lifeline",
+    }),
+    withLogChannel(CHANNEL),
+  );
 
 function normalizeOutput(text: string | null | undefined): string {
   return text?.trim() ?? '';
@@ -360,16 +383,15 @@ const awaitOutcome = Effect.fnUntraced(function* (
   const errFiber = yield* Effect.forkScoped(
     drain(handle.stderr, 'stderr', captured, options),
   );
-  const settled = Effect.all(
-    [
-      Fiber.join(outFiber),
-      Fiber.join(errFiber),
-      Effect.result(handle.exitCode),
-    ],
-    { concurrency: 'unbounded' },
-  ).pipe(
+  // A shell exits only after its lifeline is released, and that waits for
+  // both streams to close: until then a background job may still write.
+  const settled = Effect.all([Fiber.join(outFiber), Fiber.join(errFiber)], {
+    concurrency: 'unbounded',
+  }).pipe(
+    Effect.andThen(releaseLifeline(handle)),
+    Effect.andThen(Effect.result(handle.exitCode)),
     // The exit-code read fails only when the child died by a signal.
-    Effect.map(([, , exit]): Outcome =>
+    Effect.map((exit): Outcome =>
       Result.isSuccess(exit)
         ? { _tag: 'Exited', code: exit.success }
         : { _tag: 'Signalled', description: describeFailure(exit.failure) },

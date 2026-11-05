@@ -9,7 +9,6 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { cliPlatformShutdown } from '../runtime/initPlatform';
 import {
   cliErrorMessage,
-  flushNdjsonStdout,
   installCliPipeErrorHandlers,
   prePlatformDiagnosticSink,
   writeTextStderr,
@@ -27,13 +26,13 @@ import {
 // sink for it, and `initCliPlatform` swaps in the platform's as before.
 setLogSink(prePlatformDiagnosticSink, { trusted: true });
 
-// The process entry: one run, with the platform's shutdown, the process
-// runtime's disposal and the final NDJSON flush as its finalizers, in that
-// order. A platform's shutdown disposes the runtime as
-// its last step; a command that refused its arguments before bringing a
-// platform up registered no such step, and its runtime's global-root change
-// poll would hold the event loop open forever, so the entry disposes whatever
-// runtime is still installed (a no-op after a platform shutdown).
+// The process entry: one run, with the platform's shutdown and the process
+// runtime's disposal as its finalizers, in that order. A platform's shutdown
+// disposes the runtime as its last step; a command that refused its arguments
+// before bringing a platform up registered no such step, and its runtime's
+// global-root change poll would hold the event loop open forever, so the entry
+// disposes whatever runtime is still installed (a no-op after a platform
+// shutdown).
 await Effect.runPromise(
   Effect.tryPromise({
     try: async () => {
@@ -58,10 +57,7 @@ await Effect.runPromise(
       }),
     ),
     Effect.ensuring(
-      cliPlatformShutdown.pipe(
-        Effect.ensuring(disposeCliProcessRuntime),
-        Effect.ensuring(flushNdjsonStdout()),
-      ),
+      cliPlatformShutdown.pipe(Effect.ensuring(disposeCliProcessRuntime)),
     ),
   ),
 );

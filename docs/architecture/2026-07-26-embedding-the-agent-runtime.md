@@ -48,9 +48,10 @@ one of two owners, and an embedder supplies each one there:
 - **Per-workspace services** (the workspace root, its storage paths, its
   configuration and its state stores) are a `WorkspaceRoots`
   (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
-  can hold sessions rooted in several folders. Build one with
-  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:52-69`), which
-  picks the config provider.
+  can hold sessions rooted in several folders. Open one with
+  `openNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:56-78`), which
+  resolves the storage path, picks the config provider and opens the state
+  stores over the process's `StateStores`.
 
 `agentDirectories` is the port that names the three directories the registry
 scans. `new AgentDirectoryService({...})`
@@ -492,7 +493,7 @@ following classification makes that distinction.
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
   leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
-- **`:352-361` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
+- **`:290-296` — `openNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
 - **The first-install seed:** `texraProcessLayer` seeds the disabled tools
   as the runtime's layer builds, before any program reads the switches. (The
@@ -502,9 +503,11 @@ following classification makes that distinction.
 
 ### CLI initialization choices — not runtime obligations
 
-- **`:340-346` — `StateStores.project(...)` and `StateStores.repo(...)`:** The
-  CLI's own on-disk workspace state stores under its storage root. An embedder supplies its own
-  stores to `createNodeWorkspaceRoots`.
+- **`StateStores.project(...)` and `StateStores.repo(...)`:** The on-disk
+  workspace state stores under the storage root, opened by
+  `openNodeWorkspaceRoots` from the `StateStores` the CLI passes it. An
+  embedder that holds the project's state elsewhere passes it as
+  `workspaceState`.
 - **`:366-388` — the memoized session open:** Opens the process session lazily
   (`Sessions.open(roots, { persistent: true, … })`), so a command that needs
   no session never opens one. An embedder calls `Sessions.open` directly (§1,

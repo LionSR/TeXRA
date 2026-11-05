@@ -49,7 +49,6 @@ import {
 } from '@texra/controllers/texraProcessLayer';
 
 import { readCliVersion } from './cliContext';
-import { setCliLogRuntime } from './logSinks';
 import { validationModelLayer } from './validationModel';
 
 const NO_PLATFORM_APP_STATE =
@@ -204,17 +203,12 @@ export function installCliProcessRuntime(
     ),
   );
   installed = runtime;
-  // The output plane runs its Effects on this runtime from here on; the
-  // disposal below hands it back the no-runtime state.
-  setCliLogRuntime(runtime);
   return runtime;
 }
 
 /**
  * Dispose this process's runtime, if one is installed: the end of the
- * lifecycle {@link installCliProcessRuntime} starts. The output plane is
- * handed back the no-runtime state after the disposal finishes, so a write racing the teardown still reaches
- * the runtime that is unwinding, exactly as it did before the shutdown began.
+ * lifecycle {@link installCliProcessRuntime} starts.
  *
  * Registered by `initCliPlatform` as the last shutdown step, and run by the
  * process entry (`bin/texra.ts`) for whatever runtime is still installed —
@@ -227,12 +221,6 @@ export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
     const runtime = installed;
     if (!runtime) return Effect.void;
     installed = undefined;
-    return runtime.disposeEffect.pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          setCliLogRuntime(null);
-        }),
-      ),
-    );
+    return runtime.disposeEffect;
   },
 );

@@ -52,7 +52,6 @@ import type {
 } from '@agent/runtime/ToolServices';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import {
   RunHistory,
   type RunCell,
@@ -317,23 +316,15 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 /** Dispatch the pending response of an opened run; `definitions` are the
  *  tools a script run in it may call. */
 const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
-  dispatchPendingResponse(
-    kit.cell,
-    {
-      definitions,
-      registry: kit.tools,
-      offered: [],
-      services: Context.empty(),
-      stepRoots: [],
-      hooks: [],
-      modules: {},
-    },
-    // The run's pending requests, as its `FollowUps.controls` reads them.
-    Effect.map(
-      Context.get(kit.session, Inbox).read(kit.runId),
-      ({ followUps }) => followUps.filter((f) => f.control !== undefined),
-    ).pipe(Effect.orDie),
-  ).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
+  dispatchPendingResponse(kit.cell, {
+    definitions,
+    registry: kit.tools,
+    offered: [],
+    services: Context.empty(),
+    stepRoots: [],
+    hooks: [],
+    modules: {},
+  }).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use dispatch',

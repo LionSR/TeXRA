@@ -36,11 +36,7 @@ interface ResumeHintSnapshot {
   readonly view: SessionView;
   readonly rootRunId: RunId | undefined;
 }
-import {
-  collectResumeTargets,
-  collectResumeUsage,
-  formatResumeHint,
-} from './state/resumeHint';
+import { collectResumeUsage, formatResumeHint } from './state/resumeHint';
 import {
   chatTuiRunPending,
   type ChatExit,
@@ -123,20 +119,19 @@ export function createSessionExitController(
   let releaseSignals = (): void => {};
   // The one run of the exit, started by the path that decides it.
   let exited: Promise<CliExitCode> | undefined;
-  // Persist the reopen hint to native scrollback: the main session plus each
-  // subagent TeXRA drives, so any route can be continued by its own id.
-  // The view is read before resetCliState() clears it; the child lists
-  // arrive as a snapshot taken while the session adapter was still bound.
+  // Persist the reopen hint to native scrollback: the session's root run,
+  // through which its children resume too. The view (for the task's usage)
+  // is read before resetCliState() clears it, as a snapshot taken while the
+  // session adapter was still bound.
   const snapshotResumeHint = (): ResumeHintSnapshot => ({
     view: currentView(),
     rootRunId: rootRunIdSignal.get(),
   });
   const printResumeHintOnExit = (snapshot: ResumeHintSnapshot): void => {
     if (!session.runId) return;
-    const { view, rootRunId } = snapshot;
     const hint = formatResumeHint(
-      collectResumeTargets({ view, rootRunId: session.runId }),
-      collectResumeUsage(view, rootRunId),
+      session.runId,
+      collectResumeUsage(snapshot.view, snapshot.rootRunId),
       ctx.commandName,
       {
         cwd: ctx.cwd,
@@ -144,7 +139,7 @@ export function createSessionExitController(
         approvalPolicy: ctx.getApprovalPolicy(),
       },
     );
-    if (hint) writeTextStdout(`\n${hint}`);
+    writeTextStdout(`\n${hint}`);
   };
   // Drain artifact writes and canonical event publication before shutdown.
   // Platform shutdown then finishes executions whose leases are still held,
