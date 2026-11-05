@@ -135,10 +135,9 @@ export type ServiceRecord = typeof ServiceRecordSchema.Type;
 
 /** The storage root's running service: one row of the global root's
  *  current values, read and changed under its write lock. */
-export const TEXRA_SERVICE: ValueFamily<ServiceRecord, true> = {
+export const TEXRA_SERVICE: ValueFamily<ServiceRecord> = {
   name: 'texra-service',
   schema: ServiceRecordSchema,
-  deletable: true,
 };
 
 /** One top-level task in `tasks.list`. */

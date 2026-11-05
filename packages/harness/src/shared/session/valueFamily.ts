@@ -14,29 +14,25 @@ import { Schema } from 'effect';
 import { JsonValueSchema, type JsonValue } from '@shared/schemas';
 
 /**
- * One family of current values: its stored name, the schema its value
- * decodes with, and whether a write may delete its row (`Deletable`), in
- * which case a change may answer `undefined`.
+ * One family of current values: its stored name and the schema its value
+ * decodes with. A change that answers `undefined` deletes the row.
  */
-export interface ValueFamily<T, Deletable extends boolean = false> {
+export interface ValueFamily<T> {
   readonly name: string;
   readonly schema: Schema.Codec<T, unknown>;
-  readonly deletable: Deletable;
 }
 
 /** The process's settings store, keyed by the setting key. */
-export const APP_STATE: ValueFamily<JsonValue, true> = {
+export const APP_STATE: ValueFamily<JsonValue> = {
   name: 'app-state',
   schema: JsonValueSchema,
-  deletable: true,
 };
 
 /** The settings every checkout of one repository shares, keyed by the
  *  repository root and the setting key. */
-export const REPO_STATE: ValueFamily<JsonValue, true> = {
+export const REPO_STATE: ValueFamily<JsonValue> = {
   name: 'repo-state',
   schema: JsonValueSchema,
-  deletable: true,
 };
 
 /**
@@ -47,5 +43,4 @@ export const REPO_STATE: ValueFamily<JsonValue, true> = {
 export const WORKSPACE_STORES: ValueFamily<{ readonly root: string }> = {
   name: 'workspace-store',
   schema: Schema.Struct({ root: Schema.String.check(Schema.isMinLength(1)) }),
-  deletable: false,
 };

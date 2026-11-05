@@ -37,7 +37,7 @@ export const TextChunkSchema = Schema.TaggedStruct('chunk', {
 export type TextChunk = typeof TextChunkSchema.Type;
 
 /** Why this build cannot open a run's rows: one does not decode
- *  (`damaged`), or an earlier build wrote one it has no upcaster for, the
+ *  (`damaged`), or an earlier build wrote one at a lower version, the
  *  resume refusal of the same name. */
 const RunUnreadableSchema = Schema.Literals(['damaged', 'earlierBuild']);
 
