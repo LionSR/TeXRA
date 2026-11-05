@@ -3,8 +3,9 @@ import { Effect, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { apiKeySecretName, type ApiKeyProviderId } from '@texra-ai/llm';
+import type { Session } from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
-import { RunIdSchema } from '@texra-ai/harness/schemas';
+import { RunIdSchema, type RuntimeRequest } from '@texra-ai/harness/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 
@@ -15,9 +16,25 @@ describe('ProgressApiKeyRetryController', () => {
       const secrets = new FakeSecrets({
         [apiKeySecretName('anthropic')]: 'old-key',
       });
+      const runId = Schema.decodeUnknownSync(RunIdSchema)('a0000a');
       return Effect.gen(function* () {
         const prompts: ApiKeyProviderId[] = [];
-        const retries: string[] = [];
+        const sent: RuntimeRequest[] = [];
+        // The controller reads only the pending retry and sends its decision.
+        // cast: a test double of those two members.
+        const session = {
+          view: {
+            current: () => ({
+              requests: [
+                { runId, requestId: 'retry-a', payload: { kind: 'retry' } },
+              ],
+            }),
+          },
+          request: (request: RuntimeRequest) =>
+            Effect.sync(() => {
+              sent.push(request);
+            }),
+        } as unknown as Pick<Session, 'request' | 'view'>;
         const controller = new ProgressApiKeyRetryController({
           // The person re-enters the same key: the store hands out sealed
           // values, which compare by value, so it reads unchanged.
@@ -26,22 +43,22 @@ describe('ProgressApiKeyRetryController', () => {
               Effect.sync(() => prompts.push(provider)),
               secrets.set(apiKeySecretName('anthropic'), 'old-key'),
             ).pipe(Effect.orDie),
-          isRetryPending: () => true,
-          triggerRetry: (stream) =>
-            Effect.sync(() => {
-              retries.push(stream);
-            }),
+          session,
         });
 
-        yield* controller.useOwnApiKey({
-          stream: Schema.decodeUnknownSync(RunIdSchema)('a0000a'),
-          requestId: 'retry-a',
-          provider: 'anthropic',
-          requireNewKey: true,
-        });
+        const error = yield* Effect.flip(
+          controller.useOwnApiKey({
+            kind: 'useOwnApiKey',
+            runId,
+            requestId: 'retry-a',
+            credentialSwitch: { kind: 'new-key', provider: 'anthropic' },
+          }),
+        );
 
         expect(prompts).toStrictEqual(['anthropic']);
-        expect(retries).toStrictEqual([]);
+        expect(sent).toStrictEqual([]);
+        // The retry stays pending, and the user hears why.
+        expect(error._tag).toBe('Rejected');
       }).pipe(Effect.provide(Secrets.layer(secrets)));
     },
   );

@@ -1,19 +1,17 @@
 // Internal imports
+import { DocumentFileTypeSchema } from '@texra/shared/launcher/fileTypes';
 import { FILE_HANDLING_RULES } from './fileHandlingRules';
 
 /**
- * File categories for the product's fixed file-handling rules.
- *
- * Note: This is distinct from DocumentFileType in @shared/schemas/fileTypes.ts
- * which defines UI file input field types.
+ * File categories for the product's fixed file-handling rules: each document
+ * file type (the launch form's input fields), plus `edited` for a run's
+ * output files.
  */
 export type ExtensionCategory = (typeof EXTENSION_CATEGORIES)[number];
 
 /** Every extension category, for callers that aggregate them all. */
 export const EXTENSION_CATEGORIES = [
-  'input',
-  'context',
-  'media',
+  ...DocumentFileTypeSchema.literals,
   'edited',
 ] as const;
 

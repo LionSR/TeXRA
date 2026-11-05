@@ -3,8 +3,8 @@
 // Which requests are pending is a session view fact: `view.requests` holds every
 // `request.opened` no `request.decided` has answered. This module owns only
 // what the session view cannot: the presentation a host stages beside the fact (a
-// tool edit's before and after text, a retry's personal-key lookup), the
-// "decided here, not yet applied there" gap, and the jump-to-waiting order.
+// tool edit's before and after text), the "decided here, not yet applied
+// there" gap, and the jump-to-waiting order.
 // A decision leaves as the case `approvalDecisionArm` names: the run's
 // `request.decide` (with the bypass a session-wide approval grants), or the
 // host capability a retry on the user's own key needs.
@@ -14,7 +14,6 @@ import { Cause, Effect, absurd } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/host';
 import {
-  type RequestDecision,
   attentionOf,
   type PermissionPayload,
   type ProgressPermissionKind,
@@ -25,6 +24,7 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import type { ToolEditPreviewRead } from '@texra/controllers/approval/ToolEditApprovalController';
 
 import { registerCliStateResetHook, sessionRunIds } from './cliState';
 import { sessionView } from './sessionView';
@@ -35,19 +35,12 @@ import {
 } from './transcript';
 import type { Session } from '@texra-ai/harness';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
-import type {
-  RuntimeRequest,
-  SessionView,
-  ToolEditContent,
-} from '@texra-ai/harness/schemas';
+import type { RuntimeRequest, SessionView } from '@texra-ai/harness/schemas';
 
 interface TuiApprovalAdornments {
   /** What a tool edit's card shows: the preview staged for it, or why there
-   *  is none to show. A card never stands an empty diff in for a missing
-   *  preview: the user would approve a write they never saw. */
-  readonly toolEdit:
-    | { readonly kind: 'preview'; readonly content: ToolEditContent }
-    | { readonly kind: 'unavailable'; readonly reason: string };
+   *  is none to show. */
+  readonly toolEdit: ToolEditPreviewRead;
 }
 
 /**
@@ -73,7 +66,7 @@ export type ApprovalPayload = {
       : { readonly tui?: never });
 }[PendingApprovalKind];
 
-/** The two arms their modals read by name. */
+/** The two kinds their modals read by name. */
 export type ToolEditApprovalPayload = Extract<
   ApprovalPayload,
   { kind: 'toolEdit' }
@@ -123,9 +116,8 @@ interface AttentionRequest {
 
 /**
  * What a host staged for one request beside the fact: the payload it
- * presents. A tool edit's preview arrives with the request; a retry's
- * key-availability lookup lands once it finishes, which is what keeps the
- * retry card off the screen until it can say whether `k` is offered.
+ * presents, a tool edit with its preview, which keeps the card off the
+ * screen until the preview is read.
  */
 const stagedPresentations = signal<ReadonlyMap<string, ApprovalPayload>>(
   new Map(),
@@ -212,19 +204,18 @@ function presentedPayload(
     case 'bash':
     case 'planApproval':
     case 'proposal':
+    case 'retry':
     case 'userQuestion':
       return payload;
     case 'toolEdit':
-    case 'retry':
-      // Presentable only once the host stages it: a tool edit with its
-      // preview, a retry once the CLI policy has not finished it.
+      // Presentable only once the host stages it with its preview.
       return undefined;
   }
   absurd(payload);
 }
 
 /** The order requests became presentable: a request that only became
- *  showable now (a staged tool edit or retry) joins behind the modal the
+ *  showable now (a staged tool edit) joins behind the modal the
  *  user is already answering rather than displacing it. The stamp is a
  *  monotonic counter, not the map's size: finished entries are pruned, and a
  *  size-based stamp would hand a later request the index of one on screen. */
@@ -319,22 +310,15 @@ export function reopenRequest(requestId: string): void {
  * Issue the runtime request one decision names; a refusal reads in the
  * conversation and puts `requestId` back on this surface, since the
  * durable request it answered is still pending and nobody else will re-ask.
- * `onRefused` is the same undo for a caller keeping its own "already acted"
- * guard beside this one (the TUI host's automatic answers): a guard left set
- * over a refused decision leaves the run waiting on a request nobody answers again.
  */
 function issue(
   requests: SessionRequests,
   runtime: ProcessRuntime,
   runId: RunId,
   requestId: string,
-  onRefused: (() => void) | undefined,
   request: RuntimeRequest,
 ): void {
-  const reopen = (): void => {
-    reopenRequest(requestId);
-    onRefused?.();
-  };
+  const reopen = (): void => reopenRequest(requestId);
   runtime.runFork(
     requests.request(request).pipe(
       Effect.match({
@@ -378,7 +362,7 @@ function decideRequest(
   const { runId } = request;
   const arm = approvalDecisionArm(payload, decision);
   if ('runtime' in arm)
-    issue(requests, runtime, runId, request.requestId, undefined, arm.runtime);
+    issue(requests, runtime, runId, request.requestId, arm.runtime);
   else if (hostCapability) hostCapability(arm.host);
   else
     runtime.runFork(
@@ -386,30 +370,6 @@ function decideRequest(
         `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
       ).pipe(withLogChannel('cli.tui')),
     );
-}
-
-/**
- * Land one durable decision a host capability took itself — the retry a
- * stored credential let this host switch onto the user's own key. The
- * `request.decide` alone, without going back through `approvalDecisionArm`:
- * that is what named the capability, so re-entering it here would hand the
- * capability back to itself and the request would never be answered.
- */
-export function landRequestDecision(
-  requests: SessionRequests,
-  runtime: ProcessRuntime,
-  runId: RunId,
-  requestId: string,
-  decision: RequestDecision,
-  onRefused?: () => void,
-): void {
-  markDecided(requestId);
-  issue(requests, runtime, runId, requestId, onRefused, {
-    kind: 'request.decide',
-    runId,
-    requestId,
-    decision,
-  });
 }
 
 /** Forget every staged presentation and local decision: the Surface reset

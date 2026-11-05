@@ -2,16 +2,7 @@
 import { Buffer } from 'node:buffer';
 
 // Third-party imports
-import {
-  Effect,
-  Exit,
-  identity,
-  Ref,
-  Result,
-  Schema,
-  Stream,
-  Struct,
-} from 'effect';
+import { Effect, Exit, identity, Ref, Schema, Stream, Struct } from 'effect';
 import OpenAI from 'openai';
 
 // Local imports - canonical model contract
@@ -30,7 +21,11 @@ import {
 } from '../errors.js';
 import { backgroundCapable, originOf } from '../protocol.js';
 import { backgroundLifecycle } from './background.js';
-import { ownedAbortSafeRequest } from './transport.js';
+import {
+  decodeWireOrFail,
+  ownedAbortSafeRequest,
+  wireFail,
+} from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
 import { withResponsesContinuation } from './openaiResponsesLower.js';
@@ -177,30 +172,17 @@ export function openaiResponsesModel(
       );
       const first = yield* Effect.tryPromise({
         try: () => iterator.next(),
-        catch: (cause) =>
-          cause instanceof SyntaxError
-            ? new ModelError({
-                kind: 'malformed-output',
-                message: 'The model returned malformed stream data.',
-                cause,
-              })
-            : openaiFailure(cause),
+        catch: openaiFailure,
       });
       if (first.done)
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Background submission ended without acceptance evidence.',
-        });
-      const parsed = Schema.decodeUnknownResult(ResponseEventSchema)(
+        return yield* wireFail(
+          'Background submission ended without acceptance evidence.',
+        );
+      const { response, type } = yield* decodeWireOrFail(
+        ResponseEventSchema,
+        'Background acceptance is malformed.',
         first.value,
       );
-      if (!Result.isSuccess(parsed))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Background acceptance is malformed.',
-          cause: parsed.failure,
-        });
-      const { response, type } = parsed.success;
       yield* Ref.update(learned, (known) => ({
         ...known,
         model: response.model,
@@ -326,23 +308,20 @@ export function openaiResponsesModel(
         requestId: reply.requestId,
       }));
       // Cancellation cannot request encrypted output includes. Report status only.
-      const parsed = Schema.decodeUnknownResult(
+      const invalid =
+        'Cancellation returned invalid response identity or status.';
+      const parsed = yield* decodeWireOrFail(
         Schema.fromJsonString(
           ResponseSchema.mapFields(
             Struct.pick(['id', 'object', 'model', 'status']),
           ),
         ),
-      )(reply.body);
-      if (
-        !Result.isSuccess(parsed) ||
-        parsed.success.id !== operation.providerResponseId
-      )
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Cancellation returned invalid response identity or status.',
-          cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
-        });
-      return parsed.success.status;
+        invalid,
+        reply.body,
+      );
+      if (parsed.id !== operation.providerResponseId)
+        return yield* wireFail(invalid);
+      return parsed.status;
     }),
     // The same anchor the foreground completion builds: an observed or
     // submitted turn chains on `previous_response_id` too.

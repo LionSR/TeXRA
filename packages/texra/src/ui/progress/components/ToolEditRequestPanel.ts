@@ -13,7 +13,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 // Local imports - shared styles
 import { pluralize } from '@texra-ai/harness/transcript';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
-import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
@@ -38,14 +37,7 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
   ];
 
   protected override get grant(): RunGrant {
-    return {
-      label: RUN_GRANT_LABEL.toolEdit,
-      decision: { action: APPROVE_SESSION_ACTION },
-    };
-  }
-
-  protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve' });
+    return { label: RUN_GRANT_LABEL.toolEdit };
   }
 
   protected override renderAsk(): TemplateResult {

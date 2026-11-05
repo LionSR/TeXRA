@@ -65,7 +65,6 @@ const PREDICATES = [
   'Cause.hasInterrupts',
   'Cause.squash',
   'isTerminalOutcomePhase',
-  'isLiveRun',
   'ownedHere',
   'readOnly',
   'parentId',

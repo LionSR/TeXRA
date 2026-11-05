@@ -241,44 +241,10 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   return input;
 });
 
-/** The required tool must be among the supplied definitions. */
-const checkToolChoice = (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-): Effect.Effect<void, ModelError> => {
-  const choice = turn.controls.toolChoice;
-  return choice === 'auto' ||
-    turn.tools.some((tool) => tool.name === choice.name)
-    ? Effect.void
-    : Effect.fail(
-        new ModelError({
-          kind: 'invalid-request',
-          message:
-            'The required tool must be present in the supplied definitions.',
-        }),
-      );
-};
-
 /** The namespace function tools must sit in, or null: a ChatGPT plan's alone. */
 export const toolNamespaceOf = (
   config: OpenAIResponsesConfiguration,
 ): string | null => (config.requestDialect === 'chatgpt' ? 'texra' : null);
-
-const lowerInput = Effect.fn('llm.responses.lowerInput')(function* (
-  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
-  config: OpenAIResponsesConfiguration,
-  uploads: UploadCache | null,
-) {
-  const documents = yield* documentAccess(config, uploads);
-  const input = yield* lowerMessages(
-    turn,
-    turn.messages,
-    config,
-    documents,
-    [],
-  );
-  yield* checkToolChoice(turn);
-  return input;
-});
 
 const RESPONSES_PREFIX_DOMAIN = 'texra-openai-responses-prefix-v1';
 
@@ -343,8 +309,12 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   config: OpenAIResponsesConfiguration,
   uploads: UploadCache | null,
 ) {
+  const documents = yield* documentAccess(config, uploads);
   const continuation = turn.continuation;
-  if (!continuation) return { input: yield* lowerInput(turn, config, uploads) };
+  if (!continuation)
+    return {
+      input: yield* lowerMessages(turn, turn.messages, config, documents, []),
+    };
   const prefix = turn.messages.slice(0, continuation.coveredMessages);
   if (
     !sameModelOrigin(turn, continuation.origin) ||
@@ -369,7 +339,6 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
   // prefix's last assistant message left.
   const callIds: string[] = [];
   for (const message of prefix) replayCallIds(message, callIds);
-  const documents = yield* documentAccess(config, uploads);
   const input = yield* lowerMessages(
     turn,
     turn.messages.slice(continuation.coveredMessages),
@@ -377,7 +346,6 @@ export const responseInput = Effect.fn('llm.responses.input')(function* (
     documents,
     callIds,
   );
-  yield* checkToolChoice(turn);
   return {
     input,
     previous_response_id: continuation.anchor.responseId,

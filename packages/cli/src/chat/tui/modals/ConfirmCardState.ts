@@ -12,13 +12,20 @@ import {
 import { HOLLOW_DOT, STATUS_DOT } from '@cli/tui/ui/glyphs';
 import {
   APPROVE_SESSION_ACTION,
+  declineDecision,
+  REQUEST_ACTIONS,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
 
 const APPROVAL_PULSE_FRAMES = [STATUS_DOT, HOLLOW_DOT] as const;
 
-export type ConfirmCardRejectionMode = 'feedback' | 'immediate';
+/** The request kinds a card answers: those with a `y` answer. */
+type ConfirmCardKind = {
+  [
+    K in keyof typeof REQUEST_ACTIONS
+  ]: 'y' extends keyof (typeof REQUEST_ACTIONS)[K] ? K : never;
+}[keyof typeof REQUEST_ACTIONS];
 
 type ConfirmCardKey = Pick<ReturnKeyInput, 'escape' | 'ctrl' | 'meta'>;
 
@@ -29,17 +36,13 @@ export interface ConfirmCardKeyRow extends KeyHint {
 }
 
 export interface ConfirmCardHintOptions<Extra extends KeyHint = KeyHint> {
+  /** The request kind answered: what `y`, `n` and Esc send is its row of
+   *  `REQUEST_ACTIONS`. A kind that declines with a note opens the note on
+   *  `n`; one that stops the task stops it at once. */
+  readonly kind: ConfirmCardKind;
   /** Omitted labels are resolved by `confirmCardKeyRows`. */
   readonly approveLabel?: string;
-  /**
-   * What the approve key answers with, for a request a plain approve does not
-   * answer: the retry card's `y` is `{ action: 'retry' }`, because a retry
-   * request reads its consent off that case and nothing else. Defaults to a
-   * plain approve.
-   */
-  readonly approveDecision?: SurfaceDecision;
   readonly rejectLabel?: string;
-  readonly rejectionMode?: ConfirmCardRejectionMode;
   /** Label of the `a` session-bypass action; omitted where the request kind
    *  offers none. */
   readonly alwaysAllowLabel?: string;
@@ -73,23 +76,22 @@ export function confirmCardPulsedTitle(nowMs: number, title: string): string {
 
 /**
  * The card's keymap in hint order, one row per letter key. Esc is not a row:
- * it always rejects, and `confirmCardKeyHints` appends its hint last.
+ * it always declines, and `confirmCardKeyHints` appends its hint last.
  */
 export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
+  kind,
   approveLabel = 'approve',
-  approveDecision = { action: 'approve' },
   rejectLabel,
-  rejectionMode = 'feedback',
   alwaysAllowLabel,
   extraActions = [],
 }: ConfirmCardHintOptions<Extra>): (ConfirmCardKeyRow | Extra)[] {
-  const feedback = rejectionMode === 'feedback';
+  const feedback = takesNote(kind);
   return [
-    { key: 'y', action: approveLabel, decision: approveDecision },
+    { key: 'y', action: approveLabel, decision: REQUEST_ACTIONS[kind].y },
     {
       key: 'n',
       action: rejectLabel ?? (feedback ? 'reject & note' : 'reject'),
-      decision: feedback ? 'feedback' : { action: 'reject' },
+      decision: feedback ? 'feedback' : declineDecision(kind),
     },
     ...(alwaysAllowLabel == null
       ? []
@@ -106,22 +108,27 @@ export function confirmCardKeyRows<Extra extends KeyHint = ConfirmCardKeyRow>({
   ];
 }
 
+/** Whether `kind` declines with a note the agent reads. */
+function takesNote(kind: ConfirmCardKind): boolean {
+  return REQUEST_ACTIONS[kind].n === 'reject';
+}
+
 export function confirmCardKeyDecision(
   input: string,
   key: ConfirmCardKey,
+  kind: ConfirmCardKind,
   rows: readonly ConfirmCardKeyRow[],
 ): ConfirmCardKeyRow['decision'] | undefined {
-  if (isEscapeInput(input, key)) return { action: 'reject' };
+  if (isEscapeInput(input, key)) return declineDecision(kind);
   if (key.ctrl || key.meta) return undefined;
   const pressed = input.toLowerCase();
   return rows.find((row) => row.key.toLowerCase() === pressed)?.decision;
 }
 
 function confirmCardKeyHints(options: ConfirmCardHintOptions): KeyHint[] {
-  const escapeLabel =
-    options.rejectionMode === 'immediate'
-      ? (options.rejectLabel ?? 'reject')
-      : 'reject';
+  const escapeLabel = takesNote(options.kind)
+    ? 'reject'
+    : (options.rejectLabel ?? 'reject');
   return [...confirmCardKeyRows(options), { key: 'Esc', action: escapeLabel }];
 }
 
@@ -178,30 +185,18 @@ export function confirmCardKeyHintsForWidth(
 export function confirmCardCompactHintLayout({
   title,
   columns,
-  approveLabel,
-  rejectLabel,
-  rejectionMode,
-  alwaysAllowLabel,
-  extraActions,
+  ...options
 }: ConfirmCardCompactHintLayoutOptions): ConfirmCardCompactHintLayout {
   const pulsedTitleColumns = textDisplayWidth(confirmCardPulsedTitle(0, title));
   const inlineHints = confirmCardKeyHintsForWidth({
-    approveLabel,
-    rejectLabel,
-    rejectionMode,
-    alwaysAllowLabel,
-    extraActions,
+    ...options,
     maxColumns: Math.max(
       0,
       columns - pulsedTitleColumns - KEY_HINT_SEPARATOR.length,
     ),
   });
   const stackedHints = confirmCardKeyHintsForWidth({
-    approveLabel,
-    rejectLabel,
-    rejectionMode,
-    alwaysAllowLabel,
-    extraActions,
+    ...options,
     maxColumns: columns,
   });
   return {

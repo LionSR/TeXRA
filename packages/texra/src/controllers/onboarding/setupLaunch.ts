@@ -1,11 +1,7 @@
 import { Effect, Result } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
-import {
-  agentName,
-  isLiveRun,
-  type AgentConfig,
-} from '@texra-ai/harness/schemas';
+import { agentName, type AgentConfig } from '@texra-ai/harness/schemas';
 import {
   presentRunFailure,
   type Secrets,
@@ -42,7 +38,7 @@ export const launchSetup = Effect.fn('launchSetup')(function* <E>(options: {
   // first one's installs and config writes.
   const live = [...options.session.view.current().runs.values()].some(
     (run) =>
-      isLiveRun(run) &&
+      run.live &&
       run.identity.kind === 'agent' &&
       agentName(run.identity.agent) === SETUP_AGENT_NAME,
   );

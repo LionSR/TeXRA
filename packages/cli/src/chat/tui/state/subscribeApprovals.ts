@@ -3,19 +3,16 @@
 // A run asks a person with `request.opened`; the fold lists it in
 // `view.requests` until a `request.decided` answers it, and the modal reads
 // that list (`approvalQueue.ts`). This module owns only what a request needs
-// before it can be shown or answered on this host: the retry card it stages
-// and the decision it lands for the `useOwnApiKey` capability. Whether a retry
-// offers a move onto the user's own key, and whether that move was taken
-// without asking, is the run's decision carried on the request; the key entry
-// behind the capability is `ProgressApiKeyRetryController`'s, shared with the
-// extension and desktop.
+// before it can be shown or answered on this host: a tool edit's preview and
+// the `useOwnApiKey` capability a retry decision names, whose key entry and
+// decision are `ProgressApiKeyRetryController`'s, shared with the extension
+// and desktop.
 //
-// The attached host answers nothing: it stages each listed tool edit's
-// preview and retry card for the modal, and presents events.
+// The attached host answers nothing on its own: it stages each listed tool
+// edit's preview for the modal, and presents events.
 
-import { Cause, Effect } from 'effect';
+import { Cause, Effect, type Fiber } from 'effect';
 
-import { providerDisplayName } from '@texra-ai/llm';
 import {
   followPendingRequests,
   withLogChannel,
@@ -23,63 +20,65 @@ import {
   type ProcessRuntime,
   type SettingsStores,
 } from '@texra-ai/harness/host';
-import {
-  toErrorMessage,
-  type PendingRequest,
-  type RetryPermission,
-} from '@texra-ai/harness/schemas';
+import { isRequestRefusal } from '@texra-ai/harness';
+import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
 import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliRuntimeHost } from '@cli/runtime/cliPresentationHost';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
+import { readToolEditPreview } from '@texra/controllers/approval/ToolEditApprovalController';
 import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
 } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
+import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { notify } from '../notifications/terminalNotifier';
 import {
   attentionRequests,
   currentApproval,
   dropPresentation,
-  landRequestDecision,
   pruneToLive,
   reopenRequest,
   stagePresentation,
   useHostCapability,
 } from './approvalQueue';
-import { appendLocalNotice } from './transcript';
+import {
+  appendLocalErrorTranscript,
+  appendLocalNotice,
+  reportRequestDefect,
+} from './transcript';
 import type { Session } from '@texra-ai/harness';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read
  * the policy from and its decisions land on, the settings slots a retry's
- * credential switch goes through, and the runtime its decisions are issued
- * on, which serves the secret store that switch reads. All three come from
- * the chat session's caller, which holds them already.
+ * key prompt goes through, and the runtime its work is forked on, which
+ * serves the secret store that prompt writes. All three come from the chat
+ * session's caller, which holds them already.
  */
 interface TuiApprovalStores {
   /** Where its decisions land and its pending requests are read: the
    *  chat's session, here or in the service. */
   readonly requests: Pick<Session, 'request'> & {
-    readonly view: Pick<Session['view'], 'changes'>;
+    readonly view: Pick<Session['view'], 'changes' | 'current'>;
   };
   /** The settings slots a key prompt reads a provider's display name and key
    *  URL from, so a retry that has to ask for a credential words the ask the
    *  same way `/key` does. */
   readonly settings: SettingsStores;
-  /** The process runtime this attachment's decisions are issued on, held for
-   *  the host's lifetime rather than looked up per decision. */
+  /** The process runtime this attachment's work is forked on, held for the
+   *  host's lifetime rather than looked up per decision. */
   readonly runtime: ProcessRuntime;
 }
 
-/** A request this host stages a card for until the view drops it. */
+/** A tool edit this host stages a card for until the view drops it. */
 type StagedRequest = PendingRequest & {
   readonly payload: Extract<
     PendingRequest['payload'],
-    { readonly kind: 'retry' | 'toolEdit' }
+    { readonly kind: 'toolEdit' }
   >;
 };
 
@@ -89,31 +88,6 @@ export function createTuiHostInteractions(
   context: CliContext,
   stores: TuiApprovalStores,
 ): HostInteractions {
-  /** Set by `dispose`: an attachment that is gone answers for nobody, so it
-   *  must not decide a request the next owner will. */
-  let disposed = false;
-  /** Retries this host has already landed a personal-credential decision
-   *  for. The fold lags the decision, so this is what tells the switch's own
-   *  program that it landed rather than fell through to a denial. */
-  const switched = new Set<string>();
-  /** The undo this guard hands every decision it sends: a refused
-   *  `request.decide` answered nothing, so the retry is no longer switched. */
-  const actAgainOnRefusal = (requestId: string) => (): void => {
-    switched.delete(requestId);
-  };
-  const pendingRetry = (requestId: string): RetryPermission | undefined => {
-    const pending = attentionRequests
-      .get()
-      .find((request) => request.requestId === requestId);
-    return pending?.payload.kind === 'retry' ? pending.payload.data : undefined;
-  };
-
-  /**
-   * The shared key entry, bound to this host's settings slots: the prompt
-   * that asks for a key when the user has no usable one for the provider the
-   * run's offer names. Only the decision this host lands on the request is
-   * its own.
-   */
   const apiKeyRetry = new ProgressApiKeyRetryController({
     promptForApiKey: (provider) =>
       promptForCliProviderApiKey(stores.settings, provider).pipe(
@@ -126,88 +100,59 @@ export function createTuiHostInteractions(
             }),
         ),
       ),
-    isRetryPending: (_stream, requestId) =>
-      !disposed && pendingRetry(requestId) !== undefined,
-    triggerRetry: (runId, requestId) =>
-      Effect.sync(() => {
-        switched.add(requestId);
-        // This capability already selected the credential route; mapping the
-        // decision to an arm again would call the capability recursively.
-        landRequestDecision(
-          stores.requests,
-          stores.runtime,
-          runId,
-          requestId,
-          { action: 'retry', credentials: 'personal' },
-          actAgainOnRefusal(requestId),
-        );
-      }),
+    session: stores.requests,
   });
+  /** Own-key switches in flight. An attachment that is gone answers for
+   *  nobody, so `dispose` interrupts them before they decide a request the
+   *  next owner will. */
+  const switches = new Set<Fiber.Fiber<void>>();
 
   /**
-   * A retry on the user's own key: the shared controller checks the store
-   * for the key the run's offer names, asks for one when there is none, and
-   * lands the retry through `triggerRetry`. A switch that did not happen
-   * leaves the retry pending, as on every other host: the card comes back
-   * with the reason worded into the conversation, and the user picks again.
+   * A retry on the user's own key, through the shared controller. A switch
+   * that did not happen leaves the retry pending, as on every other host:
+   * the card comes back with the reason worded into the conversation, and
+   * the user picks again.
    */
-  const useOwnApiKey = (requestId: string): void => {
-    const permission = pendingRetry(requestId);
-    if (!permission) {
-      stores.runtime.runFork(
-        Effect.logWarning(
-          `Request ${requestId} is no longer a pending retry: no credential switch was made.`,
-        ).pipe(withLogChannel('cli.tui')),
-      );
-      return;
-    }
-    const offer = permission.credentialSwitch;
-    if (offer == null) {
-      stores.runtime.runFork(
-        Effect.logWarning(
-          `Retry ${requestId} offers no move onto a provider key: no credential switch was made.`,
-        ).pipe(withLogChannel('cli.tui')),
-      );
-      reopenRequest(requestId);
-      return;
-    }
-    const provider = offer.provider;
-    stores.runtime.runFork(
-      Effect.gen(function* () {
-        const failure = yield* Effect.match(
-          apiKeyRetry.useOwnApiKey({
-            stream: permission.runId,
-            requestId,
-            provider,
-            requireNewKey: offer.kind === 'new-key',
+  const useOwnApiKey = (
+    request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
+  ): void => {
+    const { runId, requestId } = request;
+    const fiber = stores.runtime.runFork(
+      apiKeyRetry.useOwnApiKey(request).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Retry ${requestId} stays pending: ${toErrorMessage(error)}`,
+          ).pipe(
+            withLogChannel('cli.tui'),
+            Effect.andThen(
+              Effect.sync(() => {
+                reopenRequest(requestId);
+                appendLocalNotice(
+                  isRequestRefusal(error)
+                    ? requestErrorText(error)
+                    : toErrorMessage(error),
+                  runId,
+                );
+              }),
+            ),
+          ),
+        ),
+        // An interruption is this attachment leaving, not a failure.
+        Effect.catchDefect((defect) =>
+          Effect.map(reportRequestDefect(Cause.die(defect)), (message) => {
+            reopenRequest(requestId);
+            appendLocalErrorTranscript(message, runId);
           }),
-          {
-            onSuccess: () => undefined,
-            onFailure: (error) => toErrorMessage(error),
-          },
-        );
-        // Read the local fact, not the fold: `triggerRetry` lands its
-        // decision on the session's own queue, so the request can still be
-        // listed here for a moment after the switch committed.
-        if (switched.has(requestId)) return;
-        // Success and failure have the same lifetime: a lookup that finishes
-        // after this attachment leaves must not answer for its next owner.
-        if (disposed || pendingRetry(requestId) === undefined) return;
-        const reason =
-          failure ??
-          `No ${providerDisplayName(provider)} API key was entered, so the retry did not switch to it. Use \`/key\` to add one.`;
-        yield* Effect.logWarning(
-          `The retry could not switch to your own API key: ${reason}`,
-        ).pipe(withLogChannel('cli.tui'));
-        appendLocalNotice(reason, permission.runId);
-        reopenRequest(requestId);
-      }),
+        ),
+      ),
     );
+    switches.add(fiber);
+    fiber.addObserver(() => switches.delete(fiber));
   };
 
   const performHostCapability = (arm: HostRequest): void => {
     if (arm.kind === 'useOwnApiKey') {
-      useOwnApiKey(arm.requestId);
+      useOwnApiKey(arm);
       return;
     }
     // Every other capability belongs to a windowed host's surfaces; no TUI
@@ -220,52 +165,19 @@ export function createTuiHostInteractions(
   };
 
   /**
-   * What this host stages for each listed request until the view drops it:
-   * a retry's card, and a tool edit's card with its preview. The session
-   * decided everything its policy settles before the request was listed, so
-   * what is listed waits for a person. A preview that could not be fetched
-   * is said on the card itself, so the user never approves a write they
-   * cannot see.
+   * Stage each listed tool edit's card with its preview until the view
+   * drops it. The session decided everything its policy settles before the
+   * request was listed, so what is listed waits for a person. A preview
+   * that could not be read is said on the card itself.
    */
-  const stage = (request: StagedRequest): Effect.Effect<void> => {
-    const { payload, runId, requestId } = request;
-    const staged =
-      payload.kind === 'retry'
-        ? Effect.sync(() =>
-            stagePresentation({ kind: 'retry', data: payload.data }),
-          )
-        : stores.requests
-            .request({ kind: 'request.preview', runId, requestId })
-            .pipe(
-              Effect.matchCause({
-                onFailure: (cause) => ({
-                  kind: 'unavailable' as const,
-                  reason: `the session did not send it (${toErrorMessage(Cause.squash(cause))})`,
-                }),
-                onSuccess: ({ preview }) =>
-                  preview !== null
-                    ? { kind: 'preview' as const, content: preview }
-                    : {
-                        kind: 'unavailable' as const,
-                        reason: 'the session holds no preview of this edit',
-                      },
-              }),
-              Effect.map((tui) =>
-                stagePresentation({
-                  kind: 'toolEdit',
-                  data: payload.data,
-                  tui,
-                }),
-              ),
-            );
-    // The request's program ends when the view drops it, and its switch
-    // record goes with it.
-    return staged.pipe(
+  const stage = ({ payload, runId, requestId }: StagedRequest) =>
+    readToolEditPreview(stores.requests, runId, requestId).pipe(
+      Effect.map((tui) =>
+        stagePresentation({ kind: 'toolEdit', data: payload.data, tui }),
+      ),
       Effect.andThen(Effect.never),
       Effect.ensuring(dropPresentation(requestId)),
-      Effect.ensuring(Effect.sync(() => switched.delete(requestId))),
     );
-  };
   const follower = stores.runtime.runFork(
     Effect.scoped(
       followPendingRequests(
@@ -273,7 +185,6 @@ export function createTuiHostInteractions(
         (view) =>
           view.requests.filter(
             (request): request is StagedRequest =>
-              request.payload.kind === 'retry' ||
               request.payload.kind === 'toolEdit',
           ),
         stage,
@@ -291,8 +202,8 @@ export function createTuiHostInteractions(
       host.emit(event, payload);
     },
     dispose() {
-      disposed = true;
       follower.interruptUnsafe();
+      for (const fiber of switches) fiber.interruptUnsafe();
       releaseCapability();
     },
   };

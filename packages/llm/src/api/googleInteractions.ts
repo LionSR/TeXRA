@@ -13,7 +13,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { resolveTurn } from './turnInput.js';
+import { boundTurn, resolveTurn } from './turnInput.js';
 import {
   COMPLETED_STATUSES,
   IN_FLIGHT_STATUSES,
@@ -225,36 +225,33 @@ function sdkFailure(cause: unknown): ModelError {
   );
 }
 
-/** Google's abort signature: the SDK surfaces cancellation as a bare DOMException. */
-const googleAbortMatch = (cause: unknown, signal: AbortSignal): boolean =>
-  signal.aborted &&
-  cause instanceof DOMException &&
-  cause.name === 'AbortError';
+/**
+ * A Google SDK request under Effect's own abort signal, without SDK retries.
+ * The SDK surfaces cancellation as a bare DOMException, so that is the abort
+ * a rejoin drops.
+ */
+const googleRequest = <A>(
+  request: (options: {
+    readonly maxRetries: 0;
+    readonly fetchOptions: { readonly signal: AbortSignal };
+  }) => Promise<A>,
+): Effect.Effect<A, ModelError> =>
+  ownedAbortSafeRequest(
+    (signal) => request({ maxRetries: 0, fetchOptions: { signal } }),
+    sdkFailure,
+    {
+      isAbortMatch: (cause, signal) =>
+        signal.aborted &&
+        cause instanceof DOMException &&
+        cause.name === 'AbortError',
+    },
+  );
 
+/** The steps a turn this binding prepared sends after its continuation. */
 const invocationInput = Effect.fn('llm.google.invocationInput')(function* (
-  turn: ResolvedTurn,
+  turn: Extract<ResolvedTurn, { protocol: 'google-interactions' }>,
   origin: ModelOrigin,
 ) {
-  if (
-    turn.protocol !== 'google-interactions' ||
-    !sameModelOrigin(turn, origin)
-  ) {
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message:
-        'The prepared invocation belongs to another model or deployment.',
-    });
-  }
-  const toolChoice = turn.controls.toolChoice;
-  if (
-    toolChoice !== 'auto' &&
-    !turn.tools.some((tool) => tool.name === toolChoice.name)
-  ) {
-    return yield* new ModelError({
-      kind: 'invalid-request',
-      message: 'The selected Google tool is not defined in this invocation.',
-    });
-  }
   const steps = yield* lowerMessages(turn.messages, origin);
   if (!turn.continuation) return steps;
   const continuation = turn.continuation;
@@ -584,14 +581,7 @@ export function googleInteractionsModel(
               }),
             )
           : Effect.succeed({
-              ...origin,
-              mode: input.mode ?? 'foreground',
-              system: input.system,
-              messages: input.messages,
-              tools: input.tools ?? [],
-              continuation: input.continuation,
               controls: {
-                toolChoice: input.toolChoice ?? 'auto',
                 maxOutputTokens:
                   input.maxOutputTokens ?? config.defaults.maxOutputTokens,
                 store,
@@ -599,21 +589,16 @@ export function googleInteractionsModel(
               },
             });
       },
-      (turn) => invocationInput(turn, origin),
+      (turn) =>
+        Effect.flatMap(boundTurn(turn, origin, turn.mode), (bound) =>
+          invocationInput(bound, origin),
+        ),
     );
 
-  const streamTurn: Model['streamTurn'] = (turn) =>
+  const streamTurn: Model['streamTurn'] = (input) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        if (
-          turn.protocol !== 'google-interactions' ||
-          turn.mode !== 'foreground'
-        ) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'The prepared Google invocation is unsupported.',
-          });
-        }
+        const turn = yield* boundTurn(input, origin, 'foreground');
         const inputSteps = yield* invocationInput(turn, origin);
         let reader: ReadableStreamDefaultReader<unknown> | undefined =
           undefined;
@@ -653,19 +638,11 @@ export function googleInteractionsModel(
     raw: unknown,
     operation: RemoteOperation,
   ) {
-    const parsed = Schema.decodeUnknownResult(WireInteractionSchema)(raw);
-    if (
-      !Result.isSuccess(parsed) ||
-      parsed.success.id !== operation.providerResponseId
-    ) {
-      return yield* new ModelError({
-        kind: 'malformed-output',
-        message:
-          'Google returned a malformed or mismatched interaction snapshot.',
-        cause: Result.isSuccess(parsed) ? undefined : parsed.failure,
-      });
-    }
-    return parsed.success;
+    const invalid =
+      'Google returned a malformed or mismatched interaction snapshot.';
+    const parsed = yield* decodeWireOrFail(WireInteractionSchema, invalid, raw);
+    if (parsed.id !== operation.providerResponseId) return yield* fail(invalid);
+    return parsed;
   });
   const completedSnapshot = Effect.fn('llm.google.completedSnapshot')(
     function* (interaction: typeof WireInteractionSchema.Type) {
@@ -726,32 +703,21 @@ export function googleInteractionsModel(
             'Google background execution requires an enabled route and store:true.',
         });
       const inputSteps = yield* invocationInput(turn, origin);
-      const raw = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.interactions.create(
-            {
-              ...createInput(turn, inputSteps),
-              background: true,
-              stream: false,
-            },
-            { maxRetries: 0, fetchOptions: { signal } },
-          ),
-        sdkFailure,
-        { isAbortMatch: googleAbortMatch },
+      const raw = yield* googleRequest((options) =>
+        client.interactions.create(
+          { ...createInput(turn, inputSteps), background: true, stream: false },
+          options,
+        ),
       );
       // Retain a real accepted identifier even if later snapshot validation fails.
-      const identity = Schema.decodeUnknownResult(
+      const identity = yield* decodeWireOrFail(
         Schema.Struct({ id: Schema.String.check(Schema.isMinLength(1)) }),
-      )(raw);
-      if (!Result.isSuccess(identity))
-        return yield* new ModelError({
-          kind: 'malformed-output',
-          message: 'Google returned no background interaction identifier.',
-          cause: identity.failure,
-        });
+        'Google returned no background interaction identifier.',
+        raw,
+      );
       const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
         origin,
-        providerResponseId: identity.success.id,
+        providerResponseId: identity.id,
       });
       yield* Ref.set(learned, { operation });
       const interaction = yield* snapshot(raw, operation);
@@ -762,15 +728,12 @@ export function googleInteractionsModel(
     }),
     observe: {
       poll: Effect.fnUntraced(function* (operation, learned) {
-        const raw = yield* ownedAbortSafeRequest(
-          (signal) =>
-            client.interactions.get(
-              operation.providerResponseId,
-              { stream: false, include_input: false },
-              { maxRetries: 0, fetchOptions: { signal } },
-            ),
-          sdkFailure,
-          { isAbortMatch: googleAbortMatch },
+        const raw = yield* googleRequest((options) =>
+          client.interactions.get(
+            operation.providerResponseId,
+            { stream: false, include_input: false },
+            options,
+          ),
         );
         const interaction = yield* snapshot(raw, operation);
         const { model } = yield* Ref.get(learned);
@@ -792,14 +755,12 @@ export function googleInteractionsModel(
       }),
     },
     cancel: (operation) =>
-      ownedAbortSafeRequest(
-        (signal) =>
-          client.interactions.cancel(operation.providerResponseId, undefined, {
-            maxRetries: 0,
-            fetchOptions: { signal },
-          }),
-        sdkFailure,
-        { isAbortMatch: googleAbortMatch },
+      googleRequest((options) =>
+        client.interactions.cancel(
+          operation.providerResponseId,
+          undefined,
+          options,
+        ),
       ).pipe(
         Effect.flatMap((raw) => snapshot(raw, operation)),
         Effect.map((interaction) => interaction.status),

@@ -151,7 +151,9 @@ export const rootRun = Effect.fn('rootRun')(function* (
             ),
           ),
         ).pipe(
-          // A caller interrupted as the run opened never holds it.
+          // A caller interrupted as the run opened never holds it: its
+          // launch is interrupted, which the registry records as a release
+          // of the run (`RunRegistry.admit`), behind any stop recorded first.
           Effect.tap(() => restore(Effect.void)),
           Effect.onInterrupt(() => Fiber.interrupt(fiber)),
         ),

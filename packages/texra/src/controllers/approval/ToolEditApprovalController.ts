@@ -37,6 +37,8 @@ import {
 
 import {
   type HostRequestFailure,
+  type OutcomeOf,
+  type RuntimeRequest,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -44,6 +46,7 @@ import { followPendingRequests, withLogChannel } from '@texra-ai/harness/host';
 import {
   toErrorMessage,
   type PendingRequest,
+  type RunId,
   type ToolEditContent,
   type ToolEditPermission,
 } from '@texra-ai/harness/schemas';
@@ -69,6 +72,54 @@ type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 type PreviewCall<A> = Effect.Effect<A, HostRequestFailure, PreviewServices>;
 /** An approval's session bypass, sent with its `request.decide`. */
 type Grant = Extract<HostRequest, { kind: 'toolEdit' }>['grant'];
+
+/** What a tool edit's prompt shows: the session's preview of the edit, or
+ *  why there is none. No surface stands an empty diff in for a missing
+ *  preview: the user would approve a write they never saw. */
+export type ToolEditPreviewRead =
+  | { readonly kind: 'preview'; readonly content: ToolEditContent }
+  | { readonly kind: 'unavailable'; readonly reason: string };
+
+/**
+ * Read a pending tool edit's preview from the session holding it, as every
+ * surface does before it shows the prompt. A session that does not send it
+ * and one that holds none are the same answer for the prompt: no diff, with
+ * the reason, logged here once.
+ */
+export function readToolEditPreview(
+  session: {
+    readonly request: (
+      request: Extract<RuntimeRequest, { kind: 'request.preview' }>,
+    ) => Effect.Effect<OutcomeOf<'request.preview'>, Error>;
+  },
+  runId: RunId,
+  requestId: string,
+): Effect.Effect<ToolEditPreviewRead> {
+  const unavailable = (reason: string) =>
+    Effect.logWarning(`No preview of tool edit ${requestId}: ${reason}`).pipe(
+      withLogChannel(CHANNEL),
+      Effect.andThen(
+        Effect.succeed<ToolEditPreviewRead>({ kind: 'unavailable', reason }),
+      ),
+    );
+  return session.request({ kind: 'request.preview', runId, requestId }).pipe(
+    Effect.flatMap(({ preview }) =>
+      preview === null
+        ? unavailable('the session holds no preview of this edit')
+        : Effect.succeed<ToolEditPreviewRead>({
+            kind: 'preview',
+            content: preview,
+          }),
+    ),
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : unavailable(
+            `the session did not send it (${toErrorMessage(Cause.squash(cause))})`,
+          ),
+    ),
+  );
+}
 
 /** A pending tool edit as a host stages it: its prompt and its content. */
 export type ToolEditPreviewRequest = ToolEditPermission & ToolEditContent;
@@ -225,19 +276,15 @@ export class ToolEditApprovalController {
     const { session, host, roots } = this.options;
     const { runId, requestId } = pending;
     return Effect.gen({ self: this }, function* () {
-      const outcome = yield* session.request({
-        kind: 'request.preview',
-        runId,
-        requestId,
-      });
-      if (outcome.preview === null) {
+      const read = yield* readToolEditPreview(session, runId, requestId);
+      if (read.kind === 'unavailable') {
         // The card still answers from its payload; there is no diff to show.
-        yield* Effect.logWarning(
-          `The session holds no preview of tool edit ${requestId}`,
-        ).pipe(withLogChannel(CHANNEL));
+        host.reportError(
+          `No diff of the edit to ${pending.payload.data.relativePath}: ${read.reason}.`,
+        );
         return yield* Effect.never;
       }
-      const content = outcome.preview;
+      const content = read.content;
       const scope = yield* Scope.Scope;
       const settled = yield* Deferred.make<void>();
       const applied = yield* Ref.make(false);

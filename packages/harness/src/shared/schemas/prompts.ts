@@ -4,6 +4,7 @@ import { RetryErrorInfoSchema } from './errors';
 import { RunSelectionSchema, RunIdSchema, Sha256Schema } from './identifiers';
 import { LineCountSchema } from './lineChanges';
 import { PlanSchema } from './plan';
+import { MODEL_PROVIDERS } from './runInput';
 import {
   BaseProposalFieldsSchema,
   TaskProposalFieldsSchema,
@@ -112,16 +113,7 @@ export type BashPermission = typeof BashPermissionSchema.Type;
  * change is never a silent stored format change.
  */
 const ApiKeyProviderIdSchema = Schema.Literals([
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'dashscope',
-  'minimax',
-  'glm',
-  'meta',
+  ...MODEL_PROVIDERS,
   'kimiCode',
 ]);
 

@@ -30,6 +30,7 @@ import {
 } from '@texra-ai/harness/plugins';
 import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
+  InquiryThreadStatusSchema,
   INQUIRY_REQUEST,
   InquiryRecords,
   InquiryThreadIdSchema,
@@ -100,7 +101,7 @@ const InquiryInputSchema = Schema.Union([
         'before starting a new turn after a long pause, or to recover a forgotten thread_id.',
     }),
     status: nullishWithDefault(
-      Schema.Literals(['open', 'answered', 'dropped', 'any']),
+      Schema.Literals([...InquiryThreadStatusSchema.literals, 'any']),
       'open',
       '"open" → awaiting user answer (default: matches the most common need). ' +
         '"answered" → user has submitted an answer. ' +

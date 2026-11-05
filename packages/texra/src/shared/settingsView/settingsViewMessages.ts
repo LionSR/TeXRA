@@ -20,6 +20,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { API_KEY_PROVIDER_IDS, ReasoningEffortSchema } from '@texra-ai/llm';
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
+import { SYSTEM_PACKAGE_MANAGERS } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
 import { SubscriptionUsageSnapshotsSchema } from '@texra/shared/model/subscriptionUsage';
@@ -412,7 +413,7 @@ const LatexSettingsStatusSchema = Schema.Struct({
   ghostscriptPath: Schema.NullOr(Schema.String),
   graphicsmagickPath: Schema.NullOr(Schema.String),
   /** Detected package manager available on the system (null = none found). */
-  packageManager: Schema.NullOr(Schema.Literals(['brew', 'apt', 'scoop'])),
+  packageManager: Schema.NullOr(Schema.Literals(SYSTEM_PACKAGE_MANAGERS)),
 });
 export type LatexSettingsStatus = typeof LatexSettingsStatusSchema.Type;
 

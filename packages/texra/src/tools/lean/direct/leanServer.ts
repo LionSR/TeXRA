@@ -56,11 +56,12 @@ import {
 } from '@texra-ai/harness/plugins';
 import type { DiagnosticSeverity } from '@texra/utils/diagnostics/diagnosticFormatting';
 import type { LeanServerRoster } from '../leanServerRegistry';
-import type {
-  LeanDiagnostic,
-  LeanFileProgressParams,
-  LspDiagnostic,
-  LspPublishDiagnosticsParams,
+import {
+  LeanFileUnreadable,
+  type LeanDiagnostic,
+  type LeanFileProgressParams,
+  type LspDiagnostic,
+  type LspPublishDiagnosticsParams,
 } from '../leanTypes';
 
 const LOG_CHANNEL = 'lean.direct';
@@ -139,19 +140,10 @@ export class LeanStartError extends Schema.TaggedError<LeanStartError>()(
   },
 ) {}
 
-/** The file to open could not be read from disk. */
-class LeanFileReadError extends Schema.TaggedError<LeanFileReadError>()(
-  'LeanFileReadError',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
 type LeanSessionError =
   | LeanSessionDisposed
   | LeanSessionNotRunning
-  | LeanFileReadError
+  | LeanFileUnreadable
   | JsonRpcRequestError
   | JsonRpcConnectionDisposed;
 
@@ -548,7 +540,7 @@ const make = ({
       const text = yield* fs.readFileString(absolute).pipe(
         Effect.mapError(
           (cause) =>
-            new LeanFileReadError({
+            new LeanFileUnreadable({
               message: `Failed to read ${absolute}: ${cause.message}`,
               cause,
             }),

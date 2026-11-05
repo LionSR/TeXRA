@@ -157,6 +157,18 @@ export const RunViewSchema = Schema.Struct({
   /** Inside a turn: held, not paused, not ended. A pending approval or
    *  question is still the turn's (Ctrl-C stops it, the tail stays live). */
   working: Schema.Boolean,
+  /** Its current turn is over: it waits between turns (a paused child
+   *  included), has ended, or nobody holds it any more. Its transcript rows
+   *  are then final: `settledRows` covers them and nothing reads as thinking
+   *  or compacting. */
+  turnOver: Schema.Boolean,
+  /** Somebody holds it and it has neither ended nor come to rest: working,
+   *  waiting between turns, or spawned and not started yet. The one reading
+   *  of "live" every host shares. Not `group` alone: a spawned child not
+   *  yet activated is `ready`, yet live. */
+  live: Schema.Boolean,
+  /** Live and held by this process: it runs here. */
+  runsHere: Schema.Boolean,
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
@@ -184,7 +196,7 @@ export const RunViewSchema = Schema.Struct({
   ),
   /** `runOrdering` rule. */
   childIds: Schema.Array(RunIdSchema),
-  /** Descendants by status: `running` counts the live ones (`isLiveRun`)
+  /** Descendants by status: `running` counts the live ones (`live`)
    *  still working a turn, `finished` the ended ones and those waiting idle
    *  between turns. No separate waiting or interrupted count: both force
    *  expansion, so a collapsed parent never hides a row that needs the user. */
@@ -222,16 +234,6 @@ export const RunViewSchema = Schema.Struct({
 });
 export type RunView = typeof RunViewSchema.Type;
 
-/** The one reading of "live" every host shares: a run somebody holds that
- *  has not ended (an interrupted run's phase may still say in flight). Not
- *  `group` alone: a spawned child not yet activated is `ready`, yet live. */
-export function isLiveRun(
-  run: Pick<ReadRunView, 'group' | 'status' | 'substate'>,
-): boolean {
-  if (run.substate === RUN_SUBSTATE.PAUSED) return false;
-  return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
-}
-
 /**
  * What `children` and their descendants count toward a parent's `rollup`:
  * the view's count over the run tree (each child's own `rollup` below it),
@@ -251,7 +253,7 @@ export function rollupOf(
       (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
     const under = below(child);
     rollup.total += 1 + under.total;
-    rollup.running += (isLiveRun(child) && !idle ? 1 : 0) + under.running;
+    rollup.running += (child.live && !idle ? 1 : 0) + under.running;
     rollup.finished +=
       (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) + under.finished;
   }

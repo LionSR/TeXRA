@@ -28,7 +28,7 @@ import {
   SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
@@ -158,19 +158,24 @@ const start = Effect.fn('start')(function* (
     );
   // `rootRun` stops a run whose opening is interrupted. A caller
   // interrupted after the run opened, before this hands its handle back,
-  // never holds the run either: the handle, built as the run opens, stops
-  // it. Only this call's own handle, so a caller that never opened the run
-  // stops nobody else's.
-  let opened: Run | undefined;
+  // never holds the run either: it let go, so the registry stops it as a
+  // release, which a stop recorded first (a shutdown's) outranks. Only a
+  // run this call opened, so a caller that never opened one stops nobody
+  // else's.
+  let opened = false;
   return yield* rootRun({ ...input, config, runId }).pipe(
     Effect.provideService(SessionOwner, owner),
     Effect.provide(session),
     Effect.mapError(runFailure),
     Effect.map((activation) => {
-      opened = runView(session, runId, activation);
-      return opened;
+      opened = true;
+      return runView(session, runId, activation);
     }),
-    Effect.onInterrupt(() => opened?.interrupt ?? Effect.void),
+    Effect.onInterrupt(() =>
+      Effect.sync(
+        () => opened && registryOf(Context.get(session, Runs)).interrupt(runId),
+      ),
+    ),
   );
 });
 

@@ -26,7 +26,7 @@ import {
   type TurnResult,
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
-import { fitLimit, resolveTurn } from './turnInput.js';
+import { boundTurn, fitLimit, resolveTurn } from './turnInput.js';
 import { replayableHistory, systemUpdateText } from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
@@ -48,7 +48,11 @@ import {
   UsageSchema,
 } from './anthropicMessagesWire.js';
 import { messageThreads, type SdkSource } from './anthropicThreads.js';
-import type { InputPart, PartEvent } from './parts.js';
+import {
+  ImageMimeTypeSchema,
+  type InputPart,
+  type PartEvent,
+} from './parts.js';
 import type { ModelOrigin } from '../protocol.js';
 import type {
   ContentBlockParam,
@@ -99,9 +103,7 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
 ) {
   if (part.kind === 'text') return { type: 'text', text: part.text } as const;
   if (part.kind === 'image' && part.detail === undefined) {
-    const mime = Schema.decodeUnknownResult(
-      Schema.Literals(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
-    )(part.mimeType);
+    const mime = Schema.decodeUnknownResult(ImageMimeTypeSchema)(part.mimeType);
     if (Result.isSuccess(mime))
       return {
         type: 'image',
@@ -133,21 +135,12 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
 });
 
 const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
-  turn: ResolvedTurn,
-  origin: ModelOrigin,
+  input: ResolvedTurn,
+  origin: ModelOrigin & { readonly protocol: 'anthropic-messages' },
   config: AnthropicMessagesConfiguration,
   uploads: UploadCache,
 ) {
-  if (
-    turn.protocol !== 'anthropic-messages' ||
-    !sameModelOrigin(turn, origin)
-  ) {
-    return yield* new ModelError({
-      kind: 'unsupported',
-      message:
-        'The prepared Anthropic invocation belongs to another model or deployment.',
-    });
-  }
+  const turn = yield* boundTurn(input, origin, 'foreground');
   const controls = turn.controls;
   if (
     controls.thinking.mode === 'enabled' &&
@@ -630,14 +623,8 @@ export function anthropicMessagesModel(
       undefined,
       (input) =>
         Effect.succeed({
-          ...origin,
-          mode: 'foreground',
-          system: input.system,
-          messages: input.messages,
-          tools: input.tools ?? [],
           controls: {
             ...fitLimit(config.defaults, input.maxOutputTokens),
-            toolChoice: input.toolChoice ?? 'auto',
             effort: config.defaults.effort,
             cache: config.defaults.cache,
           },

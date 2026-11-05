@@ -5,7 +5,6 @@ import { html, type TemplateResult } from 'lit';
 import { customElement } from 'lit/decorators.js';
 
 // Local imports - shared vocabulary
-import { APPROVE_SESSION_ACTION } from '@texra/shared/session/surfaceDecision';
 import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - progress view styles
@@ -32,15 +31,8 @@ export class BashRequestPanel extends BaseRequestPanel<'bash'> {
   // prompt can turn on is the run's shell bypass.
   protected override get grant(): RunGrant | null {
     return this.permission.data.allowBypass
-      ? {
-          label: RUN_GRANT_LABEL.bash,
-          decision: { action: APPROVE_SESSION_ACTION },
-        }
+      ? { label: RUN_GRANT_LABEL.bash }
       : null;
-  }
-
-  protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve' });
   }
 
   // The directory a command runs in is the security-relevant field of this

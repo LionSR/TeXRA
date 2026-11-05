@@ -44,38 +44,13 @@ class ScriptFault extends Schema.TaggedError<ScriptFault>()('ScriptFault', {
   stack: Schema.optional(Schema.String),
 }) {}
 
-class ScriptCpuExhausted extends Schema.TaggedError<ScriptCpuExhausted>()(
-  'ScriptCpuExhausted',
+/** The script ran out of CPU, heap or time; `message` names which limit. */
+class ScriptLimitExceeded extends Schema.TaggedError<ScriptLimitExceeded>()(
+  'ScriptLimitExceeded',
   {
-    budgetMs: Schema.Number,
+    message: Schema.String,
   },
-) {
-  override get message(): string {
-    return `The script used its ${this.budgetMs}ms CPU budget; look for a loop that never awaits.`;
-  }
-}
-
-class ScriptMemoryExhausted extends Schema.TaggedError<ScriptMemoryExhausted>()(
-  'ScriptMemoryExhausted',
-  {
-    limitBytes: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `The script exceeded its ${this.limitBytes / (1024 * 1024)} MB heap.`;
-  }
-}
-
-class ScriptTimedOut extends Schema.TaggedError<ScriptTimedOut>()(
-  'ScriptTimedOut',
-  {
-    timeout: Schema.Duration,
-  },
-) {
-  override get message(): string {
-    return `The script did not finish within ${Duration.format(this.timeout)}.`;
-  }
-}
+) {}
 
 /** The worker could not start, died, or sent a message that fails its decode. */
 class SandboxUnavailable extends Schema.TaggedError<SandboxUnavailable>()(
@@ -92,9 +67,7 @@ class SandboxUnavailable extends Schema.TaggedError<SandboxUnavailable>()(
 type ScriptError =
   | ScriptSyntaxError
   | ScriptFault
-  | ScriptCpuExhausted
-  | ScriptMemoryExhausted
-  | ScriptTimedOut
+  | ScriptLimitExceeded
   | SandboxUnavailable;
 
 /** One call the guest issued, numbered in issue order from 0. */
@@ -184,10 +157,16 @@ const endToResult = (
     case 'SyntaxError':
       return Effect.fail(new ScriptSyntaxError({ message: end.message }));
     case 'CpuExhausted':
-      return Effect.fail(new ScriptCpuExhausted({ budgetMs: cpuBudgetMs }));
+      return Effect.fail(
+        new ScriptLimitExceeded({
+          message: `The script used its ${cpuBudgetMs}ms CPU budget; look for a loop that never awaits.`,
+        }),
+      );
     case 'MemoryExhausted':
       return Effect.fail(
-        new ScriptMemoryExhausted({ limitBytes: QUICKJS_MEMORY_LIMIT_BYTES }),
+        new ScriptLimitExceeded({
+          message: `The script exceeded its ${QUICKJS_MEMORY_LIMIT_BYTES / (1024 * 1024)} MB heap.`,
+        }),
       );
   }
 };
@@ -331,7 +310,12 @@ const make = Effect.gen(function* () {
       Effect.scoped,
       Effect.timeoutOrElse({
         duration: timeout,
-        orElse: () => Effect.fail(new ScriptTimedOut({ timeout })),
+        orElse: () =>
+          Effect.fail(
+            new ScriptLimitExceeded({
+              message: `The script did not finish within ${Duration.format(timeout)}.`,
+            }),
+          ),
       }),
     );
   };

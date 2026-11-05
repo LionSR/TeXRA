@@ -56,6 +56,11 @@ export type LatexRecommendedSettingField =
 /** Supported OS platform keys for install guides. */
 export type OSPlatform = 'darwin' | 'win32' | 'linux';
 
+/** Package managers TeXRA knows how to install dependencies with. */
+export const SYSTEM_PACKAGE_MANAGERS = ['brew', 'apt', 'scoop'] as const;
+
+export type SystemPackageManager = (typeof SYSTEM_PACKAGE_MANAGERS)[number];
+
 // ============================================================
 // Install guide builders
 // ============================================================

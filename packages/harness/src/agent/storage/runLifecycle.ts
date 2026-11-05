@@ -34,8 +34,8 @@ import {
 import {
   Approvals,
   RunHistory,
+  runReadRefusal,
   SessionLog,
-  unloadable,
   type SessionViewAccess,
 } from '@shared/session/runHistory';
 import {
@@ -273,7 +273,7 @@ export const endIn = Effect.fn('endIn')(function* (
     if (lastTurn.held === true) yield* tx.release(runId);
     return result;
   }
-  if (!unloadable(cell.failure)) return yield* cell.failure;
+  if (runReadRefusal(cell.failure) === undefined) return yield* cell.failure;
   yield* Effect.logWarning(
     `Run ${runId} ends unloaded: ${cell.failure.message}`,
   );

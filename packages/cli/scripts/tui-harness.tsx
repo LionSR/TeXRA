@@ -526,7 +526,10 @@ HARNESS_DISPOSERS.push(
             session()
               .requests.request(req)
               .pipe(Effect.provide(harnessRuntimeSession)),
-          view: session().view,
+          view: {
+            current: () => SubscriptionRef.getUnsafe(session().view.ref),
+            changes: session().view.changes,
+          },
         },
         settings: HARNESS_PLATFORM_SERVICES,
         runtime: harnessRuntime,

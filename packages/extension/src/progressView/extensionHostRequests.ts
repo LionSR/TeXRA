@@ -36,11 +36,7 @@ import {
 } from '@texra-ai/harness/host';
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
-import {
-  handleLatexdiff,
-  handleLatexdiffCommitAction,
-  handleRunLatexdiff,
-} from '@commands/latex/latexdiffCommands';
+import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
 import {
   handleAcceptEdited,
   handleCompare,
@@ -63,11 +59,11 @@ import { openFileInEditor } from '@frontend/vscode/vscodeEditor';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { quickPick } from '@frontend/ui/dialogs';
 import { announce } from '@frontend/ui/errorHandlingUtils';
+import { withVSCodeProgress } from '@frontend/ui/progress';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import type { AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import {
   setFirstRunDone,
   setOnboardingDeclined,
@@ -398,18 +394,24 @@ export const createExtensionHostRequests = Effect.fn(
     openPath: (file, line) => runHandler('openFile', openFile(file, line)),
     openLabel: (label) => runHandler('openLabel', openLabel(roots, label)),
     admitLaunch,
-    runWorkflowDiff: (diff) =>
-      runHandler(
-        'runLatexdiff',
-        inViewScope(handleRunLatexdiff(roots, runSession, diff)),
-      ),
-    latexdiffAgainstCommit: (action, baseFile, commit) =>
-      runHandler(
-        action,
-        inViewScope(
-          handleLatexdiffCommitAction(roots, action, baseFile, commit),
+    latexdiff: {
+      // The viewer a diff schedules opens in the view's scope, so a close
+      // of the view cancels a delayed open.
+      openDiffs: (diffPaths) =>
+        runHandler(
+          'openLatexdiffs',
+          inViewScope(openLatexdiffs(roots, diffPaths)),
         ),
-      ),
+      withProgress: (title, task) =>
+        withVSCodeProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title,
+            cancellable: false,
+          },
+          task,
+        ),
+    },
     openSettings: (target) =>
       runHandler('openSettings', options.openSettings(target)),
     // SecretManager has no key-changed event, so the set-key flow's
@@ -546,20 +548,8 @@ export const createExtensionHostRequests = Effect.fn(
           'compare',
           handleCompare(at(base), at(edited), diffRefresh),
         ),
-      acceptEditedFile: (
-        base: string,
-        edited: string,
-        copyMeta?: AcceptCopyMeta,
-      ) =>
-        runFileAction(
-          'acceptEdited',
-          handleAcceptEdited(at(base), at(edited), copyMeta),
-        ),
-      latexdiffFile: (base: string, edited: string) =>
-        runFileAction(
-          'latexdiff',
-          inViewScope(handleLatexdiff(roots, base, edited)),
-        ),
+      acceptEditedFile: (base: string, edited: string) =>
+        runFileAction('acceptEdited', handleAcceptEdited(at(base), at(edited))),
       openDirectory: revealFileInOS,
     },
     export: {

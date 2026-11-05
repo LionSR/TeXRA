@@ -7,7 +7,6 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
-import { isLiveRun } from '@texra-ai/harness/schemas';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -95,11 +94,10 @@ export abstract class BaseRunContent extends LitElement {
    * holds it.
    */
   protected renderEndedLine(run: RunView): TemplateResult {
-    const live = isLiveRun(run);
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     let explanation = `${runStatusLabel(run.statusKey)}.`;
-    if (live)
+    if (run.live)
       explanation = `This ${run.parentId === null ? 'task' : 'agent'} takes no messages.`;
     else if (run.actions.includes('resume'))
       explanation += ' Resume to continue.';

@@ -832,13 +832,13 @@ export function buildStatusBarDisplay(
   // Routine activity, not caution: these sit onscreen for whole turns, and
   // painting them yellow trains the eye to ignore the color that also
   // announces auto-approval bypasses and quota exhaustion.
-  if (run?.compactingActive === true && active) {
+  if (run?.compactingActive === true) {
     left.push({
       text: 'compacting...',
       color: 'dim',
       compactPriority: STATUS_BAR_COMPACT_PRIORITY.compacting,
     });
-  } else if (run?.thinkingActive === true && active) {
+  } else if (run?.thinkingActive === true) {
     left.push({
       text: 'thinking...',
       color: 'dim',

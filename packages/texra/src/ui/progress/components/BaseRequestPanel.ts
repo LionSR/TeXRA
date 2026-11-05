@@ -30,6 +30,9 @@ import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 // Local imports - shared schemas
 import {
   approvalDecisionArm,
+  APPROVE_SESSION_ACTION,
+  declineDecision,
+  REQUEST_ACTIONS,
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
@@ -75,7 +78,9 @@ export interface RunGrant {
   readonly label: string;
   /** What else the grant turns on, when the label alone undersells it. */
   readonly scope?: string;
-  readonly decision: SurfaceDecision;
+  /** What the grant sends, when it carries more than the run grant itself
+   *  (an agent proposal's picked model). */
+  readonly decision?: SurfaceDecision;
 }
 
 /** Card chrome shared by every panel; a panel appends its own rules. */
@@ -140,12 +145,16 @@ export abstract class BaseRequestPanel<
     return 'check';
   }
 
-  /** Do the primary action (bound to y and the primary button). */
-  protected abstract submitPrimary(): void;
+  /** Do the primary action (bound to y and the primary button): the
+   *  kind's `y` answer, unless the card builds its answer from a form. */
+  protected submitPrimary(): void {
+    const actions = REQUEST_ACTIONS[this.permission.kind];
+    if ('y' in actions) this.emitAction(actions.y);
+  }
 
   /** The negative's kind; its word comes from {@link DECLINE_LABEL}. */
   protected get decline(): Decline {
-    return 'reject';
+    return REQUEST_ACTIONS[this.permission.kind].n;
   }
 
   /** The decline button's text. */
@@ -195,19 +204,9 @@ export abstract class BaseRequestPanel<
 
   private sendDecline(): void {
     const trimmed = this.noteOpen ? (this.noteInput?.value ?? '').trim() : '';
-    const feedback = trimmed ? { feedback: trimmed } : {};
+    const feedback = trimmed || undefined;
     this.noteOpen = false;
-    switch (this.decline) {
-      case 'reject':
-        this.emitAction({ action: 'reject', ...feedback });
-        return;
-      case 'skip':
-        this.emitAction({ action: 'skip', ...feedback });
-        return;
-      case 'stop':
-        this.emitAction({ action: 'cancel' });
-        return;
-    }
+    this.emitAction(declineDecision(this.permission.kind, feedback));
   }
 
   /** Handle a keyboard shortcut routed from the container. True if handled. */
@@ -220,7 +219,7 @@ export abstract class BaseRequestPanel<
       case 'a': {
         const grant = this.noteOpen ? null : this.grant;
         if (!grant) return false;
-        this.emitAction(grant.decision);
+        this.emitAction(grant.decision ?? { action: APPROVE_SESSION_ACTION });
         return true;
       }
       case 'n':
@@ -350,7 +349,8 @@ export abstract class BaseRequestPanel<
         >${grant.label}</wa-dropdown-item
       >`,
       onSelect: (value) => {
-        if (value === 'grant') this.emitAction(grant.decision);
+        if (value === 'grant')
+          this.emitAction(grant.decision ?? { action: APPROVE_SESSION_ACTION });
       },
     });
     return html`

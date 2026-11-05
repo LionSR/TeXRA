@@ -45,7 +45,7 @@ import {
   type HistoryPage,
   type HistoryQuery,
   SessionViewAccess,
-  unloadable,
+  runReadRefusal,
 } from '@shared/session/runHistory';
 import { type SessionView } from '@shared/session/sessionView';
 
@@ -360,7 +360,7 @@ export class HistoryQueryStore implements Context.Service.Shape<
           .history(qualifyAggregateId('run', run.id), after + 1)
           .pipe(
             Effect.catchIf(
-              (error) => unloadable(error),
+              (error) => runReadRefusal(error) !== undefined,
               (error) =>
                 Effect.logWarning(
                   `History query leaves out the calls of run ${run.id}: ${error.message}`,

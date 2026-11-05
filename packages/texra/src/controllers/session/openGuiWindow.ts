@@ -73,6 +73,7 @@ import {
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
+import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import { serviceRecords } from '@texra/controllers/server/serviceSession';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
@@ -83,9 +84,12 @@ import {
 } from '@texra/controllers/server/windowHost';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import {
+  latexdiffVerbs,
+  type LatexdiffHost,
+} from '@texra/latex/latexdiff/latexdiffVerbs';
+import {
   createHostRunActions,
   type HostRunActionPorts,
-  type WorkflowDiffRequest,
 } from './hostRunActions';
 import {
   createHostSnapshotSource,
@@ -165,12 +169,6 @@ type HostVerb<A> = Effect.Effect<
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 
-/** The latexdiff verbs taken against a commit rather than an edited file. */
-type LatexdiffCommitAction = Extract<
-  LatexdiffsRequest['action'],
-  'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc'
->;
-
 /**
  * The verbs behind the shared arms. Every member is a capability the host
  * performs; nothing here decides anything, which is the point: the decision
@@ -185,14 +183,8 @@ export interface SharedHostRequestBindings {
    *  says why; the extension names only open workspace folders as a working
    *  directory. */
   admitLaunch(form: LaunchRequest['launch']): HostVerb<void>;
-  runWorkflowDiff(request: WorkflowDiffRequest): HostVerb<void>;
-  /** latexdiff-vc over the base file against a commit, and the pack and
-   *  clean housekeeping of what it produced. */
-  latexdiffAgainstCommit(
-    action: LatexdiffCommitAction,
-    baseFile: string,
-    commit: string,
-  ): HostVerb<void>;
+  /** How a generated diff opens and a diff run shows its progress. */
+  readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
@@ -234,8 +226,12 @@ interface GuiWindowHost extends Pick<
   readonly window: WindowHost;
   readonly runs: Pick<
     HostRunActionPorts,
-    'openFinalOutput' | 'promptForApiKey' | 'revealProgress'
-  >;
+    'openFinalOutput' | 'revealProgress'
+  > &
+    Pick<
+      ConstructorParameters<typeof ProgressApiKeyRetryController>[0],
+      'promptForApiKey'
+    >;
   readonly files: Omit<
     ConstructorParameters<
       typeof ProgressWorkflowFileActionsController
@@ -488,18 +484,31 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     runs: runActions,
   });
 
+  const apiKeyRetry = new ProgressApiKeyRetryController({
+    promptForApiKey: host.runs.promptForApiKey,
+    session,
+  });
+
   const { bindings } = host;
+  const latexdiff = latexdiffVerbs({
+    host: bindings.latexdiff,
+    roots,
+    session,
+    messages: host,
+  });
   const shared = (request: SharedHostRequest, port: string) =>
     answerShared(request, port, {
       bridge,
       snapshot,
       runActions,
+      apiKeyRetry,
       workflowFileActions,
       draftRequests,
       toolEditApprovals,
       session,
       roots,
       bindings,
+      latexdiff,
       showInfo: host.showInfoMessage,
       exportTranscript: (runId) =>
         exportRunTranscript(runId, {
@@ -535,6 +544,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
 /** What the shared arms act on. */
 interface SharedParts extends GuiWindowParts {
   readonly runActions: Effect.Success<ReturnType<typeof createHostRunActions>>;
+  readonly apiKeyRetry: ProgressApiKeyRetryController;
   readonly workflowFileActions: ProgressWorkflowFileActionsController;
   readonly draftRequests: Effect.Success<
     ReturnType<HostDraftRequests['attach']>
@@ -543,6 +553,7 @@ interface SharedParts extends GuiWindowParts {
   readonly session: Session;
   readonly roots: WorkspaceRoots;
   readonly bindings: SharedHostRequestBindings;
+  readonly latexdiff: ReturnType<typeof latexdiffVerbs>;
   readonly showInfo: MessageHost['showInfoMessage'];
   exportTranscript(runId: RunId): HostVerb<void>;
 }
@@ -571,7 +582,7 @@ function answerShared(
       action === 'packLatexdiffvc' ||
       action === 'cleanLatexdiffvc'
     ) {
-      yield* host.latexdiffAgainstCommit(
+      yield* parts.latexdiff.againstCommit(
         action,
         baseFile,
         sheet.commit ?? 'HEAD',
@@ -594,7 +605,7 @@ function answerShared(
         yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
         return;
       case 'latexdiff':
-        yield* parts.workflowFileActions.latexdiffFile(editedFile, baseFile);
+        yield* parts.latexdiff.file(baseFile, editedFile);
         return;
     }
   });
@@ -694,7 +705,7 @@ function answerShared(
         yield* parts.runActions.runCompileFixer(request.runId);
         return done;
       case 'useOwnApiKey':
-        yield* parts.runActions.useOwnApiKey(request);
+        yield* parts.apiKeyRetry.useOwnApiKey(request);
         return done;
       case 'record':
       case 'polish':
@@ -712,11 +723,14 @@ function answerShared(
       case 'toolEdit':
         yield* parts.toolEditApprovals.handleAction(request);
         return done;
-      case 'fileAction': {
-        const config = yield* parts.runActions.readConfig(request.runId);
-        yield* parts.workflowFileActions.handle(request, config);
+      case 'fileAction':
+        yield* request.action === 'latexdiff'
+          ? parts.latexdiff.file(request.base ?? '', request.file)
+          : parts.workflowFileActions.handle({
+              ...request,
+              action: request.action,
+            });
         return done;
-      }
       case 'exportTranscript':
         if (!parts.session.view.current().runs.has(request.runId))
           return yield* new Unavailable({
@@ -727,7 +741,7 @@ function answerShared(
         return done;
       case 'latexdiff': {
         const diff = yield* parts.runActions.workflowDiffRequest(request.runId);
-        if (diff) yield* host.runWorkflowDiff(diff);
+        if (diff) yield* parts.latexdiff.run(diff.runId);
         return done;
       }
       case 'pack':

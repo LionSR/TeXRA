@@ -241,7 +241,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
     <ConfirmCard
       color={COLOR_ACCENT}
       title={title}
-      rejectionMode="feedback"
+      kind="proposal"
       alwaysAllowLabel={DELEGATION_APPROVAL_COPY.cliAction}
       onDecide={props.onDecide}
     >

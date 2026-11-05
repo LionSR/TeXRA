@@ -267,7 +267,10 @@ write's gate refuses the store; a plugin kind whose plugin this build lacks
 reads unavailable and passes the gate
 (`controllers/session/rowCodec.ts#'an unknown kind'`,
 `controllers/session/Database.ts#gated`). A run whose rows do not decode
-cannot be opened or resumed (`shared/session/runHistory.ts#unloadable`,
+cannot be opened or resumed: a resume of it, and a message to it, is refused as
+`earlierBuild` for an earlier build's row and as `unusableCheckpoint` for a
+corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefusal`,
+`agent/storage/resumability.ts#deriveResumability`,
 `agent/runtime/resumeRun.ts#refusalFor`).
 
 ## 3. Row kinds

@@ -13,9 +13,7 @@ import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
-import { type AcceptCopyMeta } from '@texra/shared/plugins/documentOutputs';
 import type { AppSignals } from '@texra-ai/harness/host';
-import type { AgentConfig } from '@texra-ai/harness/schemas';
 import type { HostRunActions } from '../session/hostRunActions';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
@@ -35,14 +33,14 @@ type FileAction<A> = Effect.Effect<
   FileSystem.FileSystem | AppSignals
 >;
 
+type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
+
 interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): FileAction<void>;
   acceptEditedFile(
     baseFile: string,
     editedFile: string,
-    copyMeta?: AcceptCopyMeta,
   ): FileAction<boolean | void>;
-  latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
   openDirectory(directory: string): FileAction<void>;
   showInfo(message: string): FileAction<void>;
 }
@@ -73,10 +71,12 @@ export class ProgressWorkflowFileActionsController {
     this.deps = deps;
   }
 
-  /** Apply an output-file request from either GUI host. */
+  /** Apply an output-file request from either GUI host; its latexdiff is
+   *  the window's latexdiff verb (`latexdiffVerbs`). */
   handle(
-    request: Extract<HostRequest, { kind: 'fileAction' }>,
-    config: AgentConfig | undefined,
+    request: FileActionRequest & {
+      action: Exclude<FileActionRequest['action'], 'latexdiff'>;
+    },
   ): FileAction<void> {
     const base = request.base ?? undefined;
     switch (request.action) {
@@ -85,11 +85,9 @@ export class ProgressWorkflowFileActionsController {
       case 'comparePrevious':
         return this.comparePrevious(request.file, request.prev ?? undefined);
       case 'accept':
-        return this.acceptFile(request.file, base, request.runId, config);
+        return this.acceptFile(request.file, base, request.runId);
       case 'merge':
         return this.mergeFile(request.file, base);
-      case 'latexdiff':
-        return this.latexdiffFile(request.file, base);
     }
   }
 
@@ -152,58 +150,44 @@ export class ProgressWorkflowFileActionsController {
     file: string,
     base?: string,
     activeRun?: RunId,
-    config?: AgentConfig,
   ) => FileAction<void> = Effect.fn(
     'ProgressWorkflowFileActionsController.acceptFile',
-  )(
-    { self: this },
-    function* (
-      file: string,
-      base?: string,
-      activeRun?: RunId,
-      config?: AgentConfig,
+  )({ self: this }, function* (file: string, base?: string, activeRun?: RunId) {
+    const backup =
+      file && activeRun
+        ? this.modelOutputBackups.get(activeRun, file)
+        : undefined;
+    // The file about to be accepted: a read that fails fails the accept,
+    // rather than dropping the run's "user modified the output" follow-up.
+    const currentContent =
+      backup === undefined ? undefined : yield* readOutputFile(file);
+
+    const accepted = yield* this.executeWithBaseFile(
+      file,
+      base,
+      'Accept',
+      (targetFile, baseFile) =>
+        this.deps.host.acceptEditedFile(baseFile, targetFile),
+    );
+    if (!accepted) return;
+
+    if (
+      activeRun !== undefined &&
+      backup !== undefined &&
+      currentContent !== undefined &&
+      contentDigest(currentContent) !== backup
     ) {
-      const backup =
-        file && activeRun
-          ? this.modelOutputBackups.get(activeRun, file)
-          : undefined;
-      // The file about to be accepted: a read that fails fails the accept,
-      // rather than dropping the run's "user modified the output" follow-up.
-      const currentContent =
-        backup === undefined ? undefined : yield* readOutputFile(file);
-
-      let copyMeta: AcceptCopyMeta | undefined;
-      if (activeRun && file) {
-        copyMeta = this.buildCopyMeta(activeRun, file, config);
-      }
-
-      const accepted = yield* this.executeWithBaseFile(
-        file,
-        base,
-        'Accept',
-        (targetFile, baseFile) =>
-          this.deps.host.acceptEditedFile(baseFile, targetFile, copyMeta),
+      const fileName = path.basename(file);
+      yield* this.deps.runs.sendFollowUp(
+        activeRun,
+        `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
       );
-      if (!accepted) return;
+    }
 
-      if (
-        activeRun !== undefined &&
-        backup !== undefined &&
-        currentContent !== undefined &&
-        contentDigest(currentContent) !== backup
-      ) {
-        const fileName = path.basename(file);
-        yield* this.deps.runs.sendFollowUp(
-          activeRun,
-          `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
-        );
-      }
-
-      if (backup !== undefined && activeRun) {
-        this.modelOutputBackups.delete(activeRun, file);
-      }
-    },
-  );
+    if (backup !== undefined && activeRun) {
+      this.modelOutputBackups.delete(activeRun, file);
+    }
+  });
 
   mergeFile(file: string, base?: string): FileAction<void> {
     return this.executeWithBaseFile(
@@ -211,16 +195,6 @@ export class ProgressWorkflowFileActionsController {
       base,
       'Merge',
       (targetFile, baseFile) => this.deps.runs.merge(baseFile, targetFile),
-    ).pipe(Effect.asVoid);
-  }
-
-  latexdiffFile(file: string, base?: string): FileAction<void> {
-    return this.executeWithBaseFile(
-      file,
-      base,
-      'Latexdiff',
-      (targetFile, baseFile) =>
-        this.deps.host.latexdiffFile(baseFile, targetFile),
     ).pipe(Effect.asVoid);
   }
 
@@ -269,32 +243,6 @@ export class ProgressWorkflowFileActionsController {
         ),
       ),
     );
-  }
-
-  /** Resolve the agent/model/round for an output file so "Accept" can offer
-   *  a postfixed copy. Returns undefined when the run's agent/model or the
-   *  file's round can't be determined (the quick-pick then just replaces). */
-  private buildCopyMeta(
-    stream: RunId,
-    file: string,
-    config: AgentConfig | undefined,
-  ): AcceptCopyMeta | undefined {
-    if (!config) return undefined;
-
-    // Use the matched entry's own `round` and prefer the most recent match:
-    // in-place workflows reuse the same workspace path across rounds, so the
-    // Map key (and the first match) would mislabel the `r<round>` postfix.
-    const rounds = Object.values(this.deps.state.getOutputFiles(stream))
-      .flat()
-      .filter((info) => info.location.absolutePath === file)
-      .map((info) => info.round);
-    if (rounds.length === 0) return undefined;
-
-    return {
-      agent: config.agent,
-      model: config.model,
-      round: Math.max(...rounds),
-    };
   }
 }
 

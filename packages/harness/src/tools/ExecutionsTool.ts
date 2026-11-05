@@ -38,7 +38,7 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import { isLiveRun, type SessionView } from '@shared/session/sessionView';
+import type { SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
@@ -417,7 +417,7 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     lines.push(
       '',
       'Script:',
-      JSON.stringify(scriptCallsView(calls, isLiveRun(run)), null, 2),
+      JSON.stringify(scriptCallsView(calls, run.live), null, 2),
     );
   }
 

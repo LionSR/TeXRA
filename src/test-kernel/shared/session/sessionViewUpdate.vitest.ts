@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { Result, Schema } from 'effect';
 
 import {
+  MESSAGE_TYPES,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
@@ -18,17 +19,22 @@ import {
 } from '@texra-ai/harness/schemas';
 import { runHistoryRows, storedDraft } from '@agent/runtime/storedTurn';
 import { SessionEventSchema } from '@shared/schemas';
+import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 
 import type { RunHistoryRow } from '@shared/session/historyTurns';
 import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
 
 import {
   CHILD,
+  Log,
   OWNER,
   PROCESS,
   ROOT,
+  T,
   buildScenario,
   local,
+  subscribe,
+  tail,
   viewOf,
 } from './fanOutScenario';
 
@@ -83,6 +89,43 @@ describe('session view update', () => {
     const unknown = viewOf(scenario.pending);
     expect(runView(unknown, CHILD).group).toBe('waiting');
     expect(runView(unknown, CHILD).readOnly).toBe(true);
+  });
+
+  it('ends the turn of a run whose owner died mid-compaction', () => {
+    const log = new Log();
+    log.emit(ROOT, T.root, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'custom:search' },
+      parent: null,
+      provenance: null,
+      userFollowUpSupport: 'nativeInteractive',
+    });
+    log.emit(ROOT, T.root, { type: 'run.activate' });
+    log.emit(ROOT, T.root + 1, {
+      type: 'log',
+      level: 'info',
+      message: '',
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: {
+        activity: 'context_compaction',
+        operationId: 'op-1',
+        state: 'started',
+      },
+    });
+    const updater = makeSessionViewUpdater('paper');
+    const inputs = [subscribe(ROOT), ...log.events.map(tail), log.drained()];
+    const held = runView(viewOf([...inputs, alive], updater), ROOT);
+    expect(held.compactingActive).toBe(true);
+    expect(held.transcript.settledRows).toBe(0);
+
+    // No row says the turn ended; the owner's death alone ends it, so the
+    // open compaction finishes and the scrollback may print every row.
+    const lost = runView(viewOf([nobody], updater), ROOT);
+    expect(lost.group).toBe('interrupted');
+    expect(lost.turnOver).toBe(true);
+    expect(lost.compactingActive).toBe(false);
+    expect(lost.transcript.rows).toHaveLength(1);
+    expect(lost.transcript.settledRows).toBe(1);
   });
 });
 

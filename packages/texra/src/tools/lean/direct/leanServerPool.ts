@@ -510,10 +510,10 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       Effect.catchTag('LeanStartError', (error) =>
         Effect.fail(noToolchain(error)),
       ),
-      // Reading the file, or the folders above it for its project, failed
-      // (e.g. ENOENT): the file is the problem, so the tool keeps its
-      // "could not open file" framing.
-      Effect.catchTag(['LeanFileReadError', 'PlatformError'], (error) =>
+      // Reading the folders above the file for its project failed (e.g.
+      // ENOENT): the file is the problem, so the tool keeps its "could not
+      // open file" framing, as a failed read of the file itself does.
+      Effect.catchTag('PlatformError', (error) =>
         Effect.fail(
           new LeanFileUnreadable({ message: error.message, cause: error }),
         ),
@@ -543,7 +543,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
           Effect.fail(noToolchain(error)),
         ),
         Effect.catchTag(
-          ['LeanFileReadError', 'PlatformError', 'JsonRpcRequestError'],
+          ['LeanFileUnreadable', 'PlatformError', 'JsonRpcRequestError'],
           (error) =>
             Effect.fail(
               new LeanFileCommandFailed({

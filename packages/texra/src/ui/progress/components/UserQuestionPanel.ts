@@ -38,10 +38,6 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     return 'Submit';
   }
 
-  protected override get decline(): 'skip' {
-    return 'skip';
-  }
-
   protected override get notePrompt(): string {
     return 'What should the agent do instead?';
   }

@@ -94,13 +94,11 @@ export interface SkillCatalogEntry {
 // ---------------------------------------------------------- model backend
 
 /**
- * Who serves a run's conversation: the model's own provider, whose plugin
- * names the protocol, or the internal validation model. A run keeps its
- * backend: a resume or a model switch rebinds it, whatever the subscription
- * preferences say now.
+ * The model providers as stored rows name them: a run's backend and the
+ * API-key provider a retry offer names (with the coding plans) both read
+ * this one list, so a new provider is added once.
  */
-export const ModelBackendSchema = Schema.Literals([
-  'validation',
+export const MODEL_PROVIDERS = [
   'openai',
   'anthropic',
   'google',
@@ -111,6 +109,17 @@ export const ModelBackendSchema = Schema.Literals([
   'minimax',
   'glm',
   'meta',
+] as const;
+
+/**
+ * Who serves a run's conversation: the model's own provider, whose plugin
+ * names the protocol, or the internal validation model. A run keeps its
+ * backend: a resume or a model switch rebinds it, whatever the subscription
+ * preferences say now.
+ */
+export const ModelBackendSchema = Schema.Literals([
+  'validation',
+  ...MODEL_PROVIDERS,
 ]);
 /** Who serves a run's conversation ({@link ModelBackendSchema}). */
 export type ModelBackend = typeof ModelBackendSchema.Type;

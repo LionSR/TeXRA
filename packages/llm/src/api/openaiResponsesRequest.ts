@@ -12,8 +12,7 @@ import {
   type ResolvedTurn,
   type TurnRequest,
 } from '../turn.js';
-import { resolveTurn } from './turnInput.js';
-import { sameModelOrigin } from '../protocol.js';
+import { boundTurn, resolveTurn } from './turnInput.js';
 import { ModelError } from '../errors.js';
 import { responseInput, toolNamespaceOf } from './openaiResponsesLower.js';
 import type { ResponseOrigin } from './openaiResponsesCodec.js';
@@ -42,13 +41,7 @@ export const prepareResponsesTurn = (
     background,
     (author) =>
       Effect.succeed({
-        ...origin,
-        mode: author.mode ?? 'foreground',
         transport,
-        system: author.system,
-        messages: author.messages,
-        tools: author.tools ?? [],
-        continuation: author.continuation,
         controls: {
           temperature: config.defaults.temperature,
           maxOutputTokens:
@@ -56,7 +49,6 @@ export const prepareResponsesTurn = (
               ? null
               : (author.maxOutputTokens ?? config.defaults.maxOutputTokens),
           store: config.defaults.store,
-          toolChoice: author.toolChoice ?? 'auto',
           reasoning: config.defaults.reasoning,
           serviceTier: config.defaults.serviceTier,
           ...(config.openaiEndpoint && author.cacheKey !== undefined
@@ -74,23 +66,13 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     config: OpenAIResponsesConfiguration,
     origin: ResponseOrigin,
     transport: ResponsesTransport,
-    turn: ResolvedTurn,
+    input: ResolvedTurn,
     mode: 'foreground' | 'background',
     uploads: UploadCache | null,
   ) {
+    const turn = yield* boundTurn(input, origin, mode);
     if (
-      turn.protocol !== 'openai-responses' ||
-      turn.mode !== mode ||
       !isDeepStrictEqual(turn.transport, transport) ||
-      !sameModelOrigin(turn, origin)
-    ) {
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message:
-          'The prepared invocation belongs to another model, protocol or execution mode.',
-      });
-    }
-    if (
       (config.defaults.temperature === null &&
         turn.controls.temperature !== null) ||
       (config.defaults.maxOutputTokens === null &&
@@ -104,7 +86,8 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     )
       return yield* new ModelError({
         kind: 'unsupported',
-        message: 'The prepared controls are unsupported by the selected route.',
+        message:
+          'The prepared transport or controls are unsupported by the selected route.',
       });
     const wireInput = yield* responseInput(turn, config, uploads);
     const reasoning = turn.controls.reasoning;

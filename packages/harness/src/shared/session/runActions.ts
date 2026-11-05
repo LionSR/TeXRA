@@ -12,7 +12,7 @@ import {
 
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 
-import { isLiveRun, type RunView } from './sessionView';
+import type { RunView } from './sessionView';
 import type { RunView as ReadonlyRunView } from './readonlyViews';
 
 /** Opening the run's folder, exporting its conversation, copying its
@@ -26,7 +26,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * no live process holds whose rows this build cannot read (`stranded`:
  * damaged, or an earlier build's) never becomes readable,
  * so it offers delete beside inspection, the one way to clear it. A live
- * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
+ * run (`live`: working, waiting, or spawned and not started yet) can
  * be stopped; while it is in flight (running or waiting, not interrupted)
  * an agent's run takes approval grants, and a conversation (not a task's
  * recipe) its compaction. Nothing that rewrites or
@@ -45,6 +45,7 @@ export function runActions(
     RunView,
     | 'readOnly'
     | 'group'
+    | 'live'
     | 'status'
     | 'substate'
     | 'identity'
@@ -55,7 +56,7 @@ export function runActions(
 ): RunAction[] {
   if (stranded) return ['delete', ...inspectActions()];
   if (run.readOnly) return inspectActions();
-  if (isLiveRun(run)) {
+  if (run.live) {
     const inFlight = run.group === 'running' || run.group === 'waiting';
     const agent = inFlight && run.identity.kind === 'agent';
     const compact =
@@ -104,16 +105,13 @@ const forkable = (
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
 export function runActionRefusal(
-  run: Pick<
-    ReadonlyRunView,
-    'readOnly' | 'group' | 'status' | 'substate' | 'label'
-  >,
+  run: Pick<ReadonlyRunView, 'readOnly' | 'live' | 'label'>,
   action: RunAction,
 ): string {
   const what = ACTION_LABEL[action];
   if (run.readOnly)
     return `${what} is not available: this process cannot act on “${run.label}”.`;
-  if (isLiveRun(run))
+  if (run.live)
     return `${what} is not available while “${run.label}” is running; stop it first.`;
   return `${what} is not available for “${run.label}” in its current state.`;
 }

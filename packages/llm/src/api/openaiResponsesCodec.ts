@@ -8,7 +8,12 @@ import OpenAI from 'openai';
 // Local imports - canonical model contract
 import { ModelError, fillModelError, type RemoteOperation } from '../errors.js';
 import { openaiFailure } from './openaiError.js';
-import { parseInboundToolArguments, sdkStream } from './transport.js';
+import {
+  decodeWireOrFail,
+  parseInboundToolArguments,
+  sdkStream,
+  wireFail as fail,
+} from './transport.js';
 import { responsesUsage } from './openaiResponsesUsage.js';
 import {
   DeltaEventSchema,
@@ -20,24 +25,21 @@ import {
 } from './openaiResponsesWire.js';
 import { assembleTurn, type AssemblyOptions } from './assembleTurn.js';
 import type { TurnEvent, TurnResult } from '../turn.js';
-import type { InputPart, Part, PartEvent } from './parts.js';
+import {
+  ImageMimeTypeSchema,
+  type InputPart,
+  type Part,
+  type PartEvent,
+} from './parts.js';
 
 type Append = Extract<PartEvent, { kind: 'append' }>;
 
 // The codec is the lowest module of this split: the input lowering, the
 // request surface and the entry all name the response origin, so it lives
 // with the schemas that produce it.
-export type ResponseOrigin = RemoteOperation['origin'];
-
-const malformed = (message: string, cause?: unknown) =>
-  new ModelError({ kind: 'malformed-output', message, cause });
-const decoded = <T>(
-  result: Result.Result<T, Schema.SchemaError>,
-  message: string,
-) =>
-  Result.isSuccess(result)
-    ? Effect.succeed(result.success)
-    : Effect.fail(malformed(message, result.failure));
+export type ResponseOrigin = RemoteOperation['origin'] & {
+  readonly protocol: 'openai-responses';
+};
 
 /**
  * An item in canonical shape. An item still in progress opens a part whose
@@ -122,9 +124,7 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
 export const terminalParts = Effect.fn('llm.responses.terminalParts')(
   function* (response: ResponseValue, type: string) {
     if (response.status !== type.slice('response.'.length))
-      return yield* malformed(
-        'The terminal event and response status disagree.',
-      );
+      return yield* fail('The terminal event and response status disagree.');
     const incomplete = response.incomplete_details?.reason;
     const rejected = () =>
       new ModelError({
@@ -188,20 +188,6 @@ const RESPONSES_IMAGE_DETAIL = {
 >;
 
 /**
- * The image formats sent to Responses. The pinned `openai` typings name no
- * input-image formats (only image generation's output formats), so this is
- * the conservative raster set; a GIF must also be a single frame. An exact
- * match on the lowercased MIME type also keeps a value carrying data-URL
- * delimiters out of the URL built from it.
- */
-const RESPONSES_IMAGE_MIME_TYPES: ReadonlySet<string> = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-]);
-
-/**
  * How many image frames a GIF holds, by walking its blocks, or `null` when
  * the bytes are not a well-formed GIF. Only the structure is read: the
  * header, the optional colour tables, then extension and image blocks and
@@ -258,9 +244,10 @@ export const responsesContent = Effect.fn('llm.responses.content')(function* (
     case 'text':
       return { type: 'input_text', text: part.text };
     case 'image': {
+      // Lowercased, and a GIF must also be a single frame.
       const mimeType = part.mimeType.toLowerCase();
       if (
-        !RESPONSES_IMAGE_MIME_TYPES.has(mimeType) ||
+        !Schema.is(ImageMimeTypeSchema)(mimeType) ||
         (mimeType === 'image/gif' &&
           gifFrameCount(Buffer.from(part.base64, 'base64')) !== 1)
       )
@@ -369,9 +356,7 @@ export function responsesWire() {
         !Result.isSuccess(header) ||
         header.success.sequence_number <= sequence
       )
-        return yield* malformed(
-          'The model emitted invalid or out-of-order events.',
-        );
+        return yield* fail('The model emitted invalid or out-of-order events.');
       sequence = header.success.sequence_number;
       const type = header.success.type;
       const at = (parts: readonly PartEvent[], terminal = false) => ({
@@ -379,9 +364,10 @@ export function responsesWire() {
         terminal,
       });
       if (SNAPSHOT_EVENTS.has(type)) {
-        const { response } = yield* decoded(
-          Schema.decodeUnknownResult(ResponseEventSchema)(raw),
+        const { response } = yield* decodeWireOrFail(
+          ResponseEventSchema,
           'The response snapshot is malformed or unsupported.',
+          raw,
         );
         if (!TERMINAL_EVENTS.has(type))
           return at([
@@ -393,9 +379,10 @@ export function responsesWire() {
         type === 'response.output_item.added' ||
         type === 'response.output_item.done'
       ) {
-        const { output_index: index, item } = yield* decoded(
-          Schema.decodeUnknownResult(ItemEventSchema)(raw),
+        const { output_index: index, item } = yield* decodeWireOrFail(
+          ItemEventSchema,
           'The model returned unsupported output content.',
+          raw,
         );
         return at([
           type === 'response.output_item.added'
@@ -405,9 +392,10 @@ export function responsesWire() {
       }
       const channel = DELTA_CHANNELS.get(type);
       if (channel !== undefined) {
-        const delta = yield* decoded(
-          Schema.decodeUnknownResult(DeltaEventSchema)(raw),
+        const delta = yield* decodeWireOrFail(
+          DeltaEventSchema,
           'The model returned malformed progress content.',
+          raw,
         );
         return at([
           {
@@ -420,9 +408,7 @@ export function responsesWire() {
         ]);
       }
       if (FRAMING_EVENTS.has(type)) return at([]);
-      return yield* malformed(
-        `The model returned an unsupported event: ${type}.`,
-      );
+      return yield* fail(`The model returned an unsupported event: ${type}.`);
     });
 }
 
@@ -451,16 +437,7 @@ export const sdkEvents = (
 ) =>
   sdkStream(
     source,
-    (cause) =>
-      enrich(
-        cause instanceof SyntaxError
-          ? new ModelError({
-              kind: 'malformed-output',
-              message: 'The model returned malformed stream data.',
-              cause,
-            })
-          : openaiFailure(cause),
-      ),
+    (cause) => enrich(openaiFailure(cause)),
     (cause) =>
       enrich(
         new ModelError({

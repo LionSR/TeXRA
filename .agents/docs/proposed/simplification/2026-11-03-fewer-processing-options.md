@@ -387,10 +387,14 @@ pseudo-types, which it alone sends); `openInstallGuide` carries no `tool`;
 their one reader each; `RegexRuleSet.flags` is required. Checked and kept:
 `latexdiff.changesOnly` has a LaTeX-tab row; `goal.strategy` is the SDK's
 strategy hook, exercised by `packages/harness/example/09-goal-strategies.ts`;
-`followUp.receipt` stays as public SDK. Waiting on the owner: `acceptEditedFile`'s
-`copyMeta` (deleting it removes the VS Code "Save as copy" choice, a working
-control the desktop never had), the four replacement presets with their key
-pairs (a feature reachable from `config.json` by hand), and `git.markCommits`._
+`followUp.receipt` stays as public SDK. Waiting on the owner: the four
+replacement presets with their key pairs (a feature reachable from
+`config.json` by hand) and `git.markCommits`, both kept on 2026-11-05._
+
+_Landed 2026-11-05 (owner's word): `acceptEditedFile`'s `copyMeta` is gone with
+the VS Code "Save as copy" choice, `workflowOutputCopyStem`, and the run-config
+read the file action made only to build it; Accept replaces the original on
+both hosts._
 
 _Landed 2026-11-04 (CLI): `clone`'s destination is its second argument and
 `--cwd` keeps its one global meaning (the directory the command works in,

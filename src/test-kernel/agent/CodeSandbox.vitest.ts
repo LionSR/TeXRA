@@ -149,8 +149,8 @@ it.layer(SandboxLayer, { excludeTestServices: true })('CodeSandbox', (it) => {
         })
         .pipe(Effect.flip);
       expect(error).toMatchObject({
-        _tag: 'ScriptCpuExhausted',
-        budgetMs: 200,
+        _tag: 'ScriptLimitExceeded',
+        message: expect.stringContaining('200ms CPU budget'),
       });
     }),
   );
