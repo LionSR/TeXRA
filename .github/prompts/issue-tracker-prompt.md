@@ -98,7 +98,7 @@ design the repository is already leaving. Two checks before filing:
    `docs/architecture/` document that names the area as being deleted or
    superseded; an open `tracking` issue scheduling its removal; comments
    such as "delete after", "compatibility window", "retire", "legacy", or a
-   dated tolerance; an `attic/` move; or a PR body that calls the area a
+   dated tolerance; or a PR body that calls the area a
    transitional shape. When the area is doomed, do not file a fix for it.
    The fix dies with the area, and until then it only makes the removal
    harder. If the finding is a real user-visible defect, mention it as a
