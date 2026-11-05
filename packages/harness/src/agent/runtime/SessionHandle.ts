@@ -48,10 +48,6 @@ export interface SessionHandleInit {
   /** A presentation host the session is born with: it answers while no
    *  host is attached. */
   readonly interactions?: HostInteractions;
-  /** What the session does with its interrupted tasks
-   *  (`OpenOptions.host.interruptedTasks`, `followInterruptedTasks`);
-   *  absent, nothing. */
-  readonly interruptedTasks?: 'list' | 'resume';
   /** Absent, the project's database; ephemeral, a throwaway one. */
   readonly transcriptMode?: { readonly kind: 'ephemeral' };
 }

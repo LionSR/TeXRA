@@ -43,7 +43,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
@@ -160,7 +159,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           const roots = yield* openRoots(root, projectScope);
           const session = yield* sessions.open(roots, {
             persistent: true,
-            host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
+            host: {},
           });
           yield* recordFirstCompletedRun(session).pipe(
             Scope.provide(projectScope),

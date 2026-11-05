@@ -68,8 +68,8 @@ export function runStatusLabel(key: RunStatusKey): string {
 
 type RunNotice = NonNullable<RunView['statusNotice']>;
 
-/** What a resume found blocking a run: it can continue once that is back
- *  (by itself under `resumeOnOpen: auto`, else when resumed). */
+/** What a resume found blocking a run: it can continue, when resumed again,
+ *  once that is back. */
 function resumeBlockedText({
   reason,
 }: Extract<RunNotice, { kind: 'resumeBlocked' }>): string {

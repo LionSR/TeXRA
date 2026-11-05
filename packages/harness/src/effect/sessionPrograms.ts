@@ -257,11 +257,9 @@ export function makeSessions(
         Effect.map(
           owner.open({
             roots,
-            ...(host === undefined
-              ? { interactions: { approvalPromptsUnavailable: true } }
-              : host.interruptedTasks && {
-                  interruptedTasks: host.interruptedTasks,
-                }),
+            ...(host === undefined && {
+              interactions: { approvalPromptsUnavailable: true },
+            }),
             ...(!persistent && {
               transcriptMode: { kind: 'ephemeral' },
             }),

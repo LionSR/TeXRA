@@ -64,8 +64,6 @@ export const INTERRUPTED_NOTICE = Object.freeze({
     count === 1 ? '1 task was interrupted' : `${count} tasks were interrupted`,
   resumeAll: 'Resume all',
   notNow: 'Not now',
-  /** Where `texra.resumeOnOpen: auto` is set. */
-  alwaysResume: 'Always resume: Settings › General',
   /** The TUI's lines under the list, in place of buttons. */
   tuiActions: (count: number) =>
     count === 1

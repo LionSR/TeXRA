@@ -5,7 +5,6 @@
  */
 
 import type {
-  LocalRuntimeState,
   ResumeBlocked,
   RunId,
   TranscriptSubscription,
@@ -48,6 +47,4 @@ export interface SessionViewAccessShape {
     runId: RunId,
     blocked: ResumeBlocked | null,
   ): Effect.Effect<void>;
-  /** The runs a resume found blocked here, with what each waits for. */
-  resumeBlocks(): LocalRuntimeState['resumeBlocked'];
 }
