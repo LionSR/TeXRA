@@ -83,9 +83,12 @@ import {
 } from '@texra/controllers/server/windowHost';
 import { loadModelOptions } from '@texra/model/setupCredentialAccess';
 import {
+  latexdiffVerbs,
+  type LatexdiffHost,
+} from '@texra/latex/latexdiff/latexdiffVerbs';
+import {
   createHostRunActions,
   type HostRunActionPorts,
-  type WorkflowDiffRequest,
 } from './hostRunActions';
 import {
   createHostSnapshotSource,
@@ -165,12 +168,6 @@ type HostVerb<A> = Effect.Effect<
 type LaunchRequest = Extract<HostRequest, { kind: 'launch' }>;
 type LatexdiffsRequest = Extract<HostRequest, { kind: 'latexdiffs' }>;
 
-/** The latexdiff verbs taken against a commit rather than an edited file. */
-type LatexdiffCommitAction = Extract<
-  LatexdiffsRequest['action'],
-  'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc'
->;
-
 /**
  * The verbs behind the shared arms. Every member is a capability the host
  * performs; nothing here decides anything, which is the point: the decision
@@ -185,14 +182,8 @@ export interface SharedHostRequestBindings {
    *  says why; the extension names only open workspace folders as a working
    *  directory. */
   admitLaunch(form: LaunchRequest['launch']): HostVerb<void>;
-  runWorkflowDiff(request: WorkflowDiffRequest): HostVerb<void>;
-  /** latexdiff-vc over the base file against a commit, and the pack and
-   *  clean housekeeping of what it produced. */
-  latexdiffAgainstCommit(
-    action: LatexdiffCommitAction,
-    baseFile: string,
-    commit: string,
-  ): HostVerb<void>;
+  /** How a generated diff opens and a diff run shows its progress. */
+  readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
@@ -489,6 +480,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   });
 
   const { bindings } = host;
+  const latexdiff = latexdiffVerbs({
+    host: bindings.latexdiff,
+    roots,
+    session,
+    messages: host,
+  });
   const shared = (request: SharedHostRequest, port: string) =>
     answerShared(request, port, {
       bridge,
@@ -500,6 +497,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       session,
       roots,
       bindings,
+      latexdiff,
       showInfo: host.showInfoMessage,
       exportTranscript: (runId) =>
         exportRunTranscript(runId, {
@@ -543,6 +541,7 @@ interface SharedParts extends GuiWindowParts {
   readonly session: Session;
   readonly roots: WorkspaceRoots;
   readonly bindings: SharedHostRequestBindings;
+  readonly latexdiff: ReturnType<typeof latexdiffVerbs>;
   readonly showInfo: MessageHost['showInfoMessage'];
   exportTranscript(runId: RunId): HostVerb<void>;
 }
@@ -571,7 +570,7 @@ function answerShared(
       action === 'packLatexdiffvc' ||
       action === 'cleanLatexdiffvc'
     ) {
-      yield* host.latexdiffAgainstCommit(
+      yield* parts.latexdiff.againstCommit(
         action,
         baseFile,
         sheet.commit ?? 'HEAD',
@@ -594,7 +593,7 @@ function answerShared(
         yield* parts.workflowFileActions.mergeFile(editedFile, baseFile);
         return;
       case 'latexdiff':
-        yield* parts.workflowFileActions.latexdiffFile(editedFile, baseFile);
+        yield* parts.latexdiff.file(baseFile, editedFile);
         return;
     }
   });
@@ -713,7 +712,12 @@ function answerShared(
         yield* parts.toolEditApprovals.handleAction(request);
         return done;
       case 'fileAction':
-        yield* parts.workflowFileActions.handle(request);
+        yield* request.action === 'latexdiff'
+          ? parts.latexdiff.file(request.base ?? '', request.file)
+          : parts.workflowFileActions.handle({
+              ...request,
+              action: request.action,
+            });
         return done;
       case 'exportTranscript':
         if (!parts.session.view.current().runs.has(request.runId))
@@ -725,7 +729,7 @@ function answerShared(
         return done;
       case 'latexdiff': {
         const diff = yield* parts.runActions.workflowDiffRequest(request.runId);
-        if (diff) yield* host.runWorkflowDiff(diff);
+        if (diff) yield* parts.latexdiff.run(diff.runId);
         return done;
       }
       case 'pack':

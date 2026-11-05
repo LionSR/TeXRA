@@ -21,7 +21,6 @@ function createDeps(
     host: {
       compareFiles: () => Effect.void,
       acceptEditedFile: () => Effect.void,
-      latexdiffFile: () => Effect.void,
       openDirectory: () => Effect.void,
       showInfo: () => Effect.void,
       ...overrides,

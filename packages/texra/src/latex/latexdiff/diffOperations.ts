@@ -7,9 +7,8 @@
  * of the session applies them), builds one diff operation per pair each round's
  * outputs call for, and runs them. That view is the only source: run storage
  * is never rescanned and no workspace filename is parsed, so a run with no
- * recorded outputs has no diff operations. Every host (VS Code command,
- * desktop) keeps only its own UX (progress chrome, prompts, result rendering)
- * and calls this with a {@link DiffProgressReporter}.
+ * recorded outputs has no diff operations. The GUI hosts reach it through
+ * `latexdiffVerbs`, with a {@link DiffProgressReporter} of their own.
  */
 
 // Node imports
@@ -39,10 +38,10 @@ import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 /**
  * Minimal progress sink for long-running diff runs. Host-neutral so the core
- * latexdiff logic stays free of `vscode` — the VS Code command layer passes its
+ * latexdiff logic stays free of `vscode`: the extension passes its
  * `vscode.Progress<…>`, which structurally satisfies this interface.
  */
-interface DiffProgressReporter {
+export interface DiffProgressReporter {
   report(value: { message?: string; increment?: number }): void;
 }
 

@@ -30,7 +30,7 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   `latexToolchain.ts` (the CLI tools TeXRA needs, type-checked against
   `@texra/shared/constants/latexToolchain`, which catches a removed tool but
   not a missing new one); `latexLogging.ts` (the shared channel for
-  `texcount.ts`, `formatter/` and the extension's latexdiff commands; other
+  `texcount.ts`, `formatter/` and the GUI hosts' latexdiff verbs; other
   `LaTeXdiffService` callers pass their own).
 - **Extraction**: `extractFigure.ts` (figure paths); `extractBibliography.ts`
   (bibliography references and citation keys from source, then entries from
@@ -61,10 +61,12 @@ The subprocess and filesystem code (`texcount.ts`, `latexdiff.ts` and
   (`tex-fmt`) backends, `texFormatter.ts` (picks one from the workspace
   setting), `indentDirectory.ts` (a whole directory).
 - **`latexdiff/`**: whole-run diffing around `LaTeXdiffService`.
-  `diffOperations.ts` (`runLatexdiffForRun`) is the entry the VS Code command
-  and the desktop toolbar call with the run's rounds (`runOutputFiles`); the
-  CLI goes through the agent's `LatexDiffManager` instead.
-  `diffCommandExecutor.ts` runs the operations, `diffFileNameManager.ts` names
-  outputs, `diffFileProcessor.ts` post-processes a direct or VC diff (restores
-  bibliography directives, sanitizes `\DIFadd`/`\DIFdel`), and `latexdiffCopy.ts`
-  holds the outcome strings both hosts print.
+  `latexdiffVerbs.ts` is the one body of the GUI hosts' latexdiff verbs (two
+  files, against a commit, a whole run), with the guards, refusals and notices;
+  a host supplies only how a diff opens and how progress shows.
+  `diffOperations.ts` (`runLatexdiffForRun`) diffs a run's rounds
+  (`runOutputFiles`); the CLI goes through the agent's `LatexDiffManager`
+  instead. `diffCommandExecutor.ts` runs the operations,
+  `diffFileNameManager.ts` names outputs, and `diffFileProcessor.ts`
+  post-processes a direct or VC diff (restores bibliography directives,
+  sanitizes `\DIFadd`/`\DIFdel`).

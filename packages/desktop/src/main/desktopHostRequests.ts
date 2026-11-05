@@ -20,33 +20,15 @@ import {
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   pathToLocationIn,
-  Settings,
 } from '@texra-ai/harness/host';
-import {
-  toErrorMessage,
-  type AgentConfig,
-  type RunId,
-} from '@texra-ai/harness/schemas';
-import {
-  latexdiffPackMessage,
-  runPackLatexdiffvc,
-} from '@housekeeping/packLatexdiffvc';
+import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
-import { LaTeXdiffService } from '@latex/latexdiff';
-import {
-  latexdiffAllFailedMessage,
-  NO_LATEXDIFF_OPERATIONS_MESSAGE,
-} from '@latex/latexdiff/latexdiffCopy';
-import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   ExternalOpenFailed,
   type NotificationFailed,
   type PromptFailed,
 } from '@texra/hosts/uiHosts';
-import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
-import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { runOutputFiles } from '@texra/tools/documents/runOutputs';
 
 import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
@@ -97,8 +79,6 @@ interface DesktopHostRequestsOptions {
   runtime: ProcessRuntime;
 }
 
-const CHANNEL = 'DesktopHostRequests';
-
 /**
  * The diff window would not open. The desktop's diff surface fails with what
  * it hit (a side that would not read, a patch the OS editor refused), and the
@@ -148,101 +128,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
       openFile: (data) => host.openPath(data.location.absolutePath),
     };
 
-    /** Open a generated diff file in the PDF tab through the build display. */
-    const openDiffOutput = (diffPath: string) =>
-      host.openBuildDisplay({ kind: 'external', absolutePath: diffPath });
-
-    /**
-     * The stream toolbar's "diff": the round-aware latexdiff for a whole run,
-     * opening every diff it produced. This host has no quick-pick to choose a
-     * markup mode with, so it runs with the configured
-     * `texra.latexdiff.mathMarkup`, and a run whose every diff failed is
-     * refused with the wording that names it.
-     */
-    const diffRun = Effect.fn('DesktopHostRequests.diffRun')(function* (
-      runId: RunId,
-    ) {
-      const outcome = yield* runLatexdiffForRun({
-        runId,
-        rounds: runOutputFiles(project.session.view.current(), runId),
-        roots,
-        channel: CHANNEL,
-        progress: { report: () => undefined },
-      });
-      if (!outcome.results.length) {
-        return yield* host.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
-      }
-      const successes = outcome.results.filter((entry) => entry.success);
-      for (const result of successes) yield* openDiffOutput(result.diffPath);
-      if (successes.length > 0) return;
-      const mathMarkup = yield* Settings.get<LatexdiffMathMarkupValue>(
-        roots,
-        DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
-      );
-      return yield* new Rejected({
-        reason: latexdiffAllFailedMessage(mathMarkup),
-      });
-    });
-
-    /** latexdiff over two files of the workspace, opening the result. */
-    const latexdiffFile = Effect.fn('DesktopHostRequests.latexdiffFile')(
-      function* (baseFile: string, editedFile: string) {
-        const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiff(
-          pathToLocationIn(roots.workspace, baseFile),
-          pathToLocationIn(roots.workspace, editedFile),
-          '_diff',
-          undefined,
-          { cwd: roots.workspace },
-        );
-        if (!result.success) {
-          return yield* new Rejected({ reason: result.message });
-        }
-        yield* openDiffOutput(result.diffPath);
-      },
-    );
-
-    /**
-     * The sheet's commit verbs, the dock's "latexdiff vs last commit" among
-     * them: latexdiff-vc over the base file against a commit, and the pack
-     * and clean housekeeping of what it produced. The diff opens in the PDF
-     * tab through the build display, as a run's outputs do. The math markup
-     * is left to `diffCommandExecutor`, which reads `LATEXDIFF_MATH_MARKUP`.
-     */
-    const latexdiffAgainstCommit = Effect.fn('latexdiffAgainstCommit')(
-      function* (
-        action: 'latexdiffvc' | 'packLatexdiffvc' | 'cleanLatexdiffvc',
-        baseFile: string,
-        commit: string,
-      ) {
-        if (!baseFile) {
-          return yield* new Rejected({ reason: 'Choose a base file first.' });
-        }
-        const base = pathToLocationIn(roots.workspace, baseFile);
-        if (action === 'latexdiffvc') {
-          const result = yield* new LaTeXdiffService(CHANNEL, roots).runDiffVc(
-            base,
-            commit,
-          );
-          if (!result.success) {
-            return yield* new Rejected({ reason: result.message });
-          }
-          yield* openDiffOutput(result.diffPath).pipe(
-            Effect.mapError((cause) =>
-              hostFailure('host.openBuildDisplay', cause),
-            ),
-          );
-          return;
-        }
-        const packed = yield* runPackLatexdiffvc(
-          baseFile,
-          commit,
-          action === 'cleanLatexdiffvc',
-        );
-        const message = latexdiffPackMessage(packed);
-        if (message) yield* host.showInfoMessage(message);
-      },
-    );
-
     /** This window's half of the shared body's binding table: every verb
      *  mapped onto the window's dialogs, its preview host, its settings
      *  view, and the project's launch path. */
@@ -254,11 +139,23 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         ).pipe(Effect.mapError((cause) => hostFailure('openLabel', cause))),
       // The window's project is its one workspace: any launch runs as asked.
       admitLaunch: () => Effect.void,
-      runWorkflowDiff: (request) =>
-        diffRun(request.runId).pipe(
-          Effect.mapError((cause) => hostFailure('diffRun', cause)),
-        ),
-      latexdiffAgainstCommit,
+      latexdiff: {
+        // Each diff opens in the PDF tab through the build display, as a
+        // run's outputs do.
+        openDiffs: (diffPaths) =>
+          Effect.forEach(
+            diffPaths,
+            (absolutePath) =>
+              host.openBuildDisplay({ kind: 'external', absolutePath }),
+            { discard: true },
+          ).pipe(
+            Effect.mapError((cause) =>
+              hostFailure('host.openBuildDisplay', cause),
+            ),
+          ),
+        // The window has no progress chrome for a diff run.
+        withProgress: (_title, task) => task({ report: () => undefined }),
+      },
       openSettings: (target) =>
         Effect.sync(() =>
           postDesktopSettingsView(options.postToRenderer, target),
@@ -405,13 +302,6 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
               confirm: (message) => host.confirmAcceptFile(message),
               showInfo: (message) => host.showInfoMessage(message),
             },
-          ),
-        latexdiffFile: (baseFile: string, editedFile: string) =>
-          withProcessServices(
-            runtime,
-            latexdiffFile(baseFile, editedFile),
-          ).pipe(
-            Effect.mapError((cause) => hostFailure('latexdiffFile', cause)),
           ),
         openDirectory: (directory: string) => host.openPath(directory),
       },

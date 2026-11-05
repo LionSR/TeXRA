@@ -33,13 +33,14 @@ type FileAction<A> = Effect.Effect<
   FileSystem.FileSystem | AppSignals
 >;
 
+type FileActionRequest = Extract<HostRequest, { kind: 'fileAction' }>;
+
 interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): FileAction<void>;
   acceptEditedFile(
     baseFile: string,
     editedFile: string,
   ): FileAction<boolean | void>;
-  latexdiffFile(baseFile: string, editedFile: string): FileAction<void>;
   openDirectory(directory: string): FileAction<void>;
   showInfo(message: string): FileAction<void>;
 }
@@ -70,9 +71,12 @@ export class ProgressWorkflowFileActionsController {
     this.deps = deps;
   }
 
-  /** Apply an output-file request from either GUI host. */
+  /** Apply an output-file request from either GUI host; its latexdiff is
+   *  the window's latexdiff verb (`latexdiffVerbs`). */
   handle(
-    request: Extract<HostRequest, { kind: 'fileAction' }>,
+    request: FileActionRequest & {
+      action: Exclude<FileActionRequest['action'], 'latexdiff'>;
+    },
   ): FileAction<void> {
     const base = request.base ?? undefined;
     switch (request.action) {
@@ -84,8 +88,6 @@ export class ProgressWorkflowFileActionsController {
         return this.acceptFile(request.file, base, request.runId);
       case 'merge':
         return this.mergeFile(request.file, base);
-      case 'latexdiff':
-        return this.latexdiffFile(request.file, base);
     }
   }
 
@@ -193,16 +195,6 @@ export class ProgressWorkflowFileActionsController {
       base,
       'Merge',
       (targetFile, baseFile) => this.deps.runs.merge(baseFile, targetFile),
-    ).pipe(Effect.asVoid);
-  }
-
-  latexdiffFile(file: string, base?: string): FileAction<void> {
-    return this.executeWithBaseFile(
-      file,
-      base,
-      'Latexdiff',
-      (targetFile, baseFile) =>
-        this.deps.host.latexdiffFile(baseFile, targetFile),
     ).pipe(Effect.asVoid);
   }
 
