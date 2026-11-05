@@ -1,54 +1,62 @@
 # Two answers to "which core dependencies are missing"
 
-Status: proposed. Found by a responsibility-overlap sweep on 2026-11-04.
+Status: proposed. Found by a responsibility-overlap sweep on 2026-11-04;
+checked against `main` on 2026-11-05.
 
 ## The overlap
 
 The LaTeX and image dependency catalog (`LATEX_TOOLS` in
 `packages/texra/src/shared/constants/latexToolchain.ts`) is the one list of
-tools. Two consumers still decide "which core dependencies are missing"
-separately, each with its own copy of the rule "either image tool satisfies the
-image requirement":
+tools, and both consumers below derive their image list from it
+(`IMAGE_LATEX_TOOLS`). What they still decide separately is the rule "either
+image tool satisfies the image requirement", and what the setup assistant
+hands to the model names the two tools by hand.
 
-| Consumer | File | Probe | Image rule | Result shape |
-| --- | --- | --- | --- | --- |
-| Dependency banner | `packages/texra/src/utils/system/checkCoreDependencies.ts` | `probeTool` over `CORE_DEPENDENCY_TOOLS` and `IMAGE_LATEX_TOOLS` | push both image tools if none installed | `MissingTool[]` |
-| Setup assistant | `packages/texra/src/tools/setup/toolProbing.ts` (`locateTool`, `missingCoreTools`) | `probeTool` or a PATH search, over `PROBED_LATEX_TOOLS` | push one `IMAGE_TOOL_LABEL` entry if none installed | `string[]` |
+| Consumer          | File                                                                               | Probe                                                            | Image rule                                             | Result shape    |
+| ----------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------ | --------------- |
+| Dependency banner | `packages/extension/src/progressView/checkCoreDependencies.ts`                     | `probeTool` over `CORE_DEPENDENCY_TOOLS` and `IMAGE_LATEX_TOOLS` | push both image tools if none is installed             | `MissingTool[]` |
+| Setup assistant   | `packages/texra/src/tools/setup/toolProbing.ts` (`locateTool`, `missingCoreTools`) | `probeTool` or a PATH search, over `PROBED_LATEX_TOOLS`          | push one `IMAGE_TOOL_LABEL` entry if none is installed | `string[]`      |
 
-Two further entries in the same area differ only in what they do with the
-result: `probeLatexToolchain` (`packages/texra/src/latex/latexToolchain.ts`, the
-doctor rows) and `LatexToolingController` (the settings view).
+`ProbeEnvironmentTool` (`packages/texra/src/tools/setup/ProbeEnvironmentTool.ts`)
+resolves the `IMAGE_TOOL_LABEL` alias by hand (`locateTool('gm')`,
+`locateTool('magick')`): the one place that names the image tools instead of
+reading the catalog, so a third image tool reaches the banner and
+`missingCoreTools` on its own and this tool not at all.
 
-The image-tool alias `IMAGE_TOOL_LABEL` is also resolved by hand in
-`ProbeEnvironmentTool` (`locateTool('gm')`, `locateTool('magick')`), a third
-statement of the same rule.
+The two probe the catalog's sets differently, on purpose or not:
+`CORE_DEPENDENCY_TOOLS` (the entries marked `core`: latexindent, Perl and
+Ghostscript) plus `IMAGE_LATEX_TOOLS` for the banner, and
+`PROBED_LATEX_TOOLS` (every entry whose `probe` is not `none`) for the setup
+assistant, which also probes latexmk, pdflatex, latexdiff and texcount. The
+catalog's `core: true` marks a strict subset of `probe: 'required'`, so the
+two columns are not the same fact; they are two views of the catalog with no
+statement of why they differ.
+
+`probeLatexToolchain` (`packages/texra/src/latex/latexToolchain.ts`, the
+doctor rows) and `LatexToolingController` (the settings view) probe the
+catalog too, but decide no "missing core dependency" of their own.
 
 ## Why it matters
 
-A change to the image requirement (a third tool, a different alias) has to be
-made in three places, and the banner and the setup assistant can disagree about
-whether the machine is missing something. The catalog's `probe` and `core`
-columns encode the same fact in two ways (`probe: 'required' | 'image'` and
-`core: true`), which is the sign of a second owner.
+The banner and the setup assistant can disagree about whether the machine is
+missing something, because they probe different sets, and the "either tool
+satisfies" rule is written twice. A change to that rule (a third image tool
+with its own alias, say) is made in two functions and one hand-written alias
+resolution.
 
 ## Proposed change
 
 Give the catalog one function, next to `probeTool` in `toolChecks.ts`, that
-returns the missing core dependencies as catalog ids with an `interchangeable`
-flag for the image group. The banner maps it to `MissingTool`; the setup
-assistant maps it to names and the `IMAGE_TOOL_LABEL` entry. Then:
+takes the set to probe and returns the missing core dependencies as catalog
+ids with an `interchangeable` flag for the image group. The banner maps it to
+`MissingTool`; the setup assistant maps it to names and the
+`IMAGE_TOOL_LABEL` entry. Then:
 
 - delete `missingCoreTools` and the image branch in `checkCoreDependencies`;
 - have `ProbeEnvironmentTool` resolve the `IMAGE_TOOL_LABEL` alias from the
   catalog's image group instead of naming `gm` and `magick`;
-- drop one of `probe: 'required'` and `core: true` if the two columns turn out
-  to be equal after this.
+- record in the catalog why the banner's set and the setup assistant's set
+  differ (two named views), or make them one set.
 
-Check first: `CORE_DEPENDENCY_TOOLS` vs `PROBED_LATEX_TOOLS` membership (the
-banner probes latexindent, Perl and Ghostscript; the setup tool also probes
-`latexmk` and `pdflatex`, so the two sets are not equal today and the shared
-function needs the set as a parameter or two named views). If they differ on
-purpose, record that in the catalog and keep only the shared image rule.
-
-Net elements: expected negative (one function, one image rule, one alias
-resolution replace three).
+Net elements: expected negative (one function and one image rule replace two
+functions and one hand-written alias resolution).
