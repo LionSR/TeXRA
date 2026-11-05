@@ -56,7 +56,9 @@ Grant only the tools the agent needs; start from the recommended groups below.
 - `document_task` — run a named agent's document task over files, as a
   child of this run. Pass `agentName`, `inputFiles` (rewritten, one revised
   document each) plus optional `prompt`, `contextFiles`, `mediaFiles`,
-  `outputFiles`, `extractFigures`, and `extractTikz`. Only an agent with a
+  `outputFiles`, and the task's switches under the names a run stores
+  them by (`attachTeXCount`, `reflect`, `autoExtractFigure`,
+  `autoExtractTikzFigure`, `autoCompileInputPdf`). Only an agent with a
   `task` block has a document task. Unlike `agent`, it is not gated by the
   "Multi-Agent Workflow" switch.
 - Both take `model` (with an `@effort` suffix), `memories`, `label`, and
@@ -75,7 +77,7 @@ Grant only the tools the agent needs; start from the recommended groups below.
   and `document_task` call in the script and shows its source. There are no timers, no
   `Date.now()`, no `Math.random()`, and no imports, so an interrupted script
   replays exactly and finished calls are not run again. `run_in_background:
-true` runs it as its own background run that delivers one result and a
+  true` runs it as its own background run that delivers one result and a
   summary as a follow-up; `timeoutMs` is the wall clock (1 s to 24 h,
   default 60 min). Use it when the whole fan-out and join is known up front;
   call `agent` directly when the next step depends on reading the last
@@ -89,7 +91,7 @@ true` runs it as its own background run that delivers one result and a
 ## External coding agents
 
 - `codex` — spin off an OpenAI Codex coding agent in its own sandbox
-  (separate CLI process, `sandbox_mode`-controlled). Async and multi-turn
+  (separate CLI process; its access follows the run's approval policy). Async and multi-turn
   like an `agent` call; requires the Codex CLI and `codex login` (or
   `OPENAI_API_KEY`).
 - `claude_code` — spin off a separate Claude Code agent via the Claude Agent

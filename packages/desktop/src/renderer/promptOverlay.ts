@@ -8,7 +8,6 @@ import {
   type DesktopShowPromptMessage,
 } from '../shared/desktopPromptMessages';
 import { createOverlayDialog, renderElement } from './overlayDialog';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 
 interface DesktopPromptOverlay {
   open(message: DesktopShowPromptMessage): void;
@@ -22,7 +21,7 @@ export function createDesktopPromptOverlay(
   const form = document.createElement('form');
   form.classList.add('desktop-prompt-form');
 
-  const input = document.createElement('wa-input') as WaInput;
+  const input = document.createElement('wa-input');
   input.classList.add('desktop-prompt-input');
   input.autocomplete = 'off';
   input.spellcheck = false;

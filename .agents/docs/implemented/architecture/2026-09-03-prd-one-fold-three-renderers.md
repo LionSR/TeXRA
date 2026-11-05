@@ -343,7 +343,8 @@ request error on the wire.
 ### 8.5 Down: `surface.action`
 
 The host acting on state a surface owns, and only these arms: `selectNew`,
-`select`, `showSessions`, `submit`, `draft`, `chime`, `launch`.
+`select`, `selectOnArrival`, `showSessions`, `submit`, `draft`, `chime`,
+`launch`.
 
 ### 8.6 What does not cross the bridge
 

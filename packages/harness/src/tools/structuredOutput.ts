@@ -130,7 +130,7 @@ function assertSafeSandboxSchema(schema: unknown): void {
     }
     for (const key of SUBSCHEMA_RECORD_KEYS) {
       const schemas = record[key];
-      if (schemas !== null && typeof schemas === 'object') {
+      if (Predicate.isObjectOrArray(schemas)) {
         for (const name of Object.keys(schemas)) {
           if (FORBIDDEN_SCHEMA_PROPERTY_KEYS.includes(name)) {
             throw new Error(

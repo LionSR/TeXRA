@@ -40,6 +40,7 @@ import {
 } from '@shared/session/runHistory';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import { runBypasses } from '@shared/approvalBypassKind';
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   parseApprovalPolicy,
@@ -223,7 +224,7 @@ const WIDE_TRANSCRIPT_SUFFIX =
 const SHOW_REJECTED_BASH_TOOL = process.env.HARNESS_REJECTED_BASH_TOOL === '1';
 const SHOW_LONG_CHILD_OUTPUT = process.env.HARNESS_LONG_CHILD_OUTPUT === '1';
 const BASH_APPROVAL_COMMAND =
-  process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run compile:safe';
+  process.env.HARNESS_BASH_APPROVAL_COMMAND ?? 'npm run typecheck';
 const SHOW_BASH_APPROVAL_AFTER_CHILD_FOCUS =
   process.env.HARNESS_BASH_APPROVAL_AFTER_CHILD_FOCUS === '1';
 const USER_QUESTION_CONTEXT = [
@@ -878,13 +879,15 @@ function seedSubagentFollowupTranscript(): void {
       '</subagent-error>',
     ].join('\n'),
   ];
+  // The run's transcript stores a delivery as its queue wrote it: the
+  // envelope's summary (`FollowUpContent.displayText`), not the envelope.
   for (const [index, text] of followups.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text,
+      text: summarizeSubagentFollowup(text),
     });
   }
   seedRows(HARNESS_RUN_ID, entries);
@@ -982,7 +985,6 @@ function makeRetryApprovalPayload(): RetryPermission {
             kind: 'chatgpt-subscription',
             resetsInMs: 7_200_000,
           },
-          userRetryable: true,
           provider: 'openai',
           statusCode: 429,
         }
@@ -992,7 +994,6 @@ function makeRetryApprovalPayload(): RetryPermission {
           // an explicit user decision before changing credentials, so this
           // fixture remains interactive.
           classification: { kind: 'upstream-credit' },
-          userRetryable: true,
           provider: 'openai',
           statusCode: 429,
         },
@@ -1792,7 +1793,7 @@ registerBuiltinSlashCommands({
 // run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
 // does.
 if (canInterrupt) {
-  harnessSession.markRunPending(Effect.never);
+  harnessSession.markRunPending(Effect.never, Effect.void);
   harnessSession.runId = HARNESS_RUN_ID;
 }
 
@@ -1877,21 +1878,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     local({
       self: [OWNER],
       dead: [OTHER_OWNER],
-      // What a resume of the interrupted root waits for, as the session's
-      // follower marks it at open.
-      resumeBlocked:
-        process.env.HARNESS_RESUME_BLOCKED === '1'
-          ? [
-              {
-                runId: interrupted,
-                reason: {
-                  kind: 'blocked',
-                  blocker: 'pluginOff',
-                  name: 'zotero',
-                },
-              },
-            ]
-          : [],
     }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));

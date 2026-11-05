@@ -46,7 +46,7 @@ jobs:
       checks: read
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Require green CI on the dispatched commit
         uses: ./.github/actions/require-green-ci
@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -114,14 +114,14 @@ jobs:
 
       - name: Smoke-test macOS packaged desktop app
         run: >-
-          pnpm run desktop:package:smoke -- --app
+          node scripts/verify-desktop.mjs smoke-package --app
           packages/desktop/dist-packaged/mac-universal/TeXRA.app/Contents/MacOS/TeXRA
 
       - name: Check macOS packaged desktop app contents
-        run: pnpm run check:desktop-package
+        run: node scripts/verify-desktop.mjs package
 
       - name: Check macOS desktop installer artifacts
-        run: pnpm run check:desktop-installers
+        run: node scripts/verify-desktop.mjs installers
 
       - name: Upload macOS desktop installers
         uses: actions/upload-artifact@v7
@@ -142,7 +142,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -158,14 +158,14 @@ jobs:
 
       - name: Smoke-test Linux packaged desktop app
         run: >-
-          xvfb-run --auto-servernum pnpm run desktop:package:smoke -- --app
+          xvfb-run --auto-servernum node scripts/verify-desktop.mjs smoke-package --app
           packages/desktop/dist-packaged/linux-unpacked/texra
 
       - name: Check Linux packaged desktop app contents
-        run: pnpm run check:desktop-package
+        run: node scripts/verify-desktop.mjs package
 
       - name: Check Linux desktop installer artifacts
-        run: pnpm run check:desktop-installers
+        run: node scripts/verify-desktop.mjs installers
 
       - name: Upload Linux desktop installers
         uses: actions/upload-artifact@v7
@@ -194,19 +194,19 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
       - name: Check desktop Electron binary
-        run: pnpm run check:desktop-electron-binary
+        run: node scripts/verify-desktop.mjs electron-binary
 
       - name: Build desktop artifacts
         run: pnpm run desktop:build
 
       - name: Check desktop build artifacts
-        run: pnpm run check:desktop-build-artifacts
+        run: node scripts/verify-desktop.mjs build-artifacts
 
       - name: Verify Windows signing secrets
         id: desktop-signing
@@ -219,14 +219,14 @@ jobs:
 
       - name: Smoke-test Windows packaged desktop app
         run: >-
-          pnpm run desktop:package:smoke -- --app
+          node scripts/verify-desktop.mjs smoke-package --app
           packages/desktop/dist-packaged/win-unpacked/TeXRA.exe
 
       - name: Check Windows packaged desktop app contents
-        run: pnpm run check:desktop-package
+        run: node scripts/verify-desktop.mjs package
 
       - name: Check Windows desktop installer artifacts
-        run: pnpm run check:desktop-installers
+        run: node scripts/verify-desktop.mjs installers
 
       - name: Upload Windows desktop installer
         uses: actions/upload-artifact@v7
@@ -277,10 +277,10 @@ jobs:
           fi
 
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Download desktop installer artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: texra-desktop-installers-*
           path: artifacts/desktop-release

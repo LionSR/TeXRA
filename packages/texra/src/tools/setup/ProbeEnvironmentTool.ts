@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import * as os from 'node:os';
-import { Config, Effect, Option, Schema } from 'effect';
+import { Config, Effect, Option, Predicate, Schema } from 'effect';
 
 // Local imports
 import {
@@ -97,7 +97,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
     // tokens like `"."` or `".."`, which would otherwise path-join
     // through the common-paths search to existing directories (e.g.
     // `/usr/bin/.`) and produce a false "ok" verification result.
-    if (!/^[A-Za-z0-9][A-Za-z0-9._+\-]*$/.test(name)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._+-]*$/.test(name)) {
       return yield* Effect.fail(
         new ToolError(
           `Invalid tool name "${name}". Must start with an alphanumeric character; only \`A-Za-z0-9._+-\` are allowed thereafter (or the alias "${IMAGE_TOOL_LABEL}").`,
@@ -297,7 +297,7 @@ const probe = Effect.fn('ProbeEnvironmentTool.execute')(function* (
       'usable credential',
     credentials.storedSecrets === 'unavailable' &&
       'credential store unreadable',
-  ].filter((cred): cred is string => typeof cred === 'string');
+  ].filter(Predicate.isString);
   parts.push(`credentials: ${creds.length > 0 ? creds.join(' + ') : 'none'}`);
   const headline = parts.join('; ');
 

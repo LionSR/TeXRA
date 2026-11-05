@@ -219,7 +219,7 @@ function configFileWarnings(
         }
         continue;
       }
-      const value = store.get<unknown>(key);
+      const value = store.get(key);
       if (Result.isFailure(Schema.decodeUnknownResult(entry.schema)(value))) {
         warnings.push(
           `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}".`,
@@ -272,8 +272,8 @@ export function loadCliStartupConfig(
       // next tier, as that warning says, instead of each reader warning about
       // the same value again. Writes still land in the file itself.
       const withoutInvalid = (store: JsonStore): ConfigStore => ({
-        get: <T>(key: string): T | undefined => {
-          const value = store.get<T>(key);
+        get: (key: string): unknown => {
+          const value = store.get(key);
           const entry = TEXRA_SETTINGS.catalog.byStoredKey(key);
           return value !== undefined &&
             entry &&

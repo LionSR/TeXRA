@@ -7,7 +7,9 @@ import { entryTypeIn, workspaceRelativePath } from '@texra-ai/harness/node';
 import { COMMIT_HASH_HEX_RANGE } from '@texra/utils/git/commitHashPattern';
 
 type GeneratedLatexdiffArtifactKind =
-  'workspaceDiff' | 'versionControlDiff' | 'betweenRoundDiff';
+  | 'workspaceDiff'
+  | 'versionControlDiff'
+  | 'betweenRoundDiff';
 
 interface GeneratedLatexdiffArtifact {
   kind: GeneratedLatexdiffArtifactKind;

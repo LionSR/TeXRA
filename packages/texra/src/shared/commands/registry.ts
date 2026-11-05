@@ -17,42 +17,39 @@ import { Result, Schema } from 'effect';
  * dispatcher parses the raw argument list at the boundary and only calls
  * `run` once parsing succeeds, keeping handlers free of parsing boilerplate.
  */
-export type CommandHandler<
-  TActions,
-  TArgs extends readonly unknown[] = readonly unknown[],
-  TResult = boolean | Promise<boolean>,
-> =
+export type CommandHandler<TActions, TResult = boolean | Promise<boolean>> =
   | ((actions: TActions) => TResult)
-  | TypedCommandHandler<TActions, TArgs, TResult>;
+  | TypedCommandHandler<TActions, TResult>;
 
+/**
+ * A parameterized handler: `dispatch` decodes the raw argument list against
+ * the handler's own tuple schema and runs it only on success. The argument
+ * type stays inside the closure `definedHandler` builds, so a registry map
+ * holds entries with different argument tuples under one type.
+ */
 export interface TypedCommandHandler<
   TActions,
-  TArgs extends readonly unknown[],
   TResult = boolean | Promise<boolean>,
 > {
-  run: (actions: TActions, ...args: [...TArgs]) => TResult;
-  argsSchema: Schema.Codec<TArgs, unknown>;
+  readonly dispatch: (
+    actions: TActions,
+    rawArgs: readonly unknown[],
+  ) => Result.Result<TResult, Schema.SchemaError>;
 }
 
 /**
- * Map type for a registry. Each entry can carry its own `TArgs` shape, so
- * the per-entry argument schema is not unified across the map. Callers
- * declare entries with `definedHandler` (or a plain function for no-arg
- * commands) and the dispatcher narrows at lookup time.
+ * Map type for a registry. Callers declare entries with `definedHandler` (or
+ * a plain function for no-arg commands).
  */
 type CommandHandlerMap<TId extends string, TActions, TResult> = Partial<
-  // `any` here is load-bearing: each entry can declare its own `TArgs`
-  // shape via `definedHandler`. Using `unknown` would force-unify across
-  // the map and break per-entry inference. The dispatcher is the only
-  // consumer of this map and parses raw args through the entry's own
-  // schema, so the loose map type doesn't leak into call sites.
-  Record<TId, CommandHandler<TActions, any, TResult>>
+  Record<TId, CommandHandler<TActions, TResult>>
 >;
 
 /**
- * Helper that lets call sites declare a typed handler with full inference
- * for the args parameter. Without this helper, TypeScript can't widen the
- * inline object literal back into the union return type.
+ * Declare a typed handler with full inference for the args parameter. The
+ * positional argument list is decoded at the boundary so `run` receives
+ * validated values; an argument object carrying a key its schema does not
+ * declare is refused, not stripped.
  */
 export function definedHandler<
   TActions,
@@ -61,8 +58,14 @@ export function definedHandler<
 >(
   argsSchema: S,
   run: (actions: TActions, ...args: [...S['Type']]) => TResult,
-): TypedCommandHandler<TActions, S['Type'], TResult> {
-  return { run, argsSchema };
+): TypedCommandHandler<TActions, TResult> {
+  const decode = Schema.decodeUnknownResult(argsSchema, {
+    onExcessProperty: 'error',
+  });
+  return {
+    dispatch: (actions, rawArgs) =>
+      Result.map(decode(rawArgs), (args) => run(actions, ...args)),
+  };
 }
 
 export type CommandDispatchFailure<TId extends string> =
@@ -94,17 +97,12 @@ export function dispatchCommandFromRegistry<
   // A no-arg handler is a plain callable.
   if (typeof handler === 'function') return handler(actions);
 
-  // Typed handlers decode the positional argument list at the boundary so
-  // handlers receive validated values; an argument object carrying a key its
-  // schema does not declare is refused, not stripped. A decoding failure
-  // surfaces as `false` so callers can surface the invalid payload
-  // distinctly from a genuinely unhandled command id.
-  const result = Schema.decodeUnknownResult(handler.argsSchema, {
-    onExcessProperty: 'error',
-  })(rawArgs);
-  if (!Result.isSuccess(result)) {
+  // A decoding failure surfaces as `false` so callers can surface the
+  // invalid payload distinctly from a genuinely unhandled command id.
+  const result = handler.dispatch(actions, rawArgs);
+  if (Result.isFailure(result)) {
     onFailure?.({ kind: 'invalidArguments', id, error: result.failure });
     return false;
   }
-  return handler.run(actions, ...result.success);
+  return result.success;
 }

@@ -11,7 +11,7 @@
  *   [`NodePlatformOptions`](#nodeplatformoptions) build an `AgentPlatform` from
  *   `agentsDir`, `storageDir`, `workspaceDir`, and `settings`.
  * - **Workspace roots & paths**:
- *   [`createNodeWorkspaceRoots`](#createnodeworkspaceroots),
+ *   [`openNodeWorkspaceRoots`](#opennodeworkspaceroots),
  *   [`canonicalizeWorkspacePath`](#canonicalizeworkspacepath),
  *   [`workspaceRelativePath`](#workspacerelativepath),
  *   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
@@ -39,7 +39,7 @@ export {
 // spawner), the canonical spelling of a workspace path, a path's
 // workspace-relative form, and the storage layout under a root.
 export {
-  createNodeWorkspaceRoots,
+  openNodeWorkspaceRoots,
   type NodeWorkspaceRootsInit,
 } from '@platform/defaults/nodeHost';
 export { nodePlatformServices } from '@platform/defaults/nodePlatform';

@@ -14,6 +14,7 @@ import {
   Exit,
   FileSystem,
   Path,
+  Predicate,
   Scope,
 } from 'effect';
 
@@ -28,10 +29,9 @@ import {
   StateStores,
 } from '@texra-ai/harness/host';
 import {
-  createNodeWorkspaceRoots,
+  openNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   resolveGlobalStoragePath,
-  resolveWorkspaceStoragePath,
   envFlag,
   JsonStore,
   setLogSink,
@@ -43,7 +43,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import type { ServiceInfo } from '@texra/controllers/server/protocol';
@@ -83,53 +82,42 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   sessions: Context.Service.Shape<typeof Sessions>,
 ) {
   const { storageRoot } = context;
-  const globalStorage = resolveGlobalStoragePath(storageRoot);
   const globalState = yield* AppState;
   // The windows and the CLI write these files while the service runs: each
   // read serves what they hold now, so a setting changed in any client
   // reaches the next task and the next turn.
   const globalConfig = yield* JsonStore.open(
-    path.join(globalStorage, TEXRA_CONFIG_FILE_NAME),
+    path.join(resolveGlobalStoragePath(storageRoot), TEXRA_CONFIG_FILE_NAME),
     { follow: true },
   );
   const openRoots = Effect.fn('cliServiceProjects.openRoots')(function* (
     workspace: string | undefined,
     within: Scope.Scope,
   ) {
-    const storage = resolveWorkspaceStoragePath(storageRoot, workspace);
     // The config open reports through a plain callback while it runs; its
     // warnings are logged once it has.
     const warnings: string[] = [];
-    const [workspaceState, repoState, configs] = yield* Effect.all(
-      [
-        (yield* StateStores).project(storage, workspace),
-        (yield* StateStores).repo(storage, workspace),
-        openTexraWorkspaceConfigStores(
-          TEXRA_SETTINGS.catalog,
-          storage,
-          workspace,
-          (message) => warnings.push(message),
-          true,
-        ),
-      ],
-      { concurrency: 'unbounded' },
-    ).pipe(Scope.provide(within));
+    const configs = yield* openTexraWorkspaceConfigStores(
+      TEXRA_SETTINGS.catalog,
+      storageRoot,
+      workspace,
+      (message) => warnings.push(message),
+      true,
+    );
     yield* Effect.forEach(warnings, (message) =>
       Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
     );
-    return createNodeWorkspaceRoots({
+    return yield* openNodeWorkspaceRoots({
       workspacePath: workspace,
       storageRoot,
-      storage,
       config: {
         ...configs,
         global: globalConfig,
         catalog: TEXRA_SETTINGS.catalog,
       },
-      workspaceState,
-      repoState,
+      stateStores: yield* StateStores,
       globalState,
-    });
+    }).pipe(Scope.provide(within));
   });
   // What opening a project reads, captured once: `open` is the port's,
   // called from handlers that hold no process context of their own. Exactly
@@ -171,7 +159,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           const roots = yield* openRoots(root, projectScope);
           const session = yield* sessions.open(roots, {
             persistent: true,
-            host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
+            host: {},
           });
           yield* recordFirstCompletedRun(session).pipe(
             Scope.provide(projectScope),
@@ -183,11 +171,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           if (moved) {
             const message = sessionStoreMovedAsideMessage(moved);
             yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
-            yield* session.emit(
-              'requestShowInstruction',
-              { key: `store-moved-aside-${moved.aside}`, message },
-              { replayWhenAttached: true },
-            );
+            yield* session.emit('requestShowInstruction', {
+              key: `store-moved-aside-${moved.aside}`,
+              message,
+            });
           }
           return { session };
         }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
@@ -252,7 +239,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
           (root) => closeIfIdle(root, Duration.toMillis(idleFor)),
           { concurrency: 'unbounded' },
         ),
-        (closed) => closed.filter((session) => session !== undefined),
+        (closed) => closed.filter(Predicate.isNotUndefined),
       ),
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
@@ -322,17 +309,15 @@ function withCliService<A>(
  * asked (wedged, or its record unreadable) fails: the caller says why
  * instead of naming the holder as some other process.
  */
-export function heldByService(
+export const heldByService = Effect.fn('heldByService')(function* (
   owner: OwnerId,
-): Effect.Effect<boolean, ServiceUnavailable, GlobalValues> {
-  return Effect.gen(function* () {
-    if (yield* envFlag(NO_SERVICE)) return false;
-    const info = yield* probeCliService;
-    if (info === null) return false;
-    // It answered on this machine's socket; a recorded hostname may be stale.
-    return ownerIdentity(owner).pid === info.pid;
-  });
-}
+): Effect.fn.Return<boolean, ServiceUnavailable, GlobalValues> {
+  if (yield* envFlag(NO_SERVICE)) return false;
+  const info = yield* probeCliService;
+  if (info === null) return false;
+  // It answered on this machine's socket; a recorded hostname may be stale.
+  return ownerIdentity(owner).pid === info.pid;
+});
 
 /** {@link reachCliService} for a client command, whose process prints only
  *  its own result. */

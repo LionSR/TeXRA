@@ -30,7 +30,7 @@ import type { StepRoot } from '@utils/files/externalRoots';
  * either is asked for, so no tool body opens its own approval prompt or
  * re-checks its own roots.
  */
-export interface ToolGuard<T, R = never> {
+export interface ToolGuard<T> {
   /**
    * The paths this call writes, read from its arguments. Each is resolved
    * against the call's workspace and working directory — which refuses a path
@@ -42,12 +42,8 @@ export interface ToolGuard<T, R = never> {
    * session's command approval before the body runs.
    */
   readonly command?: {
-    /**
-     * The command as the approval prompt shows it. An Effect because the
-     * spelling can depend on settings the prompt must show (a Codex sandbox
-     * mode, a Claude permission mode).
-     */
-    readonly text: (input: T) => Effect.Effect<string, Error, R>;
+    /** The command as the approval prompt shows it. */
+    readonly text: (input: T) => string;
     /**
      * The standing grant that answers this tool's commands. `'bash'`: the
      * run's command grant ("approve all commands in this task"), which the
@@ -137,19 +133,22 @@ export interface ITool<E = Error, R = never> {
    *  with its settlement. */
   readonly slow?: boolean;
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
-  readonly guard?: ToolGuard<never, R>;
+  readonly guard?: ToolGuard<never>;
   /**
-   * A description rendered from the other tools the run declares, in place
-   * of `definition.description`: rendered at the step that freezes the
-   * run's system text and kept as that step recorded it until a compaction
-   * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
-   * its text, and the cached prefix through it, as it was. The tool that has
-   * one is the script tool, which reaches nothing but the run's other tools
-   * and its own agent: a child is offered it, and its script-only functions,
-   * whatever its parent was.
+   * A description rendered from the other tools the run declares and the
+   * modules its scripts may import, in place of `definition.description`:
+   * rendered at the step that freezes the run's system text and kept as
+   * that step recorded it until a compaction opens the freeze again
+   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * prefix through it, as it was. The tool that has one is the script tool,
+   * which reaches nothing but the run's other tools and its own agent: a
+   * child is offered it, and its script-only functions, whatever its parent
+   * was.
    */
   readonly describe?: (
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    /** The specifiers of the modules the step's scripts may import. */
+    modules: readonly string[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }

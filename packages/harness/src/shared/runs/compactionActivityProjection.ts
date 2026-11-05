@@ -9,7 +9,9 @@ import {
 } from '@shared/schemas';
 
 export type CompactionActivityStatus =
-  'running' | CompactionActivityOutcome | 'interrupted';
+  | 'running'
+  | CompactionActivityOutcome
+  | 'interrupted';
 
 /** One stable transcript block projected from a correlated activity lifecycle. */
 export interface CompactionActivityBlock {

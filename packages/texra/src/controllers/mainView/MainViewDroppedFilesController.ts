@@ -7,7 +7,7 @@ import { Effect, FileSystem } from 'effect';
 
 // Local imports
 import { Rejected } from '@texra-ai/harness';
-import { relativeToRoot } from '@texra-ai/harness/node';
+import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 
 /**
@@ -17,11 +17,12 @@ import { toErrorMessage } from '@texra-ai/harness/schemas';
  * A path outside the workspace, and one that does not name a regular file,
  * are both dropped. So is one that is no longer there: a drag whose source
  * moved between the drop and this probe is the user's own race, and
- * `NotFound` is the only absence this treats as one. Every other stat failure
- * (an unreadable folder, a symlink loop) fails the whole drop instead of
- * quietly shrinking it, because a path discarded in silence looks to the user
- * like a file the launcher refused. A `file:` URL that does not decode is
- * refused the same way.
+ * `absentReason`'s absence (nothing at the path, or a parent component that
+ * is now a file) is the only failure this treats as one. Every other stat
+ * failure (an unreadable folder, a symlink loop) fails the whole drop
+ * instead of quietly shrinking it, because a path discarded in silence looks
+ * to the user like a file the launcher refused. A `file:` URL that does not
+ * decode is refused the same way.
  */
 const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
   workspacePath: string,
@@ -40,12 +41,9 @@ const droppedWorkspaceFile = Effect.fn('droppedWorkspaceFile')(function* (
   const relative = relativeToRoot(workspacePath, dropped);
   if (relative === undefined) return null;
   const fs = yield* FileSystem.FileSystem;
-  const info = yield* fs.stat(path.resolve(workspacePath, relative)).pipe(
-    Effect.catchIf(
-      (error) => error.reason._tag === 'NotFound',
-      () => Effect.succeed(undefined),
-    ),
-  );
+  const info = yield* fs
+    .stat(path.resolve(workspacePath, relative))
+    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
   return info?.type === 'File' ? relative : null;
 });
 

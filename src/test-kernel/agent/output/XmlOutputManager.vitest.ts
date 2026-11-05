@@ -1,10 +1,11 @@
 import { it, layer } from '@effect/vitest';
-import { Effect, FileSystem } from 'effect';
+import { Effect, FileSystem, Schema } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { createExternalLocation } from '@texra-ai/harness/host';
 
+import { AgentConfigSchema, RunIdSchema } from '@texra-ai/harness/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakePath } from '@test/support/FakePlatform';
 import { FakeHost } from '@test/support/testKernel';
@@ -12,9 +13,8 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
 import { XmlOutputManager } from '@texra/agent/output/XmlOutputManager';
 import { assignByContentSimilarity } from '@texra/agent/output/extraction/contentSimilarity';
-import type { AgentConfig, RunId } from '@texra-ai/harness/schemas';
 
-const RUN_ID = 'xml-output-manager-test' as RunId;
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('a0e1a0');
 
 interface XmlManagerOptions {
   outputFiles?: string[];
@@ -36,10 +36,10 @@ function createXmlManager(
     { strict: true },
   );
   return new XmlOutputManager(
-    {
+    Schema.decodeUnknownSync(AgentConfigSchema)({
       inputFiles,
       outputFiles: options.outputFiles ?? [],
-    } as unknown as AgentConfig,
+    }),
     logger,
     new RunFileService(RUN_ID, testWorkspaceRoots()),
     { rounds: new Map() },

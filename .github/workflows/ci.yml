@@ -39,7 +39,7 @@ jobs:
       packages: ${{ steps.detect.outputs.packages }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -100,10 +100,10 @@ jobs:
             echo "packages=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # The static gate is `npm run gate` (package.json): invariants, then
-  # typecheck + formatting, then lint. CI runs the same three groups as
-  # parallel jobs, so PR wall-time is the slowest group (lint), not their sum,
-  # and a local `npm run gate` reproduces exactly what these jobs enforce.
+  # The static gate is `npm run gate` (package.json): lint and the
+  # invariants, then typecheck + formatting. CI runs the two groups as
+  # parallel jobs, and a local `npm run gate` reproduces exactly what these
+  # jobs enforce.
   invariants:
     name: invariants (linux)
     needs: changes
@@ -113,7 +113,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Deno
         uses: denoland/setup-deno@v2.0.5
@@ -124,13 +124,13 @@ jobs:
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
 
-      # The ratchets and cheap invariant scripts (`npm run gate:invariants`).
-      - name: Check invariants
+      # Lint and the cheap invariant scripts (`npm run gate:invariants`).
+      - name: Lint and check invariants
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. The ratchet checks (the allowlists and the
-          # core-quality counts, both reading TEXRA_RATCHET_BASE) judge this
+          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (the
+          # core-quality counts, fact spread and row-kind list) judge this
           # tree against its merge base with the target: fetch the target tip
           # if it is missing, then deepen the target and HEAD until git finds
           # the merge base. The checks fail loudly if it still cannot.
@@ -176,7 +176,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -187,23 +187,6 @@ jobs:
       # its token, retrigger, cancellation, and branch-race complexity.
       - name: Check types and formatting
         run: pnpm run gate:typecheck
-
-  lint:
-    name: lint (linux)
-    needs: changes
-    if: needs.changes.outputs.code == 'true' && github.event_name != 'schedule'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-
-      - name: Setup workspace
-        uses: ./.github/actions/setup-workspace
-
-      - name: Lint
-        run: pnpm run lint
 
   guidance-refs:
     name: guidance references
@@ -216,13 +199,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       # setup-node@v5 caches the package manager named by package.json's
       # `packageManager` (pnpm) by default and fails when pnpm is absent;
       # this job installs nothing, so opt out.
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
           package-manager-cache: false
@@ -284,10 +267,22 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
+
+      # Vitest starts the files that took longest last run first; without
+      # its results it falls back to the largest files, and the crash-point
+      # suites (a few lines each, the slowest by far) would start last and
+      # set the shard's wall-clock. Each run saves its own results; a run
+      # restores the newest a shard saved, a PR's from its base branch.
+      - name: Restore test durations
+        uses: actions/cache@v6
+        with:
+          path: node_modules/.vite/vitest
+          key: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-${{ github.run_id }}
+          restore-keys: vitest-results-${{ runner.os }}-shard${{ matrix.shard }}-
 
       # --maxWorkers=2 saturates the 2-vCPU hosted runner (see #8039); the
       # shards exist because a single runner can't go wider than that.
@@ -303,7 +298,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -332,7 +327,7 @@ jobs:
         run: pnpm --filter texra build:fast
 
       - name: Check extension VSIX contents
-        run: pnpm run check:vsix-contents
+        run: node scripts/verify-vsix-contents.mjs
 
       - name: Upload extension VSIX artifact
         uses: actions/upload-artifact@v7
@@ -358,7 +353,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -393,7 +388,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -444,7 +439,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -462,7 +457,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -489,14 +484,14 @@ jobs:
     name: docs build
     needs: changes
     # Runs only for docs-only PRs (where the heavy validation jobs are
-    # skipped). Formatting still uses the root workspace's pinned Prettier;
+    # skipped). Formatting still uses the root workspace's pinned oxfmt;
     # VitePress then builds from its self-contained npm sub-project.
     if: needs.changes.result == 'success' && needs.changes.outputs.code != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -521,7 +516,6 @@ jobs:
       - changes
       - invariants
       - typecheck
-      - lint
       - guidance-refs
       - test
       - build
@@ -559,7 +553,6 @@ jobs:
           for result in \
             'invariants:${{ needs.invariants.result }}' \
             'typecheck:${{ needs.typecheck.result }}' \
-            'lint:${{ needs.lint.result }}' \
             'test:${{ needs.test.result }}' \
             'build:${{ needs.build.result }}' \
             'desktop-e2e:${{ needs.desktop-e2e.result }}' \
@@ -583,7 +576,6 @@ jobs:
               'test:${{ needs.test.result }}' \
               'invariants:${{ needs.invariants.result }}' \
               'typecheck:${{ needs.typecheck.result }}' \
-              'lint:${{ needs.lint.result }}' \
               'build:${{ needs.build.result }}'; do
               name="${result%%:*}"
               value="${result#*:}"

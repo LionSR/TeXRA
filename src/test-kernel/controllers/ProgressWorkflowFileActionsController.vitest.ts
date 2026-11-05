@@ -1,12 +1,12 @@
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, FileSystem, Layer, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AppSignals } from '@texra-ai/harness/host';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import type { RunId } from '@texra-ai/harness/schemas';
 
-const RUN = 'ab12cd' as RunId;
+const RUN = Schema.decodeUnknownSync(RunIdSchema)('ab12cd');
 
 /** The controller's deps are file-local; derive them from its constructor. */
 type ProgressWorkflowFileActionsControllerDeps = ConstructorParameters<

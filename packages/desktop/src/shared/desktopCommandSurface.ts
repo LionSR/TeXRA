@@ -1,9 +1,5 @@
 import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import {
-  toElectronAccelerator,
-  type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
-import {
   commandCatalogById,
   settingsTabByCommand,
   type CommandId,
@@ -15,6 +11,7 @@ import {
 } from '@texra/shared/commands/registry';
 import type { IconName } from '@ui/wa/iconNames';
 import { texraGuideUrl } from '@ui/copy/guide';
+import { toElectronAccelerator, type DesktopPlatform } from './accelerators';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopOpenSettingsMessageSchema,
@@ -23,6 +20,7 @@ import {
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
+  SHOW_BROWSER: 'texra.desktop.showBrowser',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
   TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
@@ -44,6 +42,7 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showDashboard',
     DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+    DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
   ],
   // One row per settings page that has a command, in nav order. Teams are a
   // section of Agents, so texra.showTeamSettings gets no row of its own.
@@ -81,7 +80,9 @@ type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
 type DesktopFileCommandId = (typeof DESKTOP_FILE_COMMANDS)[number];
 type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
 export type DesktopCommandId =
-  DesktopFileCommandId | DesktopMenuCommandId | DesktopHelpCommandId;
+  | DesktopFileCommandId
+  | DesktopMenuCommandId
+  | DesktopHelpCommandId;
 
 const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
   ...DESKTOP_FILE_COMMANDS,
@@ -98,6 +99,7 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showDashboard': 'gear',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'terminal',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'folder-tree',
+  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: 'globe',
   'texra.showMemory': 'database',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
@@ -170,6 +172,9 @@ function action(
 const DESKTOP_COMMAND_HANDLERS = {
   'texra.showMainView': action((a) => a.showLauncher()),
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.openWorkbench('logs')),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: action((a) =>
+    a.openWorkbench('browser'),
+  ),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: action((a) =>
     a.toggleBottomBar(),
   ),
@@ -177,16 +182,6 @@ const DESKTOP_COMMAND_HANDLERS = {
     a.toggleSidePanel(),
   ),
   'texra.showDashboard': action((a) => a.showSettings()),
-  // `texra.show*` rows derived from the catalog's `settingsTab` field
-  // (`settingsTabByCommand`) — same source the extension handler map uses.
-  ...(Object.fromEntries(
-    (
-      Object.entries(settingsTabByCommand) as [
-        SettingsTabCommandId,
-        SettingsTarget,
-      ][]
-    ).map(([id, tab]) => [id, action((a) => a.showSettings(tab))]),
-  ) as Record<SettingsTabCommandId, DesktopCommandHandler>),
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: action((a) => a.openLogFolder()),
   [DESKTOP_LOCAL_COMMANDS.OPEN_WORKSPACE_FOLDER]: action((a) =>
     a.openWorkspaceFolder(),
@@ -195,12 +190,26 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: action((a) =>
     a.openDesktopDocs(),
   ),
-} as const satisfies Record<DesktopCommandId, DesktopCommandHandler>;
+} as const satisfies Record<
+  Exclude<DesktopCommandId, SettingsTabCommandId>,
+  DesktopCommandHandler
+>;
+
+// The `texra.show*` commands open the tab the catalog's `settingsTab` field
+// names (`settingsTabByCommand`), the same source the extension handler map uses.
+const SETTINGS_TAB_BY_COMMAND = new Map<string, SettingsTarget>(
+  Object.entries(settingsTabByCommand),
+);
 
 export function dispatchDesktopCommand(
   id: DesktopCommandId,
   actions: DesktopCommandActions,
 ): boolean | Promise<boolean> {
+  const settingsTab = SETTINGS_TAB_BY_COMMAND.get(id);
+  if (settingsTab) {
+    actions.showSettings(settingsTab);
+    return true;
+  }
   return dispatchCommandFromRegistry(
     id,
     DESKTOP_COMMAND_HANDLERS,

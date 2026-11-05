@@ -24,9 +24,8 @@ import {
 } from '@texra-ai/harness/host';
 import {
   absentReason,
-  createNodeWorkspaceRoots,
+  openNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
-  resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -43,7 +42,6 @@ import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import type { WindowClient } from '@texra/controllers/server/windowHost';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -266,64 +264,61 @@ const warnInDialog = (message: string): void => {
  * workspace override in `.texra/config.json` is the same value a run in this
  * session would read.
  */
-function openProjectSession(
+const openProjectSession = Effect.fn('openProjectSession')(function* (
   root: string | undefined,
   roots: WorkspaceRoots,
-  // The closeable scope the caller provides; `dispose` closes it.
   scope: Scope.Closeable,
   service: ServiceLink | undefined,
   sessions: Sessions['Service'],
   hosts: Context.Service.Shape<typeof HostWindows>,
-): Effect.Effect<DesktopProject, Error, Scope.Scope> {
-  return Effect.gen(function* () {
-    const facts = {
-      key: roots.storage,
-      display: projectDisplayOf(roots.storage, root),
-      roots,
-      dispose: () => Scope.close(scope, Exit.void),
+): Effect.fn.Return<DesktopProject, Error, Scope.Scope> {
+  const facts = {
+    key: roots.storage,
+    display: projectDisplayOf(roots.storage, root),
+    roots,
+    dispose: () => Scope.close(scope, Exit.void),
+  };
+  // A folder's runs run in the service, which follows its interrupted
+  // tasks; this process opens no session for it.
+  if (service !== undefined && root !== undefined)
+    return {
+      ...facts,
+      root,
+      service,
+      session: yield* serviceSession(service, root, roots),
     };
-    // A folder's runs run in the service, which follows its interrupted
-    // tasks; this process opens no session for it.
-    if (service !== undefined && root !== undefined)
-      return {
-        ...facts,
-        root,
-        service,
-        session: yield* serviceSession(service, root, roots),
-      };
-    // The no-workspace session's runs, and every run without a service, run
-    // here.
-    const session = yield* Effect.acquireRelease(
-      sessions.open(roots, {
-        persistent: true,
-        host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
-      }),
-      // The one close every session takes: its runs stopped under the
-      // shutdown deadline, the ones still live past it settled, its
-      // artifacts flushed, its entry released.
-      (opened) => Effect.asVoid(sessions.close(opened.roots)),
-    );
-    yield* recordFirstCompletedRun(session);
-    // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
-    // extension and the CLI say it.
-    if (session.storeMovedAside)
-      warnInDialog(sessionStoreMovedAsideMessage(session.storeMovedAside));
-    return { ...facts, root, session, link: yield* hosts.localLink(session) };
-  });
-}
+  // The no-workspace session's runs, and every run without a service, run
+  // here.
+  const session = yield* Effect.acquireRelease(
+    sessions.open(roots, {
+      persistent: true,
+      host: {},
+    }),
+    // The one close every session takes: its runs stopped under the
+    // shutdown deadline, the ones still live past it settled, its
+    // artifacts flushed, its entry released.
+    (opened) => Effect.asVoid(sessions.close(opened.roots)),
+  );
+  yield* recordFirstCompletedRun(session);
+  // A store moved aside at open (pre-1.0 or corrupt) is said once, as the
+  // extension and the CLI say it.
+  if (session.storeMovedAside)
+    warnInDialog(sessionStoreMovedAsideMessage(session.storeMovedAside));
+  return { ...facts, root, session, link: yield* hosts.localLink(session) };
+});
 
 /**
  * Build the registry with its no-workspace session open, so a window always
  * has a session to show even before the first folder opens.
  */
-export function openDesktopProjectRegistry(
+export const openDesktopProjectRegistry: (
   options: DesktopProjectRegistryOptions,
-): Effect.Effect<
+) => Effect.Effect<
   DesktopProjectRegistry,
   Error,
   DesktopProjectRecords | StateStores | Sessions | HostWindows
-> {
-  return Effect.gen(function* () {
+> = Effect.fn('openDesktopProjectRegistry')(
+  function* (options: DesktopProjectRegistryOptions) {
     // The process's sessions: each project's session is opened through them.
     const sessions = yield* Sessions;
     const hosts = yield* HostWindows;
@@ -362,14 +357,16 @@ export function openDesktopProjectRegistry(
       const recent = yield* records.readRecent;
       yield* SubscriptionRef.update(state, (s) => ({ ...s, recent }));
     }).pipe(withPerKeyLane(lanes, selection));
-    const activate = (root: string | undefined) =>
-      Effect.gen(function* () {
+    const activate = Effect.fn('activate')(
+      function* (root: string | undefined) {
         const next = root === undefined ? undefined : byRoot(root);
         if (next?.root !== undefined) yield* records.activate(next.root);
         const activeKey = (next ?? fallback).key;
         if (activeKey === current().activeKey) return;
         yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
-      }).pipe(withPerKeyLane(lanes, selection));
+      },
+      withPerKeyLane(lanes, selection),
+    );
     return {
       state,
       open(rootInput) {
@@ -378,41 +375,31 @@ export function openDesktopProjectRegistry(
           const existing = byRoot(root);
           if (existing) return existing;
           yield* records.remember(root);
-          const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            const [workspaceState, repoState, workspaceConfigs] =
-              yield* Effect.all(
-                [
-                  // A folder of the service keeps its state there: this
-                  // process opens no store of that project.
-                  options.service !== undefined
-                    ? Effect.succeed(serviceProjectState(options.service, root))
-                    : stateStores.project(storage, root),
-                  stateStores.repo(storage, root),
-                  openTexraWorkspaceConfigStores(
-                    TEXRA_SETTINGS.catalog,
-                    storage,
-                    root,
-                    (message) => {
-                      console.warn(`[desktop] ${message}`);
-                      warnInDialog(message);
-                    },
-                  ),
-                ],
-                { concurrency: 'unbounded' },
-              );
-            const roots = createNodeWorkspaceRoots({
+            const workspaceConfigs = yield* openTexraWorkspaceConfigStores(
+              TEXRA_SETTINGS.catalog,
+              options.dataRoot,
+              root,
+              (message) => {
+                console.warn(`[desktop] ${message}`);
+                warnInDialog(message);
+              },
+            );
+            const roots = yield* openNodeWorkspaceRoots({
               workspacePath: root,
               storageRoot: options.dataRoot,
-              storage,
               config: {
                 ...workspaceConfigs,
                 global: options.globalConfigStore,
                 catalog: TEXRA_SETTINGS.catalog,
               },
-              workspaceState,
-              repoState,
+              // A folder of the service keeps its state there: this process
+              // opens no store of that project.
+              ...(options.service !== undefined && {
+                workspaceState: serviceProjectState(options.service, root),
+              }),
+              stateStores,
               // Every project's roots share the process's global state.
               globalState: options.processRoots.globalState,
             });
@@ -427,15 +414,18 @@ export function openDesktopProjectRegistry(
                 sessions,
                 hosts,
               ).pipe(
-                Effect.tap((project) =>
-                  Effect.gen(function* () {
-                    const recent = yield* records.readRecent;
-                    yield* SubscriptionRef.update(state, (s) => ({
-                      ...s,
-                      projects: [...s.projects, project],
-                      recent,
-                    }));
-                  }).pipe(withPerKeyLane(lanes, selection)),
+                Effect.tap(
+                  Effect.fnUntraced(
+                    function* (project) {
+                      const recent = yield* records.readRecent;
+                      yield* SubscriptionRef.update(state, (s) => ({
+                        ...s,
+                        projects: [...s.projects, project],
+                        recent,
+                      }));
+                    },
+                    withPerKeyLane(lanes, selection),
+                  ),
                 ),
               ),
             );
@@ -512,5 +502,7 @@ export function openDesktopProjectRegistry(
           ),
         ),
     } satisfies DesktopProjectRegistry;
-  }).pipe(Effect.uninterruptible, Effect.mapError(ensureError));
-}
+  },
+  Effect.uninterruptible,
+  Effect.mapError(ensureError),
+);

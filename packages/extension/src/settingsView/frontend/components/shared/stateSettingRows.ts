@@ -10,6 +10,7 @@
  */
 
 // Local imports - shared webview
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { html, type TemplateResult } from 'lit';
 
 import {
@@ -32,8 +33,6 @@ import {
 // Third-party imports
 import '@awesome.me/webawesome/dist/components/select/select.js';
 import '@awesome.me/webawesome/dist/components/option/option.js';
-
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 /**
  * Write one catalog key. `null` clears it back to the catalog default.
@@ -96,7 +95,7 @@ export function renderStateSettingToggleRow(
     onChange: (event: Event) =>
       postStateSetting(
         key,
-        Boolean((event.target as WaSwitch | null)?.checked),
+        event.target instanceof WaSwitch && event.target.checked,
       ),
   });
 }

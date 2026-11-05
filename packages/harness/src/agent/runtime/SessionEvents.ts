@@ -26,7 +26,7 @@ import {
   type SessionEvent,
 } from '@shared/schemas';
 import { Database, type DatabaseWriteFailed } from '@shared/session/database';
-import { closesRunWindow, recordOf } from '@shared/session/runRowReads';
+import { closesRunWindow } from '@shared/session/runRowReads';
 import {
   afterCommit,
   committing,
@@ -83,7 +83,7 @@ function openWorkTracker(): {
   const aggregates: OpenWorkByAggregate = new Map();
   const track = (rows: readonly SessionEvent[]) => {
     for (const row of rows) {
-      if (recordOf(row).removed !== null) {
+      if (row.type === 'run.removed') {
         aggregates.delete(row.aggregateId);
         continue;
       }
@@ -237,23 +237,22 @@ export const sessionEventsLayer = Layer.effect(
     yield* Effect.addFinalizer(() => drain);
     const enqueue = (job: PublicationJob): boolean =>
       Queue.offerUnsafe(inbox, job);
-    const transact = <A, E>(
+    const transact = Effect.fn('transact')(function* <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
       options: JobOptions = {},
-    ): Effect.Effect<A, E | DatabaseWriteFailed> =>
-      Effect.gen(function* () {
-        if ((yield* PublisherJob) !== null) return yield* reentered;
-        const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
-        const admitted = enqueue(
-          settling(inTransaction(job, options.order), done),
+    ): Effect.fn.Return<A, E | DatabaseWriteFailed> {
+      if ((yield* PublisherJob) !== null) return yield* reentered;
+      const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
+      const admitted = enqueue(
+        settling(inTransaction(job, options.order), done),
+      );
+      if (!admitted) {
+        return yield* Effect.die(
+          new Error('Session publication after the plane closed'),
         );
-        if (!admitted) {
-          return yield* Effect.die(
-            new Error('Session publication after the plane closed'),
-          );
-        }
-        return yield* Deferred.await(done);
-      });
+      }
+      return yield* Deferred.await(done);
+    });
     const removeRun: SessionEventsShape['removeRun'] = (
       id,
       mode,

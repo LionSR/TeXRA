@@ -46,7 +46,7 @@ export function seedView(view: SessionView): void {
   sessionView().set(view);
 }
 
-type RunViewOverrides = Partial<RunView> & { readonly id: string };
+type RunViewOverrides = Partial<RunView> & Pick<RunView, 'id'>;
 
 /** One stream as the fold would state it; every field explicit. The key,
  *  tone, and group follow the status the way the fold derives them, and the
@@ -55,12 +55,13 @@ export function makeRunView(over: RunViewOverrides): RunView {
   const run = runViewFields(over);
   // A case may blank the identity to stand for metadata not yet folded; the
   // fold never states such a run, so it offers nothing.
+  // cast: `RunView` types the identity as always present; a case's may not be.
   const identity = run.identity as RunView['identity'] | undefined;
   return { ...run, actions: identity ? runActions(run, false) : [] };
 }
 
 function runViewFields(over: RunViewOverrides): RunView {
-  const id = over.id as RunId;
+  const { id } = over;
   const status = over.status ?? RUN_PHASE.RUNNING;
   const copy = runStatus(status, {
     substate: over.substate ?? undefined,
@@ -87,7 +88,9 @@ function runViewFields(over: RunViewOverrides): RunView {
     tone: copy.tone,
     createdAt: 1,
     launchedAt: 1,
+    turnStartedAt: null,
     runStartedAt: null,
+    working: false,
     lastTimestamp: 1,
     turn: null,
     followUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
@@ -112,6 +115,7 @@ function runViewFields(over: RunViewOverrides): RunView {
       settledRows: 0,
     },
   };
+  // cast: every field is stated above; a case's override may blank one.
   return {
     ...common,
     recipe: null,

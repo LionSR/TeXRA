@@ -27,7 +27,6 @@ import {
 
 import {
   Rejected,
-  ResumeRefused,
   RunFailure,
   ToolsRefused,
   type ITool,
@@ -41,7 +40,6 @@ import {
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
-  describeFollowUpFailure,
   replayTrace,
 } from '@texra-ai/harness/host';
 import type { EventsFrame } from '@texra/shared/session/sessionFrames';
@@ -205,26 +203,25 @@ export const serviceProjectState = (
           }),
         );
   };
-  const set = (
+  const set = Effect.fn('set')(function* (
     key: string,
     next: unknown,
     ifCurrent: { value: unknown } | null,
-  ) =>
-    Effect.gen(function* () {
-      const nextJson = yield* json(key, next);
-      const currentJson =
-        ifCurrent === null ? null : yield* json(key, ifCurrent.value);
-      return yield* call(
-        (message, cause) => new StateWriteFailed({ key, message, cause }),
-        (client) =>
-          client['state.set']({
-            workspace,
-            key,
-            next: nextJson,
-            ifCurrent: currentJson,
-          }),
-      );
-    });
+  ) {
+    const nextJson = yield* json(key, next);
+    const currentJson =
+      ifCurrent === null ? null : yield* json(key, ifCurrent.value);
+    return yield* call(
+      (message, cause) => new StateWriteFailed({ key, message, cause }),
+      (client) =>
+        client['state.set']({
+          workspace,
+          key,
+          next: nextJson,
+          ifCurrent: currentJson,
+        }),
+    );
+  });
   return {
     get,
     update: (key, value) => Effect.asVoid(set(key, value, null)),
@@ -302,7 +299,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
    *  TeXRA's service refused this window, which no reconnect undoes. */
   const connected = Stream.merge(
     SubscriptionRef.changes(link.client).pipe(
-      Stream.filter((client) => client !== null),
+      Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
     SubscriptionRef.changes(link.away).pipe(
@@ -511,63 +508,62 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
    *  this one), held until this window's fold shows it too; its view this
    *  window's fold sliced to this activation; and its trace read back from
    *  the service's rows of this activation through the watch. */
-  const runOf = (
+  const runOf = Effect.fn('runOf')(function* (
     {
       runId,
       activation,
     }: { readonly runId: RunId; readonly activation: CommitOrdinal },
     redirectedFrom?: RunId,
-  ): Effect.Effect<Run> =>
-    Effect.gen(function* () {
-      const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
-      const result = yield* Effect.cached(Effect.flatMap(answer, endOf));
-      // The service's commit when it answered, past every row the run
-      // wrote, failed or not. With no answer (no service will give one,
-      // and no row is coming through the watch), none: the replay ends at
-      // once with the result's failure.
-      let answeredAt: CommitOrdinal = -1;
-      return {
-        runId,
-        ...(redirectedFrom !== undefined && { redirectedFrom }),
-        result,
-        // From the first level at or past the activation, as a run here
-        // slices it (an earlier one can show the run absent, interrupted, or
-        // with its previous activation's outcome), to this activation's
-        // outcome, or the result.
-        view: graph.view.changes.pipe(
-          Stream.dropWhile(
-            (level) => level.cursor < activation || !level.runs.has(runId),
-          ),
-          Stream.takeUntil(
-            (level) => level.runs.get(runId)?.durableOutcome != null,
-          ),
-          Stream.haltWhen(Effect.exit(result)),
+  ): Effect.fn.Return<Run> {
+    const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
+    const result = yield* Effect.cached(Effect.flatMap(answer, endOf));
+    // The service's commit when it answered, past every row the run
+    // wrote, failed or not. With no answer (no service will give one,
+    // and no row is coming through the watch), none: the replay ends at
+    // once with the result's failure.
+    let answeredAt: CommitOrdinal = -1;
+    return {
+      runId,
+      ...(redirectedFrom !== undefined && { redirectedFrom }),
+      result,
+      // From the first level at or past the activation, as a run here
+      // slices it (an earlier one can show the run absent, interrupted, or
+      // with its previous activation's outcome), to this activation's
+      // outcome, or the result.
+      view: graph.view.changes.pipe(
+        Stream.dropWhile(
+          (level) => level.cursor < activation || !level.runs.has(runId),
         ),
-        // The service's rows, through the watch; the service's log is the
-        // store, settled once it answered.
-        events: replayTrace(
-          {
-            view: {
-              inputs: (set, cursor, debug) => watch(set, { cursor, debug }),
-            },
-            log: {
-              settled: Effect.exit(answer).pipe(
-                Effect.map((exit) => {
-                  if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
-                }),
-              ),
-              now: () => answeredAt,
-            },
+        Stream.takeUntil(
+          (level) => level.runs.get(runId)?.durableOutcome != null,
+        ),
+        Stream.haltWhen(Effect.exit(result)),
+      ),
+      // The service's rows, through the watch; the service's log is the
+      // store, settled once it answered.
+      events: replayTrace(
+        {
+          view: {
+            inputs: (set, cursor, debug) => watch(set, { cursor, debug }),
           },
-          runId,
-          activation,
-          result,
-        ),
-        interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
-          Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
-        ),
-      };
-    });
+          log: {
+            settled: Effect.exit(answer).pipe(
+              Effect.map((exit) => {
+                if (Exit.isSuccess(exit)) answeredAt = exit.value.at;
+              }),
+            ),
+            now: () => answeredAt,
+          },
+        },
+        runId,
+        activation,
+        result,
+      ),
+      interrupt: request({ kind: 'run.stop', runId, reason: 'user' }).pipe(
+        Effect.ignore({ log: 'Warn', message: `Stopping task ${runId}` }),
+      ),
+    };
+  });
   /** A start or resume naming a window's own tools is refused: the service
    *  runs its own, so a run continued with them would wait on a tool no
    *  one serves. */
@@ -614,18 +610,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         ),
       ).pipe(
         Effect.flatMap((resumed) =>
-          // Waiting for what blocks it (its agent, a plugin): the service
-          // clears the mark once that is back, and under `resumeOnOpen:
-          // auto` continues it.
-          'kind' in resumed
-            ? Effect.fail(
-                new ResumeRefused({
-                  runId,
-                  reason: resumed,
-                  message: describeFollowUpFailure('blocked'),
-                }),
-              )
-            : runOf(resumed, resumed.runId === runId ? undefined : runId),
+          runOf(resumed, resumed.runId === runId ? undefined : runId),
         ),
       );
     },

@@ -14,7 +14,6 @@ import { Schema } from 'effect';
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
-  ResumeBlockedSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
@@ -40,7 +39,7 @@ import {
   type PermissionPayload,
   type RunId,
 } from '@shared/schemas';
-import { isActivePhase, isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   RUN_STATUS_KEYS,
   RUN_STATUS_TONE,
@@ -148,7 +147,15 @@ const RunViewSchema = Schema.Struct({
   /** Wall-clock time of `run.start`, ms since the epoch: the launch time a
    *  host prints. `createdAt` orders; this never does. */
   launchedAt: Positive,
+  /** The current turn's start as the rows record it: the fold's input to
+   *  `runStartedAt`, kept while the run's holder is not yet known. */
+  turnStartedAt: Schema.NullOr(Positive),
+  /** The clock a host shows: the turn's start while the run is busy on it;
+   *  null while it waits on a person, is interrupted, paused or between turns. */
   runStartedAt: Schema.NullOr(Positive),
+  /** Inside a turn: held, not paused, not ended. A pending approval or
+   *  question is still the turn's (Ctrl-C stops it, the tail stays live). */
+  working: Schema.Boolean,
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
@@ -184,8 +191,6 @@ const RunViewSchema = Schema.Struct({
   approval: Schema.Literals(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable. */
   readOnly: Schema.Boolean,
-  /** What a resume of this run waits for here; null: nothing blocks it. */
-  resumeBlocked: Schema.NullOr(ResumeBlockedSchema),
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
   /** This run or a descendant needs the user; outranks the surface's
@@ -216,13 +221,9 @@ const RunViewSchema = Schema.Struct({
 });
 export type RunView = typeof RunViewSchema.Type;
 
-/**
- * The one reading of "live" every host shares: a run somebody holds that has
- * not ended. An interrupted run's durable phase may still say in flight, but
- * nothing is working on it, so no run list, rollup, or status bar counts it.
- * Not `group` alone: a spawned child that has not activated yet is `ready`
- * and sorts under `recent`, yet it is live.
- */
+/** The one reading of "live" every host shares: a run somebody holds that
+ *  has not ended (an interrupted run's phase may still say in flight). Not
+ *  `group` alone: a spawned child not yet activated is `ready`, yet live. */
 export function isLiveRun(
   run: Pick<ReadRunView, 'group' | 'status' | 'substate'>,
 ): boolean {
@@ -273,7 +274,6 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
     run.identity.kind === 'agent' &&
     run.parentId === null &&
     !run.recipe &&
-    run.resumeBlocked === null &&
     (run.turn !== null || run.forkPoint !== null)
   );
 }
@@ -384,11 +384,6 @@ export function attentionOf<View extends ReadSessionView>(
   };
 }
 
-/** A live run working right now: not a conversation waiting on its user. */
-export function isWorkingRun(run: ReadRunView): boolean {
-  return isLiveRun(run) && isActivePhase(run.status);
-}
-
 /** How busy a session reads in a title: idle, running, or awaiting approval. */
 export type SessionTitleState = 'idle' | 'running' | 'approval';
 /**
@@ -398,7 +393,7 @@ export type SessionTitleState = 'idle' | 'running' | 'approval';
  */
 export function sessionActivity(view: ReadSessionView): SessionTitleState {
   if (answerableRequests(view).length > 0) return 'approval';
-  for (const run of view.runs.values()) if (isWorkingRun(run)) return 'running';
+  for (const run of view.runs.values()) if (run.working) return 'running';
   return 'idle';
 }
 
@@ -439,7 +434,7 @@ export function descendantRuns(
   const pending = [rootRunId];
   const seen = new Set<RunId>();
   for (let cursor = 0; cursor < pending.length; cursor++) {
-    const id = pending[cursor]!;
+    const id = pending[cursor];
     const run = view.runs.get(id);
     if (!run || seen.has(id)) continue;
     seen.add(id);

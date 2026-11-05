@@ -87,7 +87,7 @@ function isPlainObject(value: object): value is Record<string, unknown> {
  * the fields that identify what failed.
  */
 export function formatLogData(data: unknown): string {
-  if (typeof data !== 'object' || data === null) return String(data);
+  if (!Predicate.isObjectOrArray(data)) return String(data);
   const flattened = new WeakMap<Error, Record<string, unknown>>();
   // `splitRoot` is the payload a split render copied its fields out of. Each
   // half is a fresh object, so the payload itself is never on the

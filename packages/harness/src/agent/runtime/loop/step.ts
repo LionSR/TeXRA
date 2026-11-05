@@ -129,16 +129,18 @@ const sameSet = (
 
 /**
  * The offered tools with each that renders its description from the run's
- * declared tools (`ITool.describe`, the `script` tool's declarations)
- * described: at the step that freezes the system text, from the tools the
- * run declares (an MCP server's and the injected ones are left to
- * discovery); at any later step, as the run's last offered set recorded it,
- * so the text holds until a compaction opens the freeze again.
+ * declared tools and the modules its scripts may import (`ITool.describe`,
+ * the `script` tool's declarations) described: at the step that freezes the
+ * system text, from the tools the run declares (an MCP server's and the
+ * injected ones are left to discovery); at any later step, as the run's last
+ * offered set recorded it, so the text holds until a compaction opens the
+ * freeze again.
  */
 function describedAtFreeze<T extends ResolvedTools>(
   tools: T,
   state: RunState,
   declaration: AgentRunShape['toolInputs']['tools'],
+  modules: readonly string[],
 ): T {
   const describes = (name: string) =>
     tools.registry.get(name)?.describe !== undefined;
@@ -170,7 +172,7 @@ function describedAtFreeze<T extends ResolvedTools>(
       ? definition
       : {
           ...definition,
-          description: recorded(definition.name) ?? describe(declared),
+          description: recorded(definition.name) ?? describe(declared, modules),
         };
   });
   const shown = new Map(
@@ -227,10 +229,19 @@ const openStep = Effect.fn('Step.open')(function* (
       ...(trusted && { approvalPromptsUnavailable: false }),
     });
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
+    // A step held to the record loads the modules it recorded, so a
+    // resumed script runs the code it ran with.
+    const imported =
+      held === null
+        ? pinned.modules
+        : Record.map(state.offeredWith.modules, (at) =>
+            stored(state, at, Schema.String),
+          );
     const tools = describedAtFreeze(
       held?.tools ?? resolved,
       state,
       run.toolInputs.tools,
+      Object.keys(imported),
     );
     // The plugins whose sections the step's system text renders.
     const contributing = pinned.plugins.filter(
@@ -286,14 +297,6 @@ const openStep = Effect.fn('Step.open')(function* (
     const activated = names.flatMap((name) => byName.get(name) ?? []);
     const hooks = stepHooks(pinned.installed, recordedHooks);
     for (const note of hooks.notes) run.logger.warn(note);
-    // A step held to the record loads the modules it recorded, so a
-    // resumed script runs the code it ran with.
-    const imported =
-      held === null
-        ? pinned.modules
-        : Record.map(state.offeredWith.modules, (at) =>
-            stored(state, at, Schema.String),
-          );
     const modules = tools.registry.has(SCRIPT_TOOL_NAME) ? imported : {};
     return {
       tools: {

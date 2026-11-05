@@ -146,7 +146,7 @@ Each entry's exports, with their TSDoc and declarations, are listed in
 The protocols (`api/`), the prefix fingerprint and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
-ESLint holds the rest: nothing under `src/` imports another repo module, and
+oxlint holds the rest (`.oxlintrc.json`): nothing under `src/` imports another repo module, and
 outside `api/`, `oauth/` and `node.ts` nothing imports a Node built-in or a
 vendor SDK.
 
@@ -192,7 +192,11 @@ switch (`replayableHistory`); another protocol's evidence fails explicitly in
 the codec. `codecVersion` changes only when the meaning of that stored state
 changes, so a turn a newer codec would read differently is resent as plain
 content instead of misread. Adding a field or changing how a request is
-built keeps the version.
+built keeps the version. A turn of another version must still decode, so
+`codecVersion` covers a change of meaning only. A change to the stored
+shape of that state, one an older build could not decode, also bumps the
+harness's `model.message` row version, and an older build then refuses the
+store rather than the turn (`ROW_KINDS`, `packages/harness/src/shared/schemas/rowVersions.ts`).
 
 ## The tree
 

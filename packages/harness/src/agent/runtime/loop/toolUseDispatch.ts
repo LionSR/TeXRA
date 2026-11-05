@@ -85,7 +85,6 @@ import {
   type CallResult,
   type CallStatus,
 } from '@shared/session/inFlight';
-import type { QueuedFollowUp } from '@shared/session/runRows';
 import { checkOwnFacts, factRows } from '@tools/plugins';
 import { ToolRegistry } from '@tools/toolTable';
 import { getBasename } from '@utils/core';
@@ -497,29 +496,28 @@ const finishCall = Effect.fn('toolUse.finishCall')(function* (
   } else {
     // From here the call may have run: its intent commits now, with a slow
     // tool's card, unless this attempt's body already started (a re-entry).
-    const bodyStarts = (on: unknown) =>
-      Effect.gen(function* () {
-        ran = on;
-        if (!bodyStarted)
-          yield* commit(call, [
-            {
-              type: 'tool.intent',
-              aggregateId: dispatch.aggregateId,
-              payload: {
-                origin:
-                  script === null
-                    ? { kind: 'response', responseId }
-                    : { kind: 'script', scriptCallId: script.scriptCallId },
-                callId: fact.callId,
-                attempt,
-              },
+    const bodyStarts = Effect.fn('bodyStarts')(function* (on: unknown) {
+      ran = on;
+      if (!bodyStarted)
+        yield* commit(call, [
+          {
+            type: 'tool.intent',
+            aggregateId: dispatch.aggregateId,
+            payload: {
+              origin:
+                script === null
+                  ? { kind: 'response', responseId }
+                  : { kind: 'script', scriptCallId: script.scriptCallId },
+              callId: fact.callId,
+              attempt,
             },
-            ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
-          ]);
-        bodyStarted = true;
-        accepting = tool.slow === true;
-        yield* pre.bodyStarts;
-      });
+          },
+          ...(tool.slow ? cardRows(call, on, attempt, false, null) : []),
+        ]);
+      bodyStarted = true;
+      accepting = tool.slow === true;
+      yield* pre.bodyStarts;
+    });
     // This call's place in its run, and the child door over exactly it.
     const runCall: RunCallShape = {
       run,
@@ -707,34 +705,32 @@ const scriptDoor = Effect.fn('toolUse.scriptDoor')(function* (
   let since: Deferred.Deferred<void>[] = [];
   const window = yield* Semaphore.make(MAX_PARALLEL_TOOL_CALLS);
   /** Run `body` in `seq`'s place and `lane`, or only take the place (no lane). */
-  const inLane = <E, R>(
+  const inLane = Effect.fn('inLane')(function* <E, R>(
     seq: number,
     lane: DispatchFacts['lane'] | null,
     body: Effect.Effect<void, E, R>,
-  ): Effect.Effect<void, E, R> =>
-    Effect.gen(function* () {
-      if (seq > 0) yield* Deferred.await(slot(places, seq - 1));
-      const after = lane === 'barrier' ? [barrier, ...since] : [barrier];
-      const done = lane === null ? null : Deferred.makeUnsafe<void>();
-      if (done !== null && lane === 'barrier') [barrier, since] = [done, []];
-      else if (done !== null) since.push(done);
-      yield* Deferred.succeed(slot(places, seq), undefined);
-      if (done !== null)
-        for (const call of after)
-          if (call !== null) yield* Deferred.await(call);
-      // Nothing runs again until the guest holds all that settled.
-      yield* handedBack(seq);
-      if (done === null) return;
-      // A call that did not finish (a stop, a durable write that failed)
-      // lets nothing after it run: what follows it is interrupted too.
-      yield* (lane === 'parallel' ? window.withPermits(1)(body) : body).pipe(
-        Effect.onExit((exit) =>
-          Exit.isSuccess(exit)
-            ? Deferred.succeed(done, undefined)
-            : Deferred.interrupt(done),
-        ),
-      );
-    });
+  ): Effect.fn.Return<void, E, R> {
+    if (seq > 0) yield* Deferred.await(slot(places, seq - 1));
+    const after = lane === 'barrier' ? [barrier, ...since] : [barrier];
+    const done = lane === null ? null : Deferred.makeUnsafe<void>();
+    if (done !== null && lane === 'barrier') [barrier, since] = [done, []];
+    else if (done !== null) since.push(done);
+    yield* Deferred.succeed(slot(places, seq), undefined);
+    if (done !== null)
+      for (const call of after) if (call !== null) yield* Deferred.await(call);
+    // Nothing runs again until the guest holds all that settled.
+    yield* handedBack(seq);
+    if (done === null) return;
+    // A call that did not finish (a stop, a durable write that failed)
+    // lets nothing after it run: what follows it is interrupted too.
+    yield* (lane === 'parallel' ? window.withPermits(1)(body) : body).pipe(
+      Effect.onExit((exit) =>
+        Exit.isSuccess(exit)
+          ? Deferred.succeed(done, undefined)
+          : Deferred.interrupt(done),
+      ),
+    );
+  });
   yield* Effect.addFinalizer((exit) =>
     Exit.hasInterrupts(exit)
       ? Effect.void
@@ -923,12 +919,8 @@ const groupsOf = (calls: readonly DispatchFacts[]): DispatchFacts[][] => {
 };
 
 /** Delivery: the paid turn enters history once, with the complete tool
- *  group, each result as the model reads it. A queued model switch among
- *  the run's pending requests (`controls`) keeps the documents local. */
-const deliver = Effect.fn('toolUse.deliver')(function* (
-  dispatch: Dispatch,
-  controls: Effect.Effect<readonly QueuedFollowUp[]>,
-) {
+ *  group, each result as the model reads it. */
+const deliver = Effect.fn('toolUse.deliver')(function* (dispatch: Dispatch) {
   const { run, cell, responseId } = dispatch;
   const { runId, logger } = run;
   const settledState = yield* cell.current;
@@ -971,12 +963,11 @@ const deliver = Effect.fn('toolUse.deliver')(function* (
   // Offer each delivered document to the binding's upload cache, so requests
   // replaying this history can send a file id instead of the bytes: under the
   // parallel-call bound and one deadline that warns with the unfinished paths.
-  // A batch that ends the turn, or one delivered while a model switch waits
-  // (its binding never saw these ids), keeps its documents local.
-  const switching =
-    !endTurn && (yield* controls).some((f) => f.control?.kind === 'model');
-  const documents = (endTurn || switching ? [] : media).flatMap(
-    ({ path, part }) => (part.kind === 'document' ? [{ path, part }] : []),
+  // A batch that ends the turn keeps its documents local. Ids uploaded on a
+  // binding a queued model switch then replaces are never sent: the new
+  // binding's cache starts empty and sends the bytes.
+  const documents = (endTurn ? [] : media).flatMap(({ path, part }) =>
+    part.kind === 'document' ? [{ path, part }] : [],
   );
   const uploadFile =
     documents.length === 0 ? undefined : bound.model.uploadFile;
@@ -1030,12 +1021,10 @@ const deliver = Effect.fn('toolUse.deliver')(function* (
 });
 
 /** Dispatch the pending response's unsettled calls under `step`'s tools,
- *  then deliver. `controls` are the run's pending requests (`FollowUps`):
- *  a queued model switch keeps the delivered documents local. */
+ *  then deliver. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   step: StepTools,
-  controls: Effect.Effect<readonly QueuedFollowUp[]>,
 ): Effect.fn.Return<DispatchOutcome, InvokeError, AgentRun | AgentRunServices> {
   const run = yield* AgentRun;
   const { runId, logger } = run;
@@ -1093,5 +1082,5 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       endsTurn(settlementOf(dispatch, state, callId)),
     );
   }
-  return yield* deliver(dispatch, controls);
+  return yield* deliver(dispatch);
 });

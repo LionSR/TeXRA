@@ -26,7 +26,8 @@ function wslInstallHint(): string {
 
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */
 type SdkBinaryStatus =
-  { ok: false; message: string } | { ok: true; binaryPath: string };
+  | { ok: false; message: string }
+  | { ok: true; binaryPath: string };
 
 /**
  * Human-readable probe shared by the SDK-backed CLI integrations: import
@@ -35,22 +36,22 @@ type SdkBinaryStatus =
  * importer's own install guidance, found on the cause chain's error code
  * rather than in the message text. Callers own only the final "ready" line.
  */
-export function probeSdkBinaryStatus(config: {
-  importSdk: () => Effect.Effect<unknown, Error>;
-  findBinary: () => Effect.Effect<
-    string | undefined,
-    Error,
+export const probeSdkBinaryStatus = Effect.fn('probeSdkBinaryStatus')(
+  function* (config: {
+    importSdk: () => Effect.Effect<unknown, Error>;
+    findBinary: () => Effect.Effect<
+      string | undefined,
+      Error,
+      ChildProcessSpawner | FileSystem.FileSystem
+    >;
+    importFailedLabel: string;
+    binaryNotFoundMessage: string;
+    classifyImportError?: (msg: string) => string | undefined;
+  }): Effect.fn.Return<
+    SdkBinaryStatus,
+    ToolProbeFailed,
     ChildProcessSpawner | FileSystem.FileSystem
-  >;
-  importFailedLabel: string;
-  binaryNotFoundMessage: string;
-  classifyImportError?: (msg: string) => string | undefined;
-}): Effect.Effect<
-  SdkBinaryStatus,
-  ToolProbeFailed,
-  ChildProcessSpawner | FileSystem.FileSystem
-> {
-  return Effect.gen(function* () {
+  > {
     // Only the import is classified into a message; a binary-resolution
     // failure stays on the error channel.
     const importFailure = yield* Effect.suspend(config.importSdk).pipe(
@@ -85,8 +86,8 @@ export function probeSdkBinaryStatus(config: {
       };
     }
     return { ok: true as const, binaryPath };
-  });
-}
+  },
+);
 
 /**
  * Pick the install command to offer for a CLI on this machine.

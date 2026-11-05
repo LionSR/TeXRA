@@ -23,6 +23,7 @@ export const noPluginHold = () => Effect.void;
  * files, ahead of the suites that mock it.
  */
 const unreadGitHubSubscriptions = new Proxy(
+  // cast: the three tables throw when read, and nothing else is read.
   {} as GitHubSubscriptions['Service'],
   {
     get: (target, member) => {
@@ -60,9 +61,8 @@ export const testCallPluginServices = Layer.merge(
         return Layer.build(testPluginServicesLayer).pipe(
           Scope.provide(Scope.makeUnsafe()),
           Effect.map((services) => {
-            const context = services as PluginContext;
-            builtFor.set(runs, context);
-            return context;
+            builtFor.set(runs, services);
+            return services;
           }),
         );
       }),

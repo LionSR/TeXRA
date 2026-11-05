@@ -13,8 +13,9 @@ export function renderElement(template: TemplateResult): HTMLElement {
   const container = document.createElement('div');
   render(template, container);
   const element = container.firstElementChild;
-  if (!element) throw new Error('renderElement: template produced no element');
-  return element as HTMLElement;
+  if (!(element instanceof HTMLElement))
+    throw new Error('renderElement: template produced no HTML element');
+  return element;
 }
 
 /**
@@ -71,7 +72,7 @@ export function createOverlayDialog(
   options: OverlayDialogOptions,
 ): OverlayDialogHandle {
   const { prefix } = options;
-  const dialog = document.createElement('wa-dialog') as WaDialog;
+  const dialog = document.createElement('wa-dialog');
   dialog.classList.add(`${prefix}-overlay`);
   dialog.withoutHeader = true;
   dialog.lightDismiss = false;

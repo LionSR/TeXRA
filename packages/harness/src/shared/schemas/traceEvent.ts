@@ -21,6 +21,11 @@ function trace<T extends string, const F extends Schema.Struct.Fields>(
   });
 }
 
+const ResponseCutSchema = Schema.Literals(['length', 'content-filter']);
+/** The limit that ended an answer early: the model's output budget
+ *  (`length`), or the provider's content filter. */
+export type ResponseCut = typeof ResponseCutSchema.Type;
+
 /** Durable transcript vocabulary; session events extend each arm. */
 export const TranscriptEventSchema = Schema.Union([
   trace('log', {
@@ -89,7 +94,12 @@ export const TranscriptEventSchema = Schema.Union([
    *  boundary, not only the terminal round. The round's MODEL_RESPONSE stream carries raw
    *  provider chunks, so subscribers reconcile that stream's entry to this
    *  text rather than assume the two match. */
-  trace('response.finalized', { text: Schema.String }),
+  /** The answer shown as final. `cut` names the limit that ended it early:
+   *  the model's output budget, or the provider's content filter. */
+  trace('response.finalized', {
+    text: Schema.String,
+    cut: Schema.optional(ResponseCutSchema),
+  }),
 ]);
 
 export type TranscriptEvent = typeof TranscriptEventSchema.Type;

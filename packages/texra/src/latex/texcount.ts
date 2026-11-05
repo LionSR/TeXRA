@@ -138,39 +138,38 @@ const getIndividualCounts = Effect.fn('texcount.getIndividualCounts')(
   ) {
     const results = yield* Effect.forEach(
       paths,
-      (filePath) =>
-        Effect.gen(function* () {
-          const absolutePath = pathToLocationIn(
-            workspaceRoot,
-            filePath,
-          ).absolutePath;
-          const reason = yield* rejectionReason(absolutePath);
-          if (reason) {
-            return { output: null, error: reason };
-          }
+      Effect.fnUntraced(function* (filePath) {
+        const absolutePath = pathToLocationIn(
+          workspaceRoot,
+          filePath,
+        ).absolutePath;
+        const reason = yield* rejectionReason(absolutePath);
+        if (reason) {
+          return { output: null, error: reason };
+        }
 
-          const args: string[] = [];
-          if (includeReferenced) {
-            args.push('-inc');
-          }
-          if (yield* hasChinesePackages(absolutePath)) {
-            args.push('-ch-only');
-          }
-          args.push(filePath);
+        const args: string[] = [];
+        if (includeReferenced) {
+          args.push('-inc');
+        }
+        if (yield* hasChinesePackages(absolutePath)) {
+          args.push('-ch-only');
+        }
+        args.push(filePath);
 
-          const { stdout, error } = yield* runTexcount(
-            workspaceRoot,
-            settings,
-            args,
-            filePath,
-          );
-          return {
-            output: stdout
-              ? `TeX Count Results for ${filePath}:\n${stdout}`
-              : null,
-            error,
-          };
-        }),
+        const { stdout, error } = yield* runTexcount(
+          workspaceRoot,
+          settings,
+          args,
+          filePath,
+        );
+        return {
+          output: stdout
+            ? `TeX Count Results for ${filePath}:\n${stdout}`
+            : null,
+          error,
+        };
+      }),
       { concurrency: COUNT_CONCURRENCY },
     );
 

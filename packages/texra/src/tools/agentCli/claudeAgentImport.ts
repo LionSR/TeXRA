@@ -15,23 +15,18 @@
  *    `query()`. Results are cached for the session.
  *
  * 3. `getClaudeAgentConfig()` — the same lazy access for `claudeAgentConfig`,
- *    which the tool-registration path must not pull in eagerly, plus the one
- *    reading of the call's effective permission mode.
+ *    which the tool-registration path must not pull in eagerly.
  */
 
 import * as path from 'node:path';
-import { Settings } from '@texra-ai/harness/host';
 
 import { Effect } from 'effect';
 
-import type { ClaudeAgentPermissionMode } from '@texra/shared/agentCliSettings';
-import { ClaudeAgentStateKey } from '@texra/shared/settingsView/integrationSettings';
 import {
   binaryIfPresent,
   createCachedBinaryResolver,
   importForeignSdk,
 } from '@texra/tools/support/externalBinaryUtils';
-import type { StateReadFailed, SettingsStores } from '@texra-ai/harness/host';
 
 // ---------------------------------------------------------------------------
 // SDK import
@@ -128,16 +123,3 @@ export const findClaudeBinaryPath = createCachedBinaryResolver(() => {
 export const getClaudeAgentConfig = Effect.promise(
   () => import('./claudeAgentConfig.js'),
 );
-
-/**
- * The permission mode a claude_code call runs under: its own override, else
- * the workspace default. The approval prompt the loop opens and the launch
- * that follows it read the same one from here.
- */
-export const claudeAgentPermissionMode = (
-  input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
-  stores: SettingsStores,
-): Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =>
-  input.permission_mode == null
-    ? Settings.get(stores, ClaudeAgentStateKey.PERMISSION_MODE)
-    : Effect.succeed(input.permission_mode);

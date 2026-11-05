@@ -223,13 +223,15 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
           part.kind === 'reasoning' &&
           sameModelOrigin(message.origin, origin)
         ) {
+          const onlyContent =
+            part.content?.length === 1 ? part.content.at(0) : undefined;
           if (
             part.evidence?.kind === 'anthropic-thinking-signature' &&
-            part.content?.length === 1
+            onlyContent !== undefined
           ) {
             content.push({
               type: 'thinking',
-              thinking: part.content[0]!.text,
+              thinking: onlyContent.text,
               signature: part.evidence.signature,
             });
           } else if (part.evidence?.kind === 'anthropic-redacted-thinking') {
@@ -295,10 +297,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       ? {}
       : {
           tools,
-          tool_choice: {
-            type: 'auto',
-            disable_parallel_tool_use: !controls.parallelToolCalls,
-          },
+          tool_choice: { type: 'auto' },
         }),
   };
   if (turn.system && body.cache_control) {
@@ -319,7 +318,6 @@ const FINISH = {
   stop_sequence: 'stop-sequence',
   tool_use: 'tool-calls',
   refusal: 'refusal',
-  model_context_window_exceeded: 'context-window-exceeded',
 } as const;
 
 /** The canonical receipt of Anthropic's cumulative counters. */
@@ -402,175 +400,185 @@ function anthropicWire() {
   let stop: typeof StopSchema.Type = {};
   let usage: typeof UsageSchema.Type = {};
 
-  const parts = (raw: unknown): Effect.Effect<PartEvent[], ModelError> =>
-    Effect.gen(function* () {
-      const event = yield* decodeWireOrFail(
-        EventSchema,
-        'Anthropic returned an unsupported or malformed stream event.',
-        raw,
+  const parts = Effect.fnUntraced(function* (
+    raw: unknown,
+  ): Effect.fn.Return<PartEvent[], ModelError> {
+    const event = yield* decodeWireOrFail(
+      EventSchema,
+      'Anthropic returned an unsupported or malformed stream event.',
+      raw,
+    );
+    if (event.type === 'message_start') {
+      const message = event.message;
+      if (
+        started ||
+        message.stop_reason != null ||
+        message.stop_sequence != null ||
+        message.stop_details != null ||
+        message.container != null
+      )
+        return yield* fail('Anthropic returned an invalid initial message.');
+      started = true;
+      usage = message.usage;
+      return [{ kind: 'identity', id: message.id, model: message.model }];
+    }
+    if (!started)
+      return yield* fail('Anthropic emitted content before message identity.');
+    if (event.type === 'message_delta') {
+      if (open || event.delta.container != null)
+        return yield* fail(
+          'Anthropic returned unsettled content.',
+          'unsupported',
+        );
+      stop = event.delta;
+      // These counters are cumulative; null/omission means no update, never zero or addition.
+      usage = {
+        ...usage,
+        ...Object.fromEntries(
+          Object.entries(event.usage).filter(([, value]) => value != null),
+        ),
+      };
+      return [];
+    }
+    if (event.type === 'message_stop') {
+      const reason = stop.stop_reason;
+      if (open || reason == null)
+        return yield* fail(
+          'Anthropic stopped without complete content and a terminal reason.',
+        );
+      if (reason === 'pause_turn')
+        return yield* fail(
+          'Anthropic paused hosted execution requires a separate supported continuation protocol.',
+          'unsupported',
+        );
+      // The one overflow every protocol reports the same way: the error
+      // the other providers raise as an HTTP failure. Anthropic billed the
+      // input it read before stopping, so the failure carries its usage.
+      if (reason === 'model_context_window_exceeded')
+        return yield* Effect.fail(
+          new ModelError({
+            kind: 'context-overflow',
+            message:
+              "Anthropic stopped: the request exceeds the model's context window.",
+            usage: canonicalUsage(usage),
+          }),
+        );
+      stopped = true;
+      const refusal = stop.stop_details;
+      return [
+        { kind: 'usage', usage: canonicalUsage(usage) },
+        {
+          kind: 'finish',
+          finish: {
+            finishReason: FINISH[reason],
+            ...(stop.stop_sequence == null
+              ? {}
+              : { stopSequence: stop.stop_sequence }),
+            ...(refusal === undefined
+              ? {}
+              : {
+                  refusalEvidence: refusal && {
+                    kind: 'anthropic-refusal',
+                    category: refusal.category,
+                    explanation: refusal.explanation,
+                  },
+                }),
+          },
+        },
+      ];
+    }
+    if (stop.stop_reason != null)
+      return yield* fail(
+        'Anthropic emitted content after terminal message metadata.',
       );
-      if (event.type === 'message_start') {
-        const message = event.message;
-        if (
-          started ||
-          message.stop_reason != null ||
-          message.stop_sequence != null ||
-          message.stop_details != null ||
-          message.container != null
-        )
-          return yield* fail('Anthropic returned an invalid initial message.');
-        started = true;
-        usage = message.usage;
-        return [{ kind: 'identity', id: message.id, model: message.model }];
-      }
-      if (!started)
+    if (event.type === 'content_block_start') {
+      const block = event.content_block;
+      if (open || event.index !== next)
         return yield* fail(
-          'Anthropic emitted content before message identity.',
+          'Anthropic content blocks are not complete and ordered.',
         );
-      if (event.type === 'message_delta') {
-        if (open || event.delta.container != null)
-          return yield* fail(
-            'Anthropic returned unsettled content.',
-            'unsupported',
-          );
-        stop = event.delta;
-        // These counters are cumulative; null/omission means no update, never zero or addition.
-        usage = {
-          ...usage,
-          ...Object.fromEntries(
-            Object.entries(event.usage).filter(([, value]) => value != null),
-          ),
-        };
-        return [];
-      }
-      if (event.type === 'message_stop') {
-        const reason = stop.stop_reason;
-        if (open || reason == null)
-          return yield* fail(
-            'Anthropic stopped without complete content and a terminal reason.',
-          );
-        if (reason === 'pause_turn')
-          return yield* fail(
-            'Anthropic paused hosted execution requires a separate supported continuation protocol.',
-            'unsupported',
-          );
-        stopped = true;
-        const refusal = stop.stop_details;
-        return [
-          { kind: 'usage', usage: canonicalUsage(usage) },
-          {
-            kind: 'finish',
-            finish: {
-              finishReason: FINISH[reason],
-              ...(stop.stop_sequence == null
-                ? {}
-                : { stopSequence: stop.stop_sequence }),
-              ...(refusal === undefined
-                ? {}
-                : {
-                    refusalEvidence: refusal && {
-                      kind: 'anthropic-refusal',
-                      category: refusal.category,
-                      explanation: refusal.explanation,
-                    },
-                  }),
-            },
-          },
-        ];
-      }
-      if (stop.stop_reason != null)
+      if (
+        (block.type === 'text' && (block.citations?.length ?? 0) > 0) ||
+        (block.type === 'tool_use' &&
+          (block.toolset_name != null || Object.keys(block.input).length !== 0))
+      )
         return yield* fail(
-          'Anthropic emitted content after terminal message metadata.',
+          'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',
+          'unsupported',
         );
-      if (event.type === 'content_block_start') {
-        const block = event.content_block;
-        if (open || event.index !== next)
-          return yield* fail(
-            'Anthropic content blocks are not complete and ordered.',
-          );
-        if (
-          (block.type === 'text' && (block.citations?.length ?? 0) > 0) ||
-          (block.type === 'tool_use' &&
-            (block.toolset_name != null ||
-              Object.keys(block.input).length !== 0))
-        )
-          return yield* fail(
-            'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',
-            'unsupported',
-          );
-        open = {
-          index: next++,
-          type: block.type,
-          signed: block.type === 'thinking' && block.signature.length > 0,
-        };
-        const initial =
-          (block.type === 'text' && block.text) ||
-          (block.type === 'thinking' && block.thinking);
-        return [
-          { kind: 'open', index: event.index, part: blockPart(block) },
-          ...(initial
-            ? [
-                {
-                  kind: 'append',
-                  index: event.index,
-                  channel: block.type === 'text' ? 'text' : 'reasoning',
-                  text: initial,
-                } as const,
-              ]
-            : []),
-        ];
-      }
-      if (open?.index !== event.index)
-        return yield* fail('Anthropic updated a block that is not open.');
-      if (event.type === 'content_block_stop') {
-        if (open.type === 'thinking' && !open.signed)
-          return yield* fail('Anthropic thinking ended without its signature.');
-        open = undefined;
-        return [{ kind: 'close', index: event.index }];
-      }
-      const delta = event.delta;
-      if (delta.type === 'signature_delta') {
-        if (open.type !== 'thinking')
-          return yield* fail('Anthropic emitted a mismatched content delta.');
-        open.signed = true;
-        return [
-          {
-            kind: 'evidence',
-            index: event.index,
-            evidence: {
-              kind: 'anthropic-thinking-signature',
-              signature: delta.signature,
-            },
+      open = {
+        index: next++,
+        type: block.type,
+        signed: block.type === 'thinking' && block.signature.length > 0,
+      };
+      const initial =
+        (block.type === 'text' && block.text) ||
+        (block.type === 'thinking' && block.thinking);
+      return [
+        { kind: 'open', index: event.index, part: blockPart(block) },
+        ...(initial
+          ? [
+              {
+                kind: 'append',
+                index: event.index,
+                channel: block.type === 'text' ? 'text' : 'reasoning',
+                text: initial,
+              } as const,
+            ]
+          : []),
+      ];
+    }
+    if (open?.index !== event.index)
+      return yield* fail('Anthropic updated a block that is not open.');
+    if (event.type === 'content_block_stop') {
+      if (open.type === 'thinking' && !open.signed)
+        return yield* fail('Anthropic thinking ended without its signature.');
+      open = undefined;
+      return [{ kind: 'close', index: event.index }];
+    }
+    const delta = event.delta;
+    if (delta.type === 'signature_delta') {
+      if (open.type !== 'thinking')
+        return yield* fail('Anthropic emitted a mismatched content delta.');
+      open.signed = true;
+      return [
+        {
+          kind: 'evidence',
+          index: event.index,
+          evidence: {
+            kind: 'anthropic-thinking-signature',
+            signature: delta.signature,
           },
-        ];
-      }
-      if (delta.type === 'text_delta')
-        return [
-          {
-            kind: 'append',
-            index: open.index,
-            channel: 'text',
-            text: delta.text,
-          },
-        ];
-      if (delta.type === 'thinking_delta')
-        return [
-          {
-            kind: 'append',
-            index: open.index,
-            channel: 'reasoning',
-            text: delta.thinking,
-          },
-        ];
+        },
+      ];
+    }
+    if (delta.type === 'text_delta')
       return [
         {
           kind: 'append',
           index: open.index,
-          channel: 'arguments',
-          text: delta.partial_json,
+          channel: 'text',
+          text: delta.text,
         },
       ];
-    });
+    if (delta.type === 'thinking_delta')
+      return [
+        {
+          kind: 'append',
+          index: open.index,
+          channel: 'reasoning',
+          text: delta.thinking,
+        },
+      ];
+    return [
+      {
+        kind: 'append',
+        index: open.index,
+        channel: 'arguments',
+        text: delta.partial_json,
+      },
+    ];
+  });
   return { parts, stopped: () => stopped };
 }
 
@@ -629,29 +637,20 @@ export function anthropicMessagesModel(
       origin,
       undefined,
       (input) =>
-        // Anthropic keeps no response state a later turn could chain on.
-        input.store !== undefined
-          ? Effect.fail(
-              new ModelError({
-                kind: 'unsupported',
-                message: 'Anthropic does not store responses.',
-              }),
-            )
-          : Effect.succeed({
-              ...origin,
-              mode: 'foreground',
-              system: input.system,
-              messages: input.messages,
-              tools: input.tools ?? [],
-              controls: {
-                ...fitLimit(config.defaults, input.maxOutputTokens),
-                parallelToolCalls: config.defaults.parallelToolCalls,
-                toolChoice: input.toolChoice ?? 'auto',
-                effort: config.defaults.effort,
-                cache: config.defaults.cache,
-                stopSequences: config.defaults.stopSequences,
-              },
-            }),
+        Effect.succeed({
+          ...origin,
+          mode: 'foreground',
+          system: input.system,
+          messages: input.messages,
+          tools: input.tools ?? [],
+          controls: {
+            ...fitLimit(config.defaults, input.maxOutputTokens),
+            toolChoice: input.toolChoice ?? 'auto',
+            effort: config.defaults.effort,
+            cache: config.defaults.cache,
+            stopSequences: config.defaults.stopSequences,
+          },
+        }),
       (turn) => invocationBody(turn, origin, config, uploads),
     );
 

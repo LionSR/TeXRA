@@ -11,9 +11,9 @@
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import type { SettingsViewOutboundHandlerRegistry } from '@texra/shared/settingsView/settingsViewMessages';
-import type {
-  SettingsSectionName,
-  SettingsTabPanelName,
+import {
+  SETTINGS_PAGE_SECTIONS,
+  SETTINGS_TAB_ORDER,
 } from '@texra/shared/settingsView/settingsTarget';
 
 import {
@@ -47,10 +47,14 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   // View chrome: active tab and the derived capability gating across tabs.
   [SETTINGS_VIEW_COMMANDS.SET_TAB]: (data) => {
     // The schema admits only `page` or a `page/section` pair it declares.
-    const [page, section] = data.tab.split('/') as [
-      SettingsTabPanelName,
-      SettingsSectionName?,
-    ];
+    const { tab } = data;
+    const page = SETTINGS_TAB_ORDER.find(
+      (name) => tab === name || tab.startsWith(`${name}/`),
+    );
+    if (!page) throw new Error(`Unknown settings tab "${tab}"`);
+    const section = SETTINGS_PAGE_SECTIONS[page].find(
+      (name: string) => tab === `${page}/${name}`,
+    );
     selectSettingsPage(page, section);
   },
 
@@ -91,9 +95,6 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION]: (data) => {
     modelSelectionItems.set(data.models);
     settingSignal<string>(GlobalStateKey.HELPER_MODEL).set(data.helperModel);
-    settingSignal<boolean>(GlobalStateKey.PREFER_SHORT_MODEL_NAMES).set(
-      data.preferShortModelNames,
-    );
   },
 
   // Agent selection.

@@ -21,23 +21,27 @@ import {
   Schema,
   type Scope,
   Semaphore,
-  SubscriptionRef,
 } from 'effect';
 
 import type { finalizeRun } from '@agent/storage/runLifecycle';
 import type { RunAttempt } from '@agent/followUp/ToolUseFollowUp';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { grantsKept, type ApprovalGrants } from '@shared/approvalBypassKind';
+import {
+  grantSource,
+  grantsKept,
+  type ApprovalGrants,
+} from '@shared/approvalBypassKind';
 import { Settings } from '@shared/config/settings';
+import { ancestryRows } from '@shared/session/runRelation';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
   USER_FOLLOW_UP_SUPPORT,
+  type RunStopReason,
 } from '@shared/schemas';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import type { RunStopReason } from '@shared/session/runtimeRequest';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -46,7 +50,6 @@ import type {
   RunControls,
   RunsShape,
   RunStop,
-  RunStopOptions,
   StopCause,
 } from './runs';
 import type { executeAgent } from './executeAgent';
@@ -178,7 +181,6 @@ export class RunRegistry implements RunsShape {
     return {
       runId,
       controls,
-      parent: this.attachedParent(runId),
       readsMessages,
       drained: this.awaitDrained(runId),
     };
@@ -195,7 +197,7 @@ export class RunRegistry implements RunsShape {
   /** The run's attached parent here: the settled view's for a run that
    *  exists, its activation's for one not yet created. A decision that
    *  writes reads the run's records in its job instead. */
-  private attachedParent(runId: RunId): RunId | null {
+  attachedParent(runId: RunId): RunId | null {
     const run = this.init.view.run(runId);
     return run
       ? run.parentId
@@ -462,41 +464,40 @@ export class RunRegistry implements RunsShape {
   }
 
   /**
-   * Stop a run, deciding here what happens to its children: the caller's
-   * policy, else the session's "Keep subagents running", read as the stop
-   * runs. A run this process drives is stopped where it stands, children
-   * first; a detaching stop only after the children's `run.detach` commits,
-   * or a child completing meanwhile would route its result to the stopped
-   * parent. A run nothing here owns is stopped under its claim, taken before
-   * its children are touched, and given the end the stop owes it
-   * ({@link stopEnd}); a refused claim or row fails it.
+   * Stop a run (`RunsShape.stop` says what each reason does to its
+   * children). A run this process drives is stopped where it stands,
+   * children first; a detaching stop only after the children's `run.detach`
+   * commits, or a child completing meanwhile would route its result to the
+   * stopped parent. A run nothing here owns is stopped under its claim,
+   * taken before its children are touched, and given the end the stop owes
+   * it ({@link stopEnd}); a refused claim or row fails it.
    */
-  stop(runId: RunId, options: RunStopOptions): RunStop {
+  stop(runId: RunId, reason: RunStopReason): RunStop {
     const activation = this.activations.get(runId);
     // Marked at the request: from here a child is refused under the run
     // (`assertAdmitsChild`) and a user's message sent while the stop runs
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
     const marked = activation?.stop;
-    if (activation !== undefined) this.markStopped(runId, options.reason);
-    const asked = options.detachActiveChildren;
+    if (activation !== undefined) this.markStopped(runId, reason);
     // Something here to stop: a launch.
     const local = activation !== undefined;
-    const end = this.stopEnd(runId, options.reason);
     let reached = false;
     // The child sweep and the root cascade visit each run once.
     const stopHere = (cascade: boolean): boolean => {
-      reached = this.terminate(runId, new Set(), cascade, options.reason);
+      reached = this.terminate(runId, new Set(), cascade, reason);
       return reached;
     };
-    if (asked === false && (local || end === undefined)) {
+    // No end owed (a shutdown, which ends this process's hold and its
+    // children's holds with it): the sweep is the whole stop.
+    const end = this.stopEnd(runId, reason);
+    if (end === undefined) {
       stopHere(true);
       return { accepted: () => reached, settlement: Effect.void };
     }
+    // A user's stop: its children follow "Keep agents running".
     const key = GlobalStateKey.DETACH_SUBAGENTS_ON_STOP;
     const apply = Effect.flatMap(
-      asked === undefined
-        ? Effect.suspend(() => Settings.get<boolean>(this.init.roots, key))
-        : Effect.succeed(asked),
+      Effect.suspend(() => Settings.get<boolean>(this.init.roots, key)),
       (detach) =>
         (detach ? this.detachActiveChildren(runId) : Effect.void).pipe(
           Effect.andThen(
@@ -504,7 +505,7 @@ export class RunRegistry implements RunsShape {
               // A reached target ends itself; an end owed otherwise is
               // written as an inactive-run step, which a generation admitted
               // meanwhile refuses (`RunLive`) and becomes the target instead.
-              stopHere(!detach) || end === undefined
+              stopHere(!detach)
                 ? Effect.void
                 : this.withInactiveRunStep(runId, end).pipe(
                     Effect.catchIf(isRunLive, () =>
@@ -539,7 +540,7 @@ export class RunRegistry implements RunsShape {
   ): Effect.Effect<void, Error, SessionServices> | undefined {
     if (cause !== 'user') return undefined;
     const { CANCELLED: outcome } = RUN_OUTCOME;
-    const end = { runId, outcome, ownerless: true };
+    const end = { runId, outcome, ownerless: true, reason: cause };
     return Effect.asVoid(this.programs.finalize(end));
   }
 
@@ -552,16 +553,18 @@ export class RunRegistry implements RunsShape {
     const active = new Set(this.activations.keys());
     for (const runId of active) {
       const parent = this.attachedParent(runId);
-      if (parent === null || !active.has(parent))
-        this.stop(runId, { detachActiveChildren: false, reason: 'shutdown' });
+      if (parent === null || !active.has(parent)) this.stop(runId, 'shutdown');
     }
   }
 
   /** Record why `runId` stops, before it is interrupted, on its activation;
-   *  only a run this process launched has one. */
+   *  only a run this process launched has one. A person's stop outranks
+   *  every other cause, and a reason outranks a release. */
   private markStopped(runId: RunId, cause: StopCause): void {
     const activation = this.activations.get(runId);
-    if (activation && activation.stop !== 'user') activation.stop = cause;
+    if (activation === undefined || activation.stop === 'user') return;
+    if (cause !== 'released' || activation.stop === undefined)
+      activation.stop = cause;
   }
 
   /** Stop `runId` here, its children first when `cascadeChildren`: each run
@@ -599,15 +602,14 @@ export class RunRegistry implements RunsShape {
     return log.transact((tx) =>
       Effect.gen({ self: this }, function* () {
         const children = this.childRunIds(parentRunId);
-        const view = SubscriptionRef.getUnsafe(this.init.view.ref);
-        // Each born child's kept grants, from its rows: the view may not
-        // hold a child born a moment ago.
+        // Each born child's kept grants, from its rows and its ancestors'.
         const kept = new Map<RunId, ApprovalGrants>();
         for (const id of children) {
           const facts = yield* log.facts(id);
           if (facts?.start == null || facts.grants === null) continue;
           const parent = facts.start.parent?.id ?? parentRunId;
-          kept.set(id, grantsKept(view, id, parent, facts.grants));
+          const line = yield* ancestryRows((run) => log.facts(run), parent);
+          kept.set(id, grantsKept(grantSource(line), id, parent, facts.grants));
           yield* log.hold(id);
         }
         if (kept.size > 0)

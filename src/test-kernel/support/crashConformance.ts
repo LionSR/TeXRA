@@ -2,7 +2,7 @@
  * The crash-point conformance suite: the durability
  * contract checked at every commit point of one run, under TeXRA's plugins
  * (the block's `SessionGraph`), a superset of the harness's built-ins: every
- * scenario but the document task runs only harness code.
+ * scenario runs only harness code.
  *
  * A clean pass drives `golden_crash` (`goldenTurn` in the validation model)
  * in-process over a persistent store: a response with two calls (a read and
@@ -85,6 +85,7 @@ import {
 import { describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
+import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import {
   rootRun,
@@ -102,13 +103,14 @@ import {
   AgentConfigSchema,
   qualifyAggregateId,
   aggregateTarget,
-  type RunEndOutput,
   type RunId,
 } from '@shared/schemas';
 import { ProjectDatabases } from '@shared/session/database';
 import { generateRunId } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
+import { Settings } from '@shared/config/settings';
 import {
+  answerOf,
   crashAt,
   persistentTestSession,
   storedRows as rowsOf,
@@ -117,8 +119,6 @@ import {
 } from '@test/support/storeFaults';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { asDocumentTask } from '@test/support/ProgressControllerHarnesses';
-import { documentsResultOf } from '@texra/shared/plugins/documentOutputs';
 
 /** A file's lines, none when it is absent. */
 const linesOf = (file: string): string[] =>
@@ -129,8 +129,74 @@ const linesOf = (file: string): string[] =>
         .map((line) => line.trimEnd())
         .filter(Boolean)
     : [];
-const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
-const payload = (row: Row) => json(row).payload as Record<string, unknown>;
+const decodeFields = Schema.decodeUnknownSync(
+  Schema.Record(Schema.String, Schema.Unknown),
+);
+const json = (row: Row) => decodeFields(JSON.parse(row.data));
+const payload = (row: Row) => decodeFields(json(row).payload);
+// Decoders of the row fields the suite reads beyond its type.
+const followUpOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    followUpId: Schema.String,
+    control: Schema.optional(Schema.Struct({ kind: Schema.String })),
+  }),
+);
+const configOf = Schema.decodeUnknownSync(
+  Schema.Struct({ config: Schema.Struct({ model: Schema.String }) }),
+);
+const seedOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    messages: Schema.Array(
+      Schema.Struct({
+        role: Schema.String,
+        content: Schema.optional(Schema.Unknown),
+      }),
+    ),
+  }),
+);
+const policyOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    snapshot: Schema.Struct({
+      own: Schema.Struct({ bash: Schema.optional(Schema.String) }),
+    }),
+  }),
+);
+const invocationOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    invocation: Schema.Struct({ invocationId: Schema.String }),
+  }),
+);
+const decisionOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    requestId: Schema.String,
+    decision: Schema.Struct({ action: Schema.String }),
+  }),
+);
+const intentOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    origin: Schema.Struct({ responseId: Schema.optional(Schema.String) }),
+    callId: Schema.String,
+    attempt: Schema.Number,
+  }),
+);
+const parkOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    heldFor: Schema.optional(Schema.String),
+    ends: Schema.optional(Schema.String),
+  }),
+);
+const identityOf = Schema.decodeUnknownSync(
+  Schema.Struct({ identity: Schema.Struct({ kind: Schema.String }) }),
+);
+const ownerOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    parent: Schema.Struct({
+      call: Schema.NullOr(Schema.Struct({ callId: Schema.String })),
+    }),
+  }),
+);
+/** The call a child's `run.start` names as its owner, or null. */
+const callOf = (child: Row) => ownerOf(json(child)).parent.call?.callId ?? null;
 const isResponse = (row: Row) =>
   row.type === 'model.message' && payload(row).kind === 'response';
 
@@ -155,26 +221,9 @@ const textsOf = (value: unknown): string[] => {
 const isFork = (row: Row) =>
   row.type === 'run.start' && row.data.includes('"kind":"fork"');
 
-/** A response's text, or null when it calls tools. */
-const answerOf = (row: Row): string | null => {
-  const content = (
-    payload(row).turn as {
-      readonly content: readonly {
-        readonly kind: string;
-        readonly content?: readonly { readonly text?: string }[];
-      }[];
-    }
-  ).content;
-  if (content.some((part) => part.kind === 'local-call')) return null;
-  return content
-    .flatMap((part) => part.content ?? [])
-    .map((part) => part.text ?? '')
-    .join('');
-};
-
 const answers = (rows: readonly Row[], run: string) =>
   rows.flatMap((row) => {
-    const text = row.run === run && isResponse(row) ? answerOf(row) : null;
+    const text = row.run === run ? answerOf(row) : null;
     return text === null ? [] : [text];
   });
 
@@ -194,10 +243,7 @@ function outcome(rows: readonly Row[], root: string) {
     // Each request the user made, queued once and consumed once; and the
     // model the run ends on.
     requests: of(root, 'followup.queued').flatMap((row) => {
-      const { followUpId, control } = json(row) as {
-        readonly followUpId: string;
-        readonly control?: { readonly kind: string };
-      };
+      const { followUpId, control } = followUpOf(json(row));
       if (control === undefined) return [];
       const consumed = of(root, 'followup.consumed').filter(
         (done) => json(done).followUpId === followUpId,
@@ -205,9 +251,7 @@ function outcome(rows: readonly Row[], root: string) {
       return [`${control.kind} consumed ${consumed.length}`];
     }),
     model: of(root, 'run.config')
-      .flatMap((row) => [
-        (json(row).config as { readonly model: string }).model,
-      ])
+      .flatMap((row) => [configOf(json(row)).config.model])
       .at(-1),
     // What each executed call returned, by call: a retried call returns
     // what its first attempt would have.
@@ -233,11 +277,7 @@ function outcome(rows: readonly Row[], root: string) {
     children: new Set(
       rows
         .filter((row) => row.type === 'run.start' && row.parent === root)
-        .map(
-          (row) =>
-            (json(row).parent as { call: { callId: string } | null }).call
-              ?.callId ?? null,
-        ),
+        .map(callOf),
     ).size,
     childAnswers: [
       ...new Set(
@@ -252,12 +292,7 @@ function outcome(rows: readonly Row[], root: string) {
       edits: of(fork.run, 'context.edit').map((row) => payload(row).cause),
       positions: of(fork.run, 'run.position').map((row) => payload(row).at),
       seed: of(fork.run, 'context.edit').flatMap((row) =>
-        (
-          payload(row).messages as readonly {
-            readonly role: string;
-            readonly content?: unknown;
-          }[]
-        ).map(
+        seedOf(payload(row)).messages.map(
           (message) =>
             `${message.role}: ${normalized(textsOf(message.content).join(''))}`,
         ),
@@ -265,6 +300,13 @@ function outcome(rows: readonly Row[], root: string) {
     })),
   };
 }
+
+/** The suite host's workspace folder: the validation host always opens one. */
+const workspaceOf = ({ workspace }: ReturnType<typeof testWorkspaceRoots>) => {
+  if (workspace === undefined)
+    throw new Error('the crash suite runs in a workspace folder');
+  return workspace;
+};
 
 /** The files a run keeps beside the store and the workspace files the run
  *  changes (the command effects, the notes it edits), copied as the clean
@@ -284,7 +326,7 @@ const takeSnapshot = (
     if (existsSync(from)) cpSync(from, join(to, name), { recursive: true });
   }
   for (const name of WORKSPACE_FILES) {
-    const from = join(roots.workspace!, name);
+    const from = join(workspaceOf(roots), name);
     if (existsSync(from)) cpSync(from, join(to, name));
   }
 };
@@ -343,7 +385,7 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
     (row) =>
       row.run === root &&
       row.type === 'followup.queued' &&
-      (json(row).control as { kind?: string } | undefined)?.kind === kind,
+      followUpOf(json(row)).control?.kind === kind,
   );
 
 /**
@@ -408,9 +450,7 @@ const bashBypassOf = (rows: readonly Row[], root: string) => {
   const row = rows.findLast(
     (row) => row.run === root && row.type === 'approval.policy',
   );
-  return row === undefined
-    ? undefined
-    : (json(row).snapshot as { own: { bash?: string } }).own.bash;
+  return row === undefined ? undefined : policyOf(json(row)).snapshot.own.bash;
 };
 
 /** What broke the contract after a resume from commit `n`. */
@@ -444,10 +484,7 @@ function violations(
     .sort();
   const invocations = final
     .filter(isResponse)
-    .map(
-      (row) =>
-        (payload(row).invocation as { invocationId: string }).invocationId,
-    );
+    .map((row) => invocationOf(payload(row)).invocation.invocationId);
   // A call's requests carry ids its attempt derives,
   // `<responseId>/<callId>:<attempt>:<ordinal>`: the attempt is the id
   // without its ordinal.
@@ -502,10 +539,7 @@ function violations(
   // A command runs only once a person approved it, before its result.
   const approvals = final.flatMap((row) => {
     if (row.type !== 'request.decided') return [];
-    const decided = json(row) as {
-      readonly requestId: string;
-      readonly decision: { readonly action: string };
-    };
+    const decided = decisionOf(json(row));
     return decided.decision.action === 'approve'
       ? [{ callId: callOfRequest(decided.requestId), commit: row.commit }]
       : [];
@@ -527,9 +561,6 @@ function violations(
   const children = final.filter(
     (row) => row.type === 'run.start' && row.parent !== null,
   );
-  const callOf = (child: Row) =>
-    (json(child).parent as { call: { callId: string } | null }).call?.callId ??
-    null;
   const relaunches = children.filter((child) =>
     children.some(
       (earlier) =>
@@ -562,11 +593,7 @@ function violations(
       (row) => row.type === 'tool.result' && payload(row).callId === callId,
     );
   const standing = (intent: Row) => {
-    const { origin, callId, attempt } = payload(intent) as {
-      readonly origin: { readonly responseId?: string };
-      readonly callId: string;
-      readonly attempt: number;
-    };
+    const { origin, callId, attempt } = intentOf(payload(intent));
     const own = `${origin.responseId ?? ''}/${callId}:${attempt}`;
     return prefix.some(
       (row) =>
@@ -603,11 +630,11 @@ function violations(
         (row) => row.run === run && row.type === 'response.finalized',
       ).length,
   );
+  const expectedFields = new Map(Object.entries(expected));
   return [
     ...Object.entries(got).map(([field, value]) =>
       modelDecides.has(field) ||
-      JSON.stringify(value) ===
-        JSON.stringify(expected[field as keyof typeof expected])
+      JSON.stringify(value) === JSON.stringify(expectedFields.get(field))
         ? null
         : `the conversation's ${field} came to ${JSON.stringify(value)}`,
     ),
@@ -730,11 +757,11 @@ const resumeFrom = (
       if (existsSync(join(snapshot, name)))
         cpSync(join(snapshot, name), join(storage, name), { recursive: true });
     for (const name of WORKSPACE_FILES) {
-      const file = join(roots.workspace!, name);
+      const file = join(workspaceOf(roots), name);
       rmSync(file, { force: true });
       if (existsSync(join(snapshot, name))) cpSync(join(snapshot, name), file);
     }
-    const effectsLog = join(roots.workspace!, 'effects.log');
+    const effectsLog = join(workspaceOf(roots), 'effects.log');
     const effectsBefore = linesOf(effectsLog).length;
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
@@ -793,13 +820,25 @@ const resumeFrom = (
     return { prefix, final: rowsOf(storage), refused, effects };
   });
 
-export function crashConformanceSuite(): void {
+/**
+ * The suite's scenarios. Each replays a run from every commit point, tens of
+ * seconds apiece, so each runs from its own file: Vitest spreads files, not
+ * tests, over its workers and CI shards.
+ */
+export type CrashScenario = 'resume' | 'child-results' | 'held-results';
+
+/** The suite's tests of `scenarios`; the two short ones (a detached
+ *  command, one job's appends) run with `child-results`. */
+export function crashConformanceSuite(
+  scenarios: readonly CrashScenario[],
+): void {
+  const runs = (scenario: CrashScenario) => scenarios.includes(scenario);
   describe('crash-point conformance', () => {
     // The validation host, with the notes the crash run reads and edits.
     const crashHost = Layer.effectDiscard(
       Effect.map(FakeHost, ({ roots }) =>
         writeFileSync(
-          join(roots.workspace!, 'notes.tex'),
+          join(workspaceOf(roots), 'notes.tex'),
           '\\section{Notes}\nThe crash suite reads this file.\n',
         ),
       ),
@@ -807,108 +846,113 @@ export function crashConformanceSuite(): void {
 
     layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
       it.layer(crashHost, { buildPerTest: true })((it) => {
-        it.effect(
-          'resumes from every commit point to the clean outcome, running nothing twice',
-          () =>
-            Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
-              const root = generateRunId();
+        if (runs('resume'))
+          it.effect(
+            'resumes from every commit point to the clean outcome, running nothing twice',
+            () =>
+              Effect.gen(function* () {
+                const roots = testWorkspaceRoots();
+                const root = generateRunId();
 
-              const { points, clean } = yield* cleanPass(
-                roots,
-                (session) =>
-                  rootRun({
-                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                      agent: 'golden_crash',
-                      model: 'openai/gpt-5.6-sol',
-                      instruction: 'Work through the crash task.',
-                    }),
-                    runId: root,
-                    interactive: true,
-                  }).pipe(Effect.provide(session)),
-                (session) => userSteps(session, roots.storage, root),
-              );
-              const cleanRows = rowsOf(roots.storage);
-              const expected = outcome(cleanRows, root);
-              // The clean pass crossed every boundary the suite names.
-              expect(expected).toMatchObject({
-                answers: [
-                  'Model saw: Work through the crash task. (+0)',
-                  'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
-                ],
-                edits: ['compaction'],
-                requests: ['model consumed 1', 'compact consumed 1'],
-                model: SWITCH_TO,
-                children: 1,
-                childAnswers: ['Child result.'],
-                forks: [
-                  {
-                    edits: ['fork'],
-                    positions: ['waiting'],
-                    seed: [
-                      'user: [Previous conversation summary]\n\nThe golden chat so far.',
-                      'assistant: Model saw: [Previous conversation summary]\n\nThe golden chat so far.',
-                    ],
-                  },
-                ],
-              });
-              // The root's prompt line and its stage commit with its opening, so
-              // no crash point sits between them (the resume never logs it).
-              const first = (type: string) =>
-                cleanRows.find((row) => row.run === root && row.type === type)
-                  ?.commit ?? 0;
-              const traced = Math.max(first('log'), first('stage.start'));
-              expect(
-                points.filter((p) => p >= first('run.position') && p < traced),
-              ).toEqual([]);
-              // The two calls, the edit, the script and its three calls, each
-              // settled.
-              expect(expected.settled).toHaveLength(7);
-              expect(
-                [
-                  'tool.intent',
-                  'tool.result',
-                  'script.call',
-                  'request.decided',
-                ].filter((type) => !cleanRows.some((row) => row.type === type)),
-              ).toEqual([]);
-              // The script's `agent()` approval, which its calls share, is the
-              // script call's (attempt 0): every crash point while it is pending
-              // must resume to that same card, never a second one.
-              expect(
-                cleanRows.some(
-                  (row) =>
-                    row.type === 'request.opened' &&
-                    /:0:\d+$/.test(String(json(row).requestId)),
-                ),
-              ).toBe(true);
-              expect(
-                violations([], cleanRows, 0, root, expected, [
-                  'batch',
-                  'script',
-                ]),
-              ).toEqual([]);
-
-              const broken: string[] = [];
-              for (const n of points) {
-                const { prefix, final, refused, effects } = yield* resumeFrom(
+                const { points, clean } = yield* cleanPass(
                   roots,
-                  clean,
-                  n,
-                  root,
-                  (session, storage) => userSteps(session, storage, root),
+                  (session) =>
+                    rootRun({
+                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                        agent: 'golden_crash',
+                        model: 'openai/gpt-5.6-sol',
+                        instruction: 'Work through the crash task.',
+                      }),
+                      runId: root,
+                      interactive: true,
+                    }).pipe(Effect.provide(session)),
+                  (session) => userSteps(session, roots.storage, root),
                 );
-                const found = [
-                  ...(refused === null ? [] : [refused]),
-                  ...violations(prefix, final, n, root, expected, effects),
-                ];
-                if (found.length > 0)
-                  broken.push(`after commit ${n}: ${found.join('; ')}`);
-              }
-              expect(broken).toEqual([]);
-            }),
-          600_000,
-        );
+                const cleanRows = rowsOf(roots.storage);
+                const expected = outcome(cleanRows, root);
+                // The clean pass crossed every boundary the suite names.
+                expect(expected).toMatchObject({
+                  answers: [
+                    'Model saw: Work through the crash task. (+0)',
+                    'Model saw: [Previous conversation summary]\n\nThe golden chat so far. (+0)',
+                  ],
+                  edits: ['compaction'],
+                  requests: ['model consumed 1', 'compact consumed 1'],
+                  model: SWITCH_TO,
+                  children: 1,
+                  childAnswers: ['Child result.'],
+                  forks: [
+                    {
+                      edits: ['fork'],
+                      positions: ['waiting'],
+                      seed: [
+                        'user: [Previous conversation summary]\n\nThe golden chat so far.',
+                        'assistant: Model saw: [Previous conversation summary]\n\nThe golden chat so far.',
+                      ],
+                    },
+                  ],
+                });
+                // The root's prompt line and its stage commit with its opening, so
+                // no crash point sits between them (the resume never logs it).
+                const first = (type: string) =>
+                  cleanRows.find((row) => row.run === root && row.type === type)
+                    ?.commit ?? 0;
+                const traced = Math.max(first('log'), first('stage.start'));
+                expect(
+                  points.filter(
+                    (p) => p >= first('run.position') && p < traced,
+                  ),
+                ).toEqual([]);
+                // The two calls, the edit, the script and its three calls, each
+                // settled.
+                expect(expected.settled).toHaveLength(7);
+                expect(
+                  [
+                    'tool.intent',
+                    'tool.result',
+                    'script.call',
+                    'request.decided',
+                  ].filter(
+                    (type) => !cleanRows.some((row) => row.type === type),
+                  ),
+                ).toEqual([]);
+                // The script's `agent()` approval, which its calls share, is the
+                // script call's (attempt 0): every crash point while it is pending
+                // must resume to that same card, never a second one.
+                expect(
+                  cleanRows.some(
+                    (row) =>
+                      row.type === 'request.opened' &&
+                      /:0:\d+$/.test(String(json(row).requestId)),
+                  ),
+                ).toBe(true);
+                expect(
+                  violations([], cleanRows, 0, root, expected, [
+                    'batch',
+                    'script',
+                  ]),
+                ).toEqual([]);
+
+                const broken: string[] = [];
+                for (const n of points) {
+                  const { prefix, final, refused, effects } = yield* resumeFrom(
+                    roots,
+                    clean,
+                    n,
+                    root,
+                    (session, storage) => userSteps(session, storage, root),
+                  );
+                  const found = [
+                    ...(refused === null ? [] : [refused]),
+                    ...violations(prefix, final, n, root, expected, effects),
+                  ];
+                  if (found.length > 0)
+                    broken.push(`after commit ${n}: ${found.join('; ')}`);
+                }
+                expect(broken).toEqual([]);
+              }),
+            600_000,
+          );
         /**
          * Checks invariant I6: a child's result is never lost or read twice across a crash: a
          * detached child's turn, a background script's and a background
@@ -935,284 +979,282 @@ export function crashConformanceSuite(): void {
          * resume in a fresh one delivers them, each once, ending the child.
          */
         for (const elsewhere of [false, true])
-          it.effect(
-            elsewhere
-              ? 'delivers results held while the parent was open elsewhere, exactly once'
-              : 'reads every child result settled before the crash, exactly once',
-            () =>
-              Effect.gen(function* () {
-                const roots = testWorkspaceRoots();
-                const root = generateRunId();
-                const ids = (rows: readonly Row[], type: string) =>
-                  rows
-                    .filter((row) => row.run === root && row.type === type)
-                    .map((row) => String(json(row).followUpId));
-                /** The children's parks holding a result for the root. */
-                const held = (rows: readonly Row[]) =>
-                  rows.flatMap((row) => {
-                    if (row.type !== 'child.park' || row.parent !== root)
-                      return [];
-                    const { heldFor, ends } = json(row) as {
-                      heldFor?: string;
-                      ends?: string;
-                    };
-                    return heldFor === undefined
-                      ? []
-                      : [{ row, followUpId: heldFor, end: ends }];
-                  });
-                /** The results the children delivered or hold, by follow-up id. */
-                const settled = (rows: readonly Row[]) => [
-                  ...new Set([
-                    ...ids(rows, 'followup.queued').filter((id) =>
-                      id.endsWith(':delivery'),
-                    ),
-                    ...held(rows).map((h) => h.followUpId),
-                  ]),
-                ];
-                /** The root's children whose settled turns outnumber, or trail,
-                 *  their delivered or held results: a cut between the two. */
-                const apart = (rows: readonly Row[]) =>
-                  rows
-                    .filter(
-                      (row) => row.type === 'run.start' && row.parent === root,
-                    )
-                    .map((child) => child.run)
-                    .filter(
-                      (child) =>
-                        rows.filter(
-                          (row) =>
-                            row.run === child &&
-                            row.type === 'child.turn' &&
-                            json(row).phase === 'settled',
-                        ).length !==
-                        settled(rows).filter((id) => id.startsWith(`${child}:`))
-                          .length,
-                    );
-                const allRead = (rows: readonly Row[]) => {
-                  const consumed = new Set(ids(rows, 'followup.consumed'));
-                  return settled(rows).every((id) => consumed.has(id));
-                };
-                /** A child held at its last turn whose end was never written. */
-                const unended = (rows: readonly Row[]) =>
-                  held(rows).filter(
-                    (h) =>
-                      h.end !== undefined &&
-                      !rows.some(
-                        (row) =>
-                          row.run === h.row.run &&
-                          row.type === 'run.end' &&
-                          row.commit > h.row.commit,
-                      ),
-                  );
-                /** The root's children a cut at `n` left unfinished: a turn
-                 *  accepted and not settled, or none begun and no end, in the
-                 *  rows up to `n`. */
-                const cutShort = (rows: readonly Row[], n: number) =>
-                  rows
-                    .filter(
-                      (row) =>
-                        row.commit <= n &&
-                        row.type === 'run.start' &&
-                        row.parent === root,
-                    )
-                    .map((child) => child.run)
-                    .filter((child) => {
-                      const before = rows.filter(
-                        (row) => row.run === child && row.commit <= n,
-                      );
-                      const turns = (phase: string) =>
-                        before.filter(
-                          (row) =>
-                            row.type === 'child.turn' &&
-                            json(row).phase === phase,
-                        ).length;
-                      const accepted = turns('accepted');
-                      return (
-                        accepted > turns('settled') ||
-                        (accepted === 0 &&
-                          !before.some((row) => row.type === 'run.end'))
-                      );
+          if (runs(elsewhere ? 'held-results' : 'child-results'))
+            it.effect(
+              elsewhere
+                ? 'delivers results held while the parent was open elsewhere, exactly once'
+                : 'reads every child result settled before the crash, exactly once',
+              () =>
+                Effect.gen(function* () {
+                  const roots = testWorkspaceRoots();
+                  const root = generateRunId();
+                  const ids = (rows: readonly Row[], type: string) =>
+                    rows
+                      .filter((row) => row.run === root && row.type === type)
+                      .map((row) => String(json(row).followUpId));
+                  /** The children's parks holding a result for the root. */
+                  const held = (rows: readonly Row[]) =>
+                    rows.flatMap((row) => {
+                      if (row.type !== 'child.park' || row.parent !== root)
+                        return [];
+                      const { heldFor, ends } = parkOf(json(row));
+                      return heldFor === undefined
+                        ? []
+                        : [{ row, followUpId: heldFor, end: ends }];
                     });
-                /** Whether `child` settled a turn or ended after commit `after`. */
-                const finished = (
-                  rows: readonly Row[],
-                  child: string,
-                  after: number,
-                ) =>
-                  rows.some(
-                    (row) =>
-                      row.run === child &&
-                      row.commit > after &&
-                      (row.type === 'run.end' ||
-                        (row.type === 'child.turn' &&
-                          json(row).phase === 'settled')),
-                  );
-                /** Every result read, every held child ended, every child the
-                 *  cut left unfinished finished after it, and every child the
-                 *  resume launched (a command it re-ran after its outcome was
-                 *  unknown) settled. */
-                const quiet = (rows: readonly Row[], n: number) =>
-                  allRead(rows) &&
-                  unended(rows).length === 0 &&
-                  cutShort(rows, n).every((child) =>
-                    finished(rows, child, n),
-                  ) &&
-                  rows
-                    .filter(
-                      (row) =>
-                        row.commit > n &&
-                        row.type === 'run.start' &&
-                        row.parent === root,
-                    )
-                    .every((child) => finished(rows, child.run, 0));
-                const { points, clean } = yield* cleanPass(
-                  roots,
-                  (session) =>
-                    rootRun({
-                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                        agent: 'golden_delivery',
-                        model: 'openai/gpt-5.6-sol',
-                        instruction: 'Send the children off.',
-                      }),
-                      runId: root,
-                      interactive: true,
-                    }).pipe(Effect.provide(session)),
-                  (session) =>
-                    Effect.gen(function* () {
-                      if (elsewhere) {
-                        // Each child's settlement finds the root held by another
-                        // live process (its admission's verdict); every later
-                        // admission is this process's, which runs the root.
-                        const inbox = Context.get(session, Inbox);
-                        const admission = inbox.admission.bind(inbox);
-                        const refused = new Set<string>();
-                        // Decided as the job runs, not when the part is built.
-                        inbox.admission = (runId, item, options) =>
-                          Effect.suspend(() => {
-                            const id = item.deliveryId;
-                            if (
-                              runId !== root ||
-                              id === undefined ||
-                              refused.has(id)
-                            )
-                              return admission(runId, item, options);
-                            refused.add(id);
-                            return Effect.succeed({
-                              rows: [],
-                              sent: {
-                                kind: 'refused',
-                                reason: 'ownedElsewhere',
-                              },
-                            } as const);
-                          });
-                      }
-                      yield* until(
-                        roots.storage,
-                        (rows) =>
-                          settled(rows).length === 3 &&
-                          allRead(rows) &&
-                          unended(rows).length === 0,
+                  /** The results the children delivered or hold, by follow-up id. */
+                  const settled = (rows: readonly Row[]) => [
+                    ...new Set([
+                      ...ids(rows, 'followup.queued').filter((id) =>
+                        id.endsWith(':delivery'),
+                      ),
+                      ...held(rows).map((h) => h.followUpId),
+                    ]),
+                  ];
+                  /** The root's children whose settled turns outnumber, or trail,
+                   *  their delivered or held results: a cut between the two. */
+                  const apart = (rows: readonly Row[]) =>
+                    rows
+                      .filter(
+                        (row) =>
+                          row.type === 'run.start' && row.parent === root,
+                      )
+                      .map((child) => child.run)
+                      .filter(
+                        (child) =>
+                          rows.filter(
+                            (row) =>
+                              row.run === child &&
+                              row.type === 'child.turn' &&
+                              json(row).phase === 'settled',
+                          ).length !==
+                          settled(rows).filter((id) =>
+                            id.startsWith(`${child}:`),
+                          ).length,
                       );
-                    }),
-                );
-                const cleanRows = rowsOf(roots.storage);
-                // The child's turn, the script and the command each reported, and
-                // the script's own `agent()` child ran under it.
-                expect(settled(cleanRows)).toHaveLength(3);
-                expect(held(cleanRows)).toHaveLength(elsewhere ? 3 : 0);
-                // The detached child's first turn is an interim one (it goes on
-                // waiting): held, delivered, and its waiting park then cleared by
-                // the process running it, with no second park beside the held one.
-                const interim = held(cleanRows).filter(
-                  (h) => h.end === undefined,
-                );
-                expect(interim).toHaveLength(elsewhere ? 1 : 0);
-                for (const { row } of interim) {
-                  const later = cleanRows.filter(
-                    (other) =>
-                      other.run === row.run &&
-                      other.type === 'child.park' &&
-                      other.commit > row.commit,
+                  const allRead = (rows: readonly Row[]) => {
+                    const consumed = new Set(ids(rows, 'followup.consumed'));
+                    return settled(rows).every((id) => consumed.has(id));
+                  };
+                  /** A child held at its last turn whose end was never written. */
+                  const unended = (rows: readonly Row[]) =>
+                    held(rows).filter(
+                      (h) =>
+                        h.end !== undefined &&
+                        !rows.some(
+                          (row) =>
+                            row.run === h.row.run &&
+                            row.type === 'run.end' &&
+                            row.commit > h.row.commit,
+                        ),
+                    );
+                  /** The root's children a cut at `n` left unfinished: a turn
+                   *  accepted and not settled, or none begun and no end, in the
+                   *  rows up to `n`. */
+                  const cutShort = (rows: readonly Row[], n: number) =>
+                    rows
+                      .filter(
+                        (row) =>
+                          row.commit <= n &&
+                          row.type === 'run.start' &&
+                          row.parent === root,
+                      )
+                      .map((child) => child.run)
+                      .filter((child) => {
+                        const before = rows.filter(
+                          (row) => row.run === child && row.commit <= n,
+                        );
+                        const turns = (phase: string) =>
+                          before.filter(
+                            (row) =>
+                              row.type === 'child.turn' &&
+                              json(row).phase === phase,
+                          ).length;
+                        const accepted = turns('accepted');
+                        return (
+                          accepted > turns('settled') ||
+                          (accepted === 0 &&
+                            !before.some((row) => row.type === 'run.end'))
+                        );
+                      });
+                  /** Whether `child` settled a turn or ended after commit `after`. */
+                  const finished = (
+                    rows: readonly Row[],
+                    child: string,
+                    after: number,
+                  ) =>
+                    rows.some(
+                      (row) =>
+                        row.run === child &&
+                        row.commit > after &&
+                        (row.type === 'run.end' ||
+                          (row.type === 'child.turn' &&
+                            json(row).phase === 'settled')),
+                    );
+                  /** Every result read, every held child ended, every child the
+                   *  cut left unfinished finished after it, and every child the
+                   *  resume launched (a command it re-ran after its outcome was
+                   *  unknown) settled. */
+                  const quiet = (rows: readonly Row[], n: number) =>
+                    allRead(rows) &&
+                    unended(rows).length === 0 &&
+                    cutShort(rows, n).every((child) =>
+                      finished(rows, child, n),
+                    ) &&
+                    rows
+                      .filter(
+                        (row) =>
+                          row.commit > n &&
+                          row.type === 'run.start' &&
+                          row.parent === root,
+                      )
+                      .every((child) => finished(rows, child.run, 0));
+                  const { points, clean } = yield* cleanPass(
+                    roots,
+                    (session) =>
+                      rootRun({
+                        config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                          agent: 'golden_delivery',
+                          model: 'openai/gpt-5.6-sol',
+                          instruction: 'Send the children off.',
+                        }),
+                        runId: root,
+                        interactive: true,
+                      }).pipe(Effect.provide(session)),
+                    (session) =>
+                      Effect.gen(function* () {
+                        if (elsewhere) {
+                          // Each child's settlement finds the root held by another
+                          // live process (its admission's verdict); every later
+                          // admission is this process's, which runs the root.
+                          const inbox = Context.get(session, Inbox);
+                          const admission = inbox.admission.bind(inbox);
+                          const refused = new Set<string>();
+                          // Decided as the job runs, not when the part is built.
+                          inbox.admission = (runId, item, options) =>
+                            Effect.suspend(() => {
+                              const id = item.deliveryId;
+                              if (
+                                runId !== root ||
+                                id === undefined ||
+                                refused.has(id)
+                              )
+                                return admission(runId, item, options);
+                              refused.add(id);
+                              return Effect.succeed({
+                                rows: [],
+                                sent: {
+                                  kind: 'refused',
+                                  reason: 'ownedElsewhere',
+                                },
+                              } as const);
+                            });
+                        }
+                        yield* until(
+                          roots.storage,
+                          (rows) =>
+                            settled(rows).length === 3 &&
+                            allRead(rows) &&
+                            unended(rows).length === 0,
+                        );
+                      }),
                   );
-                  expect(later.map((other) => json(other).heldFor)).toEqual([
-                    undefined,
-                  ]);
-                  expect(
-                    cleanRows.some(
+                  const cleanRows = rowsOf(roots.storage);
+                  // The child's turn, the script and the command each reported, and
+                  // the script's own `agent()` child ran under it.
+                  expect(settled(cleanRows)).toHaveLength(3);
+                  expect(held(cleanRows)).toHaveLength(elsewhere ? 3 : 0);
+                  // The detached child's first turn is an interim one (it goes on
+                  // waiting): held, delivered, and its waiting park then cleared by
+                  // the process running it, with no second park beside the held one.
+                  const interim = held(cleanRows).filter(
+                    (h) => h.end === undefined,
+                  );
+                  expect(interim).toHaveLength(elsewhere ? 1 : 0);
+                  for (const { row } of interim) {
+                    const later = cleanRows.filter(
                       (other) =>
                         other.run === row.run &&
                         other.type === 'child.park' &&
-                        other.commit === row.commit + 1,
-                    ),
-                  ).toBe(false);
-                }
-                expect(
-                  cleanRows.filter(
-                    (row) =>
-                      row.type === 'run.start' &&
-                      row.parent !== null &&
-                      row.parent !== root,
-                  ),
-                ).toHaveLength(1);
-
-                const first = Math.min(
-                  ...cleanRows
-                    .filter((row) => settled([row]).length > 0)
-                    .map((row) => row.commit),
-                );
-                const broken: string[] = [];
-                for (const n of points.filter((point) => point >= first)) {
-                  const { prefix, final, refused } = yield* resumeFrom(
-                    roots,
-                    clean,
-                    n,
-                    root,
-                    (_, storage) => until(storage, (rows) => quiet(rows, n)),
-                  );
-                  const twice = (type: string) =>
-                    ids(final, type).filter(
-                      (id, index, all) => all.indexOf(id) !== index,
+                        other.commit > row.commit,
                     );
-                  const calls = final.flatMap((row) =>
-                    row.type === 'run.start' && row.parent !== null
-                      ? [
-                          `${row.parent}/${(json(row).parent as { call: { callId: string } | null }).call?.callId ?? null}`,
-                        ]
-                      : [],
+                    expect(later.map((other) => json(other).heldFor)).toEqual([
+                      undefined,
+                    ]);
+                    expect(
+                      cleanRows.some(
+                        (other) =>
+                          other.run === row.run &&
+                          other.type === 'child.park' &&
+                          other.commit === row.commit + 1,
+                      ),
+                    ).toBe(false);
+                  }
+                  expect(
+                    cleanRows.filter(
+                      (row) =>
+                        row.type === 'run.start' &&
+                        row.parent !== null &&
+                        row.parent !== root,
+                    ),
+                  ).toHaveLength(1);
+
+                  const first = Math.min(
+                    ...cleanRows
+                      .filter((row) => settled([row]).length > 0)
+                      .map((row) => row.commit),
                   );
-                  const found = [
-                    ...(refused === null ? [] : [refused]),
-                    apart(prefix).length === 0
-                      ? null
-                      : 'a child settled a turn in another transaction than its delivery',
-                    new Set(calls).size === calls.length
-                      ? null
-                      : 'a child launched again for its call',
-                    allRead(final)
-                      ? null
-                      : 'a settled child result was never read',
-                    unended(final).length === 0
-                      ? null
-                      : 'a child holding its last result never ended',
-                    cutShort(prefix, n).every((child) =>
-                      finished(final, child, n),
-                    )
-                      ? null
-                      : 'a child the crash cut short was neither resumed nor reported',
-                    twice('followup.queued').length === 0
-                      ? null
-                      : 'a child result was queued twice',
-                    twice('followup.consumed').length === 0
-                      ? null
-                      : 'a child result was read twice',
-                  ].filter((violation) => violation !== null);
-                  if (found.length > 0)
-                    broken.push(`after commit ${n}: ${found.join('; ')}`);
-                }
-                expect(broken).toEqual([]);
-              }),
-            600_000,
-          );
+                  const broken: string[] = [];
+                  for (const n of points.filter((point) => point >= first)) {
+                    const { prefix, final, refused } = yield* resumeFrom(
+                      roots,
+                      clean,
+                      n,
+                      root,
+                      (_, storage) => until(storage, (rows) => quiet(rows, n)),
+                    );
+                    const twice = (type: string) =>
+                      ids(final, type).filter(
+                        (id, index, all) => all.indexOf(id) !== index,
+                      );
+                    const calls = final.flatMap((row) =>
+                      row.type === 'run.start' && row.parent !== null
+                        ? [`${row.parent}/${callOf(row)}`]
+                        : [],
+                    );
+                    const found = [
+                      ...(refused === null ? [] : [refused]),
+                      apart(prefix).length === 0
+                        ? null
+                        : 'a child settled a turn in another transaction than its delivery',
+                      new Set(calls).size === calls.length
+                        ? null
+                        : 'a child launched again for its call',
+                      allRead(final)
+                        ? null
+                        : 'a settled child result was never read',
+                      unended(final).length === 0
+                        ? null
+                        : 'a child holding its last result never ended',
+                      cutShort(prefix, n).every((child) =>
+                        finished(final, child, n),
+                      )
+                        ? null
+                        : 'a child the crash cut short was neither resumed nor reported',
+                      twice('followup.queued').length === 0
+                        ? null
+                        : 'a child result was queued twice',
+                      twice('followup.consumed').length === 0
+                        ? null
+                        : 'a child result was read twice',
+                    ].filter((violation) => violation !== null);
+                    if (found.length > 0)
+                      broken.push(`after commit ${n}: ${found.join('; ')}`);
+                  }
+                  expect(broken).toEqual([]);
+                }),
+              600_000,
+            );
         /**
          * A background command its stopped parent let go (a detach) has no
          * parent to finish it when the process running it dies: the next open
@@ -1227,343 +1269,230 @@ export function crashConformanceSuite(): void {
          * which the open reaches first, is the control, its claim a live
          * process's; the second's owner died.
          */
-        it.effect(
-          'ends a detached command a dead process left running, once',
-          () =>
-            Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
-              const root = generateRunId();
-              const SEND = 'Run in the background.';
-              const of = (rows: readonly Row[], run: string, type: string) =>
-                rows.filter((row) => row.run === run && row.type === type);
-              /** The root's background commands, in launch order. */
-              const commands = (rows: readonly Row[]) =>
-                rows
-                  .filter(
-                    (row) =>
-                      row.type === 'run.start' &&
-                      row.parent === root &&
-                      (json(row).identity as { kind: string }).kind ===
-                        'process',
-                  )
-                  // cast: the store's logical id of a run aggregate is its RunId.
-                  .map((row) => row.run as RunId);
-              const began = (rows: readonly Row[]) =>
-                commands(rows).filter((run) =>
-                  of(rows, run, 'child.turn').some(
-                    (row) => json(row).phase === 'accepted',
-                  ),
-                ).length;
-              const { points, clean } = yield* cleanPass(
-                roots,
-                (session) =>
-                  rootRun({
-                    config: Schema.decodeUnknownSync(AgentConfigSchema)({
-                      agent: 'golden_script',
-                      model: 'openai/gpt-5.6-sol',
-                      instruction: SEND,
-                    }),
-                    runId: root,
-                    interactive: true,
-                  }).pipe(Effect.provide(session)),
-                (session) =>
-                  Effect.gen(function* () {
-                    const requests = Context.get(session, SessionRequests);
-                    yield* until(roots.storage, (rows) =>
-                      parkedAfter(rows, root, 1),
-                    );
-                    yield* requests.request({
-                      kind: 'followUp.send',
+        if (runs('child-results'))
+          it.effect(
+            'ends a detached command a dead process left running, once',
+            () =>
+              Effect.gen(function* () {
+                const roots = testWorkspaceRoots();
+                const root = generateRunId();
+                const SEND = 'Run in the background.';
+                const of = (rows: readonly Row[], run: string, type: string) =>
+                  rows.filter((row) => row.run === run && row.type === type);
+                /** The root's background commands, in launch order. */
+                const commands = (rows: readonly Row[]) =>
+                  rows
+                    .filter(
+                      (row) =>
+                        row.type === 'run.start' &&
+                        row.parent === root &&
+                        identityOf(json(row)).identity.kind === 'process',
+                    )
+                    // cast: the store's logical id of a run aggregate is its RunId.
+                    .map((row) => row.run as RunId);
+                const began = (rows: readonly Row[]) =>
+                  commands(rows).filter((run) =>
+                    of(rows, run, 'child.turn').some(
+                      (row) => json(row).phase === 'accepted',
+                    ),
+                  ).length;
+                const { points, clean } = yield* cleanPass(
+                  roots,
+                  (session) =>
+                    rootRun({
+                      config: Schema.decodeUnknownSync(AgentConfigSchema)({
+                        agent: 'golden_script',
+                        model: 'openai/gpt-5.6-sol',
+                        instruction: SEND,
+                      }),
                       runId: root,
-                      text: SEND,
-                    });
-                    yield* until(
-                      roots.storage,
-                      (rows) => parkedAfter(rows, root, 2) && began(rows) === 2,
-                    );
-                    yield* requests.request({
-                      kind: 'run.stop',
-                      runId: root,
-                      detachActiveChildren: true,
-                      reason: 'user',
-                    });
-                    yield* until(
-                      roots.storage,
-                      (rows) =>
-                        of(rows, root, 'run.end').length > 0 &&
-                        commands(rows).every(
-                          (run) => of(rows, run, 'run.detach').length > 0,
-                        ),
-                    );
-                  }).pipe(Effect.provide(session)),
-              );
-              const cleanRows = rowsOf(roots.storage);
-              expect(commands(cleanRows)).toHaveLength(2);
-              const [control, detached] = commands(cleanRows) as [RunId, RunId];
-              // The cut: the parent ended, both commands run detached, neither
-              // has ended yet.
-              const ended = cleanRows.filter(
-                (row) =>
-                  (row.run === control || row.run === detached) &&
-                  row.type === 'run.end',
-              );
-              const n = Math.max(
-                ...points.filter((point) =>
-                  ended.every((row) => point < row.commit),
-                ),
-              );
-              // Owners other than the suite's own (its start reads `vitest`):
-              // this live process under its real start, and one that died.
-              const live = processOwnerId(yield* nodeProcesses.selfIdentity());
-              const dead = processOwnerId('killed');
-              const storage = join(roots.storage, 'crash-detached');
-              crashAt(clean, storage, n);
-              const db = new DatabaseSync(join(storage, 'texra.db'));
-              try {
-                const own = db.prepare(
-                  "UPDATE event_sequence SET owner_id = ? WHERE kind = 'run' AND logical_id = ?",
+                      interactive: true,
+                    }).pipe(Effect.provide(session)),
+                  (session) =>
+                    Effect.gen(function* () {
+                      const requests = Context.get(session, SessionRequests);
+                      yield* until(roots.storage, (rows) =>
+                        parkedAfter(rows, root, 1),
+                      );
+                      yield* requests.request({
+                        kind: 'followUp.send',
+                        runId: root,
+                        text: SEND,
+                      });
+                      yield* until(
+                        roots.storage,
+                        (rows) =>
+                          parkedAfter(rows, root, 2) && began(rows) === 2,
+                      );
+                      // A user's stop detaches the background command under
+                      // "Keep agents running".
+                      yield* Settings.set(
+                        roots,
+                        GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
+                        true,
+                      );
+                      yield* requests.request({
+                        kind: 'run.stop',
+                        runId: root,
+                        reason: 'user',
+                      });
+                      yield* until(
+                        roots.storage,
+                        (rows) =>
+                          of(rows, root, 'run.end').length > 0 &&
+                          commands(rows).every(
+                            (run) => of(rows, run, 'run.detach').length > 0,
+                          ),
+                      );
+                    }).pipe(Effect.provide(session)),
                 );
-                own.run(live, control);
-                own.run(dead, detached);
-              } finally {
-                db.close();
-              }
-              const reopened = yield* Effect.scoped(
-                Effect.gen(function* () {
-                  const session = yield* persistentTestSession({
-                    ...roots,
-                    storage,
-                  });
-                  const log = Context.get(session, SessionLog);
-                  const isEnded = (rows: readonly Row[]) =>
-                    of(rows, detached, 'run.end').length > 0;
-                  // Its end's claim goes with the end, not with the session.
-                  const released = Effect.gen(function* () {
-                    while ((yield* log.owner(detached)).ownerId !== null)
-                      yield* Effect.sleep(Duration.millis(25));
-                  }).pipe(Effect.timeout('30 seconds'));
-                  const closed = yield* Effect.exit(
-                    Effect.andThen(until(storage, isEnded), released),
-                  );
-                  return {
-                    released: Exit.isSuccess(closed),
-                    control: yield* log.owner(control),
-                  };
-                }),
-              );
-              const final = rowsOf(storage);
-              const after = (run: RunId) =>
-                final.filter((row) => row.run === run && row.commit > n);
-              expect(
-                of(final, detached, 'run.end').map((row) => json(row).outcome),
-              ).toEqual(['failed']);
-              expect(reopened.released).toBe(true);
-              expect(
-                of(after(detached), detached, 'run.report').map((row) =>
-                  String(json(row).report),
-                ),
-              ).toEqual([expect.stringContaining('its outcome is unknown')]);
-              // Never run again: no turn begun after the cut, no run launched.
-              expect(
-                after(detached).filter(
+                const cleanRows = rowsOf(roots.storage);
+                expect(commands(cleanRows)).toHaveLength(2);
+                const [control, detached] = commands(cleanRows);
+                if (control === undefined || detached === undefined)
+                  return yield* Effect.die('the clean pass sent no commands');
+                // The cut: the parent ended, both commands run detached, neither
+                // has ended yet.
+                const ended = cleanRows.filter(
                   (row) =>
-                    row.type === 'child.turn' && json(row).phase === 'accepted',
-                ),
-              ).toEqual([]);
-              expect(
-                final.filter(
-                  (row) => row.commit > n && row.type === 'run.start',
-                ),
-              ).toEqual([]);
-              // The control, untouched under its live owner.
-              expect(after(control)).toEqual([]);
-              expect(reopened.control).toEqual({
-                ownerId: live,
-                liveness: 'alive',
-              });
-            }),
-          600_000,
-        );
+                    (row.run === control || row.run === detached) &&
+                    row.type === 'run.end',
+                );
+                const n = Math.max(
+                  ...points.filter((point) =>
+                    ended.every((row) => point < row.commit),
+                  ),
+                );
+                // Owners other than the suite's own (its start reads `vitest`):
+                // this live process under its real start, and one that died.
+                const live = processOwnerId(
+                  yield* nodeProcesses.selfIdentity(),
+                );
+                const dead = processOwnerId('killed');
+                const storage = join(roots.storage, 'crash-detached');
+                crashAt(clean, storage, n);
+                const db = new DatabaseSync(join(storage, 'texra.db'));
+                try {
+                  const own = db.prepare(
+                    "UPDATE event_sequence SET owner_id = ? WHERE kind = 'run' AND logical_id = ?",
+                  );
+                  own.run(live, control);
+                  own.run(dead, detached);
+                } finally {
+                  db.close();
+                }
+                const reopened = yield* Effect.scoped(
+                  Effect.gen(function* () {
+                    const session = yield* persistentTestSession({
+                      ...roots,
+                      storage,
+                    });
+                    const log = Context.get(session, SessionLog);
+                    const isEnded = (rows: readonly Row[]) =>
+                      of(rows, detached, 'run.end').length > 0;
+                    // Its end's claim goes with the end, not with the session.
+                    const released = Effect.gen(function* () {
+                      while ((yield* log.owner(detached)).ownerId !== null)
+                        yield* Effect.sleep(Duration.millis(25));
+                    }).pipe(Effect.timeout('30 seconds'));
+                    const closed = yield* Effect.exit(
+                      Effect.andThen(until(storage, isEnded), released),
+                    );
+                    return {
+                      released: Exit.isSuccess(closed),
+                      control: yield* log.owner(control),
+                    };
+                  }),
+                );
+                const final = rowsOf(storage);
+                const after = (run: RunId) =>
+                  final.filter((row) => row.run === run && row.commit > n);
+                expect(
+                  of(final, detached, 'run.end').map(
+                    (row) => json(row).outcome,
+                  ),
+                ).toEqual(['failed']);
+                expect(reopened.released).toBe(true);
+                expect(
+                  of(after(detached), detached, 'run.report').map((row) =>
+                    String(json(row).report),
+                  ),
+                ).toEqual([expect.stringContaining('its outcome is unknown')]);
+                // Never run again: no turn begun after the cut, no run launched.
+                expect(
+                  after(detached).filter(
+                    (row) =>
+                      row.type === 'child.turn' &&
+                      json(row).phase === 'accepted',
+                  ),
+                ).toEqual([]);
+                expect(
+                  final.filter(
+                    (row) => row.commit > n && row.type === 'run.start',
+                  ),
+                ).toEqual([]);
+                // The control, untouched under its live owner.
+                expect(after(control)).toEqual([]);
+                expect(reopened.control).toEqual({
+                  ownerId: live,
+                  liveness: 'alive',
+                });
+              }),
+            600_000,
+          );
         /**
          * A job's appends commit together: a process killed between two of them
          * leaves neither on disk. The cut is the store's files copied while the
          * job holds its transaction open, which is what a kill there leaves.
          */
-        it.effect('a crash between two appends of one job leaves neither', () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const session = yield* persistentTestSession(roots);
-            const run = qualifyAggregateId('run', generateRunId());
-            const titled = (description: string) => [
-              {
-                type: 'run.description' as const,
-                aggregateId: run,
-                description,
-                by: 'user' as const,
-              },
-            ];
-            yield* Context.get(session, SessionLog).transact([
-              {
-                type: 'run.start',
-                aggregateId: run,
-                identity: { kind: 'agent', agent: 'chat' },
-                userFollowUpSupport: 'unsupported',
-                parent: null,
-                provenance: null,
-              },
-            ]);
-            const cut = join(roots.storage, 'cut');
-            yield* Context.get(session, SessionLog).transact((tx) =>
+        if (runs('child-results'))
+          it.effect(
+            'a crash between two appends of one job leaves neither',
+            () =>
               Effect.gen(function* () {
-                yield* tx.append(titled('first half'));
-                yield* Effect.sync(() => {
-                  mkdirSync(cut);
-                  for (const file of ['texra.db', 'texra.db-wal'])
-                    cpSync(join(roots.storage, file), join(cut, file));
-                });
-                yield* tx.append(titled('second half'));
+                const roots = testWorkspaceRoots();
+                const session = yield* persistentTestSession(roots);
+                const run = qualifyAggregateId('run', generateRunId());
+                const titled = (description: string) => [
+                  {
+                    type: 'run.description' as const,
+                    aggregateId: run,
+                    description,
+                    by: 'user' as const,
+                  },
+                ];
+                yield* Context.get(session, SessionLog).transact([
+                  {
+                    type: 'run.start',
+                    aggregateId: run,
+                    identity: { kind: 'agent', agent: 'chat' },
+                    userFollowUpSupport: 'unsupported',
+                    parent: null,
+                    provenance: null,
+                  },
+                ]);
+                const cut = join(roots.storage, 'cut');
+                yield* Context.get(session, SessionLog).transact((tx) =>
+                  Effect.gen(function* () {
+                    yield* tx.append(titled('first half'));
+                    yield* Effect.sync(() => {
+                      mkdirSync(cut);
+                      for (const file of ['texra.db', 'texra.db-wal'])
+                        cpSync(join(roots.storage, file), join(cut, file));
+                    });
+                    yield* tx.append(titled('second half'));
+                  }),
+                );
+                const types = (storage: string) =>
+                  rowsOf(storage).map((row) => row.type);
+                expect(types(cut)).toEqual(['run.start']);
+                expect(types(roots.storage)).toEqual([
+                  'run.start',
+                  'run.description',
+                  'run.description',
+                ]);
               }),
-            );
-            const types = (storage: string) =>
-              rowsOf(storage).map((row) => row.type);
-            expect(types(cut)).toEqual(['run.start']);
-            expect(types(roots.storage)).toEqual([
-              'run.start',
-              'run.description',
-              'run.description',
-            ]);
-          }),
-        );
-        /**
-         * A document task's documents are its recipe script's settled value: a
-         * resume from any commit point ends `completed` with the clean run's
-         * documents, and a revision whose persona child ended before the crash
-         * is not run again. The polish persona and the documents plugin are
-         * TeXRA's.
-         */
-        it.effect(
-          "resumes a document task from every commit point to the clean run's documents",
-          () =>
-            Effect.gen(function* () {
-              const roots = testWorkspaceRoots();
-              const root = generateRunId();
-              writeFileSync(
-                join(roots.workspace!, 'paper.tex'),
-                '\\section{Draft}\nA short draft.\n',
-              );
-              // The persona answers with the validation document, not the echo.
-              delete process.env.TEXRA_INTERNAL_VALIDATE_ECHO;
-              const ended = (storage: string) =>
-                until(storage, (rows) =>
-                  rows.some(
-                    (row) => row.run === root && row.type === 'run.end',
-                  ),
-                );
-              const { points, clean } = yield* cleanPass(
-                roots,
-                (session) =>
-                  rootRun({
-                    config: Schema.decodeUnknownSync(AgentConfigSchema)(
-                      asDocumentTask({
-                        agent: 'polish',
-                        agentSource: 'builtIn',
-                        model: 'openai/gpt-5.6-sol',
-                        instruction: 'Polish the draft.',
-                        inputFiles: ['paper.tex'],
-                        workingDirectory: roots.workspace,
-                      }),
-                    ),
-                    runId: root,
-                    interactive: true,
-                  }).pipe(Effect.provide(session)),
-                () => ended(roots.storage),
-              );
-              /** How the root ended, and the documents its end carries. */
-              const end = (rows: readonly Row[]) => {
-                const row = rows.find(
-                  (row) => row.run === root && row.type === 'run.end',
-                );
-                if (row === undefined) return null;
-                const { outcome, output } = json(row) as {
-                  readonly outcome: string;
-                  readonly output: RunEndOutput;
-                };
-                return {
-                  outcome,
-                  outputs: (
-                    documentsResultOf(output.structured)?.outputs ?? []
-                  ).map((file) => `${file.round} ${file.relativePath}`),
-                };
-              };
-              const cleanRows = rowsOf(roots.storage);
-              const expected = end(cleanRows);
-              const childCalls = (rows: readonly Row[]) =>
-                rows
-                  .filter(
-                    (row) => row.type === 'run.start' && row.parent === root,
-                  )
-                  .map(
-                    (row) =>
-                      (json(row).parent as { call: { callId: string } }).call
-                        .callId,
-                  );
-              // Two revisions, each its own persona child, and both documents.
-              expect(expected).toEqual({
-                outcome: 'completed',
-                outputs: expect.arrayContaining([expect.any(String)]),
-              });
-              expect(new Set(childCalls(cleanRows)).size).toBe(2);
-
-              const broken: string[] = [];
-              for (const n of points) {
-                const { prefix, final, refused } = yield* resumeFrom(
-                  roots,
-                  clean,
-                  n,
-                  root,
-                  (_, storage) => ended(storage),
-                );
-                // A call whose child ended before the crash.
-                const endedBefore = new Set(
-                  prefix
-                    .filter(
-                      (row) => row.type === 'run.start' && row.parent === root,
-                    )
-                    .filter((child) =>
-                      prefix.some(
-                        (row) =>
-                          row.run === child.run && row.type === 'run.end',
-                      ),
-                    )
-                    .map(
-                      (child) =>
-                        (json(child).parent as { call: { callId: string } })
-                          .call.callId,
-                    ),
-                );
-                const relaunched = childCalls(
-                  final.filter((row) => row.commit > n),
-                ).filter((call) => endedBefore.has(call));
-                const got = end(final);
-                const found = [
-                  ...(refused === null ? [] : [refused]),
-                  JSON.stringify(got) === JSON.stringify(expected)
-                    ? null
-                    : `the run ended ${JSON.stringify(got)}`,
-                  relaunched.length === 0
-                    ? null
-                    : `a settled revision's child launched again: ${relaunched.join(', ')}`,
-                  new Set(childCalls(final)).size === 2
-                    ? null
-                    : `the revisions' children came to ${new Set(childCalls(final)).size} calls`,
-                ].filter((violation) => violation !== null);
-                if (found.length > 0)
-                  broken.push(`after commit ${n}: ${found.join('; ')}`);
-              }
-              expect(broken).toEqual([]);
-            }),
-          600_000,
-        );
+          );
       });
     });
   });

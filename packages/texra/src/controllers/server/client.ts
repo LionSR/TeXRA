@@ -119,30 +119,26 @@ function isOlder(info: ServiceInfo): boolean {
 
 /** A client over `socket`, held for the caller's scope. `onDisconnect`
  *  runs whenever the connection ends, or an attempt to open it fails. */
-function connectService(
+const connectService = Effect.fn('connectService')(function* (
   socket: string,
   onDisconnect: Effect.Effect<void> = Effect.void,
-): Effect.Effect<ServiceClient, SocketError, Scope.Scope> {
-  return Effect.gen(function* () {
-    // The protocol lives in the caller's scope, not the client's build: a
-    // layer provided to `make` alone would close the socket once it returns.
-    const protocol = yield* Layer.build(
-      RpcClient.layerProtocolSocket().pipe(
-        Layer.provide(NodeSocket.layerNet({ path: socket })),
-        Layer.provide(RpcSerialization.layerNdjson),
-        Layer.provide(
-          Layer.succeed(RpcClient.ConnectionHooks, {
-            onConnect: Effect.void,
-            onDisconnect,
-          }),
-        ),
+): Effect.fn.Return<ServiceClient, SocketError, Scope.Scope> {
+  // The protocol lives in the caller's scope, not the client's build: a
+  // layer provided to `make` alone would close the socket once it returns.
+  const protocol = yield* Layer.build(
+    RpcClient.layerProtocolSocket().pipe(
+      Layer.provide(NodeSocket.layerNet({ path: socket })),
+      Layer.provide(RpcSerialization.layerNdjson),
+      Layer.provide(
+        Layer.succeed(RpcClient.ConnectionHooks, {
+          onConnect: Effect.void,
+          onDisconnect,
+        }),
       ),
-    );
-    return yield* RpcClient.make(TexraRpcs).pipe(
-      Effect.provideContext(protocol),
-    );
-  });
-}
+    ),
+  );
+  return yield* RpcClient.make(TexraRpcs).pipe(Effect.provideContext(protocol));
+});
 
 /** Nothing accepts a connection on the socket: no service, or a dead one. */
 const nobodyListens = (error: {
@@ -454,18 +450,19 @@ export const linkService = Effect.fn('server.linkService')(function* (
   ServiceUnavailable,
   Scope.Scope | GlobalValues
 > {
-  const connect = (begin: Effect.Effect<void, Error>) =>
-    Effect.gen(function* () {
-      const scope = yield* Scope.make();
-      const lost = yield* Deferred.make<void>();
-      const connection = yield* ensureService(storageRoot, begin, {
-        onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
-      }).pipe(
-        Scope.provide(scope),
-        Effect.onError(() => Scope.close(scope, Exit.void)),
-      );
-      return { connection, lost, scope };
-    });
+  const connect = Effect.fn('connect')(function* (
+    begin: Effect.Effect<void, Error>,
+  ) {
+    const scope = yield* Scope.make();
+    const lost = yield* Deferred.make<void>();
+    const connection = yield* ensureService(storageRoot, begin, {
+      onDisconnect: Effect.asVoid(Deferred.succeed(lost, undefined)),
+    }).pipe(
+      Scope.provide(scope),
+      Effect.onError(() => Scope.close(scope, Exit.void)),
+    );
+    return { connection, lost, scope };
+  });
   let current = yield* connect(start);
   const client = yield* SubscriptionRef.make<ServiceClient | null>(
     current.connection.client,

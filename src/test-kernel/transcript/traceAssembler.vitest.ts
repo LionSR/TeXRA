@@ -7,7 +7,7 @@ import {
   emptyRunEndOutput,
   MESSAGE_TYPES,
   qualifyAggregateId,
-  type RunId,
+  RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { LOG_LEVELS, USER_FOLLOW_UP_SUPPORT } from '@shared/schemas';
@@ -43,7 +43,7 @@ layer(
       const session: Context.Context<SessionServices> = yield* sessionHandleOf(
         yield* TestSession.open(),
       );
-      const runId = 'aa11bb22cc33' as RunId;
+      const runId = Schema.decodeSync(RunIdSchema)('aa11bb22cc33');
       const aggregateId = qualifyAggregateId('run', runId);
       const planFact = {
         plugin: 'goal',

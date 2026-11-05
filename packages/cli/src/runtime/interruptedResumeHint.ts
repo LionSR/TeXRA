@@ -1,31 +1,8 @@
-import { Effect } from 'effect';
-
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { readCliCwd, type CliContext } from './cliContext';
-import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
 import type { RunId } from '@texra-ai/harness/schemas';
-
-/** A command's refinement of a checkpoint, read from the run's rows. */
-export type CheckpointRefinement = (
-  runId: RunId,
-) => Effect.Effect<boolean, Error>;
-
-/**
- * The one reading of "this decision advertises a resumable run": a checkpoint
- * the command's own refinement agrees to, where no refinement means yes. Each
- * probe on the interrupt path asks this at its own instant, and `refine` may
- * fail, so its caller decides whether that is fatal.
- */
-export function advertisesInterruptedRun(
-  runId: RunId,
-  resumable: boolean | undefined,
-  refine: CheckpointRefinement | undefined,
-): Effect.Effect<boolean, Error> {
-  if (resumable !== true) return Effect.succeed(false);
-  return refine?.(runId) ?? Effect.succeed(true);
-}
 
 /** Read the launch directory without making recovery depend on its lifetime. */
 export function tryReadCliCwd(): string | undefined {
@@ -38,17 +15,8 @@ export function tryReadCliCwd(): string | undefined {
   }
 }
 
-/** Keep recovery commands on the human-facing error stream. */
-export function writeInterruptedResumeHint(
-  hint: string,
-  waitForWrite = false,
-): Effect.Effect<void> {
-  return waitForWrite
-    ? writeTextStderrAndWait(hint)
-    : Effect.sync(() => writeTextStderr(hint));
-}
-
-/** Format a copyable command after the caller has established resumability. */
+/** Format a copyable command after the caller has established resumability;
+ *  it goes to stderr, the human-facing stream. */
 export function formatInterruptedResumeHint(
   context: CliContext,
   runId: RunId,

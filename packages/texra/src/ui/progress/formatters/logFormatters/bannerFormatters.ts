@@ -12,11 +12,12 @@
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Third-party imports - Lit utilities
-import { html } from 'lit';
+import { html, nothing } from 'lit';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
 // Local imports - shared transcript model
+import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
 import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
@@ -110,10 +111,17 @@ export function formatBannerContentTemplate(
 
   if (kind === 'assistant') {
     const time = formatDisplayTimestamp(new Date(timestamp), 'minute');
+    // An answer its model ended early says so under its text.
+    const cutNote =
+      row.cut === undefined
+        ? nothing
+        : html`<div class="log-line">
+            <span class="message-warn">${RESPONSE_CUT_NOTE[row.cut]}</span>
+          </div>`;
     // The transcript has one header grid for people, assistant output and errors.
     // Keep the disclosure at the trailing edge, beside the copy action.
     // prettier-ignore
-    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, { content: trimmedContent, labeled: true })}</div>${contentTemplate}</wa-details>`;
+    return html`<wa-details appearance="plain" icon-placement="end" class="banner-details banner-details--assistant message-disclosure" open aria-busy=${isRunning ? 'true' : 'false'} data-log-id=${ifDefined(id)} data-group-id=${ifDefined(groupId)}><div slot="summary" class="details-summary message-header"><span class="message-label">${waIcon('wand-magic-sparkles')}<span>Assistant</span></span><time class="message-timestamp" datetime=${new Date(timestamp).toISOString()} title=${time.tooltipTimestamp}>${time.timeDisplay}</time>${buildCopyButton(config.copyTitle, { content: trimmedContent, labeled: true })}</div>${contentTemplate}${cutNote}</wa-details>`;
   }
 
   // prettier-ignore

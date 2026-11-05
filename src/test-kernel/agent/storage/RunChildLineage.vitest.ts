@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
-import { Effect, Context, Layer } from 'effect';
+import { Effect, Context, Layer, Schema } from 'effect';
 import { expect } from 'vitest';
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -22,15 +22,24 @@ layer(
     () =>
       Effect.gen(function* () {
         const session = yield* isolatedTestSession();
-        publishTestRunStart(session, 'aaa0ff' as RunId);
+        publishTestRunStart(
+          session,
+          Schema.decodeUnknownSync(RunIdSchema)('aaa0ff'),
+        );
         yield* Context.get(session, SessionLog).settled;
         const rows = yield* Context.get(session, SessionLog).transact([
           {
             type: 'run.start',
-            aggregateId: qualifyAggregateId('run', 'aaa010' as RunId),
+            aggregateId: qualifyAggregateId(
+              'run',
+              Schema.decodeUnknownSync(RunIdSchema)('aaa010'),
+            ),
             identity: { kind: 'agent', agent: 'assistant' },
             userFollowUpSupport: 'unsupported',
-            parent: { id: 'aaa0ff' as RunId, call: null },
+            parent: {
+              id: Schema.decodeUnknownSync(RunIdSchema)('aaa0ff'),
+              call: null,
+            },
             provenance: null,
           },
         ]);
@@ -38,11 +47,14 @@ layer(
           parent: { id: 'aaa0ff', uid: expect.any(String) },
         });
         const facts = yield* Context.get(session, SessionLog).facts(
-          'aaa010' as RunId,
+          Schema.decodeUnknownSync(RunIdSchema)('aaa010'),
         );
         expect(facts?.parent?.id).toBe('aaa0ff');
         const view = yield* Context.get(session, SessionViewAccess).read([]);
-        expect(view.runs.get('aaa010' as RunId)?.parentId).toBe('aaa0ff');
+        expect(
+          view.runs.get(Schema.decodeUnknownSync(RunIdSchema)('aaa010'))
+            ?.parentId,
+        ).toBe('aaa0ff');
       }),
   );
 });

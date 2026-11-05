@@ -12,10 +12,10 @@ import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
+import { getBasename, type SessionView } from '@texra-ai/harness/schemas';
 import type { ProjectDisplay } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
-import type { Shell } from '@texra/shared/session/shell';
 import type { IconName } from '@ui/wa/iconNames';
 import {
   renderIconActionButton,
@@ -23,7 +23,7 @@ import {
 } from '@ui/wa/actionButtons';
 import { afterDropdownHides } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import type { SessionView } from '@texra-ai/harness/schemas';
+import type { Shell } from './shell';
 
 /** One open project as the rail lists it: how its host names it, its session,
  *  its surface. */
@@ -37,12 +37,18 @@ interface ShellSidebarModel {
   readonly renamingProjectKey?: string | null;
   /** Every open project, in `shell.open` order. */
   readonly projects: readonly RailProject[];
+  /** Folders of recently closed projects, the most recent first: offered
+   *  under "Open a project" while no project is open. */
+  readonly recent: readonly string[];
   readonly shell: Shell;
   /** Canonical name of the command palette action, from the command catalog. */
   readonly commandsLabel: string;
   /** The same name with its shortcut, for the tooltip. */
   readonly commandsTitle: string;
 }
+
+/** The recent projects the empty rail offers; File › Open Recent has all. */
+const RECENT_PROJECTS_SHOWN = 5;
 
 /** Project menu actions always name the project they affect. */
 type ProjectAction = 'new-task' | 'rename' | 'close';
@@ -51,6 +57,7 @@ interface ShellSidebarCallbacks {
   onNewTask(): void;
   onOpenCommands(): void;
   onOpenFolder(): void;
+  onOpenRecent(root: string): void;
   onSelectProject(key: string): void;
   onProjectAction(key: string, action: ProjectAction): void;
   onRenameProject?(key: string, name: string | null): void;
@@ -122,15 +129,18 @@ function projectSection(
               .value=${name}
               @keydown=${(event: KeyboardEvent) => {
                 event.stopPropagation();
-                if (event.key === 'Enter')
-                  callbacks.onRenameProject?.(
-                    key,
-                    (event.target as HTMLInputElement).value,
-                  );
+                if (
+                  event.key === 'Enter' &&
+                  event.currentTarget instanceof HTMLInputElement
+                )
+                  callbacks.onRenameProject?.(key, event.currentTarget.value);
                 if (event.key === 'Escape')
                   callbacks.onRenameProject?.(key, null);
               }}
-              @blur=${(event: FocusEvent) => callbacks.onRenameProject?.(key, (event.target as HTMLInputElement).value)}
+              @blur=${(event: FocusEvent) => {
+                if (event.currentTarget instanceof HTMLInputElement)
+                  callbacks.onRenameProject?.(key, event.currentTarget.value);
+              }}
             />`
           : html`<wa-button
               type="button"
@@ -235,11 +245,19 @@ export function shellSidebarTemplate(
           </div>
           ${
             model.projects.length === 0
-              ? sidebarAction({
+              ? html`${sidebarAction({
                   icon: 'folder-open',
                   label: 'Open a project',
                   onClick: callbacks.onOpenFolder,
-                })
+                })}
+                ${model.recent.slice(0, RECENT_PROJECTS_SHOWN).map((root) =>
+                  sidebarAction({
+                    icon: 'clock-rotate-left',
+                    label: getBasename(root) || root,
+                    title: `Reopen ${root}`,
+                    onClick: () => callbacks.onOpenRecent(root),
+                  }),
+                )}`
               : model.projects.map((project) =>
                   projectSection(project, model, callbacks),
                 )

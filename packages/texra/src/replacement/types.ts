@@ -28,7 +28,7 @@ export interface RegexRuleSet {
   patterns: Record<string, ReplacementValue>;
   isRegex: true;
   /** Regex flags such as 'g'. */
-  flags?: string;
+  flags: string;
 }
 
 export type ReplacementRuleSet = NonRegexRuleSet | RegexRuleSet;

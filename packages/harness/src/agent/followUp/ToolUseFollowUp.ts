@@ -29,7 +29,11 @@ export class Inbox extends Context.Service<Inbox, SessionInbox>()(
 
 /** What a follow-up's admission and its wake read of the session. */
 export type FollowUpServices =
-  Inbox | Runs | SessionLog | SessionViewAccess | Interactions;
+  | Inbox
+  | Runs
+  | SessionLog
+  | SessionViewAccess
+  | Interactions;
 
 /** The caller's {@link FollowUpServices}, for a run's inbox kept past the
  *  caller's fiber ({@link runInbox}). */
@@ -54,7 +58,10 @@ export const followUpServices = Effect.map(
  * - `notParent`: the sender is not the run's parent.
  */
 export type FollowUpFailureReason =
-  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
+  | ResumeRefusal['kind']
+  | 'readFailed'
+  | 'oneShot'
+  | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
@@ -160,30 +167,28 @@ export interface RunAttempt {
  * that no resume launched reads that input itself, and a run gone from the
  * view is not resumed. Gives back the resume's end, which never fails.
  */
-export const wakeRun = (
+export const wakeRun = Effect.fn('wakeRun')(function* (
   runId: RunId,
-): Effect.Effect<Effect.Effect<void>, never, FollowUpServices> =>
-  Effect.gen(function* () {
-    if ((yield* SessionViewAccess).run(runId) === undefined) return Effect.void;
-    const attempt = yield* openResume(runId, {}, true);
-    if (attempt === undefined) return Effect.void;
-    attempt.handedOff = true;
-    // Observation only: interruptible even where the caller is masked.
-    return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
-  });
+): Effect.fn.Return<Effect.Effect<void>, never, FollowUpServices> {
+  if ((yield* SessionViewAccess).run(runId) === undefined) return Effect.void;
+  const attempt = yield* openResume(runId, {}, true);
+  if (attempt === undefined) return Effect.void;
+  attempt.handedOff = true;
+  // Observation only: interruptible even where the caller is masked.
+  return Effect.asVoid(Effect.interruptible(Effect.exit(attempt.answer)));
+});
 
 /** Resume the run, or join its resume in flight here, if its input obliges
  *  one and no reader here takes it (`SessionInbox.owesResume`). False only
  *  if the input could not be read; else the resume's end, for a caller to
  *  wait on (at once if none started). */
-export const wakeIfOwed = (
+export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
   runId: RunId,
-): Effect.Effect<false | Effect.Effect<void>, never, FollowUpServices> =>
-  Effect.gen(function* () {
-    const owed = yield* (yield* Inbox).owesResume(runId);
-    if (owed === undefined) return false;
-    return owed ? yield* wakeRun(runId) : Effect.void;
-  });
+): Effect.fn.Return<false | Effect.Effect<void>, never, FollowUpServices> {
+  const owed = yield* (yield* Inbox).owesResume(runId);
+  if (owed === undefined) return false;
+  return owed ? yield* wakeRun(runId) : Effect.void;
+});
 
 /**
  * Join `runId`'s resume in flight here, or open one as its activation,
@@ -244,59 +249,54 @@ export const openResume = (
  * the user what the run did not take, or a fault. A caller that holds the
  * answer acts on it itself.
  */
-const answered = <R>(
+const answered = Effect.fn('answered')(function* <R>(
   runId: RunId,
   attempt: RunAttempt,
   decided: Effect.Effect<ResumeAttempt, Error, R>,
-): Effect.Effect<ResumeAttempt, Error, R | FollowUpServices> =>
-  Effect.gen(function* () {
-    const view = yield* SessionViewAccess;
-    const interactions = yield* Interactions;
-    // Latched: a run id deleted and re-created is not the run this wake was for.
-    let missing = false;
-    const gone = () => (missing ||= view.run(runId) === undefined);
-    return yield* decided.pipe(
-      Effect.tap((result) => {
-        if (!attempt.handedOff) return Effect.void;
-        // The parent's open call reattaches the run it owns.
-        if ('ownedBy' in result) return Effect.flatten(wakeRun(result.ownedBy));
-        if (gone() || ('started' in result && result.delivered))
-          return Effect.void;
-        return interactions.emit(
-          'requestShowInstruction',
-          {
-            key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
-            message:
-              'failed' in result
-                ? describeFollowUpFailure(result.failed.kind)
-                : FOLLOW_UP_WAKE_FAILED_MESSAGE,
-            showSuppress: false,
-          },
-          { replayWhenAttached: true },
-        );
-      }),
-      Effect.tapCause((cause) => {
-        if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
-          return Effect.void;
-        const error = Cause.squash(cause);
-        // Shown once, by its one presenter: a run the resume opened shows
-        // its own end (`presentTerminalResult`), and a caller still waiting
-        // on the answer (a host's resume that joined this one) shows what it
-        // receives.
-        const shownElsewhere =
-          Deferred.isDoneUnsafe(attempt.admitted) || attempt.waiters > 0;
-        return Effect.logError(`Failed to resume run ${runId}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            shownElsewhere
-              ? Effect.void
-              : presentRunFailure(interactions, error, 'Resume failed: '),
-          ),
-        );
-      }),
-    );
-  });
+): Effect.fn.Return<ResumeAttempt, Error, R | FollowUpServices> {
+  const view = yield* SessionViewAccess;
+  const interactions = yield* Interactions;
+  // Latched: a run id deleted and re-created is not the run this wake was for.
+  let missing = false;
+  const gone = () => (missing ||= view.run(runId) === undefined);
+  return yield* decided.pipe(
+    Effect.tap((result) => {
+      if (!attempt.handedOff) return Effect.void;
+      // The parent's open call reattaches the run it owns.
+      if ('ownedBy' in result) return Effect.flatten(wakeRun(result.ownedBy));
+      if (gone() || ('started' in result && result.delivered))
+        return Effect.void;
+      return interactions.emit('requestShowInstruction', {
+        key: HARNESS_INSTRUCTION_KEY.RESUME_REFUSED,
+        message:
+          'failed' in result
+            ? describeFollowUpFailure(result.failed.kind)
+            : FOLLOW_UP_WAKE_FAILED_MESSAGE,
+        showSuppress: false,
+      });
+    }),
+    Effect.tapCause((cause) => {
+      if (!attempt.handedOff || Cause.hasInterruptsOnly(cause) || gone())
+        return Effect.void;
+      const error = Cause.squash(cause);
+      // Shown once, by its one presenter: a run the resume opened shows
+      // its own end (`presentTerminalResult`), and a caller still waiting
+      // on the answer (a host's resume that joined this one) shows what it
+      // receives.
+      const shownElsewhere =
+        Deferred.isDoneUnsafe(attempt.admitted) || attempt.waiters > 0;
+      return Effect.logError(`Failed to resume run ${runId}`).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          shownElsewhere
+            ? Effect.void
+            : presentRunFailure(interactions, error, 'Resume failed: '),
+        ),
+      );
+    }),
+  );
+});
 
 /**
  * The one admission of a message to a run: every host and tool sends

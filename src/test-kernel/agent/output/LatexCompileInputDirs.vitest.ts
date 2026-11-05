@@ -3,11 +3,14 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import { expect, vi } from 'vitest';
 
 // Local imports
-import { fileLocationDisplayPath, type RunId } from '@texra-ai/harness/schemas';
+import {
+  RunIdSchema,
+  fileLocationDisplayPath,
+} from '@texra-ai/harness/schemas';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -60,7 +63,7 @@ vi.mock('@texra/agent/output/compiledPdfArtifacts', async (importOriginal) => ({
   publishCompiledPdfArtifact: mocks.publishCompiledPdfArtifact,
 }));
 
-const runId = 'latexdiff-same-basename' as RunId;
+const runId = Schema.decodeUnknownSync(RunIdSchema)('d1ff0a');
 const document = (body: string) =>
   `\\documentclass{article}\\begin{document}${body}\\end{document}`;
 const files = ['original', 'r0', 'r1'].flatMap((dir) =>

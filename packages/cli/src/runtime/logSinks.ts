@@ -3,14 +3,9 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect, PlatformError } from 'effect';
+import { Effect, PlatformError, Predicate } from 'effect';
 
 // Local imports
-import {
-  type ProcessRuntime,
-  type PerKeyLane,
-  withPerKeyLane,
-} from '@texra-ai/harness/host';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import {
   entryChannel,
@@ -28,8 +23,8 @@ const closed = { stdout: false, stderr: false };
 type StreamKey = 'stdout' | 'stderr';
 
 function isCliPipeClosureError(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  const code = (error as { code?: unknown }).code;
+  if (!Predicate.hasProperty(error, 'code')) return false;
+  const code = error.code;
   return code === 'EPIPE' || code === 'ERR_STREAM_DESTROYED';
 }
 
@@ -51,31 +46,22 @@ function openStream(key: StreamKey): (typeof process)[StreamKey] | undefined {
   return stream.destroyed ? undefined : stream;
 }
 
-/**
- * The process runtime the NDJSON sink queues its lane fibers on, handed over
- * by `installCliProcessRuntime` and taken back once that install has been
- * disposed (#12720). `null` is a state the plane is in, not a lookup that
- * failed: it is what the sink's no-runtime edge below is, and the direct
- * write it takes there is production behaviour rather than a fallback.
- */
-let logRuntime: ProcessRuntime | null = null;
-
-export function setCliLogRuntime(runtime: ProcessRuntime | null): void {
-  logRuntime = runtime;
-}
-
 /** A synchronous throw from `write` (including `JSON.stringify` in the
- *  thunk) marks the stream closed and finishes, never crashes the process. */
-function bestEffortStreamWrite(write: () => void, onSyncThrow: () => void) {
+ *  thunk) goes to `onSyncThrow` and never crashes the process. */
+function bestEffortStreamWrite(
+  write: () => void,
+  onSyncThrow: (error: unknown) => void,
+) {
   try {
     write();
-  } catch {
-    onSyncThrow();
+  } catch (error) {
+    onSyncThrow(error);
   }
 }
 
 // CLI output is best effort, and a fire-and-forget write has nothing to wait
-// for, so it never needs the process runtime: a synchronous throw from
+// for: Node's stream keeps call order and buffers under backpressure, and the
+// event loop stays alive until buffered writes land. A synchronous throw from
 // `stream.write` or a write error reported to its callback marks the stream
 // closed instead of propagating. Throwing from here would bypass the command
 // error boundary and can crash the process.
@@ -93,23 +79,23 @@ function writeRaw(key: StreamKey, text: string): void {
   );
 }
 
-// A waiting write takes the direct path unconditionally. Its callers are the
-// exit edges — the resume hint, the chat TUI's teardown warning, and the
-// shutdown sequence's final flush, which runs after the process runtime has
-// been disposed — so it never needs that runtime. The stream's write callback
-// is the foreign edge, wrapped exactly once here.
-function writeRawStderrAndWait(text: string): Effect.Effect<void> {
+// A waiting write resolves once the stream has written `text` and everything
+// queued before it. Its callers are the exit edges — the resume hint, the chat
+// TUI's teardown warning, and the shutdown sequence's final flushes before
+// `process.exit`, which drops whatever an asynchronous pipe still buffers. The
+// stream's write callback is the foreign edge, wrapped exactly once here.
+function writeRawAndWait(key: StreamKey, text: string): Effect.Effect<void> {
   return Effect.callback<void>((resume) => {
-    const stream = openStream('stderr');
+    const stream = openStream(key);
     if (!stream) return resume(Effect.void);
     bestEffortStreamWrite(
       () =>
         stream.write(text, (error) => {
-          if (error) closed.stderr = true;
+          if (error) closed[key] = true;
           resume(Effect.void);
         }),
       () => {
-        closed.stderr = true;
+        closed[key] = true;
         resume(Effect.void);
       },
     );
@@ -143,12 +129,17 @@ export function writeTextStderr(text: string): void {
 }
 
 export function writeTextStderrAndWait(text: string): Effect.Effect<void> {
-  return writeRawStderrAndWait(`${text}\n`);
+  return writeRawAndWait('stderr', `${text}\n`);
 }
 
 /** Wait until every stderr write queued before this call has completed. */
 export function flushTextStderr(): Effect.Effect<void> {
-  return writeRawStderrAndWait('');
+  return writeRawAndWait('stderr', '');
+}
+
+/** Wait until every stdout write queued before this call has completed. */
+export function flushStdout(): Effect.Effect<void> {
+  return writeRawAndWait('stdout', '');
 }
 
 /**
@@ -250,155 +241,33 @@ export const silentLogSink: HostLogSink = Object.freeze({
   write: () => undefined,
 });
 
-interface NdjsonWritable {
-  /**
-   * False once the target can no longer accept writes. The target owns this
-   * answer so the sink never has to ask whether it happens to be holding
-   * `process.stdout` and consult the module-level pipe-closure flag itself.
-   */
-  readonly usable: boolean;
-  write(text: string): boolean;
-  once(event: 'drain' | 'error' | 'close', listener: () => void): unknown;
-  off(event: 'drain' | 'error' | 'close', listener: () => void): unknown;
-}
+/** Set once an NDJSON record fails to serialize or write: the records after
+ *  it would describe a stream with a hole in it, so none are written. */
+let ndjsonClosed = false;
 
-const processStdoutTarget: NdjsonWritable = {
-  get usable(): boolean {
-    return !process.stdout.destroyed && !closed.stdout;
-  },
-  write: (text) => process.stdout.write(text),
-  once: (event, listener) => process.stdout.once(event, listener),
-  off: (event, listener) => process.stdout.off(event, listener),
-};
-
-/**
- * One FIFO write lane per sink: records land on stdout strictly in call
- * order, and a backpressured write holds the lane until its drain arrives.
- * Keyed weakly by the sink, whose lifetime bounds it.
- */
-const sinkLanes = new WeakMap<NdjsonStdoutSink, PerKeyLane>();
-
-export class NdjsonStdoutSink {
-  private stdoutClosed = false;
-
-  private readonly stdout: NdjsonWritable;
-  constructor(stdout: NdjsonWritable = processStdoutTarget) {
-    this.stdout = stdout;
-  }
-
-  writeRecord(unstamped: CliNdjsonRecord): void {
-    if (this.isClosed()) return;
-    // Appended, never prepended: line-oriented consumers anchor on the
-    // record's leading `{"kind":`.
-    const record = { ...unstamped, contract: CLI_NDJSON_CONTRACT };
-    const runtime = logRuntime;
-    if (!runtime) {
-      // No-runtime edge (`texra version --output-format ndjson` builds no
-      // platform; post-disposal nothing queues): no lane fiber can be waiting
-      // ahead of this record, so a direct write keeps the lane's call order.
-      // A synchronous stringify/write throw still closes the sink.
-      bestEffortStreamWrite(
-        () => this.stdout.write(`${JSON.stringify(record)}\n`),
-        () => this.closeQueue(),
-      );
-      return;
-    }
-    runtime.runFork(withPerKeyLane(sinkLanes, this)(this.writeLine(record)));
-  }
-
-  /** Finishes once every record queued before this call has landed: the FIFO
-   *  lane runs this no-op only after them. */
-  flush(): Effect.Effect<void> {
-    return Effect.suspend(() => {
-      if (!logRuntime) {
-        // Before `installCliProcessRuntime` every write took the direct path
-        // and already landed; after its disposal the runtime's
-        // scope close has interrupted any lane fiber still waiting on a drain.
-        // Either way nothing remains to wait for.
-        return Effect.void;
-      }
-      return withPerKeyLane(sinkLanes, this)(Effect.void);
-    });
-  }
-
-  /**
-   * Writes one queued record, honouring backpressure. Never fails: the fiber
-   * is forked unobserved, so a failure would die unreported. A failed write
-   * or an unserializable record closes the sink — loudly, on stderr, since a
-   * write that throws (including a stringify of a malformed record, which is
-   * a producer bug) must not pass without a trace.
-   */
-  private writeLine(record: CliNdjsonRecord): Effect.Effect<void> {
-    return Effect.gen({ self: this }, function* () {
-      if (this.isClosed()) return;
-      const writeResult = yield* Effect.try({
-        try: () => this.stdout.write(`${JSON.stringify(record)}\n`),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((cause: unknown) =>
-          Effect.sync(() => {
-            // Closed first, so this report cannot re-enter the broken sink.
-            this.closeQueue();
-            writeTextStderr(
-              `[warn] [cli.output] A queued NDJSON record could not be written; the sink is closed for the rest of this process: ${toErrorMessage(cause)}`,
-            );
-            return undefined;
-          }),
-        ),
-      );
-      // A throw closed the sink above; only a successful write that returned
-      // false is backpressure and waits for drain.
-      if (writeResult === undefined) return;
-      if (!writeResult && !(yield* this.waitForStdoutDrain())) {
-        this.closeQueue();
-      }
-    });
-  }
-
-  private isClosed(): boolean {
-    return this.stdoutClosed || !this.stdout.usable;
-  }
-
-  /** Records still queued behind a closed stdout write nothing when they run. */
-  private closeQueue(): void {
-    this.stdoutClosed = true;
-  }
-
-  private waitForStdoutDrain(): Effect.Effect<boolean> {
-    return Effect.suspend(() => {
-      if (!this.stdout.usable) return Effect.succeed(false);
-      const stdout = this.stdout;
-      return Effect.callback<boolean>((resume) => {
-        const onDrain = (): void => {
-          cleanup();
-          resume(Effect.succeed(true));
-        };
-        const onClosed = (): void => {
-          cleanup();
-          resume(Effect.succeed(false));
-        };
-        const cleanup = (): void => {
-          stdout.off('drain', onDrain);
-          stdout.off('error', onClosed);
-          stdout.off('close', onClosed);
-        };
-        stdout.once('drain', onDrain);
-        stdout.once('error', onClosed);
-        stdout.once('close', onClosed);
-        return Effect.sync(cleanup);
-      });
-    });
-  }
-}
-
-const ndjsonStdoutSink = new NdjsonStdoutSink();
-
-/** Queue one public NDJSON record on the process-wide stdout serializer. */
+/** Write one public NDJSON record to stdout, stamped with the contract. */
 export function writeNdjsonStdout(record: CliNdjsonRecord): void {
-  ndjsonStdoutSink.writeRecord(record);
-}
-
-/** Wait until all queued public NDJSON and structured log records are written. */
-export function flushNdjsonStdout(): Effect.Effect<void> {
-  return ndjsonStdoutSink.flush();
+  if (ndjsonClosed) return;
+  const stream = openStream('stdout');
+  if (!stream) return;
+  bestEffortStreamWrite(
+    () =>
+      stream.write(
+        // Appended, never prepended: line-oriented consumers anchor on the
+        // record's leading `{"kind":`.
+        `${JSON.stringify({ ...record, contract: CLI_NDJSON_CONTRACT })}\n`,
+        (error) => {
+          if (error) closed.stdout = true;
+        },
+      ),
+    (error) => {
+      // Closed first, so this report cannot re-enter the broken output. A
+      // throw here (including a stringify of a malformed record, which is a
+      // producer bug) must not pass without a trace.
+      ndjsonClosed = true;
+      writeTextStderr(
+        `[warn] [cli.output] An NDJSON record could not be written; NDJSON output is closed for the rest of this process: ${toErrorMessage(error)}`,
+      );
+    },
+  );
 }

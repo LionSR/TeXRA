@@ -27,21 +27,11 @@ import {
   RequestDecisionSchema,
   RunIdSchema,
   StoredMediaSchema,
+  RunStopReasonSchema,
   ToolEditContentSchema,
 } from '@shared/schemas';
 
 const runScoped = { runId: RunIdSchema };
-
-/**
- * Why a run stops. `user` is an explicit stop of the work (a stop button,
- * Ctrl-C on a running turn, an agent's kill): the run cancels the remote
- * background operation it is observing. `shutdown` only ends this process's
- * hold on the run (an exit, a signal, a session close), leaving that
- * operation for a resume to observe.
- */
-const RunStopReasonSchema = Schema.Literals(['user', 'shutdown']);
-/** Why a run stops: a `user` stop or this process's `shutdown`. */
-export type RunStopReason = typeof RunStopReasonSchema.Type;
 
 /** Every request a surface issues to its session's runtime, one arm per
  *  `group.action` tag. */
@@ -49,7 +39,6 @@ export const RuntimeRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('run.stop'),
     ...runScoped,
-    detachActiveChildren: Schema.optional(Schema.NullOr(Schema.Boolean)),
     reason: RunStopReasonSchema,
   }),
   Schema.Struct({ kind: Schema.Literal('run.delete'), ...runScoped }),
@@ -279,7 +268,9 @@ export class Conflict extends Schema.TaggedError<Conflict>()('Conflict', {
   }
 }
 
-/** The user cancelled the operation. No refusal notice is needed. */
+/** Nothing is left to tell the user: they cancelled the operation, or the
+ *  host has already told them why it did not go through. No refusal notice
+ *  is needed. */
 export class Cancelled extends Schema.TaggedError<Cancelled>()(
   'Cancelled',
   {},

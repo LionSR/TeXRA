@@ -8,8 +8,6 @@
  * import for dispatch and palette rendering.
  */
 
-import type { DesktopPlatform } from '@texra/shared/commands/accelerators';
-
 import {
   DESKTOP_HELP_COMMANDS,
   DESKTOP_LOCAL_COMMANDS,
@@ -18,6 +16,8 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface.js';
+import type { DesktopPlatform } from '../shared/accelerators';
+
 import type { MenuItemConstructorOptions } from 'electron';
 
 /** The one place Electron's wider platform id is narrowed into the union the
@@ -132,6 +132,7 @@ export function buildDesktopMenuTemplate(
       submenu: [
         commandItem(DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL),
         commandItem(DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR),
+        commandItem(DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER),
         commandItem(DESKTOP_LOCAL_COMMANDS.SHOW_LOGS),
         { type: 'separator' },
         { role: 'resetZoom' },

@@ -2,12 +2,18 @@
  * Diff statistics computation for output files.
  *
  * Computes line-based diff statistics between base files and outputs
- * using the diff-match-patch library.
+ * from the harness's diff hunks, the same ones a reader sees beside the diff.
  */
 
 import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { withLogChannel, pathToLocationIn } from '@texra-ai/harness/host';
+import {
+  buildDiffHunks,
+  countLineChanges,
+  pathToLocationIn,
+  reportDiffTimeout,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { absentReason } from '@texra-ai/harness/node';
 import {
   toErrorMessage,
@@ -17,7 +23,6 @@ import {
   type FileLocation,
 } from '@texra-ai/harness/schemas';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
-import { diffLineChanges } from '@texra/utils/text/diff';
 
 import { traceFileLineage } from './lineageMapping';
 import { ensureRoundData, type OutputState } from './outputState';
@@ -53,20 +58,16 @@ const computeDiffStats = Effect.fn('documents.computeDiffStats')(
       { concurrency: 2 },
     );
 
-    return diffLineChanges(baseContent, outContent);
+    const { hunks, timeout } = buildDiffHunks(baseContent, outContent);
+    yield* reportDiffTimeout(timeout);
+    return countLineChanges(hunks);
   },
   // An unreadable side of the pair yields no stats rather than failing the
   // round, but never silently: a missing file is expected on a historical
   // run and logged at debug, anything else at warn.
   Effect.catch((err) => {
     const message = `Failed to compute diff stats: ${toErrorMessage(err)}`;
-    // The reads fail as `PlatformError`s, whose `reason` carries the
-    // errno classification the raw Node error used to.
-    const write =
-      err instanceof PlatformError.PlatformError &&
-      err.reason._tag === 'NotFound'
-        ? Effect.logDebug
-        : Effect.logWarning;
+    const write = absentReason(err) ? Effect.logDebug : Effect.logWarning;
     return write(message).pipe(
       withLogChannel(CHANNEL),
       Effect.as<DiffStats>({}),
@@ -108,7 +109,7 @@ const toWorkspaceOrigin = Effect.fn('documents.toWorkspaceOrigin')(function* (
 /** The diff stats and lineage of a round's outputs, against the
  *  snapshot-resolved `baseFiles` (the list `RunFileService.prepareRunWorkspace`
  *  returns): the live workspace path would collapse in-place diffs to 0/0. A
- *  task that does not rewrite its documents gets no lineage. */
+ *  task that writes new documents (it declares `outputs`) gets no lineage. */
 export const computeOutputDiffStats = Effect.fn(
   'documents.computeOutputDiffStats',
 )(function* (
@@ -117,11 +118,11 @@ export const computeOutputDiffStats = Effect.fn(
   workspace: string | undefined,
   baseFiles: FileLocation[],
   currRound: number,
-  rewrite: boolean,
+  /** Whether the outputs descend from the inputs (false for new documents). */
+  lineage: boolean,
 ) {
   const roundOutputs = ensureRoundData(state, currRound).outputs;
   const mapping = traceFileLineage(state, baseFiles, currRound);
-  const suppressLineage = !rewrite;
 
   return yield* Effect.forEach(
     roundOutputs,
@@ -154,10 +155,10 @@ export const computeOutputDiffStats = Effect.fn(
           }
         }
 
-        const effectiveOriginal = suppressLineage
-          ? null
-          : yield* toWorkspaceOrigin(workspace, originalLocation);
-        const effectiveDiffBase = suppressLineage ? null : diffBaseLocation;
+        const effectiveOriginal = lineage
+          ? yield* toWorkspaceOrigin(workspace, originalLocation)
+          : null;
+        const effectiveDiffBase = lineage ? diffBaseLocation : null;
         const stats = yield* computeDiffStats(effectiveDiffBase, location);
 
         return {

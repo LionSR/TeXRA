@@ -35,17 +35,19 @@ export function settingsMemoryCommands(ports: {
   const postMutatedMemoryData = Effect.flatMap(memoryData, (message) =>
     bindings.post(Effect.succeed(message)),
   );
-  const setMemoryPinned = (storagePath: string, pinned: boolean) =>
-    Effect.gen(function* () {
-      const result = yield* MemoryStore.pin(storagePath, pinned);
-      if (result.status === 'cap-reached') {
-        yield* bindings.prompt.warning(
-          `Cannot pin: maximum of ${result.max} pinned memories reached. Unpin an existing memory first.`,
-        );
-        return;
-      }
-      yield* postMutatedMemoryData;
-    });
+  const setMemoryPinned = Effect.fn('setMemoryPinned')(function* (
+    storagePath: string,
+    pinned: boolean,
+  ) {
+    const result = yield* MemoryStore.pin(storagePath, pinned);
+    if (result.status === 'cap-reached') {
+      yield* bindings.prompt.warning(
+        `Cannot pin: maximum of ${result.max} pinned memories reached. Unpin an existing memory first.`,
+      );
+      return;
+    }
+    yield* postMutatedMemoryData;
+  });
 
   const handlers = {
     getMemoryData: () => postMemoryData,
@@ -98,8 +100,8 @@ export function settingsMemoryCommands(ports: {
         ),
       );
     },
-    deleteMemory: ({ storagePath, displayPath }) =>
-      Effect.gen(function* () {
+    deleteMemory: Effect.fn('deleteMemory')(
+      function* ({ storagePath, displayPath }) {
         // A declined delete posts nothing. A prompt that cannot show and a
         // failed remove stay typed, so the failure is reported and the list
         // the view is waiting on is reposted.
@@ -112,14 +114,14 @@ export function settingsMemoryCommands(ports: {
         // from here never races an agent's edit beneath it.
         yield* MemoryStore.delete(storagePath);
         yield* postMutatedMemoryData;
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.andThen(
-            report('Failed to delete memory', error),
-            postMemoryData,
-          ),
+      },
+      Effect.catch((error) =>
+        Effect.andThen(
+          report('Failed to delete memory', error),
+          postMemoryData,
         ),
       ),
+    ),
     pinMemory: ({ storagePath }) =>
       reported('Failed to pin memory', setMemoryPinned(storagePath, true)),
     unpinMemory: ({ storagePath }) =>

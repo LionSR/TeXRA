@@ -75,7 +75,7 @@ query store, those tables do not exist.
     check.
   - Extension loading stays disabled, the `node:sqlite` default.
 - **Errors.** `HistoryQueryRefused { reason: 'not-a-read' | 'rejected' |
-'timeout', message }` is the model's to correct; `HistoryQueryFailed` is
+  'timeout', message }` is the model's to correct; `HistoryQueryFailed` is
   the store's own failure, logged at `warn` as the store is dropped.
 - **Deadline and interruption.** A query gets 5 seconds. Past that, or when
   its caller is interrupted, the process is killed and the next query

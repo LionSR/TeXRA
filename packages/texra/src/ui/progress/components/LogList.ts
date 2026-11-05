@@ -69,17 +69,24 @@ export class LogList extends LitElement {
       if (this.runCache.size > 0) this.runCache.clear();
       return;
     }
-    this.getOrCreateEntry(run.id).run = run;
+    const entry = this.runCache.get(run.id);
+    if (entry) entry.run = run;
+    else this.runCache.set(run.id, { run, ref: createRef<TaskGroupList>() });
   }
 
   override render(): TemplateResult | typeof nothing {
     // The run bodies mount the transcript only for a run.
     if (!this.run) return nothing;
+    // Each entry is cached under its run's id.
+    const entries = [...this.runCache.rvalues()].filter(
+      (entry) => entry !== undefined,
+    );
     return html`${repeat(
-      this.runCache.rentries() as Iterable<[RunId, CachedRun]>,
-      ([id]) => id,
-      ([id, data]) => {
+      entries,
+      (data) => data.run.id,
+      (data) => {
         const run = data.run;
+        const id = run.id;
         const terminal = run.identity.kind === 'process';
         return html`
           <task-group-list
@@ -94,7 +101,6 @@ export class LogList extends LitElement {
             .surface=${this.surface}
             .tools=${this.tools}
             .transcript=${run.transcript}
-            .runStatus=${run.status}
             .durableOutcome=${run.durableOutcome}
             .expanded=${this.surface?.groups.get(id)}
             ?terminal=${terminal}
@@ -121,17 +127,6 @@ export class LogList extends LitElement {
     }
   }
 
-  private getOrCreateEntry(runId: RunId): CachedRun {
-    const entry = this.runCache.get(runId);
-    if (entry) return entry;
-    const created: CachedRun = {
-      run: this.run!,
-      ref: createRef<TaskGroupList>(),
-    };
-    this.runCache.set(runId, created);
-    return created;
-  }
-
   private handleClickEvent = (event: Event): void => {
     if (!(event instanceof MouseEvent)) return;
     this.activateLinkFromEvent(event);
@@ -141,7 +136,7 @@ export class LogList extends LitElement {
     if (!(event instanceof KeyboardEvent)) return;
     if (event.key !== 'Enter' && event.key !== ' ') return;
     if (event.defaultPrevented) return;
-    if (!getComposedPathElement<HTMLElement>(event, '.file-link, .latex-ref')) {
+    if (!getComposedPathElement(event, '.file-link, .latex-ref', HTMLElement)) {
       return;
     }
     event.preventDefault();
@@ -149,7 +144,7 @@ export class LogList extends LitElement {
   };
 
   private activateLinkFromEvent(event: Event): void {
-    const fileLink = getComposedPathElement<HTMLElement>(event, '.file-link');
+    const fileLink = getComposedPathElement(event, '.file-link', HTMLElement);
     if (fileLink?.dataset.file) {
       const line = Number(fileLink.dataset.fileLine);
       this.dispatchEvent(
@@ -161,7 +156,7 @@ export class LogList extends LitElement {
       );
       return;
     }
-    const latexRef = getComposedPathElement<HTMLElement>(event, '.latex-ref');
+    const latexRef = getComposedPathElement(event, '.latex-ref', HTMLElement);
     if (latexRef?.dataset.label) {
       this.dispatchEvent(
         SessionUiEvents.host({

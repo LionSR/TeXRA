@@ -2,7 +2,7 @@
 import { Schema, Struct } from 'effect';
 
 // Local imports - canonical protocol binding
-import { ModelOriginSchema } from './protocol.js';
+import { ModelOriginSchema, TurnUsageSchema } from './protocol.js';
 import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
 // Local imports - canonical messages
@@ -99,6 +99,9 @@ const ModelErrorFieldsSchema = Schema.Struct({
   message: Schema.String,
   /** Text emitted before this attempt failed, when the caller observed it. */
   partialText: Schema.optional(Schema.String),
+  /** What the provider billed for a response it refused to finish, when it
+   *  reported it (Anthropic's overflowed turn). */
+  usage: Schema.optional(TurnUsageSchema),
   requestId: Schema.optional(Schema.String),
   responseId: Schema.optional(Schema.String),
   model: Schema.optional(Schema.String),
@@ -108,8 +111,9 @@ const ModelErrorFieldsSchema = Schema.Struct({
   /**
    * What the failure is evidence about beyond this request: `model` for a
    * limit the provider scoped to one model, `route` for the shared provider,
-   * credential and endpoint (an unscoped rate limit, a server failure, the
-   * network). Absent when it says nothing about either.
+   * credential and endpoint (an unscoped rate limit, a server failure, a
+   * timeout or conflict, the network). Absent when it says nothing about
+   * either.
    */
   scope: Schema.optional(Schema.Literals(['model', 'route'])),
   /**

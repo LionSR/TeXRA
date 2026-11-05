@@ -1,5 +1,5 @@
 import { layer } from '@effect/vitest';
-import { afterEach, beforeEach, expect, vi } from 'vitest';
+import { afterEach, assert, beforeEach, expect, vi } from 'vitest';
 import {
   Deferred,
   Effect,
@@ -55,7 +55,7 @@ const mocks = vi.hoisted(() => ({
   createCliRuntimeHost: vi.fn(),
   prepareInteractivePrompt: vi.fn(),
   rootLaunch: vi.fn(),
-  admit: vi.fn(),
+  admit: vi.fn<(input: StartInput) => Promise<void>>(),
   stopRequest: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Effect.Effect<void>>(() => Effect.void),
@@ -93,9 +93,11 @@ function runSessionFake(session: LocalSession): LocalSession {
       // A rejected admission is a defect, as an unexpected launch failure is.
       Effect.promise(() => mocks.admit(input)).pipe(
         Effect.map((): Run => ({
-          runId: input.runId as RunId,
+          runId:
+            input.runId ?? assert.fail('the CLI mints the id of every run'),
           result: Effect.tryPromise({
             try: () =>
+              // cast: each case's `rootLaunch` stub resolves with the run's end.
               mocks.rootLaunch(input) as Promise<Effect.Success<Run['result']>>,
             catch: (cause) =>
               new RunFailure({ cause, message: toErrorMessage(cause) }),
@@ -105,8 +107,8 @@ function runSessionFake(session: LocalSession): LocalSession {
           interrupt: Effect.void,
         })),
       ),
-    // cast: a stop answers `done`, as every other kind is answered by the
-    // real session.
+    // A stop answers `done`; the real session answers every other kind.
+    // cast: the generic signature cannot follow that branch on `kind`.
     request: ((req: RuntimeRequest) =>
       req.kind === 'run.stop'
         ? Effect.suspend(
@@ -158,7 +160,9 @@ function baseConfig(): Parameters<typeof executeCliConfig>[0] {
 
 /** The id the run under test was launched with: the CLI mints it. */
 function launchedRunId(): RunId {
-  return (mocks.admit.mock.calls[0]?.[0] as LaunchInput).runId;
+  const runId = mocks.admit.mock.calls[0]?.[0].runId;
+  assert(runId != null, 'the CLI starts the run under the id it minted');
+  return runId;
 }
 
 /** A run program's options with the session, runtime and shutdown scope
@@ -215,7 +219,7 @@ function stubHangingRun(
 ): {
   resolve: (result: unknown) => void;
 } {
-  let resolveRun!: (result: unknown) => void;
+  let resolveRun: ((result: unknown) => void) | undefined;
   mocks.rootLaunch.mockImplementation((input: LaunchInput) => {
     // Committed before the run reports admission, so every later read
     // of its rows finds the opening.
@@ -227,7 +231,12 @@ function stubHangingRun(
       void opening.then(() => Deferred.doneUnsafe(published, Effect.void));
     });
   });
-  return { resolve: (result: unknown) => resolveRun(result) };
+  return {
+    resolve: (result: unknown) => {
+      assert(resolveRun != null, 'the run launched before it is resolved');
+      resolveRun(result);
+    },
+  };
 }
 
 function stubExecuteCliDeps(): void {
@@ -333,14 +342,11 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         Effect.gen(function* () {
           const { platform } = yield* FakeHost;
           const { executeCliConfig } = yield* loadExecuteCli;
-          let settleRecoveryWrite!: () => void;
-          const recoveryWrite = new Promise<void>((resolve) => {
-            settleRecoveryWrite = resolve;
-          });
+          const recoveryWrite = Promise.withResolvers<void>();
           const finalized = yield* Deferred.make<void>();
           const onInterruptedRunFinalized = vi.fn(() => {
             Deferred.doneUnsafe(finalized, Effect.void);
-            return Effect.promise(() => recoveryWrite);
+            return Effect.promise(() => recoveryWrite.promise);
           });
           const published = yield* Deferred.make<void>();
           const hangingRun = stubHangingRun(
@@ -365,7 +371,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(mocks.stopRequest).toHaveBeenCalledExactlyOnceWith({
             kind: 'run.stop',
             runId: launchedRunId(),
-            detachActiveChildren: false,
             reason: 'shutdown',
           });
 
@@ -378,7 +383,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           });
           yield* settle;
           expect(shutdownResolved).toBe(false);
-          settleRecoveryWrite();
+          recoveryWrite.resolve();
           yield* Fiber.join(shutdown);
           expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
             launchedRunId(),

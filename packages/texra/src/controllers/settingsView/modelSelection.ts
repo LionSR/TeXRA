@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, Predicate, Result } from 'effect';
 
 // Local imports
 import {
@@ -15,7 +15,6 @@ import {
   StateWriteFailed,
   type ModelOption,
   type Secrets,
-  Settings,
 } from '@texra-ai/harness/host';
 import { GlobalStateKey } from '@texra-ai/harness/schemas';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
@@ -54,10 +53,6 @@ export const buildModelSelectionMessage = Effect.fn(
     models,
     // TeXRA's catalog always names one; '' is the select's empty value.
     helperModel: (yield* getHelperModelName(stores)) ?? '',
-    preferShortModelNames: yield* Settings.get<boolean>(
-      stores,
-      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-    ),
   };
 });
 
@@ -73,8 +68,8 @@ export function setReasoningLevel(
   // `reasoningEffortOverrides`.
   return globalState
     .modify(GlobalStateKey.REASONING_LEVELS, (stored) => {
-      const overrides = {
-        ...(stored as Record<string, string> | undefined),
+      const overrides: Record<string, unknown> = {
+        ...(Predicate.isObject(stored) && stored),
       };
       if (input.level == null) {
         delete overrides[input.modelName];

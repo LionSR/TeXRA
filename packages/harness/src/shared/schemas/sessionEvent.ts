@@ -39,7 +39,7 @@ import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
-import { RunBindingSchema } from './runFacts';
+import { RunBindingSchema } from './runInput';
 import {
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,
@@ -237,7 +237,6 @@ const DisplayRowDraftSchema = Schema.Union([
     config: RunRecordFieldsSchema,
     binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
   }),
-  durable('run.model', { model: Schema.String.check(Schema.isMinLength(1)) }), // projected (`projections.ts`), never stored
   /** The parent edge severed by a stop that detaches the run: the only
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
@@ -436,7 +435,6 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
       return { parent: null, borrowsClaim: false, closes: true };
     case 'run.activate':
     case 'run.config':
-    case 'run.model':
     case 'run.detach':
     case 'run.end':
     case 'child.park':

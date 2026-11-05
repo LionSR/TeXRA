@@ -19,7 +19,12 @@ import {
  * acknowledge each resumed turn separately.
  */
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { Inbox, openResume, REFUSED } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  Inbox,
+  openResume,
+  REFUSED,
+} from '@agent/followUp/ToolUseFollowUp';
 import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
@@ -35,11 +40,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
-import {
-  RunHistoryRefused,
-  SessionLog,
-  SessionViewAccess,
-} from '@shared/session/runHistory';
+import { RunHistoryRefused, SessionLog } from '@shared/session/runHistory';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 import type { SessionLogShape } from '@shared/session/sessionLog';
@@ -90,6 +91,20 @@ export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
   readonly stopAfterCycle?: boolean;
 }
 
+/** A resume refusal's wording: a blocked one names the agent or plugin it
+ *  waits for; every other reads as its kind. */
+export function describeResumeRefusal(reason: ResumeRefusal): string {
+  if (reason.kind !== 'blocked') return describeFollowUpFailure(reason.kind);
+  switch (reason.blocker) {
+    case 'agentMissing':
+      return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
+    case 'pluginOff':
+      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
+    case 'pluginUntrusted':
+      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once the plugin is reviewed.`;
+  }
+}
+
 const CHANNEL = 'ResumeRun';
 
 /**
@@ -120,8 +135,8 @@ export const resumeRun = (
   runId: RunId,
   options: ResumeRunOptions,
 ): Effect.Effect<ResumeHandOff, Error, SessionServices> =>
-  Effect.uninterruptibleMask((restore) =>
-    Effect.gen(function* () {
+  Effect.uninterruptibleMask(
+    Effect.fnUntraced(function* (restore) {
       const runs = registryOf(yield* Runs);
       // Counted among the attempt's waiters as `openResume` returned it.
       const attempt = yield* openResume(runId, options, false);
@@ -218,12 +233,11 @@ export const decideResume = Effect.fn('decideResume')(function* (
   // Nothing to continue from, or rows this build cannot open.
   const rejected = yield* runRejection(runId);
   if (rejected !== null) return { failed: rejected };
-  // An agent or plugin this process cannot run now leaves the run
-  // interrupted with the reason, never failed, for the session's follower to
-  // resume once it is back; nothing is launched. Another process's run
-  // is refused as such above, whatever this process lacks.
+  // An agent or plugin this process cannot run now refuses the resume with
+  // the reason; the run stays interrupted, never failed, and nothing is
+  // launched. Another process's run is refused as such above, whatever this
+  // process lacks.
   const blocker = yield* resumeBlocker(config);
-  yield* (yield* SessionViewAccess).markResumeBlocked(runId, blocker);
   if (blocker !== null) return { failed: blocker };
   // The launched run is admitted once its `run.activate` commits.
   return yield* resumeQueuedToolUse(runId, config, options, activated);

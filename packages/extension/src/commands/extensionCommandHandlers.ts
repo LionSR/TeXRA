@@ -57,7 +57,8 @@ type ExtensionRegistryCatalogCommandId = ExtensionRegistryCatalogEntry['id'];
  * page argument no palette invocation could supply.
  */
 type ExtensionRegistryCommandId =
-  ExtensionRegistryCatalogCommandId | 'texra.openDoc';
+  | ExtensionRegistryCatalogCommandId
+  | 'texra.openDoc';
 
 /**
  * A command's program. The registration boundary in
@@ -101,13 +102,9 @@ export interface ExtensionCommandActions {
  * `texra.show*` rows derived from the catalog's `settingsTab` field so the
  * command → tab mapping lives in one place (`settingsTabByCommand`).
  */
+// cast: one row per key of `settingsTabByCommand`, exactly `SettingsTabCommandId`.
 const SETTINGS_TAB_COMMAND_HANDLERS = Object.fromEntries(
-  (
-    Object.entries(settingsTabByCommand) as [
-      SettingsTabCommandId,
-      SettingsTarget,
-    ][]
-  ).map(([id, tab]) => [
+  Object.entries(settingsTabByCommand).map(([id, tab]) => [
     id,
     (actions: ExtensionCommandActions) => actions.showSettings(tab),
   ]),
@@ -168,8 +165,5 @@ export const EXTENSION_COMMAND_HANDLERS = {
   ),
 } as const satisfies Record<
   ExtensionRegistryCommandId,
-  // Typed handlers carry their own argument tuples via `definedHandler`.
-  // Matching the registry map's per-entry TArgs widening (`any`) keeps
-  // inference per entry without unifying every entry on `unknown`.
-  CommandHandler<ExtensionCommandActions, any, CommandProgram<unknown>>
+  CommandHandler<ExtensionCommandActions, CommandProgram<unknown>>
 >;

@@ -139,7 +139,9 @@ export class DatabaseClaimRefused extends Schema.TaggedError<DatabaseClaimRefuse
 
 /** A claiming transaction's refusals: the claim's, a writer's, or the write. */
 export type DatabaseClaimError =
-  DatabaseNotOwner | DatabaseClaimRefused | DatabaseWriteFailed;
+  | DatabaseNotOwner
+  | DatabaseClaimRefused
+  | DatabaseWriteFailed;
 
 /** The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
  *  names (not proven alive); null for a closed or ownerless one. */
@@ -250,7 +252,9 @@ export class SessionOptionsConflict extends Schema.TaggedError<SessionOptionsCon
 /** Why a session's root could not be opened: its database or its reads
  *  failed, or it is open over the other store. */
 export type SessionOpenError =
-  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
+  | DatabaseOpenFailed
+  | DatabaseReadFailed
+  | SessionOptionsConflict;
 
 /** A read of committed events. */
 export type EventsRead = Effect.Effect<
@@ -316,13 +320,13 @@ export class Database extends Context.Service<
     };
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
-    /** One aggregate's rows from `fromSeq` (through `toSeq`, a fork's
-     *  cut), or only those of `types` through the `(aggregate, type, seq)`
-     *  index, in seq order. A row past `toSeq` is never read. */
+    /** One aggregate's rows of `types` from `fromSeq` (through `toSeq`, a
+     *  fork's cut), read through the `(aggregate, type, seq)` index in seq
+     *  order. A row past `toSeq` is never read. */
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
-      types?: readonly SessionEvent['type'][],
+      types: readonly SessionEvent['type'][],
       toSeq?: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** One aggregate's display rows in seq order, with the `usage` rows its

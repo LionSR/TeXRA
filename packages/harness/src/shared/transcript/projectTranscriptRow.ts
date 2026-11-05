@@ -18,10 +18,7 @@ import {
   type ToolUseLog,
 } from '@shared/schemas';
 import { normalizeToolUse } from '@shared/toolUse';
-import {
-  hasIncompleteEmbeddedSubagentFollowup,
-  summarizeSubagentFollowup,
-} from '@shared/subagentFollowup';
+import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import { toolRowModel, type ToolRowModelContext } from './toolRowModel';
@@ -58,6 +55,7 @@ export function streamingTextRow(
   kind: StreamingTextRow['kind'],
   text: string,
   streaming: boolean,
+  cut?: StreamingTextRow['cut'],
 ): StreamingTextRow | undefined {
   const measured = transcriptText(text);
   if (!measured.oneLine.trim()) return undefined;
@@ -66,6 +64,7 @@ export function streamingTextRow(
     kind,
     text: measured,
     streaming,
+    ...(cut === undefined ? {} : { cut }),
     ...(kind === 'assistant' &&
     hasIncompleteEmbeddedSubagentFollowup(measured.full)
       ? { pendingEmbeddedFollowup: true }
@@ -84,9 +83,7 @@ export function streamingTextRow(
  *
  * `partialText` is deliberately absent: it is a retry surface's material,
  * not a transcript row's. `RetryRequestPanel` reads it from the approval
- * request's own payload, never from a projected row. So is `userRetryable`:
- * the runtime's retry routing flag, which the row's own retry affordance
- * already expresses to a reader.
+ * request's own payload, never from a projected row.
  */
 const ERROR_DETAIL_FIELDS = [
   'message',
@@ -237,12 +234,10 @@ export function logPayloadRow(
 ): TranscriptRow | undefined {
   switch (payload.messageType) {
     case MESSAGE_TYPES.USER_MESSAGE: {
-      const measured = transcriptText(text);
       return {
         ...base,
         kind: 'user',
-        text: measured,
-        summary: transcriptText(summarizeSubagentFollowup(measured.full)),
+        text: transcriptText(text),
         ...(payload.data?.scriptSummary
           ? { scriptSummary: payload.data.scriptSummary }
           : {}),
@@ -262,7 +257,6 @@ export function logPayloadRow(
       return {
         ...base,
         kind: 'webSearch',
-        label: `Web Search${query ? `: "${query}"` : ''}`,
         ...(query !== undefined ? { query } : {}),
       };
     }

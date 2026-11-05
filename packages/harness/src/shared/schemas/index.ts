@@ -30,18 +30,7 @@ export * from './output';
 export * from './progressEvents';
 export * from './scriptDelivery';
 
-export {
-  emptyRunEndOutput,
-  NonAgentRunRecordSchema,
-  RunRecordFieldsSchema,
-  RunEndSchema,
-  RunWorkspaceFilesSchema,
-  isTaskConfig,
-  recipeBlockOf,
-  type ResultMeta,
-  type RunEnd,
-  type RunEndOutput,
-} from './runRecords';
+export * from './runRecords';
 
 // Layer 3: Depends on layer 2
 export * from './log';
@@ -59,7 +48,7 @@ export * from './modelAvailability';
 export * from './progressView/data';
 
 // Layer 7: Composite schemas (depend on multiple layers)
-export * from './runFacts';
+export * from './runInput';
 export * from './runHistoryEvent';
 export * from './storedTurn';
 export * from './offeredTools';

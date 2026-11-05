@@ -21,6 +21,7 @@ import {
   USER_ENTRY_PREFIX,
 } from '@cli/tui/ui/glyphs';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
+import { RESPONSE_CUT_NOTE } from '@ui/copy/responseCut';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
 import { transcriptRowBodyLines } from '../render/transcriptRowLines';
 import {
@@ -263,14 +264,26 @@ function entryLines(
           ' '.repeat(NOTICE_ENTRY_PREFIX.length),
         );
       }
+      // An answer its model ended early says so under its text, wrapped
+      // like every other row so the layout counts the rows Ink paints.
+      const cut =
+        row.kind === 'assistant' && row.cut !== undefined
+          ? wrapAnsiToWidth(RESPONSE_CUT_NOTE[row.cut], columns).split('\n')
+          : [];
       if (mode === 'live') {
-        return liveAssistantDisplayLines({
-          rows: LIVE_TAIL_ROWS,
-          text: headline,
-          width: columns,
-        });
+        return [
+          ...liveAssistantDisplayLines({
+            rows: LIVE_TAIL_ROWS,
+            text: headline,
+            width: columns,
+          }),
+          ...cut,
+        ];
       }
-      return renderAnsiMarkdown(headline, { width: columns }).split('\n');
+      return [
+        ...renderAnsiMarkdown(headline, { width: columns }).split('\n'),
+        ...cut,
+      ];
     }
     case 'tool': {
       const useRichDisplay = mode === 'live' || mode === 'scrollback-budget';
@@ -304,7 +317,7 @@ function entryLines(
  *  that next entry a second time. */
 export function transcriptEntryMarginBottomRows(row: TranscriptRow): number {
   if (row.kind === 'tool') return toolUseMarginBottomRows(row);
-  if (row.kind === 'user' && isInquiryContinuationText(row.summary.full)) {
+  if (row.kind === 'user' && isInquiryContinuationText(row.text.full)) {
     return 0;
   }
   return ROW_GEOMETRY[row.kind].marginBottomRows;
@@ -329,7 +342,7 @@ export function transcriptEntryLayout(
   const base = ROW_GEOMETRY[row.kind];
   const inset = base.inset;
   const isInquiryContinuation =
-    row.kind === 'user' && isInquiryContinuationText(row.summary.full);
+    row.kind === 'user' && isInquiryContinuationText(row.text.full);
   const declaredTopRows = isInquiryContinuation ? 0 : base.marginTopRows;
   const marginTopRows =
     previousEntry === undefined

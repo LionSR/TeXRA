@@ -13,8 +13,6 @@
  * - `usage`: a `usage` display row per priced `model.message` response and
  *   `context.edit` summary (a run with a run history stores its spend there,
  *   never as a `usage` row), and each run's spend summed by `sumUsageStats`.
- * - `model`: a `run.model` display row at each `run.config` whose model
- *   differs from the one before it, and each run's latest switch.
  *
  * This module reads decoded events only, never `event.data`.
  */
@@ -52,7 +50,7 @@ type ProjectionOp =
   | {
       readonly table: 'projected_row';
       readonly commit: number;
-      readonly type: 'usage' | 'run.model';
+      readonly type: 'usage';
       readonly data: string;
     }
   | {
@@ -61,18 +59,11 @@ type ProjectionOp =
       readonly commit: number;
       /** The listing's `usage` row data: the run's spend so far. */
       readonly data: string;
-    }
-  | {
-      readonly table: 'run_model';
-      readonly aggregate: AggregateId;
-      readonly model: string;
-      readonly commit: number | null;
     };
 
 /** A run's prior row in the table a projector reads back. */
 interface ProjectionPrior {
   readonly usage?: TokenUsageStats;
-  readonly model?: { readonly model: string; readonly commit: number | null };
 }
 
 interface Projector {
@@ -80,10 +71,10 @@ interface Projector {
   /** The kinds it reads: what a catch-up selects. */
   readonly inputs: readonly string[];
   /** The prior row it reads by primary key before projecting, if any. */
-  readonly prior: 'run_usage' | 'run_model' | null;
+  readonly prior: 'run_usage' | null;
   /** The table its rebuild empties, and the projected types it deletes. */
-  readonly table: 'listing_entry' | 'run_usage' | 'run_model';
-  readonly projects: readonly ('usage' | 'run.model')[];
+  readonly table: 'listing_entry' | 'run_usage';
+  readonly projects: readonly 'usage'[];
   readonly project: (
     event: SessionEvent,
     prior: ProjectionPrior,
@@ -95,12 +86,19 @@ interface Projector {
 function pricedUsage(event: SessionEvent): TokenUsageStats | null {
   let priced = null;
   if (event.type === 'context.edit') priced = event.payload.usage;
-  if (event.type === 'model.message' && event.payload.kind === 'response')
-    priced = event.payload.usage;
+  if (
+    event.type === 'model.message' &&
+    (event.payload.kind === 'response' || event.payload.kind === 'failed')
+  )
+    priced = event.payload.usage ?? null;
   if (priced == null) return null;
   const { provider, responseTimeMs, ...usage } = priced;
   return usage;
 }
+
+/** The projections this build maintains; {@link PROJECTORS} has one each. */
+const PROJECTION_NAMES = ['listing', 'usage'] as const;
+type ProjectionName = (typeof PROJECTION_NAMES)[number];
 
 const PROJECTORS = {
   listing: {
@@ -156,41 +154,8 @@ const PROJECTORS = {
       ];
     },
   },
-  model: {
-    version: 1,
-    inputs: ['run.config'],
-    prior: 'run_model',
-    table: 'run_model',
-    projects: ['run.model'],
-    project: (event, prior) => {
-      if (event.type !== 'run.config') return [];
-      const model = event.config.model;
-      if (model === undefined) return [];
-      const switched = prior.model !== undefined && prior.model.model !== model;
-      return [
-        ...(switched
-          ? [
-              {
-                table: 'projected_row' as const,
-                commit: event.commit,
-                type: 'run.model' as const,
-                data: JSON.stringify({ model }),
-              },
-            ]
-          : []),
-        {
-          table: 'run_model',
-          aggregate: event.aggregateId,
-          model,
-          commit: switched ? event.commit : (prior.model?.commit ?? null),
-        },
-      ];
-    },
-  },
-} as const satisfies Record<string, Projector>;
+} as const satisfies Record<ProjectionName, Projector>;
 
-type ProjectionName = keyof typeof PROJECTORS;
-const PROJECTION_NAMES = Object.keys(PROJECTORS) as ProjectionName[];
 const PROJECTION_INPUTS = new Map(
   PROJECTION_NAMES.map((name) => [name, new Set(PROJECTORS[name].inputs)]),
 );
@@ -200,7 +165,8 @@ export const LISTED_TYPES = JSON.stringify([
   'usage',
 ]);
 /** One projection's checkpoint: its projector's version and the commit it
- *  read through. A name this build does not know is a later build's. */
+ *  read through. A name this build does not know (a later build's, or one
+ *  an earlier build kept) is ignored. */
 const ProjectionStateSchema = Schema.Struct({
   name: Schema.String,
   version: Schema.Int,
@@ -220,10 +186,9 @@ const isCurrent = (
     : state.version === PROJECTORS[name].version && state.through >= top;
 
 const RunUsageSchema = Schema.Struct({ usage: TokenUsageStatsSchema });
-const RunModelSchema = Schema.Struct({
-  model: Schema.String,
-  commit: Schema.NullOr(Schema.Int),
-});
+const decodeStoredUsage = Schema.decodeUnknownSync(
+  Schema.fromJsonString(RunUsageSchema),
+);
 
 /** The statement and parameters that make one projector's write. */
 function opStatement(op: ProjectionOp): [string, unknown[]] {
@@ -252,13 +217,6 @@ function opStatement(op: ProjectionOp): [string, unknown[]] {
          VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate) DO UPDATE
          SET "commit" = excluded."commit", usage = excluded.usage`,
         [...aggregateColumns(op.aggregate), op.commit, op.data],
-      ];
-    case 'run_model':
-      return [
-        `INSERT INTO run_model (aggregate, model, "commit")
-         VALUES (${AGGREGATE}, ?, ?) ON CONFLICT(aggregate) DO UPDATE
-         SET model = excluded.model, "commit" = excluded."commit"`,
-        [...aggregateColumns(op.aggregate), op.model, op.commit],
       ];
   }
 }
@@ -298,8 +256,9 @@ export function projectionUpkeep<E>(
     names: readonly ProjectionName[],
   ) =>
     Effect.forEach(events, (event) =>
-      Effect.forEach(names, (name) =>
-        Effect.gen(function* () {
+      Effect.forEach(
+        names,
+        Effect.fnUntraced(function* (name) {
           if (!PROJECTION_INPUTS.get(name)?.has(event.type)) return;
           const projector = PROJECTORS[name];
           const row =
@@ -309,13 +268,8 @@ export function projectionUpkeep<E>(
                   `SELECT * FROM ${projector.prior} WHERE aggregate = ${AGGREGATE}`,
                   aggregateColumns(event.aggregateId),
                 ))[0];
-          let prior: ProjectionPrior = {};
-          if (row !== undefined && projector.prior === 'run_usage')
-            prior = Schema.decodeUnknownSync(RunUsageSchema)(
-              JSON.parse(String(row.usage)),
-            );
-          if (row !== undefined && projector.prior === 'run_model')
-            prior = { model: Schema.decodeUnknownSync(RunModelSchema)(row) };
+          const prior: ProjectionPrior =
+            row === undefined ? {} : decodeStoredUsage(String(row.usage));
           for (const op of projector.project(event, prior))
             yield* exec(...opStatement(op));
         }),

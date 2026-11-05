@@ -1,10 +1,10 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, SubscriptionRef, Context } from 'effect';
+import { Effect, SubscriptionRef, Context, Schema } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import {
   publishTestRunStart,
@@ -20,8 +20,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       () =>
         Effect.flatMap(isolatedTestSession(), (session) =>
           Effect.gen(function* () {
-            const parent = 'aa0001' as RunId;
-            const child = 'bb0002' as RunId;
+            const parent = Schema.decodeUnknownSync(RunIdSchema)('aa0001');
+            const child = Schema.decodeUnknownSync(RunIdSchema)('bb0002');
             publishTestRunStart(session, parent);
             publishTestRunStart(session, child, { parent });
             yield* Context.get(session, SessionLog).settled;

@@ -233,8 +233,6 @@ export function nextAttempt(
       return SEND;
     case 'stop':
       return { kind: 'fail', error: failed.error };
-    case 'cancel':
-      return { kind: 'cancel' };
     case 'ask': {
       const { requestId } = failed.next;
       const decision = requests[requestId]?.decision ?? null;

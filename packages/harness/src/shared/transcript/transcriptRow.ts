@@ -21,6 +21,7 @@ import {
   type MediaAttachmentKind,
   type MessageType,
   type NormalizedToolUse,
+  type ResponseCut,
   type ToolUseLog,
   type ScriptDeliverySummary,
   type StoredMedia,
@@ -82,15 +83,17 @@ export interface StreamingTextRow extends TranscriptRowBase {
   /** True while the text hides an embedded subagent block that has opened but
    *  not closed. Blocks settlement: the visible text is still going to move. */
   readonly pendingEmbeddedFollowup?: boolean;
+  /** The limit that ended an assistant's answer early, from its
+   *  `response.finalized` row; each reader words it. */
+  readonly cut?: ResponseCut;
 }
 
 export interface UserRow extends TranscriptRowBase {
   readonly kind: 'user';
-  /** The message exactly as delivered, including any delivery envelope. */
+  /** The message as its follow-up shows it: a delivery or notice is its
+   *  summary (`FollowUpContent.displayText`), not its envelope. */
   readonly text: TranscriptText;
-  /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
-   *  truncation of `text`: hosts choose which of the two to paint. */
-  readonly summary: TranscriptText;
+  /** A workflow delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];
@@ -145,10 +148,9 @@ export interface ToolRow extends TranscriptRowBase {
   readonly cutByRunEnd?: true;
 }
 
+/** A web search the model ran; its headline is the query ({@link rowHeadline}). */
 export interface WebSearchRow extends TranscriptRowBase {
   readonly kind: 'webSearch';
-  /** `Web Search: "quantum error correction"` */
-  readonly label: string;
   readonly query?: string;
 }
 
@@ -309,8 +311,8 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
   switch (row.kind) {
     case 'assistant':
     case 'log':
-      return row.text.full;
     case 'user':
+      return row.text.full;
     case 'error':
     case 'progressStatus':
       return row.summary.full;
@@ -319,6 +321,7 @@ export function rowHeadline(row: ReadonlyDeep<TranscriptRow>): string {
     case 'scratchpad':
       return 'Scratchpad';
     case 'webSearch':
+      return `Web Search${row.query ? `: "${row.query}"` : ''}`;
     case 'contextManagement':
     case 'compactionActivity':
       return row.label;

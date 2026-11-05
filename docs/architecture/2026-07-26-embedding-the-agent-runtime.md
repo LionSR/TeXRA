@@ -48,9 +48,10 @@ one of two owners, and an embedder supplies each one there:
 - **Per-workspace services** (the workspace root, its storage paths, its
   configuration and its state stores) are a `WorkspaceRoots`
   (`@platform/workspaceRoots`) carried by each `SessionHandle`, so one process
-  can hold sessions rooted in several folders. Build one with
-  `createNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:52-69`), which
-  picks the config provider.
+  can hold sessions rooted in several folders. Open one with
+  `openNodeWorkspaceRoots` (`packages/harness/src/platform/defaults/nodeHost.ts:56-78`), which
+  resolves the storage path, picks the config provider and opens the state
+  stores over the process's `StateStores`.
 
 `agentDirectories` is the port that names the three directories the registry
 scans. `new AgentDirectoryService({...})`
@@ -68,8 +69,9 @@ which fixes TeXRA's policy around it and seeds the first-install disabled
 tools as the layer builds. An embedder that skips the seed gets a runtime
 without it, not a broken one.
 
-Only a composition root imports `processLayer`; ESLint pins the import
-to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
+Only a composition root imports `processLayer`: TeXRA's
+`texraProcessLayer.ts`, the harness's `effect/sessions.ts` and the test
+kernel's `support/testKernel.ts`.
 
 ### Feature-parity step — the `lean4` plugin's process layer
 
@@ -449,10 +451,12 @@ when it opens.
   Given a resources tree, the process also reads each of its plugins'
   bundled skills under `<resourcesPath>/plugins/<id>/skills` (today `lean4`
   and `multi-agent`).
-- **`seedToolSwitches: false` (`ProcessLayerOptions`):** No first-install tool
-  defaults are written, so no plugin whose switch starts `off` is
-  default-disabled. More tools are available, not fewer
-  (`seedDisabledToolDefaults` in `packages/harness/src/tools/toolAvailability.ts`).
+- **A store handed to `processLayer` (`ProcessLayerOptions.appState`):** It is
+  left as it is: no first-install tool defaults are written, so no plugin
+  whose switch starts `off` is default-disabled. More tools are available,
+  not fewer. A store the process builds itself, and the embedder's global
+  state under `Sessions.layer`, are seeded (`seedDisabledToolDefaults` in
+  `packages/harness/src/tools/toolAvailability.ts`).
 - **`lean: directLeanLanguageServices()`:** The raw loop still runs over any
   `LeanLanguageServices` layer; without the direct one, Lean tools reach
   whatever port the embedder passed. The `memory`/`plan` injections do not
@@ -489,7 +493,7 @@ following classification makes that distinction.
   (`packages/texra/src/tools/lean/direct/directLspAdapter.ts`) is shipped-feature parity, not a raw-loop requirement; a composition may
   leave the plugin out. The `memory` and `plan` injections are manifest data
   (`packages/harness/src/tools/plugins.ts`).
-- **`:352-361` — `createNodeWorkspaceRoots(...)`:** Required. The workspace
+- **`:290-296` — `openNodeWorkspaceRoots(...)`:** Required. The workspace
   roots every session is opened over.
 - **The first-install seed:** `texraProcessLayer` seeds the disabled tools
   as the runtime's layer builds, before any program reads the switches. (The
@@ -499,9 +503,11 @@ following classification makes that distinction.
 
 ### CLI initialization choices — not runtime obligations
 
-- **`:340-346` — `StateStores.project(...)` and `StateStores.repo(...)`:** The
-  CLI's own on-disk workspace state stores under its storage root. An embedder supplies its own
-  stores to `createNodeWorkspaceRoots`.
+- **`StateStores.project(...)` and `StateStores.repo(...)`:** The on-disk
+  workspace state stores under the storage root, opened by
+  `openNodeWorkspaceRoots` from the `StateStores` the CLI passes it. An
+  embedder that holds the project's state elsewhere passes it as
+  `workspaceState`.
 - **`:366-388` — the memoized session open:** Opens the process session lazily
   (`Sessions.open(roots, { persistent: true, … })`), so a command that needs
   no session never opens one. An embedder calls `Sessions.open` directly (§1,
@@ -514,8 +520,10 @@ following classification makes that distinction.
   Recommended for any long-lived process that runs `bash` tools; an embedder
   holds the same order in its own scope, closing sessions before it disposes
   the runtime.
-- **`installCliShutdownSignalHandlers()`:** SIGINT/SIGTERM handling for a
-  terminal process, which closes that scope.
+- **`holdSignals(policy)`** (`packages/cli/src/runtime/processSignals.ts`):
+  the one place the CLI listens for a signal; the platform's own policy
+  closes that scope through `cliExit`, and a holder above it (a foreground
+  child, the chat TUI) answers instead while it holds.
 
 ### Cross-check against desktop
 

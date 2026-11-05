@@ -7,7 +7,7 @@
  * a 304 means "no change since that ETag".
  */
 
-import { Clock, Duration, Effect, Schema } from 'effect';
+import { Clock, Duration, Effect, Predicate, Schema } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
@@ -25,7 +25,8 @@ const TIMEOUT_MS = 15_000;
 export type GitHubServices = Secrets | HttpClient.HttpClient;
 
 export type ConditionalResponse<T> =
-  { status: 200; data: T; etag: string | undefined } | { status: 304 };
+  | { status: 200; data: T; etag: string | undefined }
+  | { status: 304 };
 
 export class GitHubAuthError extends Schema.TaggedError<GitHubAuthError>()(
   'GitHubAuthError',
@@ -77,9 +78,12 @@ type GitHubRequestError =
 function extractApiMessage(data: unknown, fallback: string): string {
   if (typeof data === 'string' && data.trim() !== '') return data;
   if (data && typeof data === 'object') {
-    const rec = data as { message?: unknown };
-    if (typeof rec.message === 'string' && rec.message.trim() !== '')
-      return rec.message;
+    if (
+      Predicate.hasProperty(data, 'message') &&
+      typeof data.message === 'string' &&
+      data.message.trim() !== ''
+    )
+      return data.message;
     // `data` is a plain GitHub error object (already JSON-parsed), so
     // stringifying it can't realistically throw — no guard needed.
     return JSON.stringify(data);
@@ -180,6 +184,7 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
     }
     return {
       status: 200,
+      // cast: `T` is the caller's name for the GitHub REST shape at `path`.
       data: (yield* response.json) as T,
       etag: response.headers.etag,
     } as const;

@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Predicate } from 'effect';
 import { Text } from 'ink';
 import { useState } from 'react';
 
@@ -30,7 +30,11 @@ import type {
 } from '@texra-ai/harness/host';
 
 type WorkspaceAgentsFormMode =
-  'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';
+  | 'overview'
+  | 'workspace'
+  | 'default'
+  | 'chat-default'
+  | 'custom';
 
 interface WorkspaceAgentsData {
   readonly record: CliWorkspaceAgentsRecord;
@@ -150,10 +154,10 @@ export function WorkspaceAgentsForm(
         agents.
       </Text>
     ) : null,
-  ].filter((notice) => notice !== null);
-  const frame = (
-    items: readonly SelectItem<string>[],
-    onSelect: (value: string) => void,
+  ].filter(Predicate.isNotNull);
+  const frame = <T extends string>(
+    items: readonly SelectItem<T>[],
+    onSelect: (value: T) => void,
     onCancel: () => void,
   ) => (
     <ListForm
@@ -196,7 +200,7 @@ export function WorkspaceAgentsForm(
               : `${data.record.agentKeys.length} agents`,
         },
       ],
-      (value) => setMode(value as WorkspaceAgentsFormMode),
+      setMode,
       props.onClose,
     );
   }

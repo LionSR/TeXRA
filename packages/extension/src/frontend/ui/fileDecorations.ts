@@ -50,11 +50,11 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
 
 /** Badge the files TeXRA wrote, for as long as the caller's scope lasts:
  *  both listeners are fibers of it (activation's, in the extension). */
-export function registerFileDecorations(
-  context: vscode.ExtensionContext,
-  session: Pick<Session, 'view'>,
-): Effect.Effect<void, never, Scope.Scope | AppSignals> {
-  return Effect.gen(function* () {
+export const registerFileDecorations = Effect.fn('registerFileDecorations')(
+  function* (
+    context: vscode.ExtensionContext,
+    session: Pick<Session, 'view'>,
+  ): Effect.fn.Return<void, never, Scope.Scope | AppSignals> {
     const provider = new TeXRAFileDecorationProvider();
     yield* Effect.forkScoped(
       Stream.runForEach(outputFilesProduced(session), (files) =>
@@ -92,5 +92,5 @@ export function registerFileDecorations(
       vscode.window.registerFileDecorationProvider(provider),
       provider,
     );
-  });
-}
+  },
+);

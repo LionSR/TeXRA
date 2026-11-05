@@ -3,9 +3,10 @@
  * result.
  *
  * The child runs under the same `childRunLoop` every detached delegation
- * drives, with the same single-cycle native strategy and persist-only
- * delivery; "in-band" is only this caller blocking on the loop's completion,
- * and XML presentation remains a delivery adapter. The child's own run
+ * drives, awaited: no delivery or notice reaches the parent, and this
+ * caller reads its last turn; "in-band" is only this caller blocking on the
+ * loop's completion, and XML presentation remains a delivery adapter. The
+ * child's own run
  * aggregate is the durable record of what happened, so whether an earlier
  * child already answered a logical call belongs to whoever owns that call
  * identity (the `agent` tool derives the attempt's run id and probes it);
@@ -13,7 +14,7 @@
  */
 
 // Third-party imports
-import { Cause, Clock, Effect, Exit, Fiber, Schema } from 'effect';
+import { Cause, Clock, Effect, Exit, Fiber, Result, Schema } from 'effect';
 
 // Local imports
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
@@ -35,7 +36,6 @@ import {
   createNativeSubagentStrategy,
   type ChildRunLaunchOptions,
 } from '@agent/runtime/nativeSubagentStrategy';
-import { withLogChannel } from '@logger/effectLog';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
@@ -49,21 +49,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
-
-const CHANNEL = 'inBandSubagentRun';
-
-/**
- * A required-result child left no typed result to read back: the
- * infrastructure failed before or around the child's terminal persistence.
- * Kept distinct from the child's own failure, which is an ordinary failed
- * call, because a durability fault must abort the caller's run instead of
- * returning a null value to it.
- */
-export class SubagentDurabilityError extends Schema.TaggedError<SubagentDurabilityError>()(
-  'SubagentDurabilityError',
-  // What failed under the fault rides as `Error.cause`, after the sentence.
-  { message: Schema.String, cause: Schema.optional(Schema.Defect()) },
-) {}
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   /** The launching run: a fresh child's parent edge, and the run its loop
@@ -113,23 +98,18 @@ const defectsAsErrors = <A, R>(
 
 /**
  * Execute one child through the one shared driver and read its typed result
- * back from the durable record. The child runs under the same detached
- * child-run loop every native child uses (single-cycle strategy, persist-only
- * delivery); "in-band" is only this caller awaiting the loop's completion.
+ * back from the durable record. The child runs under the same child-run
+ * loop every native child uses, awaited (no delivery or notice reaches the
+ * parent); "in-band" is only this caller awaiting the loop's completion.
  * Once the run reaches its own terminal persistence, later caller
  * cancellation rejects the awaiting stage but never rewrites the record.
  *
- * Failure taxonomy at the read-back boundary:
- * - completion rejected, or no finished typed result / no `run.end` row
- *   afterwards → the infrastructure failed before the child's terminal
- *   persistence, so there is no typed result to return
- *   (SubagentDurabilityError).
- * - no persisted `run.result` manifest → the row a later attempt would
- *   recover from never landed, so the call is refused
- *   here rather than left unrecoverable (SubagentDurabilityError).
- * - terminal row says failed → the child itself failed; the persisted
- *   terminal error message is the thrown message.
- * - terminal row says completed/cancelled → returned typed.
+ * No end, or no finished turn, fails with the loop's failure as the cause;
+ * an end that says failed fails with the child's error. Any other end is
+ * returned with the turn's output once its `run.result` manifest is read
+ * back: the end can commit without it (a refused last turn leaves a
+ * `result-lost` end alone, `finalizeRun`), and recovery reads the manifest
+ * (`standingOf`), so a completion without one is refused here as there.
  *
  * A loop failure after the turn finished does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
@@ -176,107 +156,50 @@ const executeInBand = Effect.fn('executeInBand')(
         runId,
         startedAt,
         workingDirectory,
-        inBand: true,
       }),
     });
 
     const completionExit = yield* Effect.exit(Fiber.join(fiber));
-    const loopFailure = Exit.isFailure(completionExit)
-      ? Cause.squash(completionExit.cause)
-      : undefined;
-
-    // The turn the child ended with, as its loop recorded it; none means
-    // the run was interrupted, or a delivery write or the infrastructure
-    // failed before terminal persistence.
+    // The turn the child ended with, as its loop recorded it, and this
+    // activation's end (null while it has none).
     const finished = lastTurn();
     const resultMeta = finished?.resultMeta;
-    if (!finished || !resultMeta || resultMeta.producer !== 'subagent') {
-      return yield* new SubagentDurabilityError({
-        message: `Subagent ${runId} ended without a finished typed result (interrupted before terminal persistence, or the run loop failed).`,
-        cause: loopFailure,
-      });
+    const ended = yield* Effect.result(getRunRecords(runId).readRunEnd());
+    const runEnd = Result.isSuccess(ended) ? ended.success : null;
+    if (
+      finished === undefined ||
+      resultMeta?.producer !== 'subagent' ||
+      runEnd === null
+    ) {
+      // Why: the read's failure, else the loop's, else what the turn threw.
+      let cause: unknown = finished?.error;
+      if (Result.isFailure(ended)) cause = ended.failure;
+      else if (Exit.isFailure(completionExit))
+        cause = Cause.squash(completionExit.cause);
+      return yield* Effect.fail(
+        new Error(
+          `Subagent ${runId} ended without a recorded result${cause === undefined ? '' : `: ${toErrorMessage(cause)}`}`,
+          { cause },
+        ),
+      );
     }
-
-    // How the child ended is the `run.end` row's fact, written by the run's
-    // own lifecycle; the manifest carries only the output as this turn's
-    // delivery enriched it. A read failure is kept apart from an absent row
-    // so the thrown error can name the I/O cause.
-    const endExit = yield* Effect.exit(getRunRecords(runId).readRunEnd());
-    const runEnd = Exit.isSuccess(endExit) ? endExit.value : null;
-    const endFailure = Exit.isFailure(endExit)
-      ? Cause.squash(endExit.cause)
-      : undefined;
-    if (endFailure !== undefined)
-      yield* Effect.logWarning('Failed to read the terminal run fact').pipe(
-        Effect.annotateLogs({ data: { runId, error: endFailure } }),
-        withLogChannel(CHANNEL),
-      );
-    const childFailed =
-      finished.isError || runEnd?.outcome === RUN_OUTCOME.FAILED;
-    // The raw application error when the turn threw; otherwise the terminal
-    // row's own structured error (the result-only contract).
-    const childError = () =>
-      finished.error ??
-      new Error(
-        runEnd?.error?.message ??
-          `Subagent ${runId} ended with failed outcome.`,
-      );
-
-    // The caller answers a call whose recovery reads the child's own
-    // `run.result` row, so the in-memory manifest is not enough:
-    // a completed run whose manifest never landed is precisely what recovery
-    // refuses to repeat, so the write is verified here, where the failure can
-    // still be named. A read failure stays distinct from an absent row so the
-    // thrown error blames the I/O cause rather than persistence.
-    {
-      const persistedExit = yield* Effect.exit(
-        getRunRecords(runId).readResultMeta(),
-      );
-      const readFailure = Exit.isFailure(persistedExit)
-        ? Cause.squash(persistedExit.cause)
-        : undefined;
-      if (readFailure !== undefined)
-        yield* Effect.logWarning(
-          'Failed to read the persisted result manifest',
-        ).pipe(
-          Effect.annotateLogs({ data: { runId, error: readFailure } }),
-          withLogChannel(CHANNEL),
-        );
-      const persisted = Exit.isSuccess(persistedExit)
-        ? persistedExit.value
-        : null;
-      if (persisted === null) {
-        if (childFailed) {
-          const error = childError();
-          return yield* new SubagentDurabilityError({
-            message: `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-            cause: new AggregateError(
-              readFailure === undefined ? [error] : [error, readFailure],
-              `Subagent ${runId} run and persistence both failed.`,
+    if (finished.isError || runEnd.outcome === RUN_OUTCOME.FAILED)
+      return yield* Effect.fail(
+        ensureError(
+          finished.error ??
+            new Error(
+              runEnd.error?.message ??
+                `Subagent ${runId} ended with failed outcome.`,
             ),
-          });
-        }
-        return yield* new SubagentDurabilityError({
-          message:
-            readFailure === undefined
-              ? `Failed to persist result for subagent ${runId}.`
-              : `Failed to verify the persisted result for subagent ${runId}.`,
-          cause: readFailure,
-        });
-      }
-    }
+        ),
+      );
 
-    if (childFailed) return yield* Effect.fail(ensureError(childError()));
-
-    if (!runEnd) {
-      // The child did not fail, so the missing terminal row is an
-      // infrastructure gap: the run's lifecycle never committed it, or the
-      // read of it failed.
-      return yield* new SubagentDurabilityError({
-        message: `Subagent ${runId} ended without a terminal record.`,
-        cause: endFailure,
-      });
-    }
+    if ((yield* getRunRecords(runId).readResultMeta())?.producer !== 'subagent')
+      return yield* Effect.fail(
+        new Error(
+          `Subagent ${runId} ended, but its result was not recorded. Its work may be done: check before calling it again.`,
+        ),
+      );
 
     // A caller stop landing here interrupts the join, not the child: the
     // child's rows were committed under its own claim and the
@@ -335,14 +258,18 @@ export const resumeSubagentInBand = (
     Effect.gen(function* () {
       const rejection = yield* runRejection(options.runId);
       if (rejection !== null)
-        return yield* new SubagentDurabilityError({
-          message: `Subagent ${options.runId} cannot be resumed here (${rejection.kind}).`,
-        });
+        return yield* Effect.fail(
+          new Error(
+            `Subagent ${options.runId} cannot be resumed here (${rejection.kind}).`,
+          ),
+        );
       const config = yield* getRunRecords(options.runId).readConfig();
       if (config === null)
-        return yield* new SubagentDurabilityError({
-          message: `Subagent ${options.runId} has no stored configuration to resume.`,
-        });
+        return yield* Effect.fail(
+          new Error(
+            `Subagent ${options.runId} has no stored configuration to resume.`,
+          ),
+        );
       return yield* executeInBand(options, { kind: 'resume', config });
     }).pipe(defectsAsErrors),
   );
@@ -360,7 +287,13 @@ const awaitInBand = Effect.fn('inBandSubagentRun.awaitInBand')(function* (
   return yield* Fiber.join(child).pipe(
     Effect.onInterrupt(() =>
       Effect.suspend(() => {
-        if (runs.get(runId)?.parent === null) return Effect.void;
+        // A child the registry holds with no parent edge was detached: it
+        // runs on as a root. One it does not hold yet is stopped below.
+        if (
+          runs.get(runId) !== undefined &&
+          runs.attachedParent(runId) === null
+        )
+          return Effect.void;
         if (runs.interrupt(runId)) return Fiber.await(child);
         // No run to stop yet: a loop the launch's hand-off started meanwhile
         // is stopped once it returns, and awaited to the end.

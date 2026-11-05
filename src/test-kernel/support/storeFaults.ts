@@ -140,6 +140,7 @@ export const sessionStoreFaults = (
       entry.operation === operation &&
       (entry.rowType === undefined ||
         operation !== 'appendAll' ||
+        // cast: appendAll's first argument is the batch of drafts it commits.
         (args[0] as readonly SessionEventDraft[]).some(
           (draft) => draft.type === entry.rowType,
         ));
@@ -159,16 +160,16 @@ export const sessionStoreFaults = (
       const cause = new Error(
         `injected ${operation} fault${rowType ? ` (${rowType})` : ''}`,
       );
-      return (WRITES as readonly string[]).includes(operation)
+      return WRITES.some((write) => write === operation)
         ? new DatabaseWriteFailed({ path: storage, cause })
         : new DatabaseReadFailed({ path: storage, cause });
     };
-    // cast: each operation is a function returning an Effect; the wrapper
-    // forwards its arguments and result untouched.
+    // The wrapper forwards each operation's arguments and result untouched.
     type Operation = (...args: unknown[]) => Effect.Effect<unknown, unknown>;
     const originals = Object.fromEntries(
       [...WRITES, ...READS].map((operation) => [
         operation,
+        // cast: each named operation is a function returning an Effect.
         database[operation] as Operation,
       ]),
     );
@@ -264,7 +265,7 @@ export function crashAt(
       .get(n)?.at;
     db.exec(`
       DELETE FROM projection_state; DELETE FROM projected_row;
-      DELETE FROM listing_entry; DELETE FROM run_usage; DELETE FROM run_model;
+      DELETE FROM listing_entry; DELETE FROM run_usage;
       DELETE FROM event_blob WHERE "commit" > ${n};
       DELETE FROM event WHERE "commit" > ${n};
       DELETE FROM event_sequence WHERE id NOT IN (SELECT aggregate FROM event);
@@ -316,21 +317,26 @@ export function crashedCopy(storage: string, owner?: string): string {
   return crashed;
 }
 
+const StoredRowsSchema = Schema.mutable(
+  Schema.Array(
+    Schema.Struct({
+      commit: Schema.Number,
+      run: Schema.String,
+      parent: Schema.NullOr(Schema.String),
+      type: Schema.String,
+      data: Schema.String,
+    }),
+  ),
+);
 /** One stored run row, read straight from the file. */
-export interface StoredRow {
-  readonly commit: number;
-  readonly run: string;
-  readonly parent: string | null;
-  readonly type: string;
-  readonly data: string;
-}
+export type StoredRow = (typeof StoredRowsSchema.Type)[number];
 
 /** Every run row the store at `storage` holds, in commit order. */
 export const storedRows = (storage: string): StoredRow[] => {
   const db = new DatabaseSync(storeFile(storage));
   try {
     db.exec('PRAGMA busy_timeout = 5000');
-    return db
+    const rows = db
       .prepare(
         `SELECT e."commit" AS "commit", s.logical_id AS run,
            (SELECT json_extract(f.data, '$.parent.id') FROM event f
@@ -339,7 +345,8 @@ export const storedRows = (storage: string): StoredRow[] => {
          FROM event e JOIN event_sequence s ON s.id = e.aggregate
          WHERE s.kind = 'run' ORDER BY e."commit"`,
       )
-      .all() as unknown as StoredRow[];
+      .all();
+    return Schema.decodeUnknownSync(StoredRowsSchema)(rows);
   } finally {
     db.close();
   }
@@ -418,7 +425,11 @@ export const validationHost = (
         () => Effect.sync(() => vi.unstubAllEnvs()),
       );
       mkdirSync(storage, { recursive: true });
-      mkdirSync(workspace!, { recursive: true });
+      if (workspace === undefined)
+        return yield* Effect.die(
+          'the validation host opens a workspace folder',
+        );
+      mkdirSync(workspace, { recursive: true });
       writeFileSync(flag, 'texra-cli-run-validation\n');
       yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
       // A golden child's model is chosen among those a key makes available.
@@ -474,34 +485,52 @@ export const untilStored = (
     while (!ready(storedRows(storage))) yield* Effect.sleep('20 millis');
   }).pipe(Effect.timeout('30 seconds'));
 
-/** The texts of `runId`'s committed model answers (responses that call no
- *  tool), in order. */
+const decodeMessage = Schema.decodeUnknownSync(
+  Schema.fromJsonString(
+    Schema.Struct({
+      payload: Schema.Struct({
+        kind: Schema.String,
+        turn: Schema.optional(
+          Schema.Struct({
+            content: Schema.Array(
+              Schema.Struct({
+                kind: Schema.String,
+                content: Schema.optional(
+                  Schema.Array(
+                    Schema.Struct({ text: Schema.optional(Schema.String) }),
+                  ),
+                ),
+              }),
+            ),
+          }),
+        ),
+      }),
+    }),
+  ),
+);
+
+/** A committed model answer's text (a response that calls no tool), or
+ *  null for any other row. */
+export const answerOf = (row: StoredRow): string | null => {
+  if (row.type !== 'model.message') return null;
+  const { payload } = decodeMessage(row.data);
+  const content = payload.turn?.content ?? [];
+  if (
+    payload.kind !== 'response' ||
+    content.some((part) => part.kind === 'local-call')
+  )
+    return null;
+  return content
+    .flatMap((part) => part.content ?? [])
+    .map((part) => part.text ?? '')
+    .join('');
+};
+
+/** The texts of `runId`'s committed model answers, in order. */
 export const answersOf = (storage: string, runId: RunId): string[] =>
   storedRows(storage).flatMap((row) => {
-    if (row.run !== runId || row.type !== 'model.message') return [];
-    const { payload } = JSON.parse(row.data) as {
-      readonly payload: {
-        readonly kind: string;
-        readonly turn?: {
-          readonly content: readonly {
-            readonly kind: string;
-            readonly content?: readonly { readonly text?: string }[];
-          }[];
-        };
-      };
-    };
-    const content = payload.turn?.content ?? [];
-    if (
-      payload.kind !== 'response' ||
-      content.some((part) => part.kind === 'local-call')
-    )
-      return [];
-    return [
-      content
-        .flatMap((part) => part.content ?? [])
-        .map((part) => part.text ?? '')
-        .join(''),
-    ];
+    const text = row.run === runId ? answerOf(row) : null;
+    return text === null ? [] : [text];
   });
 
 /** Whether `runId`'s newest position is parked waiting for input, after

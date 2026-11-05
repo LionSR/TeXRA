@@ -8,21 +8,13 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import {
-  Effect,
-  Layer,
-  Schedule,
-  Schema,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import {
   DEBUG_MODE_KEY,
   referencedAggregates,
   isDisplaySessionEvent,
-  RunIdSchema,
   type AggregateId,
   type LocalRuntimeState,
   type ExistenceReconciliation,
@@ -39,8 +31,8 @@ import { Settings } from '@shared/config/settings';
 import {
   LocalRuntimeSource,
   TextChunkSource,
+  textSince,
   type InflightText,
-  type InflightTextChunk,
 } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -171,77 +163,79 @@ export const sessionInputsLayer = Layer.effect(
               // of the same state after a burst of text chunks.
               Stream.buffer({ capacity: 1, strategy: 'dropping' }),
               Stream.mapAccumEffect(
-                () => ({
-                  cursor: anchor,
-                  // The wake level the last durable read saw; none yet, so
-                  // the first drain reads.
-                  level: -1,
-                  text: new Map() as InflightText,
-                  local: initialLocal,
-                  // Every change the record holds: an aggregate that started
-                  // or moved its claim during the cold read is checked again
-                  // once its rows are in the view, not only by the replay.
-                  change: 0,
+                () => {
+                  const text: InflightText = new Map();
+                  return {
+                    cursor: anchor,
+                    // The wake level the last durable read saw; none yet, so
+                    // the first drain reads.
+                    level: -1,
+                    text,
+                    local: initialLocal,
+                    // Every change the record holds: an aggregate that started
+                    // or moved its claim during the cold read is checked again
+                    // once its rows are in the view, not only by the replay.
+                    change: 0,
+                  };
+                },
+                Effect.fnUntraced(function* (previous) {
+                  // Text first, then the level: a row committed before a
+                  // chunk moved the level this read sees.
+                  const nextText = yield* SubscriptionRef.get(text.ref);
+                  const snapshot = yield* SubscriptionRef.get(local.ref);
+                  const level = yield* SubscriptionRef.get(log.level);
+                  // A burst of text, or a local change, moved no durable
+                  // state: only a new level is worth a database read.
+                  const { cursor, change, rows, existence } =
+                    level === previous.level
+                      ? {
+                          cursor: previous.cursor,
+                          change: previous.change,
+                          rows: [],
+                          existence: { checkedAggregateIds: [], claims: [] },
+                        }
+                      : yield* readDurable(previous.cursor, previous.change);
+                  const inputs: SessionViewInput[] = textChunks(
+                    previous.text,
+                    nextText,
+                  );
+                  if (!isDeepStrictEqual(previous.local, snapshot)) {
+                    inputs.push({ _tag: 'local', local: snapshot });
+                  }
+                  if (
+                    inputs.length > 0 ||
+                    rows.length > 0 ||
+                    cursor !== previous.cursor ||
+                    existence.checkedAggregateIds.length > 0 ||
+                    // The first drain must publish the anchor: replay.complete
+                    // reconciles existence but does not advance the view cursor.
+                    previous.level === -1
+                  ) {
+                    // Every nonempty batch needs its closing marker so the
+                    // webview decoder can release it as one complete read.
+                    inputs.push({ _tag: 'drained', cursor, existence });
+                  }
+                  const batch: SessionViewInput[] = [
+                    ...rows
+                      .filter(isDisplaySessionEvent)
+                      .map((event): SessionViewInput => ({
+                        _tag: 'event',
+                        read: 'all',
+                        event,
+                      })),
+                    ...inputs,
+                  ];
+                  return [
+                    {
+                      cursor,
+                      level,
+                      text: nextText,
+                      local: snapshot,
+                      change,
+                    },
+                    batch.length === 0 ? [] : [batch],
+                  ] as const;
                 }),
-                (previous) =>
-                  Effect.gen(function* () {
-                    // Text first, then the level: a row committed before a
-                    // chunk moved the level this read sees.
-                    const nextText = yield* SubscriptionRef.get(text.ref);
-                    const snapshot = yield* SubscriptionRef.get(local.ref);
-                    const level = yield* SubscriptionRef.get(log.level);
-                    // A burst of text, or a local change, moved no durable
-                    // state: only a new level is worth a database read.
-                    const { cursor, change, rows, existence } =
-                      level === previous.level
-                        ? {
-                            cursor: previous.cursor,
-                            change: previous.change,
-                            rows: [],
-                            existence: { checkedAggregateIds: [], claims: [] },
-                          }
-                        : yield* readDurable(previous.cursor, previous.change);
-                    const inputs: SessionViewInput[] = textChunks(
-                      previous.text,
-                      nextText,
-                    );
-                    if (!isDeepStrictEqual(previous.local, snapshot)) {
-                      inputs.push({ _tag: 'local', local: snapshot });
-                    }
-                    if (
-                      inputs.length > 0 ||
-                      rows.length > 0 ||
-                      cursor !== previous.cursor ||
-                      existence.checkedAggregateIds.length > 0 ||
-                      // The first drain must publish the anchor: replay.complete
-                      // reconciles existence but does not advance the view cursor.
-                      previous.level === -1
-                    ) {
-                      // Every nonempty batch needs its closing marker so the
-                      // webview decoder can release it as one complete read.
-                      inputs.push({ _tag: 'drained', cursor, existence });
-                    }
-                    const batch: SessionViewInput[] = [
-                      ...rows
-                        .filter(isDisplaySessionEvent)
-                        .map((event): SessionViewInput => ({
-                          _tag: 'event',
-                          read: 'all',
-                          event,
-                        })),
-                      ...inputs,
-                    ];
-                    return [
-                      {
-                        cursor,
-                        level,
-                        text: nextText,
-                        local: snapshot,
-                        change,
-                      },
-                      batch.length === 0 ? [] : [batch],
-                    ] as const;
-                  }),
               ),
             );
             return Stream.concat(Stream.make(replay), tail);
@@ -257,8 +251,8 @@ const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   damaged: LocalRuntimeState['unreadable'],
 ) =>
-  // One atomic update against the other writers of this ref (the liveness
-  // prober's `dead`, `updateLocal`'s `resumeBlocked`).
+  // One atomic update against the other writer of this ref (the liveness
+  // prober's `dead`).
   SubscriptionRef.update(ref, (local) => {
     const known = new Set(local.unreadable.map(({ runId }) => runId));
     const fresh = damaged.filter(({ runId }) => !known.has(runId));
@@ -290,26 +284,22 @@ function reconcileExistence(read: {
  *  started a new chain. */
 function textChunks(held: InflightText, next: InflightText): TextChunk[] {
   const chunks: TextChunk[] = [];
-  for (const [key, value] of next) {
-    const tail = held.get(key);
-    if (value === tail) continue;
-    const parts: string[] = [];
-    let at: InflightTextChunk | undefined = value;
-    while (at !== undefined && at !== tail) {
-      parts.push(at.text);
-      at = at.previous;
+  for (const [runId, rows] of next) {
+    const heldRows = held.get(runId);
+    for (const [rowId, value] of rows) {
+      const tail = heldRows?.get(rowId);
+      if (value === tail) continue;
+      const { from, text } = textSince(value, tail);
+      if (value.length <= from) continue;
+      chunks.push({
+        _tag: 'chunk',
+        runId,
+        rowId,
+        from,
+        to: value.length,
+        text,
+      });
     }
-    const from = at === tail ? (tail?.length ?? 0) : 0;
-    if (value.length <= from) continue;
-    const slash = key.indexOf('/');
-    chunks.push({
-      _tag: 'chunk',
-      runId: Schema.decodeUnknownSync(RunIdSchema)(key.slice(0, slash)),
-      rowId: key.slice(slash + 1),
-      from,
-      to: value.length,
-      text: parts.toReversed().join(''),
-    });
   }
   return chunks;
 }

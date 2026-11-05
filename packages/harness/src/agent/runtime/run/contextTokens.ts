@@ -1,6 +1,7 @@
 /**
  * The run's one context-size fact: the tokens its history occupies, read by
- * the compaction trigger, the context gauge and the request clamp. Derived
+ * the compaction trigger, the context gauge and the output-budget preflight
+ * (`outputBudget`). Derived
  * from the run state, never stored: the last response's provider-counted
  * input plus output, then an estimate of the messages added since. Before the
  * first response, and after a compaction replaced the history, it is that
@@ -8,6 +9,7 @@
  */
 import type { HistoryMessage } from '@shared/session/historyTurns';
 import type { RunState } from '@shared/session/runState';
+import type { BoundModel } from '../modelAccess/ModelAccess';
 
 /**
  * What one media part adds to the estimate. History holds a part by its
@@ -89,4 +91,52 @@ export function contextTokens(
   return at === -1
     ? estimateMessageTokens(state.messages)
     : counted + estimateMessageTokens(state.messages.slice(at + 1));
+}
+
+/**
+ * The output-budget preflight's constants: the buffer covers tokenization
+ * differences and API framing, and a reduction below the floor is not worth
+ * taking.
+ */
+const TOKEN_SAFETY_BUFFER = 10;
+const TOOL_USE_SAFETY_BUFFER = 2000;
+const MIN_COMPLETION_TOKENS = 100;
+
+/** The output budget that fits in what the input leaves of the window. */
+function reducedOutputBudget(available: number, buffer: number): number {
+  if (available <= 0) return 1;
+  const buffered = available - buffer;
+  return buffered >= MIN_COMPLETION_TOKENS ? buffered : available;
+}
+
+/**
+ * What the model's window leaves a request, from the run's context size: an
+ * input that alone exceeds the window is refused before it is billed
+ * (`overflow`); one leaving too little room for the binding's output limit
+ * asks for a smaller output (`reduced`) rather than let the provider reject
+ * it. Null when the window is unknown or the request fits as it is.
+ */
+export function outputBudget(
+  state: Parameters<typeof contextTokens>[0],
+  bound: Pick<BoundModel, 'config' | 'maxOutputTokens' | 'textOnly'>,
+):
+  | { readonly kind: 'overflow'; readonly inputTokens: number }
+  | {
+      readonly kind: 'reduced';
+      readonly inputTokens: number;
+      readonly limit: number;
+      readonly maxOutputTokens: number;
+    }
+  | null {
+  const { contextWindow } = bound.config;
+  if (contextWindow <= 0) return null;
+  const inputTokens = contextTokens(state);
+  if (inputTokens > contextWindow) return { kind: 'overflow', inputTokens };
+  const limit = bound.maxOutputTokens;
+  if (limit === null || inputTokens + limit <= contextWindow) return null;
+  const maxOutputTokens = reducedOutputBudget(
+    contextWindow - inputTokens,
+    bound.textOnly ? TOKEN_SAFETY_BUFFER : TOOL_USE_SAFETY_BUFFER,
+  );
+  return { kind: 'reduced', inputTokens, limit, maxOutputTokens };
 }

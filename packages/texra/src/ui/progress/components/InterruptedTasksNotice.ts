@@ -3,9 +3,8 @@
  * J5, ruling GQ5), a non-blocking notice above the composer that lists the
  * tasks a closed or crashed TeXRA left interrupted. "Resume all" resumes
  * each; a row opens its task, whose ended line holds that task's one Resume;
- * "Not now" hides the listed tasks until the next open. A task a resume
- * would find blocked says why, with the fix where TeXRA has one: Settings ›
- * Plugins, the one home of the plugin switch and its trust review.
+ * "Not now" hides the listed tasks until the next open. Why a task cannot
+ * continue is the resume's own refusal, shown when it is asked for.
  */
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/relative-time/relative-time.js';
@@ -14,13 +13,10 @@ import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 
 import type { Surface } from '@texra/shared/session/surface';
-import type { SettingsTarget } from '@texra/shared/settingsView/settingsTarget';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
   INTERRUPTED_NOTICE,
   interruptedTasks,
-  resumeBlockerFix,
-  resumeBlockerLine,
   type InterruptedTask,
 } from '@ui/copy/interruptedTasks';
 import { bannerStyles, commonViewStyles, designTokens } from '@ui/styles';
@@ -81,13 +77,9 @@ export class InterruptedTasksNotice extends LitElement {
         white-space: normal;
         text-align: start;
       }
-      .meta,
-      .blocked {
+      .meta {
         font-size: var(--font-size-sm);
         color: var(--color-text-secondary);
-      }
-      #alwaysResumeButton {
-        margin-inline-start: auto;
       }
     `,
   ];
@@ -111,12 +103,7 @@ export class InterruptedTasksNotice extends LitElement {
     );
   }
 
-  private openSettings(target: SettingsTarget): void {
-    this.dispatchEvent(SessionUiEvents.host({ kind: 'openSettings', target }));
-  }
-
   private renderTask(task: InterruptedTask): TemplateResult {
-    const fix = task.blocked && resumeBlockerFix(task.blocked);
     return html`<li>
       <wa-button
         class="task btn-ghost is-link"
@@ -140,22 +127,6 @@ export class InterruptedTasksNotice extends LitElement {
                 ></wa-relative-time>`
         }${task.agents ? ` · ${task.agents}` : nothing}</span
       >
-      ${
-        task.blocked
-          ? html`<span class="blocked"
-                >· ${resumeBlockerLine(task.blocked)}</span
-              >${
-                fix
-                  ? html`<wa-button
-                      appearance="outlined"
-                      size="s"
-                      @click=${() => this.openSettings('plugins')}
-                      >${fix}</wa-button
-                    >`
-                  : nothing
-              }`
-          : nothing
-      }
     </li>`;
   }
 
@@ -196,13 +167,6 @@ export class InterruptedTasksNotice extends LitElement {
             size="s"
             @click=${() => this.dismiss(tasks)}
             >${INTERRUPTED_NOTICE.notNow}</wa-button
-          >
-          <wa-button
-            id="alwaysResumeButton"
-            appearance="plain"
-            size="s"
-            @click=${() => this.openSettings('general/approval')}
-            >${INTERRUPTED_NOTICE.alwaysResume}</wa-button
           >
         </div>
       </div>`,

@@ -35,7 +35,9 @@ export const RUN_GROUP_LABELS: Readonly<Record<RunGroup, string>> =
 
 /** Section order, in the group union's own order. */
 export const RUN_GROUP_ORDER: readonly RunGroup[] = Object.freeze(
-  Object.keys(RUN_GROUP_LABELS) as RunGroup[],
+  Object.keys(RUN_GROUP_LABELS).filter((key): key is RunGroup =>
+    Object.hasOwn(RUN_GROUP_LABELS, key),
+  ),
 );
 
 /**
@@ -66,21 +68,6 @@ export function runStatusLabel(key: RunStatusKey): string {
 
 type RunNotice = NonNullable<RunView['statusNotice']>;
 
-/** What a resume found blocking a run: it can continue once that is back
- *  (by itself under `resumeOnOpen: auto`, else when resumed). */
-function resumeBlockedText({
-  reason,
-}: Extract<RunNotice, { kind: 'resumeBlocked' }>): string {
-  switch (reason.blocker) {
-    case 'agentMissing':
-      return `This task's agent, ${reason.name}, is no longer installed. It can continue once the agent is back.`;
-    case 'pluginOff':
-      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
-    case 'pluginUntrusted':
-      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once you trust it.`;
-  }
-}
-
 /**
  * The banner a run's notice (`RunView.statusNotice`) reads as, in every
  * host: its banner, tooltip and copied diagnostics. Null when the view
@@ -94,8 +81,6 @@ export function runNoticeText(notice: RunNotice | null): string | null {
       return "Part of this task's saved history is damaged, so it cannot be opened or resumed.";
     case 'earlierBuild':
       return "This task was written by an earlier build of TeXRA; it can't be opened by this one.";
-    case 'resumeBlocked':
-      return resumeBlockedText(notice);
     case 'interrupted':
       return 'The process running this task stopped before it finished. Resume it to continue.';
     case 'held':

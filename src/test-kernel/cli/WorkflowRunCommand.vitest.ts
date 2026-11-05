@@ -1,4 +1,3 @@
-/* eslint-disable import/order -- Vitest mocks must be declared before importing the runtime under test. */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -10,8 +9,9 @@ import { beforeEach, expect, vi } from 'vitest';
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
 
 import { layer } from '@effect/vitest';
-import { Effect, Context } from 'effect';
+import { Effect, Context, Schema } from 'effect';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
+import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type {
@@ -22,6 +22,7 @@ import { CliExitCode } from '@cli/runtime/exitCodes';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
+  RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
@@ -107,7 +108,7 @@ type WorkflowRunPayload = Extract<
 
 /** Run ids the mocked launch has reported, waiting for the opening row its
  *  real counterpart would have committed. */
-let pendingRunStarts: string[] = [];
+let pendingRunStarts: RunId[] = [];
 
 /**
  * The workflow command's program over the shared happy-path inputs, on the
@@ -142,6 +143,7 @@ function workflowProgram(
       inputFiles: ['paper.tex'],
       contextFiles: [],
       instruction: '',
+      options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
       ...init,
     });
   });
@@ -182,7 +184,7 @@ function workflowRun(
           ...output,
         },
       },
-      runId: runId as RunId,
+      runId: Schema.decodeUnknownSync(RunIdSchema)(runId),
     },
   };
 }
@@ -217,12 +219,12 @@ async function writeGeneratedOutput(root: string): Promise<string> {
  */
 const seedStartedRun = (
   session: Context.Context<SessionServices>,
-  runId: string,
+  runId: RunId,
 ) =>
   Context.get(session, SessionLog).transact([
     {
       type: 'run.start',
-      aggregateId: qualifyAggregateId('run', runId as RunId),
+      aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent: 'polish' },
       userFollowUpSupport: 'unsupported',
       parent: null,
@@ -242,7 +244,6 @@ layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
         tools: [],
         blocks: {
           task: {
-            rewrite: true,
             outputs: [],
             files: {},
             prefix: '',

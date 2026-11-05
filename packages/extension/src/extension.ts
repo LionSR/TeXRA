@@ -31,25 +31,15 @@ import {
 } from '@texra-ai/harness/host';
 import { withForkFailureReporting } from '@texra-ai/harness/transcript';
 import {
-  createNodeWorkspaceRoots,
-  resolveWorkspaceStoragePath,
+  openNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
   effectDiagnosticsLayer,
   FileSecrets,
-  JsonConfigProvider,
   secretsDirectory,
   setLogSink,
 } from '@texra-ai/harness/node';
-import {
-  APPROVAL_POLICY_CONFIG_KEY,
-  type ApprovalPolicy,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
-import {
-  appSignalStream,
-  emitAppSignal,
-  onAppSignal,
-} from '@texra-ai/harness/host';
+import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
@@ -61,8 +51,7 @@ import {
 } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
 import { initializeLatexSupport } from '@frontend/setup';
-import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
+import { taskStatusBar } from '@frontend/statusBar/taskStatusBar';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import {
   announce,
@@ -93,17 +82,11 @@ import {
 import type { ServiceLink } from '@texra/controllers/server/client';
 import { texraProcessLayer } from '@texra/controllers/texraProcessLayer';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import { gitHubTokenRejectedMessage } from '@texra/tools/github/githubAuth';
 import { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import type { GuiSession } from '@texra/controllers/session/openGuiWindow';
-import {
-  formatApprovalPolicy,
-  approvalPolicyLabel,
-} from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
-import { usageCostLabel } from '@ui/copy/modelAccess';
 import { reachExtensionService } from './common/extensionService';
 
 // Local file imports
@@ -141,12 +124,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     >;
   } = {},
 ) {
-  // `~/.texra` is one history across CLI/desktop/extension (#8622). The
-  // process runtime precedes the config stores below, which open on it.
-  const storage = resolveWorkspaceStoragePath(
-    defaultNodeStorageRoot(),
-    workspaceRoot,
-  );
   // Usage logging is anonymous: a runtime service with no account behind it.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -169,6 +146,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         // The editor's commands, extensions and terminal, for the setup tools
         // and the Lean 4 probe.
         setup: vscodeSetupPlatform,
+        // `~/.texra`: one history across CLI, desktop and extension.
         storageRoot: defaultNodeStorageRoot(),
         resourcesPath: path.join(context.extensionPath, 'resources'),
         agentIssues: showLoggedMessageWithDocs,
@@ -193,8 +171,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // at the end of activation), then the host's own resources, then the
   // project scope, and the runtime last of all. The status-bar refresh and
   // the app-signal listeners are fibers of this scope, so they end before
-  // any of those; `statusBarItem` is owned solely by `context.subscriptions`
-  // (see the push near the end of activation), matching the setup pill.
+  // any of those; the task pill's item is owned solely by
+  // `context.subscriptions` (`taskStatusBar`), matching the setup pill.
   yield* Effect.addFinalizer(() => runtime.disposeEffect);
   const projectScope = yield* Scope.make();
   // The window's session closes before the project state it reads.
@@ -207,7 +185,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   return yield* withProcessServices(
     managed,
     Effect.gen(function* () {
-      const globalState = yield* AppState;
       const reached: Result.Result<ServiceLink, Error> =
         extras.service === undefined || workspaceRoot === undefined
           ? Result.fail(new Error('a window with no folder uses no service'))
@@ -216,44 +193,38 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
             yield* Effect.result(
               extras.service.pipe(Scope.provide(projectScope)),
             );
-      const projectState =
-        Result.isSuccess(reached) && workspaceRoot !== undefined
-          ? serviceProjectState(reached.success, workspaceRoot)
-          : yield* (yield* StateStores)
-              .project(storage, workspaceRoot)
-              .pipe(Scope.provide(projectScope));
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
-      const config = new JsonConfigProvider(
-        yield* openTexraConfigStores(
-          TEXRA_SETTINGS.catalog,
-          defaultNodeStorageRoot(),
-          workspaceRoot,
-          (message) => {
-            runtime.runFork(
-              Effect.logWarning(message).pipe(
-                withLogChannel(EXTENSION_CHANNEL),
-                Effect.andThen(
-                  announce(
-                    EXTENSION_CHANNEL,
-                    vscodeUi.showWarningMessage(message),
-                    undefined,
-                  ),
+      const config = yield* openTexraConfigStores(
+        TEXRA_SETTINGS.catalog,
+        defaultNodeStorageRoot(),
+        workspaceRoot,
+        (message) => {
+          runtime.runFork(
+            Effect.logWarning(message).pipe(
+              withLogChannel(EXTENSION_CHANNEL),
+              Effect.andThen(
+                announce(
+                  EXTENSION_CHANNEL,
+                  vscodeUi.showWarningMessage(message),
+                  undefined,
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       );
-      const roots = createNodeWorkspaceRoots({
+      const roots = yield* openNodeWorkspaceRoots({
         workspacePath: workspaceRoot,
         storageRoot: defaultNodeStorageRoot(),
-        storage,
         config,
-        workspaceState: projectState,
-        repoState: yield* (yield* StateStores).repo(storage, workspaceRoot),
-        globalState,
-      });
+        ...(Result.isSuccess(reached) &&
+          workspaceRoot !== undefined && {
+            workspaceState: serviceProjectState(reached.success, workspaceRoot),
+          }),
+        stateStores: yield* StateStores,
+        globalState: yield* AppState,
+      }).pipe(Scope.provide(projectScope));
       // The one-time telemetry notice, one information message; VS Code's own
       // switch being off means nothing is sent, so nothing to announce.
       const notice = vscode.env.isTelemetryEnabled
@@ -289,8 +260,8 @@ type WalkthroughCommandNeedingWorkspace =
 /** Internal command URI used by workspace-bound walkthrough links. */
 const WALKTHROUGH_WORKSPACE_ACTION_COMMAND = 'texra.walkthroughWorkspaceAction';
 
-const explainWorkspaceRequired = (extensionPath: string) =>
-  Effect.gen(function* () {
+const explainWorkspaceRequired = Effect.fn('explainWorkspaceRequired')(
+  function* (extensionPath: string) {
     const openFolder = 'Open Folder';
     const createSample = 'Create Sample Project';
     const choice = yield* vscodeUi.info(
@@ -302,7 +273,8 @@ const explainWorkspaceRequired = (extensionPath: string) =>
     } else if (choice === createSample) {
       yield* createSampleProjectWithoutWorkspace(extensionPath);
     }
-  });
+  },
+);
 
 function registerWalkthroughWorkspaceAction(
   context: vscode.ExtensionContext,
@@ -467,7 +439,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   } else {
     const session = yield* (yield* Sessions).open(roots, {
       persistent: true,
-      host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
+      host: {},
     });
     yield* recordFirstCompletedRun(session);
     windowSession = { session, link: yield* hosts.localLink(session) };
@@ -604,96 +576,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   yield* Effect.forkScoped(followInlineCriticism(session, roots));
   registerInlineComments(context);
 
-  const statusBarItem = vscode.window.createStatusBarItem(
-    'texra.taskStatus',
-    vscode.StatusBarAlignment.Left,
-  );
-  statusBarItem.name = 'TeXRA Tasks';
-  statusBarItem.command = 'texra.showProgressView';
-  // Shown only while a run is active (`updateStatusBarText`).
-
-  const statusBarUsageTracker = new StatusBarUsageTracker(session);
-  const updateStatusBarTooltip = () => {
-    // The project's persisted policy: what a run here, or the service's
-    // for this project, decides under.
-    const policy = Settings.getConfig<ApprovalPolicy>(
-      roots.config,
-      APPROVAL_POLICY_CONFIG_KEY,
-    );
-    const policyLine = `Approval policy: ${approvalPolicyLabel(policy)} — ${formatApprovalPolicy(policy)}`;
-    const usage = statusBarUsageTracker.totalUsage;
-    const { cost, inputTokens, outputTokens } = usage;
-    if (cost === 0 && inputTokens === 0 && outputTokens === 0) {
-      statusBarItem.tooltip = `${policyLine}\n\nClick to show TeXRA sessions`;
-      return;
-    }
-    const tip = new vscode.MarkdownString(
-      [
-        policyLine,
-        '',
-        '| TeXRA usage | |',
-        '| --- | ---: |',
-        `| Cost | ${usageCostLabel(usage)} |`,
-        `| Input tokens | ${inputTokens.toLocaleString()} |`,
-        `| Output tokens | ${outputTokens.toLocaleString()} |`,
-        '',
-        '*Click to show TeXRA sessions*',
-      ].join('\n'),
-    );
-    tip.isTrusted = false;
-    statusBarItem.tooltip = tip;
-  };
-  const updateStatusBarText = () => {
-    const count = statusBarUsageTracker.activeRunCount;
-    if (statusBarUsageTracker.activity === 'approval') {
-      statusBarItem.text = '$(bell-dot) TeXRA: Waiting for you';
-      statusBarItem.accessibilityInformation = {
-        label: 'TeXRA tasks, waiting for you',
-      };
-    } else if (count > 1) {
-      statusBarItem.text = `$(loading~spin) TeXRA: ${count} active`;
-      statusBarItem.accessibilityInformation = {
-        label: `TeXRA tasks, ${count} active`,
-      };
-    } else if (count === 1) {
-      statusBarItem.text = '$(loading~spin) TeXRA: Running';
-      statusBarItem.accessibilityInformation = {
-        label: 'TeXRA tasks, one active',
-      };
-    } else {
-      // Nothing running: no pill. The setup pill covers the first run.
-      statusBarItem.hide();
-      return;
-    }
-    statusBarItem.show();
-  };
-
-  yield* Effect.forkScoped(
-    refreshStatusBarOnViewChanges({
-      session,
-      tracker: statusBarUsageTracker,
-      onStatusChanged: () => {
-        updateStatusBarTooltip();
-        updateStatusBarText();
-      },
-      // The tracker projects the running runs' usage totals from the
-      // session view; the tooltip repaints when they change.
-      onUsageChanged: updateStatusBarTooltip,
-    }),
-    { startImmediately: true },
-  );
-  // Paint the policy line immediately; otherwise the tooltip shows the
-  // generic "Show TeXRA Tasks" text until the first status/usage event.
-  updateStatusBarTooltip();
-  // Approval-policy setting updates emit on this signal; the subscription
-  // here is what makes the refresh reachable, so a missed subscribe is a
-  // missing behavior rather than a silent no-op.
-  yield* Effect.forkScoped(
-    onAppSignal('approvalPolicyChanged', updateStatusBarTooltip),
-    { startImmediately: true },
-  );
-
-  context.subscriptions.push(statusBarItem);
+  yield* taskStatusBar(context, session, roots.config);
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`
   // keeps them hidden until every command handler is registered. This must run

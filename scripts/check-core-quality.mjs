@@ -7,10 +7,10 @@
 // tree, extracted with `git archive`, so a file whose count rose fails and
 // names its sites, a file new on the head starts at zero, a renamed file
 // keeps its count once the rename is staged, and a count that fell needs no
-// edit: nothing is committed and nothing regenerated. A rule listed in
-// ZERO_RULES (ratchet-zero-rules.mjs) fails any site. file-size is a cap: a
-// file may not grow past its base length rounded up to a multiple of
-// FILE_SIZE_STEP, which never rises, so small edits inside the step are free.
+// edit: nothing is committed and nothing regenerated. A rule in ZERO_RULES
+// fails any site. file-size is a cap: a file may not grow past its base
+// length rounded up to a multiple of FILE_SIZE_STEP, which never rises, so
+// small edits inside the step are free.
 // shallow-modules budgets interface elements while a module is shallow, so
 // reducing its public surface lowers the row and deepening it removes it.
 //
@@ -26,29 +26,27 @@
 //   node scripts/check-core-quality.mjs --docgen      rewrite the API reports and references
 //   node scripts/check-core-quality.mjs --report      per-package totals and hotspots
 
-import { execFileSync } from 'node:child_process';
 import console from 'node:console';
 import {
   existsSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
   readdirSync,
-  realpathSync,
-  rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
-import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { GENERATED_DIRS, apiReports } from './core-quality-api-report.mjs';
-import { CORE_FILE_LINES, RULES, measure } from './core-quality-measure.mjs';
-import { git, ratchetBase, renamesSince } from './ratchet-base.mjs';
-import { ZERO_RULES } from './ratchet-zero-rules.mjs';
+import {
+  CORE_FILE_LINES,
+  CORE_QUALITY_DIRS,
+  RULES,
+  measure,
+} from './core-quality-measure.mjs';
+import { ratchetBase, renamesSince, withBaseTree } from './ratchet-base.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -58,27 +56,23 @@ const SITES_SHOWN = 8;
 /** The line step a file-size cap is rounded up in. */
 const FILE_SIZE_STEP = 25;
 
-const heldAtZero = (rule) =>
-  Object.hasOwn(ZERO_RULES, `config/ratchets/core-quality/${rule}.json`);
-
-/** The rules measured over the base commit's tree. */
-async function measureBase(base) {
-  // The measurement compares resolved paths with its root, and the temp
-  // directory is a symlink on macOS.
-  const dir = realpathSync(
-    mkdtempSync(path.join(tmpdir(), 'core-quality-base-')),
-  );
-  try {
-    const tar = path.join(dir, 'base.tar');
-    git('archive', '--format=tar', '--output', tar, base);
-    const tree = path.join(dir, 'tree');
-    mkdirSync(tree);
-    execFileSync('tar', ['-xf', tar, '-C', tree]);
-    return (await measure(tree)).byRule;
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-}
+/** Rules no file may break any more: any site fails, whatever the base holds. */
+const ZERO_RULES = new Set([
+  'consistent-type-assertions',
+  'durable-invariants',
+  'effect-run',
+  'import-cycles',
+  'lint-disable',
+  'new-promise',
+  'no-explicit-any',
+  'no-non-null-assertion',
+  'no-non-null-assertion-test-kernel',
+  'promise-then',
+  'try-catch-effect',
+  'type-assertions',
+  'type-assertions-outside-core',
+  'type-assertions-test-kernel',
+]);
 
 function describeSites(entry) {
   const shown = entry.sites
@@ -299,7 +293,10 @@ const main = async () => {
   }
   const { target, base } = ratchetBase(values.base);
   const { files, byRule } = await measure(rootDir);
-  const before = await measureBase(base);
+  const before = await withBaseTree(
+    base,
+    async (tree) => (await measure(tree)).byRule,
+  );
   const renamed = new Map(renamesSince(base).map(([from, to]) => [to, from]));
   const baseKey = (key) => renamed.get(key) ?? key;
   const problems = [];
@@ -307,7 +304,7 @@ const main = async () => {
     problems.push(
       ...checkRule(
         rule,
-        heldAtZero(rule) ? null : before.get(rule),
+        ZERO_RULES.has(rule) ? null : before.get(rule),
         actual,
         baseKey,
       ),

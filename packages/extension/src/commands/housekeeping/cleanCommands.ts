@@ -8,10 +8,7 @@ import {
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
-import {
-  findBuildDirectories,
-  removeBuildDirectories,
-} from '@housekeeping/clean';
+import { findBuildDirectories, removeBuildDirectories } from './clean';
 
 const CHANNEL = 'cleanCommands';
 

@@ -18,7 +18,8 @@ export class DedupedResource<T, Id extends NonNullable<unknown> = number> {
 
   private readonly getId: (item: T) => Id;
   private readonly getCursor:
-    ((items: readonly T[]) => string | undefined) | undefined;
+    | ((items: readonly T[]) => string | undefined)
+    | undefined;
 
   constructor(options: DedupedResourceOptions<T, Id>) {
     this.getId = options.getId;

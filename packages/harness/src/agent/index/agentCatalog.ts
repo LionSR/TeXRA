@@ -355,25 +355,24 @@ export class AgentCatalog extends Context.Service<
       const reads = catalogReads(state);
       const { resolve, newerBuiltIn } = reads;
 
-      const forLaunch = (
+      const forLaunch = Effect.fn('forLaunch')(function* (
         stores: WorkspaceAgentsStores,
         identifier: string,
         source?: AgentSource | null,
-      ) =>
-        Effect.gen(function* () {
-          const entry =
-            (yield* Effect.andThen(settled, () =>
-              resolve(stores, identifier, source),
-            )) ??
-            (yield* Effect.andThen(refresh, () =>
-              resolve(stores, identifier, source),
-            ));
-          if (entry) return entry;
-          return yield* new AgentNotFound({
-            agent: identifier,
-            message: missMessage(state, identifier),
-          });
+      ) {
+        const entry =
+          (yield* Effect.andThen(settled, () =>
+            resolve(stores, identifier, source),
+          )) ??
+          (yield* Effect.andThen(refresh, () =>
+            resolve(stores, identifier, source),
+          ));
+        if (entry) return entry;
+        return yield* new AgentNotFound({
+          agent: identifier,
+          message: missMessage(state, identifier),
         });
+      });
 
       const customize = (entry: AgentEntry, change: AgentCustomization) =>
         customizeCopy(entry, change, newerBuiltIn(entry)).pipe(

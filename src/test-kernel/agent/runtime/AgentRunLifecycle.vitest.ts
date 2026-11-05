@@ -1,9 +1,10 @@
 import { layer } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Context, Layer } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Context, Layer, Schema } from 'effect';
 
 import { afterEach, expect, vi } from 'vitest';
 
 import {
+  RunIdSchema,
   qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
@@ -23,7 +24,6 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 
-import { eventsOfType, recordSessionEvents } from '../progressTestUtils';
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 /** The run's committed `run.end` rows, once the session's writes settled:
@@ -50,8 +50,9 @@ let lifecycleFixtureCounter = 0;
 /** A run of the file's session, with its launch context. */
 const lifecycleFixture = (agent = 'test-agent') =>
   Effect.map(Effect.flatMap(TestSession, sessionHandleOf), (session) => {
-    const runId =
-      `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
+    const runId = Schema.decodeUnknownSync(RunIdSchema)(
+      `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}`,
+    );
     const ctx = createTestLaunchContext({ runId, agent });
     // A run is registered before its lifecycle runs: an activation commits
     // onto the run's rows.
@@ -60,7 +61,7 @@ const lifecycleFixture = (agent = 'test-agent') =>
   });
 
 /** The launching run a subagent fixture names as its parent edge. */
-const PARENT_RUN_ID = 'aa0001' as RunId;
+const PARENT_RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('aa0001');
 
 /**
  * Park the run's terminal before its `run.end` write: its stage end, the
@@ -122,10 +123,10 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         // which is the window the stop below has to land in.
         yield* Deferred.await(parked.started);
 
-        const stop = Context.get(session, Runs).stop(runId, {
-          reason: 'user',
-          detachActiveChildren: false,
-        });
+        // A shutdown: the sweep alone, the path this case took before the
+        // per-stop override went; a user stop's settlement also reads "Keep
+        // agents running" and may owe an end row behind the parked persist.
+        const stop = Context.get(session, Runs).stop(runId, 'shutdown');
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement.pipe(Effect.provide(session));
 
@@ -133,36 +134,6 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         yield* Fiber.await(running);
         expect(yield* runEnds(session, runId)).toMatchObject([
           { outcome: RUN_OUTCOME.COMPLETED },
-        ]);
-      }),
-  );
-
-  // A run that aborts before its first turn is this run's outcome: the run
-  // never runs a turn, and the only fact it leaves is the cancelled terminal
-  // row with the abort's own error facts on it.
-  it.effect(
-    'writes the cancelled terminal fact when the run aborts before its first turn',
-    () =>
-      Effect.gen(function* () {
-        const { runId, ctx, session } = yield* lifecycleFixture();
-        const recorded = recordSessionEvents(session, {
-          aggregateId: qualifyAggregateId('run', runId),
-        });
-
-        yield* endRun(
-          ctx,
-          Exit.fail(new DOMException('Request aborted', 'AbortError')),
-        ).pipe(Effect.provide(session));
-        yield* Context.get(session, SessionLog).settled;
-        // A run that never ran a turn writes no step of its own: `run.end` is
-        // the whole of what it says.
-        expect(eventsOfType(yield* recorded.read, 'run.position')).toEqual([]);
-        expect(yield* runEnds(session, runId)).toMatchObject([
-          {
-            outcome: RUN_OUTCOME.CANCELLED,
-            error: { kind: 'abort', userRetryable: false },
-            output: { response: '', files: [] },
-          },
         ]);
       }),
   );

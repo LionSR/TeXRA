@@ -49,7 +49,9 @@ import '@ui/progress/components/ToolTimer';
 
 /** The names the toolkit draws: a plugin names its tools' icons as plain
  *  strings, since the app's modules do not import the toolkit. */
-const DRAWN_ICONS: ReadonlySet<string> = new Set(ICON_NAMES);
+const DRAWN_ICONS: ReadonlyMap<string, IconName> = new Map(
+  ICON_NAMES.map((name) => [name, name]),
+);
 
 /** Header width for this surface; the model carries the preview untruncated. */
 const HEADER_PREVIEW_MAX_CHARS = 120;
@@ -81,11 +83,8 @@ export function formatToolUseTemplate(
     iconName = 'circle-exclamation';
   } else {
     const icon = tools.icons[normalizedToolName];
-    // cast: `DRAWN_ICONS` holds exactly the `IconName`s.
     iconName =
-      icon !== undefined && DRAWN_ICONS.has(icon)
-        ? (icon as IconName)
-        : 'wrench';
+      (icon === undefined ? undefined : DRAWN_ICONS.get(icon)) ?? 'wrench';
   }
 
   const headerPreview = truncateWithEllipsis(

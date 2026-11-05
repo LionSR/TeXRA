@@ -11,6 +11,7 @@ import {
   MODEL_AVAILABILITY_STATUS,
 } from '@texra-ai/harness/schemas';
 import { pluralize } from '@texra-ai/harness/transcript';
+import WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { settingSignal } from '@settingsView/frontend/settingsState';
 import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { postMessage } from '@texra/shared/hostBridge';
@@ -41,7 +42,6 @@ import { readSelectValue } from '@ui/wa/selectTemplates';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { modelSelectionListStyles } from './ModelSelectionList.styles';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
 interface ProviderGroup {
   provider: string;
@@ -84,7 +84,8 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   @property({ attribute: false }) models: readonly ModelSelectionItem[] = [];
   /** Null until the profile state arrives; a group then shows no key icon. */
   @property({ attribute: false }) providerKeyStatuses:
-    readonly ProviderKeyStatus[] | null = null;
+    | readonly ProviderKeyStatus[]
+    | null = null;
 
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();
@@ -92,17 +93,16 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   private getProviderGroups(): ProviderGroup[] {
     const byProvider = Map.groupBy(this.models, (model) => model.provider);
 
-    return MODEL_SOURCE_ORDER.filter((p) => byProvider.has(p)).map(
-      (provider) => {
-        const models = byProvider.get(provider)!;
-        return {
-          provider,
-          displayName: providerDisplayName(provider),
-          current: sortFastFirst(models.filter((m) => !m.deprecated)),
-          deprecated: models.filter((m) => m.deprecated),
-        };
-      },
-    );
+    return MODEL_SOURCE_ORDER.flatMap((provider) => {
+      const models = byProvider.get(provider);
+      if (!models) return [];
+      return {
+        provider,
+        displayName: providerDisplayName(provider),
+        current: sortFastFirst(models.filter((m) => !m.deprecated)),
+        deprecated: models.filter((m) => m.deprecated),
+      };
+    });
   }
 
   private toggleProvider(provider: string): void {
@@ -209,7 +209,8 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
             isLastEnabledModel
           }
           @change=${(e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
+            if (!(e.target instanceof WaSwitch)) return;
+            const { checked } = e.target;
             postMessage(SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED, {
               modelName: model.name,
               enabled: checked,
@@ -400,29 +401,6 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
           icon: 'server',
         })}
         ${this.renderHelperModelDropdown()}
-        <div class="short-names-toggle">
-          <wa-switch
-            ?checked=${settingSignal<boolean>(
-              GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-            ).get()}
-            @change=${(e: Event) => {
-              const enabled = (e.target as WaSwitch).checked;
-              postStateSetting(
-                GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-                enabled,
-              );
-            }}
-          >
-            Use short model names
-            <span slot="hint" class="visually-hidden"
-              >Use unpinned names, such as gpt-5.5 instead of
-              gpt-5.5-2026-04-15.</span
-            >
-          </wa-switch>
-          <span class="short-names-description" aria-hidden="true">
-            Use unpinned names, such as gpt-5.5 instead of gpt-5.5-2026-04-15.
-          </span>
-        </div>
         <div class="settings-disclosure-list">
           ${groups.map((g) => this.renderProviderGroup(g))}
         </div>

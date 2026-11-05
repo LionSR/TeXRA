@@ -13,7 +13,11 @@ import { GlobalValues } from '@platform/processRuntime';
 import { Database, ProjectDatabases } from '@shared/session/database';
 import { WORKSPACE_STORES } from '@shared/session/valueFamily';
 
-import { databaseLayer, storeOpenElsewhere } from './Database';
+import {
+  databaseLayer,
+  SESSION_DATABASE_FILE,
+  storeOpenElsewhere,
+} from './Database';
 import { asideCopies } from './storeAside';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -80,7 +84,7 @@ export const readStorageInventory = Effect.fn('readStorageInventory')(
           directory === global || id === path.basename(none)
             ? undefined
             : records.get(id);
-        const database = path.join(directory, 'texra.db');
+        const database = path.join(directory, SESSION_DATABASE_FILE);
         if (record === undefined || (yield* fs.exists(record.root))) {
           asides.push(...(yield* asideCopies(database)));
           return;
@@ -144,7 +148,7 @@ export const deleteStorageInventory = Effect.fn('deleteStorageInventory')(
             outcome: 'failed' as const,
             message: `no longer listed in the inventory of ${storageRoot}; left in place`,
           };
-        const database = path.join(target, 'texra.db');
+        const database = path.join(target, SESSION_DATABASE_FILE);
         if (
           store &&
           (yield* fs.exists(database)) &&

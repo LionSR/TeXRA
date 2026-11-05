@@ -1,33 +1,14 @@
 import {
   HARNESS_INSTRUCTION_KEY,
-  RUN_OUTCOME,
-  type ProviderErrorClassification,
+  toRetryErrorInfo,
   type RequestShowErrorPayload,
   type RequestShowInstructionPayload,
   type RunEnd,
-  type RunOutcome,
 } from '@shared/schemas';
 
-import { isDiskFullError, isUserAbort } from './errorPredicates';
-import { normalizeProviderError } from './sdkError/providerErrorFormat';
+import { failureIn } from './sdkError/providerErrorFormat';
 
 export type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
-
-/**
- * Canonical outcome of a run terminated by a thrown error, per error kind.
- * `abort` is the only cancellation — every other kind is a failure. Keep this
- * a declarative table so new kinds must take an explicit stance.
- */
-export const AGENT_ERROR_OUTCOME: Readonly<Record<AgentErrorKind, RunOutcome>> =
-  {
-    abort: RUN_OUTCOME.CANCELLED,
-    'context-window': RUN_OUTCOME.FAILED,
-    'disk-full': RUN_OUTCOME.FAILED,
-    // Never thrown: an end records it, keeping its own outcome.
-    'result-lost': RUN_OUTCOME.FAILED,
-    'missing-api-key': RUN_OUTCOME.FAILED,
-    unexpected: RUN_OUTCOME.FAILED,
-  };
 
 /**
  * Runtime aggregates put the primary failure first and retain later cleanup
@@ -38,21 +19,12 @@ export function primaryAgentError(err: unknown): unknown {
   return err;
 }
 
-/**
- * Classify agent execution errors for consistent runtime notification policy.
- *
- * Every kind is decided by a typed signal: an abort predicate, an errno, or
- * the failure's classification (a missing key is model access's
- * `RouteUnavailable`, an overflowed window llm's verdict, either one as a
- * run recorded it).
- */
-export function classifyAgentError(err: unknown): AgentErrorKind {
-  const primary = primaryAgentError(err);
-  if (isUserAbort(primary)) return 'abort';
-  if (isDiskFullError(primary)) return 'disk-full';
-  const kind = normalizeProviderError(primary).classification?.kind;
-  if (kind === 'missing-api-key' || kind === 'context-window') return kind;
-  return 'unexpected';
+/** A run's failure as its `run.end` row records it ({@link failureIn}). */
+export function classifyAgentError(err: unknown): NonNullable<RunEnd['error']> {
+  const failure = failureIn(primaryAgentError(err));
+  return failure.kind === 'model'
+    ? { kind: 'model', ...toRetryErrorInfo(failure.failure) }
+    : failure;
 }
 
 /** How a host presents an agent error: an instruction, or a plain error. */
@@ -69,46 +41,33 @@ export type AgentErrorPresentation =
 const MISSING_API_KEY_MESSAGE =
   'API key not found. Set your API key and run again.';
 
-/** Map a classified error to host guidance, with no notification for aborts. */
-export function agentErrorPresentation(error: {
-  kind: AgentErrorKind;
-  message: string;
-  /** Docs page of a refusing request (`Rejected.docsPage`), surfaced
-   *  beside the error so the host's dialog keeps the guide affordance. */
-  docsPage?: string;
-  /** The failure's classification, carried beside its message so a host
-   *  may word the failure itself. */
-  classification?: ProviderErrorClassification;
-}): AgentErrorPresentation | null {
-  const docs = error.docsPage ? { docsPage: error.docsPage } : {};
-  const facts = error.classification
-    ? { classification: error.classification }
-    : {};
-  switch (error.kind) {
-    case 'missing-api-key':
-      return {
-        type: 'instruction',
-        payload: {
-          key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
-          message: MISSING_API_KEY_MESSAGE,
-          showSuppress: false,
-        },
-      };
-    case 'context-window':
-    case 'disk-full':
-    case 'result-lost':
-    case 'unexpected':
-      return {
-        type: 'error',
-        payload: { message: error.message, ...docs, ...facts },
-      };
-    case 'abort':
-      return null;
-    default: {
-      // Every error kind must choose an explicit presentation policy.
-      const _exhaustive: never = error.kind;
-      void _exhaustive;
-      return null;
-    }
-  }
+/**
+ * Map a run's failure to host guidance: the missing-key instruction, or an
+ * error with the failure's classification beside its message, which a host
+ * may word in its place.
+ */
+export function agentErrorPresentation(
+  error: NonNullable<RunEnd['error']>,
+): AgentErrorPresentation {
+  if (
+    error.kind === 'model' &&
+    error.classification?.kind === 'missing-api-key'
+  )
+    return {
+      type: 'instruction',
+      payload: {
+        key: HARNESS_INSTRUCTION_KEY.MISSING_API_KEY,
+        message: MISSING_API_KEY_MESSAGE,
+        showSuppress: false,
+      },
+    };
+  return {
+    type: 'error',
+    payload: {
+      message: error.message,
+      ...(error.kind === 'model' && error.classification !== undefined
+        ? { classification: error.classification }
+        : {}),
+    },
+  };
 }

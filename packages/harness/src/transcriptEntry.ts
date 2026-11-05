@@ -139,16 +139,12 @@ export {
   type ScriptPhaseView,
   type ScriptStageView,
 } from '@shared/transcript/scriptStage';
-// A delivered follow-up as a renderer shows it: its tag, its summary, a
-// script delivery's tally, and whether its body is entity-escaped.
+// Delivery envelopes inside assistant text, collapsed to their summaries,
+// and the entity decoding their bodies take.
 export {
   decodeXmlEntities,
-  deliveryTagOf,
-  formatScriptDeliverySummary,
   summarizeEmbeddedSubagentFollowups,
-  summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
-export { deliveryBodyEscaped } from '@shared/deliveryTags';
 // Run lists and task groups: their order, a group's status, and a
 // compaction's status.
 export {

@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect, Schema } from 'effect';
+import { Effect, Predicate, Schema } from 'effect';
 
 // Local imports - shared constants & state keys
 import {
@@ -11,10 +11,8 @@ import {
   ActiveSkillSourceScopeSchema,
   AGENT_SKILLS_CONFIG_KEY,
   AGENT_SKILLS_ENABLED_DEFAULT,
-  BASH_APPROVAL_CONFIG_KEY,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
   DEBUG_MODE_KEY,
-  TOOL_EDIT_APPROVAL_CONFIG_KEY,
   WorkspaceAgentsSelectionSchema,
   AgentSkillsEnabledSchema,
   HiddenCustomAgentKeysSchema,
@@ -66,7 +64,10 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * worktree.
  */
 export type SettingStore =
-  'config' | 'workspaceState' | 'repoState' | 'globalState';
+  | 'config'
+  | 'workspaceState'
+  | 'repoState'
+  | 'globalState';
 
 export interface StateSettingEntry {
   /** The row's key, relative to its catalog's namespace (`memory.enabled`),
@@ -203,10 +204,6 @@ const HARNESS_CONFIG_ROWS: Record<
   // workspace override stays honored (stranded values: #11173). Only
   // server-side state is a user choice (data retention); the transport knobs
   // have no settings-view row and live in `.texra/config.json`.
-  'model.gpt5ReasoningSummary': configToggle(
-    false,
-    "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
-  ),
   'model.useGoogleInteractionsServerState': {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
@@ -221,17 +218,9 @@ const HARNESS_CONFIG_ROWS: Record<
     false,
     'Run text-only Google generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
   ),
-  'model.useBackgroundResponses': configToggle(
-    true,
-    'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running a text-only agent (one without tools); ignored otherwise. Disable to fall back to synchronous streaming requests.',
-  ),
   'model.openaiFastTier': configToggle(
     false,
     "Send OpenAI requests on OpenAI's fast service tier, for models that offer it: faster responses at a higher per-token price, which run costs reflect.",
-  ),
-  'model.openaiParallelToolCalls': configToggle(
-    true,
-    'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
   ),
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `Settings.get`, so narrowing the row to the global scope would
@@ -334,25 +323,6 @@ const HARNESS_CONFIG_ROWS: Record<
       'Expose enabled built-in and imported skills to agent prompts. Skills are off by default.',
     category: 'tools',
   },
-  [TOOL_EDIT_APPROVAL_CONFIG_KEY]: {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    title: 'Require approval for file edits',
-    description:
-      'Show a diff and wait for your approval before an agent changes a project file.',
-    category: 'tools',
-    configTarget: 'local',
-  },
-  [BASH_APPROVAL_CONFIG_KEY]: {
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-    ),
-    title: 'Require approval for shell commands',
-    description: 'Wait for your approval before an agent runs a shell command.',
-    category: 'tools',
-    configTarget: 'local',
-  },
 };
 
 /**
@@ -387,7 +357,7 @@ const APPROVAL_POLICY_SETTING: StateSettingEntry = {
   ),
   title: 'Approval policy',
   description:
-    'Whether agents ask before running shell commands and editing files. Under Ask, the toggles below choose which of the two need your approval.',
+    'Whether agents ask before running shell commands and editing files.',
   category: 'tools',
   slot: 'config',
   configTarget: 'local',
@@ -572,16 +542,6 @@ const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'model',
     slot: 'globalState',
   },
-  {
-    key: GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-    schema: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-    ),
-    title: 'Prefer short model names',
-    description: 'Show compact model names in pickers.',
-    category: 'model',
-    slot: 'globalState',
-  },
 
   // --- Provider routing & region toggles --------------------------------------
   globalProviderToggle({
@@ -726,9 +686,7 @@ export function settingsCatalog(options: {
         defaults.set(key, Schema.decodeUnknownSync(entry.schema)(undefined));
       }
       const value = defaults.get(key);
-      return value !== null && typeof value === 'object'
-        ? structuredClone(value)
-        : value;
+      return Predicate.isObjectOrArray(value) ? structuredClone(value) : value;
     },
   };
 }

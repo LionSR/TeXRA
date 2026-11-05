@@ -60,7 +60,8 @@ let runId: RunId;
 // must park one returns null and decides it later with `decideRequest`.
 let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
 let decisions:
-  Effect.Success<ReturnType<typeof autoDecideRequests>> | undefined;
+  | Effect.Success<ReturnType<typeof autoDecideRequests>>
+  | undefined;
 let policyDenials = 0;
 // The tool edits the run opened, as their rows reached the log; tests
 // override the decision when they need to reject or adjust, and assert on
@@ -141,17 +142,15 @@ function inRun<A, E>(effect: Effect.Effect<A, E, PluginToolServices>) {
 }
 
 /**
- * Every case's start, for the test's scope: a host over the workspace with
- * `config`, a session over its roots whose policy host counts denials, the
+ * Every case's start, for the test's scope: a host over the workspace, a
+ * session over its roots whose policy host counts denials, the
  * policy at `ask`, and a freshly started run whose requests a surface
  * answers with `nextDecision`.
  */
-const setUp = (config: Record<string, unknown> = {}) =>
+const setUp = () =>
   Effect.gen(function* () {
     nextDecision = () => ({ action: 'approve' });
-    yield* Layer.build(
-      FakeHost.layer({ workspacePath: WORKSPACE_PATH, config }),
-    );
+    yield* Layer.build(FakeHost.layer({ workspacePath: WORKSPACE_PATH }));
     session = yield* Effect.flatMap(
       TestSession.open(undefined, { host: {} }),
       sessionHandleOf,
@@ -204,9 +203,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
       }),
     );
 
-    it.effect('lets never override a disabled approval setting', () =>
+    it.effect('denies an edit under never, and tells the host', () =>
       Effect.gen(function* () {
-        yield* setUp({ 'toolUse.requireEditApproval': false });
+        yield* setUp();
         setTestApprovalPolicy('never', Context.get(session, SessionRoots));
 
         const write = stubWorkspaceFile('denied.txt', {
@@ -248,7 +247,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               timeoutMessage: 'Timed out waiting for the edit to be opened',
             }),
           );
-          const opened = openedEdits()[0]!;
+          const opened = openedEdits()[0];
           const address =
             opened.payload.kind === 'toolEdit'
               ? opened.payload.data.content
@@ -261,13 +260,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           const content: unknown = JSON.parse(stored);
           assert.ok(typeof content === 'object' && content !== null);
           assert.strictEqual(
-            (content as { originalContent?: unknown }).originalContent,
+            Reflect.get(content, 'originalContent'),
             'alpha\n',
           );
-          assert.strictEqual(
-            (content as { proposedContent?: unknown }).proposedContent,
-            'beta\n',
-          );
+          assert.strictEqual(Reflect.get(content, 'proposedContent'), 'beta\n');
           // The door a surface reads the diff through answers from the store,
           // for a request its view lists: the log's tail above can see the
           // row before the view applies it.

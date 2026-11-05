@@ -107,7 +107,13 @@ export {
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
-export { buildDiffHunks, type DiffHunks } from '@tools/unifiedDiff';
+export {
+  buildDiffHunks,
+  countLineChanges,
+  reportDiffTimeout,
+  type DiffHunks,
+  type Hunk,
+} from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 // Which side of a trace event a run wrote.
 export type { TraceArm } from '@shared/session/agentEvent';
@@ -223,15 +229,12 @@ export {
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
 // Failures as hosts and plugins read them: the agent error, predicates, cause
-// chain, abort, and a failure's message with its classification
-// (`toErrorMessage` is in `./schemas`).
+// chain, and a failure's message with its classification (`toErrorMessage`
+// is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
 export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
-export {
-  isModuleNotFoundError,
-  isUserAbort,
-} from '@common/errors/errorPredicates';
+export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { isNotADirectoryError } from '@utils/files/fsEntryExists';
 export { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 // Platform path containment, segments, POSIX form, case-free extension check.
