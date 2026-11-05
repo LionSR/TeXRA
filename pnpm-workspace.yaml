@@ -46,8 +46,8 @@ catalog:
   turndown-plugin-gfm: '^1.0.2'
   typescript: 'npm:@typescript/typescript6@^6.0.2'
   undici: '^8.12.3'
-  which: '^5.0.0'
-  write-file-atomic: '^7.0.1'
+  which: '^7.0.0'
+  write-file-atomic: '^8.0.0'
   yaml: '^2.9.1'
 # The ranges the published packages (`@texra-ai/harness`, `@texra-ai/llm`)
 # declare as peers: the consumer's one install supplies a single coherent
