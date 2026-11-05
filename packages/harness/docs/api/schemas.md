@@ -172,6 +172,26 @@ type AgentProposalPermission =
   (typeof AgentProposalPermissionSchema)['Type'];
 ```
 
+## AgentRunListingEntry
+
+A run a person started, as a history list shows it.
+
+```ts
+type AgentRunListingEntry = typeof AgentRunListingEntrySchema.Type;
+```
+
+## AgentRunListingEntrySchema
+
+A run a person started themselves, as a history list shows it: an agent
+run with no parent, with its record. Background processes and scripts
+(`identity.kind`) and the runs an agent spawned, which belong to their
+parent's transcript, are not listed; a lookup by explicit id reads the
+run's records instead.
+
+```ts
+const AgentRunListingEntrySchema: Struct<{ readonly id: brand<String, "RunId">; readonly timestamp: String; readonly outcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly paused: optional<Literal<true>>; readonly description: optional<String>; readonly model: optional<String>; readonly resumable: Boolean; readonly resumeBlocked: optional<String>; readonly identity: Struct<{ readonly kind: Literal<"agent">; readonly agent: String; readonly tool: optional<String>; }>; readonly record: Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>; }>
+```
+
 ## AgentScanIssue
 
 ```ts
@@ -1704,6 +1724,8 @@ type ResponseCut = typeof ResponseCutSchema.Type;
 
 ## ResultMeta
 
+What a producer recorded beside a run's terminal fact.
+
 ```ts
 type ResultMeta = typeof ResultMetaSchema.Type;
 ```
@@ -1896,6 +1918,12 @@ type RunLifecycleStatus = RunPhase | typeof RUN_LIFECYCLE_READY;
 type RunOutcome = typeof RunOutcomeSchema.Type;
 ```
 
+## RunOutcomeSchema
+
+```ts
+const RunOutcomeSchema: Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>
+```
+
 ## RunPhase
 
 ```ts
@@ -1920,6 +1948,24 @@ Inputs have already passed launch validation; persisted records are canonical.
 
 ```ts
 const RunRecordFieldsSchema: Union<readonly [Struct<{ readonly name: String; readonly instruction: String; readonly workingDirectory: optional<String>; readonly model: optional<String>; }>, Struct<{ readonly editedFile: withDecodingDefault<NullOr<String>, never>; readonly inputFiles: withDecodingDefault<$Array<String>, never>; readonly contextFiles: withDecodingDefault<$Array<String>, never>; readonly mediaFiles: withDecodingDefault<$Array<String>, never>; readonly outputFiles: withDecodingDefault<$Array<String>, never>; readonly agent: withDecodingDefault<String, never>; readonly agentSource: optional<NullOr<Enum<{ readonly CUSTOM: "custom"; readonly BUILT_IN: "builtIn"; readonly PLUGIN: "plugin"; readonly INLINE: "inline"; }>>>; readonly persona: optional<NullOr<Struct<{ readonly description: optional<String>; readonly name: Trim; readonly prompt: optional<String>; readonly temperature: optional<Number>; readonly tools: optional<$Array<String>>; }>>>; readonly asCaller: optional<NullOr<Boolean>>; readonly model: withDecodingDefault<String, never>; readonly instruction: withDecodingDefault<String, never>; readonly rootUserInstruction: optional<NullOr<String>>; readonly displayInstruction: optional<NullOr<String>>; readonly memories: withDecodingDefault<$Array<String>, never>; readonly workingDirectory: optional<NullOr<String>>; readonly cli: optional<NullOr<Struct<{ readonly outputFile: optional<NullOr<String>>; readonly outputDirectory: optional<NullOr<String>>; readonly expectedOutputFiles: optional<NullOr<$Array<String>>>; readonly teamId: optional<NullOr<String>>; }>>>; readonly delegationAgentScope: optional<NullOr<$Array<Trim>>>; readonly outputSchema: optional<NullOr<$Record<String, Unknown>>>; readonly script: optional<NullOr<Union<readonly [Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"background">; }>, Struct<{ readonly code: String; readonly title: String; readonly tools: $Array<String>; readonly timeoutMs: optional<NullOr<Int>>; readonly kind: Literal<"recipe">; readonly block: String; readonly options: $Record<String, Codec<Json, Json, never, never>>; }>]>>>; }>]>
+```
+
+## RunResult
+
+One run's result as `readResult` answers it.
+
+```ts
+type RunResult = typeof RunResultSchema.Type;
+```
+
+## RunResultSchema
+
+One run's result as `readResult` answers it: its terminal fact with the
+output its delivery reported, the terminal fields absent while the run
+has not ended, or a background command's own record.
+
+```ts
+const RunResultSchema: Union<readonly [Struct<{ readonly producer: Literal<"backgroundBash">; readonly exitCode: optional<Int>; readonly wallTimeMs: Number; readonly success: Boolean; readonly timedOut: optional<Boolean>; readonly command: String; }>, Struct<{ readonly reason: optional<Literals<readonly ["user", "shutdown"]>>; readonly error: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["disk-full", "result-lost", "unexpected"]>; readonly message: String; }>, Struct<{ readonly message: String; readonly statusCode: optional<Int>; readonly statusText: optional<String>; readonly provider: optional<String>; readonly classification: optional<Union<readonly [Struct<{ readonly kind: Literals<readonly ["missing-api-key", "context-window", "upstream-credit"]>; }>, Struct<{ readonly kind: Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription"]>; readonly planType: optional<String>; readonly resetsInMs: optional<Int>; }>, Struct<{ readonly kind: Literal<"subscription-session">; readonly route: Literals<readonly ["chatgpt-subscription", "xai-subscription"]>; readonly needsReauth: Boolean; readonly sessionError: String; }>]>>; readonly requestId: optional<String>; readonly partialText: optional<String>; readonly kind: Literal<"model">; }>]>>; readonly usage: optional<Struct<{ readonly firstInputTokens: Int; readonly totalInputTokens: Int; readonly totalOutputTokens: Int; readonly totalCost: Number; readonly totalCachedInputTokens: Int; readonly totalCacheMissInputTokens: Int; readonly totalCacheWriteTokens: Int; readonly totalReasoningTokens: Int; readonly totalToolUsePromptTokens: Int; }>>; readonly output: Struct<{ readonly response: String; readonly files: $Array<String>; readonly structured: optional<Codec<Json, Json, never, never>>; }>; readonly outcome: optional<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; }>]>
 ```
 
 ## RunStatusKey
@@ -1980,6 +2026,30 @@ type RunView = ReadonlyDeep<
     ? Run
     : never
 >;
+```
+
+## RunViewSchema
+
+One run as every renderer reads it; `SessionView.runs` holds them.
+
+```ts
+const RunViewSchema: Struct<{ readonly id: brand<String, "RunId">; readonly identity: Union<readonly [Struct<{ readonly kind: Literal<"agent">; readonly agent: String; readonly tool: optional<String>; }>, Struct<{ readonly kind: Literal<"process">; readonly tool: String; }>, Struct<{ readonly kind: Literal<"script">; readonly title: String; }>]>; readonly ownerId: NullOr<String>; readonly ownedHere: Boolean; readonly label: String; readonly description: NullOr<String>; readonly descriptionBy: NullOr<Literals<readonly ["model", "user"]>>; readonly title: String; readonly model: NullOr<String>; readonly modelLabel: NullOr<String>; readonly command: NullOr<String>; readonly inputFiles: $Array<String>; readonly agentScope: optional<NullOr<$Array<String>>>; readonly facts: $Record<String, Codec<Json, Json, never, never>>; readonly worktree: NullOr<Struct<{ readonly workingDirectory: String; }>>; readonly status: Union<readonly [Enum<{ readonly RUNNING: "running"; readonly WAITING: "waiting"; readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>, Literal<"ready">]>; readonly substate: NullOr<Enum<{ readonly STARTING: "starting"; readonly RESUMING: "resuming"; readonly PAUSED: "paused"; readonly RESULT_WAITING: "resultWaiting"; }>>; readonly durableOutcome: NullOr<Enum<{ readonly COMPLETED: "completed"; readonly CANCELLED: "cancelled"; readonly FAILED: "failed"; }>>; readonly output: NullOr<Struct<{ readonly response: String; readonly files: $Array<String>; readonly structured: optional<Codec<Json, Json, never, never>>; }>>; readonly statusNotice: NullOr<Union<readonly [Struct<{ readonly kind: Literals<readonly ["damaged", "earlierBuild"]>; }>, Struct<{ readonly kind: Literal<"interrupted">; }>, Struct<{ readonly kind: Literal<"held">; readonly pid: Int; }>, Struct<{ readonly kind: Literal<"lost">; readonly message: String; }>]>>; readonly lost: NullOr<String>; readonly statusKey: Literals<["completed" | "cancelled" | "failed" | "paused" | "waiting" | "running" | "ready" | "starting" | "resuming" | "resultWaiting" | "interrupted" | "waitingOnUser", ...("completed" | "cancelled" | "failed" | "paused" | "waiting" | "running" | "ready" | "starting" | "resuming" | "resultWaiting" | "interrupted" | "waitingOnUser")[]]>; readonly tone: Enum<{ readonly RUNNING: "running"; readonly SUCCESS: "success"; readonly DANGER: "danger"; readonly NEUTRAL: "neutral"; readonly WARNING: "warning"; }>; readonly createdAt: Int; readonly launchedAt: Int; readonly turnStartedAt: NullOr<Int>; readonly runStartedAt: NullOr<Int>; readonly working: Boolean; readonly lastTimestamp: Number; readonly turn: NullOr<Int>; readonly followUpSupport: Enum<{ readonly UNSUPPORTED: "unsupported"; readonly NATIVE_INTERACTIVE: "nativeInteractive"; readonly TERMINAL_BACKED: "terminalBacked"; }>; readonly context: NullOr<Struct<{ readonly inputTokens: Int; readonly contextWindow: Int; readonly utilizationPercent: Number; }>>; readonly parentId: NullOr<brand<String, "RunId">>; readonly launchParentId: NullOr<brand<String, "RunId">>; readonly forkedFrom: NullOr<Struct<{ readonly id: brand<String, "RunId">; readonly at: Int; }>>; readonly forkPoint: NullOr<Int>; readonly parentCard: NullOr<String>; readonly ancestors: $Array<Struct<{ readonly id: brand<String, "RunId">; readonly label: String; }>>; readonly childIds: $Array<brand<String, "RunId">>; readonly rollup: Struct<{ readonly total: Int; readonly running: Int; readonly finished: Int; }>; readonly approval: Literals<readonly ["none", "own", "descendant"]>; readonly readOnly: Boolean; readonly actions: $Array<Literals<readonly ["stop", "grant", "compact", "resume", "runAgain", "fork", "files", "delete", "rename", "openRunStorage", "export", "copy"]>>; readonly forceExpanded: Boolean; readonly group: Literals<readonly ["running", "waiting", "interrupted", "recent"]>; readonly usage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>; readonly treeUsage: Struct<{ readonly inputTokens: Int; readonly outputTokens: Int; readonly cost: Number; readonly cachedInputTokens: optional<Int>; readonly cacheMissInputTokens: optional<Int>; readonly cacheWriteTokens: optional<Int>; readonly reasoningTokens: optional<Int>; readonly toolUsePromptTokens: optional<Int>; readonly usageRoute: optional<Literals<readonly ["chatgpt-subscription", "xai-subscription", "kimi-code-subscription", "glm-coding-plan-subscription", "api-key"]>>; readonly usagePlan: optional<String>; }>; readonly thinkingActive: Boolean; readonly compactingActive: Boolean; readonly latestLine: NullOr<String>; readonly transcript: Struct<{ readonly rows: $Array<declare<TranscriptRow, TranscriptRow>>; readonly taskGroups: $Array<Struct<{ readonly id: String; readonly name: String; readonly startTime: Number; readonly endTime: optional<Number>; readonly status: Literals<readonly ["running", "completed", "cancelled", "failed"]>; readonly parentGroupId: optional<String>; readonly kind: optional<Literals<readonly ["run", "session", "script"]>>; }>>; readonly settledRows: Int; }>; readonly recipe: NullOr<String>; }>
+```
+
+## RunWorkspaceFile
+
+A workspace file a run edited, as it stands now.
+
+```ts
+type RunWorkspaceFile = typeof RunWorkspaceFileSchema.Type;
+```
+
+## RunWorkspaceFileSchema
+
+A workspace file a run edited, as it stands now.
+
+```ts
+const RunWorkspaceFileSchema: Struct<{ readonly path: String; readonly size: Int; readonly isDirectory: Boolean; }>
 ```
 
 ## ScriptDeliverySummary

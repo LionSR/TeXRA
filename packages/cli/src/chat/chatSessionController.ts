@@ -208,8 +208,8 @@ export interface ChatSessionControllerInit {
   /** The chat is a client of the background service, whose view also holds
    *  other terminals' conversations. */
   readonly served: boolean;
-  /** A run's records (its saved setup, whether it exists), read from this
-   *  process's store. */
+  /** A run's records (its saved setup, whether it exists), read where the
+   *  project's runs are held: this process's store, or the service's. */
   readonly records: (runId: RunId) => ChatRunRecords;
 
   /** The chat session's {@link CliContext}: the controller attaches one

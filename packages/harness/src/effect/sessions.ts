@@ -11,11 +11,11 @@ import type {
   HostInteractions,
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
-import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentPlatform } from '@platform/agentPlatform';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
+  AgentRunListingEntry,
   CommitOrdinal,
   DisplaySessionEvent,
   SessionViewInput,

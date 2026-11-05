@@ -36,28 +36,30 @@ import {
   JsonStore,
   setLogSink,
 } from '@texra-ai/harness/node';
-import {
-  ensureError,
-  ownerIdentity,
-  type OwnerId,
-} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
-import type { ServiceInfo } from '@texra/controllers/server/protocol';
+import {
+  BUILD_VERSION,
+  PROTOCOL,
+  type ServiceInfo,
+} from '@texra/controllers/server/protocol';
 import type {
   ServiceProject,
   ServiceProjects,
 } from '@texra/controllers/server/handlers';
 import {
   ensureService,
+  isOlder,
   linkService,
   probeRecordedService,
   spawnService,
   type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
+  WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -302,21 +304,67 @@ function withCliService<A>(
   );
 }
 
+/** What the link's starter says instead of starting a service. */
+const NONE_RUNNING = 'no TeXRA service is running';
+
 /**
- * Whether `owner`, the holder of a run's claim, is the storage root's
- * running service: a chat continues such a run through the service rather
- * than refusing it as held by another process. A service that cannot be
- * asked (wedged, or its record unreadable) fails: the caller says why
- * instead of naming the holder as some other process.
+ * The storage root's running service of this build's protocol, linked for
+ * the caller's scope, or undefined when there is none to link:
+ * `TEXRA_NO_SERVICE`, Windows, no service running, or an older build's
+ * service, which a command leaves running (the chat retires and replaces
+ * it; a command never starts or stops one). A service that is there but
+ * cannot be linked (a newer build's, an unreadable record, one that does not
+ * answer) fails, so no command works beside it on the project's store.
  */
-export const heldByService = Effect.fn('heldByService')(function* (
-  owner: OwnerId,
-): Effect.fn.Return<boolean, ServiceUnavailable, GlobalValues> {
-  if (yield* envFlag(NO_SERVICE)) return false;
-  const info = yield* probeCliService;
-  if (info === null) return false;
-  // It answered on this machine's socket; a recorded hostname may be stale.
-  return ownerIdentity(owner).pid === info.pid;
+export const linkRunningCliService = Effect.fn('linkRunningCliService')(
+  function* (
+    storageRoot: string,
+  ): Effect.fn.Return<
+    ServiceLink | undefined,
+    Error,
+    Scope.Scope | GlobalValues
+  > {
+    if (yield* envFlag(NO_SERVICE)) return undefined;
+    if (process.platform === 'win32') return undefined;
+    const info = yield* probeRecordedService.pipe(
+      Effect.mapError(
+        (error) =>
+          new Error(`The TeXRA service could not be reached: ${error.reason}`),
+      ),
+    );
+    if (info === null || isOlder(info)) return undefined;
+    if (info.protocol > PROTOCOL.version)
+      return yield* Effect.fail(
+        new Error(
+          `A newer TeXRA (${info.version}, pid ${info.pid}) serves this storage root; this build (${BUILD_VERSION}) cannot work beside it.`,
+        ),
+      );
+    return yield* linkService(
+      storageRoot,
+      Effect.fail(new Error(NONE_RUNNING)),
+    ).pipe(
+      Effect.mapError(
+        (error) =>
+          new Error(`The TeXRA service could not be reached: ${error.reason}`),
+      ),
+    );
+  },
+);
+
+/**
+ * Start the storage root's service when none answers, and leave it
+ * running: what the chat and `texra resume` do before the platform comes
+ * up, so the platform links to it ({@link linkRunningCliService}). Answers
+ * null, or why this process uses none (`TEXRA_NO_SERVICE`, Windows), which
+ * the caller says once; a service that cannot start fails with its reason.
+ */
+export const startCliService = Effect.fn('startCliService')(function* (
+  storageRoot: string,
+): Effect.fn.Return<string | null, Error, GlobalValues> {
+  if (yield* envFlag(NO_SERVICE)) return `${NO_SERVICE} is set`;
+  if (process.platform === 'win32') return WINDOWS_UNSUPPORTED;
+  yield* Effect.scoped(reachCliService(storageRoot));
+  return null;
 });
 
 /** {@link reachCliService} for a client command, whose process prints only

@@ -2199,11 +2199,7 @@ interface RuntimePresentationEventPayloads {
 A workspace file a run edited, as it stands now.
 
 ```ts
-interface RunWorkspaceFile {
-  readonly path: string;
-  readonly size: number;
-  readonly isDirectory: boolean;
-}
+type RunWorkspaceFile = typeof RunWorkspaceFileSchema.Type;
 ```
 
 ## Secrets

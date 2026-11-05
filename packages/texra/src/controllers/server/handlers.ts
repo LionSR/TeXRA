@@ -58,7 +58,7 @@ import {
 } from './protocol';
 
 import { HostWindows } from './hostWindows';
-import { listTasks } from './taskList';
+import { listTasks, runLaunchFacts } from './taskList';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 /** A project the service serves: its session, as every host drives it. */
@@ -406,6 +406,51 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'task.exportTrace': ({ workspace, runId }) =>
         records(workspace, runId, (session) =>
           session.records(runId).readTrace(),
+        ),
+      'tasks.history': ({ workspace }) =>
+        Effect.scoped(
+          Effect.flatMap(open(workspace), ({ session }) =>
+            session
+              .listRuns()
+              .pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              ),
+          ),
+        ),
+      'task.detail': ({ workspace, runId }) =>
+        records(workspace, runId, (session) => {
+          const stored = session.records(runId);
+          return Effect.all(
+            {
+              run: Effect.map(session.view.read([runId]), (view) =>
+                runLaunchFacts(view.runs.get(runId)),
+              ),
+              result: stored.readResult(),
+              report: stored.readReport(),
+              conversation: stored.readConversation(),
+              workspaceFiles: stored.readWorkspaceFiles(),
+              resumable: stored.readResumable(),
+            },
+            { concurrency: 5 },
+          );
+        }),
+      'task.skills': ({ workspace, runId }) =>
+        records(workspace, runId, (session) =>
+          session.records(runId).readSkills(),
+        ),
+      'tasks.delete': ({ workspace, target }) =>
+        Effect.scoped(
+          Effect.flatMap(open(workspace), ({ session }) =>
+            session
+              .deleteRuns(target)
+              .pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              ),
+          ),
         ),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(

@@ -6,6 +6,21 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The CLI is a client of the service, like the windows.** While the TeXRA
+  service holds a project, a `texra` command in that folder reads the
+  project's settings and stored tasks through it and opens no store of its
+  own: `texra history list/show/export/delete`, `texra resume`, the chat's
+  `/resume` and `/status`. The chat starts the service before its platform
+  comes up, links to it once instead of opening the project's store beside
+  it, and starts it again if it goes away. `texra run`, `-p` and
+  `--output-format ndjson` still run in their own process. `texra history
+  delete --all` asks for `--yes` without counting first. The service answers
+  four more procedures (`tasks.history`, `task.detail`, `task.skills`,
+  `tasks.delete`; protocol bump), and `texra resume` no longer names the
+  pid of a process that holds a task: a resume the service refuses says why
+  at the click, as every refusal does.
+  SDK: `AgentRunListingEntry`, `RunResult` and `RunWorkspaceFile` are
+  schemas (`@texra-ai/harness/schemas`), their types unchanged.
 - **A stored row reads at its kind's version.** The session store converts
   no row: one at a lower version than its kind's is an earlier build's (its
   task listed as unreadable, as before), one at a higher version refuses the
