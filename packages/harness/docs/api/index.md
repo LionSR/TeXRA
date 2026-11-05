@@ -48,7 +48,8 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
+  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | StreamChunkEvent;
 ```
 
 ## AgentNotFound
@@ -985,7 +986,9 @@ failed, or it is open over the other store.
 
 ```ts
 type SessionOpenError =
-  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
+  | DatabaseOpenFailed
+  | DatabaseReadFailed
+  | SessionOptionsConflict;
 ```
 
 ## SessionOptionsConflict

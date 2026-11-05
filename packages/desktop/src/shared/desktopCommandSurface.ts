@@ -80,7 +80,9 @@ type DesktopMenuCommandId = (typeof DESKTOP_MENU_GROUPS)[number][number];
 type DesktopFileCommandId = (typeof DESKTOP_FILE_COMMANDS)[number];
 type DesktopHelpCommandId = (typeof DESKTOP_HELP_COMMANDS)[number];
 export type DesktopCommandId =
-  DesktopFileCommandId | DesktopMenuCommandId | DesktopHelpCommandId;
+  | DesktopFileCommandId
+  | DesktopMenuCommandId
+  | DesktopHelpCommandId;
 
 const DESKTOP_COMMAND_IDS: readonly DesktopCommandId[] = [
   ...DESKTOP_FILE_COMMANDS,

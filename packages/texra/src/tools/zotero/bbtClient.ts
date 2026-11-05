@@ -329,7 +329,8 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
 // ============================================================================
 
 export type ConnectorResult =
-  { status: 'success' } | { status: 'error'; message: string };
+  | { status: 'success' }
+  | { status: 'error'; message: string };
 
 /**
  * Check that Zotero is running by pinging the connector. Fails with a

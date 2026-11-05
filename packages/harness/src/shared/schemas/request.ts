@@ -189,7 +189,8 @@ const OWN_ANSWERS = {
 /** What names the answers a request takes: one of the harness's own kinds,
  *  or a plugin's request with the answers it declared. */
 type AnswerSource =
-  { readonly kind: OwnKind } | Pick<PluginRequest, 'kind' | 'answers'>;
+  | { readonly kind: OwnKind }
+  | Pick<PluginRequest, 'kind' | 'answers'>;
 
 /** The decisions a request of kind `K` takes: its own actions and the three
  *  refusals. A plugin's request declares its actions on its row, so its

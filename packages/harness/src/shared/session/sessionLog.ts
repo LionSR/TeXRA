@@ -36,7 +36,8 @@ export type StreamClosure = Extract<RunHistoryDraft, { type: 'stream.end' }>;
 /** The facts that close a run's open work: its streams, and with an
  *  outcome its stages too. */
 export type ClosureFact =
-  StreamClosure | Extract<SessionEventDraft, { type: 'stage.end' }>;
+  | StreamClosure
+  | Extract<SessionEventDraft, { type: 'stage.end' }>;
 
 /** A write the store refused: nothing was written. */
 export type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;

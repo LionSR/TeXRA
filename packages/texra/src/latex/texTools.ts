@@ -159,7 +159,8 @@ function buildLatexSearchParts(input: {
  * rule.
  */
 export type CompileLatex2PdfResult =
-  { ok: true; pdfPath: string } | { ok: false; logTail: string };
+  | { ok: true; pdfPath: string }
+  | { ok: false; logTail: string };
 
 /**
  * Compile a LaTeX file to PDF.
