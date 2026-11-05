@@ -11,11 +11,11 @@ import { causeChain, isModuleNotFoundError } from '@texra-ai/harness/host';
 import { runsInWsl } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { ToolProbeFailed } from '@texra-ai/harness/plugins';
+import { hasPackageManager } from '@texra/utils/system/toolChecks';
 import {
-  hasPackageManager,
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
-} from '@texra/utils/system/toolChecks';
+} from '@texra/shared/constants/latexToolchain';
 
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
