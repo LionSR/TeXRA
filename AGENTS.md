@@ -121,16 +121,14 @@ and harness, app and llm import no host layer. oxlint (`.oxlintrc.json`,
   the runtime entries named in its overrides; the SDK's entry files run
   nothing;
 - `new AbortController()` outside its one permanent resident;
-- in the core (`CORE_QUALITY_DIRS`), `new Promise`, `.then(`, `!` and an
-  asserted object literal. A lint disable comment in the core fails
-  `check:core-quality`.
+- in the harness and llm cores, `new Promise`, `.then(`, `!` and an
+  asserted object literal.
 
 A later override in `.oxlintrc.json` replaces an earlier one's options for a
 rule, so each import block restates every pattern that holds for its files.
 
-The core-quality counts are held against the merge base by
-`npm run check:core-quality` (`packages/harness/AGENTS.md` "Core quality").
-oxlint holds the VS Code-free zones, the host-layer, harness-no-app,
+`npm run docgen` keeps the core's public-surface reports current
+(`packages/harness/AGENTS.md` "Core quality"). oxlint holds the VS Code-free zones, the host-layer, harness-no-app,
 browser-bundle and llm import rules, and the core syntax bans. The other boundaries (no deep import
 of harness internals from the app or a host, no `@shared/schemas/<leaf>`
 import, one owner per fact) are conventions with no mechanical check; there
@@ -335,10 +333,9 @@ Decode with `{ errors: 'all' }`. Union branches and defaults:
   Reduce change amplification, cognitive load and unknown unknowns before
   adding features, and aim for the structure you would have designed with the
   change in mind. Deep modules: a small interface over much behavior, with
-  each entry exporting what its consumer writes against (`shallow-modules`,
-  `wide-records`, the API reports). Different layer, different abstraction:
-  no method or module that only forwards (`pass-through`). Those three rules
-  hold everywhere, the core's rows and the `-outside-core` rows apart. One
+  each entry exporting what its consumer writes against (the API reports
+  show it). Different layer, different abstraction: no method or module that
+  only forwards. Those rules hold in every package, not only the core. One
   owner per fact and decision; a general core that takes
   the app's vocabulary as data; complexity pulled down into the module that
   owns it; errors defined out of existence by the shape of an operation, never

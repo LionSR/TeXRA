@@ -129,8 +129,8 @@ jobs:
         env:
           TEXRA_RATCHET_BASE: origin/${{ github.base_ref || 'main' }}
         run: |
-          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (the
-          # core-quality counts, fact spread and row-kind list) judge this
+          # Checkout is shallow. The checks that read TEXRA_RATCHET_BASE (fact
+          # spread and the row-kind list) judge this
           # tree against its merge base with the target: fetch the target tip
           # if it is missing, then deepen the target and HEAD until git finds
           # the merge base. The checks fail loudly if it still cannot.
