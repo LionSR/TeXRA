@@ -4,9 +4,11 @@ import { Schema, SchemaGetter, Struct } from 'effect';
 import { normalizeFilePath } from '@utils/core';
 
 import { AgentConfigSchema } from './agentConfig';
+import { RunIdSchema } from './identifiers';
 import { JsonValueSchema } from './jsonValue';
 import { RetryErrorInfoSchema } from './errors';
 import { RunOutcomeSchema } from './run';
+import { RunIdentitySchema } from './runIdentity';
 import { RunUsageTotalsSchema } from './usage';
 
 export const NonAgentRunRecordSchema = Schema.Struct({
@@ -131,7 +133,65 @@ export const ResultMetaSchema = Schema.Union([
     output: RunEndOutputSchema,
   }),
 ]);
+/** What a producer recorded beside a run's terminal fact. */
 export type ResultMeta = typeof ResultMetaSchema.Type;
+
+/**
+ * One run's result as `readResult` answers it: its terminal fact with the
+ * output its delivery reported, the terminal fields absent while the run
+ * has not ended, or a background command's own record.
+ */
+export const RunResultSchema = Schema.Union([
+  ResultMetaSchema.members[0],
+  RunEndSchema.mapFields(
+    Struct.assign({ outcome: Schema.optional(RunOutcomeSchema) }),
+  ),
+]);
+/** One run's result as `readResult` answers it. */
+export type RunResult = typeof RunResultSchema.Type;
+
+/** A workspace file a run edited, as it stands now. */
+export const RunWorkspaceFileSchema = Schema.Struct({
+  path: Schema.String,
+  size: Schema.Int,
+  isDirectory: Schema.Boolean,
+});
+/** A workspace file a run edited, as it stands now. */
+export type RunWorkspaceFile = typeof RunWorkspaceFileSchema.Type;
+
+/**
+ * A run a person started themselves, as a history list shows it: an agent
+ * run with no parent, with its record. Background processes and scripts
+ * (`identity.kind`) and the runs an agent spawned, which belong to their
+ * parent's transcript, are not listed; a lookup by explicit id reads the
+ * run's records instead.
+ */
+export const AgentRunListingEntrySchema = Schema.Struct({
+  id: RunIdSchema,
+  timestamp: Schema.String,
+  /** The run's durable outcome (its `run.end`), null while none has landed. */
+  outcome: Schema.NullOr(RunOutcomeSchema),
+  /** A stop rested the run (the fold's paused substate), a status of its own. */
+  paused: Schema.optional(Schema.Literal(true)),
+  /** AI-generated summary of what the session aimed to accomplish. */
+  description: Schema.optional(Schema.String),
+  /** The model the run is on, as the view folds it: its newest
+   *  `run.config`'s. */
+  model: Schema.optional(Schema.String),
+  /** `deriveResumability` finds a point to continue from. Ownership and
+   *  loadability are settled when the run is opened. */
+  resumable: Schema.Boolean,
+  /** Why the run cannot resume in this build although it may have rows to
+   *  continue from: they could not be read, an earlier build wrote them, or
+   *  they hold a fact of a plugin this process does not load. Absent when
+   *  it resumes or simply has nothing to continue from. */
+  resumeBlocked: Schema.optional(Schema.String),
+  /** What the run is: the durable authority, stamped at registration. */
+  identity: RunIdentitySchema.members[0],
+  record: AgentConfigSchema,
+});
+/** A run a person started, as a history list shows it. */
+export type AgentRunListingEntry = typeof AgentRunListingEntrySchema.Type;
 
 /** Canonical workspace paths at the record boundary. */
 export const RunWorkspaceFilesSchema = Schema.Array(Schema.String).pipe(

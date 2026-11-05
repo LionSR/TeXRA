@@ -24,6 +24,13 @@ import { teamMembers } from '@texra/shared/agentTeams';
 import type { SetupPlatformShape } from '@texra/tools/setup/platform';
 import type { SecretsFailed } from '@texra-ai/llm';
 
+// The worker's temp home and the directories made in it, kept on the
+// global object so a suite that resets its module registry finds them.
+declare global {
+  var __texraFakeHome__: string | undefined;
+  var __texraFakeDirs__: Set<string> | undefined;
+}
+
 /**
  * One real temporary directory per worker process, holding both the fake
  * filesystem root and the shared global-storage directory. Cached on
@@ -39,14 +46,10 @@ import type { SecretsFailed } from '@texra-ai/llm';
  * against.
  */
 function workerTempHome(): string {
-  const globals = globalThis as { __texraFakeHome__?: string };
-  if (globals.__texraFakeHome__ === undefined) {
-    const home = realpathSync(
-      mkdtempSync(path.join(os.tmpdir(), 'texra-fake-')),
-    );
-    globals.__texraFakeHome__ = home;
-  }
-  return globals.__texraFakeHome__;
+  globalThis.__texraFakeHome__ ??= realpathSync(
+    mkdtempSync(path.join(os.tmpdir(), 'texra-fake-')),
+  );
+  return globalThis.__texraFakeHome__;
 }
 
 /**
@@ -56,9 +59,8 @@ function workerTempHome(): string {
  * free of process-wide side effects, so the pure test tier can reach it.
  */
 function workerDir(name: string): string {
-  const globals = globalThis as { __texraFakeDirs__?: Set<string> };
   const dir = path.join(workerTempHome(), name);
-  const created = (globals.__texraFakeDirs__ ??= new Set<string>());
+  const created = (globalThis.__texraFakeDirs__ ??= new Set<string>());
   if (!created.has(dir)) {
     mkdirSync(dir, { recursive: true });
     created.add(dir);

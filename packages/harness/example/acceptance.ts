@@ -39,7 +39,11 @@ import {
   harnessBuiltins,
   type Plugin,
 } from '@texra-ai/harness/plugins';
-import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
+import {
+  qualifyAggregateId,
+  RunIdSchema,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { API_KEY_PROVIDER_IDS, apiKeyEnvName } from '@texra-ai/llm';
 import { acmeNotes, agentsDir as notesAgents, NoteSchema } from 'acme-notes';
 
@@ -188,7 +192,13 @@ const codemode = (dir: string) =>
       const completed = children.filter(
         (child) => child.durableOutcome === 'completed',
       ).length;
-      const returned = scriptReturnsOf(evidence.conversation).at(-1);
+      // The object the task asked for: a later script that only checks
+      // something (a query, a listing, the count alone) does not replace it.
+      const returned = scriptReturnsOf(evidence.conversation).findLast(
+        (value) =>
+          has(value, 'completedChildren') &&
+          TITLES.some((title) => has(value, title)),
+      );
       // Each finished round's structured verdict, as its run ended with it.
       const verdicts: unknown[] = [];
       for (const child of children)
@@ -437,19 +447,36 @@ const crashResume = (dir: string) =>
       child.stdout.resume();
 
       // Kill once a `self()` child's result is committed and the script
-      // waits on the sign-off, which never resolves in that process.
+      // waits on the sign-off, which never resolves in that process. Only
+      // the run's own latest script counts: the model may try the functions
+      // out in earlier ones, its calls run one script at a time, and a
+      // round's child may run scripts of its own.
+      const own = qualifyAggregateId('run', runId);
+      let script: string | null = null;
       const selfCards = new Set<string>();
-      let selfEnded = false;
+      let selfEnded = 0;
       let signoffStarted = false;
       const killPoint = yield* Stream.runHead(
         Stream.filter(session.view.events(from), (event) => {
+          if (event.aggregateId !== own) return false;
+          if (event.type === 'tool.start' && event.toolName === 'script') {
+            script = event.logId;
+            selfCards.clear();
+            selfEnded = 0;
+            signoffStarted = false;
+          }
           if (event.type === 'tool.start' && event.toolName === 'self')
             selfCards.add(event.logId);
-          if (event.type === 'tool.end' && selfCards.has(event.logId))
-            selfEnded = true;
+          // A `self()` call that failed (its input refused) committed no round.
+          if (
+            event.type === 'tool.end' &&
+            selfCards.has(event.logId) &&
+            event.status === 'completed'
+          )
+            selfEnded += 1;
           if (event.type === 'tool.start' && event.toolName === 'await_signoff')
             signoffStarted = true;
-          return selfEnded && signoffStarted;
+          return selfEnded > 0 && signoffStarted;
         }),
       ).pipe(
         // The other process may end first: its run failed or finished.
@@ -469,7 +496,7 @@ const crashResume = (dir: string) =>
             check(
               'the script reached a committed self() result and a pending sign-off',
               false,
-              `self ended: ${selfEnded}, sign-off started: ${signoffStarted}, crash process ${signal === 'SIGKILL' ? 'killed at the time limit' : `exited first, its run ${evidence.end?.outcome ?? 'not ended'}${evidence.end?.error ? `: ${evidence.end.error.message}` : ''}`}`,
+              `self ended: ${selfEnded > 0}, sign-off started: ${signoffStarted}, crash process ${signal === 'SIGKILL' ? 'killed at the time limit' : `exited first, its run ${evidence.end?.outcome ?? 'not ended'}${evidence.end?.error ? `: ${evidence.end.error.message}` : ''}`}`,
             ),
           ],
           evidence,
@@ -507,16 +534,16 @@ const crashResume = (dir: string) =>
           .length;
         if (after === length) unchanged.push(id);
       }
-      const firstScript = evidence.calls.find((call) => call.tool === 'script');
+      const interrupted = evidence.calls.find((call) => call.id === script);
       return judged(
         session,
         runId,
         [
           check('killed by SIGKILL', signal === 'SIGKILL', signal),
           check(
-            'exactly one round was committed before the kill',
-            Option.isSome(finished) && before.size === 1,
-            before.size,
+            'the interrupted script committed exactly one round before the kill',
+            Option.isSome(finished) && selfEnded === 1,
+            selfEnded,
           ),
           check(
             'resumed run completed',
@@ -538,8 +565,8 @@ const crashResume = (dir: string) =>
           ),
           check(
             'the interrupted script finished from its saved source',
-            firstScript?.status === 'completed',
-            firstScript?.status,
+            interrupted?.status === 'completed',
+            interrupted?.status,
           ),
         ],
         evidence,

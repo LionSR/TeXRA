@@ -14,6 +14,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import {
   generateRunId,
   qualifyAggregateId,
+  RunIdSchema,
   type RunId,
   type SessionEvent,
   type SessionEventDraft,
@@ -97,6 +98,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
       }
       const committed = events.map(
         (event) =>
+          // cast: a committed draft is the event the log would return.
           ({
             ...event,
             seq: rows.length + 1,
@@ -108,6 +110,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
       rows.push(...committed);
       return Effect.succeed(committed);
     });
+  // cast: the fake log serves only what a follow-up reads.
   const log = {
     transact: <A, E>(
       work:
@@ -212,13 +215,14 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
           failed: { kind: 'notResumable' as const },
         });
       live.add(runId);
+      // cast: the fake resume commits at the first ordinal.
       return Deferred.succeed(answer, { activation: 1 as CommitOrdinal });
     });
   // cast: the fake view knows every run, with no fields.
   const view = { run: () => ({}) } as unknown as SessionViewAccess['Service'];
-  // cast: the fake log serves only what a wake and a launch read; the
-  // launch's opening never lands on this empty tail, so the fake decision
-  // answers it itself.
+  // The launch's opening never lands on this empty tail, so the fake
+  // decision answers it itself.
+  // cast: the fake log serves only what a wake and a launch read.
   const log = {
     records: () => Effect.succeed([]),
     owner: () => Effect.succeed({ ownerId: null, liveness: null }),
@@ -246,6 +250,7 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
     wake: () => {},
   });
   // The registry's records, but a generation `live` here as the case says.
+  // cast: Object.create keeps the registry's prototype, so it is one.
   const runs = Object.assign(Object.create(registry) as RunRegistry, {
     get: (runId: RunId) =>
       state === 'live' || live.has(runId)
@@ -256,6 +261,7 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
   const session = Context.make(Runs, runs).pipe(
     Context.add(SessionViewAccess, view),
     Context.add(SessionLog, log),
+    // cast: a follow-up only emits interactions.
     Context.add(Interactions, {
       emit: () => Effect.void,
     } as unknown as Interactions['Service']),
@@ -268,7 +274,7 @@ const user = (text: string) => ({ text, from: { kind: 'user' as const } });
 
 const childResult = (deliveryId: string) => ({
   text: 'child result',
-  from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+  from: { kind: 'run' as const, runId: RunIdSchema.make('c41dc41dc41d') },
   deliveryId,
 });
 

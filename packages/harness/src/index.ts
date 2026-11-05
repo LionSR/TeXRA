@@ -85,8 +85,7 @@ export type {
   RunDeletion,
   RunRecords,
 } from './effect/sessionReads.js';
-export type { RunResult } from '@agent/storage/runRecords';
-export type { AgentRunListingEntry } from '@agent/storage/runListing';
+export type { AgentRunListingEntry, RunResult } from '@shared/schemas';
 
 // A custom tool, passed to a run as `start({ tools })`.
 export { defineTool, type DefinedTool } from '@tools/core/definition';

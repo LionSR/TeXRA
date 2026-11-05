@@ -168,31 +168,41 @@ export function providerErrorOf(
 }
 
 /** The words of a full disk, wherever one is met. */
-export const DISK_FULL_MESSAGE =
+const DISK_FULL_MESSAGE =
   'No space left on device. Free up disk space and try again.';
 
-/** Any error's own words, for a failure no verdict names. */
-export const unexpectedMessage = (err: unknown): string =>
-  extractErrorMessage(err) ?? 'Provider request failed';
-
-/**
- * The model failure in `err`'s cause chain: as the run that ended on it
- * recorded it (`AgentError.failure`), else llm's verdict or the missing
- * route worded fresh.
- */
-export function modelFailureIn(err: unknown): ProviderError | undefined {
-  return findInCauseChain(err, (cause) => {
+/** What a failure is, decided once for every reader: a full disk (an
+ *  errno), the model failure in the cause chain (as the run that ended on it
+ *  recorded it, else llm's verdict or the missing route worded fresh), or
+ *  anything else in its own words. */
+export function failureIn(
+  err: unknown,
+):
+  | { readonly kind: 'disk-full'; readonly message: string }
+  | { readonly kind: 'model'; readonly failure: ProviderError }
+  | { readonly kind: 'unexpected'; readonly message: string } {
+  if (isDiskFullError(err))
+    return { kind: 'disk-full', message: DISK_FULL_MESSAGE };
+  const failure = findInCauseChain(err, (cause) => {
     if (cause instanceof AgentError) return cause.failure;
     return cause instanceof ModelError || cause instanceof RouteUnavailable
       ? providerErrorOf(cause)
       : undefined;
   });
+  return failure === undefined
+    ? {
+        kind: 'unexpected',
+        message: extractErrorMessage(err) ?? 'Provider request failed',
+      }
+    : { kind: 'model', failure };
 }
 
 /** A failure as a host reads it: a full disk, a model failure, or the error's words. */
 export function normalizeProviderError(err: unknown): ProviderError {
-  if (isDiskFullError(err)) return { message: DISK_FULL_MESSAGE };
-  return modelFailureIn(err) ?? { message: unexpectedMessage(err) };
+  const failure = failureIn(err);
+  return failure.kind === 'model'
+    ? failure.failure
+    : { message: failure.message };
 }
 
 /** The user-facing message of any failure. */

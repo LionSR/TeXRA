@@ -3,7 +3,6 @@ import { Effect, Result, Stream } from 'effect';
 
 import { isLiveRun, planOf, runBypasses } from '@texra-ai/harness/schemas';
 import { isRequestRefusal, type Session } from '@texra-ai/harness';
-import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -89,9 +88,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const model = run?.model ?? meta.model;
     // The skills the run's latest step lists, read from its rows.
     const activeSkills =
-      activeRunId === undefined
-        ? []
-        : yield* context.runtimeSession.records(activeRunId).readSkills();
+      activeRunId === undefined ? [] : yield* context.reads.skills(activeRunId);
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({
@@ -147,10 +144,9 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
 }
 
 /**
- * `/resume all`: the open-time notice's bulk answer. Each interrupted task
- * resumes on the session beside this chat, as `texra.resumeOnOpen: auto`
- * resumes them, and joins the agent list (Tab); one a resume finds blocked
- * is listed again once what it needs is back.
+ * `/resume all`: every interrupted task resumes on the session beside this
+ * chat and joins the agent list (Tab); one a resume refuses says why on its
+ * own line.
  */
 export function resumeInterruptedTasks(
   runSession: Session,
@@ -179,11 +175,6 @@ export function resumeInterruptedTasks(
             ),
           );
         return resumeRun(runSession, task.runId).pipe(
-          Effect.flatMap((resumed) =>
-            resumed === 'waiting'
-              ? notResumed(describeFollowUpFailure('blocked'))
-              : Effect.void,
-          ),
           Effect.catch((refused) =>
             notResumed(
               isRequestRefusal(refused)

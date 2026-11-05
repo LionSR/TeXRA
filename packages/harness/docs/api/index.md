@@ -48,7 +48,8 @@ Discriminated union of every event the SDK surface emits.
 
 ```ts
 type AgentEvent =
-  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
+  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | StreamChunkEvent;
 ```
 
 ## AgentNotFound
@@ -82,36 +83,10 @@ interface AgentPlatform {
 
 ## AgentRunListingEntry
 
-A run a user started themselves, as a history list shows it: an agent run
-with no parent. Background processes and scripts (`identity.kind`) and the
-runs an agent spawned, which belong to their parent's transcript, are not
-listed; a lookup by explicit id reads the run's records instead.
+A run a person started, as a history list shows it.
 
 ```ts
-interface AgentRunListingEntry {
-  id: RunId;
-  timestamp: string;
-  /** The run's durable outcome (its `run.end`), null while none has landed. */
-  outcome: RunOutcome | null;
-  /** A stop rested the run (the fold's paused substate), a status of its own. */
-  paused?: true;
-  /** AI-generated summary of what the session aimed to accomplish. */
-  description?: string;
-  /** The model the run is on, as the view folds it: its newest
-   *  `run.config`'s. */
-  model?: string;
-  /** `deriveResumability` finds a point to continue from. Ownership and
-   *  loadability are settled when the run is opened. */
-  resumable: boolean;
-  /** Why the run cannot resume in this build although it may have rows to
-   *  continue from: they could not be read, an earlier build wrote them, or
-   *  they hold a fact of a plugin this process does not load. Absent when
-   *  it resumes or simply has nothing to continue from. */
-  resumeBlocked?: string;
-  /** What the run is — the durable authority, stamped at registration. */
-  identity: Extract<RunIdentity, { kind: 'agent' }>;
-  record: AgentConfig;
-}
+type AgentRunListingEntry = typeof AgentRunListingEntrySchema.Type;
 ```
 
 ## ApprovalHandler
@@ -391,17 +366,20 @@ interface ITool<E = Error, R = never> {
   /** The loop-side guard this tool declares; see {@link ToolGuard}. */
   readonly guard?: ToolGuard<never>;
   /**
-   * A description rendered from the other tools the run declares, in place
-   * of `definition.description`: rendered at the step that freezes the
-   * run's system text and kept as that step recorded it until a compaction
-   * opens the freeze again (`step.ts`), so a catalog change mid-run leaves
-   * its text, and the cached prefix through it, as it was. The tool that has
-   * one is the script tool, which reaches nothing but the run's other tools
-   * and its own agent: a child is offered it, and its script-only functions,
-   * whatever its parent was.
+   * A description rendered from the other tools the run declares and the
+   * modules its scripts may import, in place of `definition.description`:
+   * rendered at the step that freezes the run's system text and kept as
+   * that step recorded it until a compaction opens the freeze again
+   * (`step.ts`), so a catalog change mid-run leaves its text, and the cached
+   * prefix through it, as it was. The tool that has one is the script tool,
+   * which reaches nothing but the run's other tools and its own agent: a
+   * child is offered it, and its script-only functions, whatever its parent
+   * was.
    */
   readonly describe?: (
     declared: readonly Pick<ITool, 'definition' | 'scriptGlobal'>[],
+    /** The specifiers of the modules the step's scripts may import. */
+    modules: readonly string[],
   ) => string;
   call(rawInput: unknown): Effect.Effect<ToolResult, E, R>;
 }
@@ -535,17 +513,11 @@ interface OpenOptions {
    * Set when a person is present to answer the runs' requests from the
    * view (`request.decide`), as in an editor window. Absent, nobody can
    * answer until a host with an `approve` handler attaches
-   * ({@link Session.attach}), so every request is denied.
-   *
-   * `interruptedTasks` is what the session does at open with the root
-   * runs a closed or crashed process left unfinished, the one place that
-   * decides it. Both values mark what blocks each one (an agent, a plugin:
-   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
-   * leaves them for the host to list and resume; `resume` continues them,
-   * and a blocked one once it is back. Absent, the session recovers
-   * nothing at open.
+   * ({@link Session.attach}), so every request is denied. A session
+   * resumes nothing at open either way: a run a closed or crashed process
+   * left unfinished is listed as interrupted and continues on a resume.
    */
-  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
+  readonly host?: Record<string, never>;
 }
 ```
 
@@ -852,8 +824,6 @@ interface RunRecords {
     readonly string[],
     DatabaseReadFailed
   >;
-  /** A model call's failure stopped its turn, and nothing retired it. */
-  readonly readModelFailed: () => Effect.Effect<boolean, DatabaseReadFailed>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
@@ -870,15 +840,10 @@ interface RunRecords {
 
 ## RunResult
 
-The public value of one run's result endpoint (`readResult`): the run's
-terminal result with the output as its delivery reported it, or a
-background command's own record. The terminal fields are absent while the
-run has not ended.
+One run's result as `readResult` answers it.
 
 ```ts
-type RunResult =
-  | Extract<ResultMeta, { producer: 'backgroundBash' }>
-  | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
+type RunResult = typeof RunResultSchema.Type;
 ```
 
 ## RunStopReason
@@ -985,7 +950,9 @@ failed, or it is open over the other store.
 
 ```ts
 type SessionOpenError =
-  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
+  | DatabaseOpenFailed
+  | DatabaseReadFailed
+  | SessionOptionsConflict;
 ```
 
 ## SessionOptionsConflict

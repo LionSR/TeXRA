@@ -23,16 +23,15 @@ import type { LiveRun } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { deriveResumability, runRejection } from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
-import { getRunRecords, type RunResult } from '@agent/storage/runRecords';
-import {
-  listRunWorkspaceFiles,
-  type RunWorkspaceFile,
-} from '@agent/storage/runWorkspaceFiles';
+import { getRunRecords } from '@agent/storage/runRecords';
+import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   type ResumeRefusal,
   type RunEnd,
   type RunId,
+  type RunResult,
+  type RunWorkspaceFile,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -81,8 +80,6 @@ export interface RunRecords {
     readonly string[],
     DatabaseReadFailed
   >;
-  /** A model call's failure stopped its turn, and nothing retired it. */
-  readonly readModelFailed: () => Effect.Effect<boolean, DatabaseReadFailed>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
@@ -240,7 +237,6 @@ export function sessionReads(
             read,
           ),
         readSkills: () => read(stored.readSkills()),
-        readModelFailed: () => read(stored.readModelFailed()),
         readResumable: () =>
           Effect.map(
             read(deriveResumability(runId)),

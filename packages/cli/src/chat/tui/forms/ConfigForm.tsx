@@ -30,7 +30,12 @@ import type { Effect } from 'effect';
 const RESET_HINTS = [{ key: 'Ctrl-R', action: 'reset' }];
 
 type SettingEditKind =
-  'form' | 'boolean' | 'enum' | 'string' | 'number' | 'readonly';
+  | 'form'
+  | 'boolean'
+  | 'enum'
+  | 'string'
+  | 'number'
+  | 'readonly';
 
 type SettingInputResult =
   | { readonly ok: true; readonly value: unknown }

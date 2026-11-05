@@ -21,9 +21,10 @@ export function productionRoots(): string[] {
 
 /** Repo-relative TypeScript source files under `root`, declarations excluded. A missing directory throws, so a scan never passes by reading nothing. */
 export function productionFilesUnder(root: string): string[] {
-  return (
-    readdirSync(resolve(REPO_ROOT, root), { recursive: true }) as string[]
-  )
+  return readdirSync(resolve(REPO_ROOT, root), {
+    recursive: true,
+    encoding: 'utf8',
+  })
     .filter(
       (entry) =>
         /\.(?:ts|tsx|mts|cts)$/.test(entry) && !entry.endsWith('.d.ts'),

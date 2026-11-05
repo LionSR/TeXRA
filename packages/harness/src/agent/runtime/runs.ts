@@ -14,7 +14,7 @@ import type { Deferred, Effect, Fiber } from 'effect';
 import type { SessionServices } from './rootLaunch';
 
 /** How a launch of a run answers, once: the commit of the activation its
- *  program opened (a fresh run's `run.start`, a resume's `run.activate`),
+ *  program opened (its `run.activate` row, a fresh run's after its birth),
  *  or, for a resume, why it opened none: refused, or owned by an open call
  *  of `ownedBy`, as its records said under its claim, so a caller resumes
  *  that parent instead. A launch that ends before it opens fails its

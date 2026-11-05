@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it } from 'vitest';
+import { assert, describe, expect, it } from 'vitest';
 
 // Local imports
 import type { BashRequestPanel } from '@ui/progress/components/BashRequestPanel';
@@ -24,6 +24,7 @@ describe('bash-request-panel', () => {
     const permission: BashPermission = {
       requestId: 'bash-request-1',
       allowBypass: false,
+      // cast: a fixture run id; the panel only echoes it in its answer.
       runId: 'run-1' as RunId,
       command: 'echo hi',
     };
@@ -34,6 +35,7 @@ describe('bash-request-panel', () => {
     // The panel answers through the shell's `runtime-request` event.
     const actions: RuntimeRequest[] = [];
     element.addEventListener('runtime-request', (event) => {
+      // cast: the panel dispatches `runtime-request` as a CustomEvent of a request.
       actions.push((event as CustomEvent<RuntimeRequest>).detail);
     });
 
@@ -45,8 +47,8 @@ describe('bash-request-panel', () => {
     const note = element.shadowRoot?.querySelector<
       HTMLElement & { value: string }
     >('[data-note-input]');
-    expect(note).toBeTruthy();
-    note!.value = '  use latexmk instead  ';
+    assert.exists(note);
+    note.value = '  use latexmk instead  ';
     // With the note open, "a" must not grant, and Escape closes the note only.
     expect(element.handleKeyboardShortcut('a')).toBe(false);
     expect(actions).toEqual([]);

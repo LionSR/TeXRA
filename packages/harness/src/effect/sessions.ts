@@ -11,11 +11,11 @@ import type {
   HostInteractions,
   SessionHostInteractions,
 } from '@agent/runtime/HostInteractions';
-import type { AgentRunListingEntry } from '@agent/storage/runListing';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { AgentPlatform } from '@platform/agentPlatform';
 import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
+  AgentRunListingEntry,
   CommitOrdinal,
   DisplaySessionEvent,
   SessionViewInput,
@@ -86,17 +86,11 @@ export interface OpenOptions {
    * Set when a person is present to answer the runs' requests from the
    * view (`request.decide`), as in an editor window. Absent, nobody can
    * answer until a host with an `approve` handler attaches
-   * ({@link Session.attach}), so every request is denied.
-   *
-   * `interruptedTasks` is what the session does at open with the root
-   * runs a closed or crashed process left unfinished, the one place that
-   * decides it. Both values mark what blocks each one (an agent, a plugin:
-   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
-   * leaves them for the host to list and resume; `resume` continues them,
-   * and a blocked one once it is back. Absent, the session recovers
-   * nothing at open.
+   * ({@link Session.attach}), so every request is denied. A session
+   * resumes nothing at open either way: a run a closed or crashed process
+   * left unfinished is listed as interrupted and continues on a resume.
    */
-  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
+  readonly host?: Record<string, never>;
 }
 
 /**

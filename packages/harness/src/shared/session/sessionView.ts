@@ -14,7 +14,6 @@ import { Schema } from 'effect';
 import { ApprovalPolicySnapshotSchema } from '@shared/approvalBypassKind';
 import {
   AggregateIdSchema,
-  ResumeBlockedSchema,
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
@@ -88,7 +87,8 @@ const RunGroupSchema = Schema.Literals([
   'recent',
 ]);
 
-const RunViewSchema = Schema.Struct({
+/** One run as every renderer reads it; `SessionView.runs` holds them. */
+export const RunViewSchema = Schema.Struct({
   /** The run id: the aggregate's logical id, minted once at launch. */
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
@@ -192,8 +192,6 @@ const RunViewSchema = Schema.Struct({
   approval: Schema.Literals(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable. */
   readOnly: Schema.Boolean,
-  /** What a resume of this run waits for here; null: nothing blocks it. */
-  resumeBlocked: Schema.NullOr(ResumeBlockedSchema),
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
   /** This run or a descendant needs the user; outranks the surface's
@@ -277,7 +275,6 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
     run.identity.kind === 'agent' &&
     run.parentId === null &&
     !run.recipe &&
-    run.resumeBlocked === null &&
     (run.turn !== null || run.forkPoint !== null)
   );
 }

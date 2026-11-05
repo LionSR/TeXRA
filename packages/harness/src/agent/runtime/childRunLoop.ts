@@ -426,9 +426,9 @@ const beginTurn = Effect.fn('childRunLoop.beginTurn')(function* <TTurn, R>(
   ]);
 });
 
-/** Who reads this turn's result: its parent, unless the child is
- *  persist-only. A detach is read from the child's rows in the job
- *  delivering it (`deliverIn`). */
+/** Who reads this turn's result: its parent, unless nothing awaits the
+ *  child. A detach is read from the child's rows in the job delivering it
+ *  (`deliverIn`). */
 const deliveryTarget = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   isError: boolean,

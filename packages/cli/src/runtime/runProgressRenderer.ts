@@ -25,7 +25,7 @@ import {
 } from './terminalText';
 import { getStderrColumns, writeRawStderr } from './logSinks';
 import type { CliContext } from './cliContext';
-import type { LocalSession } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 
 const CLEAR_LINE = '\r\x1b[2K';
 const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
@@ -33,7 +33,7 @@ const ACTIVE_CHILD_DESCRIPTION_MAX_LENGTH = 48;
 /** What the status line reads of a session: its view, followed level by
  *  level. */
 interface RunProgressSession {
-  readonly view: Pick<LocalSession['view'], 'changes'>;
+  readonly view: Pick<Session['view'], 'changes'>;
 }
 
 /** The tool calls `run` has finished: its transcript's finished tool cards,

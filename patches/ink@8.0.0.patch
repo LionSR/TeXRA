@@ -1,0 +1,238 @@
+diff --git a/build/ink.d.ts b/build/ink.d.ts
+index 3aca51bd7da892eb5cfb1df671c46155b5011892..8311e3ebd234980357fa5333edcb2274b9d55578 100644
+--- a/build/ink.d.ts
++++ b/build/ink.d.ts
+@@ -145,6 +145,11 @@ export default class Ink {
+     waitUntilExit(): Promise<unknown>;
+     waitUntilRenderFlush(): Promise<void>;
+     clear(): void;
++    repaint(options?: {
++        clearScrollback?: boolean;
++        emitLayout?: boolean;
++        preserveStatic?: boolean;
++    }): void;
+     patchConsole(): void;
+     registerInputControl(pauseInput: () => void, resumeInput: () => void): void;
+     suspendTerminal(callback: () => void | Promise<void>): Promise<void>;
+diff --git a/build/ink.js b/build/ink.js
+index 550cdf00d2b15ac43f5d1cd708bc82c52c513569..f07a7434444d1bcfc3e0b8b30f163bdb93e89a8b 100644
+--- a/build/ink.js
++++ b/build/ink.js
+@@ -109,6 +109,10 @@ export default class Ink {
+     rootNode;
+     // Accumulated <Static> output. Only kept in debug mode, where every frame rewrites it, and on the alternate screen, where it has to be replayed on full clears because there is no scrollback to keep it in.
+     fullStaticOutput;
++    // Every <Static> line written so far, on either screen. Ink 8 keeps
++    // fullStaticOutput only for the alternate screen, but repaint() clears the
++    // scrollback too and must reprint the whole transcript. (TeXRA patch)
++    repaintStaticOutput = '';
+     // Whether any <Static> output has been written. The final unmount render is skipped once it has, since rendering again would duplicate <Static> children on exit (#397).
+     hasRenderedStaticOutput;
+     exitPromise;
+@@ -132,22 +136,48 @@ export default class Ink {
+     Whether this instance is using concurrent rendering mode.
+     */
+     isConcurrent;
++    resizeTimer = undefined;
+     resized = () => {
+         const { columns: currentWidth, rows: currentHeight } = getWindowSize(this.options.stdout);
+-        // We clear the screen when decreasing terminal width to prevent duplicate overlapping re-renders. Decreasing the height with a cursor shown also drops the frame rows below the cursor, so erase what is left and render the frame again.
+-        if (currentWidth < this.lastTerminalWidth ||
+-            (currentHeight < this.lastTerminalHeight &&
+-                this.log.getCursorPosition() !== undefined)) {
+-            this.log.clear();
+-            this.lastOutput = '';
+-            this.lastOutputToRender = '';
+-            this.lastOutputHeight = 0;
+-        }
+         this.calculateLayout();
+         dom.emitLayoutListeners(this.rootNode);
+-        this.onRender();
+-        this.lastTerminalWidth = currentWidth;
+-        this.lastTerminalHeight = currentHeight;
++        if (currentWidth === this.lastTerminalWidth && this.resizeTimer === undefined) {
++            // Decreasing the height with a cursor shown drops the frame rows below the cursor, so erase what is left and render the frame again.
++            if (currentHeight < this.lastTerminalHeight &&
++                this.log.getCursorPosition() !== undefined) {
++                this.log.clear();
++                this.lastOutput = '';
++                this.lastOutputToRender = '';
++                this.lastOutputHeight = 0;
++            }
++            this.onRender();
++            this.lastTerminalHeight = currentHeight;
++            return;
++        }
++        // Full repaint on width changes, debounced. Ink normally erases the bottom live
++        // region by line count, but after the emulator reflows soft-wrapped lines
++        // at the new width no count is correct: too small leaves residue, too large
++        // walks up and erases the <Static> header above. The reflow/scroll geometry
++        // is owned by the emulator and not observable through a write-only stdout,
++        // so the only terminal-independent fix is to redraw from a known origin:
++        // a full repaint homes the cursor and clears screen+scrollback, then we
++        // reprint fullStaticOutput (header + finalized history, reflowed) and let
++        // onRender draw the live region below it. Layout listeners still fire
++        // synchronously above so components see the new terminal width immediately;
++        // only the expensive clear+repaint is debounced so a drag-storm of resize
++        // events collapses into a single repaint (TeXRA patch).
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++        }
++        this.resizeTimer = setTimeout(this.repaintAfterResize, 24);
++        this.resizeTimer.unref?.();
++    };
++    repaintAfterResize = () => {
++        this.resizeTimer = undefined;
++        if (this.isUnmounted) {
++            return;
++        }
++        this.repaint({ clearScrollback: true });
+     };
+     resolveExitPromise = () => { };
+     rejectExitPromise = () => { };
+@@ -205,6 +235,7 @@ export default class Ink {
+     // Resets the accumulated static output when the <Static> identity changes so stale items from a previous instance are not replayed on future rewrites.
+     handleStaticChange = () => {
+         this.fullStaticOutput = '';
++        this.repaintStaticOutput = '';
+         this.hasRenderedStaticOutput = false;
+     };
+     onRender = () => {
+@@ -383,6 +414,7 @@ export default class Ink {
+             this.lastOutputHeight = 0;
+             if (hasStaticOutput) {
+                 this.options.stdout.write(staticOutput);
++                this.repaintStaticOutput += staticOutput;
+                 if (this.alternateScreen) {
+                     this.fullStaticOutput += staticOutput;
+                 }
+@@ -402,6 +434,7 @@ export default class Ink {
+         }
+         if (hasStaticOutput) {
+             this.hasRenderedStaticOutput = true;
++            this.repaintStaticOutput += staticOutput;
+             if (this.alternateScreen) {
+                 this.fullStaticOutput += staticOutput;
+             }
+@@ -754,6 +787,13 @@ export default class Ink {
+             return;
+         }
+         this.isUnmounting = true;
++        // Cancel any pending debounced resize repaint so it can't fire after
++        // teardown (repaintAfterResize already guards on isUnmounted; this also
++        // drops the dangling timer reference). (TeXRA patch)
++        if (this.resizeTimer) {
++            clearTimeout(this.resizeTimer);
++            this.resizeTimer = undefined;
++        }
+         if (this.beforeExitHandler) {
+             process.off('beforeExit', this.beforeExitHandler);
+             this.beforeExitHandler = undefined;
+@@ -922,6 +962,59 @@ export default class Ink {
+         // Keep lastOutput so that unmount's final onRender sees it as unchanged, but no rows remain on screen.
+         this.lastOutputHeight = 0;
+     }
++    repaint(options = {}) {
++        if (this.isUnmounted) {
++            return;
++        }
++        if (options.emitLayout !== false) {
++            this.calculateLayout();
++            dom.emitLayoutListeners(this.rootNode);
++        }
++        const startTime = performance.now();
++        const { output, outputHeight, staticOutput } = render(this.rootNode, this.isScreenReaderEnabled);
++        this.options.onRender?.({ renderTime: performance.now() - startTime });
++        const hasStaticOutput = staticOutput && staticOutput !== '\n';
++        // ansi-escapes@7.3.0 exposes clearViewport for visible-screen-only
++        // repaint callers; transcript switches request clearScrollback.
++        const clearSequence = options.clearScrollback === true
++            ? ansiEscapes.clearTerminal
++            : ansiEscapes.clearViewport;
++        const nextStaticOutput = hasStaticOutput ? staticOutput : '';
++        const previousStaticOutput = options.preserveStatic === false
++            ? ''
++            : this.repaintStaticOutput;
++        if (options.preserveStatic === false) {
++            this.repaintStaticOutput = nextStaticOutput;
++        }
++        else if (hasStaticOutput) {
++            this.repaintStaticOutput += staticOutput;
++        }
++        if (this.alternateScreen) {
++            this.fullStaticOutput = this.repaintStaticOutput;
++        }
++        const outputToRender = outputHeight >= getWindowSize(this.options.stdout).rows
++            ? output
++            : output + '\n';
++        this.log.reset();
++        // Wrap the clear+reprint in synchronized output (DECSET 2026) when the
++        // terminal supports it (ink 7.1.0's bsu/esu helpers) so the emulator
++        // shows the new frame atomically instead of mid-repaint tearing. (TeXRA patch)
++        const sync = this.shouldSync();
++        if (sync) {
++            this.options.stdout.write(bsu);
++        }
++        this.options.stdout.write(clearSequence + previousStaticOutput + nextStaticOutput + outputToRender);
++        if (sync) {
++            this.options.stdout.write(esu);
++        }
++        this.log.sync(outputToRender);
++        this.lastOutput = output;
++        this.lastOutputToRender = outputToRender;
++        this.lastOutputHeight = outputHeight;
++        const { columns, rows } = getWindowSize(this.options.stdout);
++        this.lastTerminalWidth = columns;
++        this.lastTerminalHeight = rows;
++    }
+     patchConsole() {
+         if (this.options.debug) {
+             return;
+diff --git a/build/parse-keypress.js b/build/parse-keypress.js
+index ad09449243b19539e0746e129f0f3b3d2c87ae9a..27eb0091f57ada00199f9f081fbcb01f8516e108 100644
+--- a/build/parse-keypress.js
++++ b/build/parse-keypress.js
+@@ -274,7 +274,16 @@ function parseKittyModifiers(modifiers) {
+         numLock: !!(modifiers & kittyModifiers.numLock),
+     };
+ }
++// Some terminals spell a modified Return as CSI 13:modifiers u (colon, no
++// semicolon). Read as the protocol grammar, the number after the colon is a
++// shifted-key code and Shift+Return arrives as a plain Return, which submits
++// instead of inserting a newline. Read it as modifiers. (TeXRA patch)
++const colonModifiedEnterRe = /^\x1b\[(13|57414):(\d+)u$/;
+ const parseKittyKeypress = (s) => {
++    const colonEnter = colonModifiedEnterRe.exec(s);
++    if (colonEnter) {
++        s = `\x1b[${colonEnter[1]};${colonEnter[2]}u`;
++    }
+     const match = kittyKeyRe.exec(s);
+     if (!match)
+         return null;
+diff --git a/build/render.d.ts b/build/render.d.ts
+index 63c59ec147214d98a2be2f73df390fd3ee59bb40..e7754007cdb5a6cba48602937829eff004e82db0 100644
+--- a/build/render.d.ts
++++ b/build/render.d.ts
+@@ -171,6 +171,10 @@ export type Instance = {
+     Clear output.
+     */
+     clear: () => void;
++    /**
++    Repaint output from a known terminal origin.
++    */
++    repaint: Ink['repaint'];
+ };
+ /**
+ Mount a component and render the output.
+diff --git a/build/render.js b/build/render.js
+index d531880f4be477a7f299c27f27a12a01ac7c1cce..a1f9402a4effc24459cbcb680dec854736126d60 100644
+--- a/build/render.js
++++ b/build/render.js
+@@ -33,6 +33,7 @@ const render = (node, options) => {
+             instance.unmount();
+         },
+         clear: instance.clear,
++        repaint: instance.repaint,
+     };
+ };
+ export default render;

@@ -38,7 +38,8 @@ import {
  * a row kind, fact kind or current-value family as a release shipped it, and
  * the frozen versions bound that name's released history. A later build reads
  * a released version forever, so its schema never changes in place: a change
- * is a new version with an upcaster from the released one.
+ * is a new version with an upcaster from the released one, and this build
+ * has no upcaster, so a released kind's version does not move.
  *
  * `npm run storage:freeze` (vitest `--mode freeze`, a `releasing` step)
  * writes each name's current version, which moves the watermark.
@@ -49,8 +50,6 @@ const FREEZING = process.env.MODE === 'freeze';
 interface Versioned {
   readonly name: string;
   readonly version: number;
-  /** Adjacent conversions ending at the current version, oldest first. */
-  readonly upcasts: number;
   readonly schema: Schema.Top;
 }
 
@@ -72,7 +71,6 @@ const VERSIONED: readonly Versioned[] = [
     return {
       name: arm.fields.type.literal,
       version: kind.version,
-      upcasts: kind.upcast.length,
       schema: arm,
     };
   }),
@@ -80,14 +78,12 @@ const VERSIONED: readonly Versioned[] = [
     ([name, factKind]) => ({
       name: `plugin.fact.${name.replace('/', '.')}`,
       version: factKind.version,
-      upcasts: factKind.upcasters.length,
       schema: factKind.schema,
     }),
   ),
   ...VALUE_FAMILIES.map(({ name, schema }) => ({
     name: `current-value.${name.replace('/', '.')}`,
     version: CURRENT_VALUE_VERSION,
-    upcasts: 0,
     schema,
   })),
 ];
@@ -96,15 +92,14 @@ const VERSIONED: readonly Versioned[] = [
 const fingerprint = (schema: Schema.Top): string =>
   `${JSON.stringify(Schema.toJsonSchemaDocument(schema), null, 2)}\n`;
 
-const released = (name: string): { first: number; latest: number } | null => {
+/** The latest released version of `name`, or null before its first release. */
+const released = (name: string): number | null => {
   if (!existsSync(FROZEN)) return null;
   const versions = readdirSync(FROZEN).flatMap((file) => {
     const match = /^(.+)\.v(\d+)\.json$/.exec(file);
     return match?.[1] === name ? [Number(match[2])] : [];
   });
-  return versions.length === 0
-    ? null
-    : { first: Math.min(...versions), latest: Math.max(...versions) };
+  return versions.length === 0 ? null : Math.max(...versions);
 };
 
 describe('row versions', () => {
@@ -162,17 +157,13 @@ describe('row versions', () => {
 
   it.each(VERSIONED)(
     '$name reads its released version',
-    ({ name, version, upcasts, schema }) => {
-      const history = released(name);
-      if (history === null) return;
-      expect(version, `${name} is below its released version`).toBe(
-        Math.max(version, history.latest),
-      );
+    ({ name, version, schema }) => {
+      const latest = released(name);
+      if (latest === null) return;
       expect(
-        upcasts,
-        `${name} v${history.first} has no upcaster chain to v${version}`,
-      ).toBeGreaterThanOrEqual(version - history.first);
-      if (version > history.latest) return;
+        version,
+        `${name} v${latest} was released, and a released kind changes only as a new version with an upcaster from it, the first this build would carry`,
+      ).toBe(latest);
       expect(
         fingerprint(schema),
         `${name} v${version} was released: change it as a new version with an upcaster`,

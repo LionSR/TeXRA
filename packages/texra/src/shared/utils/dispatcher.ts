@@ -54,7 +54,8 @@ export class UnsupportedCommandError extends Schema.TaggedError<UnsupportedComma
  */
 export type HandlerRegistry<TMessage extends CommandMessage, A = void> = {
   [K in TMessage['command']]:
-    MessageHandler<Extract<TMessage, { command: K }>, A> | Unsupported;
+    | MessageHandler<Extract<TMessage, { command: K }>, A>
+    | Unsupported;
 };
 
 export type DispatcherFn<TMessage extends CommandMessage> = (
@@ -98,7 +99,8 @@ export function createDispatcher<TMessage extends CommandMessage>(
     const message = parseResult.success;
     // cast: the registry maps the decoded message's own command to its handler.
     const entry = handlers[message.command as TMessage['command']] as
-      MessageHandler<typeof message> | Unsupported;
+      | MessageHandler<typeof message>
+      | Unsupported;
 
     // Defense-in-depth: TypeScript's exhaustiveness guarantee is a
     // compile-time fact, not a runtime one. A genuinely missing key (an

@@ -14,7 +14,7 @@ project. It is published to npm as [`@texra-ai/cli`](https://www.npmjs.com/packa
 
 ## Install
 
-Install the CLI globally from npm (requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later):
+Install the CLI globally from npm (requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later):
 
 ```bash
 npm install -g @texra-ai/cli
@@ -444,14 +444,12 @@ Inside the chat, `/fork` continues a new task holding the conversation
 A fork holds the conversation as it stood at the end of its last turn and
 leaves the original task unchanged.
 
-When `texra chat` opens without a task to resume, it looks for tasks a
-closed or crashed TeXRA stopped mid-way. With `"texra.resumeOnOpen":
-"auto"` in `~/.texra/v1/global-storage/config.json` it continues them; the
-default, `ask`, lists them above the input, where `/resume all` continues
-them and anything else you send hides the list. A task whose agent is missing, or
-comes from a plugin that is off or not trusted, waits until that is fixed;
-under `auto` it then continues by itself, under `ask` it is listed again.
-`texra run` never resumes anything on its own.
+When `texra chat` opens, nothing resumes on its own: the tasks a closed or
+crashed TeXRA stopped mid-way sit in the agent list (Tab) as interrupted.
+`/resume all` continues them and `/resume` picks one; a task whose agent is
+missing, or comes from a plugin that is off or not trusted, says so when
+resumed and stays interrupted until that is fixed. `texra run` never resumes
+anything either.
 
 A run another TeXRA process still holds is refused, and the message names
 that process's pid and host. A holder that cannot be reached (it ran on another
@@ -478,8 +476,11 @@ conversation's runs run there, so `/tasks` in another terminal lists it and
 can attach to it while it works. `texra resume <id>` of a conversation the
 service is running continues it there. When the service cannot start, or
 `TEXRA_NO_SERVICE=1` is set, the chat runs in its own process and says so
-once; other terminals then do not see it. `texra run`, `-p` and
-`--output-format ndjson` always run in their own process.
+once; other terminals then do not see it. While a service holds a project,
+a `texra` command in that folder reads the project's settings and stored
+tasks through it (`texra history`, `texra resume`, the chat's `/resume` and
+`/status`) and opens no store of its own, as a window does. `texra run`,
+`-p` and `--output-format ndjson` always run in their own process.
 
 ```bash
 texra tasks list                                   # every project's tasks, newest first

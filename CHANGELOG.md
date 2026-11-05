@@ -6,6 +6,63 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
+  terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
+  22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an
+  older Node as unsupported. The desktop app and the VS Code extension bring
+  their own runtime and are unaffected.
+- **The CLI is a client of the service, like the windows.** While the TeXRA
+  service holds a project, a `texra` command in that folder reads the
+  project's settings and stored tasks through it and opens no store of its
+  own: `texra history list/show/export/delete`, `texra resume`, the chat's
+  `/resume` and `/status`. The chat starts the service before its platform
+  comes up, links to it once instead of opening the project's store beside
+  it, and starts it again if it goes away. `texra run`, `-p` and
+  `--output-format ndjson` still run in their own process. `texra history
+  delete --all` asks for `--yes` without counting first. The service answers
+  four more procedures (`tasks.history`, `task.detail`, `task.skills`,
+  `tasks.delete`; protocol bump), and `texra resume` no longer names the
+  pid of a process that holds a task: a resume the service refuses says why
+  at the click, as every refusal does.
+  SDK: `AgentRunListingEntry`, `RunResult` and `RunWorkspaceFile` are
+  schemas (`@texra-ai/harness/schemas`), their types unchanged.
+- **A stored row reads at its kind's version.** The session store converts
+  no row: one at a lower version than its kind's is an earlier build's (its
+  task listed as unreadable, as before), one at a higher version refuses the
+  store (as before), and the per-kind conversion lists, every one of them
+  empty, are gone with the loops that ran them on every read. SDK:
+  `FactKind.upcasters` (`@texra-ai/harness/plugins`) and
+  `TraceFactKind.upcasters` are gone: a plugin's fact kind declares its
+  `version` and `schema`, and a trace's fact at another version is rejected.
+  `ValueFamily` has no `deletable` flag and no second type parameter: any
+  family's `modify` may answer `undefined` to delete its row. A current
+  value is read without a second version check: the store gate refuses a
+  newer build's values at open.
+- **The interrupted-tasks notice is gone.** A window or `texra chat` that
+  opens on tasks a closed or crashed TeXRA left unfinished no longer shows
+  the "N tasks were interrupted" notice with "Resume all" and "Not now":
+  the task list shows them as interrupted, each with its own Resume, and
+  the chat's `/resume all` still continues them all. SDK: `Surface` has no
+  `interruptedDismissed` and no `dismissInterrupted` action.
+- **A blocked resume is a refusal, not a state.** Resuming a task whose
+  agent is missing, or whose plugin is off or not trusted, is refused with
+  that reason at the click, like any other refusal; nothing about it shows
+  before a resume is asked for. Gone: the "needs the zotero plugin, which
+  is off" line and its "Turn on" / "Review" button on the task's ended line
+  and in the interrupted-tasks notice, and the same words in the model's
+  `/executions` text. SDK: `RunView.resumeBlocked`,
+  `LocalRuntimeState.resumeBlocked`, `SessionViewAccess.markResumeBlocked`
+  and the `resumeBlocked` run notice are gone; the service's `task.resume`
+  answers the task only (protocol bump).
+- **Nothing resumes on its own.** The `resumeOnOpen` setting (Settings ›
+  General › Interrupted tasks) and the notice's "Always resume" link are
+  gone: a window or `texra chat` that opens on tasks a closed or crashed
+  TeXRA left unfinished lists them and resumes none. Resume (the task's
+  button, `/resume`, `texra resume`) continues one, and a task blocked on
+  a missing agent or an off plugin stays listed with what it needs until a
+  later resume finds it back. A stored `resumeOnOpen` is ignored. SDK:
+  `OpenOptions.host` carries no `interruptedTasks`; a session recovers
+  nothing at open.
 - **One flag per choice in `texra config agents`.** `--agents` takes the
   workspace agents as one value (`inherit`, `all`, `team:<team>` by id,
   name or slug, or a comma-separated agent list), `--default-team` takes a
@@ -20,6 +77,11 @@ All notable changes to this project will be documented in this file.
   `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
   file is always written beside the file it stands in for, where its
   relative inputs resolve. A stored value of either is ignored.
+- **"Prefer short model names" is gone.** A request always carries the
+  model's catalog id. The switch never changed what a picker shows: it
+  replaced the date-pinned id sent to the provider with its unpinned alias,
+  and toggling it during a run broke that run's continuations. A stored
+  value is ignored.
 - **A child launch is a chat or a task.** SDK: `ChildLaunch`
   (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
   and the `mediaFiles` on its prompt) or a task (`task` with its `files`:
@@ -215,8 +277,7 @@ All notable changes to this project will be documented in this file.
   decision's `content`. `StagedToolEdit` leaves `@texra-ai/harness/schemas`;
   `CallRequests.open` takes the blobs a payload names. A blocked resume
   (`RunView.statusNotice` `resumeBlocked`, `LocalRuntimeState.resumeBlocked`)
-  carries no `retry`: whether an unblocked task continues by itself is the
-  `resumeOnOpen` setting's, read once at open.
+  carries no `retry`: an unblocked task continues on its next resume.
 - **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
   leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
   `snapshotEntries` take the app's id as a string.
@@ -328,6 +389,16 @@ All notable changes to this project will be documented in this file.
   `followUp.send` request takes `media` (a file path, or stored media by
   address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
   `mediaFiles` is `media: { name, mimeType, digest }[]`.
+
+- **SDK: no stop sequences or background stream positions in
+  `@texra-ai/llm`.** A turn result has no `stop-sequence` finish reason or
+  `stopSequence`, and the Anthropic defaults no `stopSequences`: nothing
+  could set one. A `RemoteOperation` is its `origin` and
+  `providerResponseId`, with no `afterSequence`; `Model.background.observe`
+  streams `TurnEvent`s, so `BackgroundEvent` and its `cursor` events are
+  gone, and an observed OpenAI response replays from its start.
+  Conversations saved by an earlier build show as written by that build and
+  cannot be resumed by this one.
 
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
   floor `^4.1.0`).** Their Effect peers (`effect`, plus
@@ -541,7 +612,7 @@ All notable changes to this project will be documented in this file.
   run by returning it in its result's `facts`: the fact is committed with
   the call's result, never apart from it. A task an earlier build saved
   after it reached the model cannot be opened: the task list, `texra
-history`, a resume and a follow-up say it was "written by an earlier
+  history`, a resume and a follow-up say it was "written by an earlier
   build of TeXRA; it can't be opened by this one" instead of calling it
   damaged or offering to resume it.
 - **Some tasks saved by an earlier build can no longer be opened.** Fields
@@ -687,7 +758,7 @@ history`, a resume and a follow-up say it was "written by an earlier
   composer lists them by title ("2 tasks were interrupted"), with when each
   stopped and how many of its agents finished. **Resume all** continues
   them, a title opens that task, and **Not now** hides the notice until the
-  next open; **Always resume** links to Settings › General. A task that
+  next open. A task that
   cannot continue says why ("needs the zotero plugin, which is off") with
   **Turn on** or **Review**, which open Settings › Plugins. In the CLI the
   notice sits above the input and is answered with `/resume all` or
@@ -1003,6 +1074,16 @@ history`, a resume and a follow-up say it was "written by an earlier
     calls.
   - A turn's end position records the turn's outcome (`run.position` v2), so
     a run an earlier build wrote reads as that build's.
+- **Long Claude runs start answering sooner.** On Anthropic's own API,
+  each request after the first now sends only the new messages and the id
+  of the previous response (message threads, beta), instead of the whole
+  conversation; Anthropic reports about 35% less time to first token on
+  conversations of 500k tokens and more. Token usage and price are
+  unchanged. A thread lasts 5 minutes between requests; after a longer
+  pause, or if the account cannot use threads, the whole conversation is
+  sent as before. A custom Anthropic endpoint is never threaded. Anthropic
+  holds a thread encrypted in memory, never on disk, for at most an hour;
+  threads are not eligible for zero data retention.
 - **A message typed while a run works is answered at its next model
   request, not after the turn ends.** Up to 0.40.10 a follow-up reached the
   model inside the turn; since then it waited for the turn to end. A message
@@ -1196,13 +1277,10 @@ history`, a resume and a follow-up say it was "written by an earlier
 
 - **Interrupted tasks when TeXRA opens.** When the terminal chat, the
   desktop app or the extension opens and finds tasks a closed or crashed
-  TeXRA stopped mid-way, Settings › General › Interrupted tasks decides
-  what happens: **Ask** (the default) leaves them for you to resume, and
-  **Resume automatically** continues them. `texra run` and the agent SDK
-  never resume on their own. A task whose agent is gone, or whose agent
-  comes from a plugin that is off or not trusted, is no longer failed by a
-  resume: it stays interrupted, says what it is waiting for, and continues
-  by itself once that is fixed.
+  TeXRA stopped mid-way, it lists them for you to resume; nothing resumes
+  on its own. A task whose agent is gone, or whose agent comes from a
+  plugin that is off or not trusted, is no longer failed by a resume: it
+  stays interrupted and says what it is waiting for.
 
 - **Long conversations no longer pause to compact.** When a conversation
   reaches the compaction threshold, TeXRA summarizes the earlier turns in
@@ -1299,7 +1377,7 @@ history`, a resume and a follow-up say it was "written by an earlier
   that was cut short continues under its own run instead of starting over.
   The tool belongs to the Multi-Agent Workflow plugin.
 - **Scripts can run in the background.** `script` with `run_in_background:
-true` returns at once with a run ID, and the script runs as a child run of
+  true` returns at once with a run ID, and the script runs as a child run of
   its own (shown as a Script run) with the same tools, model and working
   directory. When it ends, the parent receives one follow-up with the
   script's result and a summary line: how many calls succeeded, failed or
@@ -1372,7 +1450,7 @@ true` returns at once with a run ID, and the script runs as a child run of
   (a `basedOn:` line at the end of the file). When an update changes that
   agent, the settings Agents page marks the copy and offers View built-in,
   Reset to built-in, and Keep mine; `texra agents list` and `texra agents
-show` print the same notice, and the new `texra agents customize`,
+  show` print the same notice, and the new `texra agents customize`,
   `texra agents reset`, and `texra agents keep` commands make, reset, and
   keep a copy from the terminal. An agent you wrote yourself under a built-in's name
   is never flagged.
@@ -1535,6 +1613,12 @@ show` print the same notice, and the new `texra agents customize`,
 
 ### Bug Fixes
 
+- **The desktop app no longer hides a task's Edit form behind "Connect a
+  model" when the project's `.env` holds the key.** The onboarding check
+  asked without the project's `.env`, the one per-project read that did; it
+  now asks under it, as every other read about that project's models does,
+  so the launcher and the Edit form render and the key the run would use is
+  the key that counts.
 - **A retired model is refused when a run binds it.** The route decision
   sent a model llm-zoo marks retired to its provider key (or a subscription
   still listing it), so a resumed or switched run failed at the provider
@@ -1579,6 +1663,16 @@ show` print the same notice, and the new `texra agents customize`,
   the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
   the setup assistant and the guide say "OpenAI models" where they said
   "Codex models".
+- **A run's cost includes the request that titles it.** The short title a
+  run gets in the run list and history comes from one helper-model request,
+  which was billed but missing from the run's cost and token counts. It now
+  counts, and the run's result and the run list show the same total.
+- **A script's `self()` round does its own part, not the whole task again.**
+  A round now reads its prompt as one part of the work its script is doing,
+  so it no longer repeats the request that started the script, with its own
+  `self()` rounds and the script's waits, before answering. The `script`
+  tool's description also lists the modules a script may import, so a
+  plugin's module is found without guessing its name.
 - **No model request runs only to title a subagent, and the SDK sends none
   you did not ask for.** A subagent or a script's `self()` round keeps its
   agent name instead of a generated title, so a loop of rounds no longer
@@ -1769,7 +1863,7 @@ show` print the same notice, and the new `texra agents customize`,
   example, which documents did not compile and where their logs are)
   between `FAILED` and the run-artifacts line. JSON output is unchanged.
 - **An awaited sub-agent's report is now kept and viewable.** `executions
-view` on a sub-agent the parent waited for shows its report instead of
+  view` on a sub-agent the parent waited for shows its report instead of
   "No report found".
 - **`--output` that can't be written now fails the command, not the
   recorded run.** `texra run` and `texra resume` copy a document task's
@@ -2060,7 +2154,7 @@ view` on a sub-agent the parent waited for shows its report instead of
   collected.
 - **A crash no longer undoes a Stop, a finished agent or a bypass turned
   off.** A task you stopped mid-turn, killed before it finished stopping,
-  came back as interrupted, and with "Always resume" it carried on the turn
+  came back as interrupted, and when resumed it carried on the turn
   and paid for more model calls; a stop is now recorded whole or not at
   all. An agent that had finished its answer when its task was killed no
   longer asks whether to run it again: the resumed task reads the answer it

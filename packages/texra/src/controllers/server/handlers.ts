@@ -58,7 +58,7 @@ import {
 } from './protocol';
 
 import { HostWindows } from './hostWindows';
-import { listTasks } from './taskList';
+import { listTasks, runLaunchFacts } from './taskList';
 import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 /** A project the service serves: its session, as every host drives it. */
@@ -407,6 +407,51 @@ export const serviceHandlers = TexraRpcs.toLayer(
         records(workspace, runId, (session) =>
           session.records(runId).readTrace(),
         ),
+      'tasks.history': ({ workspace }) =>
+        Effect.scoped(
+          Effect.flatMap(open(workspace), ({ session }) =>
+            session
+              .listRuns()
+              .pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              ),
+          ),
+        ),
+      'task.detail': ({ workspace, runId }) =>
+        records(workspace, runId, (session) => {
+          const stored = session.records(runId);
+          return Effect.all(
+            {
+              run: Effect.map(session.view.read([runId]), (view) =>
+                runLaunchFacts(view.runs.get(runId)),
+              ),
+              result: stored.readResult(),
+              report: stored.readReport(),
+              conversation: stored.readConversation(),
+              workspaceFiles: stored.readWorkspaceFiles(),
+              resumable: stored.readResumable(),
+            },
+            { concurrency: 5 },
+          );
+        }),
+      'task.skills': ({ workspace, runId }) =>
+        records(workspace, runId, (session) =>
+          session.records(runId).readSkills(),
+        ),
+      'tasks.delete': ({ workspace, target }) =>
+        Effect.scoped(
+          Effect.flatMap(open(workspace), ({ session }) =>
+            session
+              .deleteRuns(target)
+              .pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              ),
+          ),
+        ),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           projects.open(workspace).pipe(
@@ -511,15 +556,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
               return { runId: live, activation: session.view.current().cursor };
             const run = yield* admit(
               runs,
-              session.resume(runId, { interactive: true }).pipe(
-                // Blocked, not failed: it stays interrupted until what it
-                // needs is back.
-                Effect.catchTag('ResumeRefused', (refusal) =>
-                  refusal.reason.kind === 'blocked'
-                    ? Effect.succeed(refusal.reason)
-                    : Effect.fail(refusal),
-                ),
-              ),
+              session.resume(runId, { interactive: true }),
               (error) =>
                 Effect.fail(
                   new TaskFailed({
@@ -528,7 +565,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   }),
                 ),
             );
-            return 'kind' in run ? run : yield* admittedTask(run);
+            return yield* admittedTask(run);
           }),
         ),
     };

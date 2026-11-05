@@ -10,15 +10,18 @@ import { Clock, Deferred, Effect, Result, type Scope } from 'effect';
  * runs on its fiber, under the claim the activation holds. A caller only
  * observes: leaving early changes nothing about the run.
  */
-import { Inbox, openResume } from '@agent/followUp/ToolUseFollowUp';
+import {
+  describeFollowUpFailure,
+  Inbox,
+  openResume,
+} from '@agent/followUp/ToolUseFollowUp';
 import { earlierBuildRefusal, runRejection } from '@agent/storage/resumability';
 import {
   getRunRecords,
   owningCall,
   persistedParentRunId,
 } from '@agent/storage/runRecords';
-import type { RunId } from '@shared/schemas';
-import { SessionViewAccess } from '@shared/session/runHistory';
+import type { ResumeRefusal, RunId } from '@shared/schemas';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import { createScriptRunStrategy } from './scriptRun';
 import { resumeBlocker } from './resumeBlocker';
@@ -40,6 +43,20 @@ export interface ResumeRunOptions extends Pick<ExecuteAgentOptions, 'tools'> {
 
 /** A resume's refusal of a run that cannot continue here. */
 const NOT_RESUMABLE: LaunchAnswer = { failed: { kind: 'notResumable' } };
+
+/** A resume refusal's wording: a blocked one names the agent or plugin it
+ *  waits for; every other reads as its kind. */
+export function describeResumeRefusal(reason: ResumeRefusal): string {
+  if (reason.kind !== 'blocked') return describeFollowUpFailure(reason.kind);
+  switch (reason.blocker) {
+    case 'agentMissing':
+      return `This task's agent, ${reason.name}, is not installed. It can continue once the agent is back.`;
+    case 'pluginOff':
+      return `This task's agent comes from the ${reason.name} plugin, which is off. It can continue once the plugin is on.`;
+    case 'pluginUntrusted':
+      return `This task's agent comes from the ${reason.name} plugin, which is not trusted as it is now. It can continue once the plugin is reviewed.`;
+  }
+}
 
 /**
  * Resume `runId`, or join the launch of it in flight here, and answer once
@@ -99,12 +116,11 @@ export const decideResume = Effect.fn('decideResume')(function* (
   // Nothing to continue from, or rows this build cannot open.
   const rejected = yield* runRejection(runId);
   if (rejected !== null) return yield* refuse({ failed: rejected });
-  // An agent or plugin this process cannot run now leaves the run
-  // interrupted with the reason, never failed, for the session's follower to
-  // resume once it is back; nothing is launched. Another process's run
-  // is refused as such above, whatever this process lacks.
+  // An agent or plugin this process cannot run now refuses the resume with
+  // the reason; the run stays interrupted, never failed, and nothing is
+  // launched. Another process's run is refused as such above, whatever this
+  // process lacks.
   const blocker = yield* resumeBlocker(config);
-  yield* (yield* SessionViewAccess).markResumeBlocked(runId, blocker);
   if (blocker !== null) return yield* refuse({ failed: blocker });
   // The generation, on this fiber. Its parent, read once under the claim,
   // is the run's edge for this activation.

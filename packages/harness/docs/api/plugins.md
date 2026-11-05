@@ -316,7 +316,9 @@ What a run cell's commits and re-reads fail with.
 
 ```ts
 type CellError =
-  RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
+  | RunHistoryRefused
+  | DatabaseWriteFailed
+  | DatabaseReadFailed;
 ```
 
 ## ChildLaunch
@@ -626,14 +628,14 @@ function executed(
 
 ## FactKind
 
-One row kind a plugin owns (`plugin.fact`): the version it writes, the
-schema of that version's value, and adjacent upcasters from
-`version - upcasters.length` to `version`, oldest first.
-The store checks every row of the kind against its fact kind, and reads a
-row whose fact kind the process's plugins lack (its plugin removed, or not
-listed here) as written, marked `unavailable`; a run holding one does not
-resume. Fact kinds live beside their readers, in modules webviews can
-import.
+One row kind a plugin owns (`plugin.fact`): the version it writes and
+reads, and the schema of that version's value; a stored row at a lower
+version is an earlier build's, and one at a higher version refuses the
+store. The store checks every row of the kind against its fact kind, and
+reads a row whose fact kind the process's plugins lack (its plugin
+removed, or not listed here) as written, marked `unavailable`; a run
+holding one does not resume. Fact kinds live beside their readers, in
+modules webviews can import.
 
 ```ts
 interface FactKind {
@@ -642,7 +644,6 @@ interface FactKind {
   readonly kind: string;
   readonly version: number;
   readonly schema: Schema.Codec<unknown, unknown>;
-  readonly upcasters: readonly ((value: JsonValue) => JsonValue)[];
   /** What a fork of a run (a conversation's, or a script's `self()` child)
    *  starts with of the run's own row of the kind: `copy` the row the run
    *  held at the cut, `drop` none. A row about the plugin's own aggregate
@@ -702,7 +703,10 @@ message's alone:
 
 ```ts
 type FollowUpFailureReason =
-  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
+  | ResumeRefusal['kind']
+  | 'readFailed'
+  | 'oneShot'
+  | 'notParent';
 ```
 
 ## FollowUpSenderInput
@@ -1220,11 +1224,15 @@ against whichever roots its fiber happens to carry. The child-launch
 door (`ChildRuns`) and the call's place in its run (`RunCall`) are
 references with defaults, never requirements; a plugin's tool reads the
 door and never the session's `Runs`, which only the engine door carries
-(`RunCallShape.runs`).
+(`RunCallShape.session`).
 
 ```ts
 type PluginToolServices =
-  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
+  | RunServices
+  | ToolContext
+  | WorkspaceFs
+  | StorageFs
+  | Scope.Scope;
 ```
 
 ## ProcessChildLaunch
@@ -2093,7 +2101,10 @@ extensions) it closes over.
 
 ```ts
 type ToolProbeServices =
-  Secrets | FileSystem.FileSystem | HttpClient.HttpClient | ChildProcessSpawner;
+  | Secrets
+  | FileSystem.FileSystem
+  | HttpClient.HttpClient
+  | ChildProcessSpawner;
 ```
 
 ## ToolRegistry

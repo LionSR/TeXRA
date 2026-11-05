@@ -25,7 +25,7 @@ export {
   formatConversationMessage,
   type ConversationFormatOptions,
 } from '@agent/storage/conversationFormat';
-export type { RunWorkspaceFile } from '@agent/storage/runWorkspaceFiles';
+export type { RunWorkspaceFile } from '@shared/schemas';
 export type { AssembleTraceResult } from '@transcript/traceAssembler';
 // What `SessionHost.emit` takes and answers: the notices a session's runs
 // ask a host to present.
@@ -107,7 +107,13 @@ export {
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.
 export { followPendingRequests } from './effect/requestAnswerer.js';
-export { buildDiffHunks, type DiffHunks } from '@tools/unifiedDiff';
+export {
+  buildDiffHunks,
+  countLineChanges,
+  reportDiffTimeout,
+  type DiffHunks,
+  type Hunk,
+} from '@tools/unifiedDiff';
 export type { PresentationEventHandlers } from '@agent/runtime/runtimePresentationEvents';
 // Which side of a trace event a run wrote.
 export type { TraceArm } from '@shared/session/agentEvent';

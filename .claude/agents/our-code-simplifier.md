@@ -236,7 +236,7 @@ the same POLICY implemented per host, the simplification is to hoist it:
 
 ## TeXRA-specific constraints (violations fail review even when "cleaner")
 
-- VS Code-free zones (`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`) never
+- VS Code-free zones (root `AGENTS.md`) never
   gain `vscode` imports; host capabilities arrive as typed services the process runtime serves.
 - Effect Schema: tool-input optionals use `Schema.optional(Schema.NullOr(S))`
   (check `== null` at use sites); `withDecodingDefault` /

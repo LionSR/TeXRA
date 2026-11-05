@@ -29,7 +29,8 @@ type PullValue<R> = R extends { done?: false; value: infer A } ? A : never;
  * so checking `done` narrows to the member that carries the value.
  */
 type PullResult<A> =
-  { readonly done?: false; readonly value: A } | { readonly done: true };
+  | { readonly done?: false; readonly value: A }
+  | { readonly done: true };
 
 /**
  * A stream over a pull source — a `ReadableStreamDefaultReader` or an async

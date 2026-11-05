@@ -1,17 +1,14 @@
 import { strict as assert } from 'node:assert';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import { describe } from 'vitest';
 
 import { agentMatchesIdentifier } from '@texra-ai/harness/schemas';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import {
-  CUSTOM_TEAMS_KEY,
-  type AgentModePreset,
-} from '@texra/shared/agentTeams';
+import { CUSTOM_TEAMS_KEY } from '@texra/shared/agentTeams';
 import { teamMembers } from '@texra/shared/agentTeams';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 
@@ -81,7 +78,11 @@ function createController(customPresets: unknown) {
     }),
     customPresets: workspaceState
       .get(CUSTOM_TEAMS_KEY)
-      .pipe(Effect.map((stored) => (stored ?? []) as unknown[])),
+      .pipe(
+        Effect.map((stored) =>
+          Schema.decodeUnknownSync(Schema.Array(Schema.Unknown))(stored ?? []),
+        ),
+      ),
   };
 }
 
@@ -98,8 +99,10 @@ describe('SettingsAgentCatalogController', () => {
           LEGACY_ICON_PRESET,
           MALFORMED_PRESET,
         ]);
+        const [, , saved] = yield* state.customPresets;
         assert.equal(
-          ((yield* state.customPresets)[2] as AgentModePreset | undefined)?.id,
+          Schema.decodeUnknownSync(Schema.Struct({ id: Schema.String }))(saved)
+            .id,
           'custom-0',
         );
       }),

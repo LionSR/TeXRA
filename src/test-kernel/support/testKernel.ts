@@ -158,6 +158,9 @@ const composedProcess = (
   extra: readonly Plugin[],
   model: Layer.Layer<ValidationModel>,
 ) =>
+  // `processLayer` serves the internal `SessionOwner` beside `Sessions`
+  // (provideMerge); the suites' root launches and `sessionHandleOf` ask it.
+  // cast: the process layer provides `SessionOwner`, which its type omits.
   Layer.unwrap(
     Effect.map(FakeHost, (host) =>
       processLayer({
@@ -183,9 +186,6 @@ const composedProcess = (
         processStart: Effect.succeed('vitest'),
       }).pipe(Layer.provide(model)),
     ),
-    // cast: `processLayer` serves the internal `SessionOwner` beside
-    // `Sessions` (provideMerge); the suites' root launches and
-    // `sessionHandleOf` ask it.
   ) as Layer.Layer<ProcessServices | Sessions | SessionOwner, never, FakeHost>;
 
 /**

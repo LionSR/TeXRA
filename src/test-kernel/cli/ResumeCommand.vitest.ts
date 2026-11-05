@@ -7,12 +7,13 @@ import {
   type AgentConfig,
   AgentConfigSchema,
   qualifyAggregateId,
+  RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { CliExitCode } from '@cli/runtime/exitCodes';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { localRunReads } from '@cli/runtime/runReads';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
 import {
   SessionGraph,
@@ -31,13 +32,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
 }));
+// The command starts the service a conversation continues in; none here.
+vi.mock('@cli/runtime/cliService', () => ({
+  startCliService: () => Effect.void,
+}));
 
 vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/logSinks')>()),
   writeTextStderr: mocks.writeTextStderr,
 }));
 
-const RUN_ID = 'eec001' as RunId;
+const RUN_ID = Schema.decodeUnknownSync(RunIdSchema)('eec001');
 
 const TOOL_USE_CONFIG = Schema.decodeUnknownSync(AgentConfigSchema)({
   agent: 'planner',
@@ -56,6 +61,9 @@ const seedRunRecord = (config: AgentConfig | null) =>
       Effect.succeed({
         runtime: yield* SessionGraph.runtime,
         session: Effect.succeed(session),
+        runSession: Effect.succeed(session),
+        reads: localRunReads(Effect.succeed(session)),
+        service: undefined,
       }),
     );
     yield* Context.get(handle, SessionLog).transact([
@@ -126,27 +134,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             expect(yield* run(cliContext())).toEqual({
               chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
             });
-          }),
-      );
-
-      it.effect(
-        'refuses a run another live TeXRA process holds, naming its pid',
-        () =>
-          Effect.gen(function* () {
-            const seededSession = yield* seedRunRecord(TOOL_USE_CONFIG);
-            const log = Context.get(seededSession, SessionLog);
-            vi.spyOn(log, 'owner').mockReturnValue(
-              Effect.succeed({
-                ownerId: JSON.stringify(['other-host', 4321, 'start-1']),
-                liveness: 'alive',
-              }),
-            );
-
-            expect(yield* run(cliContext())).toBe(CliExitCode.Usage);
-
-            expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-              `Task ${RUN_ID} is held by another TeXRA process (pid 4321 on other-host).`,
-            );
           }),
       );
     });

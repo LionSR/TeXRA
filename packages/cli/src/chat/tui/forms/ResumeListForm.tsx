@@ -16,16 +16,16 @@ import {
 } from '@cli/runtime/historyLabels';
 import { rootRunId } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
-import type { LocalSession } from '@texra-ai/harness';
+import type { CliRunReads } from '@cli/runtime/runReads';
 import type { ProcessRuntime } from '@texra-ai/harness/host';
 import type { RunId } from '@texra-ai/harness/schemas';
 
 interface ResumeListFormProps {
   /**
-   * The session the history listing reads. Ink components run no Effect, so
-   * the process session arrives as a prop from the surface that opened the form.
+   * The stored runs the listing reads. Ink components run no Effect, so
+   * the reads arrive as a prop from the surface that opened the form.
    */
-  readonly session: LocalSession;
+  readonly reads: CliRunReads;
   /** The process runtime the listing runs on, from the same surface. */
   readonly runtime: ProcessRuntime;
   readonly availableRows?: number;
@@ -55,16 +55,13 @@ export function ResumeListForm(props: ResumeListFormProps): React.JSX.Element {
       title="/resume"
       loadingLabel="Loading history..."
       load={() =>
-        Effect.map(
-          listCliHistoryEntries(Effect.succeed(props.session)),
-          (entries) => {
-            // The conversation this chat is on is already open here.
-            const current = rootRunId.get();
-            return listResumableCliHistoryEntries(
-              entries.filter((entry) => entry.id !== current),
-            );
-          },
-        )
+        Effect.map(listCliHistoryEntries(props.reads), (entries) => {
+          // The conversation this chat is on is already open here.
+          const current = rootRunId.get();
+          return listResumableCliHistoryEntries(
+            entries.filter((entry) => entry.id !== current),
+          );
+        })
       }
       runtime={props.runtime}
       items={(entries) =>

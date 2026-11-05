@@ -8,6 +8,7 @@ import {
   emptyRunEndOutput,
   qualifyAggregateId,
   RUN_OUTCOME,
+  RunIdSchema,
   type RunId,
   type RunOutcome,
   type RunRecord,
@@ -18,6 +19,7 @@ import {
   listCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
+import { localRunReads } from '@cli/runtime/runReads';
 import { SessionLog } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -47,16 +49,23 @@ const config = Schema.decodeUnknownSync(AgentConfigSchema)(
 
 const tempDirs = useTempDirs();
 
-/** The process session the CLI's history readers open. */
-const historySession = Effect.map(TestSession, (session) =>
-  Effect.succeed(session),
+const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
+
+/** The CLI's history reads over the process session, as a chat no service
+ *  serves holds them. */
+const historyReads = Effect.map(TestSession, (session) =>
+  localRunReads(Effect.succeed(session)),
 );
 
-const historyEntries = Effect.flatMap(historySession, listCliHistoryEntries);
+const historyEntries = Effect.flatMap(historyReads, listCliHistoryEntries);
 
 const historyDetails = (id: RunId) =>
-  Effect.flatMap(historySession, (session) =>
-    readCliHistoryDetails(session, id),
+  Effect.flatMap(TestSession, (session) =>
+    readCliHistoryDetails(
+      localRunReads(Effect.succeed(session)),
+      session.roots.storage,
+      id,
+    ),
   );
 
 /**
@@ -132,7 +141,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   ['b4b4b4', undefined],
                 ] as const;
                 for (const [id, outcome] of outcomes)
-                  yield* publishRunFacts(session, id as RunId, {
+                  yield* publishRunFacts(session, decodeRunId(id), {
                     record: config,
                     ...(outcome && { outcome }),
                   });
@@ -146,16 +155,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   'completed',
                   'resumable',
                 ]);
-                expect(
-                  outcomes.map(
-                    ([id]) =>
-                      (
-                        cliHistoryNdjsonRecords([byId(id)!])[0] as {
-                          entry: { status: string };
-                        }
-                      ).entry.status,
+                const listed = outcomes.flatMap(([id]) => byId(id) ?? []);
+                expect(cliHistoryNdjsonRecords(listed)).toMatchObject(
+                  ['interrupted', 'error', 'completed', 'resumable'].map(
+                    (status) => ({ entry: { status } }),
                   ),
-                ).toEqual(['interrupted', 'error', 'completed', 'resumable']);
+                );
               }),
           );
 
@@ -176,7 +181,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                 yield* Effect.promise(() => writeFile(outsidePath, 'outside'));
                 // A stored tool-use run whose settled calls edited these
                 // paths.
-                yield* publishRunFacts(session, 'a1a1a1' as RunId, {
+                yield* publishRunFacts(session, decodeRunId('a1a1a1'), {
                   record: Schema.decodeUnknownSync(AgentConfigSchema)({
                     ...config,
                     script: null,
@@ -187,7 +192,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   edited: ['../outside.md', outsidePath, 'missing.md'],
                 });
 
-                const details = yield* historyDetails('a1a1a1' as RunId);
+                const details = yield* historyDetails(decodeRunId('a1a1a1'));
 
                 expect(details?.files).toEqual([]);
               }),

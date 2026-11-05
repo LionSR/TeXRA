@@ -44,7 +44,7 @@ You can also install TeXRA in your preferred editor through a protocol link:
 ### CLI
 
 The standalone `texra` command is published to npm. Install it globally (requires
-Node.js 22.19.0 or later in 22.x, or Node.js 24 or later):
+Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later):
 
 ```bash
 npm install -g @texra-ai/cli
@@ -313,7 +313,7 @@ Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and
 - **MiniMax API Key**: Available from [MiniMax Platform](https://platform.minimax.io/) (international) or [MiniMax China](https://platform.minimaxi.com/) (China region)
 - **GLM API Key**: Available from [Z.AI](https://z.ai/) (international) or [BigModel](https://open.bigmodel.cn/) (China region)
 - **Meta API Key** (Muse Spark): Available from [dev.meta.ai](https://dev.meta.ai/)
-  :::
+:::
 
 ## Verifying and troubleshooting installation
 

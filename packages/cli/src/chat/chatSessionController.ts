@@ -21,7 +21,6 @@ import {
   type Session,
 } from '@texra-ai/harness';
 import {
-  describeFollowUpFailure,
   launchNoticeOf,
   normalizeProviderError,
   presentFollowUpResult,
@@ -209,8 +208,8 @@ export interface ChatSessionControllerInit {
   /** The chat is a client of the background service, whose view also holds
    *  other terminals' conversations. */
   readonly served: boolean;
-  /** A run's records (its saved setup, whether it exists), read from this
-   *  process's store. */
+  /** A run's records (its saved setup, whether it exists), read where the
+   *  project's runs are held: this process's store, or the service's. */
   readonly records: (runId: RunId) => ChatRunRecords;
 
   /** The chat session's {@link CliContext}: the controller attaches one
@@ -599,15 +598,6 @@ export function createChatSessionController(
           );
           yield* Effect.forkDetach(
             resumeRun(runSession, id).pipe(
-              Effect.flatMap((resumed) =>
-                resumed === 'waiting'
-                  ? Effect.sync(() =>
-                      appendLocalErrorTranscript(
-                        describeFollowUpFailure('blocked'),
-                      ),
-                    )
-                  : Effect.void,
-              ),
               Effect.catch((refused) =>
                 Effect.sync(() =>
                   showFailure(
@@ -655,20 +645,15 @@ export function createChatSessionController(
         yield* Effect.forkIn(
           recoverRun(
             Effect.gen(function* () {
-              // A refusal, or a run that waits for what blocks it, is the
-              // resume's answer, not a failure: the chat says it in the
-              // session's words and exits as a usage error.
+              // A refusal is the resume's answer, not a failure: the chat
+              // says it in the session's words and exits as a usage error.
               const run = yield* resumeRun(runSession, id).pipe(
                 Effect.catchIf(isRequestRefusal, (refusal) =>
                   Effect.succeed(refusal),
                 ),
               );
-              if (run === 'waiting' || isRequestRefusal(run)) {
-                if (run === 'waiting')
-                  appendLocalErrorTranscript(
-                    describeFollowUpFailure('blocked'),
-                  );
-                else appendLocalRequestRefusal(run);
+              if (isRequestRefusal(run)) {
+                appendLocalRequestRefusal(run);
                 session.settleExitCode(claim, CliExitCode.Usage);
                 return;
               }

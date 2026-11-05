@@ -1,11 +1,10 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 // Node imports
-import { EventEmitter } from 'node:events';
 
 // Third-party imports
-import { Effect, Predicate } from 'effect';
-import { useInput, useStdin, useWindowSize, type Key } from 'ink';
+import { Effect } from 'effect';
+import { useInput, useWindowSize, type Key } from 'ink';
 import {
   Fragment,
   useCallback,
@@ -18,12 +17,7 @@ import {
 
 // Local imports - shared runtime
 import { type RunId, acceptsFollowUp } from '@texra-ai/harness/schemas';
-import {
-  isCtrlInput,
-  isEscapeInput,
-  metaChordInput,
-  rewriteKittyEnterInput,
-} from '@cli/tui/inputKeys';
+import { isCtrlInput, isEscapeInput, metaChordInput } from '@cli/tui/inputKeys';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
 import { AGENT_LIST } from '@ui/copy/nestedRuns';
@@ -67,7 +61,6 @@ import {
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
   focusRun,
-  interruptedNoticeHidden,
 } from './state/cliState';
 import {
   appendLocalNotice,
@@ -160,7 +153,6 @@ export function App(props: AppProps): React.JSX.Element {
     view,
   });
   const childListTarget = resolveChildListTarget(view, activeRunId);
-  const stdin = useStdin();
   // One owner of "a foreground surface is up": the surface kind itself.
   // `undefined` is exactly the no-surface case (every reader target carries a
   // `kind`), so nothing derives that fact a second time and the two can never
@@ -203,33 +195,6 @@ export function App(props: AppProps): React.JSX.Element {
   const inputBarVisible =
     !foregroundOpen &&
     (!childInputHidden || childListFocused || unavailableDetail !== undefined);
-
-  // Under the Kitty disambiguate flag (enabled in runChatTui for Shift+Enter),
-  // some Enter variants arrive as CSI-u sequences that Ink parses incompletely.
-  // Re-dispatch keypad Enter as plain Enter so submit/confirm still works.
-  // Batched Shift+Enter sequences are rewritten into an internal newline token
-  // only while the main draft input is active; standalone Shift+Enter is
-  // already parsed by Ink and must not be emitted twice.
-  useEffect(() => {
-    // Ink's stdin context carries its input emitter at runtime (Ink's own
-    // `Props` type declares it), but `useStdin` types only the public subset.
-    if (
-      !Predicate.hasProperty(stdin, 'internal_eventEmitter') ||
-      !(stdin.internal_eventEmitter instanceof EventEmitter)
-    )
-      return;
-    const emitter = stdin.internal_eventEmitter;
-    const onInput = (data: string): void => {
-      const rewritten = rewriteKittyEnterInput(data, {
-        shiftEnter: inputDisabled ? 'preserve' : 'newline',
-      });
-      if (rewritten !== undefined) emitter.emit('input', rewritten);
-    };
-    emitter.on('input', onInput);
-    return () => {
-      emitter.off('input', onInput);
-    };
-  }, [inputDisabled, stdin]);
 
   const sessions = useSignal(sessionListRunIds);
   const childRunningCount = runningChildCount(
@@ -635,11 +600,7 @@ export function App(props: AppProps): React.JSX.Element {
               roots={props.session.roots}
               controlRef={inputBarRef}
               holdsKeystroke={holdsKeystroke}
-              onSubmit={(line, mediaFiles, images, holdUntil) => {
-                // Anything submitted passes over the open-time notice.
-                interruptedNoticeHidden.set(true);
-                props.onSubmit(line, mediaFiles, images, holdUntil);
-              }}
+              onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}
               disabledMessage={inputDisabledMessage}
               disabled={inputDisabled}

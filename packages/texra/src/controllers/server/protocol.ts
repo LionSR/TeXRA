@@ -23,7 +23,8 @@
  *   `task.ended`: the outcome it ends with.
  * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
  *   setup, and what its transcript exports read, from the service's own
- *   records.
+ *   records; `tasks.history`, `task.detail`, `task.skills` and
+ *   `tasks.delete`: what the CLI's history and status read and delete.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
@@ -34,11 +35,15 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 
 import {
   AgentConfigSchema,
+  AgentRunListingEntrySchema,
   JsonValueSchema,
   LaunchNoticeSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
+  RunResultSchema,
+  RunViewSchema,
+  RunWorkspaceFileSchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
@@ -48,7 +53,6 @@ import {
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
-  ResumeBlockedSchema,
 } from '@texra-ai/harness/transcript';
 import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
@@ -61,7 +65,9 @@ import {
   HostCapabilitySchema,
   HostFrameSchema,
 } from './hostCalls';
-import type { ValueFamily } from '@texra-ai/harness/host';
+import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
+
+import { RUN_LAUNCH_FACT_FIELDS } from './taskList';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
@@ -87,19 +93,23 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 52,
+  version: 60,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
     'tasks.list': 'f53aa5564aa8',
-    'task.watch': 'd6bd4b11bb04',
+    'task.watch': 'e44e66772744',
     'task.request': 'f055ca5a4858',
     'task.start': 'bd10b36a735a',
-    'task.resume': 'df1eb0f607ad',
+    'task.resume': 'ac37fb4d0261',
     'task.ended': 'b8a10423576c',
     'task.config': 'ee42ee67ab23',
-    'task.exportTrace': 'f005493cb0c1',
+    'task.exportTrace': 'e14a1baf0863',
     'task.exportInput': 'fefc9f82f1e2',
+    'tasks.history': '9de0043e6a9e',
+    'task.detail': '5a78e8b493e2',
+    'task.skills': 'b842fcc8e960',
+    'tasks.delete': 'c7fc69cb1d9c',
     'host.attach': '153808303ff7',
     'state.get': '221cc7263384',
     'state.set': 'e377b902a4e3',
@@ -136,10 +146,9 @@ export type ServiceRecord = typeof ServiceRecordSchema.Type;
 
 /** The storage root's running service: one row of the global root's
  *  current values, read and changed under its write lock. */
-export const TEXRA_SERVICE: ValueFamily<ServiceRecord, true> = {
+export const TEXRA_SERVICE: ValueFamily<ServiceRecord> = {
   name: 'texra-service',
   schema: ServiceRecordSchema,
-  deletable: true,
 };
 
 /** One top-level task in `tasks.list`. */
@@ -235,10 +244,8 @@ export const TexraRpcs = RpcGroup.make(
   }),
   Rpc.make('task.resume', {
     payload: { workspace, runId: RunIdSchema },
-    /** The run that resumed: the asked one, or the parent that owns it;
-     *  or what it needs (its agent, a plugin) and is missing, so it stays
-     *  interrupted. */
-    success: Schema.Union([TaskAdmitted, ResumeBlockedSchema]),
+    /** The run that resumed: the asked one, or the parent that owns it. */
+    success: TaskAdmitted,
     error: TaskFailed,
   }),
   /** What a task's current activation ends with, once it ends: its
@@ -285,6 +292,56 @@ export const TexraRpcs = RpcGroup.make(
       exportInput: Schema.NullOr(ChatExportInputSchema),
     }),
     error: TaskRecordsFailed,
+  }),
+  /** The runs a person started in the project, newest first, as a history
+   *  list shows them (`LocalSession.listRuns`). */
+  Rpc.make('tasks.history', {
+    payload: { workspace },
+    success: Schema.Array(AgentRunListingEntrySchema),
+    error: TaskFailed,
+  }),
+  /** What a history detail reads of a run beyond its setup and its
+   *  conversation: the launch facts its view holds (null for a run the
+   *  view no longer lists), its result, its report, the workspace files it
+   *  edited that are still there, and whether its rows hold a point to
+   *  continue from. */
+  Rpc.make('task.detail', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Struct({
+      run: Schema.NullOr(
+        RunViewSchema.mapFields(Struct.pick(RUN_LAUNCH_FACT_FIELDS)),
+      ),
+      result: Schema.NullOr(RunResultSchema),
+      report: Schema.NullOr(Schema.String),
+      /** Its conversation as every conversation view renders it. */
+      conversation: Schema.Array(ExportNodeSchema),
+      workspaceFiles: Schema.Array(RunWorkspaceFileSchema),
+      resumable: Schema.Boolean,
+    }),
+    error: TaskRecordsFailed,
+  }),
+  /** The skills the run's latest step listed. */
+  Rpc.make('task.skills', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(Schema.String),
+    error: TaskRecordsFailed,
+  }),
+  /** Delete one stored run, or every one (`LocalSession.deleteRuns`): a run
+   *  the service still runs is skipped and reported as `active`. */
+  Rpc.make('tasks.delete', {
+    payload: {
+      workspace,
+      target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
+    },
+    success: Schema.Struct({
+      listed: Schema.Int,
+      deleted: Schema.Array(RunIdSchema),
+      active: Schema.Array(RunIdSchema),
+      failed: Schema.Array(
+        Schema.Struct({ runId: RunIdSchema, error: RequestErrorSchema }),
+      ),
+    }),
+    error: TaskFailed,
   }),
   Rpc.make('host.attach', {
     payload: {

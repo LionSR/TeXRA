@@ -47,6 +47,7 @@ function usage<A>(
   return program.pipe(
     Effect.provideService(
       FetchHttpClient.Fetch,
+      // cast: the adapters only call it; the fake has none of fetch's statics.
       http as unknown as typeof globalThis.fetch,
     ),
     Effect.provideService(Secrets, new FakeSecrets(CODING_PLAN_KEYS)),

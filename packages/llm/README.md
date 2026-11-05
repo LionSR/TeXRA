@@ -13,7 +13,7 @@ credentials through `CredentialStore`.
 
 ## Install
 
-Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
+Requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later. The
 package is ESM only. `effect` (^4.1.0) is a peer dependency, so your install
 supplies the one copy of it:
 
@@ -146,7 +146,7 @@ Each entry's exports, with their TSDoc and declarations, are listed in
 The protocols (`api/`), the prefix fingerprint and the upload cache are
 internal: `bindModel` loads the chosen protocol with a literal
 `import('./api/<protocol>.js')`, so a run loads only its provider's SDK.
-ESLint holds the rest: nothing under `src/` imports another repo module, and
+oxlint holds the rest (`.oxlintrc.json`): nothing under `src/` imports another repo module, and
 outside `api/`, `oauth/` and `node.ts` nothing imports a Node built-in or a
 vendor SDK.
 

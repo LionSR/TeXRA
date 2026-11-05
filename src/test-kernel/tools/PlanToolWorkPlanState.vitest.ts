@@ -56,7 +56,7 @@ const planSession = Effect.fn('planSession')(function* (runId: RunId) {
     await waitForCondition(() => requests.opened.length > 0, {
       timeoutMessage: 'Timed out waiting for the plan request to open',
     });
-    const opened = requests.opened[0]!;
+    const opened = requests.opened[0];
     if (opened.payload.kind !== 'planApproval') {
       throw new Error(`Expected a plan request, not ${opened.payload.kind}.`);
     }

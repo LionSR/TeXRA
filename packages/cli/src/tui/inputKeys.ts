@@ -6,7 +6,6 @@ export interface ReturnKeyInput {
   readonly escape?: boolean;
 }
 
-export const SYNTHETIC_SHIFT_RETURN_INPUT = '\uE000';
 const ESC = '\u001B';
 
 const RAW_CONTROL_INPUTS = new Map<number, string>([
@@ -83,7 +82,6 @@ export function isPlainReturnInput(
 // it, Shift+Enter is byte-identical to Enter and falls through to submit, so
 // Ctrl-J remains the universal fallback.
 function isShiftReturnInput(input: string, key: ReturnKeyInput): boolean {
-  if (input === SYNTHETIC_SHIFT_RETURN_INPUT) return true;
   if (key.ctrl || key.meta || key.shift !== true) return false;
   return key.return === true || input === '\r' || input === '\n';
 }
@@ -92,7 +90,7 @@ function isShiftReturnInput(input: string, key: ReturnKeyInput): boolean {
  * Text inputs treat Ctrl-J and Shift+Enter as literal newline insertion before
  * the shared Return handler can submit. Raw Ctrl-J arrives from Ink as bare LF
  * with no ctrl flag, while Kitty-capable terminals may surface either Ctrl+J as
- * a ctrl chord or Shift+Enter as a modified return/synthetic token.
+ * a ctrl chord or Shift+Enter as a modified return.
  */
 export function isTextInputNewlineInput(
   input: string,
@@ -103,110 +101,4 @@ export function isTextInputNewlineInput(
     isCtrlInput(input, key, 'j') ||
     isShiftReturnInput(input, key)
   );
-}
-
-const KITTY_KEYPAD_ENTER_CODEPOINT = '57414';
-const KITTY_SHIFT_MODIFIER_BITS = 1;
-const KITTY_NO_MODIFIER_BITS = 0;
-
-// Kitty keyboard protocol: CSI codepoint ; modifiers [: eventType]
-// [; text-as-codepoints] u. Some terminals also emit the colon-only spelling
-// CSI codepoint : modifiers u for shifted Return, which Ink does not parse.
-const KITTY_ENTER_INPUT_RE = new RegExp(
-  `${ESC}\\[(13|57414)(?:([;:])(\\d+)(?::(\\d+))?(?:;[\\d:]+)?)?u`,
-  'g',
-);
-
-interface KittyEnterInput {
-  readonly delimiter?: ';' | ':';
-  readonly eventType?: number;
-  readonly key: 'mainEnter' | 'keypadEnter';
-  readonly modifierBits: number;
-}
-
-function parseKittyEnterInput(
-  codepoint: string,
-  delimiter: string | undefined,
-  modifier: string | undefined,
-  eventType: string | undefined,
-): KittyEnterInput {
-  const modifierBits =
-    modifier == null
-      ? KITTY_NO_MODIFIER_BITS
-      : Math.max(KITTY_NO_MODIFIER_BITS, Number(modifier) - 1);
-  const parsedDelimiter =
-    delimiter === ';' || delimiter === ':' ? delimiter : undefined;
-  return {
-    delimiter: parsedDelimiter,
-    eventType: eventType == null ? undefined : Number(eventType),
-    key:
-      codepoint === KITTY_KEYPAD_ENTER_CODEPOINT ? 'keypadEnter' : 'mainEnter',
-    modifierBits,
-  };
-}
-
-function isInkParsedStandaloneShiftEnterInput(
-  data: string,
-  sequence: string,
-  offset: number,
-  input: KittyEnterInput,
-): boolean {
-  return (
-    offset === 0 &&
-    sequence.length === data.length &&
-    input.delimiter === ';' &&
-    input.key === 'mainEnter' &&
-    input.modifierBits === KITTY_SHIFT_MODIFIER_BITS
-  );
-}
-
-function rewriteKittyEnterMatch(
-  data: string,
-  sequence: string,
-  offset: number,
-  input: KittyEnterInput,
-  shiftEnter: 'newline' | 'preserve',
-): string {
-  if (input.eventType === 3) return sequence;
-  if (
-    input.key === 'keypadEnter' &&
-    input.modifierBits === KITTY_NO_MODIFIER_BITS
-  ) {
-    return '\r';
-  }
-  if (shiftEnter === 'preserve') return sequence;
-  if (
-    input.key === 'mainEnter' &&
-    input.modifierBits === KITTY_SHIFT_MODIFIER_BITS
-  ) {
-    return isInkParsedStandaloneShiftEnterInput(data, sequence, offset, input)
-      ? sequence
-      : SYNTHETIC_SHIFT_RETURN_INPUT;
-  }
-  return sequence;
-}
-
-export function rewriteKittyEnterInput(
-  data: string,
-  options: { readonly shiftEnter: 'newline' | 'preserve' },
-): string | undefined {
-  const rewritten = data.replaceAll(
-    KITTY_ENTER_INPUT_RE,
-    (
-      sequence,
-      codepoint: string,
-      delimiter: string | undefined,
-      modifier: string | undefined,
-      eventType: string | undefined,
-      offset: number,
-    ) =>
-      rewriteKittyEnterMatch(
-        data,
-        sequence,
-        offset,
-        parseKittyEnterInput(codepoint, delimiter, modifier, eventType),
-        options.shiftEnter,
-      ),
-  );
-  return rewritten === data ? undefined : rewritten;
 }

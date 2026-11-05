@@ -245,7 +245,7 @@ function emptySessionState(): SessionState {
     rows: new Map(),
     latest: new Map(),
     transcripts: new Map(),
-    local: { self: [], dead: [], unreadable: [], resumeBlocked: [] },
+    local: { self: [], dead: [], unreadable: [] },
   };
 }
 
@@ -354,7 +354,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     approval: 'none' as const,
     ownedHere: false,
     readOnly: false,
-    resumeBlocked: null,
     actions: [],
     forceExpanded: false,
     group: 'recent' as const,
@@ -473,12 +472,8 @@ function withAggregates(u: Update, run: RunView): RunView {
   const readOnly = heldBy !== null || stranded;
   const actions = runActions({ ...run, readOnly, group }, stranded);
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
-  const blockedEntry = local.resumeBlocked.find((b) => b.runId === run.id);
-  const resumeBlocked = blockedEntry?.reason ?? null;
   let statusNotice: RunView['statusNotice'] = null;
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
-  else if (blockedEntry !== undefined)
-    statusNotice = { kind: 'resumeBlocked', reason: blockedEntry.reason };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
   else if (heldBy !== null)
     statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
@@ -498,7 +493,6 @@ function withAggregates(u: Update, run: RunView): RunView {
     treeUsage,
     ...status,
     statusNotice,
-    resumeBlocked,
   });
 }
 
@@ -738,12 +732,6 @@ function applyRunEvent(u: Update, run: RunView, event: OwnEvent): RunView {
         recipe: recipeBlockOf(config),
       };
     }
-    case 'run.model':
-      return {
-        ...run,
-        model: event.model,
-        modelLabel: getModelLabel(event.model),
-      };
     case 'context.state':
       return {
         ...run,

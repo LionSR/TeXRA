@@ -21,7 +21,7 @@
     "url": "https://github.com/LionSR/TeXRA/issues"
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.22.2 || >=24.15.0"
   },
   "publishConfig": {
     "access": "public"

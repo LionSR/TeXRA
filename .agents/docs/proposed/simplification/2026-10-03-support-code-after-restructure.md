@@ -8,30 +8,16 @@ Its behaviour-preserving finds merged in #13670. Of the findings it left, the
 `LanguageModelPort.onDidChange` split, the `entryTypeIn` ENOTDIR fix, the
 second config-path derivation, `ConfigProvider.inspect`'s `| undefined`, the
 `@common/errors` barrel (gone; AGENTS.md says to import the leaf module), the
-plugin digest's symlink read (now one `lstat` per entry, with no recovery) and
+plugin digest's symlink read (now one `lstat` per entry, with no recovery),
 the hook runner's stdio read (now logged at `warn` before the result keeps
-what was read) have since been settled. The `initializeNodeRuntimeSkills`
-inline was dropped: the package split made it a published `./node` export
-(`packages/harness/src/node.ts`) whose caller, `bootstrapHost`, now lives in
-the app, which may not import `@skills`. Re-checked against `main` at `808521a8ed`
-(2026-10-30); what follows is still open.
+what was read), the hook runner's exit code (only a signal kill reads as
+no code) and `readLinkOrUndefined` (only EINVAL and absence recovered) have
+since been settled. The `initializeNodeRuntimeSkills` inline is moot: neither
+it nor `bootstrapHost` exists any more. Re-checked against `main` at
+`b411a6d` (2026-11-03); the one item that was still open, below, has
+since landed too.
 
-## 1. Two silent catches
-
-- `packages/harness/src/common/plugins/pluginHooks.ts`, `runHook`:
-  `handle.exitCode.pipe(Effect.orElseSucceed(() => null))` turns every
-  exit-code failure into "exited, code null". The comment only justifies a
-  signal kill.
-- `packages/harness/src/utils/files/externalRoots.ts`, `readLinkOrUndefined`:
-  the comment says EINVAL or ENOENT, but the bare `catch` also absorbs EACCES
-  and ELOOP.
-
-Proposal: give each one a code predicate, or log at `warn` before
-recovering. Not done in the sweep: each changes which failures surface, and
-the hook runner's verdicts are pinned by
-`src/test-kernel/common/HookProtocol.vitest.ts`.
-
-## 2. Hooks and MCP servers resolve a program on different PATHs (done)
+## Hooks and MCP servers resolve a program on different PATHs (done)
 
 Done: `pinHook`, `hookShell` and `runHook` (`pluginHooks.ts`) resolve and
 spawn on the PATH extended with `CommandDirs`, as `externalFiles` and an MCP

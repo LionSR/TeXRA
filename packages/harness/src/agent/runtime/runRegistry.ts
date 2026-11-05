@@ -296,9 +296,7 @@ export class RunRegistry implements RunsShape {
     const aggregateId = qualifyAggregateId('run', runId);
     const opening = this.init.log.tail(this.init.log.now()).pipe(
       Stream.filter(
-        (row) =>
-          row.aggregateId === aggregateId &&
-          (row.type === 'run.start' || row.type === 'run.activate'),
+        (row) => row.aggregateId === aggregateId && row.type === 'run.activate',
       ),
       Stream.take(1),
       Stream.runForEach((row) =>

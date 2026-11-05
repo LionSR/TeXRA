@@ -139,6 +139,11 @@ test.beforeAll(async () => {
     join(workspacePath, 'second.ts'),
     'export const secondDocument = true;\n',
   );
+  for (const name of ['third', 'fourth'])
+    writeFileSync(
+      join(workspacePath, `${name}.ts`),
+      `export const ${name}Document = true;\n`,
+    );
   launched = await launchTexraApp({ workspacePath });
   launched.page.on('pageerror', (error) => rendererErrors.push(error.message));
   await dismissOnboarding(launched.page);
@@ -394,6 +399,17 @@ test('moves live terminals and unsaved editors without recreating resources', as
       '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-lines',
     ),
   ).toContainText('retained edit');
+  // Closing the unsaved editor asks in a styled dialog; Cancel keeps it.
+  await first.locator('.shell-dock-tab-close wa-button').click();
+  const discard = page.locator('wa-dialog.desktop-discard-overlay[open]');
+  await expect(discard).toContainText('first.ts has unsaved changes');
+  await page.screenshot({
+    path: test.info().outputPath('discard-unsaved-dialog.png'),
+    animations: 'disabled',
+  });
+  await discard.locator('.desktop-discard-cancel').click();
+  await expect(discard).toHaveCount(0);
+  expect(await editorNode?.evaluate((node) => node.isConnected)).toBe(true);
   await page
     .locator(
       '.shell-dock-editor[data-panel-id="workbench:editor:first.ts"]:visible .view-line',
@@ -493,6 +509,28 @@ test('keeps browser menus above native content and close controls inside tab bou
   await expect.poll(attachedViews).toBe(baseline + 1);
   await close.click();
   await expect.poll(attachedViews).toBe(baseline);
+
+  // The command palette reaches the same browser tab.
+  await page.keyboard.press(
+    process.platform === 'darwin' ? 'Meta+k' : 'Control+k',
+  );
+  await page
+    .locator('.desktop-command-palette-input')
+    .locator('input')
+    .fill('browser');
+  await page
+    .locator(
+      '.desktop-command-palette-item[data-command-id="texra.desktop.showBrowser"]',
+    )
+    .click();
+  await expect(browser).toBeVisible();
+  await expect.poll(attachedViews).toBe(baseline + 1);
+  await page.screenshot({
+    path: test.info().outputPath('browser-from-command-palette.png'),
+    animations: 'disabled',
+  });
+  await close.click();
+  await expect.poll(attachedViews).toBe(baseline);
 });
 
 test('preserves each project’s grid and unsaved editor when switching projects', async () => {
@@ -573,4 +611,39 @@ test('preserves each project’s grid and unsaved editor when switching projects
   } finally {
     cleanupDirectory(otherPath);
   }
+});
+
+test('Close group asks about each unsaved editor in turn', async () => {
+  const { page } = launched;
+  const names = ['third.ts', 'fourth.ts'];
+  for (const name of names) {
+    await openFile(name);
+    const editor = panel('editor').filter({
+      has: page.locator(`[title="${name}"]`),
+    });
+    await editor.locator('.view-line').first().click();
+    await page.keyboard.type('// unsaved ');
+    await expect(editor.locator('.view-lines')).toContainText('unsaved');
+  }
+  const editorTab = (name: string) =>
+    page.locator(`.shell-dock-tab[data-tab-id="workbench:editor:${name}"]`);
+  await menu(groupOf(editorTab('fourth.ts')), 'close-group');
+  const dialog = page.locator('wa-dialog.desktop-discard-overlay[open]');
+  // One question per unsaved editor, in the group's order: the first is
+  // discarded, the second kept.
+  await expect(dialog).toContainText('has unsaved changes');
+  const asked = (await dialog.textContent()) ?? '';
+  const [discarded, kept] = asked.includes('third.ts')
+    ? names
+    : names.toReversed();
+  await dialog.locator('.desktop-discard-confirm').click();
+  await expect(editorTab(discarded!)).toHaveCount(0);
+  await expect(dialog).toContainText(`${kept} has unsaved changes`);
+  await dialog.locator('.desktop-discard-cancel').click();
+  await expect(dialog).toHaveCount(0);
+  await expect(editorTab(kept!)).toHaveCount(1);
+  // Leave nothing unsaved behind: discard the kept editor too.
+  await editorTab(kept!).locator('.shell-dock-tab-close wa-button').click();
+  await dialog.locator('.desktop-discard-confirm').click();
+  await expect(editorTab(kept!)).toHaveCount(0);
 });

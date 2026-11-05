@@ -14,12 +14,13 @@ import {
   AgentDirectories,
   type AgentEntry,
   AppState,
-  GlobalStorageFs,
-  type RootedFileSystem,
 } from '@texra-ai/harness/host';
 import { findAgentByIdentifier } from '@agent/index/agentCatalog';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  nodePlatformLayer,
+  unusedGlobalStorageFs,
+} from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
   createFakeHost,
@@ -53,7 +54,7 @@ const loadCatalog = Effect.provide(
   AgentCatalog.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
-        Layer.succeed(GlobalStorageFs)({} as RootedFileSystem),
+        unusedGlobalStorageFs(),
         Layer.succeed(AgentDirectories)(fakeHostAgentDirectories),
         AppState.layer(new FakeStateStore()),
         nodePlatformLayer,

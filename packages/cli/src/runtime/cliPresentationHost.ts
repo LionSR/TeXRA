@@ -9,14 +9,10 @@ import {
 import { modelFailureText } from '@ui/copy/modelAccess';
 
 // Local imports - CLI runtime
-import {
-  flushNdjsonStdout,
-  writeNdjsonStdout,
-  writeTextStderr,
-} from './logSinks';
+import { writeNdjsonStdout, writeTextStderr } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
-import type { LocalSession } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 import type {
   PresentationEventHandlers,
   RuntimePresentationEvent,
@@ -31,7 +27,7 @@ export interface CliRuntimeHost {
     payload: RuntimePresentationEventPayloads[K],
   ): boolean;
   attachRunProgressRenderer(
-    session: LocalSession,
+    session: Session,
     runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;
@@ -124,12 +120,9 @@ export function createCliRuntimeHost(context: CliContext): CliRuntimeHost {
       return handlers[event](payload) === true;
     },
     close() {
-      return Effect.gen(function* () {
+      return Effect.sync(() => {
         closed = true;
         runProgress?.clear();
-        // NDJSON records queue on the module-level stdout serializer; the
-        // text mode writes stderr directly and buffers nothing.
-        if (ndjson) yield* flushNdjsonStdout();
       });
     },
   };

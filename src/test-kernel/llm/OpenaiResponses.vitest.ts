@@ -195,7 +195,7 @@ describe('native OpenAI Responses protocol', () => {
                 summary: REASONING.summary,
                 content: REASONING.content,
               },
-              CALLS[0]!,
+              CALLS[0],
             ],
             {
               usage: { input_tokens: 12, output_tokens: 3, total_tokens: 15 },

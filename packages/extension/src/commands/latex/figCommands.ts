@@ -46,53 +46,52 @@ export function handleCompileTikzFigures(
           title: 'Compiling TikZ Figures',
           cancellable: false,
         },
-        (progress) =>
-          Effect.gen(function* () {
-            progress.report({
-              message: 'Extracting and compiling TikZ pictures...',
-            });
+        Effect.fnUntraced(function* (progress) {
+          progress.report({
+            message: 'Extracting and compiling TikZ pictures...',
+          });
 
-            // Over the session's rooted filesystems the command root
-            // provided, not a view built at this depth.
-            const compiledFiles = yield* TikzPictureManager.compile(
-              pathToLocationIn(roots.workspace, filePath),
-              roots,
-            );
+          // Over the session's rooted filesystems the command root
+          // provided, not a view built at this depth.
+          const compiledFiles = yield* TikzPictureManager.compile(
+            pathToLocationIn(roots.workspace, filePath),
+            roots,
+          );
 
-            if (compiledFiles.length === 0) {
-              yield* showLoggedInfoMessage(
-                CHANNEL,
-                'No TikZ figures found to compile',
-              );
-              return;
-            }
-
-            const items = compiledFiles.map((fileLocation) => ({
-              label: path.basename(fileLocation.absolutePath),
-              description: path.dirname(fileLocation.absolutePath),
-              resourceUri: vscode.Uri.file(fileLocation.absolutePath),
-              iconPath: vscode.ThemeIcon.File,
-            }));
-
-            const selected = yield* quickPick(items, {
-              placeHolder: 'Compiled TikZ figures (select to open)',
-              prompt: 'Select a compiled TikZ figure to open in the editor',
-              canPickMany: false,
-            });
-
-            if (selected) {
-              yield* safeExecuteCommand(
-                'vscode.open',
-                [selected.resourceUri],
-                CHANNEL,
-              );
-            }
-
+          if (compiledFiles.length === 0) {
             yield* showLoggedInfoMessage(
               CHANNEL,
-              `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
+              'No TikZ figures found to compile',
             );
-          }),
+            return;
+          }
+
+          const items = compiledFiles.map((fileLocation) => ({
+            label: path.basename(fileLocation.absolutePath),
+            description: path.dirname(fileLocation.absolutePath),
+            resourceUri: vscode.Uri.file(fileLocation.absolutePath),
+            iconPath: vscode.ThemeIcon.File,
+          }));
+
+          const selected = yield* quickPick(items, {
+            placeHolder: 'Compiled TikZ figures (select to open)',
+            prompt: 'Select a compiled TikZ figure to open in the editor',
+            canPickMany: false,
+          });
+
+          if (selected) {
+            yield* safeExecuteCommand(
+              'vscode.open',
+              [selected.resourceUri],
+              CHANNEL,
+            );
+          }
+
+          yield* showLoggedInfoMessage(
+            CHANNEL,
+            `Successfully compiled ${compiledFiles.length} TikZ ${pluralize(compiledFiles.length, 'figure')}`,
+          );
+        }),
       );
     }),
   );

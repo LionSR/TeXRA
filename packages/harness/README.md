@@ -10,7 +10,7 @@ agent from a Node program and consume its trace as a stream.
 
 ## Install
 
-Requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later. The
+Requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later. The
 package is ESM only.
 
 ```bash
@@ -138,7 +138,7 @@ A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
 `reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
-and `RunView.resumeBlocked` give: its `kind` is `finished`, `ownedElsewhere`
+gives: its `kind` is `finished`, `ownedElsewhere`
 (a live process holds it, named by `owner`), `blocked` (the agent or plugin
 named by `name` is missing, off or not trusted), `unusableCheckpoint`,
 `earlierBuild` (with its `cause`), or `notResumable` (it is running here, or

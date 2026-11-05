@@ -52,7 +52,9 @@ export function describeSubagentProgress(
  *  by the user's one-off answer (`inherit`), or by the run's proposal
  *  bypass, a human's (`auto-approved`) or an autonomous goal's. */
 export type DelegatedChildApproval =
-  'inherit' | 'auto-approved' | 'goal-approved';
+  | 'inherit'
+  | 'auto-approved'
+  | 'goal-approved';
 
 /**
  * The grants a delegated child is registered with, stamped on its

@@ -24,8 +24,9 @@ export const testRunFork: Effect.Effect<
   RunServices | Scope.Scope
 > = Effect.map(
   FiberSet.makeRuntime<RunServices>(),
-  // cast: a test registry stands for no session, so what it starts reads
-  // none of a session's services
+  // A test registry stands for no session, so what it starts reads none of
+  // a session's services.
+  // cast: nothing the runtime starts asks for a session service.
   (fork) => fork as RunRegistryInit['fork'],
 );
 
@@ -42,12 +43,13 @@ export const testRunRegistry: Effect.Effect<
   (fork, emptyView) =>
     // The registry reads its session's view (empty here), claims (no-ops)
     // and its own `run.detach` batches (dropped); nothing else.
-    // cast: the registry reads only these members of its view and log.
     new RunRegistry({
+      // cast: the registry reads only these members of its view.
       view: {
         run: () => undefined,
         ref: emptyView,
       } as unknown as RunRegistryInit['view'],
+      // cast: the registry reads only these members of its log.
       log: {
         transact: () => Effect.succeed([]),
         hold: () => Effect.void,

@@ -120,20 +120,24 @@ changes, and decided O5 differently:
 - The 1.0 storage freeze waits for the slices that change stored rows (2, 3,
   4 and D).
 
-### Slice 3 design (2026-11-04, after a read-only survey)
+### Slice 3 design (2026-11-04; corrected 2026-11-05 after a read of the tree)
 
 What the code does today, against O1's description:
 
 - Nobody holds a store lock. Every process opens `texra.db` in WAL mode with
   a busy retry (`databaseLayer`, `packages/harness/src/controllers/session/Database.ts`);
   who may run a run is the per-aggregate claim `event_sequence.owner_id`,
-  checked on every append. `storeOpenElsewhere` is the probe of
-  `texra doctor --prune-storage` alone (`projectDatabase.ts`).
-- The desktop and the extension already attach: with a service, a window
-  holds `serviceSession` and `serviceProjectState` and opens no store. The
-  CLI chat opens the project store even when attached (`runChatTui.tsx`,
-  `initPlatform.ts`), and headless `texra run`, `team run` and the document
-  resume never attach (`executeCli.ts`).
+  checked on every append. `storeOpenElsewhere` (`Database.ts`) is the probe
+  of `texra doctor --prune-storage` alone (`projectDatabase.ts`). The holder's
+  liveness is proved by `ownerLiveness.ts` (`proveRecorded`, `deadOwners`),
+  not by the session inputs, which only carry the claims.
+- The desktop and the extension attach: with a service, a window holds
+  `serviceSession` and `serviceProjectState` and opens no store. Since
+  2026-11-05 (#14738) the CLI does the same: `initCliPlatform` links to the
+  running service and takes the project's state and reads from it
+  (`runReads.ts`); the chat starts one before its platform comes up. Headless
+  `texra run`, `team run` and a document resume still run in process, as
+  the guide states (`executeCli.ts`).
 - The service (`texra serve`) is one per storage root, found through its
   record in the global store (a compare-and-set), one session per project
   opened on the first lease and closed after 600 s idle. An upgrade drains:
@@ -148,53 +152,71 @@ EXCLUSIVE` in WAL mode makes the holder the only process, readers included,
 so a second opener cannot read; the global store carries the service record's
 compare-and-set and must stay multi-process, so the lock is the project
 store's alone; an idle close releases the lock; the lock is per connection,
-so it cannot sit on a second connection beside the writer; the prober and
-the claims exist only to arbitrate between openers; and a store's schema
-change is a version bump, not an upcaster.
+so it cannot sit on a second connection beside the writer; `node:sqlite`'s
+busy wait blocks the event loop, so every probe and lock step runs at
+`busy_timeout = 0` with the retry on the fiber schedule; and a store's
+schema change is a version bump that moves every developer's store aside
+(`checkStamps` refuses any other stamp), so the pending column drops
+(`event_sequence.owner_id`, `current_value.version`) land in one
+re-baseline, not one per PR.
 
 The mechanism, then:
 
 1. **One opener per project store**: the process that drives its runs holds
-   `locking_mode = EXCLUSIVE` on its connection for the connection's life.
-   Where a service runs, that is the service; it opens a project on the first
-   lease and closes it idle, and clients open nothing. A second opener gets
-   `BUSY` and attaches to the service. There is no read-only opener: a
-   process that can neither hold nor attach says "another TeXRA process holds
-   this project" and offers nothing else. Prune's probe keeps working (`BUSY`
-   is `open`).
-2. **Every client goes through the service.** The desktop and the extension
-   do. The CLI chat stops opening the store when attached and reads project
-   state through the service as the desktop does; headless `texra run`,
-   `team run` and a document resume beside a service run through it, as
-   `texra tasks start` does; with no service, the first opener holds, as the
-   in-process path does today.
-3. **Windows gets the service** over a named pipe with an explicit DACL (the
-   user's SID alone): the one piece of new host code, and a prerequisite, or
-   a Windows window would be shut out of a project another window holds.
+   `locking_mode = EXCLUSIVE` on its connection for the connection's life,
+   taken by an empty immediate transaction at open. Where a service runs,
+   that is the service; it opens a project on the first lease and closes it
+   idle, and clients open nothing. A second opener gets `BUSY` at once and
+   is refused: "another TeXRA process holds this project". There is no
+   read-only opener and no attach-on-BUSY path: hosts pick the service
+   before opening. Prune's probe keeps working (`BUSY` is `open`); a cold
+   `tasks.list` read of a held project answers "held" instead of waiting.
+2. **Every client goes through the service.** The desktop, the extension and
+   the CLI do (#14738). Headless `texra run` beside a service that holds the
+   project is refused with that message and `texra tasks start` named, so
+   the service stays the project's one writer.
+3. **Windows** has no service, so a second window on one folder, or the CLI
+   beside the app, is refused outright. Open owner question (2026-11-05):
+   accept that for now, or build the named-pipe service (an explicit DACL,
+   the user's SID alone) first.
 4. **The no-workspace store** goes through the service like any project.
 5. **An upgrade drain** opens projects lazily in the new service; one the
    draining service still holds answers `BUSY`, and the new service retries
    until the old one's tasks end, within the drain's own deadline.
-6. **Deleted with the claims**: `event_sequence.owner_id` and its trigger and
-   `NEXT_SEQ`'s owner check; `acquireClaims`, `releaseClaims`, `claimOwner`,
-   `claimAll`, `reclaimable`, `provingOwners`, `DatabaseNotOwner`,
-   `DatabaseClaimRefused`, `heldElsewhereBy`, `claimStanding`;
-   `proveOwnerLiveness`, `proveRecorded`, `deadOwners` and the prober layer;
-   `ProcessIdentity.owners`, `LocalRuntimeState.self` and `dead`,
-   `RunView.ownerId` and `ownedHere`, the `ownedElsewhere` arms of the three
-   unions, the held parks (`heldFor`), `holdProcessRoot`. `RunView.readOnly`
-   keeps its one remaining meaning, rows of an earlier build, and is named
-   for it (`unreadable`), with its delete action. The fifteen test files
-   that pin claims (`sessionEvents`, `sessionViewUpdate`, `resumeRun`,
-   `RunAgentOwnership`, `ResumeCommand`, `ApprovalQueue`, `ChildRunLoop`,
-   `SessionIsolation`, `sessionPrograms`, `DelegationHeadless`, the crash
-   conformance and store-fault supports, `goldenStore`, the fan-out and
-   session-view fixtures) lose those cases; `claimHolder` and `untilStored`
-   read through the session's connection instead of the raw file.
+6. **Deleted with the claims**, in one PR: `event_sequence.owner_id`'s
+   writes and reads (the column stays until the re-baseline), its trigger
+   and `NEXT_SEQ`'s owner check; `acquireClaims`, `releaseClaims`,
+   `claimOwner`, `claimAll`, `reclaimable`, `provingOwners`, `DeletionMode`
+   (whose only reader is `claimAll`), `DatabaseClaimRefused`,
+   `heldElsewhereBy`, `claimStanding`, `NotOwner` and the `not-owner`
+   refusal; `DatabaseNotOwner` narrowed to its `closed` case; the liveness
+   machinery (`ownerLiveness.ts`, `leaseOwnerLiveness.ts`,
+   `ProcessIdentity.owners`, `ProcessProbe`); `LocalRuntimeState.self` and
+   `dead` replaced by `runsHere`, the registry's activation map that
+   `session.held()` already exposes, so the fold's `interrupted` is "not
+   ended and not running here"; `RunView.ownerId` and `ownedHere`
+   (`runsHere` replaces them), the held notice and `readOnly` (equal to
+   `stranded`, deleted rather than renamed); the `ownedElsewhere` arms of
+   the three unions; `holdProcessRoot`; `presentTerminalResult`'s self check
+   (`event.origin` then has no reader); stop's non-local branch, the
+   decision-phase `stopEnd` and `beforeEnd`'s claim line (its child
+   retirement and `withInactiveRunStep` have other callers and stay);
+   `RunStop` collapses to a boolean. Then one resume per run, no hand-off
+   (`RunAttempt`, `attemptOf`, the last-leaver interrupt, `restsWith`), with
+   the held parks, whose only producer is the `ownedElsewhere` refusal.
+   The fifteen test files that pin claims (`sessionEvents`,
+   `sessionViewUpdate`, `resumeRun`, `RunAgentOwnership`, `ResumeCommand`,
+   `ApprovalQueue`, `ChildRunLoop`, `SessionIsolation`, `sessionPrograms`,
+   `DelegationHeadless`, the crash conformance and store-fault supports,
+   `goldenStore`, the fan-out and session-view fixtures) lose those cases;
+   the raw readers (`storedRows`, `untilStored`, `claimHolder`,
+   `crashedCopy`, the desktop E2E and `validate-run.mjs`) read through the
+   session's connection instead of the file.
 
-Order: the Windows pipe first, then the CLI's attach for chat state and
-headless runs, then the lock with the deletions in one PR. The lock alone,
-before the two, would strand a Windows window and the CLI.
+Order: the CLI as a client (done), then the lock with the deletions in one
+PR, then one resume per run with the held parks. The lock alone, before the
+CLI attached, would have refused every `texra` command beside a running
+service, since each opened the project store for its state.
 
 ## Findings by area
 
@@ -240,11 +262,12 @@ fold computes.
 | A clock is ticking     | `runStartedAt`, nulled by the fold unless working | the three clock rules (`RunHeader.ts:562`, `BackgroundTasksPanel.ts:464`, `childControls.ts:22,38`)                                                                                                                                                                                                                                               | 3     |
 | Stop is offered        | `actions`                                         | the TUI stop predicate over `isActivePhase` (`sessionRunState.ts:229-242`)                                                                                                                                                                                                                                                                        | 1     |
 
-Today's divergences, each a user-visible defect: an interrupted run keeps
-`status: running`, so the TUI status bar shows it active, the live-assistant
-row renders, `/clear` is refused ("wait for the active response"); the header
-clock keeps ticking on an interrupted run while the background panel stops it;
-a service handler invents `CANCELLED` for a run with no end row.
+The divergences at `b411a6d6`, each a user-visible defect: an interrupted run
+kept `status: running`, so the TUI status bar showed it active, the
+live-assistant row rendered, `/clear` was refused ("wait for the active
+response"); the header clock kept ticking on an interrupted run while the
+background panel stopped it (all fixed 2026-11-04, below); a service handler
+still invents `CANCELLED` for a run with no end row (`handlers.ts:213`).
 
 Acceptance: no host file imports `isActivePhase`, `isTerminalOutcomePhase` or
 `isLiveRun`; `grep -rn 'view.status\|run.status' packages/{cli,texra,extension,desktop}/src`
@@ -262,7 +285,7 @@ predicate reads `working`, not `actions`: it asks whether a turn is in
 progress, and `actions` offers a stop at a wait too, where the TUI's exit
 leaves the run resumable. Still open: `runsHere` and the
 `ownedHere && isLiveRun` sites, `handlers.ts`'s `durableOutcome ?? CANCELLED`
-and `/clear`'s `isTranscriptSettlementPhase` read, which change meaning under
+and the TUI's agent-finished bell's `isTranscriptSettlementPhase` read (`runChatTui.tsx:758`; `/clear` already reads `working`), which change meaning under
 slice 3 (the service holds the run) and land with it._
 
 ### C. Host attachment and the CLI process lifecycle
@@ -281,9 +304,9 @@ written in `packages/desktop/src/main/desktopProjects.ts:292-297`,
 | The exit code                 | one `setExitCode`, written through `settleExitCode`               | the seven direct `runExitCode =` writes; the nine `process.exit` sites outside the one owner                                                                                                                                                    | 6     |
 | Signal policy                 | one registry in `initPlatform`; TUI and `serve` register policies | the five install sites (`initPlatform.ts:188-210`, `foregroundCommand.ts:37`, `sessionExitController.ts:136-145,254-266`, `commands/service.ts:92-98`)                                                                                          | 4     |
 
-Today's defect: `reportRunFailure` (`packages/cli/src/chat/chatSessionController.ts:417-420`)
-writes exit code 0 whenever a stop was requested, `leaving` included, so a run
-that fails while the user quits exits 0 and bypasses `settleExitCode`.
+The defect at `b411a6d6` (gone 2026-11-04, below): `reportRunFailure`
+wrote exit code 0 whenever a stop was requested, `leaving` included, so a run
+that failed while the user quit exited 0 and bypassed `settleExitCode`.
 
 Acceptance: `grep -rn 'process.exit(' packages/cli/src` returns one file;
 `grep -rn "process.on('SIG" packages/cli/src` returns one file.
@@ -348,12 +371,11 @@ before it is recorded, and a failure is one value from the model call to
 
 ### E. The parent edge
 
-Audit verdict: partial. Rows and view are both read as the attached parent in
-one job: `packages/harness/src/agent/followUp/Inbox.ts:314` refuses by the
-rows, `:318` stamps `relation` from the view, and
-`followUpMessages.ts:219` recomputes `relation` from the view when comparing
-a retry with its stored row, so a retry after a detach fails with a spurious
-`Conflict`.
+Audit verdict (at `b411a6d6`): partial. Rows and view were both read as the
+attached parent in one job: `Inbox.ts` refused by the rows, stamped
+`relation` from the view, and `followUpMessages.ts` recomputed `relation`
+from the view when comparing a retry with its stored row, so a retry after a
+detach failed with a spurious `Conflict` (fixed 2026-11-04, below).
 
 | Fact                | Keep                                               | Delete                                                                                                                    | Files |
 | ------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ----- |
@@ -372,10 +394,10 @@ waits for O5's slice._
 
 ### F. Approval grants
 
-Audit verdict: not this disease. One evaluator, one vocabulary. One item goes
-with E: `grantsKept` reads the ancestry from the view
-(`runRegistry.ts:602-609`) while `activationRows` reads it from the rows
-(`runApprovalQueue.ts:128-141`). A claim that the guarding ratchet
+Audit verdict: not this disease. One evaluator, one vocabulary. One item went
+with E (landed 2026-11-04): `grantsKept` read the ancestry from the view
+while `activationRows` read it from the rows; both now take `grantSource`
+over `ancestryRows` (`runRegistry.ts:614-615`, `runApprovalQueue.ts:128-129`). A claim that the guarding ratchet
 (`src/test-kernel/architecture/approvalPolicyAuthorityRatchet.vitest.ts`)
 names a missing file was checked on 2026-11-04 and withdrawn: every path it
 lists exists.
@@ -428,7 +450,7 @@ checks below green. No slice keeps two representations "for now".
 4. **A4 + A5: one resume, one refusal, children through tool results** (O5).
    Amends the session-messaging note.
    _Landed 2026-11-04 (the resume row): one `Deferred<LaunchAnswer>` per
-   activation, completed from the log's `run.start`/`run.activate` row;
+   activation, completed from the log's `run.activate` row;
    `RunRegistry.resume` opens the run or joins the launch in flight in one
    step, and the decision runs the generation on its own fiber under the
    claim the activation holds. `RunAttempt`, `waiters`, `handedOff`, the
@@ -436,6 +458,19 @@ checks below green. No slice keeps two representations "for now".
    `delivered`, the hand-off rule, `onAdmitted` and `activationIfOpened` are
    gone. The refusal row and A5 follow._
 5. **A6 + A7: no ownerless stop, list at open** (O4). Deletes the setting.
+   _Landed 2026-11-05 (A7, list at open): the `resumeOnOpen` setting,
+   `OpenOptions.host.interruptedTasks`, `followInterruptedTasks` and
+   `resumeBlocks()` are gone; a session resumes nothing at open._
+   _Landed 2026-11-05 (second part): the blocked mark
+   (`LocalRuntimeState.resumeBlocked`, `RunView.resumeBlocked`,
+   `markResumeBlocked`, the `resumeBlocked` notice) and the `'waiting'`
+   answer are gone; a blocked resume is refused with its reason at the click,
+   on every host and over the service._
+   _Landed 2026-11-05 (third part): the interrupted-tasks notice in both
+   hosts, its "Not now" state and the TUI's hide-on-send are gone; the
+   list's one home is the task list's `interrupted` group with each task's
+   Resume, and `/resume all`. The other refusal kinds wait for the lock, with
+   A6 (no ownerless stop)._
 6. **B: the fold fields and the host deletions** (O6).
 7. **C: the CLI exit owner** (O7).
 8. **D: llm's verdict and the row fold** (O8).

@@ -1,6 +1,6 @@
 ---
 created: 2026-11-01
-status: proposed
+status: implemented
 ---
 
 # The tool layer: one catalog, one step pin, one tool contract
@@ -11,7 +11,7 @@ Measured 2026-11-01 at `origin/main` `1bdc883c0f`. Paths are relative to
 the number of `.ts` and `.tsx` files that name the identifier (word match)
 under `packages/*/src` and `src/test-kernel`. This note is the general-package
 design's lane 4b
-([harness general-package design](./2026-10-21-harness-general-package-design.md),
+([harness general-package design](../../proposed/architecture/2026-10-21-harness-general-package-design.md),
 "Plugin contract" and "Lane 4b therefore starts with the fence itself") and
 the seventh problem of the peer comparison
 ([harness design by Ousterhout's criteria](../../implemented/architecture/2026-10-30-harness-design-against-pi-durable-and-deepseek.md),
@@ -54,9 +54,17 @@ refused: its catalog merge is a rename on an edge the layer-names ratchet
 freezes and would serve every run the switch door; its door move is the
 hand-provided null the Effect rules forbid, for about 20 lines.
 
-The decision asked of the owner: approve design B as one PR (decisions 1 to
-3 in section 7), and decide whether the `builtins/` fence is built now at its
-measured cost (decision 4; recommended: no).
+Landed as one PR, #14513 (2026-11-01): design B, with decisions 1, 2, 3 and 5
+taken as recommended and decision 4 declined (no `builtins/` fence until a
+named embedder needs one). The layer-names rows that left were
+`RunCall#requireRun`, `RunCall#sessionOf`, `ToolServices#RuntimeTool` and
+`ToolServices#ToolServices`. #14546 (2026-11-02) then replaced the `runs`
+field lane 1 added to `RunCallShape` with `session`, the session's services
+picked where the loop dispatches the call: a built-in runs over
+`call.session`, and `childRuns(call)` provides them to a plugin tool's
+launches (`agent/runtime/RunCall.ts:204`,
+`agent/runtime/ToolServices.ts:165-197`). The measurements below describe the
+tree before #14513.
 
 ## What gets deleted
 
@@ -477,7 +485,7 @@ Refused by this note, with the evidence:
   `file-ops` unless its value stays in `tools/` and imports the moved tools;
   the count it exists to drive to zero is already zero for the app.
 
-## Owner decisions
+## Owner decisions (taken in #14513)
 
 1. **One tool type.** Type `Plugin.tools`, the table, the catalog, the step
    and the loop with `ITool<Error, PluginToolServices>`, reach `Runs` through
