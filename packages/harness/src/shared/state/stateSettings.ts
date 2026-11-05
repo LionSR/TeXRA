@@ -192,11 +192,11 @@ const HARNESS_CONFIG_ROWS: Record<
   },
   // The provider toggles below are `configTarget: 'global'`: they describe how
   // you talk to a provider, not a property of one project. Writes go to the
-  // global file past the open-workspace write guard; reads stay merged, so a
-  // workspace override stays honored (stranded values: #11173). Server-side
-  // state (data retention) and the fast tier (price) are user choices with a
-  // settings-view row; the transport knob has none and lives in
-  // `.texra/config.json`.
+  // global file past the open-workspace write guard, and reads take the
+  // global value only: a project file's value for one is ignored (#11173).
+  // Server-side state (data retention) and the fast tier (price) are user
+  // choices with a settings-view row; the transport knob has none and is set
+  // in the global `config.json`.
   'model.useGoogleInteractionsServerState': {
     schema: Schema.Boolean.pipe(
       Schema.withDecodingDefault(Effect.succeed(true)),
