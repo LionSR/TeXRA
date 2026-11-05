@@ -55,9 +55,9 @@ import { blobAddress, sha256Hex } from '@utils/core/idHash';
 /** One selected store row, its columns by name, decoded where it is read. */
 export type SqlRow = Readonly<Record<string, unknown>>;
 
-// zstd: Node 22.15+ (the CLI needs 22.19; Electron and VS Code ship 24).
+// zstd: Node 22.15+ (the packages need 22.22.2; Electron and VS Code ship 24).
 if (typeof zstdCompressSync !== 'function')
-  throw new Error('The session store needs zstd: Node 22.19 or later.');
+  throw new Error('The session store needs zstd: Node 22.22.2 or later.');
 
 /** A payload key shaped `$b`, `$$b`, …: stored with one more `$`. */
 const REF_SHAPED = /^\$+b$/;

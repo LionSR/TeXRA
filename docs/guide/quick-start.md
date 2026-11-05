@@ -177,7 +177,7 @@ For details on how LaTeX diff works, read the [LaTeX diff guide](./latex-diff.md
 ## From the CLI
 
 The same agents run from the terminal. After
-`npm install -g @texra-ai/cli` (Node.js 22.19.0 or later in 22.x, or Node.js 24 or later) or
+`npm install -g @texra-ai/cli` (Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later) or
 `brew install texra-ai/tap/texra`:
 
 ```bash

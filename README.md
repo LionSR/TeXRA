@@ -29,7 +29,7 @@ your project are untouched.
 # VS Code (or Cursor, Windsurf, Antigravity)
 code --install-extension texra-ai.texra
 
-# Terminal: requires Node.js 22.19.0 or later in 22.x, or Node.js 24 or later
+# Terminal: requires Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later
 npm install -g @texra-ai/cli
 
 # Or via Homebrew (macOS / Linux)
@@ -123,7 +123,7 @@ In the CLI, export the same variables in your shell.
 ## Requirements
 
 - **VS Code 1.125+** (also runs in Cursor, Windsurf, Antigravity), or
-  **Node.js 22.19.0 or later in 22.x, or Node.js 24 or later** for the CLI
+  **Node.js 22.22.2 or later in 22.x, or Node.js 24.15 or later** for the CLI
 - **LaTeX distribution** (TeX Live, MiKTeX, or MacTeX)
 - **Perl** (for `latexindent` and `latexdiff`)
 - Optional: ImageMagick + Ghostscript (for PDF/image processing),

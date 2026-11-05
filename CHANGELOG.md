@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
+  terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
+  22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an
+  older Node as unsupported. The desktop app and the VS Code extension bring
+  their own runtime and are unaffected.
 - **A stored row reads at its kind's version.** The session store converts
   no row: one at a lower version than its kind's is an earlier build's (its
   task listed as unreadable, as before), one at a higher version refuses the
