@@ -1896,6 +1896,8 @@ const ink = render(renderHarnessApp(), {
   stderr: process.stderr,
   stdin: process.stdin,
   exitOnCtrlC: false,
+  // As runChatTui renders, so the frames are the ones a user sees.
+  incrementalRendering: true,
 });
 inkRef.current = ink;
 

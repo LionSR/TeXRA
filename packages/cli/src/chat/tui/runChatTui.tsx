@@ -710,6 +710,10 @@ export async function runChat(
       // handler runs (build/hooks/use-input.js). Disabling it lets the parsed
       // ctrl+c key reach our handler uniformly on every terminal.
       exitOnCtrlC: false,
+      // Rewrite only the live-region lines that changed, and only past their
+      // unchanged prefix: typing or streaming redraws a fraction of the bytes
+      // a whole-region rewrite does, which is what flickers over slow links.
+      incrementalRendering: true,
       // Enable the Kitty keyboard protocol (disambiguate flag only) when the
       // terminal supports it, already confirmed by discoverTerminalCapabilities
       // above, so use 'enabled' to skip Ink's redundant detection query. This
