@@ -59,6 +59,48 @@ export function launchAgentOption(
   );
 }
 
+/**
+ * The model menu over `selected`: its label, and the host's models as items
+ * valued `model:<id>`, the selected one checked. A model the host does not
+ * list (a saved effort or mode, or a proposal's model) is offered as itself,
+ * its effort or mode after the name: `ref@high` is "Name (high)".
+ */
+export function modelMenu(
+  selected: string,
+  host: HostSnapshot,
+): { readonly label: string; readonly items: TemplateResult } {
+  const listed = host.modelOptions.find((option) => option.value === selected);
+  const ref = modelRefOf(selected) ?? selected;
+  const modifiers = selected.slice(ref.length).replace(/^[@+]/, '');
+  const options = listed
+    ? host.modelOptions
+    : [
+        {
+          value: selected,
+          label:
+            modifiers === ''
+              ? getModelLabel(selected)
+              : `${getModelLabel(selected)} (${modifiers})`,
+        },
+        ...host.modelOptions,
+      ];
+  return {
+    label: listed?.label ?? options[0].label,
+    items: html`${repeat(
+      options,
+      (option) => option.value,
+      (option) =>
+        html`<wa-dropdown-item
+          value=${`model:${option.value}`}
+          type="checkbox"
+          .checked=${live(option.value === selected)}
+          ?disabled=${!isModelOptionAvailable(option)}
+          >${option.label}</wa-dropdown-item
+        >`,
+    )}`,
+  };
+}
+
 export function launcherChipMenus(
   launch: Launch,
   host: HostSnapshot,
@@ -76,26 +118,7 @@ export function launcherChipMenus(
     launch.launchTarget === 'team' && team
       ? team.label
       : (agent?.label ?? UNLISTED_AGENT_LABEL);
-  const model = host.modelOptions.find(
-    (option) => option.value === launch.model,
-  );
-  // The form's model as it will run: one the picker does not list (a saved
-  // effort or mode, or a proposal's model) is offered as itself.
-  // Its effort or mode reads after the name: `ref@high` is "Name (high)".
-  const ref = modelRefOf(launch.model) ?? launch.model;
-  const modifiers = launch.model.slice(ref.length).replace(/^[@+]/, '');
-  const modelOptions = model
-    ? host.modelOptions
-    : [
-        {
-          value: launch.model,
-          label:
-            modifiers === ''
-              ? getModelLabel(launch.model)
-              : `${getModelLabel(launch.model)} (${modifiers})`,
-        },
-        ...host.modelOptions,
-      ];
+  const model = modelMenu(launch.model, host);
   const menus: ChipMenu[] = [
     {
       id: 'composer-agent',
@@ -173,21 +196,10 @@ export function launcherChipMenus(
     {
       id: 'composer-model',
       icon: 'bolt',
-      label: model?.label ?? modelOptions[0].label,
+      label: model.label,
       title: 'Model',
       items: html`
-        ${repeat(
-          modelOptions,
-          (option) => option.value,
-          (option) =>
-            html`<wa-dropdown-item
-              value=${`model:${option.value}`}
-              type="checkbox"
-              .checked=${live(option.value === launch.model)}
-              ?disabled=${!isModelOptionAvailable(option)}
-              >${option.label}</wa-dropdown-item
-            >`,
-        )}
+        ${model.items}
         <wa-dropdown-item value="settings:models"
           >Model settings…</wa-dropdown-item
         >

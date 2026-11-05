@@ -9,13 +9,15 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Record as Rec, Result, Schema } from 'effect';
 import { html, nothing, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { ifDefined } from 'lit/directives/if-defined.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 
-// Side-effect imports - register WA icon component
+// Side-effect imports - register WA components
+import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
+import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
@@ -43,15 +45,18 @@ import { markdownStyles } from '@ui/styles/markdownStyles';
 
 // Local imports - shared utilities
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
+import { selectedItemValue } from '@ui/wa/selectTemplates';
 
 // Local imports - base class
 import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
+import { modelMenu } from './composerChipMenus';
 import { proposalRequestPanelStyles } from './ProposalRequestPanel.styles';
 import { buildStatusBadge } from '../formatters/htmlBuilders';
 import { processMarkdownContent } from '../formatters/markdownRenderer';
 import { proposalLaunchPatch } from '../proposalEdit';
 import { getComposedPathElement } from '../utils';
 import type { RunView } from '@texra-ai/harness/schemas';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('proposal-request-panel')
 export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
@@ -67,15 +72,36 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /** The asking run: its `agentScope` bounds the form's agents. */
   @property({ attribute: false }) run: RunView | null = null;
 
+  /** The model picked on the card, for the request it was picked on. */
+  @state() private picked: { requestId: string; model: string } | null = null;
+
+  /** The model the run starts on: the one picked here, else the proposal's. */
+  private get model(): string {
+    const data = this.permission.data;
+    return this.picked?.requestId === data.requestId
+      ? this.picked.model
+      : data.model;
+  }
+
+  /** An approval's `model`: stated only when it is not the proposal's. */
+  private get modelChange(): { readonly model?: string } {
+    return this.model === this.permission.data.model
+      ? {}
+      : { model: this.model };
+  }
+
   protected override submitPrimary(): void {
-    this.emitAction({ action: 'approve' });
+    this.emitAction({ action: 'approve', ...this.modelChange });
   }
 
   protected override get grant(): RunGrant {
     return {
       label: RUN_GRANT_LABEL.superYolo,
       scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
-      decision: { action: APPROVE_ALL_DELEGATED_WORK_ACTION },
+      decision: {
+        action: APPROVE_ALL_DELEGATED_WORK_ACTION,
+        ...this.modelChange,
+      },
     };
   }
 
@@ -86,10 +112,43 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       return html`${SCRIPT_REQUEST_COPY.title(data.script)}`;
     }
     const agent = html` <strong>${data.agent}</strong>`;
-    const model = html` on ${getModelLabel(data.model)}`;
+    const model = html` on ${this.renderModel()}`;
     return data.task
       ? html`Run${agent}${model}`
       : html`Delegate a task to${agent}${model}`;
+  }
+
+  /** The model in the ask. On a card that can be answered it is a menu over
+   *  the host's models: changing only the model takes one pick here, where
+   *  Edit opens the whole launch form. */
+  private renderModel(): TemplateResult | string {
+    const { host } = this;
+    if (!this.editable || host === null) return getModelLabel(this.model);
+    const menu = modelMenu(this.model, host);
+    return html`<wa-dropdown
+      class="proposal-model"
+      @wa-select=${(event: WaSelectEvent) => {
+        const value = selectedItemValue(event);
+        if (!value.startsWith('model:')) return;
+        this.picked = {
+          requestId: this.permission.data.requestId,
+          model: value.slice(6),
+        };
+      }}
+    >
+      <wa-button
+        slot="trigger"
+        id="proposal-model-trigger"
+        class="proposal-model__trigger btn-ghost is-compact"
+        appearance="plain"
+        variant="neutral"
+        size="s"
+        type="button"
+        with-caret
+        >${menu.label}</wa-button
+      >
+      ${menu.items}
+    </wa-dropdown>`;
   }
 
   protected override handleExtraKey(key: string): boolean {
@@ -116,7 +175,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       SessionUiEvents.surface({
         kind: 'editProposal',
         proposal: { runId: data.runId, requestId: data.requestId },
-        patch: proposalLaunchPatch(data, this.run ?? undefined, host),
+        patch: {
+          ...proposalLaunchPatch(data, this.run ?? undefined, host),
+          model: this.model,
+        },
       }),
     );
   }

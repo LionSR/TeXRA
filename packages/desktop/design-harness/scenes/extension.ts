@@ -532,7 +532,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // A proposed document task on the child, in place of its bash request:
-  // the card's agent and model pickers over the host's catalogs.
+  // the card's model menu over the host's models.
   'ext-proposal-pickers': () => {
     const log = new Log();
     log.emit(CHILD, T.childApproval, {

@@ -1104,9 +1104,10 @@ All notable changes to this project will be documented in this file.
   delegate to. Change what you need and **Approve** starts it, as the
   agent's own child run, with your changes; **Back to …** leaves the
   proposal waiting. A finished task's **Run again…** opens the same form
-  filled from that task instead of relaunching it at once. Edit replaces
-  the card's agent and model pickers and its **Change and start myself**
-  button, which ended the proposal without opening anything; Run again…
+  filled from that task instead of relaunching it at once. The card keeps
+  a model menu on the model's name, so switching only the model takes one
+  pick; Edit replaces the card's agent picker and its **Change and start
+  myself** button, which ended the proposal without opening anything; Run again…
   replaces **Run again from scratch**. A script's request card no longer
   offers either: it approves the script as a whole. SDK: a proposal's
   `approve` decision may carry `instruction`, `inputFiles`, `contextFiles`,
