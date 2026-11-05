@@ -466,14 +466,13 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = withInterruptedChild();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // Opening after a crash: the notice above the composer lists the
-  // interrupted tasks, the blocked one with its fix.
+  // Opening after a crash: the sidebar lists the interrupted tasks under
+  // their group; nothing resumes on its own.
   'ext-interrupted-open': () => {
     const view = interruptedTasksView();
     return sidebar(view, surface(view, { kind: 'selectNew' }));
   },
-  // The blocked task itself: its ended line says what it waits for, with
-  // the one Resume and the fix, under the notice until "Not now".
+  // An interrupted task itself: its ended line, with the one Resume.
   'ext-interrupted-blocked': () => {
     const view = interruptedTasksView();
     return sidebar(

@@ -1,11 +1,7 @@
 /**
- * The open-time prompt: the tasks a
- * closed or crashed TeXRA left interrupted, read from the view, and the copy
- * every host prints for them. The progress view paints it as a notice above
- * the composer, the TUI above its input; neither blocks typing.
- *
- * The list is the view's: a root task in the `interrupted` group that this
- * window can resume. Why one cannot continue is the resume's own refusal.
+ * The interrupted tasks a chat's `/resume all` continues: the root tasks in
+ * the view's `interrupted` group that this window can resume. The view lists
+ * them under their group; each has its own Resume.
  */
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
@@ -20,21 +16,17 @@ export interface InterruptedTask {
   readonly agents: string | null;
 }
 
-/**
- * The root tasks this window can resume that no process holds and that did
- * not end, newest first. `dismissed` is the surface's "Not now".
- */
+/** The root tasks this window can resume that no process holds and that
+ *  did not end, newest first. */
 export function interruptedTasks(
   view: Pick<SessionView, 'runs'>,
-  dismissed: ReadonlySet<RunId> = new Set(),
 ): InterruptedTask[] {
   return [...view.runs.values()]
     .filter(
       (run) =>
         run.parentId === null &&
         run.group === 'interrupted' &&
-        run.actions.includes('resume') &&
-        !dismissed.has(run.id),
+        run.actions.includes('resume'),
     )
     .sort((a, b) => b.createdAt - a.createdAt)
     .map((run) => ({
@@ -50,16 +42,3 @@ function agentProgress(run: Pick<RunView, 'rollup'>): string | null {
   if (total === 0) return null;
   return `${finished} of ${formatResultCount(total, 'agent')} done`;
 }
-
-/** The notice's copy. */
-export const INTERRUPTED_NOTICE = Object.freeze({
-  heading: (count: number) =>
-    count === 1 ? '1 task was interrupted' : `${count} tasks were interrupted`,
-  resumeAll: 'Resume all',
-  notNow: 'Not now',
-  /** The TUI's lines under the list, in place of buttons. */
-  tuiActions: (count: number) =>
-    count === 1
-      ? '/resume all continues it · /resume chooses a task · sending anything hides this'
-      : '/resume all continues them · /resume chooses one · sending anything hides this',
-});

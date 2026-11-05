@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The interrupted-tasks notice is gone.** A window or `texra chat` that
+  opens on tasks a closed or crashed TeXRA left unfinished no longer shows
+  the "N tasks were interrupted" notice with "Resume all" and "Not now":
+  the task list shows them as interrupted, each with its own Resume, and
+  the chat's `/resume all` still continues them all. SDK: `Surface` has no
+  `interruptedDismissed` and no `dismissInterrupted` action.
 - **A blocked resume is a refusal, not a state.** Resuming a task whose
   agent is missing, or whose plugin is off or not trusted, is refused with
   that reason at the click, like any other refusal; nothing about it shows
