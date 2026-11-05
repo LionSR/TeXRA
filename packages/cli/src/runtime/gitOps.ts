@@ -1,5 +1,7 @@
 // Thin wrappers over `git` and `gh` for the `install-github-action` command.
 // Every call captures output and never fails — callers branch on `success`.
+// The read-only facts about a repository (root, origin, branches) live in
+// `@texra/utils/git/gitReads`.
 //
 // These commands carry no TeXRA settings, so they use the user's Git identity.
 import { Effect } from 'effect';
@@ -29,49 +31,6 @@ export function gh(
     settings: undefined,
     quiet: true,
   });
-}
-
-/** The trimmed stdout of a successful `git` read, or null. */
-function gitValue(
-  cwd: string,
-  ...args: readonly string[]
-): GitRead<string | null> {
-  return Effect.map(git(cwd, ...args), (result) =>
-    result.success && result.stdout ? result.stdout : null,
-  );
-}
-
-export function isGitRepo(cwd: string): GitRead<boolean> {
-  return Effect.map(
-    git(cwd, 'rev-parse', '--is-inside-work-tree'),
-    (result) => result.success,
-  );
-}
-
-export function repoRoot(cwd: string): GitRead<string | null> {
-  return gitValue(cwd, 'rev-parse', '--show-toplevel');
-}
-
-export function remoteUrl(cwd: string): GitRead<string | null> {
-  return gitValue(cwd, 'remote', 'get-url', 'origin');
-}
-
-export function currentBranch(cwd: string): GitRead<string | null> {
-  return Effect.map(
-    gitValue(cwd, 'rev-parse', '--abbrev-ref', 'HEAD'),
-    (branch) => (branch === 'HEAD' ? null : branch),
-  );
-}
-
-/** Default branch of `origin`, e.g. "main" — null if it can't be resolved. */
-export function defaultBranch(cwd: string): GitRead<string | null> {
-  return Effect.map(
-    gitValue(cwd, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'),
-    (ref) =>
-      ref !== null && ref.startsWith('origin/')
-        ? ref.slice('origin/'.length)
-        : ref,
-  );
 }
 
 export function localBranchExists(

@@ -12,6 +12,13 @@ below are the significant ones found.
 
 ## 1. The same git reads are written in several places (most significant)
 
+Partly landed 2026-11-05: `packages/texra/src/utils/git/gitReads.ts` owns the
+root, origin URL, current branch and origin default branch reads; the CLI's
+five read helpers and the `latexdiff.ts` root lookup are gone, and
+`install-github-action` now uses `isGitRepository` (a bare repository is not a
+repository there). Still open: `githubSubscriptionTool.ts`, which keeps its own
+error wording per failed read.
+
 | Read                                                      | Where it is written                                                                                                                                                                                                                                                           |
 | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | "is this a work tree" (`rev-parse --is-inside-work-tree`) | `packages/texra/src/utils/git/isGitRepository.ts` (success and stdout `true`); `packages/cli/src/runtime/gitOps.ts` `isGitRepo` (success only); `packages/harness/src/agent/prompt/workspaceInfo.ts` `getGitInfo` (success only, deliberately, with a comment explaining why) |
