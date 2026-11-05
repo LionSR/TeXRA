@@ -428,6 +428,11 @@ checks below green. No slice keeps two representations "for now".
 4. **A4 + A5: one resume, one refusal, children through tool results** (O5).
    Amends the session-messaging note.
 5. **A6 + A7: no ownerless stop, list at open** (O4). Deletes the setting.
+   _Landed 2026-11-05 (A7, list at open): the `resumeOnOpen` setting,
+   `OpenOptions.host.interruptedTasks`, `followInterruptedTasks` and
+   `resumeBlocks()` are gone; a session resumes nothing at open. The blocked
+   mark, the `'waiting'` answer and the refusal kinds go in the next PR with
+   the notice; A6 (no ownerless stop) waits for the lock._
 6. **B: the fold fields and the host deletions** (O6).
 7. **C: the CLI exit owner** (O7).
 8. **D: llm's verdict and the row fold** (O8).

@@ -256,6 +256,5 @@ export const makeSessionViewAccess = Effect.fn(
             blocked === null ? rest : [...rest, { runId, reason: blocked }],
         };
       }),
-    resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
   };
 });

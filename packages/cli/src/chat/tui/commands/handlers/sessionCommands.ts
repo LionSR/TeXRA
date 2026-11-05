@@ -148,9 +148,8 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
 
 /**
  * `/resume all`: the open-time notice's bulk answer. Each interrupted task
- * resumes on the session beside this chat, as `texra.resumeOnOpen: auto`
- * resumes them, and joins the agent list (Tab); one a resume finds blocked
- * is listed again once what it needs is back.
+ * resumes on the session beside this chat and joins the agent list (Tab);
+ * one a resume finds blocked stays listed with what it needs.
  */
 export function resumeInterruptedTasks(
   runSession: Session,
