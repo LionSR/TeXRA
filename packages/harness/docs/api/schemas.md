@@ -532,7 +532,9 @@ A claiming transaction's refusals: the claim's, a writer's, or the write.
 
 ```ts
 type DatabaseClaimError =
-  DatabaseNotOwner | DatabaseClaimRefused | DatabaseWriteFailed;
+  | DatabaseNotOwner
+  | DatabaseClaimRefused
+  | DatabaseWriteFailed;
 ```
 
 ## DatabaseClaimRefused
@@ -2102,7 +2104,10 @@ worktree.
 
 ```ts
 type SettingStore =
-  'config' | 'workspaceState' | 'repoState' | 'globalState';
+  | 'config'
+  | 'workspaceState'
+  | 'repoState'
+  | 'globalState';
 ```
 
 ## SkillDisplayIssue

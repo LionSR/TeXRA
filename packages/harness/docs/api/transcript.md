@@ -116,7 +116,9 @@ interface CompactionActivityRow extends TranscriptRowBase {
 
 ```ts
 type CompactionActivityStatus =
-  'running' | CompactionActivityOutcome | 'interrupted';
+  | 'running'
+  | CompactionActivityOutcome
+  | 'interrupted';
 ```
 
 ## compareByNewestCreationTime

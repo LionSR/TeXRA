@@ -61,8 +61,8 @@ export const noticeStyles = css`
     padding: 0;
     margin-block-start: calc(
       (
-          var(--font-size-sm) *
-            var(--line-height-normal) - var(--font-size-icon-sm)
+          var(--font-size-sm) * var(--line-height-normal) -
+            var(--font-size-icon-sm)
         ) /
         2
     );
