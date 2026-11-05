@@ -31,8 +31,7 @@ import {
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import { executeCommand } from '@texra-ai/harness/node';
-import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
+import type { RunId } from '@texra-ai/harness/schemas';
 
 import {
   DEFAULT_CHECK_ANNOTATION_LEVEL,
@@ -49,6 +48,11 @@ import {
 } from './prSubscriptionConstants';
 import { GitHubSubscriptions } from './subscriptionBindings';
 import { parseGitHubSlug } from './githubSlug';
+import {
+  currentBranch,
+  originDefaultBranch,
+  originUrl,
+} from '@texra/utils/git/gitReads';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import type { GhIssue } from './prTypes';
 import type { SettingsStores } from '@texra-ai/harness/host';
@@ -405,32 +409,6 @@ const execList = Effect.fn('GitHubSubscriptionTool.list')(function* (
   );
 });
 
-const gitInDir = (
-  args: string[],
-  cwd: string,
-  settings: SettingsStores,
-): Effect.Effect<string, ToolError, ChildProcessSpawner> =>
-  Effect.flatMap(
-    // `executeCommand` never fails — a failed `git` is a result with
-    // `success: false`, which the flatMap below turns into the tool's own
-    // error. Interrupting the fiber tears the spawn down.
-    executeCommand(['git', ...args], {
-      cwd,
-      // The calling session's slots, carried from the tool call.
-      settings,
-      timeout: 10_000,
-      channel: 'github_subscription',
-    }),
-    (result) =>
-      result.success
-        ? Effect.succeed(result.stdout.trim())
-        : Effect.fail(
-            new ToolError(
-              result.stderr || `git ${args.join(' ')} failed with no stderr.`,
-            ),
-          ),
-  );
-
 interface OpenPullSummary {
   number: number;
   title?: string;
@@ -446,26 +424,6 @@ const getDefaultBranch = (
   Effect.map(
     ghGetOk<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
     (repository) => repository.default_branch,
-  );
-
-function parseOriginHeadDefaultBranch(ref: string): string | undefined {
-  const branch = ref.trim().replace(/^refs\/remotes\//, '');
-  if (!branch.startsWith('origin/')) return undefined;
-  return branch.slice('origin/'.length) || undefined;
-}
-
-/** The local origin/HEAD hint: any lookup failure just means "no hint". */
-const getLocalDefaultBranchHint = (
-  cwd: string,
-  settings: SettingsStores,
-): Effect.Effect<string | undefined, never, ChildProcessSpawner> =>
-  gitInDir(
-    ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-    cwd,
-    settings,
-  ).pipe(
-    Effect.map(parseOriginHeadDefaultBranch),
-    Effect.catch(() => Effect.succeed(undefined)),
   );
 
 const listOpenPullSuggestions = (
@@ -506,7 +464,10 @@ const getFindCurrentFallbackInfo = (
       Effect.catch((error) =>
         Effect.logWarning(
           `The default branch of ${owner}/${repo} could not be read; using origin/HEAD: ${error.message}`,
-        ).pipe(Effect.andThen(getLocalDefaultBranchHint(cwd, settings))),
+        ).pipe(
+          Effect.andThen(originDefaultBranch(cwd, settings)),
+          Effect.map((branch) => branch ?? undefined),
+        ),
       ),
     ),
     listOpenPullSuggestions(owner, repo).pipe(
@@ -542,24 +503,24 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
         ),
       );
     }
-    const [remoteUrl, branch] = yield* Effect.zip(
-      gitInDir(['remote', 'get-url', 'origin'], cwd, settings),
-      gitInDir(['rev-parse', '--abbrev-ref', 'HEAD'], cwd, settings),
-    ).pipe(
-      Effect.mapError(
-        (err) =>
-          new ToolError(
-            `git invocation failed in ${cwd}: ${toErrorMessage(err)}`,
-          ),
-      ),
+    const [remoteUrl, branch] = yield* Effect.all(
+      [originUrl(cwd, settings), currentBranch(cwd, settings)],
+      { concurrency: 'unbounded' },
     );
+    if (remoteUrl === null) {
+      return yield* Effect.fail(
+        new ToolError(
+          `${cwd} has no readable origin remote (it may not be a git repository).`,
+        ),
+      );
+    }
     const remote = parseGitHubSlug(remoteUrl);
     if (!remote) {
       return yield* Effect.fail(
         new ToolError(`origin remote is not a github.com URL: ${remoteUrl}`),
       );
     }
-    if (branch === 'HEAD') {
+    if (branch === null) {
       return yield* Effect.fail(
         new ToolError('HEAD is detached: cannot infer a PR branch.'),
       );
