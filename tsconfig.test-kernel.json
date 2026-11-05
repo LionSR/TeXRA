@@ -8,6 +8,7 @@
   },
   "include": [
     "src/test-kernel/**/*.ts",
+    "packages/*/test/**/*.ts",
     "packages/harness/src/types/**/*.d.ts",
     "packages/texra/src/types/**/*.d.ts"
   ],

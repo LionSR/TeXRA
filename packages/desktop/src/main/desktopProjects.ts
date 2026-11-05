@@ -24,9 +24,8 @@ import {
 } from '@texra-ai/harness/host';
 import {
   absentReason,
-  createNodeWorkspaceRoots,
+  openNodeWorkspaceRoots,
   canonicalizeWorkspacePath,
-  resolveWorkspaceStoragePath,
 } from '@texra-ai/harness/node';
 import { ensureError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
@@ -43,7 +42,6 @@ import type { ServiceLink } from '@texra/controllers/server/client';
 import { HostWindows } from '@texra/controllers/server/hostWindows';
 import type { WindowClient } from '@texra/controllers/server/windowHost';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import { showDesktopWarningDialog } from './platform/warningDialog.js';
@@ -294,7 +292,7 @@ const openProjectSession = Effect.fn('openProjectSession')(function* (
   const session = yield* Effect.acquireRelease(
     sessions.open(roots, {
       persistent: true,
-      host: { interruptedTasks: yield* interruptedTasksOnOpen(roots) },
+      host: {},
     }),
     // The one close every session takes: its runs stopped under the
     // shutdown deadline, the ones still live past it settled, its
@@ -377,41 +375,31 @@ export const openDesktopProjectRegistry: (
           const existing = byRoot(root);
           if (existing) return existing;
           yield* records.remember(root);
-          const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            const [workspaceState, repoState, workspaceConfigs] =
-              yield* Effect.all(
-                [
-                  // A folder of the service keeps its state there: this
-                  // process opens no store of that project.
-                  options.service !== undefined
-                    ? Effect.succeed(serviceProjectState(options.service, root))
-                    : stateStores.project(storage, root),
-                  stateStores.repo(storage, root),
-                  openTexraWorkspaceConfigStores(
-                    TEXRA_SETTINGS.catalog,
-                    storage,
-                    root,
-                    (message) => {
-                      console.warn(`[desktop] ${message}`);
-                      warnInDialog(message);
-                    },
-                  ),
-                ],
-                { concurrency: 'unbounded' },
-              );
-            const roots = createNodeWorkspaceRoots({
+            const workspaceConfigs = yield* openTexraWorkspaceConfigStores(
+              TEXRA_SETTINGS.catalog,
+              options.dataRoot,
+              root,
+              (message) => {
+                console.warn(`[desktop] ${message}`);
+                warnInDialog(message);
+              },
+            );
+            const roots = yield* openNodeWorkspaceRoots({
               workspacePath: root,
               storageRoot: options.dataRoot,
-              storage,
               config: {
                 ...workspaceConfigs,
                 global: options.globalConfigStore,
                 catalog: TEXRA_SETTINGS.catalog,
               },
-              workspaceState,
-              repoState,
+              // A folder of the service keeps its state there: this process
+              // opens no store of that project.
+              ...(options.service !== undefined && {
+                workspaceState: serviceProjectState(options.service, root),
+              }),
+              stateStores,
               // Every project's roots share the process's global state.
               globalState: options.processRoots.globalState,
             });
@@ -426,15 +414,18 @@ export const openDesktopProjectRegistry: (
                 sessions,
                 hosts,
               ).pipe(
-                Effect.tap((project) =>
-                  Effect.gen(function* () {
-                    const recent = yield* records.readRecent;
-                    yield* SubscriptionRef.update(state, (s) => ({
-                      ...s,
-                      projects: [...s.projects, project],
-                      recent,
-                    }));
-                  }).pipe(withPerKeyLane(lanes, selection)),
+                Effect.tap(
+                  Effect.fnUntraced(
+                    function* (project) {
+                      const recent = yield* records.readRecent;
+                      yield* SubscriptionRef.update(state, (s) => ({
+                        ...s,
+                        projects: [...s.projects, project],
+                        recent,
+                      }));
+                    },
+                    withPerKeyLane(lanes, selection),
+                  ),
                 ),
               ),
             );

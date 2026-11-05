@@ -100,19 +100,6 @@ export const modelSelectionListStyles: CSSResult = css`
     min-width: 0;
   }
 
-  .short-names-toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--wa-space-xs);
-    margin-bottom: var(--wa-space-xs);
-    font-size: var(--font-size-sm);
-  }
-
-  .short-names-description {
-    color: var(--color-text-secondary);
-    font-size: var(--font-size-xs);
-  }
-
   .model-name {
     white-space: nowrap;
     min-width: 0;
@@ -196,8 +183,7 @@ export const modelSelectionListStyles: CSSResult = css`
   }
 
   @container settings (max-width: 520px) {
-    .helper-model-row,
-    .short-names-toggle {
+    .helper-model-row {
       align-items: stretch;
       flex-direction: column;
     }

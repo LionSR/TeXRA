@@ -1,8 +1,8 @@
+import { commandCatalogById } from '@texra/shared/commands/catalog';
 import {
   toElectronAccelerator,
   type DesktopPlatform,
-} from '@texra/shared/commands/accelerators';
-import { commandCatalogById } from '@texra/shared/commands/catalog';
+} from '../shared/accelerators';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,

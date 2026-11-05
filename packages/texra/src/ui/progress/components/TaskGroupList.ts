@@ -197,7 +197,8 @@ export class TaskGroupList extends LitElement {
   /** `Surface.groups` for this stream: true is expanded, false collapsed,
    *  a missing key expanded. Toggles go out as surface actions. */
   @property({ attribute: false }) expanded:
-    ReadonlyMap<string, boolean> | undefined = undefined;
+    | ReadonlyMap<string, boolean>
+    | undefined = undefined;
 
   /**
    * Render log output in terminal style (monospace, no bullets/timestamps).

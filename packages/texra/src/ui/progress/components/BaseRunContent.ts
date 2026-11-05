@@ -12,7 +12,6 @@ import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import { runNoticeText, runStatusLabel } from '@ui/copy/runStatus';
-import { interruptedTasks, resumeBlockerFix } from '@ui/copy/interruptedTasks';
 import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import type {
@@ -22,7 +21,6 @@ import type {
 } from '@texra-ai/harness/schemas';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import type { ForkFromHere } from './UserMessage';
-import './InterruptedTasksNotice';
 import './RequestPanels';
 import './LogList';
 import './UsagePanel';
@@ -98,8 +96,6 @@ export abstract class BaseRunContent extends LitElement {
    */
   protected renderEndedLine(run: RunView): TemplateResult {
     const live = isLiveRun(run);
-    // What a blocked resume waits for has its fix in Settings › Plugins.
-    const fix = run.resumeBlocked && resumeBlockerFix(run.resumeBlocked);
     const request = (kind: 'resume') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     let explanation = `${runStatusLabel(run.statusKey)}.`;
@@ -127,24 +123,6 @@ export abstract class BaseRunContent extends LitElement {
           : nothing
       }
       ${
-        fix
-          ? html`<wa-button
-              id="resumeBlockerFixBtn"
-              appearance="outlined"
-              variant="neutral"
-              size="s"
-              @click=${() =>
-                this.dispatchEvent(
-                  SessionUiEvents.host({
-                    kind: 'openSettings',
-                    target: 'plugins',
-                  }),
-                )}
-              >${fix}</wa-button
-            >`
-          : nothing
-      }
-      ${
         run.actions.includes('fork')
           ? html`<wa-button
               id="forkTaskBtn"
@@ -164,20 +142,6 @@ export abstract class BaseRunContent extends LitElement {
     </div>`;
   }
 
-  /** The notice's own dock, for a run with no composer or ended line (a
-   *  process, a running workflow): nothing while no task is listed. */
-  protected renderInterruptedDock(): TemplateResult | typeof nothing {
-    if (
-      !this.view ||
-      interruptedTasks(this.view, this.surface?.interruptedDismissed).length ===
-        0
-    )
-      return nothing;
-    return html`<div class="conversation-composer-dock">
-      <div class="conversation-column">${this.renderInterruptedNotice()}</div>
-    </div>`;
-  }
-
   /** A fork's first line: the task and the point it was cut at, since its
    *  transcript starts empty (the model's view is the source's). */
   protected renderForkedFrom(run: RunView): TemplateResult | typeof nothing {
@@ -189,14 +153,6 @@ export abstract class BaseRunContent extends LitElement {
       ${waIcon('code-branch')} ${TASK_ACTIONS.forkedFrom(title)} at step
       ${source.at}: the model holds that conversation up to there.
     </p>`;
-  }
-
-  /** The open-time notice, above the composer or the ended line. */
-  protected renderInterruptedNotice(): TemplateResult {
-    return html`<interrupted-tasks-notice
-      .view=${this.view}
-      .surface=${this.surface}
-    ></interrupted-tasks-notice>`;
   }
 
   protected renderUsagePanel(run: RunView): TemplateResult {

@@ -280,7 +280,7 @@ export const LeanLoogleTool = defineTool({
 
 Example queries:
 - "Real.sin" - find lemmas mentioning a constant
-- "List.map" or "\"differ\"" - search by name substring
+- "List.map" or ""differ"" - search by name substring
 - "_ * (_ ^ _)" - find lemmas with subexpression pattern
 - "(?a -> ?b) -> List ?a -> List ?b" - find List.map by type signature
 - "|- tsum _ = _ * tsum _" - search by main conclusion

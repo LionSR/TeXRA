@@ -384,7 +384,7 @@ interrupted) is swept.
 - **Host re-gates what the harness gates.** `runActionGuard.require`
   (`packages/texra/src/controllers/session/runActionGuard.ts:32-40`) checks
   `run.actions.includes(action)` with `runActionRefusal`; `SessionRequests.
-requireRunAction` (`SessionRequests.ts:119-135`) checks the same for every
+  requireRunAction` (`SessionRequests.ts:119-135`) checks the same for every
   gated request. `hostRunActions.ts:702, 709` guards `files` and then sends
   `run.files` (`:712`), which the harness gates again. `resume`/`runNew`
   (`:389`) reach `session.resume` which is not request-gated, so that
@@ -452,7 +452,7 @@ What `scripts/check-core-quality.mjs` and `config/ratchets/` measure
   `missing-readme`, `durable-invariants` (README numbers I1.. and a test
   cites each), `core-module-mocks`.
 - Edges: `architecture-edges-baseline.json`, `harness-deep-import-baseline.
-json`, `subsystemEdgeRatchet`, `dependencyDirection` (which directory may
+  json`, `subsystemEdgeRatchet`, `dependencyDirection` (which directory may
   import which); `runRegistryAccessRatchet` and `runLaunchDoorRatchet` (which
   files may name `RunRegistry`/`registryOf`, and which forks are not
   launches); `storedShapeBoundary`, `persistenceWriteBoundary` (one writer of

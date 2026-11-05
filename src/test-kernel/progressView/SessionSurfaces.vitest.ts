@@ -39,7 +39,7 @@ vi.mock('@ui/progress/sessionTransport', async (original) => ({
 const KEY = 'paper';
 let surfaces: ReturnType<typeof createSessionSurfaces>;
 let storage: KeyValueStore;
-let webviewState: Record<string, unknown>;
+let webviewState: unknown;
 let view: ReturnType<typeof signal<ReturnType<typeof emptySessionView>>>;
 let host: ReturnType<typeof signal<HostSnapshot | null>>;
 
@@ -60,7 +60,7 @@ beforeEach(() => {
   storage = createWebviewStorage({
     getState: () => webviewState,
     setState: (state) => {
-      webviewState = state as Record<string, unknown>;
+      webviewState = state;
     },
   });
   transport.open.mockReturnValue({
@@ -76,13 +76,9 @@ beforeEach(() => {
 afterEach(() => surfaces.dispose());
 
 function response(): (result: Response['result']) => void {
-  let resolve!: (result: Response['result']) => void;
-  transport.request.mockReturnValueOnce(
-    new Promise((done) => {
-      resolve = done;
-    }),
-  );
-  return (result) => resolve(result);
+  const { promise, resolve } = Promise.withResolvers<Response['result']>();
+  transport.request.mockReturnValueOnce(promise);
+  return resolve;
 }
 
 describe('session Surface ownership', () => {

@@ -95,6 +95,7 @@ class FakePromptHost implements PromptHost {
     options?: PromptMessageOptions<T>,
   ): T | undefined {
     this.messages.push({ kind, message, options });
+    // cast: a suite queues the answers its own prompts offer as choices.
     return this.promptResponses.shift() as T | undefined;
   }
 }

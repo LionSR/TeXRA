@@ -54,9 +54,9 @@
     "golden:store": "node scripts/generate-golden-store.mjs"
   },
   "devDependencies": {
-    "@babel/core": "^7.29.7",
-    "@babel/preset-react": "^7.29.7",
-    "@babel/preset-typescript": "^7.29.7",
+    "@babel/core": "^8.1.0",
+    "@babel/preset-react": "^8.0.1",
+    "@babel/preset-typescript": "^8.0.7",
     "@lit-labs/signals": "^0.3.0",
     "@texra-ai/harness": "workspace:*",
     "@texra-ai/llm": "workspace:*",
@@ -80,7 +80,7 @@
     "picocolors": "^1.1.1",
     "react": "^19.3.1",
     "safe-stable-stringify": "catalog:",
-    "semver": "^7.8.5",
+    "semver": "^7.8.6",
     "slice-ansi": "^10.0.0",
     "string-width": "^8.3.0",
     "strip-ansi": "^7.2.0",

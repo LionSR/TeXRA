@@ -43,7 +43,6 @@ const NO_LOCAL_STATE: LocalRuntimeState = {
   self: [],
   dead: [],
   unreadable: [],
-  resumeBlocked: [],
 };
 
 /** Whether this cold read failed because no store is there: its directory

@@ -511,15 +511,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
               return { runId: live, activation: session.view.current().cursor };
             const run = yield* admit(
               runs,
-              session.resume(runId, { interactive: true }).pipe(
-                // Blocked, not failed: it stays interrupted until what it
-                // needs is back.
-                Effect.catchTag('ResumeRefused', (refusal) =>
-                  refusal.reason.kind === 'blocked'
-                    ? Effect.succeed(refusal.reason)
-                    : Effect.fail(refusal),
-                ),
-              ),
+              session.resume(runId, { interactive: true }),
               (error) =>
                 Effect.fail(
                   new TaskFailed({
@@ -528,7 +520,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   }),
                 ),
             );
-            return 'kind' in run ? run : yield* admittedTask(run);
+            return yield* admittedTask(run);
           }),
         ),
     };

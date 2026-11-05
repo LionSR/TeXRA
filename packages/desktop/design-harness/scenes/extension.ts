@@ -153,14 +153,12 @@ function sidebar(
 /** A first open: no sessions yet, the host's notices as the funnel and
  *  the folder leave them. */
 const LATEXINDENT: MissingTool = {
-  id: 'latexindent',
   label: 'latexindent',
   interchangeable: false,
   usedFor: 'format .tex files',
 };
 const IMAGE_TOOLS: MissingTool[] = ['GraphicsMagick', 'ImageMagick'].map(
   (label) => ({
-    id: label === 'GraphicsMagick' ? 'gm' : 'magick',
     label,
     interchangeable: true,
     usedFor: 'turn PDF figures into images',
@@ -219,7 +217,7 @@ function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
 
 /** Two tasks a TeXRA that has since closed left mid-turn, by title: the
  *  first with two agents (one done), the second's agent from a plugin that
- *  is off now. What the open-time notice lists. */
+ *  is off now. What the task list's interrupted group shows. */
 const runId = Schema.decodeUnknownSync(RunIdSchema);
 const REVIEW_TASK = runId('a1a1a1a1a1a1');
 const ABSTRACT_TASK = runId('a2a2a2a2a2a2');
@@ -283,12 +281,6 @@ function interruptedTasksView(): SessionView {
     local({
       self: [OWNER],
       dead: [OTHER_OWNER],
-      resumeBlocked: [
-        {
-          runId: ABSTRACT_TASK,
-          reason: { kind: 'blocked', blocker: 'pluginOff', name: 'zotero' },
-        },
-      ],
     }),
   ]);
 }
@@ -474,14 +466,13 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = withInterruptedChild();
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // Opening after a crash: the notice above the composer lists the
-  // interrupted tasks, the blocked one with its fix.
+  // Opening after a crash: the sidebar lists the interrupted tasks under
+  // their group; nothing resumes on its own.
   'ext-interrupted-open': () => {
     const view = interruptedTasksView();
     return sidebar(view, surface(view, { kind: 'selectNew' }));
   },
-  // The blocked task itself: its ended line says what it waits for, with
-  // the one Resume and the fix, under the notice until "Not now".
+  // An interrupted task itself: its ended line, with the one Resume.
   'ext-interrupted-blocked': () => {
     const view = interruptedTasksView();
     return sidebar(

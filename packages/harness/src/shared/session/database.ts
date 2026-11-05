@@ -139,7 +139,9 @@ export class DatabaseClaimRefused extends Schema.TaggedError<DatabaseClaimRefuse
 
 /** A claiming transaction's refusals: the claim's, a writer's, or the write. */
 export type DatabaseClaimError =
-  DatabaseNotOwner | DatabaseClaimRefused | DatabaseWriteFailed;
+  | DatabaseNotOwner
+  | DatabaseClaimRefused
+  | DatabaseWriteFailed;
 
 /** The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
  *  names (not proven alive); null for a closed or ownerless one. */
@@ -201,29 +203,26 @@ export class DatabaseRowEarlier extends Schema.TaggedError<DatabaseRowEarlier>()
  * no longer decodes fails that read.
  */
 export interface CurrentValues {
-  readonly get: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
+  readonly get: <T>(
+    family: ValueFamily<T>,
     key: string,
   ) => Effect.Effect<T | undefined, DatabaseReadFailed>;
   /**
    * Change one value from the one read under the write lock: `change`
    * answers with its result and the next value, with its result alone to
-   * write nothing, or refuses and nothing is written. Only a deletable
-   * family's change may answer `undefined`, which deletes the row.
+   * write nothing, or refuses and nothing is written. A next value of
+   * `undefined` deletes the row.
    */
-  readonly modify: <T, D extends boolean, A, E = never>(
-    family: ValueFamily<T, D>,
+  readonly modify: <T, A, E = never>(
+    family: ValueFamily<T>,
     key: string,
     change: (
       current: T | undefined,
-    ) => Result.Result<
-      readonly [A] | readonly [A, D extends true ? T | undefined : T],
-      E
-    >,
+    ) => Result.Result<readonly [A] | readonly [A, T | undefined], E>,
   ) => Effect.Effect<A, E | DatabaseWriteFailed>;
   /** Every row of a family, latest write first. */
-  readonly list: <T, D extends boolean>(
-    family: ValueFamily<T, D>,
+  readonly list: <T>(
+    family: ValueFamily<T>,
   ) => Effect.Effect<
     readonly { readonly key: string; readonly value: T }[],
     DatabaseReadFailed
@@ -235,7 +234,7 @@ export interface CurrentValues {
    * retried, so no change is missed.
    */
   readonly changes: (
-    family: Pick<ValueFamily<unknown, boolean>, 'name'>,
+    family: Pick<ValueFamily<unknown>, 'name'>,
     keys: readonly string[],
   ) => Stream.Stream<void>;
 }
@@ -250,7 +249,9 @@ export class SessionOptionsConflict extends Schema.TaggedError<SessionOptionsCon
 /** Why a session's root could not be opened: its database or its reads
  *  failed, or it is open over the other store. */
 export type SessionOpenError =
-  DatabaseOpenFailed | DatabaseReadFailed | SessionOptionsConflict;
+  | DatabaseOpenFailed
+  | DatabaseReadFailed
+  | SessionOptionsConflict;
 
 /** A read of committed events. */
 export type EventsRead = Effect.Effect<
@@ -316,13 +317,13 @@ export class Database extends Context.Service<
     };
     /** The root's current values: application state, not history. */
     readonly values: CurrentValues;
-    /** One aggregate's rows from `fromSeq` (through `toSeq`, a fork's
-     *  cut), or only those of `types` through the `(aggregate, type, seq)`
-     *  index, in seq order. A row past `toSeq` is never read. */
+    /** One aggregate's rows of `types` from `fromSeq` (through `toSeq`, a
+     *  fork's cut), read through the `(aggregate, type, seq)` index in seq
+     *  order. A row past `toSeq` is never read. */
     readonly readAggregate: (
       id: AggregateId,
       fromSeq: number,
-      types?: readonly SessionEvent['type'][],
+      types: readonly SessionEvent['type'][],
       toSeq?: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
     /** One aggregate's display rows in seq order, with the `usage` rows its

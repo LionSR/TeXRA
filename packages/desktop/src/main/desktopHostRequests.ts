@@ -229,8 +229,8 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             return yield* Effect.fail(new Rejected({ reason: result.message }));
           }
           yield* openDiffOutput(result.diffPath).pipe(
-            Effect.catch((cause) =>
-              Effect.fail(hostFailure('host.openBuildDisplay', cause)),
+            Effect.mapError((cause) =>
+              hostFailure('host.openBuildDisplay', cause),
             ),
           );
           return;

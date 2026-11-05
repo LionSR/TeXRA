@@ -60,7 +60,8 @@ let runId: RunId;
 // must park one returns null and decides it later with `decideRequest`.
 let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
 let decisions:
-  Effect.Success<ReturnType<typeof autoDecideRequests>> | undefined;
+  | Effect.Success<ReturnType<typeof autoDecideRequests>>
+  | undefined;
 let policyDenials = 0;
 // The tool edits the run opened, as their rows reached the log; tests
 // override the decision when they need to reject or adjust, and assert on
@@ -246,7 +247,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               timeoutMessage: 'Timed out waiting for the edit to be opened',
             }),
           );
-          const opened = openedEdits()[0]!;
+          const opened = openedEdits()[0];
           const address =
             opened.payload.kind === 'toolEdit'
               ? opened.payload.data.content
@@ -259,13 +260,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           const content: unknown = JSON.parse(stored);
           assert.ok(typeof content === 'object' && content !== null);
           assert.strictEqual(
-            (content as { originalContent?: unknown }).originalContent,
+            Reflect.get(content, 'originalContent'),
             'alpha\n',
           );
-          assert.strictEqual(
-            (content as { proposedContent?: unknown }).proposedContent,
-            'beta\n',
-          );
+          assert.strictEqual(Reflect.get(content, 'proposedContent'), 'beta\n');
           // The door a surface reads the diff through answers from the store,
           // for a request its view lists: the log's tail above can see the
           // row before the view applies it.

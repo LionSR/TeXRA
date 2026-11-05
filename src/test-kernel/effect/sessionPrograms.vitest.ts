@@ -3,14 +3,16 @@
  * back, over a real store on the validation model: the run hand-off
  * scenario of the harness 1.0 release acceptance (R14).
  *
- * Failure mode:
+ * Failure modes:
  * - R14: a resumed child its parent's open call owns is activated on its
  *   own, or the parent twice, or the redirect is an error instead of the
  *   parent's handle; the redirect leaves a claim held or a listener of its
  *   own subscribed.
+ * - A labelled run's label request is left out of its result's usage or its
+ *   view's, or the two disagree.
  */
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Scope, Stream } from 'effect';
+import { Context, Effect, Exit, Schema, Scope, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
@@ -45,11 +47,16 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     return yield* sessions.open(testWorkspaceRoots());
   });
 
+/** The stored data of a `run.end` row, as far as these cases read it. */
+const RunEndData = Schema.fromJsonString(
+  Schema.Struct({ outcome: Schema.String }),
+);
+
 /** The outcomes of the run's `run.end` rows, in order. */
 const endsOf = (storage: string, runId: RunId) =>
   storedRows(storage)
     .filter((row) => row.run === runId && row.type === 'run.end')
-    .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
+    .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data).outcome);
 
 /** How many times the run was activated after commit `after`. */
 const activationsAfter = (storage: string, runId: string, after: number) =>
@@ -124,6 +131,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
                 const storage = crashedCopy(roots.storage);
                 yield* intent.release;
                 yield* Sessions.use((sessions) => sessions.close(roots));
+                // cast: the store's logical id of a run aggregate is its RunId.
                 const child = storedRows(storage).find(
                   (row) => row.parent === run.runId && row.type === 'run.start',
                 )?.run as RunId;
@@ -162,6 +170,42 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* untilSubscribed(sdk, [child]);
             yield* Scope.close(listener, Exit.void);
             yield* untilSubscribed(sdk, []);
+          }),
+      );
+
+      it.effect(
+        "counts a labelled run's label request in its result and its view alike",
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const sdk = yield* packageSession(
+              yield* persistentTestSession(roots),
+            );
+            const run = yield* sdk.start({
+              agent: 'golden_parent',
+              instruction: 'Read the notes, plan, delegate.',
+              model: MODEL,
+              approval: { delegated: true },
+            });
+            yield* Stream.runDrain(run.view);
+            const { usage } = yield* run.result;
+
+            const rows = storedRows(roots.storage).filter(
+              (row) => row.run === run.runId,
+            );
+            expect(rows.map((row) => row.type)).toContain('run.description');
+            const responses = rows.filter(
+              (row) =>
+                row.type === 'model.message' &&
+                row.data.includes('"kind":"response"'),
+            ).length;
+            // Every validation answer is one output token: the turns' and
+            // the label's.
+            expect(usage?.totalOutputTokens).toBe(responses + 1);
+            const view = sdk.view.current().runs.get(run.runId)?.usage;
+            expect(view?.outputTokens).toBe(usage?.totalOutputTokens);
+            expect(view?.inputTokens).toBe(usage?.totalInputTokens);
+            expect(view?.cost).toBeCloseTo(usage?.totalCost ?? -1, 12);
           }),
       );
     });

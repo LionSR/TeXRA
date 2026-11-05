@@ -5,7 +5,7 @@
  */
 
 import { it } from '@effect/vitest';
-import { Context, Effect, Layer, Result } from 'effect';
+import { Context, Effect, Layer, Result, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { AppState } from '@texra-ai/harness/host';
@@ -57,13 +57,22 @@ describe('application state on SQLite', () => {
       // the value the other committed, never a stale read of its own.
       const add = (store: typeof one, id: string) =>
         store.modify('disabledTools', (stored) =>
-          Result.succeed([...((stored as string[] | undefined) ?? []), id]),
+          Result.succeed([
+            ...(Schema.decodeUnknownSync(
+              Schema.UndefinedOr(Schema.Array(Schema.String)),
+            )(stored) ?? []),
+            id,
+          ]),
         );
       yield* Effect.all([add(one, 'a'), add(two, 'b')], {
         concurrency: 'unbounded',
       });
       expect(
-        [...((yield* one.get('disabledTools')) as string[])].sort(),
+        [
+          ...Schema.decodeUnknownSync(Schema.Array(Schema.String))(
+            yield* one.get('disabledTools'),
+          ),
+        ].sort(),
       ).toEqual(['a', 'b']);
     }),
   );

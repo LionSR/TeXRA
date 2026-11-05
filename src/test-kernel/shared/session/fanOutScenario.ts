@@ -106,8 +106,7 @@ export class Log {
       const n = this.commit.toString(16).padStart(12, '0');
       this.uid.set(runId, `00000000-0000-4000-8000-${n}`);
     }
-    // A body is a distributive omit over the union, so the spread cannot be
-    // typed back into the union without this assertion.
+    // cast: a body is a distributive omit; its spread is one of the union.
     const event = {
       aggregateId: key,
       seq,
@@ -170,7 +169,7 @@ export const subscribe = (...ids: RunId[]): SessionViewInput => ({
 export function local(state: Partial<LocalRuntimeState>): SessionViewInput {
   return {
     _tag: 'local',
-    local: { self: [], dead: [], unreadable: [], resumeBlocked: [], ...state },
+    local: { self: [], dead: [], unreadable: [], ...state },
   };
 }
 

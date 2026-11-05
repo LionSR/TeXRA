@@ -68,26 +68,32 @@ wa-button[hidden] {
 }
 
 /* =====================================================================
-   Correlated text/password prompt (wa-dialog)
+   Correlated text/password prompt and the discard-changes confirmation
+   (wa-dialog)
    --------------------------------------------------------------------- */
 
-wa-dialog.desktop-prompt-overlay {
+wa-dialog.desktop-prompt-overlay,
+wa-dialog.desktop-discard-overlay {
   --width: min(520px, calc(100vw - var(--wa-space-l) * 2));
 }
 
-wa-dialog.desktop-prompt-overlay::part(body) {
+wa-dialog.desktop-prompt-overlay::part(body),
+wa-dialog.desktop-discard-overlay::part(body) {
   padding: 0;
 }
 
-wa-dialog.desktop-prompt-overlay .desktop-prompt-body {
+wa-dialog.desktop-prompt-overlay .desktop-prompt-body,
+wa-dialog.desktop-discard-overlay .desktop-discard-body {
   padding: var(--wa-space-l);
 }
 
-wa-dialog.desktop-prompt-overlay .desktop-prompt-header {
+wa-dialog.desktop-prompt-overlay .desktop-prompt-header,
+wa-dialog.desktop-discard-overlay .desktop-discard-header {
   margin-bottom: var(--wa-space-m);
 }
 
-wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
+wa-dialog.desktop-prompt-overlay .desktop-prompt-title,
+wa-dialog.desktop-discard-overlay .desktop-discard-title {
   margin: 0;
   color: var(--wa-color-text-normal);
   font-size: var(--font-size-h2);
@@ -104,7 +110,13 @@ wa-dialog.desktop-prompt-overlay .desktop-prompt-title {
   width: 100%;
 }
 
-.desktop-prompt-actions {
+.desktop-discard-message {
+  margin: 0 0 var(--wa-space-m);
+  color: var(--wa-color-text-normal);
+}
+
+.desktop-prompt-actions,
+.desktop-discard-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--wa-space-xs);
@@ -119,7 +131,8 @@ wa-dialog.desktop-settings-overlay {
 }
 
 wa-dialog.desktop-settings-overlay::part(dialog),
-wa-dialog.desktop-prompt-overlay::part(dialog) {
+wa-dialog.desktop-prompt-overlay::part(dialog),
+wa-dialog.desktop-discard-overlay::part(dialog) {
   border: var(--border-thin) solid var(--wa-color-menu-border);
   border-radius: var(--wa-border-radius-xl);
   background: var(--wa-color-surface-default);
@@ -1011,10 +1024,22 @@ wa-input.desktop-command-palette-input::part(input) {
 
 /* Each docked terminal owns its surface and retains its running shell. */
 .desktop-terminal-surface {
+  position: relative;
   grid-area: 1 / 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+}
+
+.desktop-terminal-exit-actions {
+  position: absolute;
+  z-index: 1;
+  right: var(--wa-space-m);
+  bottom: var(--wa-space-m);
+}
+
+.desktop-terminal-exit-actions:empty {
+  display: none;
 }
 
 .desktop-terminal-surface[hidden] {

@@ -15,15 +15,10 @@ import {
   withProcessServices,
   StateStores,
 } from '@texra-ai/harness/host';
-import {
-  createNodeWorkspaceRoots,
-  resolveWorkspaceStoragePath,
-  setLogSink,
-} from '@texra-ai/harness/node';
+import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import { interruptedTasksOnOpen } from '@texra/controllers/session/interruptedTasksOnOpen';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 
 // Local file imports
@@ -33,7 +28,7 @@ import {
   type CliProcessRuntime,
 } from './cliProcessRuntime';
 import {
-  flushNdjsonStdout,
+  flushStdout,
   flushTextStderr,
   silentLogSink,
   writeTextStderr,
@@ -82,11 +77,6 @@ type CliPlatformInitOptions = Pick<
    *  above its header. Otherwise this init prints it to stderr: the
    *  platform's log sink is always silent. */
   readonly presentsStoreMovedAside?: boolean;
-  /** The chat TUI: its session recovers interrupted tasks
-   *  (`OpenOptions.host.interruptedTasks`) as the `resumeOnOpen` setting
-   *  says, or, beside a resume of one task that resuming the others would
-   *  race, only lists them. */
-  readonly interruptedTasks?: 'setting' | 'list';
 };
 
 /**
@@ -125,11 +115,12 @@ export type CliPlatformServices = SettingsStores & {
 
 /**
  * The canonical "shut down the CLI platform" sequence: lifecycle shutdown
- * hooks, then the NDJSON stdout flush, then the runtime disposal that drains
- * the usage log. `cliExit` below runs it before `process.exit`, for the
- * platform's own signal policy and for the chat TUI's teardown alike, so the
- * two paths cannot drift; `bin/texra.ts`'s `ensuring` runs the same steps on
- * the ordinary return path.
+ * hooks and the runtime disposal that drains the usage log, then the stderr
+ * and stdout flushes `process.exit` would otherwise cut short. `cliExit`
+ * below runs it before `process.exit`, for the platform's own signal policy
+ * and for the chat TUI's teardown alike, so the two paths cannot drift;
+ * `bin/texra.ts`'s `ensuring` runs the same shutdown on the ordinary return
+ * path, where the event loop drains the streams.
  *
  * A program, not a run: the caller runs it on the default runtime rather
  * than the process runtime, because the lifecycle shutdown below disposes the
@@ -157,7 +148,7 @@ function cliPlatformShutdownSequence(): Effect.Effect<void> {
     // A closed stderr pipe must not prevent signal-based termination.
     yield* bestEffort('flushing stderr', flushTextStderr());
     // A closed stdout pipe must not prevent signal-based termination.
-    yield* bestEffort('flushing stdout', flushNdjsonStdout());
+    yield* bestEffort('flushing stdout', flushStdout());
   });
 }
 
@@ -284,47 +275,27 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
       const projectScope = yield* Scope.make();
       const closeProject = Scope.close(projectScope, Exit.void);
       return yield* Effect.gen(function* () {
-        // The project's `texra.db` lives in its storage directory and is
-        // owned by the project scope; AppState (global) is the runtime's.
-        const { storageRoot } = context;
-        const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
-        const workspaceState = yield* (yield* StateStores)
-          .project(storage, context.cwd)
-          .pipe(Scope.provide(projectScope));
-        const repoState = yield* (yield* StateStores).repo(
-          storage,
-          context.cwd,
-        );
         // One process, one project: the process roots are the `--cwd` workspace,
         // over the config provider the startup read already opened — the project
         // `.texra/config.json` layered over the user-level
         // `~/.texra/v1/global-storage/config.json`. One provider per process is
         // what keeps a value `texra config` writes readable at the next startup.
-        const roots = createNodeWorkspaceRoots({
+        // The project's `texra.db` is owned by the project scope; AppState
+        // (global) is the runtime's.
+        const roots = yield* openNodeWorkspaceRoots({
           workspacePath: context.cwd,
-          storageRoot,
-          storage,
+          storageRoot: context.storageRoot,
           config: context.config,
-          workspaceState,
-          repoState,
+          stateStores: yield* StateStores,
           globalState,
-        });
+        }).pipe(Scope.provide(projectScope));
         // The one open of the process session, over the roots published below,
         // memoized so the first entry point that needs a session opens it and
         // every later one gets the same handle; an entry that needs none never
         // opens one.
         const openSession = yield* Effect.cached(
           Effect.acquireRelease(
-            Effect.flatMap(
-              context.interruptedTasks === 'setting'
-                ? interruptedTasksOnOpen(roots)
-                : Effect.succeed(context.interruptedTasks),
-              (interruptedTasks) =>
-                sessions.open(roots, {
-                  persistent: true,
-                  host: { ...(interruptedTasks && { interruptedTasks }) },
-                }),
-            ),
+            sessions.open(roots, { persistent: true, host: {} }),
             (session) => Effect.asVoid(sessions.close(session.roots)),
           ).pipe(
             Effect.tap(recordFirstCompletedRun),
@@ -354,14 +325,11 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         // extension and desktop hosts do: a background `bash` run is its own
         // process group (see execUtils), which its lifeline kills only once
         // `texra` is gone, and this close stops it first so its run finishes.
-        // Then the project scope with a final NDJSON flush, and the runtime
-        // last, draining the usage log.
+        // Then the project scope, and the runtime last, draining the usage
+        // log.
         const scope = Scope.makeUnsafe();
         yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
-        yield* Scope.addFinalizer(
-          scope,
-          closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
-        );
+        yield* Scope.addFinalizer(scope, closeProject);
         yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
         const platform = {
           roots,

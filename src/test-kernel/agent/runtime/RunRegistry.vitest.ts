@@ -9,11 +9,13 @@ import {
   Layer,
   SubscriptionRef,
   Context,
+  Schema,
 } from 'effect';
 import { expect, vi } from 'vitest';
 
 // Local imports
 import {
+  RunIdSchema,
   GlobalStateKey,
   generateRunId,
   RUN_PHASE,
@@ -71,6 +73,7 @@ function createRegistry(
   const views = new Map<RunId, RunView>();
   const setPhase = (runId: RunId, status: RunPhase) => {
     // The fields the registry reads off a run's view (these runs are roots).
+    // cast: the registry reads only these fields of a run's view.
     views.set(runId, {
       status,
       substate: null,
@@ -82,6 +85,7 @@ function createRegistry(
   // detached child keeps, and its own `run.detach` batches. Everything else,
   // a run's end among it, is the default session's.
   const grantView = Effect.runSync(
+    // cast: the registry reads only a view's runs and grant policy.
     SubscriptionRef.make({
       runs: new Map(),
       policy: new Map(),
@@ -91,7 +95,10 @@ function createRegistry(
     Effect.sync(() => {
       for (const draft of drafts)
         if (draft.type === 'run.detach') {
-          const id = aggregateTarget(draft.aggregateId).id as RunId;
+          const id = Schema.decodeUnknownSync(RunIdSchema)(
+            aggregateTarget(draft.aggregateId).id,
+          );
+          // cast: the detached child's view, with only the fields set above.
           views.set(id, { ...views.get(id), parentId: null } as RunView);
         }
     });
@@ -102,11 +109,17 @@ function createRegistry(
   };
   const log: SessionLog['Service'] = {
     ...Context.get(real, SessionLog),
+    // One arrow answers both `transact` overloads, which no single signature
+    // states; the job form is told apart at runtime.
+    // cast: the arrow serves both overloads, as the runtime check splits them.
     transact: ((work: unknown) =>
       typeof work === 'function'
         ? Context.get(real, SessionLog).transact((tx) =>
+            // cast: a function passed to `transact` is its job form.
             (work as (job: typeof tx) => Effect.Effect<unknown>)({
               ...tx,
+              // A detach batch is applied here and returns no rows.
+              // cast: the registry never reads the rows a detach returns.
               append: ((drafts: readonly SessionEventDraft[]) =>
                 drafts.some((draft) => draft.type === 'run.detach')
                   ? Effect.as(fold(drafts), [])
@@ -280,7 +293,7 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
             yield* defaultSession,
             yield* testRunFork,
           );
-          const runId = 'abcd12' as RunId;
+          const runId = Schema.decodeUnknownSync(RunIdSchema)('abcd12');
           const started = yield* Deferred.make<void>();
           const finish = yield* Deferred.make<void>();
           const generation = yield* Effect.forkChild(

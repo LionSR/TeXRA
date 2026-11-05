@@ -19,7 +19,7 @@ import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
 import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
-import { describeFollowUpFailure } from '@agent/followUp/ToolUseFollowUp';
+import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
@@ -213,7 +213,7 @@ function resume(
       return yield* new ResumeRefused({
         runId,
         reason: resumed.failed,
-        message: describeFollowUpFailure(resumed.failed.kind),
+        message: describeResumeRefusal(resumed.failed),
       });
     return runView(session, runId, resumed.activation, redirectedFrom);
   });
@@ -257,11 +257,9 @@ export function makeSessions(
         Effect.map(
           owner.open({
             roots,
-            ...(host === undefined
-              ? { interactions: { approvalPromptsUnavailable: true } }
-              : host.interruptedTasks && {
-                  interruptedTasks: host.interruptedTasks,
-                }),
+            ...(host === undefined && {
+              interactions: { approvalPromptsUnavailable: true },
+            }),
             ...(!persistent && {
               transcriptMode: { kind: 'ephemeral' },
             }),

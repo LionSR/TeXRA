@@ -5,16 +5,15 @@
  * `SCHEMA_VERSION` names the DDL, never the row vocabulary: rows carry
  * their own versions (`rowVersions.ts`), and the kinds a store holds are
  * gated by `rowCodec.ts`, so it moves only for a change an older build
- * cannot write around. The 1.0 baseline is 101. A file below it holding
- * tables was written before 1.0 (100 a pre-release that never shipped);
- * this build reads none and moves it aside whole.
- *
- * This module knows no row kind and no payload field.
+ * cannot write around. The 1.0 baseline is 101; a file below it holding
+ * tables is pre-1.0 (100 was a pre-release that never shipped), read by no
+ * build and moved aside whole. This module knows no row kind or payload field.
  */
 import { Clock, Effect, Exit, FileSystem, Scope } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { SessionStoreMovedAside } from '@shared/session/database';
 import {
+  asideName,
   cannotOpen,
   freeName,
   inImmediateTransaction,
@@ -22,6 +21,7 @@ import {
   pragmaValue,
   retryBusy,
   run,
+  STORE_FILE_SUFFIXES,
   underCopy,
   type Sql,
 } from './storeAside';
@@ -146,11 +146,6 @@ const ADDITIVE = [
     aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
     "commit"  INTEGER NOT NULL,
     usage     TEXT NOT NULL
-  ) STRICT`,
-  `CREATE TABLE IF NOT EXISTS run_model (
-    aggregate INTEGER PRIMARY KEY REFERENCES event_sequence(id) ON DELETE CASCADE,
-    model     TEXT NOT NULL,
-    "commit"  INTEGER
   ) STRICT`,
   `CREATE INDEX IF NOT EXISTS event_sequence_parent
     ON event_sequence(parent_id) WHERE parent_id IS NOT NULL`,
@@ -286,7 +281,7 @@ const prepareStore = Effect.fnUntraced(function* (
     yield* run(sql, 'PRAGMA foreign_keys = OFF');
     const aside = yield* underCopy(
       sql,
-      `${filename}.pre1`,
+      asideName.pre1(filename),
       Effect.gen(function* () {
         for (const table of yield* userTables(sql))
           yield* run(sql, `DROP TABLE "${table}"`);
@@ -406,9 +401,9 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     return { sql, movedAside: yield* prepareStore(sql, mode, path, filename) };
   }
   const aside = yield* freeName(
-    `${filename}.corrupt-${yield* Clock.currentTimeMillis}`,
+    asideName.corrupt(filename, yield* Clock.currentTimeMillis),
   );
-  for (const suffix of ['', '-wal', '-shm']) {
+  for (const suffix of STORE_FILE_SUFFIXES) {
     if (yield* fs.exists(`${filename}${suffix}`))
       yield* fs.rename(`${filename}${suffix}`, `${aside}${suffix}`);
   }

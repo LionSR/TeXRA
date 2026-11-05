@@ -34,7 +34,6 @@ import {
 import {
   ModelError,
   fillModelError,
-  type BackgroundEvent,
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
@@ -238,7 +237,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           trace: AttemptTrace,
           completed: AttemptOutcome,
         ) =>
-        (event: TurnEvent | BackgroundEvent) =>
+        (event: TurnEvent) =>
           Effect.gen(function* () {
             switch (event.kind) {
               case 'identified': {
@@ -273,8 +272,6 @@ export const modelInvokerLayer = (): Layer.Layer<
                     completed.streamedText + event.text
                   ).slice(-PARTIAL_TEXT_TAIL_MAX);
                 }
-                return;
-              case 'cursor':
                 return;
               case 'completed':
                 completed.value = event.result;

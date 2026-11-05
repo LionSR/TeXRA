@@ -93,7 +93,9 @@ export type DerivedSettingsSnapshot =
 
 /** Every settings-view snapshot: what a row's `surfaces.settingsView` names. */
 export type SettingsViewSnapshot =
-  DerivedSettingsSnapshot | 'models' | 'profile';
+  | DerivedSettingsSnapshot
+  | 'models'
+  | 'profile';
 
 /**
  * One snapshot's member of the outbound snapshot case: its name plus one
@@ -205,8 +207,6 @@ const UpdateModelSelectionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: Schema.Array(ModelSelectionItemSchema),
   helperModel: Schema.String,
-  /** Whether the user prefers short (unpinned) model names. */
-  preferShortModelNames: Schema.Boolean,
 });
 export type UpdateModelSelectionMessage =
   (typeof UpdateModelSelectionMessageSchema)['Type'];
