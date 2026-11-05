@@ -96,7 +96,7 @@ export const InquiryRequestSchema = Schema.Struct({
 });
 export type InquiryRequest = typeof InquiryRequestSchema.Type;
 
-const InquiryThreadStatusSchema = Schema.Literals([
+export const InquiryThreadStatusSchema = Schema.Literals([
   'open',
   'answered',
   'dropped',
