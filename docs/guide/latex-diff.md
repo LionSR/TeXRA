@@ -161,7 +161,7 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 - [Original vs. Revision 2 (After Reflection)](/examples/draft_polish_r1_gemini25p_diff.pdf)
 - [Revision 1 vs. Revision 2 (Reflection Changes)](/examples/draft_polish_r1_gemini25p_diffr1r0.pdf)
 - [Original Document](/examples/draft.pdf)
-  :::
+:::
 
 <style>
 .pdf-examples {

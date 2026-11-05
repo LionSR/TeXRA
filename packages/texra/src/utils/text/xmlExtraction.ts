@@ -44,7 +44,7 @@ export function extractTextFromTag(
   tagName: string,
 ): string {
   // Find all matches and get the last one using matchAll
-  const regex = new RegExp(`<${tagName}>(.*?)<\/${tagName}>`, 'gs');
+  const regex = new RegExp(`<${tagName}>(.*?)</${tagName}>`, 'gs');
   const matches = [...inputContent.matchAll(regex)];
   const lastContent = matches.at(-1)?.[1] ?? '';
 
@@ -58,7 +58,7 @@ export function extractTextFromTag(
  */
 function extractNamedDocuments(content: string): NamedDocument[] {
   const documentRegex = new RegExp(
-    `${DOCUMENT_OPEN_TAG_WITH_NAME}(.*?)<\/${OUTPUT_DOCUMENT_TAG}>`,
+    `${DOCUMENT_OPEN_TAG_WITH_NAME}(.*?)</${OUTPUT_DOCUMENT_TAG}>`,
     'gs',
   );
 
@@ -105,7 +105,7 @@ export function extractDocuments(
   // falling back to a whole-response scan when the container is absent or
   // holds none of them.
   const container = outputContent.match(
-    new RegExp(`<${containerTag}>(.*?)<\/${containerTag}>`, 's'),
+    new RegExp(`<${containerTag}>(.*?)</${containerTag}>`, 's'),
   )?.[1];
   const inContainer = container ? extractNamedDocuments(container) : [];
   const documents =

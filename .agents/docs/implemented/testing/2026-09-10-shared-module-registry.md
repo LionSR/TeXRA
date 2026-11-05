@@ -72,20 +72,20 @@ flaky in the commit loop too.
 Three leak classes, from the error tallies:
 
 1. **Lit custom-element registry.** `Invalid constructor, the constructor is
-not part of the custom element registry` (125), `d.createComment is not a
-function` (47). Element classes are bound to the first jsdom window a worker
+   not part of the custom element registry` (125), `d.createComment is not a
+   function` (47). Element classes are bound to the first jsdom window a worker
    created; later suites' windows never see them. `progressView`, `settings`,
    `frontend`, `desktop`, `webview` suites. Structural: these need a fresh
    registry, or a per-worker window they all share.
 2. **Partial `vi.mock()` factories staying in the shared cache.** `No
-"workspaceRoots" export is defined on the "@platform/workspaceRoots" mock`
+   "workspaceRoots" export is defined on the "@platform/workspaceRoots" mock`
    (15), `No "platform" export …` (8), `platform(...).fs.stat is not a
-function`, `client.buildURL is not a function`. 164 of 741 suites call
+   function`, `client.buildURL is not a function`. 164 of 741 suites call
    `vi.mock`; 37 mock `@platform/platform` directly. A later suite importing
    the real module gets the earlier suite's partial mock.
 3. **Module-scope singletons installed by one file, observed by the next.**
    `Sessions not initialized: call installProcessRuntime()`, `The default
-session has not been initialized`, unhandled `ExecutionLeaseLostError`
+   session has not been initialized`, unhandled `ExecutionLeaseLostError`
    rejections from the execution lease (20 of 37 unhandled errors),
    `session.onResult is not a function`.
 

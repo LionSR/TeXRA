@@ -186,13 +186,16 @@ export const prepareBuildDisplay = Effect.fn('openBuild.prepareBuildDisplay')(
 
 /** What the file-open/build phase takes from the runtime it is run on. */
 type PreparedFileServices =
-  FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner;
 
 /** How it fails: the editor's own rejections, and the existence probe's. */
 type DisplayFailure = Error | PlatformError.PlatformError;
 
 type PrepareFileForDisplayResult =
-  { kind: 'done'; delivered: boolean } | { kind: 'latex-ready' };
+  | { kind: 'done'; delivered: boolean }
+  | { kind: 'latex-ready' };
 
 const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
   function* (

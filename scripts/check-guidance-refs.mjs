@@ -102,7 +102,7 @@ const GUIDANCE_DIRS = [
 // Escape hatch for prose that names a path precisely because it is gone —
 // e.g. "`packages/harness/src/common/webview/` does not exist". Put
 // `<!-- guidance-refs-ignore -->` anywhere in the paragraph. It scopes to the
-// whole block (contiguous non-blank lines), not one line, because Prettier
+// whole block (contiguous non-blank lines), not one line, because the formatter
 // reflows this prose and would otherwise strand the marker.
 const IGNORE_MARKER = '<!-- guidance-refs-ignore -->';
 

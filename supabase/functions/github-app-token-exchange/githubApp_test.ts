@@ -118,19 +118,16 @@ async function withStubbedGitHub<T>(
   }
 }
 
-Deno.test(
-  'workflow missing from the default branch is untrusted, not a missing App',
-  async () => {
-    const trusted = await withStubbedGitHub(
-      (ref) =>
-        ref === WORKFLOW_SHA
-          ? jsonOk({ type: 'file', sha: 'blob-sha' })
-          : new Response('Not Found', { status: 404 }),
-      (client) => client.isWorkflowOnDefaultBranch(WORKFLOW_PATH, WORKFLOW_SHA),
-    );
-    strictEqual(trusted, false);
-  },
-);
+Deno.test('workflow missing from the default branch is untrusted, not a missing App', async () => {
+  const trusted = await withStubbedGitHub(
+    (ref) =>
+      ref === WORKFLOW_SHA
+        ? jsonOk({ type: 'file', sha: 'blob-sha' })
+        : new Response('Not Found', { status: 404 }),
+    (client) => client.isWorkflowOnDefaultBranch(WORKFLOW_PATH, WORKFLOW_SHA),
+  );
+  strictEqual(trusted, false);
+});
 
 Deno.test('workflow matching the default branch blob is trusted', async () => {
   const trusted = await withStubbedGitHub(
@@ -140,19 +137,16 @@ Deno.test('workflow matching the default branch blob is trusted', async () => {
   strictEqual(trusted, true);
 });
 
-Deno.test(
-  'a failed content lookup surfaces instead of reading as untrusted',
-  async () => {
-    await withStubbedGitHub(
-      () => new Response('Server Error', { status: 500 }),
-      (client) =>
-        rejects(
-          () => client.isWorkflowOnDefaultBranch(WORKFLOW_PATH, WORKFLOW_SHA),
-          GitHubApiError,
-        ),
-    );
-  },
-);
+Deno.test('a failed content lookup surfaces instead of reading as untrusted', async () => {
+  await withStubbedGitHub(
+    () => new Response('Server Error', { status: 500 }),
+    (client) =>
+      rejects(
+        () => client.isWorkflowOnDefaultBranch(WORKFLOW_PATH, WORKFLOW_SHA),
+        GitHubApiError,
+      ),
+  );
+});
 
 Deno.test('the exchanged token never carries contents write', async () => {
   const permissions = await withStubbedGitHub(

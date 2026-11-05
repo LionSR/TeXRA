@@ -229,7 +229,7 @@ Then add new issues to relevant tracking issue checklists:
   section.
 - For an umbrella, append `- [ ] #<umbrella> - Tracking: ...` as a single line.
 - Comment on the parent pull request: `Filed follow-ups from this PR:
-#<umbrella-or-issue>`.
+  #<umbrella-or-issue>`.
 
 ## Playbook C: Pull Request Activity
 

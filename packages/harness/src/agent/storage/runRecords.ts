@@ -40,7 +40,10 @@ import { deriveRunId } from '@utils/core/idHash';
 
 /** What a read of a run's records takes from its session. */
 type RecordServices =
-  SessionLog | SessionViewAccess | RunHistory | SessionRoots;
+  | SessionLog
+  | SessionViewAccess
+  | RunHistory
+  | SessionRoots;
 
 /** A read of a run's records, over the session services `R`. */
 type RecordRead<A, R = SessionLog> = Effect.Effect<A, DatabaseReadFailed, R>;
@@ -388,7 +391,7 @@ export function getRunRecords(runId: RunId) {
         }
         const end = yield* runEndOf(runId, held, lifecycles, history);
         return {
-          ...(end ?? {}),
+          ...end,
           output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },
         };
       },

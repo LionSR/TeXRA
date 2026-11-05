@@ -65,7 +65,11 @@ export type RunServices =
  *  door and never the session's `Runs`, which only the engine door carries
  *  (`RunCallShape.session`). */
 export type PluginToolServices =
-  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
+  | RunServices
+  | ToolContext
+  | WorkspaceFs
+  | StorageFs
+  | Scope.Scope;
 
 /**
  * A plugin tool's one door to the session's runs. It launches children of
