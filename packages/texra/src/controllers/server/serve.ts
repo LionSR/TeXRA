@@ -121,12 +121,10 @@ export const serve = Effect.fn('server.serve')(function* (
   ProcessServices | Sessions | ServiceProjects | HostWindows | Scope.Scope
 > {
   if (process.platform === 'win32')
-    return yield* Effect.fail(
-      new ServiceListenFailed({
-        socket: '',
-        cause: new Error(WINDOWS_UNSUPPORTED),
-      }),
-    );
+    return yield* new ServiceListenFailed({
+      socket: '',
+      cause: new Error(WINDOWS_UNSUPPORTED),
+    });
   const fs = yield* FileSystem.FileSystem;
   const projects = yield* ServiceProjects;
   const paths = servicePaths(projects.storageRoot);
@@ -263,7 +261,7 @@ export const serve = Effect.fn('server.serve')(function* (
     }),
   );
   if (holder !== null)
-    return yield* Effect.fail(new ServiceAlreadyRunning({ info: holder }));
+    return yield* new ServiceAlreadyRunning({ info: holder });
   yield* Effect.addFinalizer(() => release);
   yield* Effect.logInfo(
     `TeXRA service ${BUILD_VERSION} listening on ${socket}`,

@@ -819,7 +819,7 @@ export class PRPollingSource extends PollingSourceBase<
       return false;
     }
     if (err instanceof GitHubRateLimitError) {
-      return yield* Effect.fail(new PollHookRejected({ cause: err }));
+      return yield* new PollHookRejected({ cause: err });
     }
     if (err instanceof GitHubPermanentError || err instanceof GitHubAuthError) {
       const reason =

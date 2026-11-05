@@ -321,13 +321,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (turn === null) {
           trace.thinking.finalize(undefined);
           trace.output.finalize();
-          return yield* Effect.fail(
-            new ModelError({
-              kind: 'malformed-output',
-              message: EMPTY_RESPONSE_ERROR_MESSAGE,
-              partialText: completed.streamedText,
-            }),
-          );
+          return yield* new ModelError({
+            kind: 'malformed-output',
+            message: EMPTY_RESPONSE_ERROR_MESSAGE,
+            partialText: completed.streamedText,
+          });
         }
         const text = turnText(turn);
         const reasoning = turn.content
@@ -401,12 +399,10 @@ export const modelInvokerLayer = (): Layer.Layer<
         const budget =
           mode === 'background' ? null : outputBudget(state, bound);
         if (budget?.kind === 'overflow')
-          return yield* Effect.fail(
-            new ModelError({
-              kind: 'context-overflow',
-              message: `Input is ${budget.inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
-            }),
-          );
+          return yield* new ModelError({
+            kind: 'context-overflow',
+            message: `Input is ${budget.inputTokens} tokens, which exceeds the model's context window of ${contextWindow} tokens.`,
+          });
         const maxOutputTokens =
           budget?.kind === 'reduced' ? budget.maxOutputTokens : undefined;
         if (budget?.kind === 'reduced')
@@ -496,13 +492,11 @@ export const modelInvokerLayer = (): Layer.Layer<
         > {
           const background = bound.model.background;
           if (background === undefined) {
-            return yield* Effect.fail(
-              new ModelError({
-                kind: 'unsupported',
-                message:
-                  'The run resumed onto a model that cannot observe its accepted background operation.',
-              }),
-            );
+            return yield* new ModelError({
+              kind: 'unsupported',
+              message:
+                'The run resumed onto a model that cannot observe its accepted background operation.',
+            });
           }
           const resolved = yield* admittedTurn(yield* cell.current, log.blobs);
           const trace = openTrace();

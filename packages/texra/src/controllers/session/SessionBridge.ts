@@ -216,7 +216,7 @@ export class SessionBridge {
       ) {
         yield* Scope.close(framers, Exit.void);
         yield* Scope.close(scope, Exit.void);
-        return yield* Effect.fail(new SessionBridgeClosedError());
+        return yield* new SessionBridgeClosedError();
       }
       const entry: PortEntry = {
         port,

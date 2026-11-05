@@ -271,11 +271,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
     // run is the registry's: a drain waits for a start already under way.
     const refuseWhileDraining = Effect.gen(function* () {
       if (!(yield* control.admission))
-        return yield* Effect.fail(
-          new TaskFailed({
-            message: 'The service is shutting down; start the task again.',
-          }),
-        );
+        return yield* new TaskFailed({
+          message: 'The service is shutting down; start the task again.',
+        });
     });
     const hosts = yield* HostWindows;
     yield* Effect.forkScoped(

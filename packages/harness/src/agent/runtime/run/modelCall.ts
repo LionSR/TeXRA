@@ -190,11 +190,9 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
       new Error(`The ${call.purpose} call was cancelled.`),
     );
   // The failure as recorded, which every formatter reads off the error.
-  return yield* Effect.fail(
-    new AgentError({
-      message: ended.error.message,
-      cause: ended.cause ?? undefined,
-      failure: ended.error,
-    }),
-  );
+  return yield* new AgentError({
+    message: ended.error.message,
+    cause: ended.cause ?? undefined,
+    failure: ended.error,
+  });
 });

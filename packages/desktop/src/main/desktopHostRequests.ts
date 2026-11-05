@@ -179,9 +179,9 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         roots,
         DocumentsStateKey.LATEXDIFF_MATH_MARKUP,
       );
-      return yield* Effect.fail(
-        new Rejected({ reason: latexdiffAllFailedMessage(mathMarkup) }),
-      );
+      return yield* new Rejected({
+        reason: latexdiffAllFailedMessage(mathMarkup),
+      });
     });
 
     /** latexdiff over two files of the workspace, opening the result. */
@@ -195,7 +195,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
           { cwd: roots.workspace },
         );
         if (!result.success) {
-          return yield* Effect.fail(new Rejected({ reason: result.message }));
+          return yield* new Rejected({ reason: result.message });
         }
         yield* openDiffOutput(result.diffPath);
       },
@@ -215,9 +215,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
         commit: string,
       ) {
         if (!baseFile) {
-          return yield* Effect.fail(
-            new Rejected({ reason: 'Choose a base file first.' }),
-          );
+          return yield* new Rejected({ reason: 'Choose a base file first.' });
         }
         const base = pathToLocationIn(roots.workspace, baseFile);
         if (action === 'latexdiffvc') {
@@ -226,7 +224,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             commit,
           );
           if (!result.success) {
-            return yield* Effect.fail(new Rejected({ reason: result.message }));
+            return yield* new Rejected({ reason: result.message });
           }
           yield* openDiffOutput(result.diffPath).pipe(
             Effect.mapError((cause) =>
@@ -315,7 +313,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
             .pipe(
               Effect.mapError((cause) => hostFailure('files.pickFiles', cause)),
             );
-          if (paths === null) return yield* Effect.fail(new Cancelled());
+          if (paths === null) return yield* new Cancelled();
           return { kind: 'files' as const, paths };
         }
         case 'useCurrentFile':

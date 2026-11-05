@@ -579,11 +579,9 @@ function answerShared(
       return;
     }
     if (!baseFile || !editedFile) {
-      return yield* Effect.fail(
-        new Rejected({
-          reason: 'Choose a base file and an edited file first.',
-        }),
-      );
+      return yield* new Rejected({
+        reason: 'Choose a base file and an edited file first.',
+      });
     }
     switch (action) {
       case 'compare':
@@ -611,11 +609,9 @@ function answerShared(
         // host's search: both word it the same way.
         const opened = yield* host.openLabel(request.label);
         if (!opened) {
-          return yield* Effect.fail(
-            new Rejected({
-              reason: `No file defines the label ${request.label}.`,
-            }),
-          );
+          return yield* new Rejected({
+            reason: `No file defines the label ${request.label}.`,
+          });
         }
         return done;
       }
@@ -723,12 +719,10 @@ function answerShared(
       }
       case 'exportTranscript':
         if (!parts.session.view.current().runs.has(request.runId))
-          return yield* Effect.fail(
-            new Unavailable({
-              runId: request.runId,
-              reason: 'The run is no longer open.',
-            }),
-          );
+          return yield* new Unavailable({
+            runId: request.runId,
+            reason: 'The run is no longer open.',
+          });
         yield* parts.exportTranscript(request.runId);
         return done;
       case 'latexdiff': {
@@ -751,7 +745,7 @@ function answerShared(
           files.inputFile,
         );
         if (message.level === 'error')
-          return yield* Effect.fail(new Rejected({ reason: message.text }));
+          return yield* new Rejected({ reason: message.text });
         yield* parts.showInfo(message.text);
         return done;
       }

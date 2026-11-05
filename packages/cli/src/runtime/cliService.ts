@@ -106,8 +106,10 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       (message) => warnings.push(message),
       true,
     );
-    yield* Effect.forEach(warnings, (message) =>
-      Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+    yield* Effect.forEach(
+      warnings,
+      (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
+      { discard: true },
     );
     return yield* openNodeWorkspaceRoots({
       workspacePath: workspace,

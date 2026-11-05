@@ -171,36 +171,39 @@ export function messageThreads(options: {
     }
     return null;
   };
-  const store = (turn: ResolvedTurn, result: TurnResult, mode: Mode) =>
-    Effect.gen(function* () {
-      const responseId = result.providerResponseId;
-      if (
-        !supported ||
-        responseId === null ||
-        (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
-      )
-        return result;
-      // The full request with the response lowered as its last message.
-      const held = yield* options.lower({
-        ...turn,
-        messages: [...turn.messages, assistantMessageFromResult(result)],
-      });
-      const nowMs = yield* Clock.currentTimeMillis;
-      prune(nowMs);
-      const key = threadKey(held, held.messages);
-      live.set(key, {
-        responseId,
-        mode,
-        length: held.messages.length,
-        expiresAtMs: nowMs + THREAD_LIFETIME_MS,
-      });
-      // Insertion order is age order: drop the oldest past the cap.
-      for (const oldest of live.keys()) {
-        if (live.size <= MAX_THREADS) break;
-        live.delete(oldest);
-      }
+  const store = Effect.fnUntraced(function* (
+    turn: ResolvedTurn,
+    result: TurnResult,
+    mode: Mode,
+  ) {
+    const responseId = result.providerResponseId;
+    if (
+      !supported ||
+      responseId === null ||
+      (result.finishReason !== 'stop' && result.finishReason !== 'tool-calls')
+    )
       return result;
+    // The full request with the response lowered as its last message.
+    const held = yield* options.lower({
+      ...turn,
+      messages: [...turn.messages, assistantMessageFromResult(result)],
     });
+    const nowMs = yield* Clock.currentTimeMillis;
+    prune(nowMs);
+    const key = threadKey(held, held.messages);
+    live.set(key, {
+      responseId,
+      mode,
+      length: held.messages.length,
+      expiresAtMs: nowMs + THREAD_LIFETIME_MS,
+    });
+    // Insertion order is age order: drop the oldest past the cap.
+    for (const oldest of live.keys()) {
+      if (live.size <= MAX_THREADS) break;
+      live.delete(oldest);
+    }
+    return result;
+  });
 
   const send: MessageThreads['send'] = (turn, body) =>
     Effect.gen(function* () {

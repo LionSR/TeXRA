@@ -383,11 +383,9 @@ export const createHostRunActions = Effect.fn(
     yield* requireAction(runId, action);
     const config = yield* readConfig(runId);
     if (!config) {
-      return yield* Effect.fail(
-        new Rejected({
-          reason: "This run's configuration was not saved.",
-        }),
-      );
+      return yield* new Rejected({
+        reason: "This run's configuration was not saved.",
+      });
     }
     return config;
   });
@@ -590,12 +588,10 @@ export const createHostRunActions = Effect.fn(
     ),
     runCompileFixer: Effect.fn(function* (runId) {
       if (!view().runs.has(runId)) {
-        return yield* Effect.fail(
-          new Unavailable({
-            runId,
-            reason: 'The run is no longer open.',
-          }),
-        );
+        return yield* new Unavailable({
+          runId,
+          reason: 'The run is no longer open.',
+        });
       }
       const config = yield* readConfig(runId);
       const modelOptions = yield* ports.loadModelOptions();
