@@ -19,7 +19,7 @@ describe('defineTool', () => {
   // Failure mode: a bug inside a tool's body (a defect, not the tool's own
   // `ToolError`) reached the model as a failed call and nothing else: the
   // cause was in no log, so the bug read as the model's mistake.
-  it.live('logs a defect inside a tool body before the model reads it', () =>
+  it.effect('logs a defect inside a tool body before the model reads it', () =>
     Effect.gen(function* () {
       const capture = captureLogEntries();
       const tool = defineTool({

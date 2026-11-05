@@ -71,7 +71,7 @@ const PURE_DIRS = [
 ];
 const REACHES_A_HOST = [
   /from\s+['"]@platform\//,
-  /from\s+['"]@test\/support\/(?:setupPlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|crashConformance|testWorkspaceRoots|testKernel)['"]/,
+  /from\s+['"]@test\/support\/(?:setupPlatform|FakePlatform|FakeHosts|tempDirPlatform|nativeToolTestLayer|sessionTestUtils|crashConformance|testWorkspaceRoots|testKernel|logSinkCapture)['"]/,
 ];
 // What a shared registry cannot serve: a `vi.mock` / `vi.doMock` factory (the
 // module it built stays in the registry, and a partial factory is what the
