@@ -41,20 +41,24 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
-import type { ServiceInfo } from '@texra/controllers/server/protocol';
+import {
+  BUILD_VERSION,
+  PROTOCOL,
+  type ServiceInfo,
+} from '@texra/controllers/server/protocol';
 import type {
   ServiceProject,
   ServiceProjects,
 } from '@texra/controllers/server/handlers';
 import {
   ensureService,
+  isOlder,
   linkService,
   probeRecordedService,
   spawnService,
   type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
-  WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -303,33 +307,48 @@ function withCliService<A>(
 const NONE_RUNNING = 'no TeXRA service is running';
 
 /**
- * The storage root's running service, linked for the caller's scope, or
- * undefined when there is none to link: `TEXRA_NO_SERVICE`, Windows, or no
- * service running. A command never starts one; the chat and `texra tasks
- * start` do ({@link startCliService}, {@link connectCliService}). A service
- * that is there but cannot be linked (a newer build's, an unreadable
- * record) fails, so no command works beside it on the project's store.
+ * The storage root's running service of this build's protocol, linked for
+ * the caller's scope, or undefined when there is none to link:
+ * `TEXRA_NO_SERVICE`, Windows, no service running, or an older build's
+ * service, which a command leaves running (the chat retires and replaces
+ * it; a command never starts or stops one). A service that is there but
+ * cannot be linked (a newer build's, an unreadable record, one that does not
+ * answer) fails, so no command works beside it on the project's store.
  */
-export function linkRunningCliService(
-  storageRoot: string,
-): Effect.Effect<ServiceLink | undefined, Error, Scope.Scope | GlobalValues> {
-  return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
-    off
-      ? Effect.succeed(undefined)
-      : linkService(storageRoot, Effect.fail(new Error(NONE_RUNNING))).pipe(
-          Effect.catch((error) =>
-            error.reason === WINDOWS_UNSUPPORTED ||
-            error.reason.endsWith(NONE_RUNNING)
-              ? Effect.succeed(undefined)
-              : Effect.fail(
-                  new Error(
-                    `The TeXRA service could not be reached: ${error.reason}`,
-                  ),
-                ),
-          ),
+export const linkRunningCliService = Effect.fn('linkRunningCliService')(
+  function* (
+    storageRoot: string,
+  ): Effect.fn.Return<
+    ServiceLink | undefined,
+    Error,
+    Scope.Scope | GlobalValues
+  > {
+    if (yield* envFlag(NO_SERVICE)) return undefined;
+    if (process.platform === 'win32') return undefined;
+    const info = yield* probeRecordedService.pipe(
+      Effect.mapError(
+        (error) =>
+          new Error(`The TeXRA service could not be reached: ${error.reason}`),
+      ),
+    );
+    if (info === null || isOlder(info)) return undefined;
+    if (info.protocol > PROTOCOL.version)
+      return yield* Effect.fail(
+        new Error(
+          `A newer TeXRA (${info.version}, pid ${info.pid}) serves this storage root; this build (${BUILD_VERSION}) cannot work beside it.`,
         ),
-  );
-}
+      );
+    return yield* linkService(
+      storageRoot,
+      Effect.fail(new Error(NONE_RUNNING)),
+    ).pipe(
+      Effect.mapError(
+        (error) =>
+          new Error(`The TeXRA service could not be reached: ${error.reason}`),
+      ),
+    );
+  },
+);
 
 /** Start the storage root's service when none answers, and leave it
  *  running: what the chat does before its platform comes up, so the

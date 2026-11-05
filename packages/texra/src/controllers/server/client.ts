@@ -107,7 +107,7 @@ const HELLO_TIMEOUT = '10 seconds';
 
 /** A service the caller should retire: an older protocol, or an older
  *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
-function isOlder(info: ServiceInfo): boolean {
+export function isOlder(info: ServiceInfo): boolean {
   if (info.protocol !== PROTOCOL.version)
     return info.protocol < PROTOCOL.version;
   return (

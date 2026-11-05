@@ -184,16 +184,35 @@ export async function runChat(
         presentsStoreMovedAside: true,
       });
       const served = services.service !== undefined;
-      // A service that goes away mid-chat is started again, so the link
-      // reaches it; one that refuses this build (newer) is left alone.
-      if (services.service !== undefined)
+      // A service that goes away mid-chat is started again, and again
+      // every few seconds until the link reaches one, so a start that
+      // fails while the trouble lasts is not the last; one that refuses
+      // this build (newer) is left alone.
+      if (services.service !== undefined) {
+        const link = services.service;
+        const restarts = yield* FiberHandle.make<void, never>().pipe(
+          Scope.provide(chatScope),
+        );
+        const restart = Effect.gen(function* () {
+          while ((yield* SubscriptionRef.get(link.client)) === null) {
+            yield* startCliService(context.storageRoot).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  `The TeXRA service is not back: ${error.message}; trying again.`,
+                ),
+              ),
+            );
+            yield* Effect.sleep('5 seconds');
+          }
+        });
         yield* Effect.forkScoped(
-          Stream.runForEach(linkOutage(services.service), (reason) =>
+          Stream.runForEach(linkOutage(link), (reason) =>
             reason === null || reason === WINDOW_OUTDATED
-              ? Effect.void
-              : Effect.ignore(startCliService(context.storageRoot)),
+              ? FiberHandle.clear(restarts)
+              : FiberHandle.run(restarts, restart),
           ),
         ).pipe(Scope.provide(chatScope));
+      }
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;
       // Said once the view is bound, which the transcript rows need.
