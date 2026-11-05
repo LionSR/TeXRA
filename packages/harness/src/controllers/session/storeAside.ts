@@ -3,8 +3,9 @@
  * (a pre-1.0 store to `.pre1`, a damaged file to `.corrupt-<stamp>`), each
  * at a name no earlier copy holds and kept until a storage prune deletes
  * them; the outermost transaction's
- * two retries (a busy lock, claim owners proven off the lock); and the test
- * of whether a failed open is SQLite reporting the file damaged.
+ * two retries (a busy lock, claim owners proven off the lock); the return
+ * of a collection's freed pages; and the test of whether a failed open is
+ * SQLite reporting the file damaged.
  */
 import { randomUUID } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
@@ -19,6 +20,7 @@ import {
   Schedule,
 } from 'effect';
 import { isSqlError, type SqlError } from 'effect/sql/SqlError';
+import { withLogChannel } from '@logger/effectLog';
 import type { OwnerId, OwnerLiveness } from '@shared/schemas';
 import { DatabaseClaimRefused } from '@shared/session/database';
 import type * as SqlClient from 'effect/sql/SqlClient';
@@ -276,3 +278,38 @@ export function isDamaged(cause: Cause.Cause<unknown>): boolean {
 export function cannotOpen(cause: Cause.Cause<unknown>): boolean {
   return hasSqliteCode(cause, [14]);
 }
+
+/** Pages one reclaim step frees at most: a few milliseconds of the lock. */
+const RECLAIM_PAGES = 256;
+
+/**
+ * Give the pages a collection freed back to the filesystem, once it
+ * commits, in autocommit steps of `incremental_vacuum(N)`, so
+ * another writer waits on one step, never the whole reclaim. A driver that
+ * steps a statement to its end frees N pages a step, one that steps it once
+ * frees one; either way the steps run until the freelist is empty or stops
+ * shrinking. It is not interrupted, as the collection is not: a session that
+ * closes first would leave the pages. A step that fails ends it, and the
+ * next collection reclaims the rest.
+ */
+export const reclaimFreePages = (sql: Sql, path: string): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const free = () =>
+      pragmaValue(sql, 'freelist_count').pipe(Effect.map(Number));
+    for (let left = yield* free(); left > 0;) {
+      yield* retryBusy(run(sql, `PRAGMA incremental_vacuum(${RECLAIM_PAGES})`));
+      const now = yield* free();
+      if (now >= left) return;
+      left = now;
+    }
+  }).pipe(
+    Effect.uninterruptible,
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Could not return the pages freed in ${path} to the filesystem; the next collection retries.`,
+      ).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel('sessionDatabase'),
+      ),
+    ),
+  );

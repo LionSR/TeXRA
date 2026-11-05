@@ -1298,7 +1298,9 @@ function normalize(file, root) {
     'UPDATE event SET origin = ?, at = ?, data = ? WHERE "commit" = ?',
   );
   const insertBlob = db.prepare('INSERT OR IGNORE INTO blob VALUES (?, ?)');
-  const insertRef = db.prepare('INSERT INTO event_blob VALUES (?, ?)');
+  // Every link is a string `outline` moved out of a row (`inline` 1): the
+  // golden runs attach no media, which would link at 0.
+  const insertRef = db.prepare('INSERT INTO event_blob VALUES (?, ?, 1)');
   for (const row of rows) {
     let payload = scrub(row.value);
     if (row.type === 'context.blob') {

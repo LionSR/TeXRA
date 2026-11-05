@@ -91,7 +91,7 @@ holds tables of the pre-1.0 format SHALL be copied whole to the first free
 (`controllers/session/storeSchema.ts:279-298`). A file SQLite reports damaged at
 open SHALL be moved, with its WAL and shared-memory files, to
 `<file>.corrupt-<ms>`, and a fresh store opened in its place
-(`controllers/session/storeSchema.ts:382-419`).
+(`controllers/session/storeSchema.ts:378-415`).
 
 A persistent store runs in WAL mode with `synchronous = NORMAL` and foreign keys
 on (`controllers/session/storeSchema.ts:251-258`). Every write transaction the

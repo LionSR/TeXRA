@@ -32,7 +32,6 @@ import { sha256Hex } from '@utils/core/idHash';
 
 import {
   aggregateOf,
-  decodable,
   decodeRow,
   EARLIER_RUNS,
   factKindOf,
@@ -107,19 +106,13 @@ function inflateBlob(value: Uint8Array, digest: string): string {
   if (sha256Hex(text) !== digest) throw new Error(`Blob ${digest} is corrupt`);
   return decodeBlobText(text);
 }
-/** The blobs a batch of selected rows inflates: each `{"$b": digest}` in
- *  the data of the rows this build decodes. A payload's own `$b` key is
- *  stored `$$b`, so it never matches; a media part's address is not a
- *  reference, so its bytes are never fetched. */
-function blobDigests(rows: readonly SqlRow[]): string[] {
-  const digests = new Set<string>();
-  for (const row of rows) {
-    if (typeof row.data !== 'string' || !decodable(row)) continue;
-    for (const match of row.data.matchAll(/"\$b":"([0-9a-f]{64})"/g))
-      digests.add(match[1] ?? '');
-  }
-  return [...digests];
-}
+/** The blobs a batch of rows inflates: the strings the codec moved out of
+ *  those rows (`event_blob.inline`), by the rows' commits bound as one
+ *  `json_each` array. A media address is linked too, but never inflated. */
+const INLINE_BLOBS = `SELECT DISTINCT digest FROM event_blob
+  WHERE inline = 1 AND "commit" IN (SELECT value FROM json_each(?))`;
+const decodeCommit = Schema.decodeUnknownSync(Schema.Int);
+const decodeDigest = Schema.decodeUnknownSync(Schema.String);
 
 /** An earlier-build run row, as `EARLIER_RUNS` selects it. */
 const EarlierRowSchema = Schema.Struct({
@@ -290,8 +283,13 @@ export function rowReader<E>(
       });
       if (refusal !== undefined) return yield* refusal;
     }
-    // The batch's blobs in one statement: a row carries addresses only.
-    const texts: Blobs = yield* stored(blobDigests(rows));
+    // The batch's blobs in two statements: a row carries addresses only.
+    const linked = yield* exec(INLINE_BLOBS, [
+      JSON.stringify(rows.map((row) => decodeCommit(row.commit))),
+    ]);
+    const texts: Blobs = yield* stored(
+      linked.map((row) => decodeDigest(row.digest)),
+    );
     const events: SessionEvent[] = [];
     for (const row of rows) {
       const decoded = decodeRow(row, factKinds, texts);
