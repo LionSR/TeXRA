@@ -1,19 +1,19 @@
 /**
  * The dispatch card (board E2): what a run has fanned out, in its
- * conversation prelude. A `<wa-details>` headed "N agents working in the
- * background" (or "N agents in the background" once all have finished)
- * with the `rollup` of the children it lists as badges and "since <time>"
- * from the earliest child still running (the session view clears `runStartedAt` when
- * a run ends, so a finished fan-out carries no since), one row per dispatched
- * child run (`dispatchedChildren`: a script's calls are listed by its stage;
- * nested children indented under theirs), the inquiry threads the run opened, and a
- * "Waiting on N agents" line while any run. The `inquiries` scope is the
- * same card over the inquiry threads alone (the workflow body, whose run
- * board already lists every call). Every row is a child of the session view: label,
- * status, tone, latest line, and clock facts come from `view.runs`; the
- * host paints the glyph and the time. The card's open state is the
- * surface's (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle
- * goes out as a `group` action. Selecting a row is the navigation.
+ * conversation prelude. A `<wa-details>` headed by the counts of what it
+ * lists, each kind by its noun ("3 agents, 4 commands in the background"),
+ * with how many of them still run as a badge and "since <time>" from the
+ * earliest child still running (the session view clears `runStartedAt` when
+ * a run ends, so a finished fan-out carries no since), one row per
+ * dispatched child run (`dispatchedChildren`: a script's calls are listed by
+ * its stage; nested children indented under theirs), and the inquiry
+ * threads the run opened. The `inquiries` scope is the same card over the
+ * inquiry threads alone (the workflow body, whose run board already lists
+ * every call). Every row is a child of the session view: label, status,
+ * tone, latest line, and clock facts come from `view.runs`; the host paints
+ * the glyph and the time. The card's open state is the surface's
+ * (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle goes out as
+ * a `group` action. Selecting a row is the navigation.
  */
 
 // Third-party imports
@@ -47,7 +47,7 @@ import type { IconName } from '@ui/wa/iconNames';
 import { runStatusLabel } from '@ui/copy/runStatus';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { NESTED_AGENT } from '@ui/copy/nestedRuns';
+import { dispatchSummary, NESTED_NOUNS } from '@ui/copy/nestedRuns';
 import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
@@ -209,15 +209,6 @@ export class BackgroundTasksPanel extends LitElement {
         transform: scaleX(-1);
       }
 
-      .task-wait {
-        display: flex;
-        align-items: center;
-        gap: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) var(--wa-space-xs) 0;
-        font-size: var(--font-size-xs);
-        color: var(--color-text-secondary);
-      }
-
       .inquiry-id {
         flex: 0 0 auto;
         font-family: var(--wa-font-family-code);
@@ -299,6 +290,13 @@ export class BackgroundTasksPanel extends LitElement {
       (descendant) => descendant.runStartedAt ?? [],
     );
     const since = starts.length > 0 ? Math.min(...starts) : null;
+    // Each kind by its own noun: a command is not counted as an agent.
+    const counts = Object.entries(NESTED_NOUNS)
+      .flatMap(([kind, noun]) => {
+        const count = listed.filter((r) => r.identity.kind === kind).length;
+        return count > 0 ? [formatResultCount(count, noun)] : [];
+      })
+      .join(', ');
     const summary =
       this.scope === 'inquiries'
         ? html`${waIcon('comments')} Inquiries
@@ -306,11 +304,7 @@ export class BackgroundTasksPanel extends LitElement {
               >${inquiries.length}</wa-badge
             >`
         : html`${waIcon('diagram-project')}
-          ${(rollup.running > 0
-            ? NESTED_AGENT.workingSummary
-            : NESTED_AGENT.settledSummary)(
-            formatResultCount(rollup.total, NESTED_AGENT.countNoun),
-          )}${
+          ${dispatchSummary(counts)}${
             rollup.running > 0
               ? html`<wa-badge variant="success" pill
                   >${rollup.running} running</wa-badge
@@ -355,14 +349,6 @@ export class BackgroundTasksPanel extends LitElement {
             (thread, index) => this.renderInquiryItem(thread, index),
           )}
         </div>
-        ${
-          this.scope === 'all' && rollup.running > 0
-            ? html`<div class="task-wait">
-                ${waIcon('clock')} Waiting on
-                ${formatResultCount(rollup.running, NESTED_AGENT.countNoun)}
-              </div>`
-            : nothing
-        }
       </wa-details>
     `;
   }
