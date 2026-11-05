@@ -468,14 +468,6 @@ class RemoteSessionView extends Context.Service<
 >()('@texra-ai/harness/session/RemoteSessionView')
 ```
 
-## ResumeBlocked
-
-What a blocked resume waits for ({@link ResumeBlockedSchema}).
-
-```ts
-type ResumeBlocked = typeof ResumeBlockedSchema.Type;
-```
-
 ## ResumeBlockedSchema
 
 A run this process cannot continue until its agent, or its agent's

@@ -232,7 +232,6 @@ export {
 // chain, and a failure's message with its classification (`toErrorMessage`
 // is in `./schemas`).
 export { AgentError, RouteUnavailable } from '@common/errors/agentErrors';
-export type { AgentErrorKind } from '@common/errors/agentErrorClassification';
 export { causeChain } from '@utils/errors/errorMessage';
 export { isModuleNotFoundError } from '@common/errors/errorPredicates';
 export { isNotADirectoryError } from '@utils/files/fsEntryExists';

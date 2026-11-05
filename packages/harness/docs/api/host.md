@@ -331,12 +331,6 @@ class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
 })
 ```
 
-## AgentErrorKind
-
-```ts
-type AgentErrorKind = NonNullable<RunEnd['error']>['kind'];
-```
-
 ## AgentRuntimeEmitOptions
 
 ```ts
