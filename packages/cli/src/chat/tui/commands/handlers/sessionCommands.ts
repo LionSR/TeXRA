@@ -146,9 +146,9 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
 }
 
 /**
- * `/resume all`: the open-time notice's bulk answer. Each interrupted task
- * resumes on the session beside this chat and joins the agent list (Tab);
- * one a resume refuses says why on its own line.
+ * `/resume all`: every interrupted task resumes on the session beside this
+ * chat and joins the agent list (Tab); one a resume refuses says why on its
+ * own line.
  */
 export function resumeInterruptedTasks(
   runSession: Session,

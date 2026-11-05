@@ -435,8 +435,12 @@ checks below green. No slice keeps two representations "for now".
    (`LocalRuntimeState.resumeBlocked`, `RunView.resumeBlocked`,
    `markResumeBlocked`, the `resumeBlocked` notice) and the `'waiting'`
    answer are gone; a blocked resume is refused with its reason at the click,
-   on every host and over the service. The notice and "Not now" go next; the
-   other refusal kinds wait for the lock, with A6 (no ownerless stop)._
+   on every host and over the service._
+   _Landed 2026-11-05 (third part): the interrupted-tasks notice in both
+   hosts, its "Not now" state and the TUI's hide-on-send are gone; the
+   list's one home is the task list's `interrupted` group with each task's
+   Resume, and `/resume all`. The other refusal kinds wait for the lock, with
+   A6 (no ownerless stop)._
 6. **B: the fold fields and the host deletions** (O6).
 7. **C: the CLI exit owner** (O7).
 8. **D: llm's verdict and the row fold** (O8).

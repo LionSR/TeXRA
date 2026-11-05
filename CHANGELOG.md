@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The interrupted-tasks notice is gone.** A window or `texra chat` that
+  opens on tasks a closed or crashed TeXRA left unfinished no longer shows
+  the "N tasks were interrupted" notice with "Resume all" and "Not now":
+  the task list shows them as interrupted, each with its own Resume, and
+  the chat's `/resume all` still continues them all. SDK: `Surface` has no
+  `interruptedDismissed` and no `dismissInterrupted` action.
 - **A blocked resume is a refusal, not a state.** Resuming a task whose
   agent is missing, or whose plugin is off or not trusted, is refused with
   that reason at the click, like any other refusal; nothing about it shows
@@ -1615,6 +1621,10 @@ All notable changes to this project will be documented in this file.
   the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
   the setup assistant and the guide say "OpenAI models" where they said
   "Codex models".
+- **A run's cost includes the request that titles it.** The short title a
+  run gets in the run list and history comes from one helper-model request,
+  which was billed but missing from the run's cost and token counts. It now
+  counts, and the run's result and the run list show the same total.
 - **A script's `self()` round does its own part, not the whole task again.**
   A round now reads its prompt as one part of the work its script is doing,
   so it no longer repeats the request that started the script, with its own

@@ -75,7 +75,6 @@ function plannedPassesOf(run: RunView, host: HostSnapshot): number | undefined {
 import { progressAppStyles } from './progressAppStyles';
 import './components/RunTabs';
 import './components/RunConversation';
-import './components/InterruptedTasksNotice';
 import './components/SessionBanners';
 import './components/SessionComposer';
 import './components/NewTaskHero';
@@ -531,10 +530,6 @@ export class ProgressApp extends LitElement {
             : nothing
         }
         <div class="launch-banners">
-          <interrupted-tasks-notice
-            .view=${view}
-            .surface=${surface}
-          ></interrupted-tasks-notice>
           <session-banners .banners=${host.banners}></session-banners>
         </div>
         <launch-attachments .files=${documentPass ? [] : launch.mediaFiles}

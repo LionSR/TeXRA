@@ -16,6 +16,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import type { Secrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settings';
+import type { NormalizedUsage } from '@shared/schemas';
 import { turnText } from '@shared/session/runFacts';
 import type { UsageLog } from '@shared/usageLog';
 
@@ -37,9 +38,10 @@ export interface HelperPrompt {
  * this call alone and run one completion through the one retry loop
  * (`run/invocation.ts`), gated on the process's retry gate, priced and
  * reported to the usage log as `attribution`. No row is written. Returns the
- * turn's assistant text. `stores` are the asking session's setting slots: the
- * binding, the retry limit and the usage consent read them, beside the
- * process `Secrets`.
+ * turn's assistant text and its priced usage (`null`: the provider reported
+ * none), for a caller whose row records what the call cost. `stores` are the
+ * asking session's setting slots: the binding, the retry limit and the usage
+ * consent read them, beside the process `Secrets`.
  */
 export const helperCall = Effect.fn('helperCall')(
   function* (
@@ -57,7 +59,7 @@ export const helperCall = Effect.fn('helperCall')(
       readonly runModel?: string;
     } = {},
   ): Effect.fn.Return<
-    string,
+    { readonly text: string; readonly usage: NormalizedUsage | null },
     CallFailure | Error,
     Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
   > {
@@ -69,7 +71,7 @@ export const helperCall = Effect.fn('helperCall')(
         .bind({ purpose: 'helper', runModel, rejected })
         .pipe(Effect.interruptible);
     const held = yield* ScopedRef.fromAcquire(acquire());
-    const { turn } = yield* callModel({
+    const { turn, usage } = yield* callModel({
       purpose: 'helper',
       binding: ScopedRef.get(held),
       reacquire: (failed, renew) =>
@@ -100,7 +102,7 @@ export const helperCall = Effect.fn('helperCall')(
       record: null,
     });
     // The turn's assistant text, from the same leaf the run loop reads.
-    return turnText(turn);
+    return { text: turnText(turn), usage };
   },
   // The binding is this call's alone: released as soon as it answers.
   Effect.scoped,

@@ -3088,10 +3088,10 @@ async function validateServiceSharedTask() {
 }
 
 /**
- * The open-time prompt and rename (GUI lane G4): a chat killed while it
- * waits leaves its task interrupted; the next `texra chat` lists it above
- * the input by title and resumes nothing until `/resume all`. A resumed chat's
- * `/rename` then writes the user's title. The notice's lines, the
+ * Resume all and rename: a chat killed while it waits leaves its task
+ * interrupted; the next `texra chat` resumes nothing until `/resume all`,
+ * which names and resumes it. A resumed chat's
+ * `/rename` then writes the user's title. `/resume all`'s line, the
  * activation counts and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
@@ -3129,7 +3129,7 @@ async function validateOpenTimePrompt() {
     let whileListed = null;
     let resumed = null;
     const chat = await runTexraPty(['chat'], {
-      label: 'texra chat with an interrupted task (ask)',
+      label: 'texra chat with an interrupted task',
       cwd: project.work,
       cols: 160,
       rows: 40,
@@ -3137,22 +3137,23 @@ async function validateOpenTimePrompt() {
       env: project.ptyEnv,
       onData: (_data, pty) => {
         const plain = stripVTControlCharacters(pty.output);
-        if (phase !== 'opening' || !plain.includes('1 task was interrupted'))
-          return;
-        phase = 'listed';
+        if (phase !== 'opening' || !plain.includes('Idle')) return;
+        phase = 'open';
         pty.setTimer(() => {
-          const shown = stripVTControlCharacters(pty.output);
-          const at = shown.lastIndexOf('1 task was interrupted');
-          notice = shown
-            .slice(at)
-            .split('\n')
-            .slice(0, 3)
-            .map((line) => line.trim());
+          // Nothing resumed on its own while the chat opened.
           whileListed = activations();
           pty.write('/resume all');
           pty.setTimer(() => pty.write('\r'), 400);
           const poll = () => {
             const now = activations();
+            const shown = stripVTControlCharacters(pty.output);
+            const at = shown.lastIndexOf('Resuming 1 task');
+            if (at !== -1)
+              notice = shown
+                .slice(at)
+                .split('\n')
+                .slice(0, 1)
+                .map((line) => line.trim());
             if (now > interrupted) {
               resumed = now;
               pty.setTimer(() => pty.write(ETX), 800);
@@ -3200,11 +3201,11 @@ async function validateOpenTimePrompt() {
     });
     assert(
       chat.exit.exitCode === 0 &&
-        notice.length > 1 &&
-        notice[1].includes('stopped') &&
+        notice.length === 1 &&
+        notice[0].includes('First message') &&
         whileListed === interrupted &&
         resumed === interrupted + 1,
-      `the chat should list the interrupted task by title, resume nothing until /resume all, then resume it (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
+      `the chat should resume nothing at open, then /resume all should name and resume the interrupted task (artifact: ${artifactPath})\noutput:\n${stripVTControlCharacters(chat.output).slice(-3000)}`,
     );
     assert(
       titles.at(-1)?.by === 'user' &&

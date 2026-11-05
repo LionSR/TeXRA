@@ -67,10 +67,10 @@ export class WorkflowRunContent extends BaseRunContent {
       </div>
       ${
         isLiveRun(run)
-          ? this.renderInterruptedDock()
+          ? nothing
           : html`<div class="conversation-composer-dock">
               <div class="conversation-column">
-                ${this.renderInterruptedNotice()} ${this.renderEndedLine(run)}
+                ${this.renderEndedLine(run)}
               </div>
             </div>`
       }
