@@ -45,7 +45,7 @@ export function coreEntries(rootDir) {
 
 /** A markdown code span for `text`: its fence is one backtick longer than
  *  the longest backtick run inside (a type can carry a string literal that
- *  quotes code), so Prettier reads it as one span and leaves it alone. */
+ *  quotes code), so the formatter reads it as one span and leaves it alone. */
 const codeSpan = (text) => {
   const runs = text.match(/`+/g) ?? [];
   if (runs.length === 0) return `\`${text}\``;

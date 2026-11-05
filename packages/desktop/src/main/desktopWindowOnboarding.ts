@@ -78,7 +78,8 @@ export const openWindowOnboarding = Effect.fn('desktop.openWindowOnboarding')(
      *  when a card asks, since both are built after this surface. */
     readonly settings: () => DesktopSettingsIpc | undefined;
     readonly activeRun: () =>
-      Parameters<typeof kickoffDesktopSetup>[0]['run'] | undefined;
+      | Parameters<typeof kickoffDesktopSetup>[0]['run']
+      | undefined;
   }): Effect.fn.Return<
     {
       readonly onboarding: WindowOnboarding;

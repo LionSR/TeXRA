@@ -139,7 +139,7 @@ testing guides.
 
 ## Test fixtures and fakes
 
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, where a module-scope `await` or `Effect.run*` is an ESLint error that no disable comment reaches: what a suite runs over is a layer its blocks build.
+- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, which awaits nothing and runs no Effect at module scope: what a suite runs over is a layer its blocks build.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 

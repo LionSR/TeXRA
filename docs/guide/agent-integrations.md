@@ -49,7 +49,7 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 - **WSL Remote**: open TeXRA inside the WSL window before installing.
 - **Native Windows**: install the CLI on Windows so the real binary is on PATH.
-  :::
+:::
 
 ## OpenAI Codex
 

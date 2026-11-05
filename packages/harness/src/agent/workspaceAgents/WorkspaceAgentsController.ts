@@ -104,10 +104,8 @@ export class WorkspaceAgentsController<
 
   /** The team this workspace effectively runs, or null when it runs no team. */
   getActiveTeamId() {
-    return Effect.map(
-      this.resolveStoredSelection(),
-      ({ effectiveSelection }) =>
-        effectiveSelection.kind === 'team' ? effectiveSelection.teamId : null,
+    return Effect.map(this.resolveStoredSelection(), ({ effectiveSelection }) =>
+      effectiveSelection.kind === 'team' ? effectiveSelection.teamId : null,
     );
   }
 

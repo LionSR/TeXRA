@@ -69,8 +69,9 @@ which fixes TeXRA's policy around it and seeds the first-install disabled
 tools as the layer builds. An embedder that skips the seed gets a runtime
 without it, not a broken one.
 
-Only a composition root imports `processLayer`; ESLint pins the import
-to the files in `COMPOSITION_ROOT_FILES` (`eslint.config.mjs`).
+Only a composition root imports `processLayer`: TeXRA's
+`texraProcessLayer.ts`, the harness's `effect/sessions.ts` and the test
+kernel's `support/testKernel.ts`.
 
 ### Feature-parity step — the `lean4` plugin's process layer
 

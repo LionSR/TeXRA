@@ -222,8 +222,9 @@ export const endIn = Effect.fn('endIn')(function* (
   const facts = yield* log.facts(runId);
   // A run never created has nothing to end: its launch reports the failure.
   if (facts === null) return { end: null, wrote: false };
-  const lastTurn: Effect.Success<TransactionPart> = yield* last ??
-    Effect.succeed({ rows: [] });
+  const lastTurn: Effect.Success<TransactionPart> = yield* (
+    last ?? Effect.succeed({ rows: [] })
+  );
   // Ended in its current lifecycle, that end stands: a resumed run ends
   // again, or every `durableOutcome` reader keeps it RUNNING for want of
   // the row.

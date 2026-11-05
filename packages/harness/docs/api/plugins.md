@@ -316,7 +316,9 @@ What a run cell's commits and re-reads fail with.
 
 ```ts
 type CellError =
-  RunHistoryRefused | DatabaseWriteFailed | DatabaseReadFailed;
+  | RunHistoryRefused
+  | DatabaseWriteFailed
+  | DatabaseReadFailed;
 ```
 
 ## ChildLaunch
@@ -702,7 +704,10 @@ message's alone:
 
 ```ts
 type FollowUpFailureReason =
-  ResumeRefusal['kind'] | 'readFailed' | 'oneShot' | 'notParent';
+  | ResumeRefusal['kind']
+  | 'readFailed'
+  | 'oneShot'
+  | 'notParent';
 ```
 
 ## FollowUpSenderInput
@@ -1220,11 +1225,15 @@ against whichever roots its fiber happens to carry. The child-launch
 door (`ChildRuns`) and the call's place in its run (`RunCall`) are
 references with defaults, never requirements; a plugin's tool reads the
 door and never the session's `Runs`, which only the engine door carries
-(`RunCallShape.runs`).
+(`RunCallShape.session`).
 
 ```ts
 type PluginToolServices =
-  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
+  | RunServices
+  | ToolContext
+  | WorkspaceFs
+  | StorageFs
+  | Scope.Scope;
 ```
 
 ## ProcessChildLaunch
@@ -2093,7 +2102,10 @@ extensions) it closes over.
 
 ```ts
 type ToolProbeServices =
-  Secrets | FileSystem.FileSystem | HttpClient.HttpClient | ChildProcessSpawner;
+  | Secrets
+  | FileSystem.FileSystem
+  | HttpClient.HttpClient
+  | ChildProcessSpawner;
 ```
 
 ## ToolRegistry

@@ -415,15 +415,18 @@ export const openDesktopProjectRegistry: (
                 sessions,
                 hosts,
               ).pipe(
-                Effect.tap((project) =>
-                  Effect.gen(function* () {
-                    const recent = yield* records.readRecent;
-                    yield* SubscriptionRef.update(state, (s) => ({
-                      ...s,
-                      projects: [...s.projects, project],
-                      recent,
-                    }));
-                  }).pipe(withPerKeyLane(lanes, selection)),
+                Effect.tap(
+                  Effect.fnUntraced(
+                    function* (project) {
+                      const recent = yield* records.readRecent;
+                      yield* SubscriptionRef.update(state, (s) => ({
+                        ...s,
+                        projects: [...s.projects, project],
+                        recent,
+                      }));
+                    },
+                    withPerKeyLane(lanes, selection),
+                  ),
                 ),
               ),
             );

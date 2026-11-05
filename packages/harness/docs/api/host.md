@@ -761,6 +761,17 @@ interface ConversationFormatOptions {
 }
 ```
 
+## countLineChanges
+
+Added/removed line counts folded over hunks a caller already holds.
+
+```ts
+function countLineChanges(hunks: readonly Hunk[]): {
+  added: number;
+  removed: number;
+}
+```
+
 ## createExternalLocation
 
 ```ts
@@ -1184,6 +1195,16 @@ interface HostSkillOptions {
   readonly projectFolder?: string;
   readonly skillSourceOptions?: SkillSourceOptions;
 }
+```
+
+## Hunk
+
+A hunk as its readers see it: jsdiff's, or one carried as data.
+
+```ts
+type Hunk = Readonly<Omit<StructuredPatchHunk, 'lines'>> & {
+  readonly lines: readonly string[];
+};
 ```
 
 ## InstalledPlugin
@@ -1947,6 +1968,16 @@ function replayTrace<E>(
   activation: CommitOrdinal,
   result: Effect.Effect<unknown, E>,
 ): Stream.Stream<AgentEvent, E>
+```
+
+## reportDiffTimeout
+
+Warn that a diff pass fell back to a whole-file replacement, if it did.
+
+```ts
+function reportDiffTimeout(
+  timeout: string | undefined,
+): Effect.Effect<void>
 ```
 
 ## RootedFileSystem
