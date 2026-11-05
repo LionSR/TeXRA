@@ -145,7 +145,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
         size="s"
         type="button"
         with-caret
-        aria-label=${`Model: ${menu.label}`}
         >${menu.label}</wa-button
       >
       ${menu.items}
