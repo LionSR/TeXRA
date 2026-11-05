@@ -5,9 +5,9 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { RouteUnavailable } from '@texra-ai/harness/host';
 import { failureInfo } from '@agent/runtime/modelAccess/failureInfo';
-import { openaiFailure } from '../../../packages/llm/src/api/openaiError.js';
-import { judgeFailure } from '../../../packages/llm/src/api/verdict.js';
-import { ModelError } from '../../../packages/llm/src/errors.js';
+import { openaiFailure } from '../../../llm/src/api/openaiError.js';
+import { judgeFailure } from '../../../llm/src/api/verdict.js';
+import { ModelError } from '../../../llm/src/errors.js';
 
 /**
  * An OpenAI SDK failure as the binding raises and judges it, recorded the way

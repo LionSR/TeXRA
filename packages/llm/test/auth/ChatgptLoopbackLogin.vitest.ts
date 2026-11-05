@@ -6,8 +6,8 @@ import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import { chatgptLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
-import type { ChatgptSession } from '../../../packages/llm/src/oauth/chatgpt/chatgptProvider.js';
-import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/subscriptionCoordinator.js';
+import type { ChatgptSession } from '../../src/oauth/chatgpt/chatgptProvider.js';
+import type { SubscriptionAuthorizeRequest } from '../../src/oauth/subscriptionCoordinator.js';
 
 /** The callback path ChatGPT's sign-in returns to. */
 const CALLBACK_PATH = '/auth/callback';

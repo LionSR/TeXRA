@@ -6,8 +6,8 @@ import { it } from '@effect/vitest';
 import { Effect, Stream } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { completedTurn, type TurnRequest } from '@texra-ai/llm';
-import { openaiResponsesModel } from '../../../packages/llm/src/api/openaiResponses.js';
-import type { OpenAIResponsesConfiguration } from '../../../packages/llm/src/turn.js';
+import { openaiResponsesModel } from '../../src/api/openaiResponses.js';
+import type { OpenAIResponsesConfiguration } from '../../src/turn.js';
 
 const CONFIG: OpenAIResponsesConfiguration = {
   protocol: 'openai-responses',
