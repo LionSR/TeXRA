@@ -8,6 +8,7 @@ import {
   DEPENDENCY_USE,
   IMAGE_LATEX_TOOLS,
   LATEX_TOOL_ENTRIES,
+  missingLatexTools,
 } from '@texra/shared/constants/latexToolchain';
 
 // Local file imports
@@ -33,27 +34,13 @@ function missingTool(
 export const checkCoreDependencies = Effect.fn(
   'toolUtils.checkCoreDependencies',
 )(function* (): Effect.fn.Return<MissingTool[], never, ChildProcessSpawner> {
-  // Both groups probe at once: the catalog's core set (not a second list
-  // beside it) and the image tools.
-  const [probes, imageTools] = yield* Effect.all(
-    [
-      Effect.all(CORE_DEPENDENCY_TOOLS.map(probeTool), {
-        concurrency: 'unbounded',
-      }),
-      Effect.all(IMAGE_LATEX_TOOLS.map(probeTool), {
-        concurrency: 'unbounded',
-      }),
-    ],
+  const probed = yield* Effect.all(
+    [...CORE_DEPENDENCY_TOOLS, ...IMAGE_LATEX_TOOLS].map((id) =>
+      Effect.map(probeTool(id), (installed) => [id, installed] as const),
+    ),
     { concurrency: 'unbounded' },
   );
-  const missing: MissingTool[] = CORE_DEPENDENCY_TOOLS.filter(
-    (_, i) => !probes[i],
-  ).map((id) => missingTool(id, false));
-
-  // Report both image tools as interchangeable only if neither is installed.
-  if (!imageTools.some(Boolean)) {
-    missing.push(...IMAGE_LATEX_TOOLS.map((id) => missingTool(id, true)));
-  }
-
-  return missing;
+  return missingLatexTools(probed).map(({ name, interchangeable }) =>
+    missingTool(name, interchangeable),
+  );
 });

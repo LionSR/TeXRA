@@ -3,6 +3,15 @@
 Status: proposed. Found by a responsibility-overlap sweep on 2026-11-04;
 checked against `main` on 2026-11-05.
 
+Done: `missingLatexTools` in the catalog
+(`packages/texra/src/shared/constants/latexToolchain.ts`) holds the image
+rule once, over probe results rather than probing itself, because the setup
+assistant also reports each tool's own status and would otherwise probe it
+twice. The banner and the setup assistant both read it, `missingCoreTools`
+is deleted, `ProbeEnvironmentTool` resolves the image alias from
+`IMAGE_LATEX_TOOLS`, and the two sets' doc comments say why they differ. The
+sections below are the state the sweep found.
+
 ## The overlap
 
 The LaTeX and image dependency catalog (`LATEX_TOOLS` in
