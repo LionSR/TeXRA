@@ -78,7 +78,7 @@ A run is one Effect program in `packages/harness/src/agent/runtime/loop/`, with 
 
 ## Storage format
 
-`storeSchema.ts` (`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version, moves a pre-1.0 store aside whole at open (`texra.db.pre1`, never read again, settings included) and refuses a newer schema. Row kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read only by the row codec (`rowCodec.ts`). Before 1.0 a kind changes with no upcaster; bump its version when an older build's row would read wrong, so that row reads as an earlier build's (`DatabaseRowEarlier`) and never as damaged or silently stripped.
+`storeSchema.ts` (`packages/harness/src/controllers/session/`) stamps every `texra.db` with its schema version, moves a pre-1.0 store aside whole at open (`texra.db.pre1`, never read again, settings included) and refuses a newer schema. Row kinds carry their own versions (`packages/harness/src/shared/schemas/rowVersions.ts`), read only by the row codec (`rowCodec.ts`). A kind changes with no upcaster (the codec converts no stored row; the first released version that must stay readable across a change brings the first upcaster): bump its version when an older build's row would read wrong, so that row reads as an earlier build's (`DatabaseRowEarlier`) and never as damaged or silently stripped.
 
 ## Core quality
 

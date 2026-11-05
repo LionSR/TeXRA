@@ -288,7 +288,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
     ...(controls.effort === null
       ? {}
       : { output_config: { effort: controls.effort } }),
-    stop_sequences: [...controls.stopSequences],
     thinking: wireThinking,
     ...(controls.cache === 'disabled'
       ? {}
@@ -315,7 +314,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
 const FINISH = {
   end_turn: 'stop',
   max_tokens: 'length',
-  stop_sequence: 'stop-sequence',
   tool_use: 'tool-calls',
   refusal: 'refusal',
 } as const;
@@ -413,7 +411,6 @@ function anthropicWire() {
       if (
         started ||
         message.stop_reason != null ||
-        message.stop_sequence != null ||
         message.stop_details != null ||
         message.container != null
       )
@@ -471,9 +468,6 @@ function anthropicWire() {
           kind: 'finish',
           finish: {
             finishReason: FINISH[reason],
-            ...(stop.stop_sequence == null
-              ? {}
-              : { stopSequence: stop.stop_sequence }),
             ...(refusal === undefined
               ? {}
               : {
@@ -648,7 +642,6 @@ export function anthropicMessagesModel(
             toolChoice: input.toolChoice ?? 'auto',
             effort: config.defaults.effort,
             cache: config.defaults.cache,
-            stopSequences: config.defaults.stopSequences,
           },
         }),
       (turn) => invocationBody(turn, origin, config, uploads),

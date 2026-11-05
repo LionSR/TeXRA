@@ -6,6 +6,24 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A stored row reads at its kind's version.** The session store converts
+  no row: one at a lower version than its kind's is an earlier build's (its
+  task listed as unreadable, as before), one at a higher version refuses the
+  store (as before), and the per-kind conversion lists, every one of them
+  empty, are gone with the loops that ran them on every read. SDK:
+  `FactKind.upcasters` (`@texra-ai/harness/plugins`) and
+  `TraceFactKind.upcasters` are gone: a plugin's fact kind declares its
+  `version` and `schema`, and a trace's fact at another version is rejected.
+  `ValueFamily` has no `deletable` flag and no second type parameter: any
+  family's `modify` may answer `undefined` to delete its row. A current
+  value is read without a second version check: the store gate refuses a
+  newer build's values at open.
+- **The interrupted-tasks notice is gone.** A window or `texra chat` that
+  opens on tasks a closed or crashed TeXRA left unfinished no longer shows
+  the "N tasks were interrupted" notice with "Resume all" and "Not now":
+  the task list shows them as interrupted, each with its own Resume, and
+  the chat's `/resume all` still continues them all. SDK: `Surface` has no
+  `interruptedDismissed` and no `dismissInterrupted` action.
 - **A blocked resume is a refusal, not a state.** Resuming a task whose
   agent is missing, or whose plugin is off or not trusted, is refused with
   that reason at the click, like any other refusal; nothing about it shows
@@ -351,6 +369,16 @@ All notable changes to this project will be documented in this file.
   `followUp.send` request takes `media` (a file path, or stored media by
   address) in place of `mediaFiles`, and a user row's and an `InboxItem`'s
   `mediaFiles` is `media: { name, mimeType, digest }[]`.
+
+- **SDK: no stop sequences or background stream positions in
+  `@texra-ai/llm`.** A turn result has no `stop-sequence` finish reason or
+  `stopSequence`, and the Anthropic defaults no `stopSequences`: nothing
+  could set one. A `RemoteOperation` is its `origin` and
+  `providerResponseId`, with no `afterSequence`; `Model.background.observe`
+  streams `TurnEvent`s, so `BackgroundEvent` and its `cursor` events are
+  gone, and an observed OpenAI response replays from its start.
+  Conversations saved by an earlier build show as written by that build and
+  cannot be resumed by this one.
 
 - **SDK: `@texra-ai/harness` and `@texra-ai/llm` need Effect 4.1.0 (peer
   floor `^4.1.0`).** Their Effect peers (`effect`, plus
@@ -1615,6 +1643,10 @@ All notable changes to this project will be documented in this file.
   the subscription switch, `texra auth chatgpt`, the VS Code walkthrough,
   the setup assistant and the guide say "OpenAI models" where they said
   "Codex models".
+- **A run's cost includes the request that titles it.** The short title a
+  run gets in the run list and history comes from one helper-model request,
+  which was billed but missing from the run's cost and token counts. It now
+  counts, and the run's result and the run list show the same total.
 - **A script's `self()` round does its own part, not the whole task again.**
   A round now reads its prompt as one part of the work its script is doing,
   so it no longer repeats the request that started the script, with its own

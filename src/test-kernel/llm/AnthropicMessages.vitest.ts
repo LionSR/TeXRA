@@ -26,7 +26,6 @@ const CONFIG: AnthropicMessagesConfiguration = {
     thinking: { mode: 'adaptive', display: 'summarized' },
     effort: 'high',
     cache: '5m',
-    stopSequences: [],
   },
 };
 const REQUEST: TurnRequest = {

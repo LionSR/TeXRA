@@ -86,18 +86,18 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 55,
+  version: 56,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
     'tasks.list': 'f53aa5564aa8',
-    'task.watch': '643a817fd4a5',
+    'task.watch': 'e44e66772744',
     'task.request': 'f055ca5a4858',
     'task.start': 'bd10b36a735a',
     'task.resume': 'ac37fb4d0261',
     'task.ended': 'b8a10423576c',
     'task.config': 'ee42ee67ab23',
-    'task.exportTrace': 'd984c3d58161',
+    'task.exportTrace': 'e14a1baf0863',
     'task.exportInput': 'fefc9f82f1e2',
     'host.attach': '153808303ff7',
     'state.get': '221cc7263384',
@@ -135,10 +135,9 @@ export type ServiceRecord = typeof ServiceRecordSchema.Type;
 
 /** The storage root's running service: one row of the global root's
  *  current values, read and changed under its write lock. */
-export const TEXRA_SERVICE: ValueFamily<ServiceRecord, true> = {
+export const TEXRA_SERVICE: ValueFamily<ServiceRecord> = {
   name: 'texra-service',
   schema: ServiceRecordSchema,
-  deletable: true,
 };
 
 /** One top-level task in `tasks.list`. */

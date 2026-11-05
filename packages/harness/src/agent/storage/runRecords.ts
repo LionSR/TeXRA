@@ -23,6 +23,7 @@ import { applyRunRows, type RunState } from '@shared/session/runState';
 import type { RunRows } from '@shared/session/runRowsShape';
 import { lastLifecycleRow, runEndFromEvents } from '@shared/session/runFacts';
 import {
+  addTurnUsage,
   type CommitOrdinal,
   EMPTY_RUN_USAGE_TOTALS,
   qualifyAggregateId,
@@ -198,23 +199,20 @@ export type RunResult =
 /**
  * The terminal result of the lifecycle the `lifecycles` rows end with: its
  * `run.end`'s outcome, error and output, and the usage its activation
- * spent, folded from the `history` rows from its own `run.activate` on (a
- * recipe's with its children's then); none with no end. An unreadable fold
- * is logged and reads as no usage.
+ * spent: its `history` rows from its own `run.activate` on and its label's
+ * request (a recipe's with its children's then); none with no end. An
+ * unreadable fold is logged and reads as no usage.
  */
-const runEndOf: (
+const runEndOf = Effect.fn('runEndOf')(function* (
   runId: RunId,
   held: RunRows,
   lifecycles: readonly SessionEvent[],
   history: readonly SessionEvent[],
-) => RecordRead<RunEnd | null, SessionLog | SessionViewAccess> = Effect.fn(
-  'runEndOf',
-)(function* (
-  runId: RunId,
-  held: RunRows,
-  lifecycles: readonly SessionEvent[],
-  history: readonly SessionEvent[],
-) {
+): Effect.fn.Return<
+  RunEnd | null,
+  DatabaseReadFailed,
+  SessionLog | SessionViewAccess
+> {
   const end = runEndFromEvents(lifecycles, runId);
   if (!end) return null;
   // The activation's own rows begin at the lifecycle row before its end
@@ -224,6 +222,8 @@ const runEndOf: (
     runId,
   );
   const from = start?.seq ?? -1;
+  const during = (commit: CommitOrdinal) =>
+    commit > (start?.commit ?? -1) && commit <= end.commit;
   // One read of the rows, so a resume never pairs the end with another
   // activation's totals: the state before the activation, its usage
   // zeroed, then the activation's rows.
@@ -247,7 +247,12 @@ const runEndOf: (
       'Failed to fold the run usage from its run history rows',
     ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
   }
-  const own = Result.isSuccess(folded) ? folded.success?.usage : undefined;
+  const turns = Result.isSuccess(folded) ? folded.success?.usage : undefined;
+  const withLabel = ({ label }: RunRows) =>
+    Result.isSuccess(folded) && during(label?.commit ?? -1) && label?.usage
+      ? addTurnUsage(turns ?? EMPTY_RUN_USAGE_TOTALS, label.usage)
+      : turns;
+  const own = withLabel(held);
   // A document task's revisions are its children's runs, which hold
   // what it cost: those this activation started, each as it had ended
   // by this end, whatever a later resume of it spent.
@@ -259,9 +264,7 @@ const runEndOf: (
             Effect.flatMap(
               SessionLog.use((log) => log.facts(child)),
               (facts) => {
-                const born = facts?.start?.commit ?? -1;
-                const late = born > end.commit;
-                if (facts === null || born <= (start?.commit ?? -1) || late)
+                if (facts === null || !during(facts.start?.commit ?? -1))
                   return Effect.succeed(null);
                 const asOf = (row: SessionEvent) => row.commit <= end.commit;
                 return Effect.flatMap(rowsOf(child), (rows) =>

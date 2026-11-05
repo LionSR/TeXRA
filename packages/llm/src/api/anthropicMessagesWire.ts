@@ -55,7 +55,6 @@ export const StopSchema = Schema.Struct({
       Schema.Literals([
         'end_turn',
         'max_tokens',
-        'stop_sequence',
         'tool_use',
         'pause_turn',
         'refusal',
@@ -63,7 +62,6 @@ export const StopSchema = Schema.Struct({
       ]),
     ),
   ),
-  stop_sequence: Schema.optional(Schema.NullOr(Schema.String)),
   stop_details: Schema.optional(Schema.NullOr(RefusalSchema)),
   container: Schema.optional(Schema.Unknown),
 });

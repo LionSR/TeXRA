@@ -22,7 +22,6 @@ export const GOAL_PLAN_KIND = Object.freeze({
   kind: 'plan',
   version: 1,
   schema: PlanSchema,
-  upcasters: Object.freeze([]),
   fork: 'copy',
 } as const);
 

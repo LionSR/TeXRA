@@ -44,12 +44,11 @@ export const DOCUMENTS_OUTPUT_KIND = {
   plugin: 'documents',
   kind: 'output',
   // v2: a proposed task's fact carries its `diffs`. v3: each round holds
-  // its `latexdiffs` and its `reply`, which were log rows. No upcaster: an
-  // earlier version is an earlier build's row (`pluginFactFloor`), and an
-  // earlier build reads a v3 one as a newer build's.
+  // its `latexdiffs` and its `reply`, which were log rows. An earlier
+  // version is an earlier build's row, and an earlier build reads a v3 one
+  // as a newer build's.
   version: 3,
   schema: DocumentsOutputSchema,
-  upcasters: [],
   // A document task runs a recipe script, which is never forked.
   fork: 'drop',
 } as const;
@@ -89,7 +88,6 @@ export const DOCUMENTS_ACCEPTED_KIND = {
   kind: 'accepted',
   version: 1,
   schema: DocumentsAcceptedSchema,
-  upcasters: [],
   // The source wrote those files; a fork wrote none.
   fork: 'drop',
   writes: (value: unknown): readonly string[] =>

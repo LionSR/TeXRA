@@ -7,34 +7,15 @@ import type { ApiKeyProviderId } from './providers/providerPlugins.js';
 
 // Local imports - canonical messages
 
-/** Enough evidence to observe accepted remote work, without a second transcript. */
-const ResponsesOperationSchema = Schema.Struct({
+/** Remote work a provider accepted: enough to observe or cancel it later. */
+export const RemoteOperationSchema = Schema.Struct({
   origin: ModelOriginSchema.mapFields(
     Struct.assign({
-      protocol: Schema.Literal('openai-responses'),
+      protocol: Schema.Literals(['openai-responses', 'google-interactions']),
     }),
   ),
   providerResponseId: Schema.String.check(Schema.isMinLength(1)),
-  afterSequence: Schema.NullOr(
-    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
-  ),
 });
-/** Remote work a provider accepted: enough to observe or cancel it later. */
-export const RemoteOperationSchema = Schema.Union([
-  ResponsesOperationSchema,
-
-  ResponsesOperationSchema.mapFields(
-    Struct.assign({
-      origin: ModelOriginSchema.mapFields(
-        Struct.assign({
-          protocol: Schema.Literal('google-interactions'),
-        }),
-      ),
-      // Polling snapshots have no provider sequence or replay cursor.
-      afterSequence: Schema.Null,
-    }),
-  ),
-]);
 /** {@link RemoteOperationSchema}'s value. */
 export type RemoteOperation = typeof RemoteOperationSchema.Type;
 

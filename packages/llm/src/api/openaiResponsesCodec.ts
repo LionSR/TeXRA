@@ -350,19 +350,18 @@ const FRAMING_EVENTS = new Set([
   'response.metadata',
 ]);
 
-/** One decoded Responses event: its sequence, its parts, whether it finishes. */
+/** One decoded Responses event: its parts, and whether it finishes. */
 interface ResponseEventParts {
-  readonly sequence: number;
   readonly parts: readonly PartEvent[];
   readonly terminal: boolean;
 }
 
 /**
  * The one Responses event decoder, for HTTP and WebSocket streams and for
- * observation: each event after `after`, in order, as parts.
+ * observation: each event, in strictly rising sequence order, as parts.
  */
-export function responsesWire(after: number) {
-  let sequence = after;
+export function responsesWire() {
+  let sequence = -1;
   return (raw: unknown): Effect.Effect<ResponseEventParts, ModelError> =>
     Effect.gen(function* () {
       const header = Schema.decodeUnknownResult(EventSchema)(raw);
@@ -376,7 +375,6 @@ export function responsesWire(after: number) {
       sequence = header.success.sequence_number;
       const type = header.success.type;
       const at = (parts: readonly PartEvent[], terminal = false) => ({
-        sequence,
         parts,
         terminal,
       });
@@ -437,7 +435,7 @@ export const responseEvents = (
   Stream.suspend(() =>
     assembleTurn(
       chunks.pipe(
-        Stream.mapEffect(responsesWire(-1)),
+        Stream.mapEffect(responsesWire()),
         // The terminal snapshot finishes the response; HTTP EOF is not a condition.
         Stream.takeUntil((event) => event.terminal),
         Stream.map((event) => event.parts),
