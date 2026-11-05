@@ -100,7 +100,7 @@ import {
   reclaimable,
   retryBusy,
 } from './storeAside';
-import { openStore, reclaimFreePages } from './storeSchema';
+import { IN_MEMORY_STORE, openStore, reclaimFreePages } from './storeSchema';
 /** The database file of a session root, beside the stores it replaces. */
 export const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
@@ -205,14 +205,14 @@ export const databaseLayer = (
         );
       const path =
         mode === 'ephemeral'
-          ? ':memory:'
+          ? IN_MEMORY_STORE
           : join(roots.storage, SESSION_DATABASE_FILE);
       const openFailed = (cause: unknown): DatabaseOpenFailed =>
         new DatabaseOpenFailed({ path, cause });
       const create = mode !== 'existing';
       const filename =
         mode === 'ephemeral'
-          ? ':memory:'
+          ? IN_MEMORY_STORE
           : yield* localDatabasePath(
               roots.storage,
               SESSION_DATABASE_FILE,
@@ -227,7 +227,6 @@ export const databaseLayer = (
           busyTimeout: '5 seconds',
         }),
         SqliteClient.make({ filename, readonly: true, disableWAL: true }),
-        mode === 'ephemeral' ? mode : 'persistent',
         path,
         filename,
       ).pipe(mapDatabaseFailure(openFailed));

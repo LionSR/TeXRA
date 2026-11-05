@@ -1435,7 +1435,6 @@ describe('the session event table and its one publisher', () => {
         const opened = yield* openStore(
           SqlDriver.make({ filename }),
           SqlDriver.make({ filename, readonly: true, disableWAL: true }),
-          'persistent',
           filename,
           filename,
         );

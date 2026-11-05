@@ -227,6 +227,10 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
   return pre1;
 });
 
+/** The filename SQLite opens as a store held in memory, not in a file: it
+ *  journals in memory, is never vacuumed and is never moved aside. */
+export const IN_MEMORY_STORE = ':memory:';
+
 /**
  * Bring an open connection to the store this build writes: pragmas, a pre-1.0
  * store moved aside, the schema stamped; answering what it moved aside.
@@ -245,17 +249,13 @@ const checkStamps = Effect.fnUntraced(function* (sql: Sql, path: string) {
  */
 const prepareStore = Effect.fnUntraced(function* (
   sql: Sql,
-  mode: 'persistent' | 'ephemeral',
   path: string,
   filename: string,
 ) {
+  const persistent = filename !== IN_MEMORY_STORE;
   yield* run(sql, 'PRAGMA foreign_keys = ON');
   yield* run(sql, 'PRAGMA synchronous = NORMAL');
-  yield* verifyPragma(
-    sql,
-    'journal_mode',
-    mode === 'persistent' ? 'wal' : 'memory',
-  );
+  yield* verifyPragma(sql, 'journal_mode', persistent ? 'wal' : 'memory');
   yield* verifyPragma(sql, 'foreign_keys', 1);
   let movedAside: SessionStoreMovedAside | null = null;
   for (;;) {
@@ -263,7 +263,7 @@ const prepareStore = Effect.fnUntraced(function* (
     const stored = Number(yield* pragmaValue(sql, 'user_version'));
     if (stored === SCHEMA_VERSION) break;
     if (!pre1) {
-      if (mode === 'persistent') yield* incrementalVacuum(sql);
+      if (persistent) yield* incrementalVacuum(sql);
       yield* Effect.gen(function* () {
         // Another process stamped the file while this one waited: the
         // loop checks it again.
@@ -297,7 +297,7 @@ const prepareStore = Effect.fnUntraced(function* (
     movedAside = { path, aside, reason: 'pre-1.0' };
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
-  if (mode === 'persistent') {
+  if (persistent) {
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
   }
   yield* run(sql, 'PRAGMA busy_timeout = 25');
@@ -348,14 +348,14 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   connect: Effect.Effect<Sql, E, R | Scope.Scope>,
   /** A read-only connection that changes nothing in the file. */
   probe: Effect.Effect<Sql, E, R | Scope.Scope>,
-  mode: 'persistent' | 'ephemeral',
   path: string,
   filename: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
+  const persistent = filename !== IN_MEMORY_STORE;
   // A file the probe cannot open (none yet) is the open's to create; one
   // SQLite reads as damaged (cut short in its first page) is moved below.
-  if (mode === 'persistent')
+  if (persistent)
     yield* Effect.scoped(
       Effect.flatMap(probe, (sql) => checkStamps(sql, path)),
     ).pipe(
@@ -369,7 +369,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   const first = yield* Scope.fork(outer, 'sequential');
   const attempt = yield* connect.pipe(
     Effect.flatMap((sql) =>
-      Effect.map(prepareStore(sql, mode, path, filename), (movedAside) => ({
+      Effect.map(prepareStore(sql, path, filename), (movedAside) => ({
         sql,
         movedAside,
       })),
@@ -378,7 +378,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     Effect.catchCause((cause) => Effect.succeed({ cause })),
   );
   if ('sql' in attempt) return attempt;
-  if (mode !== 'persistent' || !isDamaged(attempt.cause)) {
+  if (!persistent || !isDamaged(attempt.cause)) {
     return yield* Effect.failCause(attempt.cause);
   }
   yield* Scope.close(first, Exit.void);
@@ -398,7 +398,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
   );
   if (!stillDamaged || seen === null || (yield* identity) !== seen) {
     const sql = yield* connect;
-    return { sql, movedAside: yield* prepareStore(sql, mode, path, filename) };
+    return { sql, movedAside: yield* prepareStore(sql, path, filename) };
   }
   const aside = yield* freeName(
     asideName.corrupt(filename, yield* Clock.currentTimeMillis),
@@ -411,7 +411,7 @@ export const openStore = Effect.fnUntraced(function* <E, R>(
     `Session store ${path} is damaged; it was moved to ${aside} and a fresh store opened.`,
   ).pipe(withLogChannel(CHANNEL));
   const sql = yield* connect;
-  yield* prepareStore(sql, mode, path, filename);
+  yield* prepareStore(sql, path, filename);
   return {
     sql,
     movedAside: { path, aside, reason: 'corrupt' as const },
