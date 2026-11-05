@@ -150,7 +150,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
             withLogChannel(this.opts.name),
           );
         const from = { kind: 'notification', source: 'github' } as const;
-        return owner.send({ text, from }, { hold: 'generation' }).pipe(
+        return owner.send({ text, from }).pipe(
           Effect.asVoid,
           Effect.catch(reportDeliveryFailure),
           // A defect (e.g. publish throwing) got the same warn through the old

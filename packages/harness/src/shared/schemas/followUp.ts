@@ -69,9 +69,7 @@ export type FollowUpContent = typeof FollowUpContentSchema.Type;
 export const FollowUpRequestSchema = Schema.Struct({
   content: FollowUpContentSchema,
   /** When the row may be read; the rules are `readableMessages`. */
-  holdUntil: Schema.optional(
-    Schema.Literals(['instruction', 'turn', 'generation']),
-  ),
+  holdUntil: Schema.optional(Schema.Literals(['instruction', 'turn'])),
   /** A request of the run's own, consumed by the batch that applies it. */
   control: Schema.optional(
     Schema.Union([
@@ -91,8 +89,7 @@ export const FollowUpRequestSchema = Schema.Struct({
  * result committed beside it; a control (`/compact`, `/model`) was applied
  * by the edit or `run.config` beside it; or it was dropped unread and
  * unapplied: a control that changed nothing (`noop`), the run's end
- * (`ended`) or its input's close (`closed`); `stale` is on rows from builds
- * that queued a child's progress notices. `followUpReceipt` reads these.
+ * (`ended`) or its input's close (`closed`). `followUpReceipt` reads these.
  */
 export const FollowUpDispositionSchema = Schema.Union([
   Schema.Struct({
@@ -103,7 +100,7 @@ export const FollowUpDispositionSchema = Schema.Union([
   Schema.Struct({ kind: Schema.Literal('applied') }),
   Schema.Struct({
     kind: Schema.Literal('dropped'),
-    reason: Schema.Literals(['stale', 'noop', 'ended', 'closed']),
+    reason: Schema.Literals(['noop', 'ended', 'closed']),
   }),
 ]);
 /** A `followup.consumed` row's `disposition`. */
@@ -137,7 +134,6 @@ export const FollowUpReceiptSchema = Schema.Union([
       'failed',
       'cancelled',
       'completed',
-      'stale',
       'noop',
       'ended',
       'closed',

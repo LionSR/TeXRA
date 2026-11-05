@@ -79,18 +79,14 @@ export type SubmitFollowUpResult =
 
 /** How one input is delivered to a run. */
 export interface RunInboxSendOptions {
-  /** A notification for a generation already running: read at a turn's
-   *  end, never resuming the run (`readableMessages`). */
-  readonly hold?: 'generation';
   /** Only from the run's parent, by its rows (`SendOptions.fromParent`). */
   readonly fromParent?: boolean;
 }
 
-interface SubmitFollowUpOptions extends Omit<RunInboxSendOptions, 'hold'> {
-  /** `'generation'` as {@link RunInboxSendOptions}; `'turn'`: a user's
-   *  message the run reads when its current turn ends, not at the turn's
-   *  next model request. */
-  readonly hold?: 'generation' | 'turn';
+interface SubmitFollowUpOptions extends RunInboxSendOptions {
+  /** A user's message the run reads when its current turn ends, not at the
+   *  turn's next model request. */
+  readonly hold?: 'turn';
   /** The message's media, read in the run's send lane once the message is
    *  accepted, so a slow read never lets a later message commit first. */
   readonly attach?: Effect.Effect<Pick<InboxItem, 'media' | 'blobs'>, Error>;

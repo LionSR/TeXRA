@@ -20,8 +20,8 @@ export type InputPoint = 'request' | 'turn' | 'idle';
 /**
  * The pending messages a run reads at `at`, in commit order. A row held
  * until an instruction (a child's pause or stop notice) is read only beside
- * one. A row held until the turn ends, or one for a running generation only
- * (a host notification), is not read before a request inside the turn.
+ * one. A row held until the turn ends is not read before a request inside
+ * the turn.
  */
 function readableMessages(
   rows: readonly QueuedFollowUp[],
@@ -36,7 +36,6 @@ function readableMessages(
       case 'instruction':
         return asked;
       case 'turn':
-      case 'generation':
         return at !== 'request';
       case undefined:
         return true;
@@ -53,8 +52,8 @@ function readableMessages(
  * user's does. Once it ended, only the user's message or a child's delivery
  * does, and after a user's Stop (that lifecycle's `run.end` says `user`)
  * only the user's message committed after that end: a run's message never
- * revives a run that ended. A row for a running generation only (a host
- * notification) wakes nothing.
+ * revives a run that ended, and a host's notification wakes nothing: it is
+ * read by a generation already running.
  */
 export function needsWake(input: RunRows): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
@@ -62,8 +61,8 @@ export function needsWake(input: RunRows): boolean {
   const end = input.end;
   const stopped = end?.reason === 'user';
   return readableMessages(input.followUps, 'idle').some(
-    ({ commit, holdUntil, content: { from } }) => {
-      if (holdUntil === 'generation') return false;
+    ({ commit, content: { from } }) => {
+      if (from.kind === 'notification') return false;
       if (from.kind === 'user') return !stopped || commit > end.commit;
       if (from.kind === 'run' && from.relation === 'child') return !stopped;
       return end === null;
