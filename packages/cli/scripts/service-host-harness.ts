@@ -14,7 +14,15 @@
 
 import path from 'node:path';
 
-import { Effect, Layer, Option, Schema, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Schema,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import { GlobalValues } from '@texra-ai/harness/host';
 import { nodePlatformServices } from '@texra-ai/harness/node';
@@ -57,7 +65,7 @@ const approve = (link: ServiceLink) => {
   if (runId === undefined || requestId === undefined)
     throw new Error('usage: approve <runId> <requestId> [content]');
   return SubscriptionRef.changes(link.client).pipe(
-    Stream.filter((client) => client !== null),
+    Stream.filter(Predicate.isNotNull),
     Stream.runHead,
     Effect.map(Option.getOrThrow),
     Effect.flatMap((client) =>

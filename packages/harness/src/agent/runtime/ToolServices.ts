@@ -63,9 +63,13 @@ export type RunServices =
  *  door (`ChildRuns`) and the call's place in its run (`RunCall`) are
  *  references with defaults, never requirements; a plugin's tool reads the
  *  door and never the session's `Runs`, which only the engine door carries
- *  (`RunCallShape.runs`). */
+ *  (`RunCallShape.session`). */
 export type PluginToolServices =
-  RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope;
+  | RunServices
+  | ToolContext
+  | WorkspaceFs
+  | StorageFs
+  | Scope.Scope;
 
 /**
  * A plugin tool's one door to the session's runs. It launches children of

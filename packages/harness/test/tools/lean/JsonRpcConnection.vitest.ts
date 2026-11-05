@@ -2,6 +2,7 @@
  * Vitests for the LSP-style JSON-RPC pipeline. Uses an in-memory
  * `PassThrough` pair to feed bytes both ways without spawning anything.
  */
+import { strict as assert } from 'node:assert';
 import { PassThrough } from 'node:stream';
 
 import { it } from '@effect/vitest';
@@ -56,11 +57,14 @@ const makePair = Effect.gen(function* () {
       const header = clientFrameBuffer.slice(offset, headerEnd);
       const lengthMatch = header.match(/Content-Length: (\d+)/i);
       if (!lengthMatch) break;
-      const length = Number.parseInt(lengthMatch[1]!, 10);
+      const digits = lengthMatch[1];
+      assert(digits !== undefined);
+      const length = Number.parseInt(digits, 10);
       const bodyStart = headerEnd + 4;
       const bodyEnd = bodyStart + length;
       if (clientFrameBuffer.length < bodyEnd) break;
       const body = clientFrameBuffer.slice(bodyStart, bodyEnd);
+      // cast: the client writes JSON-RPC objects, and the test reads their keys.
       frames.push(JSON.parse(body) as Record<string, unknown>);
       offset = bodyEnd;
     }

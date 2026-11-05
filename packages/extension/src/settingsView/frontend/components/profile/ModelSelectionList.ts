@@ -84,7 +84,8 @@ export class ModelSelectionList extends SignalWatcher(LitElement) {
   @property({ attribute: false }) models: readonly ModelSelectionItem[] = [];
   /** Null until the profile state arrives; a group then shows no key icon. */
   @property({ attribute: false }) providerKeyStatuses:
-    readonly ProviderKeyStatus[] | null = null;
+    | readonly ProviderKeyStatus[]
+    | null = null;
 
   @state() private expandedProvider: string | null = null;
   @state() private expandedDeprecated: Set<string> = new Set();

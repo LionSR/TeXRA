@@ -25,11 +25,11 @@ describe('commandCatalog', () => {
     // Desktop-only rows carry keybindings the desktop shortcut registry owns;
     // `commandKeybindings` is the VS Code manifest's list, so scope to rows
     // that reach the manifest.
-    const keybindingEntryCount = (
-      commandCatalog as readonly CommandCatalogEntry[]
-    ).filter(
-      (entry) => entry.host !== 'desktop' && entry.keybinding !== undefined,
-    ).length;
+    const keybindingEntryCount =
+      // cast: widen the literal catalog so every row exposes the optional fields.
+      (commandCatalog as readonly CommandCatalogEntry[]).filter(
+        (entry) => entry.host !== 'desktop' && entry.keybinding !== undefined,
+      ).length;
     assert.strictEqual(keybindingEntryCount, commandKeybindings.length);
   });
 });

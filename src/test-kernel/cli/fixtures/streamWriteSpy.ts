@@ -17,7 +17,8 @@ export function spyOnStreamWrite(
       onChunk(String(chunk));
       // cast: a write's one function argument is its completion callback.
       const callback = rest.find((arg) => typeof arg === 'function') as
-        ((error?: Error | null) => void) | undefined;
+        | ((error?: Error | null) => void)
+        | undefined;
       callback?.(null);
       return true;
     });

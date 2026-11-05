@@ -1,9 +1,9 @@
-// Measures the core-quality rules over CORE_QUALITY_DIRS (eslint.config.mjs).
+// Measures the core-quality rules over CORE_QUALITY_DIRS.
 // Each rule yields its sites per file; check-core-quality.mjs compares the
 // per-file counts with the same measurement of the merge base's tree.
 //
-// The ESLint half runs ESLint's own rules without type information, so it
-// is fast and needs no project. The AST half reads each file with the
+// The oxlint half runs oxlint's rules without type information, so it is
+// fast and needs no project. The AST half reads each file with the
 // TypeScript parser. Import cycles come from esbuild's metafile: esbuild
 // erases type-only imports and resolves the tsconfig aliases, so its graph
 // is exactly the runtime module graph.
@@ -21,18 +21,49 @@
 // or interface member (Context.Service shapes included), or a parameter of
 // an exported function/signature, including const functions and Effect.fn.
 
-import { existsSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { build } from 'esbuild';
-import { ESLint } from 'eslint';
 import ts from 'typescript';
-import tseslint from 'typescript-eslint';
 import { parse as parseYaml } from 'yaml';
 
-import { CORE_QUALITY_DIRS } from '../eslint.config.mjs';
 import { coreEntries } from './core-quality-api-report.mjs';
 import { walkFiles } from './walkFiles.mjs';
+
+/**
+ * The core the quality bar holds: the harness side of the package split plus
+ * the model package. The core override in `.oxlintrc.json` lists the same
+ * paths: `any`, `!`, an asserted object literal, `new Promise`, `.then(` and
+ * `Effect.run*` outside a named entry are lint errors there.
+ */
+export const CORE_QUALITY_DIRS = [
+  'packages/harness/src/agent',
+  'packages/harness/src/shared/session',
+  'packages/harness/src/shared/schemas',
+  'packages/harness/src/tools',
+  'packages/harness/src/controllers/session',
+  'packages/harness/src/platform',
+  'packages/harness/src/effect',
+  'packages/harness/src/index.ts',
+  'packages/harness/src/host.ts',
+  'packages/harness/src/node.ts',
+  'packages/harness/src/plugins.ts',
+  'packages/harness/src/schemas.ts',
+  'packages/harness/src/transcriptEntry.ts',
+  'packages/llm/src',
+];
 
 /** Lines a core file may hold before file-size counts it. */
 export const CORE_FILE_LINES = 400;
@@ -53,29 +84,29 @@ const MIN_DEPTH_INTERFACE = 4;
 const MIN_MODULE_DEPTH = 3;
 
 /**
- * The ESLint-measured rules: baseline name, rule id and options. Thresholds
+ * The oxlint-measured rules: report name, rule id and options. Thresholds
  * are the core-quality study's (texra-design-pages/core-quality-study.md
  * §14, taken 2026-10-03): physical function length 150 with IIFEs counted,
  * so a layer closure used as a module counts; modified cyclomatic
  * complexity 15, so a `switch` over an owned union counts once.
  */
-const ESLINT_RULES = [
-  ['no-non-null-assertion', '@typescript-eslint/no-non-null-assertion', []],
+const OXLINT_RULES = [
+  ['no-non-null-assertion', 'typescript/no-non-null-assertion', []],
   [
     'explicit-module-boundary-types',
-    '@typescript-eslint/explicit-module-boundary-types',
+    'typescript/explicit-module-boundary-types',
     [],
   ],
   [
     'consistent-type-assertions',
-    '@typescript-eslint/consistent-type-assertions',
+    'typescript/consistent-type-assertions',
     [{ assertionStyle: 'as', objectLiteralTypeAssertions: 'never' }],
   ],
-  ['complexity', 'complexity', [{ max: 15, variant: 'modified' }]],
-  ['max-depth', 'max-depth', [4]],
+  ['complexity', 'eslint/complexity', [{ max: 15, variant: 'modified' }]],
+  ['max-depth', 'eslint/max-depth', [4]],
   [
     'max-lines-per-function',
-    'max-lines-per-function',
+    'eslint/max-lines-per-function',
     [{ max: 150, skipBlankLines: false, skipComments: false, IIFEs: true }],
   ],
 ];
@@ -122,6 +153,8 @@ export const RULES = {
     'A core package dependency not pinned to an exact version: replay assumes the behaviour recorded at write time.',
   'durable-invariants':
     'The harness README must number its durable invariants (`**I1**`), and a conformance test must cite each (`invariant I1`).',
+  'lint-disable':
+    'A lint disable comment in the core: the core holds its lint rules with no exception.',
   'decision-codes':
     'Internal decision codes (`D6`, `F3`, `#1234`) in core comments: state the rule or link the doc by path.',
   'pass-through-outside-core':
@@ -133,9 +166,9 @@ export const RULES = {
   'type-assertions-outside-core':
     'The type-assertions rule over the source outside the core (the rest of the harness, the app, the hosts).',
   'no-non-null-assertion-test-kernel':
-    'A definite-assignment `!` (`let x!: T`) in src/test-kernel: give the binding a value or a `| undefined` the test narrows. ESLint fails `value!` there.',
+    'A definite-assignment `!` (`let x!: T`) in a test suite (src/test-kernel, packages/*/test): give the binding a value or a `| undefined` the test narrows. oxlint fails `value!` there.',
   'type-assertions-test-kernel':
-    'The type-assertions rule over src/test-kernel: decode fixtures with their schema, narrow with `assert`, or name the invariant of a test double in a `// cast:` reason.',
+    'The type-assertions rule over the test suites (src/test-kernel, packages/*/test): decode fixtures with their schema, narrow with `assert`, or name the invariant of a test double in a `// cast:` reason.',
 };
 
 /**
@@ -150,8 +183,16 @@ const OUTSIDE_CORE_RULES = {
   'type-assertions': 'type-assertions-outside-core',
 };
 
+/** The test trees: the cross-package kernel and each package's own suites. */
+const TEST_DIRS = (rootDir) => [
+  'src/test-kernel',
+  ...readdirSync(path.join(rootDir, 'packages'))
+    .map((name) => `packages/${name}/test`)
+    .filter((dir) => existsSync(path.join(rootDir, dir))),
+];
+
 /**
- * The rules src/test-kernel is held to, suites included, under their own
+ * The rules the test trees (`TEST_DIRS`) are held to, under their own
  * names. The depth rules do not apply: a suite is not an interface.
  */
 const TEST_KERNEL_RULES = {
@@ -202,35 +243,58 @@ function addSite(byRule, rule, file, line, detail) {
   files.set(file, entry);
 }
 
-async function measureEslint(rootDir, files, byRule) {
-  const eslint = new ESLint({
-    cwd: rootDir,
-    overrideConfigFile: true,
-    overrideConfig: [
-      {
-        files: ['**/*.ts', '**/*.tsx', '**/*.mts'],
-        languageOptions: { parser: tseslint.parser },
-        plugins: { '@typescript-eslint': tseslint.plugin },
-        // A disable comment would hide debt from the count, so the ratchet
-        // reads past it; the reason belongs in the code's shape instead.
-        linterOptions: { noInlineConfig: true },
-        rules: Object.fromEntries(
-          ESLINT_RULES.map(([, id, options]) => [id, ['error', ...options]]),
-        ),
-      },
+const OXLINT = fileURLToPath(
+  new URL('../node_modules/oxlint/bin/oxlint', import.meta.url),
+);
+
+/** Runs only oxlint's measured rules over `files`. oxlint honors a disable
+ *  comment, so one in the core is its own zero rule (`lint-disable`). */
+function measureOxlint(rootDir, files, byRule) {
+  const dir = mkdtempSync(path.join(tmpdir(), 'core-quality-'));
+  const config = path.join(dir, 'oxlintrc.json');
+  writeFileSync(
+    config,
+    JSON.stringify({
+      plugins: ['typescript'],
+      categories: { correctness: 'off' },
+      rules: Object.fromEntries(
+        OXLINT_RULES.map(([, id, options]) => [id, ['error', ...options]]),
+      ),
+    }),
+  );
+  // Exit status 1 only means it reported something; the report is stdout.
+  const run = spawnSync(
+    process.execPath,
+    [
+      OXLINT,
+      '-c',
+      config,
+      '--disable-nested-config',
+      '--no-ignore',
+      '-f',
+      'json',
+      ...files,
     ],
-  });
-  const ruleById = new Map(ESLINT_RULES.map(([name, id]) => [id, name]));
-  for (const result of await eslint.lintFiles(files)) {
-    const file = path.relative(rootDir, result.filePath).replaceAll('\\', '/');
-    for (const message of result.messages) {
-      const rule = ruleById.get(message.ruleId);
-      if (rule == null) {
-        if (message.fatal) throw new Error(`${file}: ${message.message}`);
-        continue;
-      }
-      addSite(byRule, rule, file, message.line, message.message);
+    { cwd: rootDir, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 },
+  );
+  rmSync(dir, { recursive: true, force: true });
+  if (run.status !== 0 && run.status !== 1) {
+    throw new Error(`oxlint failed: ${run.stderr || run.error}`);
+  }
+  const ruleByCode = new Map(
+    OXLINT_RULES.map(([name, id]) => {
+      const [plugin, rule] = id.split('/');
+      return [`${plugin}(${rule})`, name];
+    }),
+  );
+  for (const diagnostic of JSON.parse(run.stdout).diagnostics) {
+    const rule = ruleByCode.get(diagnostic.code);
+    if (rule == null) {
+      throw new Error(`${diagnostic.filename}: ${diagnostic.message}`);
     }
+    const file = diagnostic.filename.replaceAll('\\', '/');
+    const line = diagnostic.labels[0]?.span.line ?? 1;
+    addSite(byRule, rule, file, line, diagnostic.message);
   }
 }
 
@@ -1097,6 +1161,10 @@ function measureAst(rootDir, files, byRule) {
       );
     };
     for (const comment of text.matchAll(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g)) {
+      if (/\b(?:es|ox)lint-disable/.test(comment[0])) {
+        const line = text.slice(0, comment.index).split('\n').length;
+        addSite(byRule, 'lint-disable', file, line, comment[0].trim());
+      }
       const codes = (comment[0].match(DECISION_CODE) ?? []).filter(
         (code) => !NOT_DECISION_CODES.has(code),
       );
@@ -1134,7 +1202,7 @@ function measureAst(rootDir, files, byRule) {
           `forwards unchanged parameters: ${onlyExpression(node).getText()}`,
         );
       }
-      // `let x!: T` and `field!: T`: the ESLint rule sees only `value!`.
+      // `let x!: T` and `field!: T`: the oxlint rule sees only `value!`.
       if (
         (ts.isVariableDeclaration(node) || ts.isPropertyDeclaration(node)) &&
         node.exclamationToken != null
@@ -1575,7 +1643,7 @@ function measureInvariants(rootDir, byRule) {
 export async function measure(rootDir) {
   const files = sourceFiles(rootDir, CORE_QUALITY_DIRS);
   const byRule = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
-  await measureEslint(rootDir, files, byRule);
+  measureOxlint(rootDir, files, byRule);
   const moduleDepths = measureAst(rootDir, files, byRule);
   const core = new Set(files);
   const outside = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
@@ -1590,10 +1658,12 @@ export async function measure(rootDir) {
   const tests = new Map(Object.keys(RULES).map((rule) => [rule, new Map()]));
   measureAst(
     rootDir,
-    walkFiles(path.join(rootDir, 'src/test-kernel'), {
-      include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
-    })
-      .map(({ relativePath }) => `src/test-kernel/${relativePath}`)
+    TEST_DIRS(rootDir)
+      .flatMap((dir) =>
+        walkFiles(path.join(rootDir, dir), {
+          include: (file) => SOURCE_FILE.test(file) && !file.endsWith('.d.ts'),
+        }).map(({ relativePath }) => `${dir}/${relativePath}`),
+      )
       .toSorted(),
     tests,
   );

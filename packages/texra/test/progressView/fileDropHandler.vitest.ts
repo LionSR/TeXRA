@@ -18,6 +18,7 @@ describe('FileDropController', () => {
       'text/uri-list': 'file://server/share/main.tex',
     };
 
+    // cast: the handler reads only dataTransfer and preventDefault.
     controller.handleDrop({
       dataTransfer: {
         types: ['text/uri-list'],

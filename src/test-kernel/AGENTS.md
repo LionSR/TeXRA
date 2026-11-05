@@ -139,9 +139,9 @@ testing guides.
 
 ## Test fixtures and fakes
 
-- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, where a module-scope `await` or `Effect.run*` is an ESLint error that no disable comment reaches: what a suite runs over is a layer its blocks build.
+- **Fixture rule of three.** When the same literal setup block appears three or more times in one test file, extract it to a file-local helper. Setup shared across suites is promoted to `src/test-kernel/support/`, which awaits nothing and runs no Effect at module scope: what a suite runs over is a layer its blocks build.
 
-- **No `!`, no unexplained `as`.** A fixture id or stored row decodes with its schema (`Schema.decodeUnknownSync(RunIdSchema)`), a lookup that may miss narrows with Vitest `assert`, and a deferred value is `Promise.withResolvers`. A partial test double keeps its `as` with a `// cast:` reason on its line or the line before. ESLint fails `value!` here; `npm run check:core-quality` holds `let x!` and an unexplained `as` at zero.
+- **No `!`, no unexplained `as`.** A fixture id or stored row decodes with its schema (`Schema.decodeUnknownSync(RunIdSchema)`), a lookup that may miss narrows with Vitest `assert`, and a deferred value is `Promise.withResolvers`. A partial test double keeps its `as` with a `// cast:` reason on its line or the line before. oxlint fails `value!` here and in `packages/*/test`; `npm run check:core-quality` holds `let x!` and an unexplained `as` at zero in both.
 
 - **One fake per port.** Tests use the shared fakes in `src/test-kernel/support/` for platform ports. A local fake for a port that already has a shared fake requires a one-line comment naming the capability the shared fake deliberately lacks.
 

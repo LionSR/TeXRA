@@ -38,6 +38,7 @@ export function createProjectWorkbench(options: {
   conversationView: ProgressApp;
   isActive(): boolean;
   isBrowserCovered(): boolean;
+  confirmDiscard(title: string, discard: () => void): void;
   onLayoutChanged(
     session: string,
     previous: DesktopShellState,
@@ -192,6 +193,7 @@ export function createProjectWorkbench(options: {
     session,
     isActive: options.isActive,
     isBrowserCovered: options.isBrowserCovered,
+    confirmDiscard: options.confirmDiscard,
     conversationView: options.conversationView,
     fileTree,
     editorFor,

@@ -1,0 +1,580 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise"],
+  "categories": {
+    "correctness": "error"
+  },
+  "ignorePatterns": [
+    "dist/",
+    "**/*.d.ts",
+    "**/*.d.mts",
+    "packages/harness/example/**"
+  ],
+  "rules": {
+    "promise/valid-params": "off",
+    "unicorn/no-useless-spread": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.{ts,tsx,mts}"],
+      "rules": {
+        "eqeqeq": [
+          "error",
+          "always",
+          {
+            "null": "ignore"
+          }
+        ],
+        "no-throw-literal": "error",
+        "no-unused-vars": [
+          "error",
+          {
+            "args": "after-used",
+            "argsIgnorePattern": "^_",
+            "varsIgnorePattern": "^_|Schema$",
+            "caughtErrors": "none",
+            "ignoreRestSiblings": true
+          }
+        ],
+        "typescript/no-explicit-any": "error"
+      }
+    },
+    {
+      "files": ["src/test-kernel/**", "packages/*/test/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "error"
+      }
+    },
+    {
+      "files": ["packages/*/src/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "error",
+        "no-restricted-globals": [
+          "error",
+          {
+            "name": "AbortController",
+            "message": "Use fiber interruption or Effect.abortSignal."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/texra/src/tools/agentCli/claudeAgent.ts"],
+      "rules": {
+        "no-restricted-globals": "off"
+      }
+    },
+    {
+      "files": ["packages/texra/src/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "group": [
+                  "@commands/**",
+                  "@progressView/**",
+                  "@settingsView/**",
+                  "@frontend/**",
+                  "@resources/**",
+                  "@cli/**",
+                  "@desktop/**",
+                  "@test/**"
+                ],
+                "message": "No host layer or test kernel import: reach the host through a port."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/texra/src/ui/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "group": [
+                  "@commands/**",
+                  "@progressView/**",
+                  "@settingsView/**",
+                  "@frontend/**",
+                  "@resources/**",
+                  "@cli/**",
+                  "@desktop/**",
+                  "@test/**"
+                ],
+                "message": "No host layer or test kernel import: reach the host through a port."
+              },
+              {
+                "group": ["@common", "@common/**", "@tools", "@tools/**"],
+                "allowTypeImports": true,
+                "message": "Browser bundle: runtime values come from browser-safe modules."
+              },
+              {
+                "group": ["@utils", "@utils/**"],
+                "allowTypeImports": true,
+                "message": "Browser bundle: use @texra-ai/harness/schemas or /transcript."
+              },
+              {
+                "regex": "^@texra-ai/harness(/host|/node|/plugins)?$",
+                "message": "Browser bundle: use @texra-ai/harness/schemas or /transcript."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/harness/src/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "group": [
+                  "@commands/**",
+                  "@progressView/**",
+                  "@settingsView/**",
+                  "@frontend/**",
+                  "@resources/**",
+                  "@cli/**",
+                  "@desktop/**",
+                  "@test/**"
+                ],
+                "message": "No host layer or test kernel import: reach the host through a port."
+              },
+              {
+                "group": [
+                  "@texra",
+                  "@texra/**",
+                  "@latex/**",
+                  "@replacement/**",
+                  "@telemetry/**",
+                  "@housekeeping/**",
+                  "@ui/**"
+                ],
+                "message": "The harness imports nothing from the app: take the value as an input."
+              },
+              {
+                "regex": "(?:^|/)packages/texra/",
+                "message": "The harness imports nothing from the app: take the value as an input."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/desktop/src/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/desktop/src/renderer/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "regex": "^@texra-ai/harness(/host|/node|/plugins)?$",
+                "message": "Browser bundle: use @texra-ai/harness/schemas or /transcript."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/extension/src/settingsView/frontend/**/*.{ts,tsx,mts}"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "group": ["@common", "@common/**", "@tools", "@tools/**"],
+                "allowTypeImports": true,
+                "message": "Browser bundle: runtime values come from browser-safe modules."
+              },
+              {
+                "group": ["@utils", "@utils/**"],
+                "allowTypeImports": true,
+                "message": "Browser bundle: use @texra-ai/harness/schemas or /transcript."
+              },
+              {
+                "regex": "^@texra-ai/harness(/host|/node|/plugins)?$",
+                "message": "Browser bundle: use @texra-ai/harness/schemas or /transcript."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/cli/src/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode", "vscode/**", "electron", "electron/**"],
+                "message": "The CLI host must not import VS Code or Electron."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/llm/src/**/*.{ts,tsx,mts}"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "regex": "^(?:@texra-ai/|@(?:shared|ui|texra|common|agent|frontend|utils|logger|telemetry|transcript|latex|commands|resources|model|skills|housekeeping|progressView|settingsView|replacement|tools|platform|controllers|test|cli|desktop)(?:/|$))",
+                "message": "@texra-ai/llm imports nothing else in the repo; take the value as an input."
+              },
+              {
+                "regex": "^(?:\\.\\./){3,}",
+                "message": "@texra-ai/llm imports nothing else in the repo; take the value as an input."
+              },
+              {
+                "group": [
+                  "@anthropic-ai/sdk",
+                  "@anthropic-ai/sdk/**",
+                  "@google/genai",
+                  "@google/genai/**",
+                  "openai",
+                  "openai/**",
+                  "ws"
+                ],
+                "message": "The browser-safe llm entry loads no vendor SDK: protocol code lives in api/."
+              }
+            ]
+          }
+        ],
+        "import/no-nodejs-modules": "error"
+      }
+    },
+    {
+      "files": [
+        "packages/llm/src/api/**",
+        "packages/llm/src/oauth/**",
+        "packages/llm/src/node.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": ["vscode"],
+                "message": "VS Code-free zone: reach the host through a port."
+              },
+              {
+                "regex": "^(?:@texra-ai/|@(?:shared|ui|texra|common|agent|frontend|utils|logger|telemetry|transcript|latex|commands|resources|model|skills|housekeeping|progressView|settingsView|replacement|tools|platform|controllers|test|cli|desktop)(?:/|$))",
+                "message": "@texra-ai/llm imports nothing else in the repo; take the value as an input."
+              },
+              {
+                "regex": "^(?:\\.\\./){3,}",
+                "message": "@texra-ai/llm imports nothing else in the repo; take the value as an input."
+              }
+            ]
+          }
+        ],
+        "import/no-nodejs-modules": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/harness/src/**",
+        "packages/texra/src/**",
+        "packages/llm/src/**",
+        "packages/trace-viewer/src/**",
+        "packages/extension/src/settingsView/frontend/**"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "runPromise",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runPromiseExit",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runSync",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runSyncExit",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runFork",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runCallback",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runMain",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/harness/src/agent/**/*.{ts,tsx,mts}",
+        "packages/harness/src/shared/session/**/*.{ts,tsx,mts}",
+        "packages/harness/src/shared/schemas/**/*.{ts,tsx,mts}",
+        "packages/harness/src/tools/**/*.{ts,tsx,mts}",
+        "packages/harness/src/controllers/session/**/*.{ts,tsx,mts}",
+        "packages/harness/src/platform/**/*.{ts,tsx,mts}",
+        "packages/harness/src/effect/**/*.{ts,tsx,mts}",
+        "packages/llm/src/**/*.{ts,tsx,mts}",
+        "packages/harness/src/index.ts",
+        "packages/harness/src/host.ts",
+        "packages/harness/src/node.ts",
+        "packages/harness/src/plugins.ts",
+        "packages/harness/src/schemas.ts",
+        "packages/harness/src/transcriptEntry.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "runPromise",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runPromiseExit",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runSync",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runSyncExit",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runFork",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runCallback",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "runMain",
+            "message": "Run Effects only at a host entry or a runtime entry named in .oxlintrc.json."
+          },
+          {
+            "property": "then",
+            "message": "`.then(` chains in core: compose with Effect instead."
+          }
+        ],
+        "promise/avoid-new": "error",
+        "typescript/consistent-type-assertions": [
+          "error",
+          {
+            "assertionStyle": "as",
+            "objectLiteralTypeAssertions": "never"
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/harness/src/platform/processRuntime.ts",
+        "packages/harness/src/agent/codeSandbox/worker.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "property": "then",
+            "message": "`.then(` chains in core: compose with Effect instead."
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/texra/src/ui/progress/sessionTransport.ts",
+        "packages/texra/src/shared/signals.ts"
+      ],
+      "rules": {
+        "no-restricted-properties": "off"
+      }
+    },
+    {
+      "files": ["packages/cli/src/**"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "process",
+            "property": "argv",
+            "message": "Read process input through runtime/cliContext.ts."
+          },
+          {
+            "object": "process",
+            "property": "env",
+            "message": "Read process input through runtime/cliContext.ts."
+          },
+          {
+            "object": "process",
+            "property": "cwd",
+            "message": "Read process input through runtime/cliContext.ts."
+          },
+          {
+            "object": "console",
+            "property": "log",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "console",
+            "property": "error",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "console",
+            "property": "warn",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "process",
+            "property": "exitCode",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "process",
+            "property": "stdout",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "process",
+            "property": "stderr",
+            "message": "Write output through runtime/logSinks.ts."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/cli/src/runtime/cliContext.ts"],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "console",
+            "property": "log",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "console",
+            "property": "error",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "console",
+            "property": "warn",
+            "message": "Write output through runtime/logSinks.ts."
+          },
+          {
+            "object": "process",
+            "property": "exitCode",
+            "message": "Write output through runtime/logSinks.ts."
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/cli/src/bin/texra.ts",
+        "packages/cli/src/bin/texraServe.ts",
+        "packages/cli/src/runtime/logSinks.ts",
+        "packages/cli/src/init/runInitWizard.tsx",
+        "packages/cli/src/config/runConfigTui.tsx"
+      ],
+      "rules": {
+        "no-restricted-properties": [
+          "error",
+          {
+            "object": "process",
+            "property": "argv",
+            "message": "Read process input through runtime/cliContext.ts."
+          },
+          {
+            "object": "process",
+            "property": "env",
+            "message": "Read process input through runtime/cliContext.ts."
+          },
+          {
+            "object": "process",
+            "property": "cwd",
+            "message": "Read process input through runtime/cliContext.ts."
+          }
+        ]
+      }
+    },
+    {
+      "files": ["packages/cli/src/chat/tui/runChatTui.tsx"],
+      "rules": {
+        "no-restricted-properties": "off"
+      }
+    }
+  ]
+}
