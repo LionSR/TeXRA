@@ -53,15 +53,16 @@ export interface CliRunExport {
   readonly exportInput: ChatExportInput | null;
 }
 
-/** What a read of a run the store does not hold answers. */
-const NO_DETAIL: CliRunDetail = {
+/** What a read of a run the store does not hold answers: fresh each time,
+ *  as a caller may hold on to it. */
+const noDetail = (): CliRunDetail => ({
   run: null,
   result: null,
   report: null,
   conversation: [],
   workspaceFiles: [],
   resumable: false,
-};
+});
 
 export interface CliRunReads {
   /** The runs a person started in the project, newest first. */
@@ -181,7 +182,7 @@ export function serviceRunReads(
     detail: (runId) =>
       records(
         (client) => client['task.detail']({ workspace, runId }),
-        NO_DETAIL,
+        noDetail(),
       ),
     exportInput: (runId) =>
       records((client) => client['task.exportInput']({ workspace, runId }), {
