@@ -19,7 +19,6 @@ import {
   inImmediateTransaction,
   isDamaged,
   pragmaValue,
-  retryBusy,
   run,
   STORE_FILE_SUFFIXES,
   underCopy,
@@ -82,6 +81,7 @@ const TABLES = [
   `CREATE TABLE IF NOT EXISTS event_blob (
     "commit" INTEGER NOT NULL REFERENCES event("commit") ON DELETE CASCADE,
     digest   TEXT NOT NULL REFERENCES blob(digest),
+    inline   INTEGER NOT NULL CHECK (inline IN (0, 1)),
     PRIMARY KEY ("commit", digest)
   ) STRICT, WITHOUT ROWID`,
   `CREATE TABLE IF NOT EXISTS stored_kind (
@@ -155,6 +155,31 @@ const ADDITIVE = [
   `CREATE INDEX IF NOT EXISTS current_value_at ON current_value(family, at)`,
 ];
 
+/** A column a `TABLES` table gained after stores held it: added at open
+ *  where `pragma_table_info` lacks it, existing rows at the default.
+ *  `event_blob.inline`: a string the codec moved out of the row (1, inflated
+ *  on read) or a media address (0, never inflated); a store from before it
+ *  links every blob at 1, reading right and fetching media it never uses. */
+const ADDED_COLUMNS = [
+  {
+    table: 'event_blob',
+    column: 'inline',
+    ddl: 'INTEGER NOT NULL DEFAULT 1 CHECK (inline IN (0, 1))',
+  },
+];
+
+/** Add each of `ADDED_COLUMNS` its table lacks. */
+const addColumns = Effect.fnUntraced(function* (sql: Sql) {
+  for (const { table, column, ddl } of ADDED_COLUMNS) {
+    const present = yield* sql.unsafe<{ name: string }>(
+      'SELECT name FROM pragma_table_info(?) WHERE name = ?',
+      [table, column],
+    );
+    if (present.length === 0)
+      yield* run(sql, `ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+  }
+});
+
 const verifyPragma = Effect.fnUntraced(function* (
   sql: Sql,
   pragma: string,
@@ -170,7 +195,9 @@ const verifyPragma = Effect.fnUntraced(function* (
 /** The user tables a file holds (none: a new file). */
 const userTables = (sql: Sql) =>
   sql
-    .unsafe<{ name: string }>(
+    .unsafe<{
+      name: string;
+    }>(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
       [],
     )
@@ -297,44 +324,13 @@ const prepareStore = Effect.fnUntraced(function* (
     movedAside = { path, aside, reason: 'pre-1.0' };
   }
   for (const statement of ADDITIVE) yield* run(sql, statement);
+  yield* addColumns(sql);
   if (mode === 'persistent') {
     yield* run(sql, 'PRAGMA journal_size_limit = 1048576');
   }
   yield* run(sql, 'PRAGMA busy_timeout = 25');
   return movedAside;
 });
-
-/** Pages one reclaim step frees at most: a few milliseconds of the lock. */
-const RECLAIM_PAGES = 256;
-
-/**
- * Give the pages a collection freed back to the filesystem, once it
- * commits, in autocommit steps of `incremental_vacuum(N)`, so
- * another writer waits on one step, never the whole reclaim. A driver that
- * steps a statement to its end frees N pages a step, one that steps it once
- * frees one; either way the steps run until the freelist is empty or stops
- * shrinking. It is not interrupted, as the collection is not: a session that
- * closes first would leave the pages. A step that fails ends it, and the
- * next collection reclaims the rest.
- */
-export const reclaimFreePages = (sql: Sql, path: string) =>
-  Effect.gen(function* () {
-    const free = () =>
-      pragmaValue(sql, 'freelist_count').pipe(Effect.map(Number));
-    for (let left = yield* free(); left > 0;) {
-      yield* retryBusy(run(sql, `PRAGMA incremental_vacuum(${RECLAIM_PAGES})`));
-      const now = yield* free();
-      if (now >= left) return;
-      left = now;
-    }
-  }).pipe(
-    Effect.uninterruptible,
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Could not return the pages freed in ${path} to the filesystem; the next collection retries.`,
-      ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL)),
-    ),
-  );
 
 /**
  * Open the store at `filename` through `connect` and prepare it. A file
