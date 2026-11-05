@@ -5,19 +5,33 @@
 //   surface shows up as a diff in review;
 // - the API reference (packages/<package>/docs/api/<entry>.md), shipped in the
 //   package: each export's TSDoc and declaration, for a reader of the package.
+//
+// Each file must match what the package exports produce; any difference
+// fails, so the diff of the public surface shows up in the PR that changes
+// it.
+//
+//   node scripts/check-api-report.mjs          check the committed files
+//   node scripts/check-api-report.mjs --write  rewrite them (`npm run docgen`)
 
-import { readFileSync } from 'node:fs';
+import console from 'node:console';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 
 import ts from 'typescript';
 
 const PACKAGES = ['packages/harness', 'packages/llm'];
 
-/**
- * `{ name, subpath, file, report }` for every entry the core packages export;
- * the entry-reach budgets read the same list.
- */
-export function coreEntries(rootDir) {
+/** `{ name, subpath, file, report }` for every entry the core packages export. */
+function coreEntries(rootDir) {
   return PACKAGES.flatMap((dir) => {
     const manifest = JSON.parse(
       readFileSync(path.join(rootDir, dir, 'package.json'), 'utf8'),
@@ -298,7 +312,7 @@ const referenceText = (checker, sourceFile, entry, source, exports) => {
 };
 
 /** Directories (repo-relative) whose files `apiReports` writes in full. */
-export const GENERATED_DIRS = [
+const GENERATED_DIRS = [
   'config/api-reports',
   'packages/harness/docs/api',
   'packages/llm/docs/api',
@@ -306,7 +320,7 @@ export const GENERATED_DIRS = [
 
 /** Repo-relative path → text: the report and the reference of each core
  *  package entry. */
-export function apiReports(rootDir) {
+function apiReports(rootDir) {
   const list = coreEntries(rootDir);
   const configPath = path.join(rootDir, 'tsconfig.build.json');
   const { config } = ts.readConfigFile(configPath, ts.sys.readFile);
@@ -347,3 +361,46 @@ export function apiReports(rootDir) {
     }),
   );
 }
+
+const rootDir = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
+const { values } = parseArgs({
+  options: { write: { type: 'boolean', default: false } },
+});
+const problems = [];
+const existing = new Set(
+  GENERATED_DIRS.flatMap((dir) => {
+    mkdirSync(path.join(rootDir, dir), { recursive: true });
+    return readdirSync(path.join(rootDir, dir))
+      .filter((name) => name.endsWith('.md'))
+      .map((name) => `${dir}/${name}`);
+  }),
+);
+for (const [name, text] of apiReports(rootDir)) {
+  existing.delete(name);
+  const file = path.join(rootDir, name);
+  const current = existsSync(file) ? readFileSync(file, 'utf8') : null;
+  if (current === text) continue;
+  if (values.write) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text);
+  } else
+    problems.push(
+      `${name} ${current == null ? 'is missing' : 'differs from the package exports'}: run \`npm run docgen\` and review the diff`,
+    );
+}
+for (const name of existing)
+  problems.push(`${name} has no package entry: delete it`);
+if (problems.length > 0) {
+  console.error(
+    `api-report: ${problems.length} problem(s)\n  ${problems.join('\n  ')}`,
+  );
+  process.exitCode = 1;
+} else
+  console.log(
+    values.write
+      ? 'api-report: API reports and references rewritten'
+      : 'api-report: API reports and references match the package exports',
+  );

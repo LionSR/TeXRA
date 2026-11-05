@@ -1,6 +1,5 @@
 // Two counts of how many places decide one fact, held shrink-only against
-// the merge base with origin/main (ratchet-base.mjs), as the core-quality
-// rules are. A fact decided in more files than before fails; a fall needs
+// the merge base with origin/main (ratchet-base.mjs). A fact decided in more files than before fails; a fall needs
 // nothing. Each count is one more place a fact can be decided differently:
 // a predicate evaluated in another file, a vocabulary spelled again.
 //
@@ -18,7 +17,7 @@
 
 // Node imports
 import console from 'node:console';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -28,13 +27,38 @@ import { parseArgs } from 'node:util';
 import ts from 'typescript';
 
 // Local imports
-import { SOURCE_DIRS, sourceFiles } from './core-quality-measure.mjs';
 import { ratchetBase, withBaseTree } from './ratchet-base.mjs';
+import { walkFiles } from './walkFiles.mjs';
 
 const rootDir = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
+
+/** Every package's source. */
+const SOURCE_DIRS = [
+  'packages/harness/src',
+  'packages/llm/src',
+  'packages/texra/src',
+  'packages/extension/src',
+  'packages/desktop/src',
+  'packages/cli/src',
+  'packages/trace-viewer/src',
+];
+const SOURCE_FILE = /\.(?:ts|tsx|mts)$/;
+const NOT_SOURCE = /\.d\.ts$|\.(?:test|vitest|spec)\.tsx?$/;
+
+/** The repo-relative source files of `tree`, sorted. A directory a change
+ *  adds is absent from the merge base's tree and has no files there. */
+const sourceFiles = (tree) =>
+  SOURCE_DIRS.filter((dir) => existsSync(path.join(tree, dir)))
+    .flatMap((dir) =>
+      walkFiles(path.join(tree, dir), {
+        include: (file) => SOURCE_FILE.test(file) && !NOT_SOURCE.test(file),
+        prune: (dir) => dir.endsWith('node_modules'),
+      }).map(({ relativePath }) => `${dir}/${relativePath}`),
+    )
+    .toSorted();
 
 /** The predicates whose spread is counted, as they read in source. */
 const PREDICATES = [
@@ -109,7 +133,7 @@ function literalSets(file, text) {
  * the files hold several), so a rise names the pair that is new.
  */
 function measure(tree) {
-  const files = sourceFiles(tree, SOURCE_DIRS);
+  const files = sourceFiles(tree);
   const spread = new Map(PREDICATES.map((predicate) => [predicate, []]));
   const sets = [];
   for (const file of files) {
