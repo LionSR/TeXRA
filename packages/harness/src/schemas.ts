@@ -10,7 +10,6 @@
  *   [`TranscriptView`](#transcriptview), [`PendingRequest`](#pendingrequest),
  *   and pure queries ([`acceptsFollowUp`](#acceptsfollowup),
  *   [`attentionOf`](#attentionof), [`sessionActivity`](#sessionactivity),
- *   [`isLiveRun`](#isliverun),
  *   [`descendantRuns`](#descendantruns), [`runActionRefusal`](#runactionrefusal)).
  * - **Commands & approvals**: [`RuntimeRequestSchema`](#runtimerequestschema)
  *   ([`RuntimeRequest`](#runtimerequest)), [`RequestDecision`](#requestdecision),
@@ -43,7 +42,6 @@ export {
   acceptsFollowUp,
   attentionOf,
   descendantRuns,
-  isLiveRun,
   requestAnswerability,
   rollupOf,
   RunViewSchema,

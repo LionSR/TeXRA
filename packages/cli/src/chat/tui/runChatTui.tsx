@@ -27,7 +27,6 @@ import {
   type RunId,
   type AgentConfig,
   RUN_PHASE,
-  isLiveRun,
   type ApprovalPolicy,
   isTranscriptSettlementPhase,
   toErrorMessage,
@@ -399,13 +398,12 @@ export async function runChat(
       bypass: 'superYolo',
       enabled,
     });
-    const live = isLiveRun(run);
     const changes: PolicyChange[] = [
       ...(policy === 'yolo' && run.actions.includes('grant')
         ? [bypass(true)]
         : []),
       ...(leaving ? [bypass(false)] : []),
-      ...(policy !== 'yolo' && live
+      ...(policy !== 'yolo' && run.live
         ? [{ field: 'limit' as const, runId: run.id, limit: policy }]
         : []),
     ];

@@ -5,7 +5,6 @@ import {
   RUN_PHASE,
   type RunPhase,
   type RunId,
-  isLiveRun,
 } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 
@@ -202,7 +201,7 @@ export class TuiSession {
    *  a model switch reaches. */
   runLive(): boolean {
     const run = runViewOf(sessionView().get(), this.runId);
-    return run !== undefined && isLiveRun(run);
+    return run !== undefined && run.live;
   }
 
   /** Model selection is open with no pending run, or at a tool-use wait. */

@@ -40,7 +40,6 @@ import {
   type RunId,
   acceptsFollowUp,
   RUN_PHASE,
-  isLiveRun,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import { runOutcomeExitCode } from '@cli/runtime/terminalStatus';
@@ -311,7 +310,7 @@ export function createChatSessionController(
     viewChanges.pipe(
       Stream.filter((view) => {
         const run = view.runs.get(runId);
-        return run === undefined || !run.ownedHere || !isLiveRun(run);
+        return run === undefined || !run.runsHere;
       }),
       Stream.runHead,
       Effect.asVoid,
@@ -331,7 +330,7 @@ export function createChatSessionController(
       Stream.filter((view) => {
         const run = view.runs.get(runId);
         if (run === undefined) return false;
-        if (run.ownedHere && isLiveRun(run)) return true;
+        if (run.runsHere) return true;
         return (
           before !== undefined &&
           (run.forkPoint !== before.forkPoint ||
@@ -754,7 +753,7 @@ export function createChatSessionController(
       const previous = liveHere;
       liveHere = new Set(
         [...view.runs.values()]
-          .filter((run) => isLiveRun(run) && run.ownedHere)
+          .filter((run) => run.runsHere)
           .map((run) => run.id),
       );
       for (const id of liveHere) {
@@ -1017,7 +1016,7 @@ export function createChatSessionController(
       const root = runViewOf(currentView(), rootRunId.get());
       if (
         root !== undefined &&
-        (isLiveRun(root) || root.status === RUN_PHASE.CANCELLED) &&
+        (root.live || root.status === RUN_PHASE.CANCELLED) &&
         acceptsFollowUp(root)
       )
         return yield* send(root.id, true);

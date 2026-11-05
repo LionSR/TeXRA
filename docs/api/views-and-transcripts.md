@@ -74,12 +74,13 @@ Committed rows feed two separate reducers:
 
 Runtime execution never reads `SessionView`. Every emitted `SessionView` is deeply read-only (`ReadonlyDeep`) and shares unchanged subtrees structurally across emissions.
 
+Where a run stands is a field of its `RunView`, decided once by the reducer: `live` (somebody holds it and it has neither ended nor come to rest, unlike an interrupted run whose durable status a dead owner left in flight), `working` (inside a turn right now; `runStartedAt` is set only while it is), and `turnOver` (it waits, ended, rests, or nobody holds it, so its transcript rows are final).
+
 ### Pure view queries (`@texra-ai/harness/schemas`)
 
 - **[`sessionActivity(view)`](./harness/schemas#sessionactivity)**: returns `'approval' | 'running' | 'idle'` for window titles and status indicators.
 - **[`attentionOf(view, previous?)`](./harness/schemas#attentionof)**: returns answerable [`PendingRequest`](./harness/schemas#pendingrequest)s (`requests`) and newly arrived requests (`arrived`).
 - **[`acceptsFollowUp(runView)`](./harness/schemas#acceptsfollowup)**: returns whether a composer should allow `followUp.send` on `runView` (true for active/waiting runs and stopped top-level interactive runs that can resume from history).
-- **[`isLiveRun(runView)`](./harness/schemas#isliverun)**: distinguishes a live run (working, waiting, or spawned and not started yet) from an interrupted one whose durable status a dead owner left in flight. Whether a run is working right now is the view's own `working` field, and its `runStartedAt` is set only while it is.
 - **[`descendantRuns(view, rootRunId, { includeRoot })`](./harness/schemas#descendantruns)** and **[`rollupOf(children)`](./harness/schemas#rollupof)**: walk a parent run's child tree.
 
 ## Cross-process synchronization (`RemoteSessionView`)

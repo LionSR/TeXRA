@@ -11,7 +11,6 @@ import {
 import {
   APPROVAL_POLICY_CONFIG_KEY,
   descendantRuns,
-  isLiveRun,
   sessionActivity,
   sumUsageStats,
   type ApprovalPolicy,
@@ -46,7 +45,7 @@ function taskStatus(view: SessionView): TaskStatus {
       (run.parentId === null || !view.runs.has(run.parentId)) &&
       descendantRuns(view, run.id, { includeRoot: true }).some((id) => {
         const member = view.runs.get(id);
-        return member !== undefined && isLiveRun(member);
+        return member !== undefined && member.live;
       }),
   );
   return {

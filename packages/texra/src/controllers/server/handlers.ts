@@ -36,7 +36,6 @@ import {
 import { launchNoticeOf } from '@texra-ai/harness/host';
 import {
   type SessionView,
-  isLiveRun,
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -190,7 +189,7 @@ const runEnded = Effect.fn('runEnded')(function* (
     yield* session.view.changes.pipe(
       Stream.filter((view) => {
         const run = view.runs.get(runId);
-        return run === undefined || !isLiveRun(run);
+        return run === undefined || !run.live;
       }),
       Stream.runHead,
     ),

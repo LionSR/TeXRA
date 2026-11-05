@@ -8,7 +8,6 @@ import {
 } from 'effect';
 
 import {
-  isLiveRun,
   type RunView,
   runIdentityName,
   type RunId,
@@ -112,7 +111,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
         const child = view.runs.get(childId);
         // A live child only: the child list reports who is still going, and a
         // child that ended carries its outcome on its own `run.end` line.
-        return child !== undefined && isLiveRun(child) ? [childRow(child)] : [];
+        return child !== undefined && child.live ? [childRow(child)] : [];
       });
       const wire = JSON.stringify(children);
       if (writtenChildren.get(parentRunId) === wire) continue;

@@ -11,11 +11,7 @@ import { Effect, Option, Result, Schema, Struct } from 'effect';
 
 import { type Session } from '@texra-ai/harness';
 import { GlobalValues, readSessionView } from '@texra-ai/harness/host';
-import {
-  type RunView,
-  type SessionView,
-  isLiveRun,
-} from '@texra-ai/harness/schemas';
+import { type RunView, type SessionView } from '@texra-ai/harness/schemas';
 import {
   resolveWorkspaceStoragePath,
   WORKSPACE_STORES,
@@ -42,7 +38,7 @@ function summaries(view: SessionView, workspace: string): TaskSummary[] {
       description: run.description,
       statusKey: run.statusKey,
       launchedAt: run.launchedAt,
-      live: run.ownedHere && isLiveRun(run),
+      live: run.runsHere,
     }));
 }
 

@@ -1,7 +1,7 @@
 import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect, Result, Stream } from 'effect';
 
-import { isLiveRun, planOf, runBypasses } from '@texra-ai/harness/schemas';
+import { planOf, runBypasses } from '@texra-ai/harness/schemas';
 import { isRequestRefusal, type Session } from '@texra-ai/harness';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
@@ -255,7 +255,7 @@ const forkCliTask: (context: SlashCommandContext) => SlashCommandEffect =
     const ended = yield* context.runSession.view.changes.pipe(
       Stream.takeUntil((view) => {
         const run = view.runs.get(runId);
-        return run === undefined || !isLiveRun(run);
+        return run === undefined || !run.live;
       }),
       Stream.runDrain,
       Effect.timeout('10 seconds'),

@@ -115,6 +115,10 @@ function runViewFields(over: RunViewOverrides): RunView {
       settledRows: 0,
     },
   };
+  // A held run unless the case says otherwise, as the fold reads it.
+  const ended = isTerminalOutcomePhase(status);
+  const group = over.group ?? common.group;
+  const live = over.live ?? (!ended && group !== 'interrupted');
   // cast: every field is stated above; a case's override may blank one.
   return {
     ...common,
@@ -123,6 +127,11 @@ function runViewFields(over: RunViewOverrides): RunView {
     ...over,
     id,
     title: over.title ?? (over.description || (over.label ?? over.id)),
+    live,
+    runsHere: over.runsHere ?? (live && (over.ownedHere ?? false)),
+    turnOver:
+      over.turnOver ??
+      (ended || status === RUN_PHASE.WAITING || group === 'interrupted'),
   } as RunView;
 }
 
