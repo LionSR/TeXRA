@@ -26,10 +26,7 @@ import {
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
-import {
-  isTerminalOutcomePhase,
-  outcomeFromCause,
-} from '@shared/runs/runStatus';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { heldElsewhereBy } from '@shared/session/database';
 import { recordOf } from '@shared/session/runRowReads';
 import type { RunRows } from '@shared/session/runRowsShape';
@@ -46,6 +43,7 @@ import {
   turnResultPart,
   warn,
 } from './childTurnResult';
+import { endVerdict } from './AgentRunLifecycle';
 import { formatDelivery } from './deliveryEnvelope';
 import { Interactions, presentRunFailure } from './HostInteractions';
 import { Runs } from './runRegistry';
@@ -54,9 +52,10 @@ import type { SessionServices } from './rootLaunch';
 /**
  * Hand a registered process child to its loop, which owns its end from
  * there. A hand-off that fails ends the run ownerless (an end the run
- * already wrote stands), with its classified error, which lets its birth's
- * claim go. The ending's failures join the hand-off's own as one
- * aggregate; an interruption unwinds as itself.
+ * already wrote stands) as its lifecycle would end it (`endVerdict`), with
+ * its classified error, which lets its birth's claim go. The ending's
+ * failures join the hand-off's own as one aggregate; an interruption
+ * unwinds as itself.
  */
 export function runWithLaunchGuard<A, E, R>(
   runId: RunId,
@@ -69,16 +68,17 @@ export function runWithLaunchGuard<A, E, R>(
         Exit.isSuccess(exit)
           ? Effect.void
           : Effect.gen(function* () {
-              const outcome = outcomeFromCause(exit.cause);
-              const error = Cause.squash(exit.cause);
+              const { outcome, reason, error } = endVerdict(
+                Exit.failCause(exit.cause),
+                (yield* Runs).stopCause(runId),
+              );
               const end = yield* Effect.exit(
                 finalizeRun({
                   runId,
                   outcome,
+                  reason,
                   ownerless: true,
-                  ...(outcome === RUN_OUTCOME.FAILED && {
-                    error: classifyAgentError(error),
-                  }),
+                  ...(error != null && { error: classifyAgentError(error) }),
                 }),
               );
               if (Exit.isFailure(end)) failures.push(Cause.squash(end.cause));

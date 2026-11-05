@@ -10,10 +10,13 @@
  *   own subscribed.
  * - A labelled run's label request is left out of its result's usage or its
  *   view's, or the two disagree.
+ * - A host's shutdown that stops a launch still opening, then interrupts
+ *   it (the CLI's), leaves the run ended without the shutdown's reason, so
+ *   a resume reads its turn as unanswered rather than continued.
  */
 import { layer } from '@effect/vitest';
-import { Context, Effect, Exit, Schema, Scope, Stream } from 'effect';
-import { describe, expect } from 'vitest';
+import { Context, Effect, Exit, Fiber, Schema, Scope, Stream } from 'effect';
+import { assert, describe, expect } from 'vitest';
 
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
@@ -49,7 +52,10 @@ const packageSession = (session: Context.Context<SessionServices>) =>
 
 /** The stored data of a `run.end` row, as far as these cases read it. */
 const RunEndData = Schema.fromJsonString(
-  Schema.Struct({ outcome: Schema.String }),
+  Schema.Struct({
+    outcome: Schema.String,
+    reason: Schema.optional(Schema.String),
+  }),
 );
 
 /** The outcomes of the run's `run.end` rows, in order. */
@@ -170,6 +176,46 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* untilSubscribed(sdk, [child]);
             yield* Scope.close(listener, Exit.void);
             yield* untilSubscribed(sdk, []);
+          }),
+      );
+
+      it.effect(
+        "records a host shutdown's stop of a launch still opening on its run's end",
+        () =>
+          Effect.gen(function* () {
+            const roots = testWorkspaceRoots();
+            const sdk = yield* packageSession(
+              yield* persistentTestSession(roots),
+            );
+            const faults = yield* sessionStoreFaults(roots.storage);
+            const opening = yield* faults.holdNext('appendAll', 'run.start');
+            const launch = yield* Effect.forkChild(
+              sdk.start({
+                agent: 'golden_parent',
+                instruction: 'Read the notes, plan, delegate.',
+                model: MODEL,
+              }),
+            );
+            yield* opening.reached;
+            const runId = sdk.held()[0]?.runId;
+            assert(runId !== undefined, 'the session holds the launch');
+            // The CLI's shutdown of a launch the session holds: stopped for
+            // the shutdown, then interrupted, as its opening commits.
+            yield* sdk.request({ kind: 'run.stop', runId, reason: 'shutdown' });
+            const interrupted = yield* Effect.forkChild(
+              Fiber.interrupt(launch),
+            );
+            yield* opening.release;
+            yield* Fiber.join(interrupted);
+            yield* untilStored(roots.storage, (rows) =>
+              rows.some((row) => row.run === runId && row.type === 'run.end'),
+            );
+            const ends = storedRows(roots.storage)
+              .filter((row) => row.run === runId && row.type === 'run.end')
+              .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data));
+            expect(ends).toStrictEqual([
+              { outcome: 'cancelled', reason: 'shutdown' },
+            ]);
           }),
       );
 

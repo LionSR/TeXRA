@@ -5,7 +5,11 @@ import { Cause, Clock, Effect, Exit, type Fiber, type Semaphore } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import type { TraceEmitter } from '@agent/trace/TraceEmitter';
-import { endActivation } from '@agent/runtime/AgentRunLifecycle';
+import {
+  endActivation,
+  endVerdict,
+  type EndVerdict,
+} from '@agent/runtime/AgentRunLifecycle';
 import { Inbox, followUpServices } from '@agent/followUp/ToolUseFollowUp';
 import type { FollowUpServices } from '@agent/followUp/ToolUseFollowUp';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
@@ -682,19 +686,12 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
  */
 const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
-  stopped: boolean,
+  verdict: EndVerdict,
 ): Effect.fn.Return<void, Error, R | AgentRunServices> {
   const { params } = loop;
   const { runId } = params;
-  const { end, failure } = loop;
-  // Re-read: a stop landing after the body's exit is still its verdict,
-  // and outranks a failure.
-  const failed =
-    failure !== undefined ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED;
-  const outcome =
-    stopped || loop.runs.stopCause(runId) !== undefined
-      ? RUN_OUTCOME.CANCELLED
-      : failed;
+  const { end } = loop;
+  const { outcome, reason, error } = verdict;
   const lastTurn =
     end.kind === 'finished' && !end.handedOff
       ? turnResultPart(end.result, loop.trace)
@@ -706,10 +703,8 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
         runId,
         ownerless,
         outcome,
-        ...(outcome === RUN_OUTCOME.FAILED &&
-          failure?.cause != null && {
-            error: classifyAgentError(failure.cause),
-          }),
+        reason,
+        ...(error != null && { error: classifyAgentError(error) }),
         stage: loop.stage,
         lastTurn: () => Effect.succeed(lastTurn),
       }),
@@ -756,16 +751,21 @@ const endChildLoop = <TTurn, R>(
 ): Effect.Effect<void, Error, R | AgentRunServices> =>
   Effect.uninterruptible(
     Effect.gen(function* () {
-      const stopped = Exit.isFailure(body) && Cause.hasInterrupts(body.cause);
-      if (Exit.isFailure(body) && !Cause.hasInterruptsOnly(body.cause))
-        loop.failure ??= { cause: Cause.squash(body.cause) };
+      const { failure } = loop;
+      // A turn's failure fails a body that returned; a body that did not
+      // return ends by its cause.
+      const verdict = endVerdict(
+        Exit.isSuccess(body) && failure !== undefined
+          ? Exit.fail(failure.cause)
+          : Exit.map(body, () => RUN_OUTCOME.COMPLETED),
+        loop.runs.stopCause(loop.params.runId),
+      );
       // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
         runId: loop.params.runId,
-        stopped,
-        failed: loop.failure !== undefined,
+        outcome: verdict.outcome,
       });
-      const terminal = yield* Effect.exit(writeEnd(loop, stopped));
+      const terminal = yield* Effect.exit(writeEnd(loop, verdict));
       // Provider ids stay reserved until the terminal (or pause) row is
       // written, so a call naming one finds this run, not a gap.
       const owned = yield* Effect.exit(

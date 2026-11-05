@@ -16,15 +16,18 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
+import { outcomeFromCause } from '@shared/runs/runStatus';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import {
   type RunOutcome,
+  type RunStopReason,
   emptyRunEndOutput,
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunReport } from './runReport';
 import type { ChildRunTurns } from './childRunLoop';
+import type { StopCause } from './runs';
 import type { SessionServices } from './rootLaunch';
 import type { RunLaunch } from './run/AgentRun';
 
@@ -36,6 +39,47 @@ const logLifecycleWarning = (message: string, data: unknown) =>
     Effect.annotateLogs({ data }),
     withLogChannel(CHANNEL),
   );
+
+/** How an activation ends, as {@link endVerdict} decides it. */
+export interface EndVerdict {
+  readonly outcome: RunOutcome;
+  /** What the run failed with, a stopped run's failure included. */
+  readonly error?: unknown;
+  /** Why it stopped, on a cancelled end: a person's stop or a shutdown. */
+  readonly reason?: RunStopReason;
+}
+
+/**
+ * The one verdict of how a run's activation ends, from its body's exit (the
+ * outcome it returned, or the cause it failed with) and why the registry
+ * marked it stopping. A returned outcome stands, a stop marked after it
+ * included. A failure cause with any interrupt is a stop
+ * (`outcomeFromCause`), which outranks a failure: the failure rides the
+ * cancelled end as its error. A release names no reason.
+ */
+export function endVerdict(
+  exit: Exit.Exit<RunOutcome, unknown>,
+  stopCause: StopCause | undefined,
+): EndVerdict {
+  if (Exit.isSuccess(exit))
+    return exit.value === RUN_OUTCOME.CANCELLED
+      ? stoppedVerdict(stopCause)
+      : { outcome: exit.value };
+  const { cause } = exit;
+  const verdict =
+    outcomeFromCause(cause) === RUN_OUTCOME.CANCELLED
+      ? stoppedVerdict(stopCause)
+      : { outcome: RUN_OUTCOME.FAILED };
+  return Cause.hasInterruptsOnly(cause)
+    ? verdict
+    : { ...verdict, error: Cause.squash(cause) };
+}
+
+/** A cancelled verdict, with the reason a person's stop or a shutdown gave. */
+const stoppedVerdict = (stopCause: StopCause | undefined): EndVerdict =>
+  stopCause === undefined || stopCause === 'released'
+    ? { outcome: RUN_OUTCOME.CANCELLED }
+    : { outcome: RUN_OUTCOME.CANCELLED, reason: stopCause };
 
 /** What ends an activation: the run's end, on the caller's session, whose
  *  publisher every row of the run goes through in order. */
@@ -98,13 +142,10 @@ export const endActivation = Effect.fn('endActivation')(
       ...(error ? { error } : {}),
       output,
     };
-    // Why the run stopped, as the registry marked its activation; a holder's
-    // release names no reason.
-    const cause = (yield* Runs).stopCause(runId);
     const finalization = yield* finalizeRun({
       runId,
       outcome,
-      reason: cause === 'released' ? undefined : cause,
+      reason: params.reason,
       error,
       output,
       lastTurn: params.lastTurn,
@@ -168,7 +209,7 @@ function withResolvedOutcome(
 const endWith = <R>(
   ctx: RunLaunch,
   finish: FinishLastTurn<R> | undefined,
-  end: Pick<FinalizeRunInput, 'outcome' | 'error' | 'output'> & {
+  end: Pick<FinalizeRunInput, 'outcome' | 'reason' | 'error' | 'output'> & {
     readonly lastResult?: RunReport;
   },
 ) => {
@@ -186,15 +227,15 @@ const endWith = <R>(
 /**
  * The single owner of provider/runtime failure exits: a flow's reported
  * failure (an `AgentError` carrying it as recorded) or an exception that
- * escaped the flow. A stop that met the failure (`stopped`) outranks it:
- * the failure rides the cancelled row as its error.
+ * escaped the flow, ending as `verdict` says: a stop that met the failure
+ * outranks it, and the failure rides the cancelled row as its error.
  */
 const failedEnd = Effect.fn('failedEnd')(function* <R>(
   ctx: RunLaunch,
   finish: FinishLastTurn<R> | undefined,
   err: unknown,
   carried: RunReport | undefined,
-  stopped = false,
+  verdict: EndVerdict,
 ) {
   const { runId } = ctx;
   const agentIdentifier = ctx.config.agent;
@@ -239,7 +280,7 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   // The failure a child's report and a root's `AgentError` carry: the error
   // without its kind, a model failure as recorded or the words alone.
   const { kind: _kind, ...failure } = error;
-  const outcome = stopped ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
+  const { outcome, reason } = verdict;
   // A child's failure rides its result, the error its delivery reports.
   const subagentResult: RunReport | undefined =
     parentRunId !== null
@@ -248,6 +289,7 @@ const failedEnd = Effect.fn('failedEnd')(function* <R>(
   // One finalize covers the three exits below.
   const finalized = yield* endWith(ctx, finish, {
     outcome,
+    reason,
     error,
     output: carried?.output,
     lastResult: subagentResult,
@@ -285,6 +327,13 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
   /** A child's last turn result, from the result its run ends with. */
   finish?: FinishLastTurn<R>,
 ): Effect.fn.Return<RunReport, Error, SessionServices | R> {
+  const verdict = endVerdict(
+    Exit.map(exit, (result) =>
+      result.failure ? RUN_OUTCOME.FAILED : result.outcome,
+    ),
+    (yield* Runs).stopCause(ctx.runId),
+  );
+  const { outcome, reason } = verdict;
   if (Exit.isSuccess(exit)) {
     const result = exit.value;
     if (result.failure) {
@@ -294,12 +343,13 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
         message: result.failure.message,
         failure: result.failure,
       });
-      return yield* failedEnd(ctx, finish, failure, result);
+      return yield* failedEnd(ctx, finish, failure, result, verdict);
     }
     // A completed flow supplies its outcome; an interrupted flow arrives
     // as a failed Exit and is classified below.
     const { event, persistFailure: cause } = yield* endWith(ctx, finish, {
-      outcome: result.outcome,
+      outcome,
+      reason,
       output: result.output,
       lastResult: result,
     });
@@ -318,20 +368,17 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
   // prompt closed under it) is a stop too, not a failure: squashed, it
   // would record "All fibers interrupted without error" as FAILED.
   if (Cause.hasInterruptsOnly(cause)) {
-    yield* endWith(ctx, finish, { outcome: RUN_OUTCOME.CANCELLED }).pipe(
-      Effect.orDie,
-    );
+    yield* endWith(ctx, finish, { outcome, reason }).pipe(Effect.orDie);
     return yield* Effect.failCause(cause);
   }
-  const err = ensureError(Cause.squash(cause));
-  if (!Cause.hasInterrupts(cause))
-    return yield* failedEnd(ctx, finish, err, undefined);
+  const err = ensureError(verdict.error);
   // A stop that met a failure (a finalizer that died or failed as the
-  // stop unwound it) is still a stop, as `outcomeFromCause` keys it: the row
-  // says CANCELLED and carries the failure, which is logged, not lost.
-  yield* logLifecycleWarning('A stopped run also failed', {
-    runId: ctx.runId,
-    error: err,
-  });
-  return yield* failedEnd(ctx, finish, err, undefined, true);
+  // stop unwound it) is still a stop: the row says CANCELLED and carries
+  // the failure, which is logged, not lost.
+  if (outcome === RUN_OUTCOME.CANCELLED)
+    yield* logLifecycleWarning('A stopped run also failed', {
+      runId: ctx.runId,
+      error: err,
+    });
+  return yield* failedEnd(ctx, finish, err, undefined, verdict);
 }, Effect.uninterruptible);
