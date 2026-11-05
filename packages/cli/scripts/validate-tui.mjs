@@ -3581,13 +3581,20 @@ async function runScenario(scenario, index) {
   // markers make Ink choose a non-interactive render mode and hide the live
   // input/status surface this script is meant to inspect.
   delete childEnv.CI;
-  const child = ptySpawn(process.execPath, [HARNESS], {
-    name: 'xterm-256color',
-    cols,
-    rows,
-    cwd: CLI_ROOT,
-    env: childEnv,
-  });
+  // The published launcher (dist/texra.js) drops node:sqlite's
+  // ExperimentalWarning before the bundle loads; the harness bundle has no
+  // launcher, so Node drops it here and frames match what a user sees.
+  const child = ptySpawn(
+    process.execPath,
+    ['--disable-warning=ExperimentalWarning', HARNESS],
+    {
+      name: 'xterm-256color',
+      cols,
+      rows,
+      cwd: CLI_ROOT,
+      env: childEnv,
+    },
+  );
   child.onExit((e) => (exited = e));
   child.onData((d) => {
     lastData = Date.now();

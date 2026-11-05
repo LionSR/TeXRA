@@ -106,8 +106,8 @@ try {
 
   await chmod(outfile, 0o755);
   if (outfile === 'dist/bin/texra.js') {
-    // The published command: a few lines that turn on Node's on-disk compile
-    // cache before the bundle loads, so a start after the first skips most of
+    // The published command: a few lines that drop node:sqlite's warning and
+    // turn on Node's on-disk compile cache before the bundle loads, so a start after the first skips most of
     // compiling it (about 230 ms of each start). The cache lives under the
     // user's own ~/.texra, not Node's default shared temp directory, where
     // another user could plant code for this process to load. The bundle
@@ -120,6 +120,16 @@ try {
         "import module from 'node:module';",
         "import { homedir } from 'node:os';",
         "import { join } from 'node:path';",
+        '// node:sqlite, which the session store is built on, prints an',
+        '// ExperimentalWarning on every start in the Node versions TeXRA',
+        '// supports. The bundle imports it statically, so only code here runs',
+        '// early enough to drop that one warning; every other warning prints.',
+        'const emitWarning = process.emitWarning;',
+        'process.emitWarning = (warning, ...rest) => {',
+        "  const type = typeof rest[0] === 'string' ? rest[0] : rest[0]?.type;",
+        "  if (type === 'ExperimentalWarning' && String(warning).startsWith('SQLite')) return;",
+        '  emitWarning.call(process, warning, ...rest);',
+        '};',
         '// The cache is an optimization: no home directory (HOME unset, where',
         '// os.homedir() throws) or a refused cache never stops the CLI starting.',
         'try {',
