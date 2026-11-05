@@ -21,10 +21,8 @@
  * Every other reader holds a `RunRows`, folded from the rows its read
  * selects by `runRowReads.ts`, which applies the shared rows through here.
  */
-import { type RunId, type SessionEvent } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { SessionEvent } from '@shared/schemas';
 import type { RunPosition, RunRowVerdict, RunRows } from './runRowsShape';
-import type { RunView } from './sessionView';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
  *  here and not handled by `applyRunRow` is a compile error there. */
@@ -54,27 +52,10 @@ export type QueuedFollowUp = Pick<
 >;
 
 /** A pending follow-up that is a message, not one of the run's own requests
- *  (`control`: a `/compact`, a model switch). */
+ *  (`control`: a `/compact`, a model switch): what the view lists as queued
+ *  and what keeps a run's input open. */
 export const isMessage = (row: QueuedFollowUp): boolean =>
   row.control === undefined;
-
-/** A run as the session view holds it; undefined for one it does not hold. */
-export type RunLookup = (runId: RunId) => Pick<RunView, 'status'> | undefined;
-
-/** A notice for a running generation whose child run has ended. */
-export const isStaleNotice = (row: QueuedFollowUp, run: RunLookup): boolean =>
-  row.holdUntil === 'generation' &&
-  row.content.from.kind === 'run' &&
-  row.content.from.relation === 'child' &&
-  isTerminalOutcomePhase(run(row.content.from.runId)?.status);
-
-/** The pending messages that are not stale: what the view lists as queued
- *  and what keeps a run's input open. */
-export const pendingMessages = (
-  rows: readonly QueuedFollowUp[],
-  run: RunLookup,
-): QueuedFollowUp[] =>
-  rows.filter((f) => isMessage(f) && !isStaleNotice(f, run));
 
 /**
  * A record keyed by an id the state carries: call and request ids come from

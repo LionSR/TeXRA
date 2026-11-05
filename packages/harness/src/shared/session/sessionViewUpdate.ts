@@ -63,7 +63,7 @@ import {
   applyRunRow,
   freshRunRows,
   isSharedRunRow,
-  pendingMessages,
+  isMessage,
   type SharedRunRow,
 } from './runRows';
 import { phaseMoveOf } from './runRowReads';
@@ -908,7 +908,7 @@ function projectRequests(view: ViewDraft, runId: RunId, rows: RunRows) {
 /** The run's untaken messages (not its own requests), as the view shows them. */
 function projectFollowUps(u: Update, runId: RunId, rows: RunRows) {
   const { view } = u;
-  const messages = pendingMessages(rows.followUps, (id) => view.runs.get(id));
+  const messages = rows.followUps.filter(isMessage);
   if (messages.length === 0) {
     view.queuedFollowUps = without(u, view.queuedFollowUps, runId);
     return;

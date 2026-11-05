@@ -296,15 +296,13 @@ export const turnResultPart = (
 /** A child's attached parent as a job reads it: from the child's rows once
  *  its run exists (minus a committed detach), else its launch's, which only
  *  this process holds for a run not yet created. */
-export const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(
-  function* (
-    child: RunId,
-    launchParent: RunId,
-  ): Effect.fn.Return<RunId | null, Error, SessionLog> {
-    if (!(yield* getRunRecords(child).exists())) return launchParent;
-    return (yield* persistedParentRunId(child)) ?? null;
-  },
-);
+const parentEdgeIn = Effect.fn('childTurnResult.parentEdgeIn')(function* (
+  child: RunId,
+  launchParent: RunId,
+): Effect.fn.Return<RunId | null, Error, SessionLog> {
+  if (!(yield* getRunRecords(child).exists())) return launchParent;
+  return (yield* persistedParentRunId(child)) ?? null;
+});
 
 /**
  * Queue a child's message (`item.from`) for its parent, read in the same

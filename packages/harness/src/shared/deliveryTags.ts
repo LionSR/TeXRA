@@ -17,7 +17,6 @@
 /** The tags the harness's own child runs mint, referenced by its producers
  *  instead of string literals. */
 export const DELIVERY_TAG = {
-  subagentProgress: 'subagent-progress',
   subagentResult: 'subagent-result',
   subagentError: 'subagent-error',
   backgroundResult: 'background-result',

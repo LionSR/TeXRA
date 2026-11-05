@@ -1,13 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import {
-  Cause,
-  Clock,
-  Context,
-  Effect,
-  Exit,
-  type Fiber,
-  type Semaphore,
-} from 'effect';
+import { Cause, Clock, Effect, Exit, type Fiber, type Semaphore } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -27,7 +19,6 @@ import {
   childTurnResult,
   commitPart,
   deliverIn,
-  parentEdgeIn,
   partServices,
   sendToParent,
   traceLog,
@@ -55,7 +46,6 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Alongside } from '@shared/session/sessionEvents';
-import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -139,11 +129,12 @@ export interface NativeChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  /** `notify` is best-effort live progress. A child reports no spend: its
-   *  priced calls are rows on its own run, summed over the run tree. Its
-   *  run calls `turns` within this effect, under the services it runs with. */
+  /** `notify` is an awaiting caller's live progress; a background child
+   *  reports none. A child reports no spend: its priced calls are rows on
+   *  its own run, summed over the run tree. Its run calls `turns` within
+   *  this effect, under the services it runs with. */
   launch(
-    notify: (update: SubagentProgressUpdate) => void,
+    notify: ((update: SubagentProgressUpdate) => void) | undefined,
     turns: ChildRunTurns<TTurn, R | FollowUpServices>,
   ): Effect.Effect<TTurn, Error, R>;
   /** An interrupted turn has no new result to record. */
@@ -200,8 +191,8 @@ interface ChildRunLoopShared {
   /** The child's run: its input and its interrupt target. */
   readonly runId: RunId;
   readonly agentName: string;
-  /** Replaces follow-up delivery of progress, for an awaiting caller whose
-   *  blocked parent cannot read it (e.g. onto the parent's trace). */
+  /** Where an awaiting caller shows the child's progress while it runs (its
+   *  call's card). A background child's parent hears its turn results only. */
   readonly notify?: (update: SubagentProgressUpdate) => void;
 }
 
@@ -386,25 +377,6 @@ const waitingRow = (runId: RunId, phase: 'parked' | 'resumed') =>
     aggregateId: qualifyAggregateId('run', runId),
     phase,
   }) as const;
-
-/** A native child's progress reaches its parent as a held follow-up, enqueued
- *  on the publisher where it is reported, ahead of the turn's result. */
-const progressNotify =
-  <TTurn, R>(
-    loop: ChildLoop<TTurn, R>,
-    strategy: NativeChildStrategy<TTurn, R>,
-    services: Context.Context<Inbox | SessionLog>,
-  ) =>
-  (update: SubagentProgressUpdate): void => {
-    const { notify, runId, agentName, parentRunId } = loop.params;
-    if (notify) return notify(update);
-    if (loop.awaited) return;
-    const to = parentEdgeIn(runId, parentRunId).pipe(Effect.provide(services));
-    Context.get(services, Inbox).sendNotice(to, {
-      text: formatSubagentProgress(runId, agentName, update),
-      from: { kind: 'run', runId },
-    });
-  };
 
 /**
  * Accept the next turn: its `child.turn accepted` row, the fact the
@@ -602,11 +574,12 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   strategy: NativeChildStrategy<TTurn, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R | AgentRunServices> {
   const { runId } = loop.params;
-  const notify = progressNotify(loop, strategy, yield* partServices);
   loop.turnStart = yield* Clock.currentTimeMillis;
   const turned = yield* attemptTurn(
     loop,
-    Effect.suspend(() => strategy.launch(notify, nativeTurns(loop, strategy))),
+    Effect.suspend(() =>
+      strategy.launch(loop.params.notify, nativeTurns(loop, strategy)),
+    ),
   );
   const { turn } = turned;
   // A turn that reports itself stopped stops the child.

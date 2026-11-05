@@ -10,12 +10,7 @@ import { Effect, Latch } from 'effect';
 
 import { COMPACTION_REQUEST } from '@agent/runtime/run/compaction';
 import { isInstruction } from '@shared/session/runFacts';
-import {
-  isMessage,
-  isStaleNotice,
-  type QueuedFollowUp,
-  type RunLookup,
-} from '@shared/session/runRows';
+import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
 
 /** Where in its loop a run reads its input: before a model request inside
@@ -26,14 +21,11 @@ export type InputPoint = 'request' | 'turn' | 'idle';
  * The pending messages a run reads at `at`, in commit order. A row held
  * until an instruction (a child's pause or stop notice) is read only beside
  * one. A row held until the turn ends, or one for a running generation only
- * (a progress notice, a host notification), is not read before a request
- * inside the turn. A notice from a child run that has ended is stale: it is
- * consumed unread (`staleNotices`).
+ * (a host notification), is not read before a request inside the turn.
  */
 function readableMessages(
   rows: readonly QueuedFollowUp[],
   at: InputPoint,
-  run: RunLookup,
 ): QueuedFollowUp[] {
   const messages = rows.filter(isMessage);
   const asked = messages.some(
@@ -44,21 +36,13 @@ function readableMessages(
       case 'instruction':
         return asked;
       case 'turn':
-        return at !== 'request';
       case 'generation':
-        return at !== 'request' && !isStaleNotice(f, run);
+        return at !== 'request';
       case undefined:
         return true;
     }
   });
 }
-
-/** The stale notices among the pending rows: consumed unread by the next
- *  batch the run takes. */
-const staleNotices = (
-  rows: readonly QueuedFollowUp[],
-  run: RunLookup,
-): QueuedFollowUp[] => rows.filter((f) => isStaleNotice(f, run));
 
 /**
  * Whether a run's pending input obliges a resume of it when no generation
@@ -69,15 +53,15 @@ const staleNotices = (
  * user's does. Once it ended, only the user's message or a child's delivery
  * does, and after a user's Stop (that lifecycle's `run.end` says `user`)
  * only the user's message committed after that end: a run's message never
- * revives a run that ended. A row for a running generation only (a progress
- * notice, a host notification) wakes nothing.
+ * revives a run that ended. A row for a running generation only (a host
+ * notification) wakes nothing.
  */
-export function needsWake(input: RunRows, run: RunLookup): boolean {
+export function needsWake(input: RunRows): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
   // holds a message back.
   const end = input.end;
   const stopped = end?.reason === 'user';
-  return readableMessages(input.followUps, 'idle', run).some(
+  return readableMessages(input.followUps, 'idle').some(
     ({ commit, holdUntil, content: { from } }) => {
       if (holdUntil === 'generation') return false;
       if (from.kind === 'user') return !stopped || commit > end.commit;
@@ -88,17 +72,14 @@ export function needsWake(input: RunRows, run: RunLookup): boolean {
 }
 
 /**
- * What a run reads from its input: the messages readable at this point, with
- * the stale notices consumed beside them, or a text the loop itself supplies
- * (a `/compact` with nothing else queued, a Stop hook's block), which never
- * shares a batch with messages.
+ * What a run reads from its input: the messages readable at this point, or
+ * a text the loop itself supplies (a `/compact` with nothing else queued, a
+ * Stop hook's block), which never shares a batch with messages.
  */
 export type FollowUpBatch =
   | {
       readonly kind: 'followUps';
       readonly followUps: readonly QueuedFollowUp[];
-      /** Notices of children that ended: consumed, never delivered. */
-      readonly stale: readonly QueuedFollowUp[];
     }
   | { readonly kind: 'synthetic'; readonly text: string };
 
@@ -118,14 +99,9 @@ export class RunInput {
 
   /** The run's pending follow-ups, read from its committed rows. */
   private readonly queued: Effect.Effect<readonly QueuedFollowUp[]>;
-  private readonly run: RunLookup;
 
-  constructor(
-    queued: Effect.Effect<readonly QueuedFollowUp[]>,
-    run: RunLookup,
-  ) {
+  constructor(queued: Effect.Effect<readonly QueuedFollowUp[]>) {
     this.queued = queued;
-    this.run = run;
   }
 
   /** The run's own pending requests (`/compact`, a model switch). */
@@ -141,16 +117,13 @@ export class RunInput {
     Latch.openUnsafe(this.signal);
   }
 
-  /** The messages in `rows` readable at `at`, with the stale notices. */
+  /** The messages in `rows` readable at `at`, when there are any. */
   private batch(
     rows: readonly QueuedFollowUp[],
     at: InputPoint,
   ): Extract<FollowUpBatch, { kind: 'followUps' }> | null {
-    const followUps = readableMessages(rows, at, this.run);
-    const stale = staleNotices(rows, this.run);
-    return followUps.length > 0 || stale.length > 0
-      ? { kind: 'followUps', followUps, stale }
-      : null;
+    const followUps = readableMessages(rows, at);
+    return followUps.length > 0 ? { kind: 'followUps', followUps } : null;
   }
 
   /** The messages readable at `at`, when there are any; nothing is taken. */
