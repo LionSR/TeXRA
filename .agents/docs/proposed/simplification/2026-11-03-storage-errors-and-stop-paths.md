@@ -293,7 +293,7 @@ values get a reader or go.
   re-proposed.
 - **The vendor phrase and code tables in `verdict.ts`**: per-provider by
   nature (a vendor's wording), and already the single owner; no `if (provider
-=== X)` exists elsewhere in the failure path.
+  === X)` exists elsewhere in the failure path.
 - **The 408/409 split between `isRetryableStatus` and `isTransientHttpStatus`**:
   documented as deliberate (a tool fetch and a model call differ on 409);
   the inline third copy is the find, not the split.

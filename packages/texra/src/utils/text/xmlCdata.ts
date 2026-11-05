@@ -54,7 +54,7 @@ export function addCdataToTagsMultiple(
         ? `(?:</${tag}>|(?=<${tag}[\\s>]|</${unclosed.container}>|$))`
         : `</${tag}>`;
     const pattern = new RegExp(`(<${tag}(?:\\s+[^>]*)?>)(.*?)${end}`, 'gs');
-    return result.replace(pattern, (_, openTag: string, body: string) =>
+    return result.replaceAll(pattern, (_, openTag: string, body: string) =>
       isCdataWrapped(body)
         ? `${openTag}${body}</${tag}>`
         : `${openTag}<![CDATA[${body}]]></${tag}>`,

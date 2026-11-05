@@ -39,7 +39,7 @@ import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
-import { RunBindingSchema } from './runFacts';
+import { RunBindingSchema } from './runInput';
 import {
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,

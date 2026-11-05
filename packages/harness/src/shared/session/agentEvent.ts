@@ -54,4 +54,5 @@ export interface StreamChunkEvent {
 
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =
-  TraceArm<(typeof TRACE_ROW_TYPES)[number]> | StreamChunkEvent;
+  | TraceArm<(typeof TRACE_ROW_TYPES)[number]>
+  | StreamChunkEvent;
