@@ -140,6 +140,10 @@ host edge (`HostCallFailed` with the capability as a field), one
 `ScriptLimitExceeded { limit }`, and the 1:1 re-wraps gone: the dead-code
 ratchet shrinks by the deleted classes.
 
+_Done 2026-11-05: `ScriptLimitExceeded` replaces the three script-limit
+classes, and the Lean read raises `LeanFileUnreadable` itself
+(`LeanFileReadError` is gone)._
+
 **Give up.** Catching a failure by a name nobody catches it by.
 
 ## 4. Errors: one classifier per question

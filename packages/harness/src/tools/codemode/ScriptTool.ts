@@ -302,9 +302,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
           ]),
         ScriptSyntaxError: (error) =>
           failed([`The script does not parse: ${error.message}`]),
-        ScriptCpuExhausted: (error) => failed([error.message]),
-        ScriptMemoryExhausted: (error) => failed([error.message]),
-        ScriptTimedOut: (error) => failed([error.message]),
+        ScriptLimitExceeded: (error) => failed([error.message]),
       }),
     );
   if (outcome._tag === 'EndedTurn') return outcome.result;
