@@ -36,11 +36,7 @@ import {
   JsonStore,
   setLogSink,
 } from '@texra-ai/harness/node';
-import {
-  ensureError,
-  ownerIdentity,
-  type OwnerId,
-} from '@texra-ai/harness/schemas';
+import { ensureError } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
@@ -303,21 +299,32 @@ function withCliService<A>(
 }
 
 /**
- * Whether `owner`, the holder of a run's claim, is the storage root's
- * running service: a chat continues such a run through the service rather
- * than refusing it as held by another process. A service that cannot be
- * asked (wedged, or its record unreadable) fails: the caller says why
- * instead of naming the holder as some other process.
+ * The storage root's running service, linked for the caller's scope, or a
+ * failure naming why none is: `TEXRA_NO_SERVICE`, Windows, or none running.
+ * A command never starts one; the chat and `texra tasks start` do
+ * ({@link startCliService}, {@link connectCliService}).
  */
-export const heldByService = Effect.fn('heldByService')(function* (
-  owner: OwnerId,
-): Effect.fn.Return<boolean, ServiceUnavailable, GlobalValues> {
-  if (yield* envFlag(NO_SERVICE)) return false;
-  const info = yield* probeCliService;
-  if (info === null) return false;
-  // It answered on this machine's socket; a recorded hostname may be stale.
-  return ownerIdentity(owner).pid === info.pid;
-});
+export function linkRunningCliService(
+  storageRoot: string,
+): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
+  return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
+    off
+      ? Effect.fail(new Error(`${NO_SERVICE} is set`))
+      : linkService(
+          storageRoot,
+          Effect.fail(new Error('no TeXRA service is running')),
+        ),
+  );
+}
+
+/** Start the storage root's service when none answers, and leave it
+ *  running: what the chat does before its platform comes up, so the
+ *  platform links to it ({@link linkRunningCliService}). */
+export function startCliService(
+  storageRoot: string,
+): Effect.Effect<void, Error, GlobalValues> {
+  return Effect.asVoid(Effect.scoped(reachCliService(storageRoot)));
+}
 
 /** {@link reachCliService} for a client command, whose process prints only
  *  its own result. */

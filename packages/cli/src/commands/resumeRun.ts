@@ -2,14 +2,12 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
-import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { pathExists } from '@texra-ai/harness/node';
 import {
   ensureError,
   agentKey,
   agentName,
   isTaskConfig,
-  ownerIdentity,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { forkRun } from '@texra/controllers/session/runActionPolicy';
@@ -18,7 +16,7 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import { heldByService } from '../runtime/cliService';
+import { startCliService } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
@@ -91,10 +89,12 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   id: RunId,
   fork = false,
 ) {
+  // A conversation continues in the service, which every chat is a client
+  // of: started here when none runs, before the platform links to it. A
+  // document task resumes headless, in this process.
+  yield* Effect.ignore(startCliService(context.storageRoot));
   const stores = yield* initCliPlatform(context);
-  const session = yield* stores.session;
-  const store = session.records(id);
-  const configResult = yield* Effect.result(store.readConfig());
+  const configResult = yield* Effect.result(stores.reads.config(id));
   if (Result.isFailure(configResult)) {
     writeTextStderr(loadFailureMessage(id, configResult.failure));
     return CliExitCode.AgentError;
@@ -125,51 +125,21 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       );
       return CliExitCode.Usage;
     }
-    const forked = yield* Effect.result(forkRun(session, id, null));
+    const forked = yield* Effect.result(
+      forkRun(yield* stores.runSession, id, null),
+    );
     if (Result.isFailure(forked)) {
       writeTextStderr(requestErrorText(forked.failure));
       return CliExitCode.Usage;
     }
     const forkId = forked.success;
-    const forkConfig = yield* session.records(forkId).readConfig();
+    const forkConfig = yield* stores.reads.config(forkId);
     if (!forkConfig) {
       writeTextStderr(`Task ${forkId} was forked without a configuration.`);
       return CliExitCode.AgentError;
     }
     return { chat: { initialResume: { id: forkId, config: forkConfig } } };
   }
-  // Gate resume on ownership: a run held by any owner that is alive or cannot
-  // be proven dead refuses, naming that owner.
-  const rejection = yield* store.readRejection();
-  if (rejection?.kind === 'finished') {
-    writeTextStderr(describeFollowUpFailure('finished'));
-    return CliExitCode.Usage;
-  }
-  // A conversation the service holds continues there: the chat is its
-  // client, so the service stays the run's one writer.
-  if (rejection?.kind === 'ownedElsewhere') {
-    const inService = documentTask
-      ? Result.succeed(false)
-      : yield* Effect.result(heldByService(rejection.owner));
-    // A service that cannot be asked may be the holder: its own reason
-    // (how to stop a wedged one) is what the user can act on.
-    if (Result.isFailure(inService)) {
-      writeTextStderr(
-        `Task ${id} is held by another process, which may be the TeXRA service, and the service could not be asked: ${inService.failure.reason}`,
-      );
-      return CliExitCode.Usage;
-    }
-    if (!inService.success) {
-      // The owner named by the pid and machine its claim recorded: the
-      // two parts of an identity a user can act on.
-      const { pid, hostname } = ownerIdentity(rejection.owner);
-      writeTextStderr(
-        `Task ${id} is held by another TeXRA process (pid ${pid} on ${hostname}).`,
-      );
-      return CliExitCode.Usage;
-    }
-  }
-
   // A resumed task continues under the approval it was launched with: a
   // requested policy is said not to apply, never dropped silently. A
   // chat's new rounds take it.

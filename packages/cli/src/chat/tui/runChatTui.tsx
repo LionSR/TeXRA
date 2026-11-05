@@ -42,9 +42,9 @@ import {
   type CliContext,
 } from '@cli/runtime/cliContext';
 import {
-  linkCliService,
   reachCliService,
   serviceKeysNotice,
+  startCliService,
 } from '@cli/runtime/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
@@ -66,7 +66,6 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import { serviceSession } from '@texra/controllers/server/serviceSession';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -173,25 +172,19 @@ export async function runChat(
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
       // Every chat is a client of the one service, so other terminals and
-      // windows see its task; one that cannot reach it runs here, and says
-      // so once.
-      const service = yield* linkCliService(context.storageRoot).pipe(
-        Scope.provide(chatScope),
-        Effect.result,
+      // windows see its task: started here when none runs, before the
+      // platform links to it. One the platform could not link runs here,
+      // and says so once.
+      const started = yield* Effect.result(
+        startCliService(context.storageRoot),
       );
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
       });
-      const runtimeSession = yield* services.session;
+      const served = services.service !== undefined;
       // Where this chat's runs run: the service's session, or this one.
-      const runSession = Result.isSuccess(service)
-        ? yield* serviceSession(
-            service.success,
-            context.cwd,
-            runtimeSession.roots,
-          ).pipe(Scope.provide(chatScope))
-        : runtimeSession;
+      const runSession = yield* services.runSession;
       // Said once the view is bound, which the transcript rows need.
       const startupNotices: string[] = [];
       // This chat's requests are decided under the project's persisted
@@ -199,18 +192,20 @@ export async function runChat(
       // each launch (`launchApproval`).
       const refused = launchApprovalNotice(
         context.requestedApprovalPolicy,
-        projectApprovalPolicy(runtimeSession.roots.config),
+        projectApprovalPolicy(services.roots.config),
       );
       if (refused !== undefined) startupNotices.push(refused);
-      // A store this process moved aside at open is said in the transcript,
-      // not on stderr before Ink mounts, where it would sit above the header.
-      if (runtimeSession.storeMovedAside)
+      if (!served) {
+        // A store this process moved aside at open is said in the
+        // transcript, not on stderr before Ink mounts, where it would sit
+        // above the header.
+        const local = yield* services.session;
+        if (local.storeMovedAside)
+          startupNotices.push(
+            sessionStoreMovedAsideMessage(local.storeMovedAside),
+          );
         startupNotices.push(
-          sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
-        );
-      if (Result.isFailure(service)) {
-        startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${service.failure.message}`,
+          `This chat runs here only, so other terminals and windows will not see it: ${Result.isFailure(started) ? started.failure.message : 'the TeXRA service did not answer'}`,
         );
       }
       // Without a usable credential the chat still opens: the "Connect a
@@ -279,10 +274,10 @@ export async function runChat(
         cwd: context.cwd,
         approvalPolicy: effectiveApprovalPolicy(
           context.requestedApprovalPolicy,
-          projectApprovalPolicy(runtimeSession.roots.config),
+          projectApprovalPolicy(services.roots.config),
         ),
         teamName: yield* readCliTeamName(
-          runtimeSession.roots.repoState,
+          services.roots.repoState,
           initialPresetId,
         ),
         cliTeamId: initialPresetId,
@@ -309,10 +304,9 @@ export async function runChat(
       return {
         startupNotices,
         services,
-        runtimeSession,
         runSession,
-        link: Result.isSuccess(service) ? service.success : undefined,
-        runsElsewhere: Result.isSuccess(service),
+        link: services.service,
+        runsElsewhere: served,
         defaults,
         firstRunSetupAgent,
         inputHistory,
@@ -330,7 +324,6 @@ export async function runChat(
   if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
   const {
     services,
-    runtimeSession,
     runSession,
     runsElsewhere,
     link,
@@ -346,7 +339,7 @@ export async function runChat(
   const getApprovalPolicy = (): ApprovalPolicy =>
     effectiveApprovalPolicy(
       chatPolicy,
-      projectApprovalPolicy(runtimeSession.roots.config),
+      projectApprovalPolicy(services.roots.config),
     );
   // `/approval` sets this chat's launch policy only, here or in the
   // service; the project's policy changes through `/config` or the settings
@@ -400,7 +393,7 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
-    runtimeSession,
+    reads: services.reads,
     runSession,
     stores: services,
     runtime: services.runtime,
@@ -522,13 +515,12 @@ export async function runChat(
     // The run's loop answers in this process; the service checks the
     // switch against the run when it is asked.
     const { runId } = session;
-    const held =
-      runId === undefined || runsElsewhere
-        ? undefined
-        : runtimeSession.held(runId);
-    return (
-      held?.modelSwitchDisabledReason(candidateModel) ??
-      Effect.succeed(undefined)
+    if (runId === undefined || runsElsewhere) return Effect.succeed(undefined);
+    return Effect.flatMap(
+      services.session,
+      (local) =>
+        local.held(runId)?.modelSwitchDisabledReason(candidateModel) ??
+        Effect.succeed(undefined),
     );
   };
   // Chat-session controller: owns run start/resume/stop orchestration.
@@ -538,7 +530,10 @@ export async function runChat(
     session,
     runSession,
     served: runsElsewhere,
-    records: runtimeSession.records,
+    records: (runId) => ({
+      readConfig: () => services.reads.config(runId),
+      exists: () => services.reads.exists(runId),
+    }),
     sessionContext: { ...context, quietLogs: true },
     chatScope,
     shutdownScope: services.shutdownScope,
@@ -596,7 +591,7 @@ export async function runChat(
       ),
     stores: services,
     runtime,
-    runtimeSession,
+    reads: services.reads,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
@@ -635,11 +630,11 @@ export async function runChat(
     onLoginSelect: (value, output) =>
       loginFromChat(value, services, context, output),
     onMemorySelect: (storagePath) =>
-      showCliMemoryPreview(runtimeSession.roots, storagePath),
+      showCliMemoryPreview(services.roots, storagePath),
     onSkillSelect: (selection) =>
       Effect.sync(() => chatController.activateSkill(selection)),
     onResumeSelect: chatController.resume,
-    configRoots: runtimeSession.roots,
+    configRoots: services.roots,
     onError: (error) => {
       appendLocalErrorTranscript(toErrorMessage(error));
     },
@@ -708,7 +703,12 @@ export async function runChat(
     getApprovalPolicy,
     // What the session's publisher still holds, drained before shutdown
     // within the close budget; one that does not drain is said on stderr.
-    flushArtifacts: runtimeSession.settled.pipe(
+    // What the session's publisher still holds, when the session is this
+    // process's; the service's publisher is its own.
+    flushArtifacts: (runsElsewhere
+      ? Effect.void
+      : Effect.flatMap(services.session, (local) => local.settled)
+    ).pipe(
       Effect.timeout(SESSION_CLOSE_DEADLINE_MS),
       Effect.mapError(
         () =>

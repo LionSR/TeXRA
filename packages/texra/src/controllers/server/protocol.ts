@@ -23,7 +23,8 @@
  *   `task.ended`: the outcome it ends with.
  * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
  *   setup, and what its transcript exports read, from the service's own
- *   records.
+ *   records; `tasks.history`, `task.detail` and `task.skills`: what the
+ *   CLI's history and status read of them beyond that.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
@@ -34,11 +35,15 @@ import { Rpc, RpcGroup } from 'effect/rpc';
 
 import {
   AgentConfigSchema,
+  AgentRunListingEntrySchema,
   JsonValueSchema,
   LaunchNoticeSchema,
   RunEndSchema,
   RunIdSchema,
+  RunOutcomeSchema,
   RunRecordFieldsSchema,
+  RunResultSchema,
+  RunWorkspaceFileSchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
@@ -86,7 +91,7 @@ export const PROTOCOL: {
   readonly version: number;
   readonly shapes: Readonly<Record<string, string>>;
 } = Object.freeze({
-  version: 56,
+  version: 58,
   shapes: Object.freeze({
     'service.hello': 'b883cf64d52c',
     'service.stop': '8d19317aa364',
@@ -99,6 +104,9 @@ export const PROTOCOL: {
     'task.config': 'ee42ee67ab23',
     'task.exportTrace': 'e14a1baf0863',
     'task.exportInput': 'fefc9f82f1e2',
+    'tasks.history': '9de0043e6a9e',
+    'task.detail': 'efd931cc1f33',
+    'task.skills': 'b842fcc8e960',
     'host.attach': '153808303ff7',
     'state.get': '221cc7263384',
     'state.set': 'e377b902a4e3',
@@ -280,6 +288,47 @@ export const TexraRpcs = RpcGroup.make(
       config: Schema.NullOr(AgentConfigSchema),
       exportInput: Schema.NullOr(ChatExportInputSchema),
     }),
+    error: TaskRecordsFailed,
+  }),
+  /** The runs a person started in the project, newest first, as a history
+   *  list shows them (`LocalSession.listRuns`). */
+  Rpc.make('tasks.history', {
+    payload: { workspace },
+    success: Schema.Array(AgentRunListingEntrySchema),
+    error: TaskFailed,
+  }),
+  /** What a history detail reads of a run beyond its setup and its
+   *  conversation: the launch facts its view holds (null for a run the
+   *  view no longer lists), its result, its report, the workspace files it
+   *  edited that are still there, and whether its rows hold a point to
+   *  continue from. */
+  Rpc.make('task.detail', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Struct({
+      run: Schema.NullOr(
+        Schema.Struct({
+          launchedAt: Schema.Int.check(Schema.isGreaterThan(0)),
+          parentId: Schema.NullOr(RunIdSchema),
+          description: Schema.NullOr(Schema.String),
+          statusKey: Schema.Literals(RUN_STATUS_KEYS),
+          durableOutcome: Schema.NullOr(RunOutcomeSchema),
+          /** A stop rested the run (the fold's paused substate). */
+          paused: Schema.Boolean,
+          /** The model the run is on, as the view folds it. */
+          model: Schema.NullOr(Schema.String),
+        }),
+      ),
+      result: Schema.NullOr(RunResultSchema),
+      report: Schema.NullOr(Schema.String),
+      workspaceFiles: Schema.Array(RunWorkspaceFileSchema),
+      resumable: Schema.Boolean,
+    }),
+    error: TaskRecordsFailed,
+  }),
+  /** The skills the run's latest step listed. */
+  Rpc.make('task.skills', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(Schema.String),
     error: TaskRecordsFailed,
   }),
   Rpc.make('host.attach', {

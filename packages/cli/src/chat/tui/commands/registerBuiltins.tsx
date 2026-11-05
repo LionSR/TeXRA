@@ -71,7 +71,8 @@ import {
   type FormActionHandler,
   modelAccessContribution,
 } from './modelAccessContribution';
-import type { LocalSession, Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { CliRunReads } from '@cli/runtime/runReads';
 import type {
   GlobalValues,
   ProcessRuntime,
@@ -96,9 +97,8 @@ export function registerBuiltinSlashCommands(options: {
   /** The process runtime the account commands and the `/resume` listing run
    *  their programs on, from the same surface. */
   runtime: ProcessRuntime;
-  /** The process session `/resume` lists history from: its records, which
-   *  stay read here. */
-  runtimeSession: LocalSession;
+  /** The project's stored runs `/resume` lists, where they are held. */
+  reads: CliRunReads;
   /** Where the commands' run requests and resumes land: the chat's session,
    *  here or in the service. */
   runSession: Session;
@@ -298,15 +298,11 @@ export function registerBuiltinSlashCommands(options: {
     ),
     (value: string) => options.onMemorySelect?.(value) ?? Effect.void,
   );
-  // `/resume` reads history from the process session; bind it here so the
+  // `/resume` lists the project's stored runs; bind the reads here so the
   // command still uses the one plain-picker adapter.
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
     (formProps) => (
-      <ResumeListForm
-        runtime={runtime}
-        session={options.runtimeSession}
-        {...formProps}
-      />
+      <ResumeListForm runtime={runtime} reads={options.reads} {...formProps} />
     ),
     (id: RunId) => options.onResumeSelect?.(id) ?? Effect.void,
   );

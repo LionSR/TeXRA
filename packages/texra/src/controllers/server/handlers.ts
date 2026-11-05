@@ -40,6 +40,7 @@ import {
   emptyRunEndOutput,
   RUN_OUTCOME,
   RUN_PHASE,
+  RUN_SUBSTATE,
   type RunId,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -406,6 +407,49 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'task.exportTrace': ({ workspace, runId }) =>
         records(workspace, runId, (session) =>
           session.records(runId).readTrace(),
+        ),
+      'tasks.history': ({ workspace }) =>
+        Effect.scoped(
+          Effect.flatMap(open(workspace), ({ session }) =>
+            session
+              .listRuns()
+              .pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              ),
+          ),
+        ),
+      'task.detail': ({ workspace, runId }) =>
+        records(workspace, runId, (session) => {
+          const stored = session.records(runId);
+          return Effect.all(
+            {
+              run: Effect.map(session.view.read([runId]), (view) => {
+                const run = view.runs.get(runId);
+                return run === undefined
+                  ? null
+                  : {
+                      launchedAt: run.launchedAt,
+                      parentId: run.parentId,
+                      description: run.description,
+                      statusKey: run.statusKey,
+                      durableOutcome: run.durableOutcome,
+                      paused: run.substate === RUN_SUBSTATE.PAUSED,
+                      model: run.model,
+                    };
+              }),
+              result: stored.readResult(),
+              report: stored.readReport(),
+              workspaceFiles: stored.readWorkspaceFiles(),
+              resumable: stored.readResumable(),
+            },
+            { concurrency: 4 },
+          );
+        }),
+      'task.skills': ({ workspace, runId }) =>
+        records(workspace, runId, (session) =>
+          session.records(runId).readSkills(),
         ),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(

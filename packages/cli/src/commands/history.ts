@@ -46,7 +46,7 @@ const runHistoryList = Effect.fn('runHistoryList')(function* (
   options: { limit?: number },
 ) {
   const stores = yield* initCliPlatform(context);
-  const entries = yield* listCliHistoryEntries(stores.session);
+  const entries = yield* listCliHistoryEntries(stores.reads);
   const visibleEntries =
     options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
@@ -66,9 +66,12 @@ const runHistoryShow = Effect.fn('runHistoryShow')(function* (
   options: { full?: boolean },
 ) {
   const stores = yield* initCliPlatform(context);
-  const details = yield* readCliHistoryDetails(stores.session, id, {
-    includeFullConversation: options.full === true,
-  });
+  const details = yield* readCliHistoryDetails(
+    stores.reads,
+    stores.roots.storage,
+    id,
+    { includeFullConversation: options.full === true },
+  );
   if (!details) {
     writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
     return CliExitCode.Usage;
@@ -102,7 +105,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
 ) {
   const stores = yield* initCliPlatform(context);
   if (format === 'md') {
-    const exportResult = yield* readCliHistoryExportInput(stores.session, id);
+    const exportResult = yield* readCliHistoryExportInput(stores.reads, id);
     if (exportResult.status === 'not_found') {
       writeTextStderr(formatCliHistoryNotFoundText(id, context.cwd));
       return CliExitCode.Usage;
@@ -118,8 +121,7 @@ const runHistoryExport = Effect.fn('runHistoryExport')(function* (
     return CliExitCode.Success;
   }
 
-  const session = yield* stores.session;
-  const traceResult = yield* session.records(id).readTrace();
+  const traceResult = yield* stores.reads.trace(id);
   if (traceResult.status !== 'ok') {
     switch (traceResult.status) {
       case 'config_missing':
@@ -156,16 +158,13 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   options: { target: RunId | 'all'; yes: boolean },
 ) {
   const stores = yield* initCliPlatform(context);
-  // Both deletion paths read the same session: opened once here, in the
-  // one program the run case runs.
-  const session = yield* stores.session;
 
   // `--all` is destructive and unrecoverable. Refuse it unless the caller
   // also passes `--yes`, and quote the count so the stakes are explicit.
   if (options.target === 'all' && !options.yes) {
-    // Unlike list, a full wipe counts (and later clears) every stored
-    // run, process entries and agent-spawned children included.
-    const count = (yield* session.view.read([])).runs.size;
+    // A full wipe clears every listed task, each with the children it
+    // spawned.
+    const count = (yield* stores.reads.listRuns()).length;
     writeTextStderr(
       `Refusing to delete ${formatResultCount(count, 'stored task')}. Re-run with --yes to confirm.`,
     );
@@ -176,7 +175,7 @@ const runHistoryDelete = Effect.fn('runHistoryDelete')(function* (
   // every other refusal on this command does; a defect reaches the crash
   // handler.
   const result: CliHistoryDeleteResult | null = yield* deleteCliHistory(
-    session,
+    stores.reads,
     options.target,
   ).pipe(
     Effect.catch((error) =>

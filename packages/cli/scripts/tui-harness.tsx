@@ -1720,7 +1720,7 @@ const harnessSession = new TuiSession();
 registerBuiltinSlashCommands({
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
-  runtimeSession: harnessRunSession,
+  reads: HARNESS_PLATFORM_SERVICES.reads,
   runSession: harnessRunSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.

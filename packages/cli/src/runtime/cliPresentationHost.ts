@@ -12,7 +12,7 @@ import { modelFailureText } from '@ui/copy/modelAccess';
 import { writeNdjsonStdout, writeTextStderr } from './logSinks';
 import { createRunProgressRenderer } from './runProgressRenderer';
 import { missingAgentMessage } from './agents';
-import type { LocalSession } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 import type {
   PresentationEventHandlers,
   RuntimePresentationEvent,
@@ -27,7 +27,7 @@ export interface CliRuntimeHost {
     payload: RuntimePresentationEventPayloads[K],
   ): boolean;
   attachRunProgressRenderer(
-    session: LocalSession,
+    session: Session,
     runId: RunId,
   ): Effect.Effect<void, never, Scope.Scope>;
   prepareInteractivePrompt?: () => void;

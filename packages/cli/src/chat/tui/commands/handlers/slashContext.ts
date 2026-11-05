@@ -5,7 +5,8 @@ import { setTransientNotice } from '@cli/chat/tui/state/cliState';
 import { type TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalNotice } from '@cli/chat/tui/state/transcript';
 import type { RunId, ApprovalPolicy } from '@texra-ai/harness/schemas';
-import type { LocalSession, Session } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
+import type { CliRunReads } from '@cli/runtime/runReads';
 import type {
   ProcessRuntime,
   ProcessServices,
@@ -25,9 +26,9 @@ export type SlashCommandEffect = Effect.Effect<void, Error, ProcessServices>;
 export interface SlashCommandContext {
   readonly cliContext: CliContext;
   readonly session: TuiSession;
-  /** The process session whose records `/status` reads (a run's offered
-   *  skills); records stay read here. */
-  readonly runtimeSession: LocalSession;
+  /** The project's stored runs, which `/status` reads (a run's offered
+   *  skills) and `/resume` lists, where they are held. */
+  readonly reads: CliRunReads;
   /** Where run requests and resumes land: the chat's session, here or in
    *  the background service. */
   readonly runSession: Session;
