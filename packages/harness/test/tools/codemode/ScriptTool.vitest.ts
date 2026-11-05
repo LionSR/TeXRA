@@ -20,15 +20,18 @@ describe('ScriptTool.describe', () => {
         }),
         [Schema.Record(Schema.String, Schema.Unknown)],
       );
-    const text = ScriptTool.describe?.([
-      {
-        definition: {
-          name: 'diag',
-          description: 'Diagnostics.',
-          schema: Schema.Union([branch('list'), branch('count')]),
+    const text = ScriptTool.describe?.(
+      [
+        {
+          definition: {
+            name: 'diag',
+            description: 'Diagnostics.',
+            schema: Schema.Union([branch('list'), branch('count')]),
+          },
         },
-      },
-    ]);
+      ],
+      [],
+    );
     expect(text).toContain('command: "list"; path: string');
     expect(text).toContain('command: "count"; path: string');
   });

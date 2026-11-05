@@ -19,13 +19,14 @@ import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
-  advertisesInterruptedRun,
-  type CheckpointRefinement,
   formatInterruptedResumeHint,
   tryReadCliCwd,
-  writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeTextStderr,
+  writeTextStderrAndWait,
+} from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -337,53 +338,26 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;
     let workflowOutputError: unknown;
-    let resumeHintWritten = false;
     // The persisted `cli` block is the single representation of where this run
     // writes; never take the destinations a second time as call options.
     const output = resumeWorkflowOutputFile(config);
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
-    const { recoveryInputIsDurable } = options;
-    // Not a run a model failure stopped (its `lastError` in the view): read from
-    // the rows, so no verdict held in memory can be missed by an interrupt.
-    const canAdvertiseInterruptedRun: CheckpointRefinement = (runId) =>
-      Effect.map(session.records(runId).readModelFailed(), (failed) => !failed);
-    const writeResumeHint = (
-      runId: RunId,
-      waitForWrite = false,
-    ): Effect.Effect<void> => {
-      if (!recoveryInputIsDurable || resumeHintWritten) return Effect.void;
-      resumeHintWritten = true;
-      const hint = formatInterruptedResumeHint(
-        runContext,
-        runId,
-        'workflow',
-        config.workingDirectory || runContext.cwd,
-        recoveryProcessCwd,
-      );
-      return writeInterruptedResumeHint(hint, waitForWrite);
-    };
-    const maybeAdvertiseRecovery = Effect.fn('maybeAdvertiseRecovery')(
-      function* (runId: RunId) {
-        if (!run.ok) return;
-        const resumable = yield* session.records(runId).readResumable();
-        if (
-          yield* advertisesInterruptedRun(
-            runId,
-            resumable,
-            canAdvertiseInterruptedRun,
-          )
-        )
-          yield* writeResumeHint(runId);
-      },
-    );
     const run = yield* executeCliConfig(config, runContext, {
       services: options.services,
       runId: options.runId,
-      onInterruptedRunFinalized: recoveryInputIsDurable
-        ? (runId) => writeResumeHint(runId, true)
+      onInterruptedRunFinalized: options.recoveryInputIsDurable
+        ? (runId) =>
+            writeTextStderrAndWait(
+              formatInterruptedResumeHint(
+                runContext,
+                runId,
+                'workflow',
+                config.workingDirectory || runContext.cwd,
+                recoveryProcessCwd,
+              ),
+            )
         : undefined,
-      canAdvertiseInterruptedRun,
       // The run's output is published after its end commits, gated on that
       // committed outcome (`resolveWorkflowOutput` copies only a completed
       // run's): output that cannot be written fails this command, never the
@@ -435,11 +409,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const { result } = run;
     if (workflowOutputError !== undefined) {
       writeErrorStderr(workflowOutputError);
-      if (result.outcome === RUN_OUTCOME.CANCELLED) {
-        yield* maybeAdvertiseRecovery(result.runId);
-        return CliExitCode.Interrupted;
-      }
-      return CliExitCode.AgentError;
+      return result.outcome === RUN_OUTCOME.CANCELLED
+        ? CliExitCode.Interrupted
+        : CliExitCode.AgentError;
     }
     if (!workflowResult) {
       return yield* Effect.die(
@@ -458,10 +430,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       ndjson: { kind: 'result', result: workflowResult },
       text: formatWorkflowTextResult(workflowResult),
     });
-
-    if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      yield* maybeAdvertiseRecovery(result.runId);
-    }
 
     return runOutcomeExitCode(result.outcome);
   },

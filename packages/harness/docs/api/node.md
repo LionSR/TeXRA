@@ -14,7 +14,7 @@ Node.js platform implementation and host building blocks for
   [`NodePlatformOptions`](#nodeplatformoptions) build an `AgentPlatform` from
   `agentsDir`, `storageDir`, `workspaceDir`, and `settings`.
 - **Workspace roots & paths**:
-  [`createNodeWorkspaceRoots`](#createnodeworkspaceroots),
+  [`openNodeWorkspaceRoots`](#opennodeworkspaceroots),
   [`canonicalizeWorkspacePath`](#canonicalizeworkspacepath),
   [`workspaceRelativePath`](#workspacerelativepath),
   [`resolveGlobalStoragePath`](#resolveglobalstoragepath), and
@@ -82,19 +82,6 @@ interface ConfigStore {
   get(key: string): unknown;
   set(key: string, value: unknown): Effect.Effect<void, Error>;
 }
-```
-
-## createNodeWorkspaceRoots
-
-Build the `WorkspaceRoots` for one workspace folder: the canonical physical
-root, the pinned storage path, and the config/state stores opened for it.
-Every host (and the desktop, once per open project) builds its roots here so
-the config-provider choice cannot drift.
-
-```ts
-function createNodeWorkspaceRoots(
-  init: NodeWorkspaceRootsInit,
-): WorkspaceRoots
 ```
 
 ## effectDiagnosticsLayer
@@ -512,29 +499,43 @@ const nodePlatformServices: Layer.Layer<
 
 ## NodeWorkspaceRootsInit
 
-The per-workspace services a Node host opens for one workspace folder.
+What a Node host names to open one workspace folder's roots.
 
 ```ts
 interface NodeWorkspaceRootsInit {
-  /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by the host where it reads it. */
+  /** The canonical workspace root (`canonicalizeWorkspacePath`), decided by
+   *  the host where it reads it; undefined when no folder is open. */
   readonly workspacePath: string | undefined;
   /** The storage root this process opened (`WorkspaceRoots.storageRoot`). */
   readonly storageRoot: string;
-  /** The storage root opened for this workspace (`resolveWorkspaceStoragePath`). */
-  readonly storage: string;
-  /**
-   * Config source: the workspace + global stores to build the file-backed
-   * provider from, or an already-constructed provider for hosts that resolve
-   * configuration some other way (the SDK's process-local
-   * `MemoryConfigProvider`).
-   */
+  /** The workspace, local and global config stores to build the file-backed
+   *  provider from, or the provider a host already built from them (the
+   *  CLI's, opened by its startup read). */
   readonly config: JsonConfigProviderOptions | ConfigProvider;
-  readonly workspaceState: StateStore;
-  /** The repository settings (`WorkspaceRoots.repoState`). */
-  readonly repoState: StateStore;
-  /** The process's application state store (`WorkspaceRoots.globalState`). */
+  /** The process's `StateStores`, which open the project's and the
+   *  repository's stores under the workspace's storage path. */
+  readonly stateStores: Context.Service.Shape<typeof StateStores>;
+  /** The process's application state (`AppState`), shared by every root. */
   readonly globalState: StateStore;
+  /** The project's state store when another process holds it (a background
+   *  service the host is a client of); absent, the project's own store opens
+   *  in the caller's scope. */
+  readonly workspaceState?: StateStore;
 }
+```
+
+## openNodeWorkspaceRoots
+
+Open the `WorkspaceRoots` for one workspace folder: its pinned storage
+path under the storage root, the file-backed config provider, the
+project's state store (held for the caller's scope), the repository's
+settings and the process's application state. Every host (and the
+desktop, once per open project) opens its roots here.
+
+```ts
+const openNodeWorkspaceRoots: (
+  init: NodeWorkspaceRootsInit,
+) => Effect.Effect<WorkspaceRoots, DatabaseOpenFailed, Scope.Scope>
 ```
 
 ## pathExists
