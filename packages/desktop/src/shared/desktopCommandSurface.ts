@@ -20,6 +20,7 @@ import {
 
 export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
+  SHOW_BROWSER: 'texra.desktop.showBrowser',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
   TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
@@ -41,6 +42,7 @@ const DESKTOP_MENU_GROUPS = [
     'texra.showDashboard',
     DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
+    DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER,
   ],
   // One row per settings page that has a command, in nav order. Teams are a
   // section of Agents, so texra.showTeamSettings gets no row of its own.
@@ -97,6 +99,7 @@ const DESKTOP_COMMAND_ICONS = {
   'texra.showDashboard': 'gear',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'terminal',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'folder-tree',
+  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: 'globe',
   'texra.showMemory': 'database',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
@@ -169,6 +172,9 @@ function action(
 const DESKTOP_COMMAND_HANDLERS = {
   'texra.showMainView': action((a) => a.showLauncher()),
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: action((a) => a.openWorkbench('logs')),
+  [DESKTOP_LOCAL_COMMANDS.SHOW_BROWSER]: action((a) =>
+    a.openWorkbench('browser'),
+  ),
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: action((a) =>
     a.toggleBottomBar(),
   ),
