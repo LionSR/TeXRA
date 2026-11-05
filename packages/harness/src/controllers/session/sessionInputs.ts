@@ -251,8 +251,8 @@ const markDamaged = (
   ref: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   damaged: LocalRuntimeState['unreadable'],
 ) =>
-  // One atomic update against the other writers of this ref (the liveness
-  // prober's `dead`, `updateLocal`'s `resumeBlocked`).
+  // One atomic update against the other writer of this ref (the liveness
+  // prober's `dead`).
   SubscriptionRef.update(ref, (local) => {
     const known = new Set(local.unreadable.map(({ runId }) => runId));
     const fresh = damaged.filter(({ runId }) => !known.has(runId));

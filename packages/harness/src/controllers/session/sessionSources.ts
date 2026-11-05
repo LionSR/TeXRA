@@ -41,7 +41,6 @@ export class LocalRuntimeSource extends Context.Service<
         self: [identity.ownerId],
         dead: [],
         unreadable: [],
-        resumeBlocked: [],
       });
       return { ref };
     }),

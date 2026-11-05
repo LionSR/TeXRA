@@ -3,7 +3,6 @@ import { Effect, Result, Stream } from 'effect';
 
 import { isLiveRun, planOf, runBypasses } from '@texra-ai/harness/schemas';
 import { isRequestRefusal, type Session } from '@texra-ai/harness';
-import { describeFollowUpFailure } from '@texra-ai/harness/host';
 import { readModelOptions } from '@texra-ai/harness/host';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
@@ -149,7 +148,7 @@ function requestCliSessionCompaction(runSession: Session): Effect.Effect<void> {
 /**
  * `/resume all`: the open-time notice's bulk answer. Each interrupted task
  * resumes on the session beside this chat and joins the agent list (Tab);
- * one a resume finds blocked stays listed with what it needs.
+ * one a resume refuses says why on its own line.
  */
 export function resumeInterruptedTasks(
   runSession: Session,
@@ -178,11 +177,6 @@ export function resumeInterruptedTasks(
             ),
           );
         return resumeRun(runSession, task.runId).pipe(
-          Effect.flatMap((resumed) =>
-            resumed === 'waiting'
-              ? notResumed(describeFollowUpFailure('blocked'))
-              : Effect.void,
-          ),
           Effect.catch((refused) =>
             notResumed(
               isRequestRefusal(refused)

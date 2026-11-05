@@ -169,7 +169,7 @@ export const subscribe = (...ids: RunId[]): SessionViewInput => ({
 export function local(state: Partial<LocalRuntimeState>): SessionViewInput {
   return {
     _tag: 'local',
-    local: { self: [], dead: [], unreadable: [], resumeBlocked: [], ...state },
+    local: { self: [], dead: [], unreadable: [], ...state },
   };
 }
 

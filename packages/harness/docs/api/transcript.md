@@ -377,13 +377,10 @@ interface LoadedMediaRef {
 
 Process-local liveness evidence: self, explicitly proved-dead owners, and
 unreadable runs. A current claimant absent from these verdicts is
-unprovable and remains held until a probe establishes otherwise. Beside
-it, the runs a resume found blocked here, each with what it waits for;
-whether the run then continues by itself is what the session was opened
-to do with interrupted tasks, not a fact of the run.
+unprovable and remains held until a probe establishes otherwise.
 
 ```ts
-const LocalRuntimeStateSchema: Struct<{ readonly self: $Array<String>; readonly dead: $Array<String>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; readonly resumeBlocked: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>; }>>; }>
+const LocalRuntimeStateSchema: Struct<{ readonly self: $Array<String>; readonly dead: $Array<String>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; }>
 ```
 
 ## LogRow
