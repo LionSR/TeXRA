@@ -1,6 +1,6 @@
 // The child-run delivery-envelope XML root tags (`<subagent-result>`,
 // `<background-error>`, a plugin's `<…-result>`, …) that producers mint and
-// render surfaces (progressView UserMessage, the CLI transcript) recognize.
+// a parent's queue summarizes (subagentFollowup.ts).
 //
 // The harness names only the tags its own child runs mint. A plugin's tag is
 // recognized by its shape, so a plugin declares nothing here and the harness
@@ -36,14 +36,3 @@ export const DELIVERY_TAG_PATTERN = [
   `${FAMILY}-(?:result|error)(?= id=")`,
   `${FAMILY}-activity(?=>\r?\n)`,
 ].join('|');
-
-/**
- * Whether the envelope body is XML-entity-escaped (via `escapeText()` in
- * the producer) and needs `decodeXmlEntities()` before display. An activity
- * report (a plugin's bare `<family>-activity>` open on its own line)
- * neutralizes embedded tag names rather than escaping, so it is the one
- * kind that is not.
- */
-export function deliveryBodyEscaped(tag: string): boolean {
-  return !tag.endsWith('-activity');
-}
