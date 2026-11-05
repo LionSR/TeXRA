@@ -73,21 +73,20 @@ base is no longer the latest.
   latest fact at the cut; `drop` starts without it. The goal plugin's approved
   plan is copied. Facts of a plugin's own aggregate stay with that aggregate.
 
-## Auto-continue on open, blocked until installed
+## Interrupted runs are listed, never resumed at open
 
 A run whose process died is not written to; it reads as interrupted because its
 owner claim is dead. A graceful close settles open runs as `CANCELLED`.
 
-An interactive host window opens its session with `host.interruptedTasks`
-(`effect/sessions.ts`) and then applies `texra.resumeOnOpen`: `ask` (the
-default) lists the interrupted tasks, `auto` continues them. Headless runs and
-the SDK do neither.
-
-A resume whose agent is missing from the catalog, or comes from an installed
-plugin that is off or not trusted, does not fail: the run stays interrupted with
-a reason in the projection, and the session resumes it once the catalog has it
-again (`agent/runtime/resumeBlocker.ts`). A tool plugin that is off is not a
-blocker: the step withholds its tools and a call settles `tool_unavailable`.
+Superseded 2026-11-05: a session resumes nothing at open. The host lists the
+interrupted runs and each continues on a resume (a click, `/resume`,
+`texra resume`); the `resumeOnOpen` setting, `host.interruptedTasks` and the
+catalog follower that resumed a blocked run once its agent or plugin was back
+are gone (the one-fact note, O4). A resume whose agent is missing from the
+catalog, or comes from an installed plugin that is off or not trusted, does not
+fail the run: it stays interrupted with the reason in the projection until a
+later resume finds it back. A tool plugin that is off is not a blocker: the
+step withholds its tools and a call settles `tool_unavailable`.
 
 ## Interrupted calls
 

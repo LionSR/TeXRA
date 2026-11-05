@@ -1,7 +1,7 @@
 import { layer } from '@effect/vitest';
-import { Effect, Context } from 'effect';
+import { Effect, Context, Schema } from 'effect';
 import { expect } from 'vitest';
-import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -12,7 +12,7 @@ import {
   SessionGraph,
 } from '@test/support/testKernel';
 
-const id = 'bbb001' as RunId;
+const id = Schema.decodeUnknownSync(RunIdSchema)('bbb001');
 
 /** The test's session, with the run `id` started on it. */
 const startedSession = Effect.gen(function* () {

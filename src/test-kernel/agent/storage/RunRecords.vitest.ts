@@ -3,9 +3,9 @@ import { layer } from '@effect/vitest';
 import { expect } from 'vitest';
 
 import {
+  RunIdSchema,
   AgentConfigSchema,
   qualifyAggregateId,
-  type RunId,
 } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -17,7 +17,7 @@ import {
   SessionGraph,
 } from '@test/support/testKernel';
 
-const runId = 'abcdef' as RunId;
+const runId = Schema.decodeUnknownSync(RunIdSchema)('abcdef');
 
 /** `body` over the test's session, with the run `runId` started on it. */
 const withStartedSession = <A, E>(

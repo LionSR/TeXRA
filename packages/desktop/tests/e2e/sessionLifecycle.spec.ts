@@ -30,10 +30,17 @@ const ORPHAN_RUN = 'baddad' as RunId;
 const canonicalRows = (fixture: DatabaseFixture) =>
   Effect.gen(function* () {
     const database = yield* fixture.Database;
+    const types = fixture.SessionEventSchema.members.map(
+      (schema) => schema.fields.type.literal,
+    );
     return {
       commit: yield* database.currentCommit,
       runs: yield* Effect.forEach([WAITING_RUN, ORPHAN_RUN], (runId) =>
-        database.readAggregate(fixture.qualifyAggregateId('run', runId), 0),
+        database.readAggregate(
+          fixture.qualifyAggregateId('run', runId),
+          0,
+          types,
+        ),
       ),
     };
   });

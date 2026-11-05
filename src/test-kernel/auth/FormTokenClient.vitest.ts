@@ -38,7 +38,7 @@ describe('postOAuthForm', () => {
         message:
           'Network error contacting https://example.test/token: The operation was aborted due to timeout',
       });
-      expect(fetchMock.mock.calls[0]![1]?.signal?.aborted).toBe(true);
+      expect(fetchMock.mock.calls[0][1]?.signal?.aborted).toBe(true);
     }),
   );
 });

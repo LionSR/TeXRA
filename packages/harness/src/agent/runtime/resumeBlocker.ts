@@ -3,11 +3,9 @@
  * from the catalog, or its agent comes from an
  * installed plugin that is off or not trusted as it is now. An inline
  * persona travels with its record, so nothing blocks it. A resume that
- * meets one does not fail the run: the run stays interrupted, the reason
- * goes into the projection (`SessionViewAccess.markResumeBlocked`), and the
- * session's follower (`followInterruptedTasks`) clears it once the catalog
- * says it is back, resuming the run when the session was opened to resume
- * its interrupted tasks.
+ * meets one does not fail the run: the resume is refused with the reason,
+ * and the run stays interrupted until a later resume finds the catalog has
+ * it back.
  *
  * A tool plugin that is off is not a blocker: the step withholds its tools,
  * and a call to one settles `tool_unavailable` (the user's switch, not the

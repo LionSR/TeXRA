@@ -40,6 +40,12 @@
       }
     },
     {
+      "files": ["src/test-kernel/**", "packages/*/test/**"],
+      "rules": {
+        "typescript/no-non-null-assertion": "error"
+      }
+    },
+    {
       "files": ["packages/*/src/**"],
       "rules": {
         "typescript/no-non-null-assertion": "error",

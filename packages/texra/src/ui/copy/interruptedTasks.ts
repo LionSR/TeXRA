@@ -5,14 +5,9 @@
  * the composer, the TUI above its input; neither blocks typing.
  *
  * The list is the view's: a root task in the `interrupted` group that this
- * window can resume. What blocks one (`RunView.resumeBlocked`) comes from
- * the session's follower, and the fix it names has one home, Settings ›
- * Plugins (the TUI's `/plugins`), which the notice links to.
+ * window can resume. Why one cannot continue is the resume's own refusal.
  */
-import {
-  formatResultCount,
-  type ResumeBlocked,
-} from '@texra-ai/harness/transcript';
+import { formatResultCount } from '@texra-ai/harness/transcript';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 
 /** One interrupted task, as the notice lists it. */
@@ -23,7 +18,6 @@ export interface InterruptedTask {
   readonly stoppedAt: number | null;
   /** "2 of 4 agents done", or null for a task that started none. */
   readonly agents: string | null;
-  readonly blocked: ResumeBlocked | null;
 }
 
 /**
@@ -48,7 +42,6 @@ export function interruptedTasks(
       title: run.title,
       stoppedAt: run.lastTimestamp,
       agents: agentProgress(run),
-      blocked: run.resumeBlocked,
     }));
 }
 
@@ -64,40 +57,9 @@ export const INTERRUPTED_NOTICE = Object.freeze({
     count === 1 ? '1 task was interrupted' : `${count} tasks were interrupted`,
   resumeAll: 'Resume all',
   notNow: 'Not now',
-  /** Where `texra.resumeOnOpen: auto` is set. */
-  alwaysResume: 'Always resume: Settings › General',
   /** The TUI's lines under the list, in place of buttons. */
   tuiActions: (count: number) =>
     count === 1
       ? '/resume all continues it · /resume chooses a task · sending anything hides this'
       : '/resume all continues them · /resume chooses one · sending anything hides this',
 });
-
-/** What a blocked task waits for, in one line: "needs the zotero plugin,
- *  which is off". */
-export function resumeBlockerLine(reason: ResumeBlocked): string {
-  switch (reason.blocker) {
-    case 'agentMissing':
-      return `needs the ${reason.name} agent, which is not installed`;
-    case 'pluginOff':
-      return `needs the ${reason.name} plugin, which is off`;
-    case 'pluginUntrusted':
-      return `needs the ${reason.name} plugin, which is not trusted as it is now`;
-  }
-}
-
-/**
- * The fix a blocked task offers, or null when TeXRA has none to offer (a
- * missing agent's file is the user's to restore). Each opens the one home of
- * the plugin switch and its trust review, Settings › Plugins.
- */
-export function resumeBlockerFix(reason: ResumeBlocked): string | null {
-  switch (reason.blocker) {
-    case 'agentMissing':
-      return null;
-    case 'pluginOff':
-      return 'Turn on';
-    case 'pluginUntrusted':
-      return 'Review';
-  }
-}

@@ -18,7 +18,10 @@ export type DatabaseFixture = Pick<
     'Database' | 'GlobalDatabase'
   > &
   Pick<typeof import('@shared/session/sessionEvents'), 'ProcessIdentity'> &
-  Pick<typeof import('@shared/schemas'), 'qualifyAggregateId'> &
+  Pick<
+    typeof import('@shared/schemas'),
+    'qualifyAggregateId' | 'SessionEventSchema'
+  > &
   Pick<
     typeof import('@platform/defaults/workspaceStorage'),
     'resolveGlobalStoragePath' | 'resolveWorkspaceStoragePath'

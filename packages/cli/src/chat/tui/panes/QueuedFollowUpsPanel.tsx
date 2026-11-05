@@ -1,9 +1,6 @@
 import { Box, Text } from 'ink';
 
-import {
-  summarizeSubagentFollowup,
-  pluralize,
-} from '@texra-ai/harness/transcript';
+import { pluralize } from '@texra-ai/harness/transcript';
 import { hiddenRowsText } from '@cli/tui/overflowText';
 import { COLOR_WARNING } from '@cli/tui/ui/colors';
 import {
@@ -63,10 +60,7 @@ function queuedFollowUpPanelDisplay({
       const bodyColumns = Math.max(0, contentWidth - textDisplayWidth(prefix));
       return {
         kind: 'message',
-        text: `${prefix}${truncateSummaryToWidth(
-          summarizeSubagentFollowup(message),
-          bodyColumns,
-        )}`,
+        text: `${prefix}${truncateSummaryToWidth(message, bodyColumns)}`,
       };
     });
 

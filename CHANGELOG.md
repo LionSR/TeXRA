@@ -6,6 +6,25 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **A blocked resume is a refusal, not a state.** Resuming a task whose
+  agent is missing, or whose plugin is off or not trusted, is refused with
+  that reason at the click, like any other refusal; nothing about it shows
+  before a resume is asked for. Gone: the "needs the zotero plugin, which
+  is off" line and its "Turn on" / "Review" button on the task's ended line
+  and in the interrupted-tasks notice, and the same words in the model's
+  `/executions` text. SDK: `RunView.resumeBlocked`,
+  `LocalRuntimeState.resumeBlocked`, `SessionViewAccess.markResumeBlocked`
+  and the `resumeBlocked` run notice are gone; the service's `task.resume`
+  answers the task only (protocol bump).
+- **Nothing resumes on its own.** The `resumeOnOpen` setting (Settings ›
+  General › Interrupted tasks) and the notice's "Always resume" link are
+  gone: a window or `texra chat` that opens on tasks a closed or crashed
+  TeXRA left unfinished lists them and resumes none. Resume (the task's
+  button, `/resume`, `texra resume`) continues one, and a task blocked on
+  a missing agent or an off plugin stays listed with what it needs until a
+  later resume finds it back. A stored `resumeOnOpen` is ignored. SDK:
+  `OpenOptions.host` carries no `interruptedTasks`; a session recovers
+  nothing at open.
 - **One flag per choice in `texra config agents`.** `--agents` takes the
   workspace agents as one value (`inherit`, `all`, `team:<team>` by id,
   name or slug, or a comma-separated agent list), `--default-team` takes a
@@ -220,8 +239,7 @@ All notable changes to this project will be documented in this file.
   decision's `content`. `StagedToolEdit` leaves `@texra-ai/harness/schemas`;
   `CallRequests.open` takes the blobs a payload names. A blocked resume
   (`RunView.statusNotice` `resumeBlocked`, `LocalRuntimeState.resumeBlocked`)
-  carries no `retry`: whether an unblocked task continues by itself is the
-  `resumeOnOpen` setting's, read once at open.
+  carries no `retry`: an unblocked task continues on its next resume.
 - **SDK: settings-view snapshot ids are the app's.** `SettingsViewSnapshot`
   leaves `@texra-ai/harness/schemas`; a row's `surfaces.settingsView` and
   `snapshotEntries` take the app's id as a string.
@@ -692,7 +710,7 @@ All notable changes to this project will be documented in this file.
   composer lists them by title ("2 tasks were interrupted"), with when each
   stopped and how many of its agents finished. **Resume all** continues
   them, a title opens that task, and **Not now** hides the notice until the
-  next open; **Always resume** links to Settings › General. A task that
+  next open. A task that
   cannot continue says why ("needs the zotero plugin, which is off") with
   **Turn on** or **Review**, which open Settings › Plugins. In the CLI the
   notice sits above the input and is answered with `/resume all` or
@@ -1201,13 +1219,10 @@ All notable changes to this project will be documented in this file.
 
 - **Interrupted tasks when TeXRA opens.** When the terminal chat, the
   desktop app or the extension opens and finds tasks a closed or crashed
-  TeXRA stopped mid-way, Settings › General › Interrupted tasks decides
-  what happens: **Ask** (the default) leaves them for you to resume, and
-  **Resume automatically** continues them. `texra run` and the agent SDK
-  never resume on their own. A task whose agent is gone, or whose agent
-  comes from a plugin that is off or not trusted, is no longer failed by a
-  resume: it stays interrupted, says what it is waiting for, and continues
-  by itself once that is fixed.
+  TeXRA stopped mid-way, it lists them for you to resume; nothing resumes
+  on its own. A task whose agent is gone, or whose agent comes from a
+  plugin that is off or not trusted, is no longer failed by a resume: it
+  stays interrupted and says what it is waiting for.
 
 - **Long conversations no longer pause to compact.** When a conversation
   reaches the compaction threshold, TeXRA summarizes the earlier turns in
@@ -1540,6 +1555,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The desktop app no longer hides a task's Edit form behind "Connect a
+  model" when the project's `.env` holds the key.** The onboarding check
+  asked without the project's `.env`, the one per-project read that did; it
+  now asks under it, as every other read about that project's models does,
+  so the launcher and the Edit form render and the key the run would use is
+  the key that counts.
 - **A retired model is refused when a run binds it.** The route decision
   sent a model llm-zoo marks retired to its provider key (or a subscription
   still listing it), so a resumed or switched run failed at the provider
@@ -2075,7 +2096,7 @@ All notable changes to this project will be documented in this file.
   collected.
 - **A crash no longer undoes a Stop, a finished agent or a bypass turned
   off.** A task you stopped mid-turn, killed before it finished stopping,
-  came back as interrupted, and with "Always resume" it carried on the turn
+  came back as interrupted, and when resumed it carried on the turn
   and paid for more model calls; a stop is now recorded whole or not at
   all. An agent that had finished its answer when its task was killed no
   longer asks whether to run it again: the resumed task reads the answer it

@@ -8,9 +8,9 @@ import { RunFileService } from '@texra-ai/harness/plugins';
 
 // Local imports
 import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
-import type { RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 
-const runId = 'abcdef123456' as RunId;
+const runId = RunIdSchema.make('abcdef123456');
 const storageRoot = path.resolve(path.sep, 'storage');
 const workspaceRoot = path.resolve(path.sep, 'workspace');
 

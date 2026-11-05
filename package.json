@@ -61,12 +61,12 @@
     "openai": "catalog:",
     "oxfmt": "0.76.0",
     "oxlint": "1.91.0",
-    "semver": "^7.8.5",
+    "semver": "^7.8.6",
     "tar": "catalog:",
     "typescript": "catalog:",
     "undici": "catalog:",
     "vite": "^8.3.5",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "ws": "8.22.1",
     "yaml": "catalog:"
   }

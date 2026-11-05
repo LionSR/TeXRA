@@ -281,12 +281,6 @@ function interruptedTasksView(): SessionView {
     local({
       self: [OWNER],
       dead: [OTHER_OWNER],
-      resumeBlocked: [
-        {
-          runId: ABSTRACT_TASK,
-          reason: { kind: 'blocked', blocker: 'pluginOff', name: 'zotero' },
-        },
-      ],
     }),
   ]);
 }

@@ -17,6 +17,11 @@ import {
   inheritedGrants,
 } from '@shared/approvalBypassKind';
 
+/** A fixture run id: these suites name runs (`child`, `parent`) rather than
+ *  minting hex ids, and the grants under test only compare them. */
+// cast: a readable name stands in for a run id the code only compares.
+const runId = (name: string): RunId => name as RunId;
+
 /** A session's grants as its rows fold them: parent edges, each run's
  *  standing and its latest grants. Every run is live unless `interrupted`. */
 function rows(
@@ -28,9 +33,11 @@ function rows(
   return {
     runs: new Map(
       Object.entries(runs).map(([id, run]) => [
-        id as RunId,
+        runId(id),
+        // The bypass reads parentId, group and status, the only fields set here.
+        // cast: a partial RunView with the fields the bypass reads.
         {
-          parentId: (run.parent ?? null) as RunId | null,
+          parentId: run.parent === undefined ? null : runId(run.parent),
           group: run.interrupted ? 'interrupted' : 'active',
           status: RUN_PHASE.RUNNING,
           substate: null,
@@ -39,7 +46,7 @@ function rows(
     ),
     policy: new Map(
       Object.entries(runs).flatMap(([id, run]) =>
-        run.grants === undefined ? [] : [[id as RunId, run.grants] as const],
+        run.grants === undefined ? [] : [[runId(id), run.grants] as const],
       ),
     ),
   };
@@ -54,8 +61,8 @@ describe('child subagent stream approval inheritance', () => {
       parent: { grants: goal },
       child: { parent: 'parent' },
     });
-    expect(resolveBypass(view, 'child' as RunId, 'bash')).toBe('goal');
-    expect(inheritedGrants(view, 'child' as RunId)).toEqual(NO_APPROVAL_GRANTS);
+    expect(resolveBypass(view, runId('child'), 'bash')).toBe('goal');
+    expect(inheritedGrants(view, runId('child'))).toEqual(NO_APPROVAL_GRANTS);
   });
 
   it("follows the parent's later human value past a goal a resume ended (#13839)", () => {
@@ -66,13 +73,13 @@ describe('child subagent stream approval inheritance', () => {
       parent: { grants: goalGrant(['bash'])(NO_APPROVAL_GRANTS) },
       child: { parent: 'parent', grants: resumed },
     });
-    expect(resolveBypass(underGoal, 'child' as RunId, 'bash')).toBeNull();
+    expect(resolveBypass(underGoal, runId('child'), 'bash')).toBeNull();
     const humanOn = rows({
       parent: { grants: commands },
       child: { parent: 'parent', grants: resumed },
     });
-    expect(resolveBypass(humanOn, 'child' as RunId, 'bash')).toBe('human');
-    expect(inheritedGrants(humanOn, 'child' as RunId).own).toEqual({
+    expect(resolveBypass(humanOn, runId('child'), 'bash')).toBe('human');
+    expect(inheritedGrants(humanOn, runId('child')).own).toEqual({
       bash: 'on',
     });
   });

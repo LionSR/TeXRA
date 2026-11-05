@@ -106,8 +106,8 @@ The ▾ keeps "Approve all agent work in this task". On a `setup` proposal the
 card's own-start action is "Change and start myself".
 
 **J5, crash and resume.** When a project or `texra` opens and the listing
-has interrupted tasks, one prompt lists them (the `texra.resumeOnOpen` setting chooses between
-asking and resuming):
+has interrupted tasks, one prompt lists them (nothing resumes on its own; the
+`resumeOnOpen` setting that once chose between asking and resuming is gone):
 
 ```
 ┃ 2 tasks were interrupted

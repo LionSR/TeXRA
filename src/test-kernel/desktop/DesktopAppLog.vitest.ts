@@ -27,6 +27,7 @@ interface DesktopAppLogModule {
 
 async function loadDesktopAppLogModule(): Promise<DesktopAppLogModule> {
   const cacheKey = randomUUID();
+  // cast: a computed import is untyped; the URL names desktopAppLog.ts.
   return import(
     `${moduleFileUrl(desktopSourcePath('main', 'desktopAppLog.ts'))}?${cacheKey}`
   ) as Promise<DesktopAppLogModule>;

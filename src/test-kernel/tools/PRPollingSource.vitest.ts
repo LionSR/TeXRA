@@ -44,6 +44,7 @@ interface AnnotationDrainAccess {
 }
 
 function drainAccess(source: PRPollingSource): AnnotationDrainAccess {
+  // cast: `afterTick` is the source's own hook, not on its public type.
   return source as unknown as AnnotationDrainAccess;
 }
 

@@ -50,7 +50,10 @@ const titlesOf = (storage: string, runId: string) =>
   storedRows(storage)
     .filter((row) => row.run === runId && row.type === 'run.description')
     .map(
-      (row) => (JSON.parse(row.data) as { description: string }).description,
+      (row) =>
+        Schema.decodeUnknownSync(Schema.Struct({ description: Schema.String }))(
+          JSON.parse(row.data),
+        ).description,
     );
 
 /** The file every notes fact names. */
@@ -111,7 +114,9 @@ describe('session store transactions', { timeout: REAL_RUN_TIMEOUT }, () => {
             const roots = testWorkspaceRoots();
             const session = yield* persistentTestSession(roots);
             const runId = generateRunId();
-            const release = join(roots.workspace!, 'release');
+            if (roots.workspace === undefined)
+              throw new Error('no test workspace');
+            const release = join(roots.workspace, 'release');
             yield* rootRun({
               config: Schema.decodeUnknownSync(AgentConfigSchema)({
                 agent: 'command_runner',

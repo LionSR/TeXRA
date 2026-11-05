@@ -40,6 +40,7 @@ import {
 } from '@shared/session/runHistory';
 import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import { runBypasses } from '@shared/approvalBypassKind';
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { DEFAULT_MODELS } from '@shared/constants/defaultModels';
 import {
   parseApprovalPolicy,
@@ -878,13 +879,15 @@ function seedSubagentFollowupTranscript(): void {
       '</subagent-error>',
     ].join('\n'),
   ];
+  // The run's transcript stores a delivery as its queue wrote it: the
+  // envelope's summary (`FollowUpContent.displayText`), not the envelope.
   for (const [index, text] of followups.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text,
+      text: summarizeSubagentFollowup(text),
     });
   }
   seedRows(HARNESS_RUN_ID, entries);
@@ -1875,21 +1878,6 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     local({
       self: [OWNER],
       dead: [OTHER_OWNER],
-      // What a resume of the interrupted root waits for, as the session's
-      // follower marks it at open.
-      resumeBlocked:
-        process.env.HARNESS_RESUME_BLOCKED === '1'
-          ? [
-              {
-                runId: interrupted,
-                reason: {
-                  kind: 'blocked',
-                  blocker: 'pluginOff',
-                  name: 'zotero',
-                },
-              },
-            ]
-          : [],
     }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));

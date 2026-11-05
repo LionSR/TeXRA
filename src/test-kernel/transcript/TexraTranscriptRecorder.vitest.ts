@@ -11,6 +11,7 @@ function assistantRows(rows: readonly TranscriptRow[]) {
 
 describe('createTestRunTrace undecodable compaction payload', () => {
   it('writes an error row naming the diagnostic instead of dropping it', () => {
+    // cast: a fixture run id; the trace only stamps it on its rows.
     const { trace, rows } = createTestRunTrace('stream:test' as RunId);
 
     trace.info('Compacting context', {
@@ -33,6 +34,7 @@ describe('createTestRunTrace undecodable compaction payload', () => {
 describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('does not let an earlier invocation in the same round stage overwrite a later finalized response', () => {
     const { trace, finalize, rows } = createTestRunTrace(
+      // cast: a fixture run id; the trace only stamps it on its rows.
       'stream:test' as RunId,
     );
 

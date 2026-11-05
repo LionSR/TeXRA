@@ -170,30 +170,6 @@ interface ContextManagementRow extends TranscriptRowBase {
 function decodeXmlEntities(text: string): string
 ```
 
-## deliveryBodyEscaped
-
-Whether the envelope body is XML-entity-escaped (via `escapeText()` in
-the producer) and needs `decodeXmlEntities()` before display. An activity
-report (a plugin's bare `<family>-activity>` open on its own line)
-neutralizes embedded tag names rather than escaping, so it is the one
-kind that is not.
-
-```ts
-function deliveryBodyEscaped(tag: string): boolean
-```
-
-## deliveryTagOf
-
-The delivery-envelope tag `text` opens with, or undefined when the text is
-not one of these blocks. The single recognizer for "is this a child-run
-delivery envelope", shared by the CLI transcript, the queued follow-ups
-panel, and the progress-view message bubble. Leading whitespace is allowed
-because producers hand blocks to the render surfaces untrimmed.
-
-```ts
-function deliveryTagOf(text: string): string | undefined
-```
-
 ## dispatchedChildren
 
 The runs `run` launched that are not a script's calls: what its dispatch
@@ -377,18 +353,6 @@ function formatResultCount(
 ): string
 ```
 
-## formatScriptDeliverySummary
-
-Collapse a parsed workflow delivery summary to its transcript lines. The
-tick is earned only by a run whose every call succeeded; a completed run
-with a failed, stopped, or unreached call says so in its marker too.
-
-```ts
-function formatScriptDeliverySummary(
-  summary: ScriptDeliverySummary,
-): string
-```
-
 ## isMcpToolName
 
 True for an MCP tool call: the harness's `mcp__<server>__<tool>` or an
@@ -413,13 +377,10 @@ interface LoadedMediaRef {
 
 Process-local liveness evidence: self, explicitly proved-dead owners, and
 unreadable runs. A current claimant absent from these verdicts is
-unprovable and remains held until a probe establishes otherwise. Beside
-it, the runs a resume found blocked here, each with what it waits for;
-whether the run then continues by itself is what the session was opened
-to do with interrupted tasks, not a fact of the run.
+unprovable and remains held until a probe establishes otherwise.
 
 ```ts
-const LocalRuntimeStateSchema: Struct<{ readonly self: $Array<String>; readonly dead: $Array<String>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; readonly resumeBlocked: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Struct<{ readonly kind: Literal<"blocked">; readonly blocker: Literals<readonly ["agentMissing", "pluginOff", "pluginUntrusted"]>; readonly name: String; }>; }>>; }>
+const LocalRuntimeStateSchema: Struct<{ readonly self: $Array<String>; readonly dead: $Array<String>; readonly unreadable: $Array<Struct<{ readonly runId: brand<String, "RunId">; readonly reason: Literals<readonly ["damaged", "earlierBuild"]>; }>>; }>
 ```
 
 ## LogRow
@@ -687,17 +648,6 @@ interface StreamingTextRow extends TranscriptRowBase {
 
 ```ts
 function summarizeEmbeddedSubagentFollowups(text: string): string
-```
-
-## summarizeSubagentFollowup
-
-Collapse a subagent follow-up XML block into a one-line (or, for results,
-status + response) human-readable summary. Returns `text` unchanged when it
-is not a subagent block. Malformed non-string payloads render as a visible
-placeholder instead of crashing status surfaces.
-
-```ts
-function summarizeSubagentFollowup(text: unknown): string
 ```
 
 ## taskGroupDisplayStatus
@@ -1092,11 +1042,10 @@ interface TranscriptText {
 ```ts
 interface UserRow extends TranscriptRowBase {
   readonly kind: 'user';
-  /** The message exactly as delivered, including any delivery envelope. */
+  /** The message as its follow-up shows it: a delivery or notice is its
+   *  summary (`FollowUpContent.displayText`), not its envelope. */
   readonly text: TranscriptText;
-  /** Collapsed presentation of a subagent/workflow delivery. Derived, never a
-   *  truncation of `text`: hosts choose which of the two to paint. */
-  readonly summary: TranscriptText;
+  /** A workflow delivery's facts, typed. */
   readonly scriptSummary?: ReadonlyDeep<ScriptDeliverySummary>;
   /** Media that was sent to the model beside the text, by kind (no bytes). */
   readonly attachments?: readonly MediaAttachmentKind[];

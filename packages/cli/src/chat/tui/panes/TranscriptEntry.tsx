@@ -34,7 +34,7 @@ function PlainEntryRows({
   readonly layout: TranscriptEntryLayout;
 }): React.JSX.Element {
   const isInquiryContinuation =
-    entry.kind === 'user' && isInquiryContinuationText(entry.summary.full);
+    entry.kind === 'user' && isInquiryContinuationText(entry.text.full);
   // User turns are full-width inverse bands in both static and live panes.
   // Inquiry continuations remain ordinary prefixed rows and only fill when
   // their bounded caller requests it.

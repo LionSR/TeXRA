@@ -23,6 +23,7 @@ describe('listRunGeneratedFiles', () => {
       expect(
         yield* Effect.flip(
           listRunGeneratedFiles(
+            // cast: a fixture run id; the listing only names a directory with it.
             'generated-history-test' as RunId,
             fakePath('storage'),
           ).pipe(
