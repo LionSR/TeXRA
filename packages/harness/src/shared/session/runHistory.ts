@@ -19,10 +19,11 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { causeChain } from '@utils/errors/errorMessage';
 import {
   DatabaseClaimRefused,
   DatabaseNotOwner,
-  DatabaseReadFailed,
+  type DatabaseReadFailed,
   DatabaseRowCorrupt,
   DatabaseRowEarlier,
   DatabaseWriteFailed,
@@ -155,16 +156,31 @@ export const runStateAppend = (
   // cast: one function; the narrowing is the type fence, not a runtime one.
   append as never;
 
-/** A run whose rows do not load: they cannot be applied, or one does not
- *  decode (corrupt, or an earlier build's); never a store that cannot be
- *  read. */
-export const unloadable = (
+/**
+ * Why `error`, anywhere down its cause chain, says a run's stored rows
+ * cannot be used, or undefined for a failure that may pass (the disk, a
+ * claim): `earlierBuild`, a row an earlier build wrote; `damaged`, a row
+ * that does not decode; `unusable`, rows that decode but cannot be
+ * continued (they cannot be applied, the history's rules refuse them, or
+ * their turns were recorded on a protocol the run's binding no longer
+ * speaks). None of the three heals by trying again.
+ */
+export const runReadRefusal = (
   error: unknown,
-): error is RunHistoryRefused | DatabaseReadFailed =>
-  error instanceof RunHistoryRefused ||
-  (error instanceof DatabaseReadFailed &&
-    (error.cause instanceof DatabaseRowCorrupt ||
-      error.cause instanceof DatabaseRowEarlier));
+): 'earlierBuild' | 'damaged' | 'unusable' | undefined => {
+  for (const cause of causeChain(error)) {
+    if (cause instanceof DatabaseRowEarlier) return 'earlierBuild';
+    if (cause instanceof DatabaseRowCorrupt) return 'damaged';
+    if (
+      cause instanceof RunHistoryRefused &&
+      (cause.reason === 'inconsistent' ||
+        cause.reason === 'unprepared-history' ||
+        cause.reason === 'foreign-protocol')
+    )
+      return 'unusable';
+  }
+  return undefined;
+};
 
 /** What a run cell's commits and re-reads fail with. */
 export type CellError =
@@ -177,7 +193,11 @@ export type CellError =
  * rebuilt from: the opening, every step, tool result and delivery, the input
  * it consumes, a compaction's edit, a model switch and its end all commit
  * through {@link RunCell.append}, and nothing sets the state it holds but
- * what that returns. The loop hands the same cell to the invoker and the
+ * what that returns. One exception: a run whose stored rows cannot be used
+ * ({@link runReadRefusal}) opens no cell, so `endIn`
+ * (`agent/storage/runLifecycle.ts`) appends its `run.end` and closing rows
+ * straight to the ending transaction, without the halt a cell would write.
+ * The loop hands the same cell to the invoker and the
  * dispatch unit, so no run service keeps a copy of the state it commits
  * against.
  */

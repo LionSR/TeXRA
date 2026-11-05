@@ -15,8 +15,8 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { attemptOf } from '@shared/session/inFlight';
 import {
   RunHistory,
+  runReadRefusal,
   SessionLog,
-  unloadable,
   SessionViewAccess,
 } from '@shared/session/runHistory';
 import { applyRunRows, type RunState } from '@shared/session/runState';
@@ -150,16 +150,16 @@ export const openOwnedChildren = Effect.fn('openOwnedChildren')(function* (
   runId: RunId,
 ) {
   const log = yield* SessionLog;
-  const history = yield* (yield* RunHistory)
-    .load(runId)
-    .pipe(
-      Effect.catchIf(unloadable, (refused) =>
+  const history = yield* (yield* RunHistory).load(runId).pipe(
+    Effect.catchIf(
+      (error) => runReadRefusal(error) !== undefined,
+      (refused) =>
         Effect.as(
           Effect.logWarning(`Run ${runId}: ${refused.message}`),
           false as const,
         ),
-      ),
-    );
+    ),
+  );
   const named =
     history === false
       ? [...(yield* (yield* SessionViewAccess).read([])).runs.values()].flatMap(

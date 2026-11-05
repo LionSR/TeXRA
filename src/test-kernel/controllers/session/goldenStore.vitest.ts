@@ -748,6 +748,11 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
           `UPDATE event SET version = 1 WHERE "commit" = ${RESPONSE}`,
           { kind: 'earlierBuild', cause: expect.any(String) },
         ],
+        [
+          'a row that does not decode',
+          `UPDATE event SET data = '{}' WHERE "commit" = ${RESPONSE}`,
+          { kind: 'unusableCheckpoint' },
+        ],
       ] as const)(
         'refuses a run holding %s before any request, and adds no row',
         ([, rewrite, reason]) => {
