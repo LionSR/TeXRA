@@ -48,7 +48,7 @@
     "@lit-labs/signals": "^0.3.0",
     "@texra-ai/llm": "workspace:*",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^22.19.17",
+    "@types/node": "^22.20.5",
     "@types/semver": "^7.8.0",
     "@types/vscode": "^1.125.0",
     "@types/ws": "8.18.2",
@@ -65,7 +65,7 @@
     "tar": "catalog:",
     "typescript": "catalog:",
     "undici": "catalog:",
-    "vite": "^8.3.5",
+    "vite": "^8.3.6",
     "vitest": "^5.1.0",
     "ws": "8.22.1",
     "yaml": "catalog:"

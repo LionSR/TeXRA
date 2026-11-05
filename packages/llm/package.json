@@ -23,7 +23,7 @@
     "url": "https://github.com/LionSR/TeXRA/issues"
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.22.2 || >=24.15.0"
   },
   "files": [
     "dist",
@@ -72,7 +72,7 @@
     "@typescript/native": "catalog:",
     "effect": "catalog:",
     "esbuild": "catalog:",
-    "openai": "7.20.0",
+    "openai": "7.51.0",
     "vitest": "^5.1.0"
   }
 }

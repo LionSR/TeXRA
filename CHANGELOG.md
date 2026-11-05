@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
+  terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
+  22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an
+  older Node as unsupported. The desktop app and the VS Code extension bring
+  their own runtime and are unaffected.
 - **The CLI is a client of the service, like the windows.** While the TeXRA
   service holds a project, a `texra` command in that folder reads the
   project's settings and stored tasks through it and opens no store of its

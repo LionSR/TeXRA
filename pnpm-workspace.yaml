@@ -34,7 +34,7 @@ catalog:
   mime-types: '^3.0.1'
   nanoid: '^6.0.2'
   nunjucks: '^3.2.4'
-  openai: '^7.20.0'
+  openai: '^7.51.0'
   pathe: '^2.0.3'
   postal-mime: '^4.2.0'
   pretty-bytes: '7.2.0'
@@ -46,8 +46,8 @@ catalog:
   turndown-plugin-gfm: '^1.0.2'
   typescript: 'npm:@typescript/typescript6@^6.0.2'
   undici: '^8.12.3'
-  which: '^5.0.0'
-  write-file-atomic: '^7.0.1'
+  which: '^7.0.0'
+  write-file-atomic: '^8.0.0'
   yaml: '^2.9.1'
 # The ranges the published packages (`@texra-ai/harness`, `@texra-ai/llm`)
 # declare as peers: the consumer's one install supplies a single coherent
@@ -80,8 +80,7 @@ allowBuilds:
   protobufjs: true
   unrs-resolver: true
 patchedDependencies:
-  ink@7.1.1: patches/ink@7.1.1.patch
-  openai@7.20.0: patches/openai@7.20.0.patch
+  ink@8.0.0: patches/ink@8.0.0.patch
 # pnpm 11 enables a 24h minimumReleaseAge supply-chain quarantine by default,
 # which blocked same-day dependency bumps (e.g. a fresh llm-zoo for a new model)
 # until they aged out, forcing a per-package allowlist. Disable it repo-wide so
