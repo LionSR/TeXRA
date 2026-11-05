@@ -217,7 +217,7 @@ function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
 
 /** Two tasks a TeXRA that has since closed left mid-turn, by title: the
  *  first with two agents (one done), the second's agent from a plugin that
- *  is off now. What the open-time notice lists. */
+ *  is off now. What the task list's interrupted group shows. */
 const runId = Schema.decodeUnknownSync(RunIdSchema);
 const REVIEW_TASK = runId('a1a1a1a1a1a1');
 const ABSTRACT_TASK = runId('a2a2a2a2a2a2');

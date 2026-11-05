@@ -3091,7 +3091,7 @@ async function validateServiceSharedTask() {
  * Resume all and rename: a chat killed while it waits leaves its task
  * interrupted; the next `texra chat` resumes nothing until `/resume all`,
  * which names and resumes it. A resumed chat's
- * `/rename` then writes the user's title. The notice's lines, the
+ * `/rename` then writes the user's title. `/resume all`'s line, the
  * activation counts and the task's `run.description` rows are the artifact.
  */
 async function validateOpenTimePrompt() {
