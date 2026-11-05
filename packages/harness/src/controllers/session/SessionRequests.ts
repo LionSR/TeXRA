@@ -227,12 +227,6 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
     (row) => row.runId === runId && row.requestId === requestId,
   );
 
-/**
- * Record a surface's decision. The transaction re-reads the request, so only
- * one concurrent answer commits. The request's plugin records its own facts
- * first, outside that transaction; the lane serializes both steps. A grant
- * still applies when the request is already answered (`decideUnderGrant`).
- */
 const decideRequest = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
@@ -257,7 +251,13 @@ const decideRequest = (
     const services = yield* followUpServices;
     const side =
       payload.kind === 'plugin'
-        ? deps.plugins.entries.get(payload.plugin)?.decision?.record({
+        ? (
+            deps.plugins.entries.get(payload.plugin) ??
+            (yield* new Unavailable({
+              runId: req.runId,
+              reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
+            }))
+          ).decision?.record({
             payload,
             decision: req.decision,
             inbox: (runId) => runInbox(runId, services),
