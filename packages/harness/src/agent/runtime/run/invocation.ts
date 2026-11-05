@@ -241,23 +241,22 @@ const consult = <A, E, R>(
     : asker.await(move.requestId);
 };
 
-/** The pause before an automatic resend, unchained or not. */
-const pauseBefore = <A, E, R>(
+/** Say that an automatic resend follows, unchained or not. The wait before
+ *  it is the gate's alone: the failed attempt cooled its route, and the
+ *  resend's `withRoutes` waits there, `retryAfterMs` honoured. */
+const noteResend = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   next: FailedNext,
   failure: AttemptFailure,
-): Effect.Effect<void> => {
+): void => {
   if (next.kind === 'unchain')
     driver.logger.warn(
       `Chained response gone (${failure.error.message}); retrying once with the full transcript.`,
     );
   else if (next.kind === 'retry')
-    driver.logger.debug(
-      `Model request failed; automatic retry in ${RETRY_BACKOFF_MS}ms.`,
-      { data: failure.error.message },
-    );
-  else return Effect.void;
-  return Effect.sleep(RETRY_BACKOFF_MS);
+    driver.logger.debug('Model request failed; automatic retry follows.', {
+      data: failure.error.message,
+    });
 };
 
 /** The move after `failure` of attempt `ref`, read off the attempts
@@ -377,6 +376,6 @@ export const runInvocation = Effect.fn('ModelInvoker.invocation')(function* <
     const recorded = yield* driver.failed(ref, failure, next, bound);
     if (next.kind === 'stop')
       return { kind: 'failed', error: recorded, cause: failure.error };
-    yield* pauseBefore(driver, next, failure);
+    noteResend(driver, next, failure);
   }
 });

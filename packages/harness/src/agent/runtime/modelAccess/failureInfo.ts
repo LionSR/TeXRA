@@ -37,10 +37,17 @@ export function failureInfo(
 const modelScoped = (error: Error): boolean =>
   error instanceof ModelError && error.scope === 'model';
 
+/** A failure worth repeating that llm scoped to no route (a transport
+ *  error with no status, a malformed stream): it cools the narrowest route,
+ *  the model's, so the gate owns its wait like every other. */
+const unscopedRetryable = (error: Error): boolean =>
+  error instanceof ModelError && error.retryable && error.scope === undefined;
+
 /**
  * The retry gate's two routes for one binding, narrowest first: `model` on
- * its `wire` route, then the wire route itself (provider, credential route,
- * endpoint, key fingerprint), which a failure llm scoped to the route cools.
+ * its `wire` route, which a failure scoped to the model or to no route
+ * cools, then the wire route itself (provider, credential route, endpoint,
+ * key fingerprint), which a failure llm scoped to the route cools.
  */
 export function routePolicies(
   wire: readonly string[],
@@ -54,7 +61,9 @@ export function routePolicies(
     {
       key: JSON.stringify([wireKey, model]),
       classifyFailure: (error) =>
-        modelScoped(error) ? after(error) : undefined,
+        modelScoped(error) || unscopedRetryable(error)
+          ? after(error)
+          : undefined,
     },
     {
       key: wireKey,
