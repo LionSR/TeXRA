@@ -20,6 +20,11 @@ All notable changes to this project will be documented in this file.
   `\intertext`. `latexdiff.tempFileLocation` is gone: a preview's temporary
   file is always written beside the file it stands in for, where its
   relative inputs resolve. A stored value of either is ignored.
+- **"Prefer short model names" is gone.** A request always carries the
+  model's catalog id. The switch never changed what a picker shows: it
+  replaced the date-pinned id sent to the provider with its unpinned alias,
+  and toggling it during a run broke that run's continuations. A stored
+  value is ignored.
 - **A child launch is a chat or a task.** SDK: `ChildLaunch`
   (`ChildRuns.launch`) is a chat (`task: null`, with an optional `schema`
   and the `mediaFiles` on its prompt) or a task (`task` with its `files`:

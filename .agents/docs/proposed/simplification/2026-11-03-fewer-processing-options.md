@@ -123,8 +123,7 @@ no information across them:
 
 Two model-id string tests stand in for capabilities the catalog should carry:
 `config.id.startsWith('gpt-5')` (`responsesConfiguration.ts:84`) and
-`config.id.toLowerCase().startsWith('gpt')` (`:128`). Both read an id that may
-already be the short-name rewrite (`packages/harness/src/agent/runtime/modelAccess/ModelAccess.ts:165-172`).
+`config.id.toLowerCase().startsWith('gpt')` (`:128`).
 
 Smaller instances of the same shape:
 
