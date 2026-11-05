@@ -91,8 +91,17 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
 ) {
   // A conversation continues in the service, which every chat is a client
   // of: started here when none runs, before the platform links to it. A
-  // document task resumes headless, in this process.
-  yield* Effect.ignore(startCliService(context.storageRoot));
+  // document task resumes headless, in this process; a service that could
+  // not start is said, since nothing after this would say it.
+  yield* startCliService(context.storageRoot).pipe(
+    Effect.catch((error) =>
+      Effect.sync(() =>
+        writeTextStderr(
+          `The TeXRA service could not be started, so this task runs here: ${error.message}`,
+        ),
+      ),
+    ),
+  );
   const stores = yield* initCliPlatform(context);
   const configResult = yield* Effect.result(stores.reads.config(id));
   if (Result.isFailure(configResult)) {

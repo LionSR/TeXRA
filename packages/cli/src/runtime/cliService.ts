@@ -59,6 +59,7 @@ import {
   type ServiceConnection,
   type ServiceLink,
   type ServiceUnavailable,
+  WINDOWS_UNSUPPORTED,
 } from '@texra/controllers/server/client';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -350,14 +351,21 @@ export const linkRunningCliService = Effect.fn('linkRunningCliService')(
   },
 );
 
-/** Start the storage root's service when none answers, and leave it
- *  running: what the chat does before its platform comes up, so the
- *  platform links to it ({@link linkRunningCliService}). */
-export function startCliService(
+/**
+ * Start the storage root's service when none answers, and leave it
+ * running: what the chat and `texra resume` do before the platform comes
+ * up, so the platform links to it ({@link linkRunningCliService}). Answers
+ * null, or why this process uses none (`TEXRA_NO_SERVICE`, Windows), which
+ * the caller says once; a service that cannot start fails with its reason.
+ */
+export const startCliService = Effect.fn('startCliService')(function* (
   storageRoot: string,
-): Effect.Effect<void, Error, GlobalValues> {
-  return Effect.asVoid(Effect.scoped(reachCliService(storageRoot)));
-}
+): Effect.fn.Return<string | null, Error, GlobalValues> {
+  if (yield* envFlag(NO_SERVICE)) return `${NO_SERVICE} is set`;
+  if (process.platform === 'win32') return WINDOWS_UNSUPPORTED;
+  yield* Effect.scoped(reachCliService(storageRoot));
+  return null;
+});
 
 /** {@link reachCliService} for a client command, whose process prints only
  *  its own result. */

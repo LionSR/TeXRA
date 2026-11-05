@@ -242,7 +242,7 @@ export async function runChat(
             sessionStoreMovedAsideMessage(local.storeMovedAside),
           );
         startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${Result.isFailure(started) ? started.failure.message : 'the TeXRA service did not answer'}`,
+          `This chat runs here only, so other terminals and windows will not see it: ${Result.isFailure(started) ? started.failure.message : (started.success ?? 'the TeXRA service did not answer')}`,
         );
       }
       // Without a usable credential the chat still opens: the "Connect a
