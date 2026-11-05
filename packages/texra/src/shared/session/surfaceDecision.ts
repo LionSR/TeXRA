@@ -45,7 +45,11 @@ type ToolEditPreviewAction = 'openDiff' | 'showLatexdiff' | 'previewProposed';
 export type SurfaceDecision =
   | RequestDecision
   | { readonly action: typeof APPROVE_SESSION_ACTION }
-  | { readonly action: typeof APPROVE_ALL_DELEGATED_WORK_ACTION }
+  | {
+      readonly action: typeof APPROVE_ALL_DELEGATED_WORK_ACTION;
+      /** The model picked on the card, when it is not the proposal's. */
+      readonly model?: string;
+    }
   | { readonly action: ToolEditPreviewAction };
 
 /**
@@ -104,7 +108,15 @@ export function approvalDecisionArm(
           `A ${permission.kind} request has no session bypass to enable.`,
         );
       }
-      return decide({ action: 'approve' }, bypass);
+      return decide(
+        {
+          action: 'approve',
+          ...('model' in decision && decision.model !== undefined
+            ? { model: decision.model }
+            : {}),
+        },
+        bypass,
+      );
     }
     case 'openDiff':
     case 'showLatexdiff':
