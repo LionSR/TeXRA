@@ -519,10 +519,10 @@ describe('Anthropic message threads', () => {
       { status, headers: { 'content-type': 'application/json' } },
     );
   const sent = (call: number) => {
-    const init = fetchModel.mock.calls[call]![1]!;
+    const init = fetchModel.mock.calls[call][1];
     return {
-      body: JSON.parse(init.body as string) as Record<string, unknown>,
-      beta: new Headers(init.headers).get('anthropic-beta'),
+      body: JSON.parse(String(init?.body)),
+      beta: new Headers(init?.headers).get('anthropic-beta'),
     };
   };
   // Turns that each answer the previous turn's tool calls.
@@ -596,9 +596,7 @@ describe('Anthropic message threads', () => {
       const replay = sent(2);
       expect(replay.body.thread).toStrictEqual({ type: 'create' });
       expect(replay.body.system).toBeDefined();
-      expect((replay.body.messages as unknown[]).at(-1)).toStrictEqual(
-        toolResults[0],
-      );
+      expect(replay.body.messages.at(-1)).toStrictEqual(toolResults[0]);
     }),
   );
 
@@ -633,7 +631,7 @@ describe('Anthropic message threads', () => {
         expect(sent(call).beta).toBeNull();
         expect(sent(call).body).not.toHaveProperty('thread');
       }
-      expect((sent(2).body.messages as unknown[]).length).toBe(3);
+      expect(sent(2).body.messages).toHaveLength(3);
     }),
   );
 });
