@@ -110,6 +110,7 @@ import { generateRunId } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { Settings } from '@shared/config/settings';
 import {
+  answerOf,
   crashAt,
   persistentTestSession,
   storedRows as rowsOf,
@@ -128,8 +129,74 @@ const linesOf = (file: string): string[] =>
         .map((line) => line.trimEnd())
         .filter(Boolean)
     : [];
-const json = (row: Row) => JSON.parse(row.data) as Record<string, unknown>;
-const payload = (row: Row) => json(row).payload as Record<string, unknown>;
+const decodeFields = Schema.decodeUnknownSync(
+  Schema.Record(Schema.String, Schema.Unknown),
+);
+const json = (row: Row) => decodeFields(JSON.parse(row.data));
+const payload = (row: Row) => decodeFields(json(row).payload);
+// Decoders of the row fields the suite reads beyond its type.
+const followUpOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    followUpId: Schema.String,
+    control: Schema.optional(Schema.Struct({ kind: Schema.String })),
+  }),
+);
+const configOf = Schema.decodeUnknownSync(
+  Schema.Struct({ config: Schema.Struct({ model: Schema.String }) }),
+);
+const seedOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    messages: Schema.Array(
+      Schema.Struct({
+        role: Schema.String,
+        content: Schema.optional(Schema.Unknown),
+      }),
+    ),
+  }),
+);
+const policyOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    snapshot: Schema.Struct({
+      own: Schema.Struct({ bash: Schema.optional(Schema.String) }),
+    }),
+  }),
+);
+const invocationOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    invocation: Schema.Struct({ invocationId: Schema.String }),
+  }),
+);
+const decisionOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    requestId: Schema.String,
+    decision: Schema.Struct({ action: Schema.String }),
+  }),
+);
+const intentOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    origin: Schema.Struct({ responseId: Schema.optional(Schema.String) }),
+    callId: Schema.String,
+    attempt: Schema.Number,
+  }),
+);
+const parkOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    heldFor: Schema.optional(Schema.String),
+    ends: Schema.optional(Schema.String),
+  }),
+);
+const identityOf = Schema.decodeUnknownSync(
+  Schema.Struct({ identity: Schema.Struct({ kind: Schema.String }) }),
+);
+const ownerOf = Schema.decodeUnknownSync(
+  Schema.Struct({
+    parent: Schema.Struct({
+      call: Schema.NullOr(Schema.Struct({ callId: Schema.String })),
+    }),
+  }),
+);
+/** The call a child's `run.start` names as its owner, or null. */
+const callOf = (child: Row) => ownerOf(json(child)).parent.call?.callId ?? null;
 const isResponse = (row: Row) =>
   row.type === 'model.message' && payload(row).kind === 'response';
 
@@ -154,26 +221,9 @@ const textsOf = (value: unknown): string[] => {
 const isFork = (row: Row) =>
   row.type === 'run.start' && row.data.includes('"kind":"fork"');
 
-/** A response's text, or null when it calls tools. */
-const answerOf = (row: Row): string | null => {
-  const content = (
-    payload(row).turn as {
-      readonly content: readonly {
-        readonly kind: string;
-        readonly content?: readonly { readonly text?: string }[];
-      }[];
-    }
-  ).content;
-  if (content.some((part) => part.kind === 'local-call')) return null;
-  return content
-    .flatMap((part) => part.content ?? [])
-    .map((part) => part.text ?? '')
-    .join('');
-};
-
 const answers = (rows: readonly Row[], run: string) =>
   rows.flatMap((row) => {
-    const text = row.run === run && isResponse(row) ? answerOf(row) : null;
+    const text = row.run === run ? answerOf(row) : null;
     return text === null ? [] : [text];
   });
 
@@ -193,10 +243,7 @@ function outcome(rows: readonly Row[], root: string) {
     // Each request the user made, queued once and consumed once; and the
     // model the run ends on.
     requests: of(root, 'followup.queued').flatMap((row) => {
-      const { followUpId, control } = json(row) as {
-        readonly followUpId: string;
-        readonly control?: { readonly kind: string };
-      };
+      const { followUpId, control } = followUpOf(json(row));
       if (control === undefined) return [];
       const consumed = of(root, 'followup.consumed').filter(
         (done) => json(done).followUpId === followUpId,
@@ -204,9 +251,7 @@ function outcome(rows: readonly Row[], root: string) {
       return [`${control.kind} consumed ${consumed.length}`];
     }),
     model: of(root, 'run.config')
-      .flatMap((row) => [
-        (json(row).config as { readonly model: string }).model,
-      ])
+      .flatMap((row) => [configOf(json(row)).config.model])
       .at(-1),
     // What each executed call returned, by call: a retried call returns
     // what its first attempt would have.
@@ -232,11 +277,7 @@ function outcome(rows: readonly Row[], root: string) {
     children: new Set(
       rows
         .filter((row) => row.type === 'run.start' && row.parent === root)
-        .map(
-          (row) =>
-            (json(row).parent as { call: { callId: string } | null }).call
-              ?.callId ?? null,
-        ),
+        .map(callOf),
     ).size,
     childAnswers: [
       ...new Set(
@@ -251,12 +292,7 @@ function outcome(rows: readonly Row[], root: string) {
       edits: of(fork.run, 'context.edit').map((row) => payload(row).cause),
       positions: of(fork.run, 'run.position').map((row) => payload(row).at),
       seed: of(fork.run, 'context.edit').flatMap((row) =>
-        (
-          payload(row).messages as readonly {
-            readonly role: string;
-            readonly content?: unknown;
-          }[]
-        ).map(
+        seedOf(payload(row)).messages.map(
           (message) =>
             `${message.role}: ${normalized(textsOf(message.content).join(''))}`,
         ),
@@ -264,6 +300,13 @@ function outcome(rows: readonly Row[], root: string) {
     })),
   };
 }
+
+/** The suite host's workspace folder: the validation host always opens one. */
+const workspaceOf = ({ workspace }: ReturnType<typeof testWorkspaceRoots>) => {
+  if (workspace === undefined)
+    throw new Error('the crash suite runs in a workspace folder');
+  return workspace;
+};
 
 /** The files a run keeps beside the store and the workspace files the run
  *  changes (the command effects, the notes it edits), copied as the clean
@@ -283,7 +326,7 @@ const takeSnapshot = (
     if (existsSync(from)) cpSync(from, join(to, name), { recursive: true });
   }
   for (const name of WORKSPACE_FILES) {
-    const from = join(roots.workspace!, name);
+    const from = join(workspaceOf(roots), name);
     if (existsSync(from)) cpSync(from, join(to, name));
   }
 };
@@ -342,7 +385,7 @@ const requested = (rows: readonly Row[], root: string, kind: string) =>
     (row) =>
       row.run === root &&
       row.type === 'followup.queued' &&
-      (json(row).control as { kind?: string } | undefined)?.kind === kind,
+      followUpOf(json(row)).control?.kind === kind,
   );
 
 /**
@@ -407,9 +450,7 @@ const bashBypassOf = (rows: readonly Row[], root: string) => {
   const row = rows.findLast(
     (row) => row.run === root && row.type === 'approval.policy',
   );
-  return row === undefined
-    ? undefined
-    : (json(row).snapshot as { own: { bash?: string } }).own.bash;
+  return row === undefined ? undefined : policyOf(json(row)).snapshot.own.bash;
 };
 
 /** What broke the contract after a resume from commit `n`. */
@@ -443,10 +484,7 @@ function violations(
     .sort();
   const invocations = final
     .filter(isResponse)
-    .map(
-      (row) =>
-        (payload(row).invocation as { invocationId: string }).invocationId,
-    );
+    .map((row) => invocationOf(payload(row)).invocation.invocationId);
   // A call's requests carry ids its attempt derives,
   // `<responseId>/<callId>:<attempt>:<ordinal>`: the attempt is the id
   // without its ordinal.
@@ -501,10 +539,7 @@ function violations(
   // A command runs only once a person approved it, before its result.
   const approvals = final.flatMap((row) => {
     if (row.type !== 'request.decided') return [];
-    const decided = json(row) as {
-      readonly requestId: string;
-      readonly decision: { readonly action: string };
-    };
+    const decided = decisionOf(json(row));
     return decided.decision.action === 'approve'
       ? [{ callId: callOfRequest(decided.requestId), commit: row.commit }]
       : [];
@@ -526,9 +561,6 @@ function violations(
   const children = final.filter(
     (row) => row.type === 'run.start' && row.parent !== null,
   );
-  const callOf = (child: Row) =>
-    (json(child).parent as { call: { callId: string } | null }).call?.callId ??
-    null;
   const relaunches = children.filter((child) =>
     children.some(
       (earlier) =>
@@ -561,11 +593,7 @@ function violations(
       (row) => row.type === 'tool.result' && payload(row).callId === callId,
     );
   const standing = (intent: Row) => {
-    const { origin, callId, attempt } = payload(intent) as {
-      readonly origin: { readonly responseId?: string };
-      readonly callId: string;
-      readonly attempt: number;
-    };
+    const { origin, callId, attempt } = intentOf(payload(intent));
     const own = `${origin.responseId ?? ''}/${callId}:${attempt}`;
     return prefix.some(
       (row) =>
@@ -602,11 +630,11 @@ function violations(
         (row) => row.run === run && row.type === 'response.finalized',
       ).length,
   );
+  const expectedFields = new Map(Object.entries(expected));
   return [
     ...Object.entries(got).map(([field, value]) =>
       modelDecides.has(field) ||
-      JSON.stringify(value) ===
-        JSON.stringify(expected[field as keyof typeof expected])
+      JSON.stringify(value) === JSON.stringify(expectedFields.get(field))
         ? null
         : `the conversation's ${field} came to ${JSON.stringify(value)}`,
     ),
@@ -729,11 +757,11 @@ const resumeFrom = (
       if (existsSync(join(snapshot, name)))
         cpSync(join(snapshot, name), join(storage, name), { recursive: true });
     for (const name of WORKSPACE_FILES) {
-      const file = join(roots.workspace!, name);
+      const file = join(workspaceOf(roots), name);
       rmSync(file, { force: true });
       if (existsSync(join(snapshot, name))) cpSync(join(snapshot, name), file);
     }
-    const effectsLog = join(roots.workspace!, 'effects.log');
+    const effectsLog = join(workspaceOf(roots), 'effects.log');
     const effectsBefore = linesOf(effectsLog).length;
     const prefix = rowsOf(storage);
     const refused = yield* Effect.scoped(
@@ -810,7 +838,7 @@ export function crashConformanceSuite(
     const crashHost = Layer.effectDiscard(
       Effect.map(FakeHost, ({ roots }) =>
         writeFileSync(
-          join(roots.workspace!, 'notes.tex'),
+          join(workspaceOf(roots), 'notes.tex'),
           '\\section{Notes}\nThe crash suite reads this file.\n',
         ),
       ),
@@ -969,10 +997,7 @@ export function crashConformanceSuite(
                     rows.flatMap((row) => {
                       if (row.type !== 'child.park' || row.parent !== root)
                         return [];
-                      const { heldFor, ends } = json(row) as {
-                        heldFor?: string;
-                        ends?: string;
-                      };
+                      const { heldFor, ends } = parkOf(json(row));
                       return heldFor === undefined
                         ? []
                         : [{ row, followUpId: heldFor, end: ends }];
@@ -1194,9 +1219,7 @@ export function crashConformanceSuite(
                       );
                     const calls = final.flatMap((row) =>
                       row.type === 'run.start' && row.parent !== null
-                        ? [
-                            `${row.parent}/${(json(row).parent as { call: { callId: string } | null }).call?.callId ?? null}`,
-                          ]
+                        ? [`${row.parent}/${callOf(row)}`]
                         : [],
                     );
                     const found = [
@@ -1263,8 +1286,7 @@ export function crashConformanceSuite(
                       (row) =>
                         row.type === 'run.start' &&
                         row.parent === root &&
-                        (json(row).identity as { kind: string }).kind ===
-                          'process',
+                        identityOf(json(row)).identity.kind === 'process',
                     )
                     // cast: the store's logical id of a run aggregate is its RunId.
                     .map((row) => row.run as RunId);
@@ -1326,10 +1348,9 @@ export function crashConformanceSuite(
                 );
                 const cleanRows = rowsOf(roots.storage);
                 expect(commands(cleanRows)).toHaveLength(2);
-                const [control, detached] = commands(cleanRows) as [
-                  RunId,
-                  RunId,
-                ];
+                const [control, detached] = commands(cleanRows);
+                if (control === undefined || detached === undefined)
+                  return yield* Effect.die('the clean pass sent no commands');
                 // The cut: the parent ended, both commands run detached, neither
                 // has ended yet.
                 const ended = cleanRows.filter(

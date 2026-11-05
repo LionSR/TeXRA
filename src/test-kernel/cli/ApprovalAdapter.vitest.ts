@@ -1,8 +1,9 @@
 // Third-party imports
 import { layer } from '@effect/vitest';
-import { Effect, Layer, Context } from 'effect';
+import { Effect, Layer, Context, Schema } from 'effect';
 import { describe, expect } from 'vitest';
 
+import { RunIdSchema, type RunId } from '@texra-ai/harness/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { type CliApprovalPromptHooks } from '@cli/runtime/approval/approvalPrompts';
@@ -19,7 +20,6 @@ import {
   sessionHandleOf,
   TestSession,
 } from '@test/support/testKernel';
-import type { RunId } from '@texra-ai/harness/schemas';
 
 function context(overrides: Partial<CliContext> = {}): CliContext {
   return createTestCliContext({
@@ -58,7 +58,7 @@ const useCliHostInteractions = (
     );
   });
 
-const ROOT_RUN = 'a00001' as RunId;
+const ROOT_RUN = Schema.decodeUnknownSync(RunIdSchema)('a00001');
 /** The runs this file opens requests on; a request is a row on its run, so
  *  the run exists before the first one opens. */
 const started = new Set<RunId>();

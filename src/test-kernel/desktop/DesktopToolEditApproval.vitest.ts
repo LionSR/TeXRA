@@ -9,9 +9,11 @@ import {
   type Path,
   SubscriptionRef,
   Context,
+  Schema,
 } from 'effect';
 import { afterEach, expect, vi } from 'vitest';
 
+import { RunIdSchema } from '@texra-ai/harness/schemas';
 import { DesktopToolEditApprovalHost } from '@desktop/main/desktopToolEditApproval';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -27,7 +29,6 @@ import {
   type ToolEditPreview,
 } from '@texra/controllers/approval/ToolEditApprovalController';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
-import type { RunId } from '@texra-ai/harness/schemas';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -103,7 +104,7 @@ const review = Effect.gen(function* () {
   /** Ask for the edit; the fiber ends with its answer. */
   const requestEdit = Effect.gen(function* () {
     // A request row is only ever appended to a run the history knows.
-    const runId = 'a40000' as RunId;
+    const runId = Schema.decodeSync(RunIdSchema)('a40000');
     publishTestRunStart(session, runId);
     yield* Context.get(session, SessionLog).settled;
     return yield* Effect.forkScoped(
@@ -125,7 +126,7 @@ const review = Effect.gen(function* () {
   });
   const pendingRequestId = () =>
     SubscriptionRef.getUnsafe(Context.get(session, SessionViewAccess).ref)
-      .requests[0]!.requestId;
+      .requests[0].requestId;
   return { onRuntime, openWindow, requestEdit, pendingRequestId };
 });
 
@@ -164,7 +165,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           );
           const edited = 'beta\nwith user edits\nand more\n';
           yield* Effect.tryPromise(() =>
-            writeFile(window.opened[0]!, edited, 'utf8'),
+            writeFile(window.opened[0], edited, 'utf8'),
           );
 
           // Approve sends the copy as the user left it with the decision,
@@ -180,7 +181,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* Effect.tryPromise(() =>
             vi.waitFor(async () => {
               await expect(
-                pathExists(window.staged[0]!.proposedPath),
+                pathExists(window.staged[0].proposedPath),
               ).resolves.toBe(false);
             }),
           );
@@ -224,7 +225,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* Effect.tryPromise(() =>
             vi.waitFor(() => expect(editing.opened).toHaveLength(1)),
           );
-          const copy = editing.opened[0]!;
+          const copy = editing.opened[0];
           yield* Effect.addFinalizer(() =>
             Effect.promise(() =>
               rm(dirname(copy), { recursive: true, force: true }),
@@ -256,7 +257,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           yield* Effect.tryPromise(() =>
             vi.waitFor(async () => {
               await expect(
-                pathExists(answering.staged[0]!.proposedPath),
+                pathExists(answering.staged[0].proposedPath),
               ).resolves.toBe(false);
             }),
           );

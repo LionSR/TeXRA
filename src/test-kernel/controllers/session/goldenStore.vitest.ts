@@ -220,7 +220,13 @@ describe('the golden 1.0 store', () => {
         const exec = (statement: string, params: readonly unknown[]) =>
           Effect.sync(() =>
             raw(storage, (db) =>
-              db.prepare(statement).all(...(params as (string | number)[])),
+              db
+                .prepare(statement)
+                .all(
+                  ...Schema.decodeUnknownSync(
+                    Schema.Array(Schema.Union([Schema.String, Schema.Number])),
+                  )(params),
+                ),
             ),
           );
         const events = yield* rowReader(
@@ -229,13 +235,11 @@ describe('the golden 1.0 store', () => {
           exec,
         ).read(rows, true);
         expect(events).toHaveLength(rows.length);
-        const types = new Set(events.map((event) => event.type));
+        const types = new Set<string>(events.map((event) => event.type));
         // Every row kind is in the fixture, the decode test of a released store.
         expect(
           Object.keys(ROW_KINDS)
-            .filter(
-              (kind) => !types.has(kind as (typeof events)[number]['type']),
-            )
+            .filter((kind) => !types.has(kind))
             .toSorted(),
         ).toEqual([]);
         for (const type of [
@@ -488,9 +492,13 @@ describe('the golden 1.0 store', () => {
       // committed as that build would: the row, its sequence, `stored_kind`.
       const storage = goldenRoot();
       raw(storage, (db) => {
-        const { id, seq } = db
-          .prepare('SELECT id, seq FROM event_sequence WHERE logical_id = ?')
-          .get('a00000000004') as { id: number; seq: number };
+        const { id, seq } = Schema.decodeUnknownSync(
+          Schema.Struct({ id: Schema.Number, seq: Schema.Number }),
+        )(
+          db
+            .prepare('SELECT id, seq FROM event_sequence WHERE logical_id = ?')
+            .get('a00000000004'),
+        );
         const version = ROW_KINDS['model.message'].version + 1;
         db.exec('BEGIN');
         db.prepare(
@@ -620,6 +628,7 @@ describe('the golden run killed after its effect', () => {
         () =>
           Effect.gen(function* () {
             const { storage, workspace } = testWorkspaceRoots();
+            if (workspace === undefined) throw new Error('no test workspace');
             // The resume, in a session that closes before the store is read.
             yield* Effect.scoped(
               Effect.gen(function* () {
@@ -653,13 +662,13 @@ describe('the golden run killed after its effect', () => {
              WHERE s.logical_id = ? AND e.type = 'tool.result'`,
                 )
                 .all(KILLED)
-                .map((row) => JSON.parse(String(row.payload)) as unknown),
+                .map((row): unknown => JSON.parse(String(row.payload))),
             );
             expect(settled).toHaveLength(1);
             expect(JSON.stringify(settled[0])).toContain('outcome is unknown');
             // The effect the killed process left, and nothing more.
             expect(
-              readFileSync(join(workspace!, 'approved.txt'), 'utf8')
+              readFileSync(join(workspace, 'approved.txt'), 'utf8')
                 .split(/\r?\n/)
                 .filter(Boolean),
             ).toEqual(['approved']);

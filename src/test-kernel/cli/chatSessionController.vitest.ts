@@ -7,6 +7,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Schema,
   Scope,
   Stream,
   SubscriptionRef,
@@ -58,9 +59,10 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
 }));
 
 import {
-  type AgentConfig,
+  AgentConfigSchema,
   ensureError,
   RUN_OUTCOME,
+  RunIdSchema,
   type RunId,
   type RunOutcome,
   type RuntimeRequest,
@@ -219,6 +221,8 @@ const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
     };
   });
 
+const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
+
 /** The session's view ref, as a value the harness can install. The run lives
  *  in this helper; a test body composes with `yield*` instead. */
 const installableViewRef = () =>
@@ -226,14 +230,13 @@ const installableViewRef = () =>
 
 /**
  * Installs the session stub the controller surfaces receive. Every surface is
- * a stub the controller can call; `sessionStub` is a bare mock, so the
- * override map is untyped here exactly as the returned session is.
+ * a stub the controller can call; the view's changes stream from `installed`
+ * when the case gives one.
  */
-function installSession(overrides: Record<string, unknown> = {}): void {
-  const { view: installed, ...rest } = overrides;
-  const ref =
-    (installed as SubscriptionRef.SubscriptionRef<SessionView> | undefined) ??
-    installableViewRef();
+function installSession(
+  installed?: SubscriptionRef.SubscriptionRef<SessionView>,
+): void {
+  const ref = installed ?? installableViewRef();
   mocks.sessionStub.mockReturnValue({
     roots: testWorkspaceRoots(),
     // The chat's host attaches for the session's life; detaching it is the
@@ -252,7 +255,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
         installed === undefined ? Stream.empty : SubscriptionRef.changes(ref),
       watch: () => Stream.empty,
     },
-    ...rest,
   });
 }
 /** A resumed run whose result reads `outcome` when the chat awaits it. */
@@ -315,7 +317,10 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
       // The durable run record `resume()` resolves before adopting the run.
       mocks.getRunRecords.mockReturnValue({
         readConfig: async () =>
-          ({ agent: 'demo-agent', model: 'demo-model' }) as AgentConfig,
+          Schema.decodeUnknownSync(AgentConfigSchema)({
+            agent: 'demo-agent',
+            model: 'demo-model',
+          }),
         exists: async () => true,
       });
       seedView(viewWith([]));
@@ -358,10 +363,10 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           );
 
           // A stop lands only on a run the fold holds.
-          seedView(viewWith([makeRunView({ id: 'aaaaaa' as RunId })]));
+          seedView(viewWith([makeRunView({ id: decodeRunId('aaaaaa') })]));
           // The resume command, run the way the Ink handler runs it.
           const resumed = yield* Effect.forkChild(
-            ctrl.resume('aaaaaa' as RunId),
+            ctrl.resume(decodeRunId('aaaaaa')),
             { startImmediately: true },
           );
           // resume() has claimed the slot synchronously; once the durable
@@ -413,9 +418,9 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           const ctrl = createChatSessionController(
             yield* makeInit({ session }),
           );
-          seedView(viewWith([makeRunView({ id: 'aaaaaa' as RunId })]));
+          seedView(viewWith([makeRunView({ id: decodeRunId('aaaaaa') })]));
           const resumed = yield* Effect.forkChild(
-            ctrl.resume('aaaaaa' as RunId),
+            ctrl.resume(decodeRunId('aaaaaa')),
             { startImmediately: true },
           );
           yield* Effect.promise(() =>
@@ -444,17 +449,18 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
           // once the stopped run's claim lets go, the slot passes to the
           // continued run, so a later message cannot start a second root
           // beside it.
-          seedView(viewWith([makeRunView({ id: 'a11111' as RunId })]));
-          installSession({ view: installableViewRef() });
+          seedView(viewWith([makeRunView({ id: decodeRunId('a11111') })]));
+          installSession(installableViewRef());
           const teardown = pendingRunClaim();
           const session = makeSession({
-            runId: 'a11111' as RunId,
+            runId: decodeRunId('a11111'),
             runSettled: teardown.settled,
           });
           const ctrl = createChatSessionController(
             yield* makeInit({
               session,
               served: true,
+              // cast: these plain messages run no slash command, so none reads it.
               getSlashCommandContext: () => ({}) as SlashCommandContext,
             }),
           );

@@ -47,17 +47,21 @@ const permissionsOf = (storage: string, runId: string) => {
   const payloads = (type: string) =>
     rows
       .filter((row) => row.type === type)
+      // cast: every stored row's data is the JSON object its writer encoded.
       .map((row) => JSON.parse(row.data) as Record<string, unknown>);
   return {
     offered: payloads('tools.offered').map((row) =>
+      // cast: a `tools.offered` row's payload is its ToolsOfferedPayload.
       (row.payload as { tools: readonly { name: string }[] }).tools
         .map((tool) => tool.name)
         .toSorted(),
     ),
     asked: payloads('request.opened').map(
+      // cast: a `request.opened` row's payload is the request it opened.
       (row) => (row.payload as { kind: string }).kind,
     ),
     ran: payloads('tool.result').map(
+      // cast: a `tool.result` row's payload is its ToolResultPayload.
       (row) => (row.payload as { disposition: string }).disposition,
     ),
   };

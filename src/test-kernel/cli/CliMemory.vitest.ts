@@ -4,7 +4,7 @@ import * as path from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem } from 'effect';
-import { describe, expect } from 'vitest';
+import { assert, describe, expect } from 'vitest';
 
 // Local imports
 import { sessionFsLayer, type StorageFs } from '@texra-ai/harness/host';
@@ -46,8 +46,8 @@ describe('CLI memory formatting', () => {
       const error = failureOf(
         yield* Effect.exit(loadCliMemoryDetail('/memoriesExtra')),
       );
-      expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toContain('Invalid memory path');
+      assert.instanceOf(error, Error);
+      expect(error.message).toContain('Invalid memory path');
     }).pipe(withStoredMemory),
   );
 });

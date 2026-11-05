@@ -6,7 +6,6 @@ import { Sessions } from '@texra-ai/harness';
 import {
   qualifyAggregateId,
   RUN_OUTCOME,
-  type RunId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -52,8 +51,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             sessionHandleOf,
           );
           const live = [
-            [sessionA, 'a0da01' as RunId],
-            [sessionB, 'b0db01' as RunId],
+            [sessionA, Schema.decodeUnknownSync(RunIdSchema)('a0da01')],
+            [sessionB, Schema.decodeUnknownSync(RunIdSchema)('b0db01')],
           ] as const;
           for (const [session, runId] of live) {
             publishTestRunStart(session, runId);
@@ -88,7 +87,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           // Each session claims runs in its own root: paper B never holds
           // paper A's run.
           expect(
-            yield* Context.get(sessionB, SessionLog).owns('a0da01' as RunId),
+            yield* Context.get(sessionB, SessionLog).owns(
+              Schema.decodeUnknownSync(RunIdSchema)('a0da01'),
+            ),
           ).toBe(false);
           yield* Effect.all([sessions.close(rootsA), sessions.close(rootsB)], {
             concurrency: 'unbounded',
