@@ -1,6 +1,6 @@
 ---
 created: 2026-11-03
-status: proposed
+status: proposed (item 1 done 2026-11-05, #14742; item 2 open)
 ---
 
 # Overlapping responsibilities: git reads and subscription provider facts
