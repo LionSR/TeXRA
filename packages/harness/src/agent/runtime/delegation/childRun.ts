@@ -2,7 +2,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { TraceEmitter, type StageHandle } from '@agent/trace';
+import type { StageHandle } from '@agent/trace/AgentTrace';
+import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
 import {
   parentAdmission,

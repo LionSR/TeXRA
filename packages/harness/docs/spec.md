@@ -689,7 +689,7 @@ lock, and the transaction runs again with that verdict
 (`controllers/session/storeAside.ts#reclaimable`).
 
 Liveness is proven from the owner's pid and start identity alone, with no clock
-and no hostname (`agent/storage/leaseOwnerLiveness.ts#proveOwnerLiveness`):
+and no hostname (`controllers/session/ownerLiveness.ts#proveOwnerLiveness`):
 
 | Observed                                     | Verdict      |
 | -------------------------------------------- | ------------ |

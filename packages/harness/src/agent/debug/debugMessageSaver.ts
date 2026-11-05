@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { runDirUnder } from '@common/storage/storageLayout';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { InvocationRef, RunId } from '@shared/schemas';

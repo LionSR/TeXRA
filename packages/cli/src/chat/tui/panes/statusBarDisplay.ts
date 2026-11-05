@@ -49,7 +49,7 @@ import type { PendingApprovalKind } from '../state/approvalQueue';
 export type BypassState = ReturnType<typeof runBypasses>;
 
 /** What the pending-interaction count names: approvals, questions, or both. */
-export type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
+type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 function statusKindForApproval(
   kind: PendingApprovalKind,
@@ -122,7 +122,7 @@ interface StatusBarSegment {
  * reads straight off the `RunView` (`buildStatusBarDisplay`'s `run`): the
  * turn clock, the session chrome, and which surface owns input.
  */
-export interface StatusBarChrome {
+interface StatusBarChrome {
   /** Liveness of the running turn: omitted entirely in tests/headless runs,
    *  same as each of its fields individually. */
   readonly turn?: StatusBarTurnInput;

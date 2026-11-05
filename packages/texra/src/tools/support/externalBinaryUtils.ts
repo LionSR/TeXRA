@@ -128,7 +128,7 @@ export function importForeignSdk<M, K extends keyof M & string>(opts: {
 // defers those specifics to the config.
 // ---------------------------------------------------------------------------
 
-export interface ResolveBinaryConfig {
+interface ResolveBinaryConfig {
   /**
    * npm platform package names to probe for the current platform/arch (e.g.
    * `['@anthropic-ai/claude-agent-sdk-linux-x64']`). Empty/undefined means the

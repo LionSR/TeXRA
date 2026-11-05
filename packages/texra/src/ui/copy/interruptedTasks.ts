@@ -7,7 +7,7 @@ import { formatResultCount } from '@texra-ai/harness/transcript';
 import type { RunView, SessionView, RunId } from '@texra-ai/harness/schemas';
 
 /** One interrupted task, as `/resume all` names it. */
-export interface InterruptedTask {
+interface InterruptedTask {
   readonly runId: RunId;
   readonly title: string;
   /** When it last did anything: the host words it ("3 h ago"). */

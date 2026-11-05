@@ -13,7 +13,7 @@ import type { IconName } from '@ui/wa/iconNames';
 // Local imports - Web Awesome
 import { waIcon } from './webAwesomeIcons';
 
-export interface SettingsSectionHeadingOptions {
+interface SettingsSectionHeadingOptions {
   readonly title: string;
   readonly description?: string | TemplateResult;
   readonly icon?: IconName;
@@ -57,7 +57,7 @@ export function renderSettingsSectionHeading(
   `;
 }
 
-export interface SettingsToggleRowOptions {
+interface SettingsToggleRowOptions {
   readonly label: string;
   readonly description?: string;
   readonly checked: boolean;

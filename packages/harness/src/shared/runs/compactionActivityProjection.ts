@@ -51,11 +51,6 @@ export interface CompactionActivityProjection {
   maxAppliedSeqNo: number;
 }
 
-/** Fresh mutable working state for incremental activity projection. */
-export function createCompactionActivityProjection(): CompactionActivityProjection {
-  return { blocks: [], indexByOperationId: new Map(), maxAppliedSeqNo: 0 };
-}
-
 /** A later row that moves the stream past a compaction still running. */
 function interruptRunningBlocks(
   projection: CompactionActivityProjection,

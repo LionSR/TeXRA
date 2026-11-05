@@ -27,7 +27,7 @@ import {
   type ToolRun,
 } from '@agent/core/tools/ToolTypes';
 import type { TemplateOpening } from '@agent/prompt/templateInputs';
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,

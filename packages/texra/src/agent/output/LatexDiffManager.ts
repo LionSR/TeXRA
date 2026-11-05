@@ -61,7 +61,7 @@ type SingleDiffOutcome = {
  *  per diffed pair for the round's documents fact, and why it diffed no pair
  *  at all when it could not run (`null` when it ran, however many pairs it
  *  found). */
-export interface RoundLatexdiffs {
+interface RoundLatexdiffs {
   readonly artifacts: RunStorageFileLocation[];
   readonly entries: LatexdiffEntry[];
   readonly notRun: string | null;

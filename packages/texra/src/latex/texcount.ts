@@ -47,7 +47,7 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
 
 export type TexcountMode = 'separate' | 'include';
 
-export interface TexcountOptions {
+interface TexcountOptions {
   mode?: TexcountMode;
   /**
    * Setting slots of the counted workspace, held as data by the caller that

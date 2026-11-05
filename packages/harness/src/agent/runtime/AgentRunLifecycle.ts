@@ -6,7 +6,8 @@
  */
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import { logSdkError, type StageHandle } from '@agent/trace';
+import type { StageHandle } from '@agent/trace/AgentTrace';
+import { logSdkError } from '@agent/trace/helpers';
 import {
   finalizeRun,
   type FinalizeRunInput,

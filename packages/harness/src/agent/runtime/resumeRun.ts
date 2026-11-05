@@ -67,7 +67,7 @@ import type { SessionServices } from './rootLaunch';
 
 /** A resume answers once the run rests with the input it was resumed for
  *  taken, or once the run ends, whether or not it took that input. */
-export type ResumeRunResult =
+type ResumeRunResult =
   | { readonly started: true; readonly delivered: boolean }
   | { readonly failed: ResumeRefusal };
 
@@ -79,7 +79,7 @@ export type ResumeAttempt = ResumeRunResult | { readonly ownedBy: RunId };
 /** What a resume's caller hears: the commit of the activation it opened or
  *  joined, which it now holds, or, before any, the refusal or the owning
  *  parent its decision answered. */
-export type ResumeHandOff =
+type ResumeHandOff =
   | { readonly activation: CommitOrdinal }
   | Exclude<ResumeAttempt, { readonly started: true }>;
 

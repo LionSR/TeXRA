@@ -93,7 +93,7 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
   promoteApprovalsForRun(runId);
 }
 
-export interface AppProps {
+interface AppProps {
   /** The session's three setting slots, for the status bar's route probe. */
   readonly stores: SettingsStores;
   /**

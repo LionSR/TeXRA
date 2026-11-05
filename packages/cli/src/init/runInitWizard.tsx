@@ -58,7 +58,7 @@ interface Draft {
   gitignore?: boolean;
 }
 
-export function initWizardModelSelectItems(
+function initWizardModelSelectItems(
   models: readonly CliModelAccess[],
 ): ReadonlyArray<SelectItem<string>> {
   const hasAvailableModel = models.some((model) => model.available);
@@ -72,7 +72,7 @@ export function initWizardModelSelectItems(
   }));
 }
 
-export function initWizardDefaultAgentIndex(
+function initWizardDefaultAgentIndex(
   agents: readonly InitWizardAgentOption[],
 ): number {
   const defaultAgent = pickDefaultToolUseAgent(agents);

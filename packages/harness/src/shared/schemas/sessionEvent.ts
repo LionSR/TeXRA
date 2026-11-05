@@ -412,7 +412,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * Every kind has a case, so a new kind does not compile until its edges are
  * decided here.
  */
-export interface AggregateEdges {
+interface AggregateEdges {
   readonly parent: AggregateId | null;
   /** Absent: the target keeps its parent. */
   readonly reparent?: AggregateId | null;

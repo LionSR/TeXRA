@@ -52,7 +52,7 @@ const FRAME_BUFFER = 64;
 
 /** What a framer reads: the session key every frame carries, and the
  *  session's view, whose `watch` is the ordered input reader. */
-export interface FramerSource {
+interface FramerSource {
   readonly key: string;
   readonly view: Pick<Session['view'], 'current' | 'watch'>;
 }

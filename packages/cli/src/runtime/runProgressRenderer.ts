@@ -45,7 +45,7 @@ export function finishedToolCalls(run: RunView): number {
   ).length;
 }
 
-export interface RunProgressRenderer {
+interface RunProgressRenderer {
   /** Follow the session's view until the scope closes, describing `runId`. */
   attach(
     session: RunProgressSession,

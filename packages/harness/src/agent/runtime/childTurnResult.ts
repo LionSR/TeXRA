@@ -11,7 +11,7 @@ import { Context, Effect, type Scope } from 'effect';
 
 import type { InboxItem, Sent, SendOptions } from '@agent/followUp/Inbox';
 import { Inbox, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
 import type { AttemptKey } from '@shared/session/runRowsShape';
@@ -90,7 +90,7 @@ export type TurnResultRow = Extract<
 /** A result on its way to the parent's inbox, from its child's run under
  *  the id that makes a repeat a replay; `end`: the turn was the child's
  *  last, and ends it as this outcome. */
-export interface ChildDelivery {
+interface ChildDelivery {
   readonly to: RunId;
   readonly item: InboxItem & {
     readonly from: { readonly kind: 'run'; readonly runId: RunId };

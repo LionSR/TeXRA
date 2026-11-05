@@ -34,7 +34,7 @@ import {
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
-  ownerPid,
+  ownerIdentity,
   blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
@@ -476,7 +476,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
   else if (heldBy !== null)
-    statusNotice = { kind: 'held', pid: ownerPid(heldBy) };
+    statusNotice = { kind: 'held', pid: ownerIdentity(heldBy).pid };
   else if (run.lost !== null)
     statusNotice = { kind: 'lost', message: run.lost };
   return withDerived(run, {

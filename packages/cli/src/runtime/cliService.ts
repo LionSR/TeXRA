@@ -272,30 +272,10 @@ const NO_SERVICE = 'TEXRA_NO_SERVICE';
 export function reachCliService(
   storageRoot: string,
 ): Effect.Effect<ServiceConnection, Error, Scope.Scope | GlobalValues> {
-  return withCliService(storageRoot, ensureService);
-}
-
-/** {@link reachCliService} held for the chat's life: the link reaches the
- *  service again when it goes away. */
-export function linkCliService(
-  storageRoot: string,
-): Effect.Effect<ServiceLink, Error, Scope.Scope | GlobalValues> {
-  return withCliService(storageRoot, linkService);
-}
-
-/** `reach` over the storage root's service, started with this process's
- *  own Node and entry, unless `TEXRA_NO_SERVICE` is set. */
-function withCliService<A>(
-  storageRoot: string,
-  reach: (
-    storageRoot: string,
-    start: Effect.Effect<void, Error>,
-  ) => Effect.Effect<A, Error, Scope.Scope | GlobalValues>,
-): Effect.Effect<A, Error, Scope.Scope | GlobalValues> {
   return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
     off
       ? Effect.fail(new Error(`${NO_SERVICE} is set`))
-      : reach(
+      : ensureService(
           storageRoot,
           spawnService(storageRoot, process.execPath, [
             ...process.execArgv,

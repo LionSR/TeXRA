@@ -113,7 +113,7 @@ export class CliUsageError extends Schema.TaggedError<CliUsageError>()(
 export const failUsage = (message: string) =>
   Effect.fail(new CliUsageError({ message }));
 
-export interface CliAmbientState {
+interface CliAmbientState {
   readonly isCi: boolean;
   readonly stdinIsTty: boolean;
   readonly stdoutIsTty: boolean;

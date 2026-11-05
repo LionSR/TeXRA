@@ -1,4 +1,4 @@
-export type ContextGaugeBand = 'ok' | 'warning' | 'error';
+type ContextGaugeBand = 'ok' | 'warning' | 'error';
 
 /**
  * The 65/80 thresholds the CLI status bar and the progress view's context

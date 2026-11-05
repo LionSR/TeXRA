@@ -7,7 +7,7 @@
  * still match correctly.
  */
 
-export interface BraceMacroCall {
+interface BraceMacroCall {
   /** Each argument's raw text (delimiting braces stripped). */
   readonly args: string[];
   /** Index of the macro's leading backslash. */

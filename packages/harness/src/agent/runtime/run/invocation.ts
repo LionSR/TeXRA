@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { Cause, Context, Effect, Exit, Result } from 'effect';
 import { ModelError } from '@texra-ai/llm';
 
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { BoundModel } from '@agent/runtime/modelAccess/ModelAccess';
 import { type CallFailure } from '@agent/runtime/modelAccess/failureInfo';
 import { RouteUnavailable } from '@common/errors/agentErrors';
@@ -54,7 +54,7 @@ const isCallFailure = (error: unknown): error is CallFailure =>
  * binding that could not be replaced (a renewal or a rebind that failed):
  * nothing was sent, and no retry repeats it.
  */
-export interface AttemptFailure {
+interface AttemptFailure {
   readonly error: CallFailure;
   readonly unsent: boolean;
 }
@@ -80,7 +80,7 @@ interface Asker<E, R> {
 }
 
 /** What one invocation's caller supplies to {@link runInvocation}. */
-export interface InvocationDriver<A, E, R> {
+interface InvocationDriver<A, E, R> {
   /** The invocation as its rows stand, read before every move. */
   readonly read: Effect.Effect<InvocationView>;
   /** The binding in force, read again before every attempt. */
@@ -114,7 +114,7 @@ export interface InvocationDriver<A, E, R> {
 }
 
 /** How an invocation ends when it delivers nothing. */
-export type InvocationEnd =
+type InvocationEnd =
   | {
       readonly kind: 'failed';
       readonly error: RetryErrorInfo;

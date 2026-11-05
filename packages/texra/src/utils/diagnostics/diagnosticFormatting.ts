@@ -28,7 +28,7 @@ export interface GenericDiagnostic {
 }
 
 /** Counts of diagnostics by severity level */
-export interface SeverityCounts {
+interface SeverityCounts {
   errors: number;
   warnings: number;
   info: number;

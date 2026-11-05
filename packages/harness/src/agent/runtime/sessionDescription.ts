@@ -11,7 +11,7 @@ import { Cause, Context, Deferred, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { helperCall } from '@agent/runtime/helperModel';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
@@ -223,6 +223,6 @@ export const settleDescriptionOnExit =
 
 function warnFailure(cause: unknown): Effect.Effect<void> {
   return Effect.logWarning(
-    `Failed to generate session description: ${getSdkErrorMessage(cause)}`,
+    `Failed to generate session description: ${normalizeProviderError(cause).message}`,
   ).pipe(withLogChannel(CHANNEL));
 }

@@ -295,7 +295,7 @@ interface ExpandedRunInputs {
  * `--context` is expanded with the same helper so a missing path fails as a
  * Usage error (exit 2) attributed to `--context`.
  */
-export const expandRunInputs = Effect.fn('expandRunInputs')(function* (
+const expandRunInputs = Effect.fn('expandRunInputs')(function* (
   inputSpecs: readonly string[],
   contextSpecs: readonly string[],
   cwd: string,

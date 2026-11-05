@@ -99,7 +99,7 @@ const noToolchain = (error: LeanStartError): LeanUnavailable =>
   });
 
 /** A project command could not run or reported failure. */
-export class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError>()(
+class LeanProjectCommandError extends Schema.TaggedError<LeanProjectCommandError>()(
   'LeanProjectCommandError',
   {
     message: Schema.String,

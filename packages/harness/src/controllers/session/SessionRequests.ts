@@ -90,7 +90,7 @@ type SessionRequestLog = Pick<
   Pick<SessionEventsShape, 'removeRun'>;
 
 /** What the session layer builds a session's requests over. */
-export interface SessionRequestsInit {
+interface SessionRequestsInit {
   /** The root's log: admission reads and removal. */
   readonly log: SessionRequestLog;
   /** This process's liveness snapshot (`self`, `dead`). */

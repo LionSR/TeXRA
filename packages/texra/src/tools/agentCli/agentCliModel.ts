@@ -33,7 +33,7 @@ export interface AgentCliModelRule {
   readonly requirement: string;
 }
 
-export interface AgentCliModel {
+interface AgentCliModel {
   readonly choice: ReasoningChoice;
   /** The level to send; `undefined` sends none (the model has no effort control). */
   readonly effort: AgentCliEffort | undefined;

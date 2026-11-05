@@ -15,7 +15,7 @@ import type { SchemaAST } from 'effect';
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/http';
 
-export type JsonObject = Record<string, unknown>;
+type JsonObject = Record<string, unknown>;
 
 export interface ParsedSubscriptionUsage {
   readonly planName?: string;

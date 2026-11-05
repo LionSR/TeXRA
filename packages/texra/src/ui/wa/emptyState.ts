@@ -11,7 +11,7 @@ import { waIcon } from './webAwesomeIcons';
 
 type EmptyStateHeadingTag = 'h1' | 'h2' | 'h3';
 
-export interface EmptyStateOptions {
+interface EmptyStateOptions {
   readonly icon: IconName;
   readonly title: string;
   readonly body?: string;

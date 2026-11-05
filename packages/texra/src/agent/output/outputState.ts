@@ -18,7 +18,7 @@ import type { AgentConfig, FileLocation } from '@texra-ai/harness/schemas';
  *  its fields writable, since extraction, the disk check, the compile check
  *  and the diff each set their part of the round in place before the call
  *  commits the whole map as the fact's array. */
-export type RoundState = { -readonly [K in keyof RoundOutput]: RoundOutput[K] };
+type RoundState = { -readonly [K in keyof RoundOutput]: RoundOutput[K] };
 
 export interface OutputState {
   rounds: Map<number, RoundState>;

@@ -13,7 +13,7 @@ interface FileVarValue {
 }
 
 /** The prompt XML built from a file list, plus what the read dropped. */
-export interface XmlFormatFromFilesResult {
+interface XmlFormatFromFilesResult {
   readonly xml: string | null;
   /** The files that were read, in input order, each with the content the
    *  XML carries, so a caller filling a `*_FILE`/`*_CONTENT` pair from one

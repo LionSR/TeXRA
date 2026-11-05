@@ -14,7 +14,7 @@ import {
   type TurnResult,
 } from '@texra-ai/llm';
 
-import type { AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace/AgentTrace';
 import {
   failureInfo,
   type CallFailure,
@@ -41,7 +41,7 @@ export interface CallResult {
   readonly usage: NormalizedUsage | null;
 }
 
-export interface ModelCall<R = never> {
+interface ModelCall<R = never> {
   /** Why the call is made; a turn is `ModelInvoker.invoke`, not this path. */
   readonly purpose: 'compaction' | 'helper';
   /** The binding in force, read again before every attempt. */

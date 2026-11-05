@@ -6,11 +6,7 @@ import {
   fileLocationDisplayPath,
 } from '@texra-ai/harness/schemas';
 import { createRunStorageLocation } from '@texra-ai/harness/host';
-import { traceFileLineage } from '@texra/agent/output/lineageMapping';
-import {
-  ensureRoundData,
-  type OutputState,
-} from '@texra/agent/output/outputState';
+import { pairOutputsWithBases } from '@texra/agent/output/lineageMapping';
 
 describe('workflow output lineage mapping', () => {
   const runId = Schema.decodeUnknownSync(RunIdSchema)('abc123');
@@ -29,8 +25,7 @@ describe('workflow output lineage mapping', () => {
     const chapter1Output = runStorageFile('r0/inputs/chapter1/lemma.tex');
     const chapter2Output = runStorageFile('r0/inputs/chapter2/lemma.tex');
 
-    const state: OutputState = { rounds: new Map() };
-    ensureRoundData(state, 0).outputs = [
+    const outputs = [
       {
         source: 'inputs/chapter1/lemma.tex',
         round: 0,
@@ -47,7 +42,7 @@ describe('workflow output lineage mapping', () => {
       },
     ];
 
-    const mapping = traceFileLineage(state, [chapter1, chapter2], 0);
+    const mapping = pairOutputsWithBases([chapter1, chapter2], outputs);
 
     const chapter1Entry = mapping.get(fileLocationDisplayPath(chapter1Output));
     expect(chapter1Entry?.origin).toBe(chapter1);

@@ -13,7 +13,7 @@ import { TASK_ACTIONS } from '@ui/copy/nestedRuns';
 import { runViewOf } from './sessionView';
 import type { ApprovalPolicy, SessionView } from '@texra-ai/harness/schemas';
 
-export interface ResumeCommandOptions {
+interface ResumeCommandOptions {
   readonly cwd?: string;
   readonly processCwd?: string;
   readonly approvalPolicy?: ApprovalPolicy;

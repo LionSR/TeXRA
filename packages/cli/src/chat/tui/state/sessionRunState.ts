@@ -29,7 +29,7 @@ export type RootRunSettled = Effect.Effect<void, Error>;
  * reactively instead of calling impure session closures that memoized
  * renders would cache stale (#8273). Written only through `TuiSession`.
  */
-export interface RootRunClaim {
+interface RootRunClaim {
   readonly runId: RunId | undefined;
   readonly runSettled: RootRunSettled | undefined;
   readonly runCompleted: boolean;

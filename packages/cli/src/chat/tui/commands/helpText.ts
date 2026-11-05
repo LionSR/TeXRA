@@ -24,7 +24,7 @@ const CATEGORY_SECTIONS: ReadonlyArray<{
   { category: undefined, label: 'Other' },
 ];
 
-export interface SlashCommandHelpOptions {
+interface SlashCommandHelpOptions {
   /** Chord modifier shown for stream-focus shortcuts: `Alt` on most
    *  platforms, `Esc` on macOS (see `defaultShortcutModifierLabel`). */
   readonly shortcutModifierLabel?: string;

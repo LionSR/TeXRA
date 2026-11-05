@@ -20,7 +20,7 @@ import type { BypassState } from './panes/statusBarDisplay';
 
 const QUEUED_FOLLOW_UP_STATUS_LENGTH = 160;
 
-export interface CliSessionStatusInput {
+interface CliSessionStatusInput {
   readonly agent: string;
   readonly model: string;
   readonly teamName?: string;

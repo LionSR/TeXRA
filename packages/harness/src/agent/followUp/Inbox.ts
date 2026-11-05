@@ -98,7 +98,7 @@ export interface SendOptions {
 type Admission = { rows: readonly RunInputDraft[]; sent: Sent };
 
 /** What observers hear: a run takes no more input, or the inbox closed. */
-export type InboxClosed =
+type InboxClosed =
   | { readonly kind: 'run'; readonly runId: RunId }
   | { readonly kind: 'session' };
 

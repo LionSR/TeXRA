@@ -26,7 +26,7 @@
 import { Deferred, Effect, Exit, SynchronizedRef, type Scope } from 'effect';
 
 import { buildOpeningSystemPrompt } from '@agent/prompt/PromptBuilder';
-import { logUserMessage } from '@agent/trace';
+import { logUserMessage } from '@agent/trace/helpers';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import { SessionRoots } from '@platform/rootedFs';
@@ -75,7 +75,7 @@ const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
-export interface ToolUseStart {
+interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
   /** A native child's turn permit, and the turn result its boundary commits. */

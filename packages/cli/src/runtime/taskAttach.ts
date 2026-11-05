@@ -35,7 +35,7 @@ import type { RunView, SessionView } from '@texra-ai/harness/schemas';
 const ATTACH_PORT = 'attach';
 
 /** How the attached task is printed. */
-export interface TaskAttachOutput {
+interface TaskAttachOutput {
   readonly format: 'text' | 'ndjson';
   /** Text layout width. */
   readonly columns: number;
@@ -43,7 +43,7 @@ export interface TaskAttachOutput {
 }
 
 /** The service stopped sending the task before it ended. */
-export class TaskWatchEnded extends Schema.TaggedError<TaskWatchEnded>()(
+class TaskWatchEnded extends Schema.TaggedError<TaskWatchEnded>()(
   'TaskWatchEnded',
   {
     runId: Schema.String,

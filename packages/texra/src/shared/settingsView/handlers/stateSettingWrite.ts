@@ -42,18 +42,14 @@ const WRITABLE_ENTRY_BY_KEY: {
 };
 
 /** Outcome of {@link applyStateSettingUpdate}, for host-specific UI feedback. */
-export type StateSettingUpdateResult<
-  E extends TexraSettingRow = TexraSettingRow,
-> =
+type StateSettingUpdateResult<E extends TexraSettingRow = TexraSettingRow> =
   | { readonly kind: 'ignored' }
   | { readonly kind: 'rejected'; readonly entry: E; readonly error: Error }
   | { readonly kind: 'workspace-required'; readonly entry: E }
   | { readonly kind: 'applied'; readonly entry: E }
   | { readonly kind: 'failed'; readonly entry: E; readonly error: Error };
 
-export interface StateSettingUpdatePorts<
-  H extends SettingSurface = SettingSurface,
-> {
+interface StateSettingUpdatePorts<H extends SettingSurface = SettingSurface> {
   readonly stores: SettingsStores;
   /**
    * The calling surface: it selects which rows are writable.
