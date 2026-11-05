@@ -57,7 +57,8 @@ interface WritableFileTarget {
 }
 
 type WritableTargetPreparation =
-  { blocked: ToolResult } | { target: WritableFileTarget };
+  | { blocked: ToolResult }
+  | { target: WritableFileTarget };
 
 interface ResolveWritableTargetOptions {
   missing?: 'allow' | 'require';

@@ -93,7 +93,6 @@ const CONFIGURE: {
             ? null
             : choice.effort,
         cache: config.capabilities.supportsPromptCaching ? '5m' : 'disabled',
-        stopSequences: [],
       },
     };
   },
@@ -150,7 +149,6 @@ export function configurationFor(spec: BindSpec): {
   const options: Options = {
     maxOutputTokens: config.maxOutputTokens,
     reasoning: chooseReasoning(config, {}, { route }),
-    reasoningSummary: false,
     serverState: false,
     fastTier: false,
     webSocket: false,

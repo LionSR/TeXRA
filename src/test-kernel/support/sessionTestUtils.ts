@@ -94,6 +94,7 @@ export const queuedFollowUps = (
  */
 export function createTestRunTrace(runId: RunId) {
   // Fixture run ids need not be well-formed; the reducer only stamps them.
+  // cast: the key's shape is canonical, only its run id may be a fixture's.
   const aggregate = JSON.stringify(['run', runId]) as AggregateId;
   const ctx = { debug: false, lifecycleToTaskGroups: true };
   const ix = emptyTranscriptIndexes();
@@ -104,6 +105,7 @@ export function createTestRunTrace(runId: RunId) {
     transcript = applyTranscriptEvent(
       transcript,
       { ix, owned: new WeakSet() },
+      // cast: the trace's transcript events are session event payloads.
       { ...fact, aggregateId: aggregate, seq, at: seq } as SessionEvent,
       ctx,
     );

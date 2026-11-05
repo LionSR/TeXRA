@@ -26,8 +26,8 @@ import {
   type WorkspaceRoots,
   type ToolResult,
 } from '@texra-ai/harness';
-import { ToolContext } from '@texra-ai/harness/plugins';
-import { withLogChannel, Settings } from '@texra-ai/harness/host';
+import { ChildRuns, ToolContext } from '@texra-ai/harness/plugins';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   ensureError,
   toErrorMessage,
@@ -43,20 +43,12 @@ import {
   type AgentTrace,
   type ToolCardHandle,
 } from '@texra-ai/harness/plugins';
-import type { CodexApprovalPolicy } from '@texra/shared/agentCliSettings';
-import { CodexSandboxModeSchema } from '@texra/shared/agentCliSettings';
-import { CodexStateKey } from '@texra/shared/settingsView/integrationSettings';
 import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspaceOptions';
 
 // Local file imports
-import {
-  codexSandboxMode,
-  getCodexConfig,
-  openCodexClient,
-} from './codexImport';
+import { getCodexConfig, openCodexClient } from './codexImport';
 import { CodexThreads } from './agentCliSessionStores';
 import {
-  agentCliApprovalCommand,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -100,12 +92,6 @@ const CodexInputSchema = Schema.Struct({
     description:
       'Instruction for the Codex agent. For a new session, describe the task. For a resume (thread_id set), describe the follow-up.',
   }),
-  sandbox_mode: Schema.optional(Schema.NullOr(CodexSandboxModeSchema)).annotate(
-    {
-      description:
-        'File access level for the Codex agent (defaults to user-configured mode, typically workspace-write)',
-    },
-  ),
   thread_id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description:
       'Resume an existing Codex thread with a follow-up instruction. The prompt is enqueued as the next turn; if the thread is currently processing, the prompt waits in its queue.',
@@ -398,10 +384,8 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
-    approvalPolicy: yield* Settings.get<CodexApprovalPolicy>(
-      roots,
-      CodexStateKey.APPROVAL_POLICY,
-    ),
+    // Codex cannot ask through TeXRA: the run's policy decided at launch.
+    approvalPolicy: 'never',
     model: run.slug,
     ...(run.effort && { modelReasoningEffort: run.effort }),
     skipGitRepoCheck: true as const,
@@ -428,10 +412,11 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   ToolError,
   ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
 > {
-  const sandboxMode = yield* codexSandboxMode(
-    input,
-    (yield* ToolContext).env.roots,
-  );
+  // The workspace when a person approved the launch; everything when the
+  // run's work is auto-approved.
+  const sandboxMode: SandboxMode = (yield* (yield* ChildRuns).autoApproved)
+    ? 'danger-full-access'
+    : 'workspace-write';
 
   return yield* dispatchAgentCliTool({
     agentName: CODEX_AGENT_NAME,
@@ -453,7 +438,7 @@ export const CodexTool = defineTool({
   name: 'codex',
   description:
     'Spin off an OpenAI Codex agent to perform code analysis, generation, or research in a sandboxed environment. ' +
-    'The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox. ' +
+    "The agent runs the Codex CLI locally and can read files, run commands, and make edits within its sandbox, which follows this run's approval policy: workspace-write when the launch was approved, full access under Auto-approve or an all-agent-work grant. " +
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
@@ -468,10 +453,7 @@ export const CodexTool = defineTool({
   },
   guard: {
     command: {
-      text: (input: CodexInput) =>
-        agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (stores) =>
-          codexSandboxMode(input, stores),
-        ),
+      text: (input: CodexInput) => `[${CODEX_AGENT_NAME}] ${input.prompt}`,
       // A resumed thread keeps its stored workspace: name none, not the wrong one.
       cwd: 'unknown',
     },

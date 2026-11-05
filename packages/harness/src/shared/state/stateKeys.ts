@@ -52,7 +52,6 @@ export const GlobalStateKey = Object.freeze({
   MODEL_SELECTION: 'modelSelection',
   HELPER_MODEL: 'helperModel',
   REASONING_LEVELS: 'reasoningLevels',
-  PREFER_SHORT_MODEL_NAMES: 'preferShortModelNames',
 
   // Agent settings (migrated from VS Code config)
   CUSTOM_AGENT_DIR: 'customAgentDir',

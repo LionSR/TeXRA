@@ -30,7 +30,11 @@ import type {
 } from '@texra-ai/harness/host';
 
 type WorkspaceAgentsFormMode =
-  'overview' | 'workspace' | 'default' | 'chat-default' | 'custom';
+  | 'overview'
+  | 'workspace'
+  | 'default'
+  | 'chat-default'
+  | 'custom';
 
 interface WorkspaceAgentsData {
   readonly record: CliWorkspaceAgentsRecord;

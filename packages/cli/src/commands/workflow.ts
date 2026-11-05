@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect, FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Record as Rec, Result } from 'effect';
 import { hasMagic } from 'glob';
 
 import {
@@ -9,19 +9,24 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { CliWorkflowRunResult } from '@cli/schemas/cliOutput';
 import { documentTaskPatch } from '@texra/agent/output/documentRecipe';
+import {
+  DOCUMENT_TASK_OPTIONS,
+  type DocumentTaskOptions,
+} from '@texra/shared/plugins/documents';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { getIncludedExtensions } from '@texra/common/files/fileTypeUtils';
 
 import { failUsage, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
-  advertisesInterruptedRun,
-  type CheckpointRefinement,
   formatInterruptedResumeHint,
   tryReadCliCwd,
-  writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
-import { writeErrorStderr, writeTextStderr } from '../runtime/logSinks';
+import {
+  writeErrorStderr,
+  writeTextStderr,
+  writeTextStderrAndWait,
+} from '../runtime/logSinks';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -83,7 +88,8 @@ interface HeadlessRunInit {
   readonly model?: string;
   readonly instruction: string;
   readonly instructionFile?: string;
-  readonly reflect?: boolean;
+  /** The document task's switches, each a flag of the same name. */
+  readonly options: DocumentTaskOptions;
 }
 
 /** Keep binary media out of document text interpolation on both run paths. */
@@ -224,7 +230,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
       // The entry resolved above has a task, so the patch is never null.
       const config: AgentConfigPayload = {
         ...launch,
-        ...documentTaskPatch(launch, agent, { reflect: init.reflect }),
+        ...documentTaskPatch(launch, agent, init.options),
       };
 
       return yield* executeCliWorkflowConfig(config, runContext, {
@@ -248,10 +254,13 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
 ): Effect.fn.Return<number, Error, ProcessServices> {
   // `--output` and `--output-dir` are rejected as a pair before this point, so
   // at most one of them is set here.
+  const option = Rec.keys(DOCUMENT_TASK_OPTIONS).find(
+    (key) => init.options[key],
+  );
   const workflowOnlyFlag =
     (init.output && '--output') ||
     (init.outputDir && '--output-dir') ||
-    (init.reflect && '--reflect');
+    (option && `--${option}`);
   if (workflowOnlyFlag) {
     return yield* failUsage(
       `${workflowOnlyFlag} is only available for document tasks; "${init.agent}" has no task.`,
@@ -329,53 +338,26 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;
     let workflowOutputError: unknown;
-    let resumeHintWritten = false;
     // The persisted `cli` block is the single representation of where this run
     // writes; never take the destinations a second time as call options.
     const output = resumeWorkflowOutputFile(config);
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
-    const { recoveryInputIsDurable } = options;
-    // Not a run a model failure stopped (its `lastError` in the view): read from
-    // the rows, so no verdict held in memory can be missed by an interrupt.
-    const canAdvertiseInterruptedRun: CheckpointRefinement = (runId) =>
-      Effect.map(session.records(runId).readModelFailed(), (failed) => !failed);
-    const writeResumeHint = (
-      runId: RunId,
-      waitForWrite = false,
-    ): Effect.Effect<void> => {
-      if (!recoveryInputIsDurable || resumeHintWritten) return Effect.void;
-      resumeHintWritten = true;
-      const hint = formatInterruptedResumeHint(
-        runContext,
-        runId,
-        'workflow',
-        config.workingDirectory || runContext.cwd,
-        recoveryProcessCwd,
-      );
-      return writeInterruptedResumeHint(hint, waitForWrite);
-    };
-    const maybeAdvertiseRecovery = Effect.fn('maybeAdvertiseRecovery')(
-      function* (runId: RunId) {
-        if (!run.ok) return;
-        const resumable = yield* session.records(runId).readResumable();
-        if (
-          yield* advertisesInterruptedRun(
-            runId,
-            resumable,
-            canAdvertiseInterruptedRun,
-          )
-        )
-          yield* writeResumeHint(runId);
-      },
-    );
     const run = yield* executeCliConfig(config, runContext, {
       services: options.services,
       runId: options.runId,
-      onInterruptedRunFinalized: recoveryInputIsDurable
-        ? (runId) => writeResumeHint(runId, true)
+      onInterruptedRunFinalized: options.recoveryInputIsDurable
+        ? (runId) =>
+            writeTextStderrAndWait(
+              formatInterruptedResumeHint(
+                runContext,
+                runId,
+                'workflow',
+                config.workingDirectory || runContext.cwd,
+                recoveryProcessCwd,
+              ),
+            )
         : undefined,
-      canAdvertiseInterruptedRun,
       // The run's output is published after its end commits, gated on that
       // committed outcome (`resolveWorkflowOutput` copies only a completed
       // run's): output that cannot be written fails this command, never the
@@ -427,11 +409,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const { result } = run;
     if (workflowOutputError !== undefined) {
       writeErrorStderr(workflowOutputError);
-      if (result.outcome === RUN_OUTCOME.CANCELLED) {
-        yield* maybeAdvertiseRecovery(result.runId);
-        return CliExitCode.Interrupted;
-      }
-      return CliExitCode.AgentError;
+      return result.outcome === RUN_OUTCOME.CANCELLED
+        ? CliExitCode.Interrupted
+        : CliExitCode.AgentError;
     }
     if (!workflowResult) {
       return yield* Effect.die(
@@ -450,10 +430,6 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       ndjson: { kind: 'result', result: workflowResult },
       text: formatWorkflowTextResult(workflowResult),
     });
-
-    if (result.outcome === RUN_OUTCOME.CANCELLED) {
-      yield* maybeAdvertiseRecovery(result.runId);
-    }
 
     return runOutcomeExitCode(result.outcome);
   },
@@ -510,11 +486,10 @@ export const headlessRunCommand = defineCliCommand({
       description:
         'File whose contents are passed before --instruction when both are set',
     },
-    reflect: {
-      type: 'boolean',
-      description:
-        'Document tasks only: have the critic agent review each revision but the last',
-    },
+    ...Rec.map(DOCUMENT_TASK_OPTIONS, ({ description }) => ({
+      type: 'boolean' as const,
+      description: `Document tasks only: ${description}`,
+    })),
   },
   run: (context, ctx) =>
     runHeadlessAgent(context, {
@@ -523,6 +498,9 @@ export const headlessRunCommand = defineCliCommand({
       output: optionalStringFlagValue(ctx.rawArgs, 'output'),
       outputDir: optionalStringFlagValue(ctx.rawArgs, 'output-dir'),
       model: optString(ctx.args.model),
-      reflect: ctx.args.reflect === true,
+      options: Rec.map(
+        DOCUMENT_TASK_OPTIONS,
+        (_, key) => ctx.args[key] === true,
+      ),
     }),
 });

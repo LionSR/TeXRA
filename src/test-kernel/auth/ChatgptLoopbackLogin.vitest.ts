@@ -7,7 +7,6 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import { chatgptLoginWithLoopback as loginWithLoopback } from '@texra-ai/llm/node';
 import type { ChatgptSession } from '../../../packages/llm/src/oauth/chatgpt/chatgptProvider.js';
-import type { SubscriptionOAuthCoordinator } from '../../../packages/llm/src/oauth/SubscriptionOAuthCoordinator.js';
 import type { SubscriptionAuthorizeRequest } from '../../../packages/llm/src/oauth/subscriptionCoordinator.js';
 
 /** The callback path ChatGPT's sign-in returns to. */
@@ -32,9 +31,9 @@ describe('ChatGPT loopback login', () => {
           refreshToken: 'refresh-token',
           expiresAtMs: Date.now() + 60_000,
         };
-        let request!: SubscriptionAuthorizeRequest;
+        let request: SubscriptionAuthorizeRequest | undefined;
         const loginWithCode = vi.fn(() => Effect.succeed(expectedSession));
-        const coordinator = {
+        const coordinator: Parameters<typeof login>[0]['coordinator'] = {
           buildAuthorizeRequest: (port: number) => {
             const redirectUri = `http://127.0.0.1:${port}${CALLBACK_PATH}`;
             const url = new URL('https://auth.example.test/oauth/authorize');
@@ -52,12 +51,17 @@ describe('ChatGPT loopback login', () => {
             return Effect.succeed(request);
           },
           loginWithCode,
-        } as unknown as SubscriptionOAuthCoordinator<ChatgptSession>;
+        };
 
         const session = yield* login({
           coordinator,
           openBrowser: () =>
             Effect.promise(async () => {
+              if (request === undefined) {
+                throw new Error(
+                  'The browser opened before the authorize request.',
+                );
+              }
               const callback = new URL(request.redirectUri);
 
               callback.search = new URLSearchParams({

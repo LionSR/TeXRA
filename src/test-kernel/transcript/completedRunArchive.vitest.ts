@@ -10,7 +10,7 @@ import {
   AgentConfigSchema,
   MESSAGE_TYPES,
   qualifyAggregateId,
-  type RunId,
+  RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { SessionRoots } from '@platform/rootedFs';
@@ -86,7 +86,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         'reconstructs both turns after a production resume that failed before it entered the run',
         () =>
           Effect.gen(function* () {
-            const runId = '0aa1110aa111' as RunId;
+            const runId = Schema.decodeSync(RunIdSchema)('0aa1110aa111');
             const config = runConfig('orchestrator');
 
             // The session over the host's roots, on its persistent store.

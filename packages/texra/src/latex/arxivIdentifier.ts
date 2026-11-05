@@ -1,14 +1,14 @@
-import { extract as extractArxivId } from 'identifiers-arxiv';
+import { extract as extractArxivId } from '@altmetric/identifiers/arxiv';
 
 /**
  * Normalize an arXiv identifier, ignoring surrounding whitespace, by extracting
  * it from various formats.
  * Handles URLs (abs/pdf), plain IDs, arxiv: prefixes, and old/new format IDs.
- * Uses the identifiers-arxiv package for robust extraction.
+ * Uses @altmetric/identifiers for robust extraction.
  * @returns The extracted arXiv ID, or null if no ID could be extracted.
  */
 export function normaliseArxivIdentifier(value: string): string | null {
-  // Convert PDF URLs to abs URLs and strip .pdf suffix (identifiers-arxiv doesn't handle these)
+  // Convert PDF URLs to abs URLs and strip .pdf suffix (the extractor doesn't handle these)
   const preprocessed = value
     .trim()
     .replace(/^https?:\/\/arxiv\.org\/pdf\//, 'https://arxiv.org/abs/')

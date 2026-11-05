@@ -55,7 +55,8 @@ export type SurfaceDecision =
  * so those two kinds are the only ones that name a host case.
  */
 type ApprovalArm =
-  { readonly runtime: RuntimeRequest } | { readonly host: HostRequest };
+  | { readonly runtime: RuntimeRequest }
+  | { readonly host: HostRequest };
 
 const BYPASS_OF_KIND: Partial<
   Record<PermissionPayload['kind'], ApprovalBypassKind>

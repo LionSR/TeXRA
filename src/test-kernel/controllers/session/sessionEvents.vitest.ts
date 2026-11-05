@@ -51,6 +51,9 @@ import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
+import { Sessions } from '@texra-ai/harness';
+import { nodePlatform, nodePlatformServices } from '@texra-ai/harness/node';
+
 vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   ...(await importOriginal<
     typeof import('@effect/sql-sqlite-node/SqliteClient')
@@ -98,6 +101,7 @@ import {
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
+import { SessionEventSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
@@ -115,7 +119,7 @@ import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
-import { toolTable } from '@tools/toolTable';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import type { GlobalValues } from '@texra-ai/harness/host';
 import type { ProcessProbe } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
@@ -131,6 +135,7 @@ vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
   return {
     directLeanLanguageServices: () =>
       Layer.succeed(LeanLanguageServices)(
+        // cast: no case in this suite reaches the Lean language services.
         {} as LeanLanguageServices['Service'],
       ),
   };
@@ -223,12 +228,17 @@ const settle = (
 ) =>
   SubscriptionRef.changes(view).pipe(Stream.takeUntil(ready), Stream.runDrain);
 
+/** Every row type: `readAggregate` reads only the types it is given. */
+const ROW_TYPES = SessionEventSchema.members.map(
+  (schema) => schema.fields.type.literal,
+);
+
 /** Every row of the aggregates `ids`, in commit order. */
 const rowsOf = (
   db: Database['Service'],
   ...ids: readonly SessionEvent['aggregateId'][]
 ) =>
-  Effect.forEach(ids, (id) => db.readAggregate(id, 0)).pipe(
+  Effect.forEach(ids, (id) => db.readAggregate(id, 0, ROW_TYPES)).pipe(
     Effect.map((rows) => rows.flat().toSorted((x, y) => x.commit - y.commit)),
   );
 
@@ -417,6 +427,78 @@ describe('session events and view', () => {
  * holds ends.
  */
 describe('Sessions owner', () => {
+  // A missing plugin must not clear a durable request whose answer it delivers.
+  it.live('keeps a plugin request pending when its plugin is absent', () =>
+    Effect.gen(function* () {
+      const directory = mkdtempSync(join(tmpdir(), 'texra-missing-plugin-'));
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => rmSync(directory, { recursive: true, force: true })),
+      );
+      const platform = nodePlatform({
+        agentsDir: join(directory, 'agents'),
+        storageDir: join(directory, 'storage'),
+        workspaceDir: directory,
+      });
+      mkdirSync(join(directory, 'agents'));
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db.appendAll([
+          runStart,
+          waiting,
+          {
+            type: 'request.opened',
+            aggregateId: qualifyAggregateId('run', RUN),
+            requestId: 'plugin-answer',
+            payload: {
+              kind: 'plugin',
+              plugin: 'example',
+              blocksCaller: false,
+              answers: ['answer'],
+              data: { requestId: 'plugin-answer', runId: RUN },
+            },
+          },
+        ]);
+        yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
+      }).pipe(
+        Effect.provide(
+          databaseLayer('persistent').pipe(
+            Layer.provide(Layer.succeed(WorkspaceRoots)(platform.roots)),
+            Layer.provide(ProcessIdentity.layer(SELF)),
+            Layer.provide(Layer.succeed(ToolRegistry)(toolTable([]))),
+            Layer.provide(nodePlatformServices),
+          ),
+        ),
+      );
+      yield* Effect.gen(function* () {
+        const session = yield* (yield* Sessions).open(platform.roots, {
+          persistent: true,
+          host: {},
+        });
+        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
+        yield* Stream.runHead(
+          Stream.filter(session.view.changes, (view) =>
+            view.requests.some(
+              ({ requestId }) => requestId === 'plugin-answer',
+            ),
+          ),
+        );
+        const error = yield* Effect.flip(
+          session.request({
+            kind: 'request.decide',
+            runId: RUN,
+            requestId: 'plugin-answer',
+            decision: { action: 'answer', answer: 'Preserve this answer.' },
+          }),
+        );
+        expect(error).toMatchObject({
+          _tag: 'Unavailable',
+          reason: expect.stringContaining('example'),
+        });
+        expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
+      }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
+    }),
+  );
+
   /** The graph over one started run, with the global values and platform a
    *  request handler reads. */
   const withRequestServices = <A, E, R>(program: Effect.Effect<A, E, R>) =>
@@ -446,7 +528,6 @@ describe('Sessions owner', () => {
             self: [OTHER],
             dead: [],
             unreadable: [],
-            resumeBlocked: [],
           }),
         );
         const stop = vi.fn(() => ({
@@ -456,8 +537,10 @@ describe('Sessions owner', () => {
         // cast: the stop handler reads only these of the session's owners.
         const session = Context.make(
           SessionViewAccess,
+          // cast: the stop handler reads only the view's ref and its runs.
           viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
         ).pipe(
+          // cast: the stop handler calls only `stop` of the runs.
           Context.add(Runs, { stop } as unknown as Runs['Service']),
           Context.add(
             SessionRoots,
@@ -471,6 +554,7 @@ describe('Sessions owner', () => {
           log: { ...db, removeRun: events.removeRun },
           // cast: no request here asks, decides or holds a claim.
           asks: {} as Parameters<typeof sessionRequests>[0]['asks'],
+          // cast: nor does one read the session log.
           sessionLog: {} as SessionLog['Service'],
           view: Context.get(session, SessionViewAccess),
           local,
@@ -510,12 +594,7 @@ describe('Sessions owner', () => {
         expect(
           yield* requests.request(request).pipe(Effect.provide(session)),
         ).toEqual({ kind: 'done' });
-        // A stop that leaves the child policy unset leaves it to the stop,
-        // which reads the session's "Keep subagents running".
-        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
-          detachActiveChildren: undefined,
-          reason: 'user',
-        });
+        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, 'user');
       }).pipe(withRequestServices),
   );
 });
@@ -743,7 +822,8 @@ describe('the session event table and its one publisher', () => {
           },
           commit: 0,
         });
-        expect(readFileSync(opened.movedAside!.aside)).toEqual(truncated);
+        if (opened.movedAside == null) throw new Error('nothing moved aside');
+        expect(readFileSync(opened.movedAside.aside)).toEqual(truncated);
       });
     }),
   );
@@ -770,7 +850,9 @@ describe('the session event table and its one publisher', () => {
           yield* db.appendAll([runStart, olderStart, waiting]);
           yield* corrupt(3);
           expect(
-            yield* Effect.flip(db.readAggregate(runStart.aggregateId, 0)),
+            yield* Effect.flip(
+              db.readAggregate(runStart.aggregateId, 0, ROW_TYPES),
+            ),
           ).toMatchObject({
             _tag: 'DatabaseReadFailed',
             cause: {
@@ -1014,7 +1096,7 @@ describe('the session event table and its one publisher', () => {
         const reopened = yield* Effect.gen(function* () {
           const fresh = yield* Database;
           return yield* Effect.flip(
-            fresh.readAggregate(qualifyAggregateId('run', OLDER), 0),
+            fresh.readAggregate(qualifyAggregateId('run', OLDER), 0, ROW_TYPES),
           );
         }).pipe(Effect.provide(substrate(storage)));
         expect(reopened).toMatchObject({
@@ -1065,6 +1147,8 @@ describe('the session event table and its one publisher', () => {
           thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
           thread({ turnCount: 3 }),
         ]);
+        const initialCommit = initial[0]?.commit;
+        if (initialCommit === undefined) throw new Error('nothing appended');
         expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
           root,
         );
@@ -1123,7 +1207,7 @@ describe('the session event table and its one publisher', () => {
           expect(
             yield* Effect.flip(
               Effect.flatten(
-                first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+                first.prepareRunRemoval(root, 'bulk', initialCommit),
               ),
             ),
           ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
@@ -1133,14 +1217,14 @@ describe('the session event table and its one publisher', () => {
         const committed = [
           ...(yield* first.appendAll([waiting])),
           ...(yield* Effect.flatten(
-            first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+            first.prepareRunRemoval(root, 'bulk', initialCommit),
           )),
         ];
         expect(committed.at(-1)).toMatchObject({
           type: 'run.removed',
           runIds: [RUN],
         });
-        expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(
+        expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
           committed.at(-1),
         );
         expect(committed.map((row) => [row.seq, row.commit])).toEqual([
@@ -1164,18 +1248,20 @@ describe('the session event table and its one publisher', () => {
           );
         }
         expect(yield* first.currentCommit).toBe(8);
-        const tombstone = committed.at(-1)!;
+        const tombstone = committed.at(-1);
         const cleanupError = new Error(
           'The generated directory is not writable.',
         );
-        if (tombstone.type !== 'run.removed') throw new Error('no tombstone');
+        if (tombstone?.type !== 'run.removed') throw new Error('no tombstone');
         // A failed cleanup keeps the tombstone for the next pass.
         expect(
           yield* Effect.flip(
             first.deletions.collect(tombstone, () => Effect.fail(cleanupError)),
           ),
         ).toBe(cleanupError);
-        expect((yield* first.readAggregate(root, 0)).at(-1)).toEqual(tombstone);
+        expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
+          tombstone,
+        );
         const unrelated: SessionEventDraft = {
           ...runStart,
           aggregateId: qualifyAggregateId('run', NEWER),
@@ -1201,11 +1287,13 @@ describe('the session event table and its one publisher', () => {
         expect(
           (yield* Effect.flip(
             Effect.flatten(
-              first.prepareRunRemoval(root, 'single', initial[0]!.commit),
+              first.prepareRunRemoval(root, 'single', initialCommit),
             ),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
-        expect(yield* first.readAggregate(root, 0)).toEqual(replacement);
+        expect(yield* first.readAggregate(root, 0, ROW_TYPES)).toEqual(
+          replacement,
+        );
         expect((yield* first.aggregateState([root]))[0]?.closed).toBe(false);
         // The production worker removes the recorded generated directory,
         // never a sibling or a linked file outside that directory.
@@ -1326,7 +1414,7 @@ describe('the session event table and its one publisher', () => {
               'the thread was held in SQLite for much of the hold',
             ).toBeGreaterThanOrEqual(MIN_TICKS);
           }
-          yield* db.readAggregate(own, i + 1);
+          yield* db.readAggregate(own, i + 1, ROW_TYPES);
         }
         const code = yield* Effect.promise(() => exited);
         expect(code).toBe(0);
@@ -1507,8 +1595,9 @@ describe('the session event table and its one publisher', () => {
           });
           expect((yield* second.appendAll([waiting]))[0]?.commit).toBe(3);
           const otherRoot = qualifyAggregateId('run', OLDER);
-          const otherStart = (yield* first.aggregateState([otherRoot]))[0]!
-            .startCommit!;
+          const otherStart = (yield* first.aggregateState([otherRoot]))[0]
+            ?.startCommit;
+          if (otherStart == null) throw new Error('no start commit');
           for (const mode of ['bulk', 'automatic'] as const) {
             expect(
               yield* Effect.flip(
@@ -1761,12 +1850,15 @@ describe('RunHistory', () => {
         expect(Exit.isFailure(early) && Cause.hasDies(early.cause)).toBe(true);
         // A batch the fold rejects commits nothing: the refusal has to mean
         // "not written", or every later `load` meets the orphan row.
-        const written = (yield* log.readAggregate(AGGREGATE, 1)).length;
+        const written = (yield* log.readAggregate(AGGREGATE, 1, ROW_TYPES))
+          .length;
         const orphan = yield* cell
           .append([settled('call-z'), toolEnd('call-z')])
           .pipe(Effect.flip);
         expect(refusalOf(orphan)?.reason).toBe('inconsistent');
-        expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
+        expect((yield* log.readAggregate(AGGREGATE, 1, ROW_TYPES)).length).toBe(
+          written,
+        );
         expect(yield* run.load(RUN)).toEqual(state);
         // Same rule for the history the batch assembles: an append that leaves
         // a tool group with no calling assistant is refused before publishing,
@@ -1796,7 +1888,9 @@ describe('RunHistory', () => {
           ])
           .pipe(Effect.flip);
         expect(refusalOf(orphanGroup)?.reason).toBe('unprepared-history');
-        expect((yield* log.readAggregate(AGGREGATE, 1)).length).toBe(written);
+        expect((yield* log.readAggregate(AGGREGATE, 1, ROW_TYPES)).length).toBe(
+          written,
+        );
         state = yield* cell.append([approvalRequested]);
         expect(state.requests['req-1']?.decision).toBeNull();
         expect(state.pendingResponse?.records['call-a']?.status).toEqual({
@@ -1815,7 +1909,7 @@ describe('RunHistory', () => {
                   path: 'out/plot.png',
                   mimeType: 'image/png',
                   base64Data: 'AAAA',
-                  // Not part of the row shape: the decode must drop it.
+                  // cast: not part of the row shape; the decode must drop it.
                   bytes: new Uint8Array([1, 2]) as never,
                   sourceTool: 'bash',
                 },

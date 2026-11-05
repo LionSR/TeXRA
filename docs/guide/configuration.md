@@ -32,10 +32,8 @@ Commands such as **TeXRA: Agent Team Settings** or **TeXRA: Git Settings**
 open their page on the matching sub-tab.
 
 Settings that benefit from an ordinary control appear directly in these views.
-Provider transport knobs (OpenAI background responses, parallel tool calls, the
-GPT-5 reasoning summary, OpenAI fast processing, and Google background
-responses) keep their defaults
-unless you set them in `config.json`. File-handling rules and other internal
+Provider transport knobs (OpenAI fast processing and Google background
+responses) keep their defaults unless you set them in `config.json`. File-handling rules and other internal
 implementation constants are not exposed as configuration.
 
 ## Where settings live
@@ -78,11 +76,11 @@ The JSON files use flat `texra.*` keys. For example:
 Prefer the settings views for ordinary changes: they validate values and place
 them at the intended project or user scope.
 
-Approval settings (the approval policy and the two approval switches) are the
-exception to the project scope: a project file can be supplied by a repository
-you clone, so TeXRA never reads them from it. They are kept per workspace in
-your own storage, and a value in your user file applies to every workspace. A
-project file that sets one is ignored with a warning naming the key.
+The approval policy is the exception to the project scope: a project file can
+be supplied by a repository you clone, so TeXRA never reads it from there. It
+is kept per workspace in your own storage, and a value in your user file
+applies to every workspace. A project file that sets it is ignored with a
+warning naming the key.
 Usage logging (`texra.telemetry.enabled`) follows the same rule with one
 exception: a project file may switch it off but never on, so a `false` there
 is honoured and a `true` is ignored with the same warning.

@@ -1,8 +1,8 @@
 /**
  * One connection's reader of selected rows: each decoded by the row codec
  * (`./rowCodec`), and the runs it cannot open, each with why: a row that
- * does not decode (damaged), or one an earlier build wrote at a version this
- * build has no upcaster for. Those are found as reads meet them, and the
+ * does not decode (damaged), or one an earlier build wrote at a lower
+ * version. Those are found as reads meet them, and the
  * earlier build's rows all at once on the first `damaged`, since the listing
  * never reads a run's history. The tool cards' read-time output
  * (`settleCards`) is settled over the decoded rows.
@@ -14,7 +14,6 @@ import { Effect, Result, Schema, Struct } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import {
   DISPLAY_EVENT_TYPES,
-  pluginFactFloor,
   RETIRED_PLUGIN_FACTS,
   RunIdSchema,
   type AggregateId,
@@ -64,15 +63,14 @@ export const DISPLAY_READ_TYPES = JSON.stringify([
   ...DISPLAY_EVENT_TYPES,
   'tool.result',
 ]);
-/** The listing (each aggregate's `listing_entry` rows, each run's spend on
- *  its newest priced row's envelope and its latest model switch, in commit
- *  order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
+/** The listing (each aggregate's `listing_entry` rows and each run's spend
+ *  on its newest priced row's envelope, in commit order), driven from `listing_entry` (`CROSS JOIN` holds the order: a
  *  store is never `ANALYZE`d), each by its event's primary key. */
 const LISTED = `listing_entry l CROSS JOIN event e ON e."commit" = l."commit"
   ${EVENT_JOINS}`;
 
-/** The cold listing: the latest listing row per aggregate and type, the
- *  runs' priced usage and model switches, in commit order. */
+/** The cold listing: the latest listing row per aggregate and type and the
+ *  runs' priced usage, in commit order. */
 export const READ_LISTING = `SELECT * FROM (
   SELECT ${EVENT_COLUMNS} FROM ${LISTED}
   UNION ALL
@@ -82,9 +80,6 @@ export const READ_LISTING = `SELECT * FROM (
   FROM run_usage u
     JOIN event e ON e."commit" = u."commit"
     JOIN event_sequence s ON s.id = u.aggregate
-  UNION ALL
-  SELECT ${PROJECTED_COLUMNS} FROM ${PROJECTED_FROM}
-    JOIN run_model m ON m."commit" = p."commit" AND p.type = 'run.model'
 ) ORDER BY "commit"`;
 
 /** One open run's listing rows, its requests and follow-ups left out:
@@ -220,11 +215,11 @@ export function rowReader<E>(
     mark(runId, true);
     if (!earlier.has(runId)) earlier.set(runId, row);
   };
-  // Only a retired fact kind, or one with a floor, can hold an earlier
-  // build's fact.
+  // Only a retired fact kind, or one past its first version, can hold an
+  // earlier build's fact.
   const floored =
     RETIRED_PLUGIN_FACTS.size > 0 ||
-    Object.values(factKinds).some((factKind) => pluginFactFloor(factKind) > 1);
+    Object.values(factKinds).some((factKind) => factKind.version > 1);
   /** Find, once, every run holding an earlier build's row. */
   const scan = Effect.gen(function* () {
     if (scanned) return;

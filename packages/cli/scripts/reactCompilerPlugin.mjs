@@ -48,17 +48,9 @@ export function reactCompilerPlugin() {
           configFile: false,
           sourceMaps: 'inline',
           presets: [
-            // `@babel/preset-typescript` requires `allExtensions: true` when
-            // `isTSX: true` — otherwise the preset throws on the first .tsx
-            // it sees.
-            [
-              '@babel/preset-typescript',
-              {
-                isTSX: true,
-                allExtensions: true,
-                onlyRemoveTypeImports: true,
-              },
-            ],
+            // Only `.tsx` files reach this point, so the preset's
+            // extension-based JSX detection applies.
+            ['@babel/preset-typescript', { onlyRemoveTypeImports: true }],
             ['@babel/preset-react', { runtime: 'automatic' }],
           ],
           plugins: [['babel-plugin-react-compiler', { target: '19' }]],

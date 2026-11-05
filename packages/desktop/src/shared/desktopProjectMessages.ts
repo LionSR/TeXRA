@@ -12,6 +12,8 @@ export const DESKTOP_PROJECT_COMMANDS = {
   REQUEST_PROJECTS: 'desktop:projects:request',
   SELECT_PROJECT: 'desktop:projects:select',
   CLOSE_PROJECT: 'desktop:projects:close',
+  /** Reopen a folder from the recent list the last projects message sent. */
+  OPEN_RECENT: 'desktop:projects:openRecent',
 } as const;
 
 export const DesktopProjectsMessageSchema = Schema.Struct({
@@ -24,6 +26,16 @@ export const DesktopProjectsMessageSchema = Schema.Struct({
   /** Key of the session this window shows: an open project's, or the
    *  no-workspace session's, which is never listed in `open`. */
   activeKey: Schema.String,
+  /** The closed projects' folders File › Open Recent offers, the most
+   *  recently closed first: the no-project screen lists them too. */
+  recent: Schema.Array(Schema.String),
+});
+
+/** A folder of the recent list; the main process opens it only while the
+ *  list still holds it. */
+export const DesktopOpenRecentProjectMessageSchema = Schema.Struct({
+  command: Schema.Literal(DESKTOP_PROJECT_COMMANDS.OPEN_RECENT),
+  root: Schema.String,
 });
 
 export const DesktopSelectProjectMessageSchema = Schema.Struct({

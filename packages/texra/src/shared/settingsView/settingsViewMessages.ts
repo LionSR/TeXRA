@@ -18,7 +18,7 @@ import {
   SkillDisplayItemSchema,
   WorkspaceStateKey,
 } from '@texra-ai/harness/schemas';
-import { type ModelProvider, ReasoningEffortSchema } from '@texra-ai/llm';
+import { API_KEY_PROVIDER_IDS, ReasoningEffortSchema } from '@texra-ai/llm';
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
 import { SubscriptionAuthStatusSchema } from '@texra/shared/model/subscriptionAuth';
@@ -93,7 +93,9 @@ export type DerivedSettingsSnapshot =
 
 /** Every settings-view snapshot: what a row's `surfaces.settingsView` names. */
 export type SettingsViewSnapshot =
-  DerivedSettingsSnapshot | 'models' | 'profile';
+  | DerivedSettingsSnapshot
+  | 'models'
+  | 'profile';
 
 /**
  * One snapshot's member of the outbound snapshot case: its name plus one
@@ -165,37 +167,12 @@ const UpdateAgentSelectionMessageSchema = Schema.Struct({
 // ==================== Model selection data schema ====================
 
 /**
- * The model sources the Models tab groups its rows under, in display order.
- * A model whose source is outside this list never renders as a row, so the
- * controller admits only these. Every llm-zoo provider but `others` and
- * `copilot` (whose models TeXRA does not serve) is a source (checked below,
- * so a provider a new llm-zoo release adds fails to compile until it is
- * placed here), plus the Kimi Code subscription.
+ * The model sources the Models tab groups its rows under, in display order:
+ * llm's API-key providers, every provider a user can hold a key for (the Kimi
+ * Code subscription included). A model whose source is outside this list
+ * never renders as a row, so the controller admits only these.
  */
-const MODEL_SOURCES = [
-  'openai',
-  'anthropic',
-  'google',
-  'xai',
-  'deepseek',
-  'moonshot',
-  'dashscope',
-  'minimax',
-  'glm',
-  'meta',
-  'kimiCode',
-] as const;
-type _EveryProviderIsASource = AssertNever<
-  Exclude<
-    `${ModelProvider}`,
-    (typeof MODEL_SOURCES)[number] | 'others' | 'copilot'
-  >
->;
-type AssertNever<T extends never> = T;
-
-/** {@link MODEL_SOURCES}, as the picker reads it. */
-export const MODEL_SOURCE_ORDER: readonly string[] =
-  Object.freeze(MODEL_SOURCES);
+export const MODEL_SOURCE_ORDER: readonly string[] = API_KEY_PROVIDER_IDS;
 
 const ModelSelectionItemSchema = Schema.Struct({
   name: Schema.String,
@@ -230,8 +207,6 @@ const UpdateModelSelectionMessageSchema = Schema.Struct({
   command: Schema.Literal(SETTINGS_VIEW_COMMANDS.UPDATE_MODEL_SELECTION),
   models: Schema.Array(ModelSelectionItemSchema),
   helperModel: Schema.String,
-  /** Whether the user prefers short (unpinned) model names. */
-  preferShortModelNames: Schema.Boolean,
 });
 export type UpdateModelSelectionMessage =
   (typeof UpdateModelSelectionMessageSchema)['Type'];

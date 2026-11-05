@@ -24,7 +24,7 @@ const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
  * The one rule for which actions a run's state licenses, applied by the fold
  * into `RunView.actions`. A run another process holds is inspect-only. One
  * no live process holds whose rows this build cannot read (`stranded`:
- * damaged, or an earlier build's with no upcaster) never becomes readable,
+ * damaged, or an earlier build's) never becomes readable,
  * so it offers delete beside inspection, the one way to clear it. A live
  * run (`isLiveRun`: working, waiting, or spawned and not started yet) can
  * be stopped; while it is in flight (running or waiting, not interrupted)

@@ -83,8 +83,9 @@ export const pauseChildRun = (
       Effect.gen(function* () {
         const parentRunId = yield* persistedParentRunId(runId);
         if (parentRunId === undefined) return undefined;
-        const last = yield* lastTurn ??
-          Effect.succeed({ rows: [], held: false });
+        const last = yield* (
+          lastTurn ?? Effect.succeed({ rows: [], held: false })
+        );
         // A last turn held for a parent open elsewhere already marks the
         // child as waiting: no pause after it (its notice would be refused
         // the same way).

@@ -208,7 +208,7 @@ function mcpTool(
     // one approval authority before the body runs.
     guard: {
       command: {
-        text: (input: unknown) => Effect.succeed(describe(input)),
+        text: describe,
         cwd: 'unknown',
       },
     },

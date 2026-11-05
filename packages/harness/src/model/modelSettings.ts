@@ -76,15 +76,12 @@ export interface ModelSettings {
   readonly kimiCodeKey: boolean;
   /** The user's saved reasoning effort per model reference. */
   readonly reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
-  /** Send the unpinned `shortName` in place of the date-pinned id. */
-  readonly preferShortModelNames: boolean;
   /** Automatic retries after a failed attempt. */
   readonly automaticRetries: number;
   /** Google text-only turns go out as background Interactions. */
   readonly googleBackground: boolean;
   /** The vendor knobs a binding sends. */
   readonly wire: {
-    readonly reasoningSummary: boolean;
     readonly serverState: boolean;
     readonly fastTier: boolean;
     readonly webSocket: boolean;
@@ -255,7 +252,6 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
       ),
       Effect.all({
         reasoningLevels: reasoningEffortOverrides(stores.globalState),
-        preferShortModelNames: flag(GlobalStateKey.PREFER_SHORT_MODEL_NAMES),
         googleBackground: readGoogleBackground(stores),
         automaticRetries: Settings.get<number>(
           stores,
@@ -263,7 +259,6 @@ export const readModelSettings = Effect.fn('readModelSettings')(function* (
         ),
       }),
       Effect.all({
-        reasoningSummary: flag('model.gpt5ReasoningSummary'),
         serverState: flag('model.useGoogleInteractionsServerState'),
         fastTier: flag('model.openaiFastTier'),
         webSocket: flag(GlobalStateKey.WEBSOCKET_OPENAI),

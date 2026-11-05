@@ -3,7 +3,7 @@
 // with `session.openRequest`; the surface answers with `request.decide`.
 
 import { layer } from '@effect/vitest';
-import { Effect, Fiber, Layer, SubscriptionRef, Context } from 'effect';
+import { Effect, Fiber, Layer, Schema, SubscriptionRef, Context } from 'effect';
 import { afterEach, beforeEach, expect, type MockInstance, vi } from 'vitest';
 import { API_KEY_ENV_NAMES, apiKeySecretName } from '@texra-ai/llm';
 
@@ -42,6 +42,12 @@ vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
   setCliSubscriptionPreference: mocks.setCliSubscriptionPreference,
 }));
 
+import {
+  RunIdSchema,
+  type PermissionPayload,
+  type RetryPermission,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
@@ -72,11 +78,6 @@ import {
   type SurfaceDecision,
 } from '@texra/shared/session/surfaceDecision';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
-import type {
-  PermissionPayload,
-  RetryPermission,
-  RunId,
-} from '@texra-ai/harness/schemas';
 import type { PlatformSecrets } from '@texra-ai/harness/host';
 
 /** The settings the TUI's retry decisions write through, if any. */
@@ -118,6 +119,7 @@ const cancelOpenRequests = Effect.gen(function* () {
 const tui = Effect.gen(function* () {
   const cliContext = createTuiCliContext();
   setTestApprovalPolicy(cliContext.approvalPolicy);
+  // cast: the TUI host interactions only emit through the presentation host.
   const presentationHost = {
     emit: vi.fn(),
     close: vi.fn(() => Effect.void),
@@ -140,7 +142,9 @@ function runIdFor(label: string): RunId {
   for (const character of label) {
     hash = Math.imul(hash ^ character.charCodeAt(0), 0x01000193) >>> 0;
   }
-  return hash.toString(16).padStart(8, '0') as RunId;
+  return Schema.decodeUnknownSync(RunIdSchema)(
+    hash.toString(16).padStart(8, '0'),
+  );
 }
 
 /** The runs this file opens requests on; a request is a row on its run, so
@@ -170,7 +174,7 @@ function openRequest(runId: RunId, payload: PermissionPayload) {
 }
 
 function openRetry(permission: RetryPermission) {
-  return openRequest(permission.runId as RunId, {
+  return openRequest(permission.runId, {
     kind: 'retry',
     data: permission,
   });
@@ -184,7 +188,6 @@ function chatGptSubscriptionRetry(label: string): RetryPermission {
     operation: 'model request',
     errorDetails: {
       message,
-      userRetryable: true,
       classification: { kind: 'chatgpt-subscription' },
       provider: 'openai',
     },

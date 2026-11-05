@@ -2,7 +2,7 @@ import { layer } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
 import { expect } from 'vitest';
 
-import { AgentConfigSchema, type RunId } from '@texra-ai/harness/schemas';
+import { RunIdSchema, AgentConfigSchema } from '@texra-ai/harness/schemas';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { registerRun } from '@agent/storage/runLifecycle';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -17,7 +17,7 @@ const baseConfig = Schema.decodeUnknownSync(AgentConfigSchema)({
   model: 'deepseek/deepseek-v4-flash',
   instruction: 'Check the proof.',
 });
-const runId = 'abc123' as RunId;
+const runId = Schema.decodeUnknownSync(RunIdSchema)('abc123');
 const options = {
   identity: { kind: 'agent', agent: 'chat' },
   userFollowUpSupport: 'nativeInteractive',
@@ -49,12 +49,17 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             ).toBe(true);
             // A parent nothing ever published must still refuse its child
             // rather than wait on the barrier for a row that is not coming.
-            const absentParentId = 'def456' as RunId;
+            const absentParentId =
+              Schema.decodeUnknownSync(RunIdSchema)('def456');
             const refusal = yield* Effect.flip(
-              registerRun('fed789' as RunId, baseConfig, {
-                ...options,
-                parentRunId: absentParentId,
-              }).pipe(Effect.provide(session)),
+              registerRun(
+                Schema.decodeUnknownSync(RunIdSchema)('fed789'),
+                baseConfig,
+                {
+                  ...options,
+                  parentRunId: absentParentId,
+                },
+              ).pipe(Effect.provide(session)),
             );
             expect(refusal.message).toBe(
               `Parent run ${absentParentId} is unavailable.`,

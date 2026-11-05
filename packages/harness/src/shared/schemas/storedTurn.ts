@@ -7,7 +7,7 @@
  * text or arguments, call identities, the finish reason, token counts, the
  * origin and the provider's response id. What only a provider adapter reads
  * back (finish, refusal and usage evidence, part signatures, encrypted
- * reasoning, continuations, a remote operation's cursor) is
+ * reasoning, continuations) is
  * {@link ProviderEvidenceSchema}: bytes this store keeps and never interprets.
  * The package parses them when it replays to its own protocol, and refuses
  * another protocol's evidence there. `RunHistory` converts between these
@@ -127,10 +127,8 @@ export const StoredTurnSchema = Schema.Struct({
     'length',
     'content-filter',
     'tool-calls',
-    'stop-sequence',
     'refusal',
   ]),
-  stopSequence: Schema.optional(Schema.String),
   finishEvidence: Schema.optional(ProviderEvidenceSchema),
   refusalEvidence: Schema.optional(Schema.NullOr(ProviderEvidenceSchema)),
   usage: Schema.NullOr(
@@ -179,10 +177,8 @@ export const StoredMessageSchema = Schema.Union([
 /** One entry of canonical history, as a committed row holds it. */
 export type StoredMessage = typeof StoredMessageSchema.Type;
 
-/** Accepted remote work: its identity, and the cursor the adapter observes
- *  it by. */
+/** Accepted remote work: the binding that accepted it, and its identity. */
 export const StoredOperationSchema = Schema.Struct({
   origin: StoredOriginSchema,
   providerResponseId: Schema.String.check(Schema.isMinLength(1)),
-  evidence: ProviderEvidenceSchema,
 });

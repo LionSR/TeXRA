@@ -25,7 +25,6 @@ import {
   presentTerminalResult,
 } from '@agent/runtime/HostInteractions';
 import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
-import { followInterruptedTasks } from '@agent/runtime/interruptedTasks';
 import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { requestAsks, SessionRequests } from '@agent/runtime/requestPolicy';
@@ -211,8 +210,8 @@ const runsLayer = (open: SessionHandleInit) =>
   );
 
 /** What reads the session as it runs: the tails' readers (in the
- *  consumers' scope), the leftover-run sweep, its interrupted tasks, the
- *  deletion pass at open, and the dependency probes, held for its life and
+ *  consumers' scope), the leftover-run sweep, the deletion pass at open,
+ *  and the dependency probes, held for its life and
  *  probed beside the open (the gate withholds nothing until they answer). */
 const consumersLayer = (open: SessionHandleInit) =>
   Layer.effectDiscard(
@@ -255,15 +254,6 @@ const consumersLayer = (open: SessionHandleInit) =>
         Effect.forkIn(consumers),
       );
       yield* sweepLeftoverRuns(cohort).pipe(Effect.forkScoped);
-      if (open.interruptedTasks !== undefined)
-        yield* followInterruptedTasks(open.interruptedTasks).pipe(
-          Effect.catch(
-            logFailure(
-              `Session ${open.roots.storage} stopped following its interrupted tasks.`,
-            ),
-          ),
-          Effect.forkScoped,
-        );
       yield* collectDeletions;
       yield* (yield* ToolAvailability).hold(open.roots);
     }),
@@ -289,16 +279,12 @@ export const stopSessionRuns = (
   });
 
 /** The session's approvals, with the one reading of its policy
- *  (`sessionPermission`) over its presentation host and roots. */
+ *  (`sessionPermission`) over its presentation host. */
 const approvalsLayer = Layer.effect(
   Approvals,
   Effect.gen(function* () {
     const approvals = yield* sessionApprovals;
-    const permission = sessionPermission(
-      approvals,
-      yield* Interactions,
-      yield* SessionRoots,
-    );
+    const permission = sessionPermission(approvals, yield* Interactions);
     return { ...approvals, permission };
   }),
 );

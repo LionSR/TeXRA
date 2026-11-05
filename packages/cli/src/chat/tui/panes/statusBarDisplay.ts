@@ -87,7 +87,10 @@ const STATUS_BAR_HORIZONTAL_PADDING = 2;
 // 'dim' is not an Ink color name — it is a sentinel this file's own renderer
 // (`StatusBar.tsx`) reads to apply `dimColor` instead of an explicit `color`.
 type StatusBarColor =
-  typeof COLOR_HINT | typeof COLOR_WARNING | typeof COLOR_ERROR | 'dim';
+  | typeof COLOR_HINT
+  | typeof COLOR_WARNING
+  | typeof COLOR_ERROR
+  | 'dim';
 type CtrlCAction = 'exit' | 'stop' | 'stop root';
 
 /** Choose the quota owner, preferring the route of completed usage. */
@@ -697,34 +700,22 @@ interface StatusBarRunTarget {
 
 /**
  * Which run the status bar describes (the active run when the view
- * holds it), and what Ctrl-C does there.
+ * holds it), and what Ctrl-C does there. `canStop` is the SIGINT handler's
+ * own predicate (`chatTuiCanStopVisibleRun`), so the hint cannot disagree
+ * with what the key does.
  */
 export function statusBarRunTarget({
   activeRunId,
-  canStopActiveRun,
-  canStopPendingRun = false,
-  ownedRunIds,
+  canStop,
   view,
 }: {
   readonly activeRunId: RunId | undefined;
-  readonly canStopActiveRun: boolean;
-  readonly canStopPendingRun?: boolean;
-  /** The runs this TUI runs: the root run and its descendants. */
-  readonly ownedRunIds: readonly RunId[];
+  readonly canStop: boolean;
   readonly view: SessionView;
 }): StatusBarRunTarget {
   const active = runViewOf(view, activeRunId);
-  const isLive = (runId: RunId): boolean =>
-    runViewOf(view, runId)?.working === true;
-  const hasLiveRun = ownedRunIds.some(isLive);
-  const canStopVisibleRun =
-    canStopActiveRun && (canStopPendingRun || hasLiveRun);
-  let ctrlCAction: CtrlCAction;
-  if (!canStopVisibleRun) {
-    ctrlCAction = 'exit';
-  } else {
-    ctrlCAction = active?.parentId ? 'stop root' : 'stop';
-  }
+  let ctrlCAction: CtrlCAction = 'exit';
+  if (canStop) ctrlCAction = active?.parentId ? 'stop root' : 'stop';
   return {
     ctrlCAction,
     displayRunId: active?.id,

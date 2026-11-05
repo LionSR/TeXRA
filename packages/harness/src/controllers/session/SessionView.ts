@@ -31,7 +31,6 @@ import {
 
 import {
   qualifyAggregateId,
-  type LocalRuntimeState,
   type TranscriptSubscription,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -40,7 +39,7 @@ import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
 import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
-import { LocalRuntimeSource, TranscriptSubscriptions } from './sessionSources';
+import { TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
 export class SessionViewService extends Context.Service<
@@ -188,23 +187,11 @@ export const makeSessionViewAccess = Effect.fn(
 ): Effect.fn.Return<
   SessionViewAccessShape,
   DatabaseReadFailed,
-  | Scope.Scope
-  | SessionViewService
-  | SessionInputs
-  | TranscriptSubscriptions
-  | LocalRuntimeSource
+  Scope.Scope | SessionViewService | SessionInputs | TranscriptSubscriptions
 > {
   const { ref, changes } = yield* SessionViewService;
   const inputs = yield* SessionInputs;
   const subscriptions = yield* TranscriptSubscriptions;
-  const local = yield* LocalRuntimeSource;
-  /** Update the local truth unless the session has closed. */
-  const updateLocal = (
-    next: (state: LocalRuntimeState) => LocalRuntimeState,
-  ): Effect.Effect<void> =>
-    Effect.suspend(() =>
-      closed() ? Effect.void : SubscriptionRef.update(local.ref, next),
-    );
   return {
     ref,
     changes,
@@ -237,25 +224,5 @@ export const makeSessionViewAccess = Effect.fn(
       Effect.suspend(() =>
         closed() ? Effect.void : subscriptions.set(port, set),
       ),
-    markResumeBlocked: (runId, blocked) =>
-      updateLocal((state) => {
-        const held = state.resumeBlocked.find((b) => b.runId === runId);
-        // The same block again, or none again, leaves the state, and the
-        // view, as it is.
-        const same =
-          blocked === null
-            ? held === undefined
-            : held !== undefined &&
-              held.reason.blocker === blocked.blocker &&
-              held.reason.name === blocked.name;
-        if (same) return state;
-        const rest = state.resumeBlocked.filter((b) => b.runId !== runId);
-        return {
-          ...state,
-          resumeBlocked:
-            blocked === null ? rest : [...rest, { runId, reason: blocked }],
-        };
-      }),
-    resumeBlocks: () => SubscriptionRef.getUnsafe(local.ref).resumeBlocked,
   };
 });

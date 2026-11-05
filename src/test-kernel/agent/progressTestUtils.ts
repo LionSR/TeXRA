@@ -16,10 +16,6 @@ import {
   type RequestDecision,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import {
-  type HostInteractions,
-  SessionHostInteractions,
-} from '@texra-ai/harness/host';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { aggregateTarget } from '@shared/schemas';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -27,6 +23,7 @@ import {
   publishTestRunStart,
   publishTestRows,
 } from '@test/support/sessionTestUtils';
+import type { HostInteractions } from '@texra-ai/harness/host';
 
 /**
  * Loosely-typed recording of host emissions. The recording host flattens the
@@ -37,10 +34,6 @@ type RecordedProgressEvent = {
   event: string;
   payload: unknown;
 };
-
-interface RecordingProgressSink {
-  emit(event: string, payload: unknown): void;
-}
 
 /** A request a run opened, as the fold and every surface read it. */
 type OpenedRequest = Extract<DisplaySessionEvent, { type: 'request.opened' }>;
@@ -103,7 +96,6 @@ export function recordSessionEvents(
 export function createRecordingHost(): {
   events: RecordedProgressEvent[];
   interactions: HostInteractions;
-  host: SessionHostInteractions & RecordingProgressSink;
 } {
   const events: RecordedProgressEvent[] = [];
   const interactions: HostInteractions = {
@@ -111,10 +103,7 @@ export function createRecordingHost(): {
       events.push({ event, payload });
     },
   };
-  const host = new SessionHostInteractions() as SessionHostInteractions &
-    RecordingProgressSink;
-  Effect.runSync(host.use(interactions));
-  return { events, interactions, host };
+  return { events, interactions };
 }
 
 /**
@@ -210,7 +199,7 @@ export const commandTool = defineTool({
   description: 'Run a command.',
   schema: Schema.Struct({ command: Schema.String }),
   guard: {
-    command: { text: ({ command }) => Effect.succeed(command), grant: 'bash' },
+    command: { text: ({ command }) => command, grant: 'bash' },
   },
   execute: ({ command }) => Effect.succeed(`ran ${command}`),
 });

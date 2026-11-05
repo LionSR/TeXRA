@@ -158,6 +158,9 @@ const composedProcess = (
   extra: readonly Plugin[],
   model: Layer.Layer<ValidationModel>,
 ) =>
+  // `processLayer` serves the internal `SessionOwner` beside `Sessions`
+  // (provideMerge); the suites' root launches and `sessionHandleOf` ask it.
+  // cast: the process layer provides `SessionOwner`, which its type omits.
   Layer.unwrap(
     Effect.map(FakeHost, (host) =>
       processLayer({
@@ -171,26 +174,18 @@ const composedProcess = (
         ],
         secrets: Secrets.layer(fakeHostSecrets),
         appState: AppState.layer(fakeHostAppState),
-        // No first-install seed: every plugin of the list starts on, and a
-        // suite that needs one off switches it itself.
-        seedToolSwitches: false,
         agentDirectories: Layer.succeed(AgentDirectories)(
           fakeHostAgentDirectories,
         ),
         toolAvailability: unprobedToolAvailability,
         // The process reports no usage; the telemetry suite starts its own.
         usageLog: UsageLog.disabled,
-        // As every TeXRA host does.
-        labelRuns: true,
         // The suite's captured entries are the assertion surface: emit every
         // level the programs run and let each test filter what it reads.
         minimumLogLevel: 'Trace',
         processStart: Effect.succeed('vitest'),
       }).pipe(Layer.provide(model)),
     ),
-    // cast: `processLayer` serves the internal `SessionOwner` beside
-    // `Sessions` (provideMerge); the suites' root launches and
-    // `sessionHandleOf` ask it.
   ) as Layer.Layer<ProcessServices | Sessions | SessionOwner, never, FakeHost>;
 
 /**

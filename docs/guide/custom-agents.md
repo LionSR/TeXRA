@@ -17,7 +17,7 @@ Before creating a custom agent, it helps to understand the underlying concepts:
 - <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: the `.yaml` structure, settings, prompts, and how agents run. Read the [Document tasks: how they work](./agent-architecture.md) guide.
 - <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in agents**: the standard agents TeXRA provides, useful as examples. Read the [Built-in agent reference](./built-in-agents.md).
 - <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
-  :::
+:::
 
 ## <wa-icon library="texra" name="new-file"></wa-icon> Creating a custom agent file
 
@@ -64,8 +64,6 @@ prompt: |
 # A `task` block lets this agent also run as a document task. Without it,
 # the agent only chats (see below). A file with `task` cannot also list `tools`.
 task:
-  rewrite: true # Edit the input documents (true, the default) or write new documents (false).
-
   # File Handling (Optional - Advanced)
   # files:
   #   STYLE_GUIDE: styles/internal_style.sty # Map variable names to files the agent bundles, relative to its YAML file location. Workspace files are attached per run as context files instead.
@@ -187,7 +185,6 @@ for a document task that writes two generated output files:
 name: intro_and_conclusion
 description: Writes an introduction and a conclusion.
 task:
-  rewrite: false
   outputs:
     - introduction.tex
     - conclusion.tex

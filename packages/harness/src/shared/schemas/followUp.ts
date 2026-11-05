@@ -50,7 +50,7 @@ export type FollowUpSender = typeof FollowUpSenderSchema.Type;
 /**
  * One follow-up as it is queued, taken, and shown. `from` is the provenance
  * a consumer reads: a user's or parent's text becomes the run's instruction,
- * a child's delivery envelope is summarized for the transcript. A loop's own
+ * a delivery or notice envelope is summarized for the transcript. A loop's own
  * maintenance wake is never a follow-up row.
  */
 const FollowUpContentSchema = Schema.Struct({

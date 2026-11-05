@@ -86,17 +86,11 @@ export interface OpenOptions {
    * Set when a person is present to answer the runs' requests from the
    * view (`request.decide`), as in an editor window. Absent, nobody can
    * answer until a host with an `approve` handler attaches
-   * ({@link Session.attach}), so every request is denied.
-   *
-   * `interruptedTasks` is what the session does at open with the root
-   * runs a closed or crashed process left unfinished, the one place that
-   * decides it. Both values mark what blocks each one (an agent, a plugin:
-   * `RunView.resumeBlocked`) and clear the mark once it is back. `list`
-   * leaves them for the host to list and resume; `resume` continues them,
-   * and a blocked one once it is back. Absent, the session recovers
-   * nothing at open.
+   * ({@link Session.attach}), so every request is denied. A session
+   * resumes nothing at open either way: a run a closed or crashed process
+   * left unfinished is listed as interrupted and continues on a resume.
    */
-  readonly host?: { readonly interruptedTasks?: 'list' | 'resume' };
+  readonly host?: Record<string, never>;
 }
 
 /**
@@ -281,9 +275,8 @@ export interface LocalSession extends Session {
   readonly deleteRuns: (
     target: RunId | 'all',
   ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
-  /** Show a notice through the attached host. With
-   *  `replayWhenAttached`, a notice raised while no host is attached waits
-   *  for the next one. */
+  /** Show a notice through the attached host; a notice raised while no
+   *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
   /** Wait until everything already sent to the session is written, shown
    *  in the view, and handled: for example, a failed run's end has been

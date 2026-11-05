@@ -33,6 +33,8 @@ interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
   isBrowserCovered(): boolean;
+  /** Asks before discarding a dirty tab; runs `discard` only on consent. */
+  confirmDiscard(title: string, discard: () => void): void;
   conversationView: HTMLElement;
   fileTree: ReturnType<typeof createEditorPane>;
   editorFor(id: string): ReturnType<typeof createEditorPane>;
@@ -255,11 +257,14 @@ export function createWorkbenchController(deps: WorkbenchControllerDeps) {
 
   function disposeWorkbenchTab(id: string) {
     const tab = tabFor(id);
-    if (
-      !tab ||
-      (tab.dirty && !window.confirm(`Discard unsaved changes to ${tab.title}?`))
-    )
-      return;
+    if (!tab) return;
+    if (tab.dirty) deps.confirmDiscard(tab.title, () => removeTab(id));
+    else removeTab(id);
+  }
+
+  function removeTab(id: string) {
+    const tab = tabFor(id);
+    if (!tab || disposed) return;
     reconciling = true;
     try {
       const panel = dock?.getPanel(id);

@@ -182,13 +182,6 @@ export async function runChat(
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
-        // The service follows interrupted tasks for a chat that is its
-        // client. In this process, `texra resume <id>` resumes the task it
-        // names; a second resume of the interrupted ones beside it would
-        // race that one, so it only lists them.
-        ...(Result.isFailure(service) && {
-          interruptedTasks: initialResume === undefined ? 'setting' : 'list',
-        }),
       });
       const runtimeSession = yield* services.session;
       // Where this chat's runs run: the service's session, or this one.

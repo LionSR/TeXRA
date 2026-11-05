@@ -18,8 +18,8 @@ const browserMocks = vi.hoisted(() => ({
 }));
 
 /** The runtime the command's entry installs: the test's, while it runs. */
-const installed = vi.hoisted(() => ({
-  runtime: undefined as ProcessRuntime | undefined,
+const installed = vi.hoisted((): { runtime: ProcessRuntime | undefined } => ({
+  runtime: undefined,
 }));
 
 vi.mock('@cli/runtime/browser', () => ({

@@ -33,13 +33,13 @@ import {
 
 // Local imports
 import {
+  RunIdSchema,
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
   qualifyAggregateId,
   type RunId,
   type ToolDefinition,
 } from '@texra-ai/harness/schemas';
-import { type PluginContext } from '@texra-ai/harness/host';
 import { dispatchFactsFor, localCallsOf } from '@agent/runtime/run/tools';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
@@ -52,7 +52,6 @@ import type {
 } from '@agent/runtime/ToolServices';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
 import {
   RunHistory,
   type RunCell,
@@ -126,7 +125,7 @@ function probeTool(
         endTurn: options.endTurn,
       };
     }),
-  } as StepTool;
+  };
 }
 
 interface Call {
@@ -188,7 +187,9 @@ function boundModel(): BoundModel {
 
 let dispatchRunCounter = 0;
 const dispatchRunId = (): RunId =>
-  `dd${(dispatchRunCounter++).toString(16).padStart(4, '0')}` as RunId;
+  Schema.decodeUnknownSync(RunIdSchema)(
+    `dd${(dispatchRunCounter++).toString(16).padStart(4, '0')}`,
+  );
 
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
@@ -315,23 +316,15 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 /** Dispatch the pending response of an opened run; `definitions` are the
  *  tools a script run in it may call. */
 const dispatch = (kit: DispatchKit, definitions: ToolDefinition[] = []) =>
-  dispatchPendingResponse(
-    kit.cell,
-    {
-      definitions,
-      registry: kit.tools,
-      offered: [],
-      services: Context.empty() as PluginContext,
-      stepRoots: [],
-      hooks: [],
-      modules: {},
-    },
-    // The run's pending requests, as its `FollowUps.controls` reads them.
-    Effect.map(
-      Context.get(kit.session, Inbox).read(kit.runId),
-      ({ followUps }) => followUps.filter((f) => f.control !== undefined),
-    ).pipe(Effect.orDie),
-  ).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
+  dispatchPendingResponse(kit.cell, {
+    definitions,
+    registry: kit.tools,
+    offered: [],
+    services: Context.empty(),
+    stepRoots: [],
+    hooks: [],
+    modules: {},
+  }).pipe(Effect.provide(kit.layer), Effect.provide(kit.session));
 
 layer(SessionGraph.hosted, { excludeTestServices: true })(
   'tool-use dispatch',

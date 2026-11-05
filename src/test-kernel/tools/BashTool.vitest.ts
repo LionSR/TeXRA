@@ -11,6 +11,7 @@ import {
   Fiber,
   Layer,
   Schedule,
+  Schema,
   SubscriptionRef,
   Context,
 } from 'effect';
@@ -19,10 +20,12 @@ import { afterEach, vi } from 'vitest';
 // Local imports
 
 import {
+  APPROVAL_POLICY_CONFIG_KEY,
   qualifyAggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
+  RunIdSchema,
 } from '@texra-ai/harness/schemas';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -96,13 +99,15 @@ async function parkRunWaiting(
 // Unit tests exercise the tool directly — no approval host is wired.
 const BASH_PLATFORM_OPTIONS = {
   workspacePath: '/workspace',
-  config: { 'toolUse.requireBashApproval': false },
+  config: { [APPROVAL_POLICY_CONFIG_KEY]: 'yolo' },
 } as const;
 
 /** The run id a background launch reports in its output. */
 function launchedRunId(result: ToolResult): RunId | undefined {
-  return /Run ID: (\S+)/.exec(String(result.output ?? ''))?.[1] as
-    RunId | undefined;
+  const reported = /Run ID: (\S+)/.exec(String(result.output ?? ''))?.[1];
+  return reported === undefined
+    ? undefined
+    : Schema.decodeSync(RunIdSchema)(reported);
 }
 
 function launchBackgroundBash(
@@ -169,6 +174,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           const session = yield* sessionHandle;
           const parentRunId = publishTestRunStart(session);
           let skippedAtResumeTime: boolean | undefined;
+          // cast: '' names no run until the launch reports its id.
           let runId = '' as RunId;
           const wakeReached = Deferred.makeUnsafe<void>();
           // The resume a wake starts is the run's one resume in flight.
@@ -221,7 +227,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           // the killed process report its non-zero exit.
           const stopSettlement = yield* Effect.forkChild(
             Context.get(session, Runs)
-              .stop(runId, { reason: 'user' })
+              .stop(runId, 'user')
               .settlement.pipe(Effect.provide(session)),
           );
           resolveCommand({

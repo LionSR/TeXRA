@@ -79,7 +79,8 @@ const BLOCKED_DOMAIN_POLICIES: readonly {
 ];
 
 type EmailPolicyDecision =
-  { allowed: true } | { allowed: false; reason: string; userMessage: string };
+  | { allowed: true }
+  | { allowed: false; reason: string; userMessage: string };
 
 function normalizeDomain(email: string): string | null {
   const at = email.lastIndexOf('@');

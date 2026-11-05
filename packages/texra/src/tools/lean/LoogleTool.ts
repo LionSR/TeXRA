@@ -55,38 +55,29 @@ type LeanLoogleInput = typeof LeanLoogleInputSchema.Type;
 // Response schemas (Loogle is an external network boundary — validate it)
 // ============================================================================
 
-const LoogleHitSchema = Schema.StructWithRest(
-  Schema.Struct({
-    name: Schema.String,
-    type: Schema.String,
-    // Loogle, like the sibling `doc` field below, may omit `module` or send
-    // null for it; either reads as an empty module name.
-    module: nullishWithDefault(
-      Schema.String,
-      '',
-      'The declaring module, or empty when Loogle sends none.',
-    ),
-    // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
-    doc: Schema.optional(Schema.NullOr(Schema.String)),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
+const LoogleHitSchema = Schema.Struct({
+  name: Schema.String,
+  type: Schema.String,
+  // Loogle, like the sibling `doc` field below, may omit `module` or send
+  // null for it; either reads as an empty module name.
+  module: nullishWithDefault(
+    Schema.String,
+    '',
+    'The declaring module, or empty when Loogle sends none.',
+  ),
+  // Loogle may omit, null, or empty `doc`; formatHit already guards on truthiness.
+  doc: Schema.optional(Schema.NullOr(Schema.String)),
+});
 type LoogleHit = typeof LoogleHitSchema.Type;
 
-const LoogleSuccessSchema = Schema.StructWithRest(
-  Schema.Struct({
-    hits: Schema.Array(LoogleHitSchema),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
+const LoogleSuccessSchema = Schema.Struct({
+  hits: Schema.Array(LoogleHitSchema),
+});
 
-const LoogleErrorSchema = Schema.StructWithRest(
-  Schema.Struct({
-    error: Schema.String,
-    suggestions: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
-  }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
-);
+const LoogleErrorSchema = Schema.Struct({
+  error: Schema.String,
+  suggestions: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
+});
 
 // Not a tagged union: success/error bodies share no tagged key. Try the
 // error case first so an `{ error }` body is never mis-read as an empty success.
@@ -289,7 +280,7 @@ export const LeanLoogleTool = defineTool({
 
 Example queries:
 - "Real.sin" - find lemmas mentioning a constant
-- "List.map" or "\"differ\"" - search by name substring
+- "List.map" or ""differ"" - search by name substring
 - "_ * (_ ^ _)" - find lemmas with subexpression pattern
 - "(?a -> ?b) -> List ?a -> List ?b" - find List.map by type signature
 - "|- tsum _ = _ * tsum _" - search by main conclusion

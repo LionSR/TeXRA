@@ -37,7 +37,7 @@ These `.yaml` files are flat. An agent with a document task has two main parts:
 2.  **`task`**: Present only on agents with a document task. Text templates that TeXRA fills with your context (input files, instruction) to guide the LLM at each stage, plus output settings:
     - `prefix`: Provides the main context, including your input file(s) (available as `{{ INPUT_CONTENT }}`) and the instruction you typed in the UI (available as `{{ INSTRUCTION }}`).
     - `requests`: A list with one entry per revision. The first entry asks the LLM to perform the initial task (the first revision). It often instructs the LLM to think within `<scratchpad>` tags and then output the main content wrapped in the fixed `<documents>` container, with one `<document name="...">...</document>` entry per output file. Each further entry drives one reflection revision.
-    - `rewrite`, `outputs`, and `files`: whether the agent edits its inputs or writes new documents, the default output filenames, and template files kept beside the YAML.
+    - `outputs` and `files`: the files a generator agent writes (an agent that names none edits its inputs), and template files kept beside the YAML.
 
 _(Prompts use Nunjucks templating (Jinja2-style syntax). For the list of available variables such as `{{ INPUT_CONTENT }}` and how to use them, read the [Custom agents](./custom-agents.md) guide.)_
 

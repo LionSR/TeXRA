@@ -39,7 +39,7 @@ import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import { PermissionPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
-import { RunBindingSchema } from './runFacts';
+import { NormalizedUsageSchema, RunBindingSchema } from './runInput';
 import {
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,
@@ -237,7 +237,6 @@ const DisplayRowDraftSchema = Schema.Union([
     config: RunRecordFieldsSchema,
     binding: Schema.optional(Schema.NullOr(RunBindingSchema)),
   }),
-  durable('run.model', { model: Schema.String.check(Schema.isMinLength(1)) }), // projected (`projections.ts`), never stored
   /** The parent edge severed by a stop that detaches the run: the only
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
@@ -266,10 +265,14 @@ const DisplayRowDraftSchema = Schema.Union([
     ends: Schema.optional(Schema.Literals(['completed', 'failed'])),
   }),
   /** A run's title, and who gave it: the model's summary, or the user's
-   *  rename, which a later model title does not replace. */
+   *  rename, which a later model title does not replace. `usage` is the
+   *  priced helper request that wrote a model's summary, part of the run's
+   *  spend; absent when no request was priced (a rename, a launch's label,
+   *  a fork's copy). */
   durable('run.description', {
     description: Schema.String,
     by: Schema.Literals(['model', 'user']),
+    usage: Schema.optional(NormalizedUsageSchema),
   }),
   /** Input a run has not taken yet, whole, so a crash loses nothing;
    *  `followUpId` is the producer's delivery id or minted. Pending is
@@ -436,7 +439,6 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
       return { parent: null, borrowsClaim: false, closes: true };
     case 'run.activate':
     case 'run.config':
-    case 'run.model':
     case 'run.detach':
     case 'run.end':
     case 'child.park':

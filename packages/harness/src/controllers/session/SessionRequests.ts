@@ -63,6 +63,7 @@ import {
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { runActionRefusal } from '@shared/session/runActions';
+import { descriptionRow } from '@shared/session/runFacts';
 import { ownFactRow } from '@tools/plugins';
 import { ToolRegistry, type ToolTable } from '@tools/toolTable';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
@@ -208,14 +209,7 @@ const rename = (
     req.runId,
     heldHere,
     deps.sessionLog
-      .transact([
-        {
-          type: 'run.description',
-          aggregateId: qualifyAggregateId('run', req.runId),
-          description: req.title,
-          by: 'user',
-        },
-      ])
+      .transact([descriptionRow(req.runId, req.title, 'user')])
       .pipe(
         Effect.mapError(
           writeRejection({
@@ -233,12 +227,6 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
     (row) => row.runId === runId && row.requestId === requestId,
   );
 
-/**
- * Record a surface's decision. The transaction re-reads the request, so only
- * one concurrent answer commits. The request's plugin records its own facts
- * first, outside that transaction; the lane serializes both steps. A grant
- * still applies when the request is already answered (`decideUnderGrant`).
- */
 const decideRequest = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
@@ -263,7 +251,13 @@ const decideRequest = (
     const services = yield* followUpServices;
     const side =
       payload.kind === 'plugin'
-        ? deps.plugins.entries.get(payload.plugin)?.decision?.record({
+        ? (
+            deps.plugins.entries.get(payload.plugin) ??
+            (yield* new Unavailable({
+              runId: req.runId,
+              reason: `Plugin "${payload.plugin}" is unavailable: restore it to answer this request.`,
+            }))
+          ).decision?.record({
             payload,
             decision: req.decision,
             inbox: (runId) => runInbox(runId, services),
@@ -334,26 +328,20 @@ const handle = (
 ): Effect.Effect<Outcome, RequestError, RequestServices | SessionServices> => {
   switch (req.kind) {
     case 'run.stop':
-      // An unset child policy is the stop's to decide (`RunRegistry.stop`).
-      return runs
-        .stop(req.runId, {
-          detachActiveChildren: req.detachActiveChildren ?? undefined,
-          reason: req.reason,
-        })
-        .settlement.pipe(
-          // A setting that would not read, or a refused terminal row (a live
-          // foreign owner, a rolled-back transaction): the run is still in
-          // flight, so the requester hears that rather than `done`.
-          Effect.mapError(
-            (error): RequestError =>
-              new Unavailable({
-                runId: req.runId,
-                reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
-              }),
-          ),
-          Effect.as(done),
-          Effect.uninterruptible,
-        );
+      return runs.stop(req.runId, req.reason).settlement.pipe(
+        // A setting that would not read, or a refused terminal row (a live
+        // foreign owner, a rolled-back transaction): the run is still in
+        // flight, so the requester hears that rather than `done`.
+        Effect.mapError(
+          (error): RequestError =>
+            new Unavailable({
+              runId: req.runId,
+              reason: `The ${runNoun(deps.view, req.runId)} could not be stopped: ${toErrorMessage(error)}`,
+            }),
+        ),
+        Effect.as(done),
+        Effect.uninterruptible,
+      );
     case 'run.delete':
       return deleteAdmittedRun(deps, req.runId, admitted, 'single', runs);
     case 'run.compact':

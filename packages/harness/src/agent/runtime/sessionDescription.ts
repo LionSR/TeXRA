@@ -15,14 +15,10 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { withLogChannel } from '@logger/effectLog';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
-import {
-  qualifyAggregateId,
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
+import { descriptionRow } from '@shared/session/runFacts';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import type { RouteRetries } from './run/invocation';
 import type { HttpClient } from 'effect/http';
@@ -82,9 +78,10 @@ export function getDisplayedInstruction(
 
 /**
  * Whether the session labels its root runs: one extra helper-model request
- * per root run, reported to the usage log but not to the run's own usage.
+ * per root run, counted in the run's usage through its `run.description`.
  * The label is the app's (a session's title in its run list and history),
- * so it is off unless the composition asks for it (`labelRuns`); a child
+ * so it is off unless the process layer provides it (`processLayer`
+ * does; `Sessions.layer` does not); a child
  * run is never labelled and keeps its agent name.
  */
 export const RunLabels = Context.Reference<boolean>(
@@ -110,7 +107,9 @@ const DESCRIPTION_DEADLINE = '20 seconds';
  * Uses the configured helper model, else the run's own, for a one-shot,
  * non-streaming call.
  * On success, commits the run's `run.description` row, which the meta fold
- * and every renderer read.
+ * and every renderer read, with the request's priced usage, which the run's
+ * spend counts. An answer that makes no label has no row to carry its
+ * spend, and the warning says so.
  *
  * The helper model is resolved against the session's settings slots
  * (`SessionRoots`) and the process `Secrets` read from context.
@@ -142,7 +141,7 @@ export const generateSessionDescription = Effect.fn(
       const facts = yield* log.facts(runId);
       if (facts === null || facts.title !== null) return;
     }
-    const text = yield* helperCall(
+    const { text, usage } = yield* helperCall(
       roots,
       {
         userPrompt: buildUserPrompt(
@@ -171,7 +170,11 @@ export const generateSessionDescription = Effect.fn(
       }),
     );
     const description = cleanSessionDescription(text);
-    if (!description) return;
+    // No row to carry the request's spend: say where it went.
+    if (!description)
+      return yield* Effect.logWarning(
+        `The helper's answer for ${runId} makes no session label; its request's spend is not in the run's usage.`,
+      ).pipe(withLogChannel(CHANNEL));
 
     // The description's own row, committed awaited rather than queued behind
     // a drain of the run's publications: this fiber runs beside the run's own
@@ -182,10 +185,8 @@ export const generateSessionDescription = Effect.fn(
     // path's own failure and the one thing the warning is for.
     yield* log.transact([
       {
-        type: 'run.description',
-        aggregateId: qualifyAggregateId('run', runId),
-        description,
-        by: 'model',
+        ...descriptionRow(runId, description, 'model'),
+        ...(usage === null ? {} : { usage }),
       },
     ]);
     yield* Effect.logInfo(`Generated session description for ${runId}`).pipe(
