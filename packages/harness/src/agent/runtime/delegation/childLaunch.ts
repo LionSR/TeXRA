@@ -73,7 +73,7 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
   definition: PreparedAgentDefinition,
   registration: RegisterRunOptions,
-  options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
+  options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools' | 'apiKeys'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const { opened } = yield* registryOf(yield* Runs).start(runId, {
     open: executeAgent(definition, runId, { ...options, registration }),
@@ -92,14 +92,14 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
   parentRunId: RunId,
-  options: Pick<ExecuteAgentOptions, 'onProgress'>,
+  options: Pick<ExecuteAgentOptions, 'onProgress' | 'apiKeys'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
   const runs = registryOf(yield* Runs);
   const { opened } = yield* runs.start(runId, {
     open: openResume(
       runs,
       runId,
-      { stopAfterCycle: true, onProgress: options.onProgress },
+      { stopAfterCycle: true, ...options },
       parentRunId,
     ).pipe(
       Effect.catchTag('ResumeRefused', ({ answer }) =>
@@ -195,13 +195,15 @@ interface AwaitedChildLaunch {
 
 /** Launch one child under the run id its caller derived and read its end
  *  back; recovering an earlier attempt belongs to the caller that owns the
- *  call identity (`recoverAgentChild`). */
+ *  call identity (`recoverAgentChild`). The child takes the keys the
+ *  calling run's launch brought. */
 export const executeSubagentInBand = (
   launch: AwaitedChildLaunch,
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
   awaitChildRun(
     launch.runId,
     Effect.gen(function* () {
+      const call = yield* RunCall;
       const definition = yield* prepareAgentDefinition({
         config: Schema.decodeUnknownSync(AgentConfigSchema)(
           launch.configPayload,
@@ -220,7 +222,7 @@ export const executeSubagentInBand = (
           grants: launch.grants,
           seed: launch.seed,
         },
-        { onProgress: launch.notify },
+        { onProgress: launch.notify, apiKeys: call?.run.apiKeys },
       );
     }),
   );
@@ -232,7 +234,10 @@ export const resumeSubagentInBand = (
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
   awaitChildRun(
     launch.runId,
-    resumeOwnedChild(launch.runId, launch.parentRunId, {
-      onProgress: launch.notify,
-    }),
+    Effect.flatMap(RunCall, (call) =>
+      resumeOwnedChild(launch.runId, launch.parentRunId, {
+        onProgress: launch.notify,
+        apiKeys: call?.run.apiKeys,
+      }),
+    ),
   );

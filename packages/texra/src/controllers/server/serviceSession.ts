@@ -379,7 +379,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             ).pipe(
               Effect.annotateLogs({ data: error }),
               Effect.andThen(SubscriptionRef.get(link.away)),
-              Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
+              // The link's reason once it has one; until then the call's.
+              Effect.flatMap((reason) =>
+                Effect.fail(runFailure(reason || error.message)),
+              ),
             ),
       ),
     );
@@ -500,10 +503,20 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       activation,
       ...(redirectedFrom !== undefined && { redirectedFrom }),
       result,
+      // The view ends as a run's here does, on the level that shows the
+      // activation's outcome or the run gone; and once the result has
+      // failed (the service died under the task, the link refused), when no
+      // such level is coming through the watch.
       view: activationView(
         { current: graph.view.current, changes: graph.view.changes, subscribe },
         runId,
         activation,
+      ).pipe(
+        Stream.haltWhen(
+          Effect.flatMap(Effect.exit(result), (exit) =>
+            Exit.isFailure(exit) ? Effect.void : Effect.never,
+          ),
+        ),
       ),
       // The service's rows, through the watch; the service's log is the
       // store, settled once it answered.

@@ -118,6 +118,9 @@ export interface RunLaunch {
   /** When this launch or resume of the run started (its opening). */
   readonly startedAt: number;
   readonly config: AgentConfig;
+  /** The provider API-key variables the launch brought (`StartOptions.apiKeys`):
+   *  the run's environment holds them, and a child it launches takes them. */
+  readonly apiKeys?: Readonly<Record<string, string>>;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
   readonly logger: AgentTrace;

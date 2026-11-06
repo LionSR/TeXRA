@@ -230,6 +230,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     startedAt: yield* Clock.currentTimeMillis,
     workingDirectory,
     config,
+    apiKeys: options.apiKeys,
     persona,
     toolPolicy: {
       stopAfterCycle,
