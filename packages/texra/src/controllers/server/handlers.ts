@@ -382,7 +382,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ),
       'host.focus': ({ attachment }) => hosts.focus(attachment),
       'host.answer': ({ id, answer }) => hosts.answer(id, answer),
-      'task.resume': ({ workspace, runId }) =>
+      'task.resume': ({ workspace, runId, apiKeys }) =>
         Effect.scoped(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
@@ -392,7 +392,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
             // it waiting here), which the session names.
             const run = yield* admit(
               runs,
-              session.resume(runId, { interactive: true }),
+              session.resume(runId, { interactive: true, apiKeys }),
               (error) =>
                 Effect.fail(
                   new TaskFailed({

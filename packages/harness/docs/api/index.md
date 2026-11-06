@@ -659,10 +659,11 @@ const responseText: <E, R>(events: Stream<AgentEvent, E, R>) => Stream<string, E
 ## ResumeInput
 
 What a resume takes besides the run's id: the same custom tools the
-run was started with, and whether it stays open for follow-ups.
+run was started with, whether it stays open for follow-ups, and the
+provider keys of the environment it resumes from.
 
 ```ts
-type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
+type ResumeInput = Pick<StartInput, 'tools' | 'interactive' | 'apiKeys'>;
 ```
 
 ## ResumeRefused

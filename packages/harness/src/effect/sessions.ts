@@ -116,8 +116,9 @@ export type StartInput = typeof StartRequestSchema.Type & {
 };
 
 /** What a resume takes besides the run's id: the same custom tools the
- *  run was started with, and whether it stays open for follow-ups. */
-export type ResumeInput = Pick<StartInput, 'tools' | 'interactive'>;
+ *  run was started with, whether it stays open for follow-ups, and the
+ *  provider keys of the environment it resumes from. */
+export type ResumeInput = Pick<StartInput, 'tools' | 'interactive' | 'apiKeys'>;
 
 /** One run of an agent, from the moment it exists in its session. */
 export interface Run {

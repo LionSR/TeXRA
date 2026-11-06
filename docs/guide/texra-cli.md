@@ -195,8 +195,8 @@ that an OpenAI API key can spend once you claim them for an API organization
 you own.
 
 A project's `.env` file is read by every task of that project. A key set
-only in this terminal does not reach a task that runs in the TeXRA service;
-the CLI says so, and `TEXRA_NO_SERVICE=1` keeps the task in this terminal.
+only in this terminal (`OPENAI_API_KEY=… texra chat`) travels with the
+tasks this terminal starts, wherever they run.
 
 **Use a provider subscription.** ChatGPT, Grok (xAI), Kimi Code, and the GLM
 Coding Plan can serve model calls in place of an API key:
@@ -518,9 +518,11 @@ finds an older service asks it to finish its running tasks and exit, and
 starts its own beside it. The service takes its environment (`PATH`,
 provider keys) from your login shell, not from the terminal or window that
 happened to start it, so `latexmk` and `git` are found the same way from
-every window; it logs the `PATH` it uses. It reads that environment and
-your settings when it starts: after you export or remove a key in your
-shell profile, or edit `config.json`, run `texra service restart`. The
+every window; it logs the `PATH` it uses. The provider keys a terminal or
+window holds travel with each task it starts. The service reads its own
+environment and your settings when it starts: after you export or remove
+a key in your shell profile, or edit `config.json`, run
+`texra service restart`. The
 service does not run on Windows yet; there, chats run in their own
 process.
 

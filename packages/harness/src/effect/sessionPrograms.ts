@@ -196,7 +196,7 @@ function resume(
   input: ResumeInput = {},
   redirectedFrom?: RunId,
 ): Effect.Effect<Run, ResumeError> {
-  const { tools, interactive } = input;
+  const { tools, interactive, apiKeys } = input;
   return Effect.gen(function* () {
     yield* admitTools(
       tools ?? [],
@@ -205,6 +205,7 @@ function resume(
     const resumed = yield* resumeRun(runId, {
       stopAfterCycle: interactive !== true,
       tools,
+      apiKeys,
     }).pipe(Effect.provide(session), Effect.mapError(runFailure));
     if ('ownedBy' in resumed)
       return yield* resume(

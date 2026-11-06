@@ -31,11 +31,7 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from '@cli/runtime/cliContext';
-import {
-  isLinked,
-  linkClient,
-  serviceKeysNotice,
-} from '@cli/runtime/cliService';
+import { isLinked, linkClient } from '@cli/runtime/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
@@ -417,13 +413,6 @@ export async function runChat(
   if (link !== undefined)
     runtime.runSync(
       Effect.gen(function* () {
-        // Said when the login shell has answered, without holding the chat.
-        yield* serviceKeysNotice().pipe(
-          Effect.tap((keys) =>
-            Effect.sync(() => keys !== null && appendLocalNotice(keys)),
-          ),
-          Effect.forkIn(chatScope),
-        );
         // The service went away (retired by a newer build, or it died) and
         // the link reaches it again: the chat says so, rather than going
         // quiet.

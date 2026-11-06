@@ -209,7 +209,12 @@ export const TexraRpcs = RpcGroup.make(
     error: TaskFailed,
   }),
   Rpc.make('task.resume', {
-    payload: { workspace, runId: RunIdSchema },
+    /** `apiKeys`: as a start carries them (`StartOptions.apiKeys`). */
+    payload: {
+      workspace,
+      runId: RunIdSchema,
+      apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+    },
     /** The run that resumed: the asked one, or the parent that owns it. */
     success: TaskAdmitted,
     error: TaskFailed,
