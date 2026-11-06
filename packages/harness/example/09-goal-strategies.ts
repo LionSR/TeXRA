@@ -146,13 +146,12 @@ const runGoal = (session: LocalSession, opening: string) =>
           run.launchParentId === conversation.runId &&
           run.durableOutcome !== null,
       );
-    // Ended, its claim released, and its result delivered to the
-    // conversation as a follow-up.
+    // Ended, and its result delivered to the conversation as a follow-up.
     yield* Stream.runHead(
       Stream.filter(
         conversation.view,
         (current) =>
-          ended(current)?.ownerId === null &&
+          ended(current) !== undefined &&
           (current.queuedFollowUps.get(conversation.runId)?.length ?? 0) > 0,
       ),
     );

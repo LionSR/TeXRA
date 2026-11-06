@@ -71,7 +71,7 @@ function launchBackgroundRun(
     // The completion commits on the parent's input; its wake follows.
     const followUp = vi
       .spyOn(toolUseFollowUp, 'wakeIfOwed')
-      .mockReturnValue(Effect.succeed(Effect.void));
+      .mockReturnValue(Effect.succeed(true));
 
     publishTestRunStart(session, PARENT_RUN_ID);
     // No settle before the launch. `registerRun` opens the parent check with an
@@ -194,12 +194,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             // Launched and admitted, its program not yet past its setup: the
             // window between `start` and the child's loop being under way.
             const launch = yield* Effect.forkChild(
-              startAwaited(
-                Context.get(session, Runs),
-                childId,
-                Effect.never,
-                PARENT_RUN_ID,
-              ),
+              startAwaited(Context.get(session, Runs), childId, Effect.never),
               { startImmediately: true },
             );
 

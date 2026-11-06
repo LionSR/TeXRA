@@ -24,8 +24,7 @@ import {
   INPUT_HISTORY_LIMIT,
   type CurrentValues,
   type Database,
-  type DatabaseClaimRefused,
-  type DatabaseNotOwner,
+  type DatabaseAggregateClosed,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
@@ -85,7 +84,7 @@ export function currentValues(store: {
     body: Effect.Effect<A, E>,
   ) => Effect.Effect<
     A,
-    Extract<E, DatabaseNotOwner | DatabaseClaimRefused> | DatabaseWriteFailed
+    Extract<E, DatabaseAggregateClosed> | DatabaseWriteFailed
   >;
   readonly query: <A, E>(
     read: Effect.Effect<A, E>,

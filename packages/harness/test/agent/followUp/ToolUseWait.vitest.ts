@@ -11,9 +11,9 @@ import { describe, expect } from 'vitest';
 import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
@@ -44,7 +44,10 @@ interface LoopInit extends ScriptedRunInit {
 }
 
 function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
-  return runToolUse({ resume: init.resume === true }).pipe(
+  return Effect.flatMap(
+    openToolUse({ resume: init.resume === true }),
+    (opened) => runToolUse({ resume: init.resume === true }, opened),
+  ).pipe(
     Effect.provide(
       Layer.mergeAll(
         scriptedInvokerLayer(init.script, requests),
@@ -175,6 +178,60 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               ).filter((text) => text === asked),
             ).toEqual([asked]);
             yield* Fiber.interrupt(again.fiber);
+          }),
+      );
+
+      it.effect(
+        'a one-shot child resumed for a queued message runs its turn, then ends',
+        () =>
+          Effect.gen(function* () {
+            const session = yield* quietSession();
+            const parentRunId = generateRunId();
+            const runId = startedRun(session, parentRunId);
+            const first = yield* forkLoop({
+              runId,
+              session,
+              parentRunId,
+              stopAfterCycle: true,
+              script: [textTurn('first cycle')],
+            });
+            expect((yield* Fiber.join(first.fiber)).outcome).toBe('completed');
+
+            // Its parent's message, queued once the child ended: the resume
+            // that delivers it runs the turn it asks for, not the end alone.
+            const asked = 'now check the boundary case';
+            publishTestRows(session, [
+              {
+                type: 'followup.queued' as const,
+                aggregateId: qualifyAggregateId('run', runId),
+                followUpId: 'follow-up-2',
+                content: {
+                  text: asked,
+                  from: {
+                    kind: 'run' as const,
+                    runId: parentRunId,
+                    relation: 'parent' as const,
+                  },
+                },
+              },
+            ]);
+            yield* Context.get(session, SessionLog).settled;
+
+            const resumed = yield* forkLoop({
+              runId,
+              session,
+              parentRunId,
+              stopAfterCycle: true,
+              resume: true,
+              script: [textTurn('second cycle')],
+            });
+            expect((yield* Fiber.join(resumed.fiber)).outcome).toBe(
+              'completed',
+            );
+            expect(resumed.requests).toHaveLength(1);
+            expect(
+              userTexts(yield* Context.get(session, RunHistory).load(runId)),
+            ).toContain(asked);
           }),
       );
     });

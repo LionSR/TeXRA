@@ -71,8 +71,9 @@ function frameInputs(frame: EventsFrame): SessionViewInput[] {
   const inputs: SessionViewInput[] = [];
   if (frame.debug !== null)
     inputs.push({ _tag: 'debug', enabled: frame.debug });
-  inputs.push(...frame.events, ...frame.chunks);
+  // The local snapshot before the rows it was read ahead of (`cutFrame`).
   if (frame.local !== null) inputs.push({ _tag: 'local', local: frame.local });
+  inputs.push(...frame.events, ...frame.chunks);
   if (frame.existence !== null)
     inputs.push(
       frame.replayComplete
@@ -619,10 +620,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     // its prompts, so a handler would be asked nothing.
     attach: (host) =>
       host.approve === undefined
-        ? attachWindowHost(link, workspace, {
-            emit: host.emit,
-            approvalDenied: host.approvalDenied,
-          })
+        ? attachWindowHost(link, workspace, { emit: host.emit })
         : Effect.die(
             new Error(
               "approve handlers are not supported on a service-backed session; the service's windows answer prompts",

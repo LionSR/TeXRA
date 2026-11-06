@@ -282,7 +282,7 @@ Whether `outcome` answers a request of `kind`: how a client reads an
 answer that crossed a process boundary.
 
 ```ts
-const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; readonly wake?: "failed" | null | undefined; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
+const isOutcomeOf: <K extends RuntimeRequest["kind"]>(kind: K, outcome: { readonly kind: "done"; } | { readonly kind: "followUp"; readonly id: string; readonly status: "sent" | "queued"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "receipt"; readonly receipt: { readonly state: "accepted"; } | { readonly state: "incorporated"; readonly turn: number; } | { readonly answer: number; readonly state: "answered"; readonly turn?: number | undefined; } | { readonly reason: "completed" | "cancelled" | "failed" | "noop" | "ended" | "closed"; readonly state: "unanswered"; readonly error?: string | undefined; readonly turn?: number | undefined; }; } | { readonly kind: "forked"; readonly runId: string & Brand<"RunId">; } | { readonly kind: "preview"; readonly preview: { readonly originalContent: string; readonly proposedContent: string; readonly hunks: readonly { readonly oldStart: number; readonly oldLines: number; readonly newStart: number; readonly newLines: number; readonly lines: readonly string[]; }[]; readonly firstChangedLine: number | null; } | null; } | { readonly kind: "runFiles"; readonly result: { readonly status: "done"; readonly to?: string | undefined; } | { readonly status: "noFiles"; } | { readonly status: "error"; readonly error: string; }; }) => outcome is OutcomeOf<K>
 ```
 
 ## isRequestRefusal
@@ -483,16 +483,6 @@ run's project.
 class ModelFetch extends Context.Service<ModelFetch, typeof fetch>()(
   '@texra-ai/harness/ModelFetch',
 )
-```
-
-## NotOwner
-
-Another live owner holds the run this request would act on.
-
-```ts
-class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
-  runId: RunIdSchema,
-})
 ```
 
 ## OpenOptions
@@ -745,6 +735,16 @@ interface Run {
 }
 ```
 
+## RunActive
+
+A launch here holds the run this request would act on.
+
+```ts
+class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
+  runId: RunIdSchema,
+})
+```
+
 ## RunDeletion
 
 What {@link LocalSession.deleteRuns} did with the runs it was asked for.
@@ -828,7 +828,7 @@ interface RunRecords {
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere`, `earlierBuild`, `unusableCheckpoint` or
+   *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;

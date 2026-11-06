@@ -74,8 +74,7 @@ import {
   resolveStepTools,
   type ResolvedTools,
 } from '../agentToolResolution';
-import { Interactions } from '../HostInteractions';
-import { hostCapabilitiesOf, liveToolGates } from '../requestPolicy';
+import { hostCapabilitiesOf, liveToolGates } from '../requests';
 import { blobRows, contextAt, stored } from '../run/requestContext';
 import { appendRow, SCRIPT_TOOL_NAME } from './rows';
 import { stepHooks, type StepHook } from './hooks';
@@ -322,11 +321,6 @@ const openStep = Effect.fn('Step.open')(function* (
         ),
       ],
       withheld: resolved.withheldForApproval,
-      denied: {
-        kind: 'withheldTools',
-        tools: resolved.withheldForApproval,
-        policy,
-      } as const,
       skills,
       listed,
       contributing: contributing.toSorted(
@@ -385,7 +379,6 @@ const openStep = Effect.fn('Step.open')(function* (
     warnings.push(
       `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
     );
-    (yield* Interactions).approvalDenied(step.denied, run.runId);
   }
   // Reported where the change is recorded, not at every step.
   for (const message of warnings) {

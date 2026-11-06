@@ -22,7 +22,6 @@ import { FetchHttpClient, HttpClient } from 'effect/http';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   sessionEventsLayer,
@@ -33,7 +32,6 @@ import { mcpConfigPathOf } from '@common/plugins/mcpServers';
 import { withLogChannel } from '@logger/effectLog';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { AppSignals } from '@platform/appSignals';
-import { holdProcessRoot } from '@platform/processRuntime';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { globalStorageFsLayer, SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
@@ -69,7 +67,6 @@ import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { databaseLayer, globalDatabaseLayer } from './Database';
 import { processStoresLayer } from './appStateStore';
 import { projectDatabaseLayer } from './projectDatabase';
-import { ownerLiveness } from './ownerLiveness';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -129,8 +126,7 @@ const sessionGraphLayer = (key: SessionKey) => {
             RcMap.get(databases, key.storage),
           ),
         );
-  return ownerLiveness.pipe(
-    Layer.provideMerge(SessionViewService.layer),
+  return SessionViewService.layer.pipe(
     Layer.provideMerge(sessionInputsLayer),
     Layer.provideMerge(sessionEventsLayer.pipe(Layer.provideMerge(database))),
     Layer.provideMerge(
@@ -161,16 +157,11 @@ class SessionMap extends Context.Service<
   static readonly layer = Layer.effect(
     SessionMap,
     Effect.suspend(() => {
-      // This composition: each entry holds its root under it while it lives.
-      const holder = {};
       return LayerMap.make(
         (key: SessionKey) =>
           Layer.fresh(
             sessionOwnersLayer(key.open).pipe(
               Layer.provide(sessionGraphLayer(key)),
-              Layer.provide(
-                Layer.effectDiscard(holdProcessRoot(key.storage, holder)),
-              ),
             ),
           ),
         { idleTimeToLive: Duration.infinity },
@@ -459,13 +450,6 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
-      holds: (root, runs) =>
-        withMap(heldSession(root)).pipe(
-          Effect.map(
-            (held) =>
-              held !== undefined && Context.get(held.session, Runs) === runs,
-          ),
-        ),
       close: (root) => withMap(closeSession(root)),
       closeAll,
     };

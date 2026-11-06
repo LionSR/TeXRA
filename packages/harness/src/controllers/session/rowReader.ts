@@ -18,7 +18,7 @@ import {
   RunIdSchema,
   type AggregateId,
   type JsonValue,
-  type LocalRuntimeState,
+  type UnreadableRun,
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
@@ -178,7 +178,7 @@ export interface RowReader<E> {
     E | DatabaseStoreNewer | DatabaseRowCorrupt | DatabaseRowEarlier
   >;
   /** Every run found unopenable so far, with why: shown read-only. */
-  readonly damaged: Effect.Effect<LocalRuntimeState['unreadable'], E>;
+  readonly damaged: Effect.Effect<readonly UnreadableRun[], E>;
 }
 
 /**
@@ -193,10 +193,7 @@ export function rowReader<E>(
   exec: Exec<E>,
 ): RowReader<E> {
   const warned = new Set<string>();
-  const unopenable = new Map<
-    RunId,
-    LocalRuntimeState['unreadable'][number]['reason']
-  >();
+  const unopenable = new Map<RunId, UnreadableRun['reason']>();
   // The runs an earlier build wrote, each with the first such row.
   const earlier = new Map<RunId, DatabaseRowEarlier>();
   let scanned = false;

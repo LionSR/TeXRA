@@ -69,7 +69,6 @@ type Decline = keyof typeof DECLINE_LABEL;
 /** What a card this window cannot answer says in place of its actions. */
 const UNANSWERABLE_NOTE = {
   resume: 'The task stopped before this was answered. Resume it to answer.',
-  readOnly: 'This window cannot answer this request.',
 } as const;
 
 /** A run-scoped grant the primary's ▾ menu offers: approve this request and

@@ -12,6 +12,7 @@ import {
   Layer,
   Schema,
   type Scope,
+  Semaphore,
   SynchronizedRef,
 } from 'effect';
 
@@ -309,6 +310,7 @@ export function testAgentRun(
   const { session, ...run } = base;
   const { runId, logger, model } = run;
   return {
+    startedAt: 0,
     config: Schema.decodeUnknownSync(AgentConfigSchema)({
       agent: 'chat',
       model: 'test-model',
@@ -325,6 +327,7 @@ export function testAgentRun(
     },
     entry: {
       parent: null,
+      awaited: false,
       registration: null,
       opening: Effect.succeed([]),
       entered: () => Effect.void,
@@ -338,6 +341,7 @@ export function testAgentRun(
         Effect.scoped(next(current)),
       ),
     callbacks: {},
+    awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
     ...run,
     ...over,
   };
@@ -388,6 +392,7 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
           callbacks: {},
           entry: {
             parent: init.parentRunId ?? null,
+            awaited: false,
             registration: null,
             opening: Effect.succeed([]),
             entered: () => Effect.void,

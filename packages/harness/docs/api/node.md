@@ -177,7 +177,7 @@ in its own group, on a lifeline that ends the group if this process dies
 without running the release.
 
 ```ts
-const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly success: boolean; readonly exitCode: number; readonly timedOut: boolean; readonly stderr: string; readonly stdout: string; readonly outputLimitExceeded?: boolean | undefined; readonly noExitCode?: boolean | undefined; }, never, ChildProcessSpawner>
+const executeCommand: (command: string | string[], options: ExecuteCommandBaseOptions) => Effect<{ readonly success: boolean; readonly stdout: string; readonly stderr: string; readonly timedOut: boolean; readonly exitCode: number; readonly outputLimitExceeded?: boolean | undefined; readonly noExitCode?: boolean | undefined; }, never, ChildProcessSpawner>
 ```
 
 ## ExecuteCommandBaseOptions
@@ -554,21 +554,14 @@ const pathExists: (fs: FileSystem, target: string) => Effect<boolean, PlatformEr
 ## ProcessIdentity
 
 The canonical hostname, pid, and nullable process-start tuple: the
-`ownerId` stamped on every event the process appends and the `self` entry
-of its local runtime snapshot. Resolved once at each process entry, where
-the start identity can be awaited, and provided to the process layer.
-Beside it, its liveness verdicts on claim owners, which every liveness
-proof goes through (`proveRecorded`): a `dead` one is final.
+`origin` stamped on every event the process appends. Resolved once at each
+process entry, where the start identity can be awaited, and provided to
+the process layer.
 
 ```ts
 class ProcessIdentity extends Context.Service<
   ProcessIdentity,
-  {
-    readonly ownerId: OwnerId;
-    readonly owners: SubscriptionRef.SubscriptionRef<
-      ReadonlyMap<OwnerId, OwnerLiveness>
-    >;
-  }
+  { readonly ownerId: OwnerId }
 >()('@texra-ai/harness/session/ProcessIdentity')
 ```
 

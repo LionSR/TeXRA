@@ -70,7 +70,7 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts#'request.opened'`,
-  `agent/runtime/requestPolicy.ts#decidedRows`).
+  `agent/runtime/requests.ts#policyDecidedRows`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event_sequence`).
@@ -124,7 +124,7 @@ row carries an envelope that the store stamps and no caller supplies:
   never reused
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event`).
 - `seq`: Dense from 1 per aggregate (`controllers/session/Database.ts#NEXT_SEQ`).
-- `origin`: The writing process's identity, not the claim holder's
+- `origin`: The writing process's identity
   (`controllers/session/Database.ts#INSERT_EVENT`).
 - `at`: Publish clock in whole milliseconds, one value for a whole batch;
   informational only (`controllers/session/Database.ts#'Database.appendAll'`).
@@ -135,10 +135,9 @@ hold any other row
 A child's `run.start` MUST name an open parent; the store stamps the parent's
 incarnation `uid` in the child's creation transaction
 (`controllers/session/Database.ts#Child creation requires an open parent`). A
-`run.removed` row closes its aggregate and every dependent; it requires this
-process's claim on every open dependent, and a row MUST NOT be appended to a
-closed aggregate (`controllers/session/Database.ts#closeDependents`,
-`#Deletion requires the dependent claim`, `#NEXT_SEQ`).
+`run.removed` row closes its aggregate and every dependent, and a row MUST NOT
+be appended to a closed aggregate
+(`controllers/session/Database.ts#closeDependents`, `#NEXT_SEQ`).
 
 A payload string of 4096 or more characters is stored once per store as a zstd
 blob under the sha256 of its JSON text; the row keeps a reference, and the read
@@ -148,15 +147,12 @@ verifies the digest (`controllers/session/rowCodec.ts#encodeDraft`,
 ### 2.3 One publisher
 
 Every row a session writes is written by a job on one inbox drained by one
-fiber. Claims are not rows: a hold inside a job takes its claim in that job's
-transaction, a hold outside one in a write transaction of its own, and either is
-released in the transaction of the scope that closes it, which need not be a job
-(`controllers/session/sessionStore.ts#claimHolds`). Jobs SHALL run in the order
-they were enqueued, one at a time, and the table's commit order is that order
-(`agent/runtime/SessionEvents.ts#consumer`). A job other than an ordering
-barrier (`transact(job, order)`, below) is one SQLite transaction: its appends
-commit together or not at all (`agent/runtime/SessionEvents.ts#inTransaction`,
-`controllers/session/Database.ts#committing`).
+fiber. Jobs SHALL run in the order they were enqueued, one at a time, and the
+table's commit order is that order (`agent/runtime/SessionEvents.ts#consumer`).
+A job other than an ordering barrier (`transact(job, order)`, below) is one
+SQLite transaction: its appends commit together or not at all
+(`agent/runtime/SessionEvents.ts#inTransaction`,
+`controllers/session/Database.ts#job`).
 
 The publisher offers these doors:
 
@@ -174,12 +170,9 @@ The publisher offers these doors:
   `#SESSION_CLOSE_DEADLINE_MS`).
 
 A job MUST NOT wait on its own publisher; doing so is a defect
-(`agent/runtime/SessionEvents.ts#reentered`). A job MAY run again whole when
-SQLite reports the database busy, so a job body MUST be database-only
-(`controllers/session/Database.ts#retryBusy`). Effects a job schedules with
-`afterCommit` SHALL run only after its transaction commits, never for an attempt
-that rolled back (`shared/session/sessionEvents.ts#afterCommit`,
-`#committing`). At the close deadline the running job is cut and every queued
+(`agent/runtime/SessionEvents.ts#reentered`). A job body MUST be
+database-only: what must follow its commit runs after the transaction
+returns (`agent/runtime/SessionEvents.ts#inTransaction`). At the close deadline the running job is cut and every queued
 job refused (`agent/runtime/SessionEvents.ts#drain`). An awaited job enqueued
 after close is a defect; a detached one is logged and dropped
 (`agent/runtime/SessionEvents.ts#'Session publication after the plane closed'`,
@@ -187,10 +180,7 @@ after close is a defect; a detached one is logged and dropped
 
 Above the publisher, the session's own door (`SessionLog.transact`) SHALL return
 only after the session's fold has folded every commit the job made
-(`controllers/session/sessionStore.ts#settleTo`). A claim a failed transaction
-took is released best effort: a refused release is logged and the claim stays
-until another process proves this one dead
-(`controllers/session/sessionStore.ts#Claims a refused transaction took were not released`).
+(`controllers/session/sessionStore.ts#settleTo`).
 A trace row emitted on its own reaches the publisher through
 `SessionLog.publish` (`shared/session/sessionLog.ts#SessionLogShape`); a call's
 card rows and a turn's closing rows commit inside the run's own batches instead
@@ -212,12 +202,10 @@ known kind at a version above the one this build reads
 (`controllers/session/rowCodec.ts#storeGate`). A plugin kind whose plugin this
 build lacks passes the gate; its rows read as written, marked unavailable
 (below). The
-gate MUST run at open and inside every outermost transaction that writes or
-derives rows, so no build opens a store holding core rows it cannot read, or
-writes beside them (`controllers/session/Database.ts#storeGate`, `#gated`).
-Releasing claims is the one write it skips: it writes no row and only gives back
-this process's claims (`controllers/session/Database.ts#releaseClaims`). A
-core kind this build lacks and never retired counts as newer
+gate MUST run at open, so no build opens a store holding core rows it cannot
+read, or writes beside them (`controllers/session/Database.ts#storeGate`); a
+project store's one writer is the process that opened it (section 7), so what
+the store holds cannot change under it. A core kind this build lacks and never retired counts as newer
 (`controllers/session/rowCodec.ts#readableVersion`). Kinds a build deleted are
 listed as retired, each with what its rows fed
 (`shared/schemas/rowVersions.ts#RETIRED_ROW_KINDS`): a `display` row is skipped
@@ -261,12 +249,12 @@ it, listing and tail included, because it means a newer build now writes this
 store; a read whose query does not select that row (a display tail of display
 kinds, a listing of listing rows) can still succeed, while writes and projection
 catch-up stay gated (`controllers/session/rowReader.ts#'DatabaseStoreNewer'`).
-Reads do not run the gate: a row of a core kind this build lacks, written by a
-newer build after this one opened the store, reads as corrupt until the next
-write's gate refuses the store; a plugin kind whose plugin this build lacks
-reads unavailable and passes the gate
+Reads do not run the gate: a project store's one writer is the process that
+opened it, so a row of a core kind this build lacks can only predate the open,
+which the gate refused; a plugin kind whose plugin this build lacks reads
+unavailable and passes the gate
 (`controllers/session/rowCodec.ts#'an unknown kind'`,
-`controllers/session/Database.ts#gated`). A run whose rows do not decode
+`controllers/session/rowCodec.ts#storeGate`). A run whose rows do not decode
 cannot be opened or resumed: a resume of it, and a message to it, is refused as
 `earlierBuild` for an earlier build's row and as `unusableCheckpoint` for a
 corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefusal`,
@@ -317,8 +305,6 @@ private rows themselves are never sent to a renderer
 - `hook.outcome` (folded: yes): A hook point's recorded outcome; a recorded
   point never runs again (`shared/schemas/hookOutcome.ts#HookOutcomePayloadSchema`,
   `agent/runtime/loop/hooks.ts#hooksAt`).
-- `child.turn` (folded: no): A child loop's turn identity and fate, `accepted`
-  or `settled` (`shared/schemas/sessionEvent.ts#'child.turn'`).
 
 The `model.message` arms:
 
@@ -340,10 +326,11 @@ The `model.message` arms:
 
 ### 3.2 Run records (private to the runtime)
 
-`run.report` holds the run's report text, `run.result` its result metadata, and
+`run.report` holds the run's report text (a child's delivery, written with its
+`run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
-`shared/session/runRowReads.ts#recordFacts`, `agent/followUp/Inbox.ts#admission`); taking the run's claim does not.
+`shared/session/runRowReads.ts#recordFacts`, `agent/followUp/Inbox.ts#admission`).
 
 ### 3.3 Display rows (session-authored and run-authored)
 
@@ -359,8 +346,6 @@ also read by `applyRunRows`.
   binding.
 - `run.detach` (folded: no): A stop severed the parent edge.
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output.
-- `child.park` (folded: no): A child loop's park: `parked`, `resumed`,
-  `paused`.
 - `run.removed` (folded: no): The tombstone: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
@@ -417,8 +402,8 @@ write points are normative:
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.failed'`;
   `agent/runtime/run/invocation.ts#runInvocation`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts#requestAsks`,
-  `#decisionRow`).
+  wait; a decision commits once (`agent/runtime/requests.ts#openRequest`,
+  `#decideRequest`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
@@ -466,17 +451,23 @@ delivery its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts#'mismatched-delivery'`).
 
 **W5.** The positions are `turn.ready`, `turn.begin`, `response.ready`,
-`results.ready`, `turn.end`, `waiting` and `halted`
-(`shared/schemas/runHistoryEvent.ts#PositionAtSchema`). A `halted` or
-`turn.end` position MUST carry an outcome, and every other position MUST NOT
-carry one (`shared/schemas/runHistoryEvent.ts#RunPositionPayloadSchema`). The
-`halted` position MUST commit in the same batch as the run's `run.end`
-(`agent/storage/runLifecycle.ts#endIn`,
-`agent/runtime/loop/rows.ts#haltedPositionRow`). A run whose history does not
-load ends with its `run.end` and no `halted` position, with a warning
-(`agent/storage/runLifecycle.ts#endIn`). A child the child loop drives has no
-run history and writes no position; it parks on `child.park` rows
-(`shared/schemas/sessionEvent.ts#'child.park'`).
+`results.ready`, `turn.end` and `waiting`
+(`shared/schemas/runHistoryEvent.ts#PositionAtSchema`). A `turn.end` position
+MUST carry an outcome, and every other position MUST NOT carry one
+(`shared/schemas/runHistoryEvent.ts#RunPositionPayloadSchema`). A run's end
+is its `run.end` alone, committed in one transaction with the requests it
+leaves open cancelled and its unread input dropped
+(`agent/storage/runLifecycle.ts#endIn`); a stop commits a `run.stop` row
+naming its reason first, and for a run no fiber here drives, the `run.end`
+in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A run whose
+history does not load ends with its `run.end` and its requests uncancelled,
+with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
+run that ends: a native child runs one cycle and ends with its report; a
+process child (a background command, an agent CLI's turn) is one turn of
+its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
+end queues its report on its parent's input in the same transaction, under
+`${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
+unless the parent's call awaits it or the child was detached.
 
 **W6.** Every failed attempt of a turn or a summary that reaches failure
 recording MUST commit a `failed` row whose `next` is the move after it; a
@@ -559,7 +550,7 @@ so the live path and the resume path are the same steps
 same program, `runToolUse`, with `resume: true`, through the same run program as
 a fresh launch, `executeAgent` without a registration
 (`agent/runtime/executeAgent.ts#executeAgent`), reached from `resumeRun`
-(`agent/runtime/resumeRun.ts#resumeQueuedToolUse`).
+(`agent/runtime/resumeRun.ts#resumeRun`).
 
 A resume MUST be refused when the rows hold no opened run
 (`agent/runtime/loop/runProgram.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
@@ -660,111 +651,71 @@ helper call records none) and the attempt is resent; while observing an accepted
 operation, the renewed observation repeats with no row and is never a resend
 (`agent/runtime/run/invocation.ts#afterFailure`).
 
-## 7. Claims and several processes
+## 7. One process per project store
 
-There is no daemon. Several processes MAY open one store at once; each holds its
-own connection, publisher and fold, and sees the others' commits through a 250
-ms poll of SQLite's `data_version`
-(`controllers/session/Database.ts#'PRAGMA data_version'`).
+There is no daemon and no claim. A project store is held by the one process
+that opened it, for its connection's life: the open takes
+`locking_mode = EXCLUSIVE` and the first write lock, and a second opener is
+refused at once with `STORE_HELD_MESSAGE`, never waited for
+(`controllers/session/Database.ts#STORE_HELD_MESSAGE`, `#exclusive`). The
+holder is the store's one writer and one reader; a cold listing of a held
+project fails the same way (`controllers/session/readSessionView.ts`). The
+global store is shared across processes, which see each other's commits through
+a 250 ms poll of SQLite's `data_version`
+(`controllers/session/Database.ts#'PRAGMA data_version'`); a project store
+runs no poll.
 
-### 7.1 Claims
+### 7.1 Aggregates
 
-Each aggregate has at most one owner, the `owner_id` of its sequence row
-(`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event_sequence`).
-The first append to an aggregate creates it and claims it for the writer
+The first append to an aggregate creates it
 (`controllers/session/Database.ts#NEXT_SEQ`). A later append MUST be refused
-with `DatabaseNotOwner`, and nothing written, unless the writer holds the claim
-and the aggregate is open (`controllers/session/Database.ts#NEXT_SEQ`,
-`#refuseWriter`). A `plugin.fact` on a `plugin` aggregate borrows an unheld
-claim for its own transaction only
-(`controllers/session/Database.ts#borrowsClaim`).
+with `DatabaseAggregateClosed`, and nothing written, once the aggregate is
+closed (`controllers/session/Database.ts#NEXT_SEQ`, `#refuseWriter`). Which
+runs this process drives is the session's run registry's one fact, published
+to the fold as `runsHere` (`agent/runtime/runRegistry.ts#runsHere`,
+`shared/schemas/sessionViewInput.ts#LocalRuntimeStateSchema`): a run that has
+not ended and is not among them is interrupted
+(`shared/session/sessionViewUpdate.ts#withAggregates`).
 
-A process takes a claim in one write transaction that reads the claim state and
-moves it (`controllers/session/Database.ts#acquireClaims`). It MUST NOT take a
-claim from another owner unless that owner is proven dead, or its liveness is
-unprovable and the user is deleting a single run
-(`controllers/session/storeAside.ts#reclaimable`,
-`controllers/session/Database.ts#claimAll`). The transaction reads the owners
-itself; one it holds no verdict for rolls it back whole, is proven off the write
-lock, and the transaction runs again with that verdict
-(`controllers/session/storeAside.ts#provingOwners`). A live owner refuses with
-`DatabaseClaimRefused`, and so does an unprovable one on every other path
-(`controllers/session/storeAside.ts#reclaimable`).
+### 7.2 Resume
 
-Liveness is proven from the owner's pid and start identity alone, with no clock
-and no hostname (`controllers/session/ownerLiveness.ts#proveOwnerLiveness`):
-
-| Observed                                     | Verdict      |
-| -------------------------------------------- | ------------ |
-| `kill(pid, 0)` reports `ESRCH`               | `dead`       |
-| pid exists, start identity equals the record | `alive`      |
-| pid exists, start identity differs           | `dead`       |
-| pid exists, start identity unreadable        | `unprovable` |
-
-Releasing a claim sets `owner_id` to null where this process holds it, and
-writes no row (`controllers/session/Database.ts#releaseClaims`).
-
-### 7.2 Resume under a claim
-
-A resume MUST hold the run's claim before it folds the run's history or decides
-who owns the run, and holds it until the launched run holds its own
-(`agent/runtime/resumeRun.ts#log.hold`). Its earlier reads only refuse a run
-whose records are gone, and one deleted or whose input closed while they ran
-(`agent/runtime/resumeRun.ts#decideResume`). A run another live process holds
-answers `ownedElsewhere` (`agent/runtime/resumeRun.ts#'ownedElsewhere'`). A
-resume is the run's activation from the call: a second resume of the run joins
-it and gets its result, a stop reaches it before it admits the run (a user's
-stop ends the run cancelled, and nothing is admitted after), and the last caller
-to leave before any took its answer stops it
-(`agent/runtime/resumeRun.ts#resumeRun`,
-`agent/followUp/ToolUseFollowUp.ts#openResume`); a run another launch holds in
-this process is refused. A child an open call of its parent owns resumes through
-that parent (`agent/runtime/resumeRun.ts#owningCall`; a resume a wake took
-follows it itself, whoever opened it,
-`agent/followUp/ToolUseFollowUp.ts#answered`, and the package's resume through
+A resume is one launch of the run on the session's registry
+(`agent/runtime/resumeRun.ts#resumeRun`, `agent/runtime/runRegistry.ts#start`):
+its opening reads the run's records, its queued input, whether an open call of
+its parent owns it, and whether its rows can be continued, then commits the
+run's activation (`agent/runtime/resumeRun.ts#openResume`). A run whose
+records are gone, or deleted or whose input closed while those reads ran, is
+refused, as the opening's failure, with no fiber behind it
+(`agent/runtime/resumeRun.ts#openResume`). The registry holds the run from the
+resume's first read: a second resume, or any launch, of the run meanwhile is
+refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop asked meanwhile
+is applied as the opening answers: a failed opening's run ends cancelled on
+its rows, and a committed one is forked and interrupted at once, so its one
+terminal ends it (`agent/runtime/runRegistry.ts#stopAsked`,
+`agent/runtime/runRegistry.ts#stopRows`). A child an open call of its parent
+owns resumes through that parent (`agent/runtime/resumeRun.ts#owningCall`; a
+resume a wake took follows it itself, whoever opened it,
+`agent/followUp/ToolUseFollowUp.ts#wakeRun`, and the package's resume through
 `effect/sessionPrograms.ts#redirectedFrom`).
 
-The resume first takes the run's claim in its own transaction, before its
-ownership, admission and blocker checks (`agent/runtime/resumeRun.ts#log.hold`,
-`#resumeBlocker`); a crash after it leaves the claim moved and no activation
-row. The activation is then one transaction: it verifies the claim the process
-holds, folds the stored rows, and commits the activation rows with a
-`request.decided` `cancel` for every request the previous owner left unbound
-(`agent/runtime/RunHistory.ts#activate`). A request is unbound unless it is the
-turn's open retry ask, the request a pending call's resumed attempt re-enters,
-the request a pending `script` call's guest calls share (attempt 0), or one
-that does not block its caller (`shared/session/runState.ts#unboundRequests`).
+The activation is one transaction: it folds the stored rows and commits the
+activation rows with a `request.decided` `cancel` for every request the
+previous process left unbound (`agent/runtime/RunHistory.ts#activate`). A
+request is unbound unless it is the turn's open retry ask, the request a
+pending call's resumed attempt re-enters, the request a pending `script`
+call's guest calls share (attempt 0), or one that does not block its caller
+(`shared/session/runState.ts#unboundRequests`).
 
-### 7.3 What a second process may and may not do
+### 7.3 Refusals
 
-A process MAY:
-
-- read every committed row its build can read, listing and tail
-  (`controllers/session/Database.ts#readListing`, `#readDisplay`)
-- create a new run, which it then owns
-  (`controllers/session/Database.ts#NEXT_SEQ`)
-- fork a conversation another process holds, at a settled turn end
-  (`controllers/session/SessionRequests.ts#admit`,
-  `agent/runtime/forkRun.ts#'forkRun.cut'`)
-- take over a run whose owner is proven dead
-  (`controllers/session/storeAside.ts#reclaimable`)
-
-A process MUST NOT:
-
-- append to an aggregate another process holds
-  (`controllers/session/Database.ts#refuseWriter`)
-- answer a request of a run a live process holds (`NotOwner`)
-  (`controllers/session/SessionRequests.ts#admit`)
-- resume a run a live process holds
-  (`agent/runtime/resumeRun.ts#'ownedElsewhere'`)
-- write rows to a store a newer build wrote (giving back its own claims is
-  allowed) (`controllers/session/Database.ts#gated`)
-
-A run that loses its claim mid-run gets `RunHistoryRefused` `not-owner` from its
-next append, with nothing written (`agent/runtime/RunHistory.ts#notOwner`,
+A write to a closed aggregate gets `RunHistoryRefused` `not-owner` from the
+run's next append, with nothing written
+(`agent/runtime/RunHistory.ts#notOwner`,
 `shared/session/runHistory.ts#runRefusal`). A tool call that meets a storage
 refusal fails the dispatch instead of settling
-(`agent/runtime/loop/toolUseDispatch.ts#findStorageRefusal`).
+(`agent/runtime/loop/toolUseDispatch.ts#findStorageRefusal`). A request on a
+run a launch here holds that would need the run stopped first is refused as
+`RunActive` (`controllers/session/deletionCleanup.ts#deleteAdmittedRun`).
 
 ## 8. Requests
 
@@ -797,20 +748,22 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 ### 8.3 Protocol
 
 - A request's id is part of its payload
-  (`agent/runtime/requestPolicy.ts#payload.data.requestId`). A tool call's
+  (`agent/runtime/requests.ts#payload.data.requestId`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
   resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts#callRequestId`).
 - The opening and any decision the approval policy gives at once MUST commit in
-  one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts#decidedRows`).
+  one batch, through the asker's cell, so no surface lists it pending
+  (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
+  open request it covers in the grant's own transaction
+  (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts#decisionRow`).
+  (`agent/runtime/requests.ts#decideRequest`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts#isRequestDecision`). If the session closes
-  first, the asker goes on as cancelled with no row written, and the request
-  stays open (`agent/runtime/requestPolicy.ts#closed without a decision`).
+  (`agent/runtime/requests.ts#decisionOf`). If the session closes first, the
+  asker goes on as cancelled with no row written, and the request stays open
+  (`agent/runtime/requests.ts#ended without one`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);
@@ -830,14 +783,13 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 The crash-point suite is the source of truth for this section
 (`src/test-kernel/support/crashConformance.ts#crashConformanceSuite`). It runs
 under the harness's built-ins alone
-(`packages/harness/test/controllers/session/crashConformanceResume.vitest.ts#crashConformanceSuite`
-and its siblings, one file per scenario).
+(`packages/harness/test/controllers/session/crashConformanceResume.1.vitest.ts#crashConformanceSuite`
+and its siblings, each a shard of a scenario's crash points).
 
 Its method: drive a clean run over a real store, record the event commit each
-event-writing transaction ended at (claim-only writes leave no distinct point;
-the points are deduplicated by commit), and for each such commit N copy the
-store, cut it to commits 1..N, hand its claims to a dead owner, reopen it in a
-fresh session and resume the root run
+event-writing transaction ended at (the points are deduplicated by commit),
+and for each such commit N copy the store, cut it to commits 1..N, reopen it
+in a fresh session and resume the root run
 (`src/test-kernel/support/crashConformance.ts#cleanPass`, `#resumeFrom`).
 
 The guarantees, numbered as in the package README. The suite's header lists
@@ -856,17 +808,14 @@ unless the item names another test:
   outcome-unknown runs again only after a person's retry (a call rejoining a
   standing or newly decided request runs at once, section 9).
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
-  again without a person's retry; no child is left without a terminal row,
-  except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`agent/runtime/delegation/childRun.ts#'paused'`). Also
+  again without a person's retry; no child is left without a terminal row. Also
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
-- **I6**: A child's result is delivered to its parent at most once and is not
-  lost while the parent was held elsewhere; a result whose child was detached,
-  or whose parent cannot take it, stays in the child's run report with a warning
-  (`agent/runtime/childTurnResult.ts#deliverIn`). Asserted by
-  `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`
-  and `#'delivers results held while the parent was open elsewhere, exactly once'`.
+- **I6**: A child's result is delivered to its parent at most once; a result
+  whose child was detached, or whose parent cannot take it, stays in the
+  child's run report with a warning
+  (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
+  `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.
 - **I8**: A run's halt commits with its end; a stopped run never reads as
@@ -963,14 +912,10 @@ its title.
   `#'stops automatic attempts at the configured limit'`,
   `#'spends a retry on each attempt the process stopped during'`;
   `packages/harness/test/agent/runtime/ModelRetryGate.vitest.ts#'admits one recovery probe and releases siblings after success'`
-- **7 claims**:
-  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'admits requests by current claims despite a stale displayed owner'`,
-  `#'requires every dependent claim before committing a deletion'`,
-  `#'shares one store with another OS process'`,
-  `#'reclaims a run whose recorded owner is provably dead'`,
-  `#'fences a second writer and transfers only released claims together'`;
-  `src/test-kernel/agent/runtime/resumeRun.vitest.ts#"a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input"`,
-  `#'a run a live process elsewhere holds is refused before the host rearranges'`
+- **7 one process per store**:
+  `src/test-kernel/controllers/session/sessionEvents.vitest.ts#'closes a run tree with its dependents and collects it'`,
+  `#'refuses a store another OS process holds'`;
+  `src/test-kernel/agent/runtime/resumeRun.vitest.ts#"a store read that fails under a resume fails it with the store's error, activates nothing and keeps the queued input"`
 - **8 requests**:
   `src/test-kernel/support/crashConformance.ts#'resumes from every commit point to the clean outcome, running nothing twice'`
 - **9 crash guarantees**:
@@ -979,11 +924,10 @@ its title.
 
 ## 11. Non-goals
 
-- **No daemon.** The CLI or SDK process is the unattended runner; the permanent
-  shape is several processes on one store, each aggregate held by one claim
-  (`.agents/docs/implemented/architecture/2026-08-01-architecture-rulings-ledger.md`,
-  "No daemon; several processes on one store (D4)";
-  `.agents/docs/implemented/architecture/2026-10-02-durable-harness.md`,
+- **No daemon.** The CLI or SDK process is the unattended runner; a project
+  store is held by one process at a time (section 7), and several processes
+  work on several projects
+  (`.agents/docs/implemented/architecture/2026-10-02-durable-harness.md`,
   "Considered and dropped").
 - **No third-party code in process.** Third-party plugins are data, MCP servers
   and out-of-process hooks

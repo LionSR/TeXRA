@@ -2,7 +2,8 @@ import { layer } from '@effect/vitest';
 import { Effect, Context, Layer } from 'effect';
 import { expect } from 'vitest';
 
-import { submitFollowUp, Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { SessionLog } from '@shared/session/runHistory';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {

@@ -21,7 +21,6 @@ import {
   type RunId,
   type RunInput,
   type RunOutcome,
-  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { consumedRow } from '@shared/session/runFacts';
@@ -59,7 +58,7 @@ export const finalizedRows = (
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,
-  at: Exclude<PositionAt, 'halted' | 'turn.end'>,
+  at: Exclude<PositionAt, 'turn.end'>,
 ): RunHistoryDraft;
 export function positionRow(
   runId: RunId,
@@ -70,7 +69,7 @@ export function positionRow(
 export function positionRow(
   runId: RunId,
   state: Pick<RunState, 'turn'>,
-  at: Exclude<PositionAt, 'halted'>,
+  at: PositionAt,
   outcome?: RunOutcome,
 ): RunHistoryDraft {
   return {
@@ -81,26 +80,6 @@ export function positionRow(
       at,
       turn: state.turn,
       ...(outcome !== undefined && { outcome }),
-    },
-  };
-}
-
-/** The loop's halt where its newest position left it, with the run's
- *  outcome: written only with the run's `run.end`, so a stopped run never
- *  reads as interrupted. */
-export function haltedPositionRow(
-  position: Extract<SessionEvent, { type: 'run.position' }>,
-  outcome: RunOutcome,
-): Extract<RunHistoryDraft, { type: 'run.position' }> {
-  const { family, turn } = position.payload;
-  return {
-    type: 'run.position',
-    aggregateId: position.aggregateId,
-    payload: {
-      family,
-      at: 'halted',
-      turn,
-      outcome,
     },
   };
 }

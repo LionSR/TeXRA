@@ -6,25 +6,12 @@
  * `Effect.acquireUseRelease`.
  */
 
-import {
-  Cause,
-  Context,
-  Effect,
-  Exit,
-  SubscriptionRef,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Context, Effect, Exit, SynchronizedRef } from 'effect';
 
 import { activationRows } from '@agent/storage/runLifecycle';
 import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import { SessionRoots } from '@platform/rootedFs';
-import { grantsKept, NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
-import {
-  RUN_OUTCOME,
-  type RunId,
-  type RunOutcome,
-  type SessionEventDraft,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { outcomeFromCause } from '@shared/runs/runStatus';
 import {
   Approvals,
@@ -32,46 +19,14 @@ import {
   RunHistoryRefused,
   SessionLog,
   type RunCell,
-  SessionViewAccess,
 } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { AgentRun, type AgentRunShape } from '../run/AgentRun';
+import { AgentRun } from '../run/AgentRun';
 import { registryOf, Runs } from '../runRegistry';
 import type { BoundModel } from '../modelAccess/ModelAccess';
 import type { FollowUps } from '../FollowUps';
-
-/**
- * A fresh run's registration as its birth job decides it. A child a
- * detaching stop cut before it was born (marked once that detach commits,
- * before this job runs, and read here through `RunRegistry.bornDetached`) is
- * born detached: no parent, and the grants a detach keeps, inherited from
- * that parent.
- */
-const birthRows = (
-  run: Pick<AgentRunShape, 'runId' | 'entry'>,
-  runs: Runs['Service'],
-  view: SessionViewAccess['Service'],
-): readonly SessionEventDraft[] => {
-  const { rows, start } = run.entry.registration ?? { rows: [], start: null };
-  if (
-    start === null ||
-    start.parent === null ||
-    !registryOf(runs).bornDetached(run.runId)
-  )
-    return rows;
-  const snapshot = grantsKept(
-    SubscriptionRef.getUnsafe(view.ref),
-    run.runId,
-    start.parent.id,
-    start.approvalPolicy ?? NO_APPROVAL_GRANTS,
-  );
-  return [
-    ...rows.map((row) => (row === start ? { ...start, parent: null } : row)),
-    { type: 'approval.policy', aggregateId: start.aggregateId, snapshot },
-  ];
-};
 
 /** What a resume's activation rows read of the session. */
 type ActivationServices = SessionLog | SessionRoots | Approvals;
@@ -125,12 +80,10 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
 ): Effect.fn.Return<
   RunCell,
   Error,
-  RunHistory | AgentRun | Runs | SessionViewAccess | ActivationServices
+  RunHistory | AgentRun | ActivationServices
 > {
   const runHistory = yield* RunHistory;
   const run = yield* AgentRun;
-  const runs = yield* Runs;
-  const view = yield* SessionViewAccess;
   // The activation's rows are read in its publisher job, outside this fiber.
   const owners = Context.pick(
     SessionLog,
@@ -158,7 +111,9 @@ export const openRun = Effect.fn('runProgram.openRun')(function* (
               );
             }),
           }
-        : { registration: Effect.sync(() => birthRows(run, runs, view)) },
+        : {
+            registration: Effect.succeed(run.entry.registration?.rows ?? []),
+          },
     )
     .pipe(
       // A resume enters once its activation settled, with the state it
@@ -205,7 +160,7 @@ export const settleRun =
     return Effect.map(Runs, (service) =>
       lease.release(
         outcome === RUN_OUTCOME.COMPLETED &&
-          !registryOf(service).hasActiveChildren(cell.runId)
+          !registryOf(service).hasLiveDescendants(cell.runId)
           ? 'terminal'
           : 'recoverable',
       ),
@@ -230,10 +185,7 @@ export const stoppedBy =
  * A trace stage whose verdict is the body's own exit. acquireUseRelease, not
  * a Scope: a Scope's finalizer sees `Exit<unknown, unknown>` and cannot read
  * the body's value, which is why a stage closed from a mutable verdict was the
- * older shape. This serves the run loop, whose stage closes with its body;
- * `childRunLoop` deliberately keeps a mutable `stage` field, because a detached
- * or process child's stage outlives the body and closes on the settlement a
- * surviving fiber delivers, so it cannot be expressed as acquireUseRelease.
+ * older shape. This serves the run loop, whose stage closes with its body.
  */
 export const stagedBy =
   <A>(open: () => StageHandle, outcomeOf: (value: A) => RunOutcome) =>

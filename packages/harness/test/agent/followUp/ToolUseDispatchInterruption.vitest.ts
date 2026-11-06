@@ -5,7 +5,7 @@ import { expect, vi } from 'vitest';
 
 // Local imports
 import { generateRunId } from '@texra-ai/harness/schemas';
-import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -104,7 +104,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           };
 
           const fiber = yield* Effect.forkDetach(
-            runToolUse({ resume: false }).pipe(
+            Effect.flatMap(openToolUse({ resume: false }), (opened) =>
+              runToolUse({ resume: false }, opened),
+            ).pipe(
               Effect.provide(
                 loopLayer({
                   runId,
@@ -137,7 +139,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           ]);
           expect(settledIds(interrupted)).toEqual(['call-a']);
 
-          const resumed = yield* runToolUse({ resume: true }).pipe(
+          const resumed = yield* Effect.flatMap(
+            openToolUse({ resume: true }),
+            (opened) => runToolUse({ resume: true }, opened),
+          ).pipe(
             Effect.provide(
               loopLayer({
                 runId,
@@ -198,7 +203,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           },
         };
         const run = (resume: boolean, turns: readonly TurnResult[]) =>
-          runToolUse({ resume }).pipe(
+          Effect.flatMap(openToolUse({ resume }), (opened) =>
+            runToolUse({ resume }, opened),
+          ).pipe(
             Effect.provide(
               loopLayer({ runId, session, tools, turns, stopAfterCycle: true }),
             ),

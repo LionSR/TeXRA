@@ -27,11 +27,9 @@ import {
   type CommitOrdinal,
   EMPTY_RUN_USAGE_TOTALS,
   qualifyAggregateId,
-  emptyRunEndOutput,
   isTaskConfig,
   sumRunUsageTotals,
   RunWorkspaceFilesSchema,
-  type ResultMeta,
   type RunEnd,
   type RunResult,
   type SessionEvent,
@@ -48,14 +46,6 @@ type RecordServices =
 
 /** A read of a run's records, over the session services `R`. */
 type RecordRead<A, R = SessionLog> = Effect.Effect<A, DatabaseReadFailed, R>;
-
-/** The run's child turns, folded from its `child.turn` rows. */
-export const readChildTurnState = (
-  runId: RunId,
-): RecordRead<RunRows['childTurn']> =>
-  Effect.flatMap(SessionLog, (log) =>
-    log.runRows(qualifyAggregateId('run', runId), 'turns'),
-  ).pipe(Effect.map((rows) => rows.childTurn));
 
 /** A run's lifecycle rows and its history, one read each. */
 const rowsOf = (runId: RunId) => {
@@ -136,12 +126,6 @@ export const owningCall = Effect.fn('owningCall')(function* (runId: RunId) {
     ? { parentRunId: id, callId }
     : null;
 });
-
-/** The parent notice a run's end queues when its result was lost, one per
- *  lifecycle (`since`: its `run.activate`'s commit); without `since`, the
- *  prefix every lifecycle's notice shares. */
-export const lostResultId = (runId: RunId, since?: number): string =>
-  `${runId}:result-lost:${since ?? ''}`;
 
 /** The unended children `runId`'s open calls own, from its history and
  *  their own rows. Unloadable, it names no calls: every child it launched
@@ -336,8 +320,6 @@ export function getRunRecords(runId: RunId) {
     /** The skills the run's latest `tools.offered` row listed. */
     readSkills: (): RecordRead<readonly string[], RecordServices> =>
       Effect.map(folded, (state) => state?.offeredWith.skills ?? []),
-    readResultMeta: (): RecordRead<ResultMeta | null> =>
-      read((held) => held?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the
      *  lifecycle it is in has not ended; `after` an activation's commit, the
      *  end of that activation, whatever later ones wrote. */
@@ -370,20 +352,13 @@ export function getRunRecords(runId: RunId) {
         RecordServices
       > {
         const run = yield* whole;
-        const meta = run?.held.result ?? null;
-        if (run === null || meta?.producer === 'backgroundBash') return meta;
+        if (run === null) return null;
         const { held, lifecycles, history } = run;
-        if (meta === null) {
-          const { config } = held;
-          return config && isTaskConfig(config)
-            ? yield* runEndOf(runId, held, lifecycles, history)
-            : null;
-        }
         const end = yield* runEndOf(runId, held, lifecycles, history);
-        return {
-          ...end,
-          output: { ...(end?.output ?? emptyRunEndOutput()), ...meta.output },
-        };
+        if (end === null) return null;
+        if (held.exit === null) return end;
+        const { code, timedOut } = held.exit;
+        return { ...end, exit: { code, timedOut } };
       },
     ),
   };

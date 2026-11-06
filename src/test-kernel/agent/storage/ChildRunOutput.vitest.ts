@@ -122,13 +122,6 @@ const persistCompletedChild = (
         }),
       },
     ]);
-    yield* Context.get(session, SessionLog).transact([
-      {
-        type: 'run.result',
-        aggregateId: qualifyAggregateId('run', childRunId),
-        result: { producer: 'subagent', output: { response: '', files: [] } },
-      },
-    ]);
     // How the child ended, and what it declared, is its `run.end` row's.
     yield* Context.get(session, SessionLog).transact([
       {

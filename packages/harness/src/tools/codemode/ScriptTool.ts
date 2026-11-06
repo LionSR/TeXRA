@@ -173,7 +173,7 @@ const runScript = Effect.fn('ScriptTool.call')(function* (input: ScriptInput) {
   if (
     input.run_in_background === true &&
     run !== undefined &&
-    run.toolPolicy.stopAfterCycle !== true
+    run.toolPolicy.oneShot !== true
   )
     return yield* Effect.flatMap(
       requireToolRun('script run_in_background'),

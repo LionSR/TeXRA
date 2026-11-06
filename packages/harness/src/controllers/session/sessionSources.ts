@@ -4,9 +4,8 @@
  * `SubscriptionRef` replays its current value on subscribe.
  *
  * - `LocalRuntimeSource`: what this process knows that the events cannot
- *   say: its own owner id, the owners whose runs it may not touch (alive or
- *   unprovable, written by the liveness prober in `ownerLiveness.ts`), and
- *   the runs whose `run.start` is damaged (written by the session inputs).
+ *   say: the runs a launch here holds (`runsHere`, written by the session's
+ *   run registry).
  * - `TextChunkSource`: the in-flight text per streaming row, by run and
  *   row id; the ordered input reader derives suffixes from successive chunk
  *   tails after reading the events committed before them.
@@ -25,7 +24,6 @@ import type {
   RunId,
   TranscriptSubscription,
 } from '@shared/schemas';
-import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 export class LocalRuntimeSource extends Context.Service<
   LocalRuntimeSource,
@@ -35,15 +33,10 @@ export class LocalRuntimeSource extends Context.Service<
 >()('@texra-ai/harness/session/LocalRuntimeSource') {
   static readonly layer = Layer.effect(
     LocalRuntimeSource,
-    Effect.gen(function* () {
-      const identity = yield* ProcessIdentity;
-      const ref = yield* SubscriptionRef.make<LocalRuntimeState>({
-        self: [identity.ownerId],
-        dead: [],
-        unreadable: [],
-      });
-      return { ref };
-    }),
+    Effect.map(
+      SubscriptionRef.make<LocalRuntimeState>({ runsHere: [] }),
+      (ref) => ({ ref }),
+    ),
   );
 }
 

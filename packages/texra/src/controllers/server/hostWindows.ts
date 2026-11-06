@@ -240,15 +240,6 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
             )
           : tell(window, { kind: 'notice', notice });
       },
-      approvalDenied: (denial, runId) => {
-        const window = target(key, 'notices');
-        if (window !== undefined)
-          Queue.offerUnsafe(window.frames, {
-            kind: 'call',
-            id: randomUUID(),
-            call: { kind: 'approvalDenied', denial, runId },
-          });
-      },
     };
   };
   /** What `session`'s project's windows offer its runs' editor tools,

@@ -27,15 +27,17 @@ import {
   Secrets,
 } from '@texra-ai/harness/host';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { openRequest, SessionRequests } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   RunHistory,
+  runStateAppend,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
@@ -85,11 +87,10 @@ import {
 } from '@shared/runs/runStatus';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
+  ALL_RUNS,
   buildScenario,
   viewOf,
   local,
-  OWNER,
-  OTHER_OWNER,
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
@@ -546,9 +547,10 @@ HARNESS_DISPOSERS.push(announceForegroundApprovals());
  */
 const harnessRuns = new Set<RunId>();
 
-/** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
- *  `run.config` launch fact a real run publishes next, which names the model
- *  an agent runs on (a child's scrollback header waits for it). */
+/** Mint a run, held here from its birth: its `run.start` existence fact
+ *  (PRD 6, item 2), then the `run.config` launch fact a real run publishes
+ *  next, which names the model an agent runs on (a child's scrollback
+ *  header waits for it). */
 function seedRun(
   runId: RunId,
   options: {
@@ -566,6 +568,7 @@ function seedRun(
 ): void {
   if (harnessRuns.has(runId)) return;
   harnessRuns.add(runId);
+  holdRun(runId);
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: options.agent ?? 'harness-agent',
@@ -592,6 +595,36 @@ function seedRun(
       }),
     });
   }
+}
+
+/**
+ * The runs held as launches of this session, as the registry holds a run
+ * from its birth job until its fiber ends: the view reads them as
+ * `runsHere`, which a run needs to read as running or waiting rather than
+ * interrupted. A fixture has no fiber, so each hold is one that never ends
+ * until the run's terminal row or removal releases it.
+ */
+const heldRuns = new Map<RunId, Fiber.Fiber<unknown, unknown>>();
+function holdRun(runId: RunId): void {
+  if (heldRuns.has(runId)) return;
+  heldRuns.set(
+    runId,
+    harnessRuntime.runSync(
+      Effect.map(
+        registryOf(Context.get(harnessRuntimeSession, Runs)).start(runId, {
+          open: Effect.void,
+          run: () => Effect.never,
+        }),
+        ({ fiber }) => fiber,
+      ),
+    ),
+  );
+}
+function releaseRun(runId: RunId): void {
+  const held = heldRuns.get(runId);
+  if (held === undefined) return;
+  heldRuns.delete(runId);
+  harnessRuntime.runFork(Fiber.interrupt(held));
 }
 
 /**
@@ -640,6 +673,7 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
   if (!harnessRuns.has(runId)) {
     throw new Error(`tui-harness: cannot end unknown run ${runId}`);
   }
+  releaseRun(runId);
   publish({
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
@@ -658,6 +692,7 @@ function seedDescription(runId: RunId, description: string): void {
 }
 
 function removeRun(runId: RunId): void {
+  releaseRun(runId);
   publish({
     type: 'run.removed',
     aggregateId: qualifyAggregateId('run', runId),
@@ -1149,6 +1184,21 @@ function makeUserQuestionPayload(): UserQuestionPermission {
   };
 }
 
+/** Open one request the way a run asks (`openRequest`): committed through
+ *  the session's log, answered by the surface's `request.decided`. */
+const askHarness = (
+  runId: RunId,
+  payload: PermissionPayload,
+  blobs?: readonly DraftBlob[],
+) =>
+  openRequest(runId, payload, {
+    ...(blobs && { blobs }),
+    commit: (rows) =>
+      session()
+        .log.transact((tx) => runStateAppend(tx.append)(rows))
+        .pipe(Effect.as(session().log.now())),
+  }).pipe(Effect.provide(harnessRuntimeSession));
+
 /** One request the way a run asks: `request.opened` on the run, the modal
  *  reads it off the fold, and the surface's `request.decided` answers it. */
 function requestHarnessApproval(
@@ -1159,9 +1209,7 @@ function requestHarnessApproval(
   blobs?: readonly DraftBlob[],
 ): void {
   void harnessRuntime
-    .runPromise(
-      session().requests.ask(runId, payload, { ...(blobs && { blobs }) }),
-    )
+    .runPromise(askHarness(runId, payload, blobs))
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1458,10 +1506,7 @@ if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
     return harnessRuntime.runPromise(
-      session().requests.ask(permission.runId, {
-        kind: 'bash',
-        data: permission,
-      }),
+      askHarness(permission.runId, { kind: 'bash', data: permission }),
     );
   };
   const showRepeatedApprovals = async (): Promise<void> => {
@@ -1855,26 +1900,21 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const interrupted = harnessRunId('ffffffffffff');
   const nested = harnessRunId('111111111111');
   log.emit(PROCESS, 10_000_000, { type: 'run.activate' });
-  for (const [id, agent, owner, parentId] of [
-    [waiting, 'waiting', OWNER, null],
-    [interrupted, 'interrupted', OTHER_OWNER, null],
-    [nested, 'nested', OTHER_OWNER, interrupted],
+  for (const [id, agent, parentId] of [
+    [waiting, 'waiting', null],
+    [interrupted, 'interrupted', null],
+    [nested, 'nested', interrupted],
   ] as const) {
-    log.emit(
-      id,
-      10_000_000,
-      {
-        type: 'run.start',
-        identity: { kind: 'agent', agent },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        // The creation commit the database stamps, not a guess: `Log.parent`
-        // refuses a parent that never started.
-        parent: parentId === null ? null : log.parent(parentId),
-        provenance: null,
-      },
-      owner,
-    );
-    log.emit(id, 10_000_000, { type: 'run.activate' }, owner);
+    log.emit(id, 10_000_000, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      // The creation commit the database stamps, not a guess: `Log.parent`
+      // refuses a parent that never started.
+      parent: parentId === null ? null : log.parent(parentId),
+      provenance: null,
+    });
+    log.emit(id, 10_000_000, { type: 'run.activate' });
   }
   log.emit(waiting, 10_000_000, {
     type: 'request.opened',
@@ -1893,13 +1933,10 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     ...events,
     ...log.events.slice(recordedCount).map(tail),
     // `buildScenario` stamped its existence snapshot before these runs
-    // existed, and a run with no claim has no owner: re-read the log so the
-    // three new aggregates carry the owner each was emitted under.
+    // existed: re-read the log so the three new aggregates exist. The
+    // interrupted root and its child run nowhere any more.
     log.drained(),
-    local({
-      self: [OWNER],
-      dead: [OTHER_OWNER],
-    }),
+    local({ runsHere: [...ALL_RUNS, waiting] }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(

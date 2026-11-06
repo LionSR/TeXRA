@@ -88,8 +88,6 @@ export function describeRunNotice(run: RunView): string | null {
       return 'an earlier build wrote it, and this build cannot open it';
     case 'interrupted':
       return 'the process running it stopped before it finished; resume it to continue';
-    case 'held':
-      return `held by another process (pid ${notice.pid})`;
     case 'lost':
       return notice.message;
   }
@@ -156,18 +154,10 @@ export function buildSummaryTailLines(
   category: RunDisplayCategory,
   hasChildren: boolean,
   report: string | null,
-  options: { readonly suppressReport?: boolean } = {},
 ): string[] {
   const lines: string[] = [];
 
-  if (report && options.suppressReport) {
-    lines.push(
-      '',
-      `Result: delivered automatically to this parent run as a follow-up message. Use /executions/${runId}/report to read the persisted report explicitly.`,
-    );
-  } else if (report) {
-    lines.push('', 'Result:', report);
-  }
+  if (report) lines.push('', 'Result:', report);
 
   const paths = getAvailablePaths(category, hasChildren);
   lines.push(

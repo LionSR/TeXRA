@@ -23,8 +23,7 @@ import {
   GRANDCHILD,
   local,
   Log,
-  OTHER_OWNER,
-  OWNER,
+  ALL_RUNS,
   PROCESS,
   ROOT,
   subscribe,
@@ -228,60 +227,42 @@ function interruptedTasksView(): SessionView {
     [ABSTRACT_TASK, 'Polish abstract', T.child],
   ] as const;
   for (const [id, title, at] of tasks) {
-    log.emit(
-      id,
-      at,
-      {
-        type: 'run.start',
-        identity: { kind: 'agent', agent: 'assistant' },
-        worktree: { workingDirectory: '/paper' },
-        parent: null,
-        provenance: null,
-        userFollowUpSupport: 'nativeInteractive',
-      },
-      OTHER_OWNER,
-    );
-    log.emit(id, at, { type: 'run.activate' }, OTHER_OWNER);
-    log.emit(
-      id,
-      at + 1,
-      { type: 'run.description', description: title, by: 'model' },
-      OTHER_OWNER,
-    );
+    log.emit(id, at, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: 'assistant' },
+      worktree: { workingDirectory: '/paper' },
+      parent: null,
+      provenance: null,
+      userFollowUpSupport: 'nativeInteractive',
+    });
+    log.emit(id, at, { type: 'run.activate' });
+    log.emit(id, at + 1, {
+      type: 'run.description',
+      description: title,
+      by: 'model',
+    });
   }
   const referees = [runId('a3a3a3a3a3a3'), runId('a4a4a4a4a4a4')];
   for (const [index, id] of referees.entries()) {
-    log.emit(
-      id,
-      T.childProgress,
-      {
-        type: 'run.start',
-        identity: { kind: 'agent', agent: `referee-${index + 1}` },
-        parent: log.parent(REVIEW_TASK),
-        provenance: null,
-        userFollowUpSupport: 'nativeInteractive',
-      },
-      OTHER_OWNER,
-    );
-    log.emit(id, T.childProgress, { type: 'run.activate' }, OTHER_OWNER);
+    log.emit(id, T.childProgress, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent: `referee-${index + 1}` },
+      parent: log.parent(REVIEW_TASK),
+      provenance: null,
+      userFollowUpSupport: 'nativeInteractive',
+    });
+    log.emit(id, T.childProgress, { type: 'run.activate' });
   }
-  log.emit(
-    referees[0],
-    T.grandchildDone,
-    {
-      type: 'run.end',
-      outcome: 'completed',
-      output: emptyRunEndOutput(),
-    },
-    OTHER_OWNER,
-  );
+  log.emit(referees[0], T.grandchildDone, {
+    type: 'run.end',
+    outcome: 'completed',
+    output: emptyRunEndOutput(),
+  });
   return viewOf([
     ...log.events.map(tail),
     log.drained(),
-    local({
-      self: [OWNER],
-      dead: [OTHER_OWNER],
-    }),
+    // Nothing runs here: every unended run reads as interrupted.
+    local({ runsHere: [] }),
   ]);
 }
 
@@ -361,7 +342,7 @@ function forkView(): SessionView {
     subscribe(FORK_SOURCE, FORK),
     ...log.events.map(tail),
     log.drained(),
-    local({ self: [OWNER] }),
+    local({ runsHere: ALL_RUNS }),
   ]);
 }
 
@@ -453,12 +434,18 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
   // Coming back to a finished session: the child has completed, so where
   // its composer stood the dock says so and offers the way forward.
   'ext-finished': () => {
-    const view = viewOf([...buildScenario().events, local({ self: [OWNER] })]);
+    const view = viewOf([
+      ...buildScenario().events,
+      local({ runsHere: ALL_RUNS }),
+    ]);
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
   // The same, on the finished workflow root: the board, then the dock.
   'ext-finished-workflow': () => {
-    const view = viewOf([...buildScenario().events, local({ self: [OWNER] })]);
+    const view = viewOf([
+      ...buildScenario().events,
+      local({ runsHere: ALL_RUNS }),
+    ]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // An interrupted child with the drawer shut: the dock's Resume.
@@ -562,7 +549,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
           !(input._tag === 'event' && input.event.type === 'request.opened'),
       ),
       ...log.events.map(tail),
-      local({ self: [OWNER] }),
+      local({ runsHere: ALL_RUNS }),
     ]);
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },
@@ -595,7 +582,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
         }),
       ),
     );
-    const view = viewOf([...events, ...priced, local({ self: [OWNER] })]);
+    const view = viewOf([...events, ...priced, local({ runsHere: ALL_RUNS })]);
     return sidebar(view, surface(view, { kind: 'select', runId: ROOT }));
   },
   // A document task past its second pass: the header's "Pass 2 of 3" chip.
@@ -649,7 +636,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
       subscribe(ROOT),
       ...log.events.map(tail),
       log.drained(),
-      local({ self: [OWNER] }),
+      local({ runsHere: ALL_RUNS }),
     ]);
     return editorTab(view, surface(view, { kind: 'select', runId: ROOT }));
   },

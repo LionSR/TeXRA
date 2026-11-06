@@ -2,37 +2,31 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Effect, Schema, type Context } from 'effect';
+import { Clock, Effect, Schema, type Context } from 'effect';
 
 // Local imports
 import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
-import { presentFollowUpResult } from '@texra-ai/harness/host';
 import {
   ChildRuns,
   requireRun,
-  senderOf,
   type AgentTrace,
-  type ProcessChildStrategy,
+  type PluginToolServices,
+  type ProcessTurn,
   type ToolCardHandle,
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
 import {
   AgentConfigSchema,
-  ensureError,
   toErrorMessage,
   previewLabel,
-  type FollowUpContent,
   type RunId,
   type TokenUsageStats,
   type ToolUseLog,
 } from '@texra-ai/harness/schemas';
 
-import type {
-  AgentCliSessionEntry,
-  AgentCliSessionRegistry,
-} from './agentCliSessionRegistry';
+import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 
 /**
  * The tool cards one streamed agent-CLI turn opens, keyed by the id its SDK
@@ -83,130 +77,16 @@ export class StreamedToolCards {
   }
 }
 
-interface AgentCliResumeLabels {
-  notActiveLabel: string;
-  idParamName: string;
-  summaryLabel: string;
-  queuedLabel: string;
-}
-
-const notOwned = (
-  id: string,
-  labels: AgentCliResumeLabels,
-): Effect.Effect<never, ToolError> =>
-  Effect.fail(
-    new ToolError(
-      `${labels.notActiveLabel} '${id}' is owned by a different session; start a new session without ${labels.idParamName} to run in this context.`,
-    ),
-  );
-
-const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
-  function* (
-    stored: AgentCliSessionEntry,
-    params: {
-      id: string;
-      prompt: string;
-      callerRunId: RunId | undefined;
-      labels: AgentCliResumeLabels;
-    },
-  ): Effect.fn.Return<ToolResult, ToolError> {
-    const { id, prompt, callerRunId, labels } = params;
-    // A detached or re-parented child must not accept follow-ups from its
-    // former orchestrator: the child's rows decide, in the job queuing it.
-    const followUp = { text: prompt, from: senderOf(callerRunId) };
-    const inbox = yield* (yield* ChildRuns).inbox(stored.runId);
-    const result = yield* inbox.send(followUp, {
-      fromParent: callerRunId !== undefined,
-    });
-    if (result.status === 'failed' && result.reason === 'notParent')
-      return yield* notOwned(id, labels);
-    const shown = presentFollowUpResult(result);
-    if (shown.severity === 'warning') {
-      return yield* Effect.fail(
-        new ToolError(
-          `${labels.notActiveLabel} '${id}' did not accept the follow-up: ${shown.message}`,
-        ),
-      );
-    }
-
-    const preview = previewLabel(prompt);
-    // A queued follow-up whose wake failed is still queued: it is delivered
-    // when the agent is resumed, so the caller must not offer it again.
-    const followUpLine =
-      shown.severity === 'info'
-        ? `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. ${shown.message}`
-        : `Follow-up instruction queued for ${labels.queuedLabel} '${id}'. The agent will process it and deliver a new result automatically.`;
-    return executed(
-      [followUpLine, `Run ID: ${stored.runId}`].join('\n'),
-      `Follow-up queued for ${labels.summaryLabel}: ${preview}`,
-    );
-  },
-);
-
-/**
- * Atomically choose between queueing onto an owned session id and launching a
- * disk-based fallback. A failed owner releases only its own claim; waiting
- * callers then compete for the released id, so one retries the fallback while
- * the others continue waiting. A successful launch transfers the claim to its
- * loop, which promotes it after the first successful turn or releases it during
- * cleanup so an acknowledged follow-up can never be stranded behind a failed
- * initial turn.
- */
-const resumeOrLaunchAgentCliSession = Effect.fn(
-  'agentCliShared.resumeOrLaunchAgentCliSession',
-)(function* <R>(
-  store: AgentCliSessionRegistry,
-  params: {
-    id: string | undefined;
-    prompt: string;
-    callerRunId: RunId | undefined;
-    labels: AgentCliResumeLabels;
-    launch: (
-      releaseClaim?: () => void,
-    ) => Effect.Effect<ToolResult, ToolError, R>;
-  },
-): Effect.fn.Return<ToolResult, ToolError, R | ToolContext> {
-  const { id } = params;
-  if (!id) return yield* params.launch();
-
-  while (true) {
-    const releaseClaim = store.claim(id);
-    if (releaseClaim) {
-      // Any failure cause — typed or defect — releases the claim before it
-      // propagates.
-      return yield* Effect.suspend(() => params.launch(releaseClaim)).pipe(
-        Effect.onError(() => Effect.sync(() => releaseClaim())),
-      );
-    }
-
-    const stored = yield* store.waitForActive(id);
-    if (!stored) continue;
-    return yield* queueAgentCliFollowUp(stored, {
-      id,
-      prompt: params.prompt,
-      callerRunId: params.callerRunId,
-      labels: params.labels,
-    });
-  }
-});
-
-interface AgentCliLaunchParams<TTurn> {
-  /** The thread or session id this launch continues, if any. */
-  resumeId?: string;
+interface AgentCliLaunchParams {
   agentName: string;
   /** The prompt the child launches with; it labels the run and its summary. */
   prompt: string;
   /** The model reference the child run is labeled with. */
   modelRef: string;
   registerFailedMessage: string;
-  /**
-   * Build the provider's loop strategy around the child stream the launch
-   * guard created. See {@link buildAgentCliLaunch}.
-   */
-  buildLaunch: (ctx: {
-    logger: AgentTrace;
-    runId: RunId;
-  }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
+  /** Build the provider's turn around the trace of the run the launch
+   *  registered. See {@link buildAgentCliTurn}. */
+  turn: (ctx: { logger: AgentTrace; runId: RunId }) => ProcessTurn;
   /** Names the CLI in the result summary: `Launched <summaryLabel>: <previewLabel(prompt)>`. */
   summaryLabel: string;
   launchedLine: string;
@@ -214,16 +94,15 @@ interface AgentCliLaunchParams<TTurn> {
 }
 
 /**
- * Launch an agent-CLI child of the calling run (fresh, or the paused one
- * `resumeId` continues) through the plugin's run door
- * (`ChildRuns.launchProcess`) and return the "launched" ToolResult. A
+ * Launch an agent-CLI child of the calling run through the plugin's run
+ * door (`ChildRuns.launchProcess`) and return the "launched" ToolResult. A
  * refused registration is the tool's error, worded by the provider.
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
-)(function* <TTurn>(
-  params: AgentCliLaunchParams<TTurn>,
-): Effect.fn.Return<ToolResult, ToolError> {
+)(function* (
+  params: AgentCliLaunchParams,
+): Effect.fn.Return<ToolResult, ToolError, PluginToolServices> {
   // An external CLI drives this agent: the CLI is both the agent name and the
   // driving tool, and `identity.tool` is what gates native-only affordances
   // (resume/rerun) off for this cohort.
@@ -243,8 +122,7 @@ export const launchAgentCliSession = Effect.fn(
         instruction: params.prompt,
       }),
       description: params.prompt,
-      resumeId: params.resumeId,
-      buildLaunch: params.buildLaunch,
+      turn: params.turn,
     })
     .pipe(
       Effect.mapError(
@@ -267,225 +145,133 @@ export const launchAgentCliSession = Effect.fn(
 });
 
 /**
- * The shared execute() dispatch skeleton for an agent-CLI tool. Wraps the
- * boilerplate-identical chain both providers (codex, claudeAgent) run: refuse
- * a call that has no run to launch under or cannot collect the result, choose
- * atomically between queueing onto an owned session and launching a disk-based
- * fallback. A missing in-memory entry denotes a
- * disk-based SDK fallback, so `launch` receives the `releaseFallbackClaim` it
- * must promote or release. Callers supply only their session store, resume id,
- * resume labels, and the provider-specific launch. The command each tool gets
+ * The shared execute() dispatch of an agent-CLI tool, run as the tool's
+ * whole `execute()`: refuse a call that has no run to launch under or
+ * cannot collect the result, claim the thread the call continues for the
+ * turn's life, and launch the provider's turn. The command each tool gets
  * approved is the loop-side guard each declares, not a step in here.
- *
- * The returned Effect is the tool's whole dispatch: the tool's `execute()`
- * runs it as is.
  */
 export function dispatchAgentCliTool<R = never, S = never>(params: {
   agentName: string;
   /** The plugin's session registry, served by the step that pinned it. */
   store: Context.Key<S, AgentCliSessionRegistry>;
+  /** The thread or session the call continues, if any. */
   resumeId: string | undefined;
-  /** Existing live session read by a fresh launch, such as a fork source. */
-  sourceId?: string;
-  prompt: string;
-  labels: AgentCliResumeLabels;
+  /** What a thread is called in a refusal ("Codex thread"). */
+  threadLabel: string;
   /** The provider's launch. It reads the tool call and the session registry
-   * from context, as this dispatch does; `releaseFallbackClaim` releases the
-   * disk-based fallback claim if the launch fails before promoting it, and
-   * is undefined for a fresh (non-resumed) launch. */
+   *  from context, as this dispatch does; `release` ends the claim on the
+   *  thread the call continues, to run once its turn is over (undefined
+   *  for a fresh launch). */
   launch: (
-    releaseFallbackClaim: (() => void) | undefined,
+    release: (() => void) | undefined,
   ) => Effect.Effect<ToolResult, ToolError, R>;
 }): Effect.Effect<ToolResult, ToolError, R | S | ToolContext> {
-  const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
-    params;
+  const { agentName, store, resumeId, threadLabel, launch } = params;
   return Effect.gen(function* () {
     // The run check is the one place either tool asks it: an agent-CLI child
-    // is registered under its parent run and delivers every turn as a
+    // is registered under its parent run and delivers its turn as a
     // follow-up to it, so a standalone host invocation has nowhere to put the
     // child.
     const { run } = yield* requireRun(agentName);
-    // Every turn is delivered as a follow-up message. A run with
-    // `stopAfterCycle` ends after the current cycle, so that follow-up would
-    // land in a turn that never happens and the child's result is stranded.
-    // Refuse rather than launch work nobody collects.
-    if (run.toolPolicy.stopAfterCycle) {
+    // The turn is delivered as a follow-up message. A one-shot run has no
+    // later turn to take it: refuse rather than launch work nobody collects.
+    if (run.toolPolicy.oneShot === true) {
       return yield* Effect.fail(
         new ToolError(
           `${agentName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,
         ),
       );
     }
-    const registry = yield* store;
-    const callerRunId = run.runId;
-    // A fork only reads its source session: a live source another run
-    // owns is refused by its current edge, nothing written.
-    const source = sourceId ? registry.lookup(sourceId) : undefined;
-    const sourceParent =
-      source && (yield* (yield* ChildRuns).parent(source.runId));
-    if (sourceId && sourceParent != null && sourceParent !== callerRunId)
-      return yield* notOwned(sourceId, labels);
-    return yield* resumeOrLaunchAgentCliSession(registry, {
-      id: resumeId,
-      prompt,
-      callerRunId,
-      labels,
-      launch,
-    });
+    if (resumeId === undefined) return yield* launch(undefined);
+    const release = (yield* store).claim(resumeId);
+    if (release === undefined)
+      return yield* Effect.fail(
+        new ToolError(
+          `${threadLabel} '${resumeId}' is still processing a turn. Wait for its result (a follow-up message) before sending it another instruction.`,
+        ),
+      );
+    // A launch that fails before its turn started releases the claim; the
+    // turn releases it as it ends.
+    return yield* Effect.suspend(() => launch(release)).pipe(
+      Effect.onError(() => Effect.sync(() => release())),
+    );
   });
 }
 
 // ============================================================================
-// Shared session loop — one turn per enqueued prompt, delivers to parent
+// Shared turn: one provider turn, delivered to the parent by the run's end
 // ============================================================================
 
-interface AgentCliLoopParams<TTurn> {
+interface AgentCliTurnParams<TTurn> {
   logger: AgentTrace;
-  runId: RunId;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   stageLabel: string;
-  initialPrompt: string;
-  /** Session/thread registry the loop tracks in-flight and successful turns in. */
-  registry: AgentCliSessionRegistry;
-  /**
-   * The disk-based fallback session/thread id claimed synchronously before the
-   * loop starts, if any. Release it if the loop exits before promoting it.
-   */
-  releaseFallbackClaim: (() => void) | undefined;
-  /** Provider-specific single-turn run, given the joined follow-up prompt. The
-   * implementer wraps its own foreign edge (the provider SDK's streamed turn)
-   * once, so the loop composes the turn instead of lifting it. A stop
-   * interrupts the turn: each provider hands its SDK a signal that
-   * interruption aborts (`Effect.abortSignal`). */
-  runProviderTurn: (prompt: string) => Effect.Effect<TTurn, Error>;
-  /**
-   * Session/thread ids to register as active after a successful turn. Falsy
-   * entries (not-yet-known ids) are skipped.
-   */
-  resolveSessionIds: (turn: TTurn) => readonly (string | null | undefined)[];
+  /** The claim on the thread this turn continues, released as it ends. */
+  release: (() => void) | undefined;
+  /** The provider's turn: its own foreign edge (the provider SDK's
+   *  streamed turn), wrapped once. A stop interrupts it: each provider
+   *  hands its SDK a signal that interruption aborts
+   *  (`Effect.abortSignal`). */
+  runProviderTurn: Effect.Effect<TTurn, Error>;
   /** The turn's own spend, logged and published on the child's trace as
-   *  each turn returns. Null when the provider reported none. */
+   *  the turn returns. Null when the provider reported none. */
   getUsage: (turn: TTurn) => TokenUsageStats | null;
-  formatDelivery: (
-    turn: TTurn,
-    wallTimeMs: number,
-    lastPrompt: string,
-  ) => string;
-  formatError: (turn: TTurn | null, err: unknown, lastPrompt: string) => string;
+  formatDelivery: (turn: TTurn, wallTimeMs: number) => string;
+  formatError: (turn: TTurn | null, err: unknown) => string;
   /** Omitted by providers (codex) that always throw on failure. */
   isTurnError?: (turn: TTurn) => boolean;
   turnErrorMessage?: (turn: TTurn) => string | undefined;
-  /** The call continuing this session after a stop, and the id it resumed. */
-  continueWith: readonly [tool: string, idParam: string, id?: string];
 }
 
 /**
- * Build the shared agent-CLI child-run launch. `startChildRunLoop` (reached
- * through {@link launchAgentCliSession}'s detached-launch choreography)
- * processes prompts from the child's follow-up queue one at a time and
- * delivers each turn's result to the parent's follow-up queue; this supplies
- * the `ProcessChildStrategy` scaffolding common to every agent-CLI provider
- * (codex, claudeAgent): a dedup'd session/thread registration closure, the
- * `lastPrompt` capture feeding `formatDelivery`/`formatError`, and the
- * boilerplate-identical strategy fields (`onTurnSuccess`,
- * `releaseSessionOwnership`), and each turn's usage on the child's trace.
- * Callers supply only their provider-specific turn run, usage/delivery
- * formatting, and registry entry construction.
+ * The agent-CLI child's one turn ({@link ProcessTurn}), common to every
+ * provider (codex, claudeAgent): the provider's turn with its wall time,
+ * its usage on the child's trace, its delivery or error report, and the
+ * thread's claim released as the turn ends. Callers supply only their
+ * provider-specific turn and its formatting.
  */
-export const buildAgentCliLaunch = Effect.fn('buildAgentCliLaunch')(function* <
-  TTurn,
->(
-  params: AgentCliLoopParams<TTurn>,
-): Effect.fn.Return<ProcessChildStrategy<TTurn>> {
+export function buildAgentCliTurn<TTurn>(
+  params: AgentCliTurnParams<TTurn>,
+): ProcessTurn {
   const {
     logger,
-    runId,
     stageLabel,
-    initialPrompt,
-    registry,
-    releaseFallbackClaim,
+    release,
     runProviderTurn,
-    resolveSessionIds,
     getUsage,
     formatDelivery,
     formatError,
     isTurnError,
     turnErrorMessage,
   } = params;
-  // Released with the child's aliases (`releaseSessionOwnership`).
-  yield* registry.holdWhileLive(runId);
-
-  // The one entry this loop registers and tracks: the child run's identity
-  // and follow-up address. Live handles are resolved by the registry itself.
-  const target: AgentCliSessionEntry = { runId };
-
-  // Session/thread ids are registered after the first successful turn is
-  // persisted, just before its result reaches the parent.
-  const [continueTool, continueParam, resumedId] = params.continueWith;
-  let continueId = resumedId;
-  const registerSessionId = (id: string): void => {
-    continueId = id;
-    if (registry.lookup(id)) return;
-    registry.register(id, target);
-  };
-
-  // The joined prompt text for whichever turn is currently in flight;
-  // captured here (rather than threaded through the loop contract) since
-  // `formatDelivery`/`formatError` run strictly after the turn that set it.
-  let lastPrompt = initialPrompt;
-  // Every turn the provider returns, an error turn included, reports its
-  // spend: the child has no run history, so its `usage` rows are its one
-  // record of spend, one per turn, which is what each provider reports.
-  const providerTurn = (prompt: string): Effect.Effect<TTurn, Error> =>
-    runProviderTurn(prompt).pipe(
-      Effect.tap((turn) =>
-        Effect.sync(() => {
-          const usage = getUsage(turn);
-          if (!usage) return;
-          logger.info('Tokens', {
-            data: { input: usage.inputTokens, output: usage.outputTokens },
-          });
-          logger.emit({ type: 'usage', usage });
-        }),
-      ),
-    );
-  const runTurn = (
-    followUps: readonly FollowUpContent[],
-  ): Effect.Effect<TTurn, Error> =>
-    Effect.suspend(() => {
-      lastPrompt = followUps.map((f) => f.text).join('\n\n');
-      return providerTurn(lastPrompt);
-    });
-
+  const run = Effect.gen(function* () {
+    const startedAt = yield* Clock.currentTimeMillis;
+    const turn = yield* runProviderTurn;
+    const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
+    // Every turn the provider returns, an error turn included, reports its
+    // spend: the child has no model rows, so its `usage` rows are its one
+    // record of spend.
+    const usage = getUsage(turn);
+    if (usage) {
+      logger.info('Tokens', {
+        data: { input: usage.inputTokens, output: usage.outputTokens },
+      });
+      logger.emit({ type: 'usage', usage });
+    }
+    logger.info(`Turn completed in ${(wallTimeMs / 1000).toFixed(1)}s`);
+    if (isTurnError?.(turn) === true) {
+      const failure =
+        turnErrorMessage?.(turn) ||
+        `${stageLabel} reported a failed turn without throwing.`;
+      logger.error(failure);
+      return { report: formatError(turn, null), failure };
+    }
+    return { report: formatDelivery(turn, wallTimeMs) };
+  }).pipe(Effect.ensuring(Effect.sync(() => release?.())));
   return {
     stageLabel,
-    launch: () => providerTurn(initialPrompt),
-    isTurnError,
-    turnErrorMessage,
-    formatDelivery: (turn, wallTimeMs) =>
-      Effect.try({
-        try: () => formatDelivery(turn, wallTimeMs, lastPrompt),
-        catch: ensureError,
-      }),
-    formatError: (turn, err) => formatError(turn, err, lastPrompt),
-    cli: {
-      runTurn,
-      onTurnSuccess: (turn) => {
-        for (const id of resolveSessionIds(turn)) {
-          if (id) registerSessionId(id);
-        }
-      },
-      pauseNotice: () =>
-        continueId === undefined
-          ? undefined
-          : {
-              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
-              resumeId: continueId,
-            },
-      releaseSessionOwnership: () => {
-        releaseFallbackClaim?.();
-        registry.releaseByRunId(runId);
-      },
-    },
+    run,
+    reportError: (error) => formatError(null, error),
   };
-});
+}

@@ -72,30 +72,6 @@ export function decideApproval(input: {
   return input.canPresent ? 'present' : 'deny-unpresentable';
 }
 
-/**
- * What an approval-policy denial closed, as the session reports it to its
- * host: a command, edit or plan, a delegation proposal, the approval-gated
- * tools withheld from the model when the run resolved its tools, the human
- * retry permit after a model error, or a question the model asked the user;
- * and the policy that closed it, which a host names in what it says.
- */
-export type ApprovalPolicyDenial = {
-  readonly policy: ApprovalPolicy;
-} & (
-  | { readonly kind: 'executable' }
-  | { readonly kind: 'plan' }
-  | { readonly kind: 'proposal' }
-  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
-  | {
-      readonly kind: 'retry';
-      readonly deny: Exclude<RetryApprovalDecision, 'present'>['deny'];
-    }
-  | {
-      readonly kind: 'humanInput';
-      readonly deny: Exclude<HumanInputDecision, 'present'>['deny'];
-    }
-);
-
 const APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';
 const APPROVAL_CREDENTIAL_RETRY_MESSAGE =

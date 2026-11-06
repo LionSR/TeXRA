@@ -189,9 +189,11 @@ declare module '../core/tools/ToolTypes.js' {
 }
 
 /** The run as the harness's built-in tools read it: what a plugin's tool
- *  sees (`ToolRun`), with its open step and its host callbacks. A built-in
- *  reads its session's owners from its run's context. */
-type BuiltinRun = ToolRun & Pick<AgentRunShape, 'steps' | 'callbacks'>;
+ *  sees (`ToolRun`), with its open step, its host callbacks and the bound
+ *  on the calls it awaits children in. A built-in reads its session's
+ *  owners from its run's context. */
+type BuiltinRun = ToolRun &
+  Pick<AgentRunShape, 'steps' | 'callbacks' | 'awaitedCalls'>;
 
 /** A call made under a run, as its loop dispatched it (`RunCall`). */
 export interface RunCallShape {

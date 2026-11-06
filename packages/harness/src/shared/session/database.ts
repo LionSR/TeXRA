@@ -7,9 +7,8 @@
  *   `DatabaseRowCorrupt` or `DatabaseRowEarlier` is unreadable, never resumed.
  * - `DatabaseWriteFailed`: nothing written; a run ends (`findStorageRefusal`).
  * - `DatabaseStoreNewer`, the cause of any of these: the store is refused whole.
- * - `DatabaseNotOwner` and `DatabaseClaimRefused`, never wrapped:
- *   nothing written; a run that lost its own claim stops, and one another
- *   process holds is refused as held elsewhere ({@link heldElsewhereBy}).
+ * - `DatabaseAggregateClosed`, never wrapped: a batch named a closed
+ *   aggregate; nothing written.
  */
 import {
   Context,
@@ -21,17 +20,15 @@ import {
   type SubscriptionRef,
 } from 'effect';
 import { isSqlError } from 'effect/sql/SqlError';
-import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
+import { AggregateIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   CommitOrdinal,
   DisplaySessionEvent,
   RunId,
-  OwnerId,
-  OwnerLiveness,
   SessionEvent,
   SessionEventDraft,
-  LocalRuntimeState,
+  UnreadableRun,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { WithBlobs } from './historyTurns';
@@ -45,47 +42,16 @@ export const InputHistoryRecordSchema = Schema.Struct({
 export type InputHistoryRecord = typeof InputHistoryRecordSchema.Type;
 export const INPUT_HISTORY_LIMIT = 1000;
 
-/** Only an explicit single-run deletion may replace an unprovable owner. */
-const DeletionModeSchema = Schema.Literals(['single', 'bulk', 'automatic']);
-export type DeletionMode = typeof DeletionModeSchema.Type;
-
-/** The current claim and existence, independent of historical event writers. */
+/** The current existence of an aggregate, independent of its rows' writers. */
 export const AggregateStateSchema = Schema.Struct({
   aggregateId: AggregateIdSchema,
   /** The incarnation's durable identity, minted with its first row. */
   uid: Schema.String.check(Schema.isUUID()),
-  ownerId: Schema.NullOr(OwnerIdSchema),
   closed: Schema.BooleanFromBit,
   parentId: Schema.NullOr(AggregateIdSchema),
   startCommit: Schema.NullOr(Schema.Int.check(Schema.isGreaterThan(0))),
 });
 export type AggregateState = typeof AggregateStateSchema.Type;
-
-/**
- * The current claim on one aggregate, its owner's liveness proved in the same
- * call (`self` is this process; a null owner is unclaimed or absent): what a
- * resume gate and the run listing ask, never the fold, whose prober watches
- * only owners of runs already resident in the view. */
-export interface AggregateClaim {
-  readonly ownerId: OwnerId | null;
-  readonly liveness: OwnerLiveness | 'self' | null;
-}
-
-/**
- * Who holds a claim relative to this process: itself, an owner alive or not
- * proven dead, or nobody (a provably dead owner frees it). The one reading the
- * run listing, the run classification and the resume gate all share. */
-type ClaimStanding =
-  | { readonly kind: 'self' }
-  | { readonly kind: 'held'; readonly owner: OwnerId }
-  | { readonly kind: 'free' };
-
-export function claimStanding(claim: AggregateClaim): ClaimStanding {
-  if (claim.liveness === 'self') return { kind: 'self' };
-  if (claim.ownerId !== null && claim.liveness !== 'dead')
-    return { kind: 'held', owner: claim.ownerId };
-  return { kind: 'free' };
-}
 
 /** A store failure's fields, and its text: a `SqlError`'s message and the
  *  SQLite error that says why (`database is locked`), its reason's cause. */
@@ -111,46 +77,15 @@ export class DatabaseWriteFailed extends Schema.TaggedError<DatabaseWriteFailed>
   override readonly message = storeFailureMessage(this.cause);
 }
 
-/** A batch member targets an aggregate this process does not hold open;
- *  nothing was written. Ownership, not the disk, so it is never wrapped in
- *  `DatabaseWriteFailed`. */
-export class DatabaseNotOwner extends Schema.TaggedError<DatabaseNotOwner>()(
-  'DatabaseNotOwner',
-  {
-    aggregateId: AggregateIdSchema,
-    /** The holder and closure at refusal time, read in the refusing transaction. */
-    ownerId: Schema.NullOr(OwnerIdSchema),
-    closed: Schema.Boolean,
-  },
+/** A batch member targets an aggregate that is closed (deleted) or was
+ *  never created; nothing was written. The store's protocol, not the disk,
+ *  so it is never wrapped in `DatabaseWriteFailed`. */
+export class DatabaseAggregateClosed extends Schema.TaggedError<DatabaseAggregateClosed>()(
+  'DatabaseAggregateClosed',
+  { aggregateId: AggregateIdSchema },
 ) {
-  override readonly message = `${this.aggregateId} is ${this.closed ? 'closed' : `held by ${this.ownerId ?? 'no process'}, not this one`}; nothing was written.`;
+  override readonly message = `${this.aggregateId} is closed; nothing was written.`;
 }
-
-/** A claim the deletion policy refuses: its owner is alive, or unproven dead. */
-export class DatabaseClaimRefused extends Schema.TaggedError<DatabaseClaimRefused>()(
-  'DatabaseClaimRefused',
-  {
-    ownerId: OwnerIdSchema,
-    verdict: Schema.Literals(['alive', 'unprovable']),
-  },
-) {
-  override readonly message = `Another process (${this.ownerId}) ${this.verdict === 'alive' ? 'holds this run.' : 'may hold this run: it could not be proven to have exited.'}`;
-}
-
-/** A claiming transaction's refusals: the claim's, a writer's, or the write. */
-export type DatabaseClaimError =
-  | DatabaseNotOwner
-  | DatabaseClaimRefused
-  | DatabaseWriteFailed;
-
-/** The owner a claim refusal or a `DatabaseNotOwner` of an open aggregate
- *  names (not proven alive); null for a closed or ownerless one. */
-export const heldElsewhereBy = (error: unknown): OwnerId | null => {
-  if (error instanceof DatabaseClaimRefused) return error.ownerId;
-  return error instanceof DatabaseNotOwner && !error.closed
-    ? error.ownerId
-    : null;
-};
 
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Schema.TaggedError<DatabaseReadFailed>()(
@@ -267,25 +202,23 @@ export class Database extends Context.Service<
     /**
      * Append an ordered batch across aggregates, whole or not at all, in
      * the caller's {@link job} or its own transaction; `seq` and `commit`
-     * follow batch order and the writer is this process. A target this
-     * process does not hold open refuses the batch as `DatabaseNotOwner`;
-     * any other rollback is `DatabaseWriteFailed`.
+     * follow batch order and the writer is this process. A closed target
+     * refuses the batch as `DatabaseAggregateClosed`; any other rollback is
+     * `DatabaseWriteFailed`.
      */
     readonly appendAll: (
       drafts: readonly WithBlobs<SessionEventDraft>[],
     ) => Effect.Effect<
       readonly SessionEvent[],
-      DatabaseNotOwner | DatabaseWriteFailed
+      DatabaseAggregateClosed | DatabaseWriteFailed
     >;
-    /** Run `body` as one write transaction behind the store gate, whole or
-     *  not at all; readers wake after. It holds the write lock, so `body` is
-     *  database-only and may run again whole (a busy lock; claim owners
-     *  proven off the lock); `afterCommit` actions run after. */
+    /** Run `body` as one write transaction, whole or not at all; readers
+     *  wake after. It holds the write lock, so `body` is database-only. */
     readonly job: <A, E>(
       body: Effect.Effect<A, E>,
     ) => Effect.Effect<A, E | DatabaseWriteFailed>;
-    /** Replaying wake counter. Local commits and foreign data-version changes
-     *  advance it; it is never interpreted as an event ordinal. */
+    /** Replaying wake counter. Local commits advance it (and, on the global
+     *  store, another process's); it is never interpreted as an event ordinal. */
     readonly level: SubscriptionRef.SubscriptionRef<number>;
     /** SQLite's committed high-water mark, which need not equal the wake level. */
     readonly currentCommit: Effect.Effect<CommitOrdinal, DatabaseReadFailed>;
@@ -332,32 +265,15 @@ export class Database extends Context.Service<
       id: AggregateId,
       fromSeq: number,
     ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
-    /** Who holds one aggregate right now, its owner's liveness proved in
-     *  this call: the one ownership read fresh by construction, so a cold
-     *  run's long-dead owner is never reported held. An absent or tombstoned
-     *  aggregate is unclaimed: a closed row keeps who closed it, with nothing
-     *  left to hold. */
-    readonly claimOwner: (
+    /** The job that removes a run tree (`SessionEvents.removeRun`): reread
+     *  it, refuse one that changed since `expectedStartCommit`, append the
+     *  deletion marker. */
+    readonly runRemoval: (
       id: AggregateId,
-    ) => Effect.Effect<AggregateClaim, DatabaseReadFailed>;
-    /** Atomically acquire existing, open aggregates whose prior owners are
-     *  proven dead (off the lock, {@link job}), in the caller's transaction
-     *  when it has one. */
-    readonly acquireClaims: (
-      ids: readonly AggregateId[],
-    ) => Effect.Effect<
-      readonly AggregateId[],
-      DatabaseReadFailed | DatabaseClaimError
-    >;
-    /** Prove the tree's owners off the publisher, then answer its job
-     *  (`SessionEvents.removeRun`): reread, claim, append the deletion marker. */
-    readonly prepareRunRemoval: (
-      id: AggregateId,
-      mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
-      Effect.Effect<readonly SessionEvent[], DatabaseClaimError>,
-      DatabaseReadFailed | DatabaseWriteFailed
+      readonly SessionEvent[],
+      DatabaseAggregateClosed | DatabaseWriteFailed
     >;
     /** The deletion markers not collected yet, and one's collection: `cleanup`
      *  removes its run directories, then its closed aggregate, dependents, rows
@@ -369,18 +285,11 @@ export class Database extends Context.Service<
         cleanup: (runIds: readonly RunId[]) => Effect.Effect<void, Error>,
       ) => Effect.Effect<void, Error>;
     };
-    /** Clear only this process's claims, in one transaction, unless
-     *  `heldAgain`, read under that transaction's write lock, says a holder
-     *  here took them back meanwhile. */
-    readonly releaseClaims: (
-      ids: readonly AggregateId[],
-      heldAgain?: () => boolean,
-    ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** The event prefix, current claims and damaged runs from one read: the
-     *  claims of `checkedIds` and of every aggregate whose existence or
-     *  claim changed after `changedSince` (a row that changes one is such a
-     *  change too); `change` is the last such change the read saw, or
-     *  `changedSince` when there was none. */
+    /** The event prefix, current existence and damaged runs from one read:
+     *  the state of `checkedIds` and of every aggregate whose existence
+     *  changed after `changedSince` (a row that changes one is such a change
+     *  too); `change` is the last such change the read saw, or `changedSince`
+     *  when there was none. */
     readonly readInputBatch: (
       ids: readonly AggregateId[],
       fromCommit: CommitOrdinal,
@@ -393,7 +302,7 @@ export class Database extends Context.Service<
         readonly events: readonly SessionEvent[];
         readonly checkedAggregateIds: readonly AggregateId[];
         readonly state: readonly AggregateState[];
-        readonly damaged: LocalRuntimeState['unreadable'];
+        readonly damaged: readonly UnreadableRun[];
       },
       DatabaseReadFailed
     >;

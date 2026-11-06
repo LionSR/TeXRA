@@ -9,16 +9,11 @@ import {
   type RequestDecision,
   ensureError,
   toErrorMessage,
-  type RunId,
 } from '@texra-ai/harness/schemas';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
-import type {
-  ApprovalPolicyDenial,
-  ApprovalPolicy,
-} from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'cli.approval';
 
@@ -57,110 +52,8 @@ export interface CliApprovalContent {
  * from it at once. Keyed weakly by the context, whose lifetime bounds it.
  */
 const cliPromptLanes = new WeakMap<CliContext, PerKeyLane>();
-/** Denials already warned per context, keyed by run and denial kind;
- *  a runless caller (no run id, or a payload's runless `''`) keys as `''`. */
-const warnedApprovalRuns = new WeakMap<CliContext, Set<string>>();
-
 function onCliPromptLane(context: CliContext) {
   return withPerKeyLane(cliPromptLanes, context);
-}
-
-/** Why no prompt could answer, from the live policy and this run's mode. */
-function promptUnavailableReason(
-  policy: ApprovalPolicy,
-  context: CliContext,
-): string {
-  if (policy === 'never') return 'the approval policy is "never"';
-  if (policy === 'ask' && context.mode === 'headless') {
-    return 'no interactive prompt is available (approval policy "ask", headless run)';
-  }
-  return `the approval policy is "${policy}"`;
-}
-
-function retryDenialReason(
-  deny: Extract<ApprovalPolicyDenial, { kind: 'retry' }>['deny'],
-  reason: string,
-): string {
-  switch (deny) {
-    case 'credential':
-      return 'the credential is exhausted or unauthorized';
-    case 'yolo-retry':
-      return 'automatic retries are exhausted, and the yolo policy does not approve a retry past them';
-    case 'policy':
-    case 'unpresentable':
-      return `${reason}; a retry past the automatic attempts needs an interactive approval`;
-  }
-}
-
-function approvalDenialMessage(
-  denial: ApprovalPolicyDenial,
-  context: CliContext,
-): string {
-  const reason = promptUnavailableReason(denial.policy, context);
-  // Under Block no request widens: only the project's policy can change.
-  let allow =
-    context.mode === 'headless'
-      ? 'Use --approval-policy yolo to allow'
-      : 'Change the policy with /approval to allow';
-  if (denial.policy === 'never')
-    allow =
-      "Change the project's approval policy (/config or the settings view) to allow";
-  switch (denial.kind) {
-    case 'executable':
-      return `Command or edit denied: ${reason}. ${allow} it.`;
-    case 'plan':
-      return `Plan denied: ${reason}. ${allow} it.`;
-    case 'proposal':
-      return `Delegation denied: ${reason}. ${allow} it.`;
-    case 'withheldTools':
-      return `Not offering ${denial.tools.join(', ')} to the model: they need approval, and ${reason}. ${allow} them.`;
-    case 'retry':
-      return `Model error retry not attempted: ${retryDenialReason(denial.deny, reason)}.`;
-    case 'humanInput':
-      return `Question for the user not asked: ${reason}.`;
-  }
-}
-
-/**
- * Tell the operator, once per run and denial kind (for withheld tools, once
- * per distinct tool list), that the policy closed a gate, what it closed, and
- * why. Keyed by `runId` within one context, so
- * concurrent runs sharing the chat TUI's session context each warn once; a
- * runless caller warns once per context. The model already receives the
- * denial as tool feedback and routes around it, so this is diagnostics only —
- * a denied gate never changes the process exit code.
- *
- * The warning names the policy that closed the gate, which the denial
- * carries (the frozen `CliContext.approvalPolicy` can be stale after a
- * `/approval`). Operator-facing warnings go to stderr (not the diagnostic
- * log).
- */
-export function warnApprovalDenied(
-  context: CliContext,
-  denial: ApprovalPolicyDenial,
-  runId?: RunId | '',
-): void {
-  // A yolo policy's own answer to a question or a retry is no news: the TUI
-  // shows the failed run itself, and only a headless run would end silently.
-  if (denial.kind === 'humanInput' && denial.deny === 'yolo-no-human') return;
-  if (
-    denial.kind === 'retry' &&
-    denial.deny === 'yolo-retry' &&
-    context.mode !== 'headless'
-  ) {
-    return;
-  }
-  let warned = warnedApprovalRuns.get(context);
-  if (!warned) warnedApprovalRuns.set(context, (warned = new Set()));
-  // Withheld tools key by their names too: a delegated child reports through
-  // its parent's callback, and the tools it adds are a new denial.
-  const detail = denial.kind === 'withheldTools' ? denial.tools.join(',') : '';
-  const key = `${runId ?? ''}\0${denial.kind}\0${detail}`;
-  if (warned.has(key)) return;
-  warned.add(key);
-  writeTextStderr(
-    `[warn] [cli-approval] ${approvalDenialMessage(denial, context)}`,
-  );
 }
 
 const askCliApprovalQuestion = Effect.fn(

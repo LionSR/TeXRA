@@ -22,8 +22,7 @@ import {
   type PluginToolServices,
 } from '@texra-ai/harness/plugins';
 import { WorkspaceFs } from '@texra-ai/harness/host';
-import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { SessionRoots } from '@platform/rootedFs';
 import { SessionLog } from '@shared/session/runHistory';
@@ -62,7 +61,6 @@ let nextDecision: () => RequestDecision | null = () => ({ action: 'approve' });
 let decisions:
   | Effect.Success<ReturnType<typeof autoDecideRequests>>
   | undefined;
-let policyDenials = 0;
 // The tool edits the run opened, as their rows reached the log; tests
 // override the decision when they need to reject or adjust, and assert on
 // this list otherwise.
@@ -155,13 +153,7 @@ const setUp = () =>
       TestSession.open(undefined, { host: {} }),
       sessionHandleOf,
     );
-    yield* Context.get(session, Interactions).use({
-      approvalDenied: () => {
-        policyDenials += 1;
-      },
-    });
     setTestApprovalPolicy('ask', Context.get(session, SessionRoots));
-    policyDenials = 0;
     workspaceWrites.mockReset();
     relativeFiles.clear();
     runId = publishTestRunStart(session, generateRunId());
@@ -220,7 +212,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         assert.strictEqual(openedEdits().length, 0);
         assert.strictEqual(write.mock.calls.length, 0);
         assert.strictEqual(result.status, 'error');
-        assert.strictEqual(policyDenials, 1);
       }),
     );
 

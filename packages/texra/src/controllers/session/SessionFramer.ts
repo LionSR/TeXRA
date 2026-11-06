@@ -1,7 +1,7 @@
 /**
  * The transport framer: one per
  * transport port, answering each Subscribe with the same ordered input
- * reader the runtime view uses: listing, named histories, local state,
+ * reader the runtime view uses: local state, listing, named histories,
  * completion marker, then durable events before live text. Host snapshots
  * are merged beside those inputs. A cold mount starts from the runtime
  * view's cursor; a resubscribe starts from the cursor it supplies.

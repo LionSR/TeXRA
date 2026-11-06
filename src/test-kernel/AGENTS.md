@@ -96,7 +96,7 @@ only by hand, never in CI or `npm test`, and skips a model whose key is not set.
 
 ## Scoping the test run
 
-The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for.
+The loop (`test:watch`, `test:changed [ref]`, `test:pure`, `npm test`) is in root `AGENTS.md` "Commands". Selection is only as good as that graph: a changed YAML resource or image selects nothing, and a change to the harness itself (`vitest.config.mjs`, `src/test-kernel/support/`) is not covered; those are what `npm test` is for. The crash conformance suites (`packages/harness/test/controllers/session/crashConformance*.vitest.ts`) replay a run from every commit point, half a second of CPU each, so `test:watch` and `test:changed` leave them out and `npm test` runs them, sharded over files.
 
 ## Writing tests that earn a place
 

@@ -1,6 +1,14 @@
-import { Effect, Context } from 'effect';
+import {
+  Effect,
+  Context,
+  Fiber,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   runStateAppend,
@@ -63,7 +71,8 @@ export function publishTestRunStart(
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent: 'chat' },
-      userFollowUpSupport: 'unsupported',
+      // A chat run takes a message, as the runs these suites message do.
+      userFollowUpSupport: 'nativeInteractive',
       parent:
         options.parent == null ? null : { id: options.parent, call: null },
       provenance: null,
@@ -71,6 +80,31 @@ export function publishTestRunStart(
   ]);
   return runId;
 }
+
+/**
+ * Hold `runId` as a launch of this session for the caller's scope, as a run
+ * started here is held: the registry records it (the view's `runsHere`),
+ * with no loop behind it, and lets it go when the scope closes. Its
+ * `run.start` must be published; returns once the view shows it held.
+ */
+export const holdTestRun = (
+  session: Context.Context<SessionServices>,
+  runId: RunId,
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    yield* Effect.acquireRelease(
+      registryOf(Context.get(session, Runs))
+        .start(runId, { open: Effect.void, run: () => Effect.never })
+        .pipe(Effect.orDie),
+      ({ fiber }) => Fiber.interrupt(fiber),
+    );
+    yield* SubscriptionRef.changes(
+      Context.get(session, SessionViewAccess).ref,
+    ).pipe(
+      Stream.takeUntil((view) => view.runs.get(runId)?.runsHere === true),
+      Stream.runDrain,
+    );
+  });
 
 /**
  * The follow-ups a run's rows still queue, as every view lists them: the

@@ -2,23 +2,19 @@
  * Headless CLI side of the request protocol (one run model, 3.7).
  *
  * A run asks a person with `request.opened`; the fold lists it in
- * `view.requests` until a `request.decided` answers it. This host watches
- * that list and answers each request with the prompt the operator sees. The
- * session already settled what its approval policy decides, so what is listed
- * needs a person, or a denial on a run with nobody to ask. Nothing is
- * staged here: a tool edit's diff is the session's preview of it, and the
- * port this attaches presents events and denials.
+ * `view.requests` until a `request.decided` answers it. This host answers
+ * each request the session asks it (`SessionHost.approve`) with the prompt
+ * the operator sees; the session's loop asks it once per listed request
+ * and records the answer. A run with nobody to ask (a non-interactive
+ * mode) attaches no handler: the session's policy denies each request as
+ * it opens, and withholds the approval-gated tools. Nothing is staged
+ * here: a tool edit's diff is the session's preview of it.
  */
 import { Effect, Result } from 'effect';
 
-import {
-  followPendingRequests,
-  withLogChannel,
-  type HostInteractions,
-} from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   type RequestDecision,
-  approvalPolicyDenialMessage,
   type PermissionPayload,
   type RunId,
   type UserQuestionAnswers,
@@ -31,7 +27,6 @@ import {
   type CliApprovalPromptHooks,
   askApproval,
   queueCliApprovalQuestion,
-  warnApprovalDenied,
   whilePrompting,
 } from './approval/approvalPrompts';
 import {
@@ -52,29 +47,14 @@ import {
 } from '@texra/shared/session/surfaceDecision';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
-import type { Session } from '@texra-ai/harness';
-import type { PendingRequest } from '@texra-ai/harness/schemas';
+import type { Session, SessionHost } from '@texra-ai/harness';
+import type { HostInteractions } from '@texra-ai/harness/host';
 
 const CHANNEL = 'cli.approval';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   readonly emit?: HostInteractions['emit'];
 }
-
-/**
- * The kinds this host answers: the harness's own, never a plugin's request.
- * The only plugin that opens one, the external inquiry, is unavailable on
- * the CLI, so one listed in the fold was opened by another host in a shared
- * session and is answered from its own thread. Deciding it here because a
- * headless CLI happened to observe the session would drop that thread, so
- * {@link createHeadlessCliHostInteractions} filters plugin requests out.
- */
-type AnswerablePayload = Exclude<PermissionPayload, { kind: 'plugin' }>;
-
-/** A pending request under {@link AnswerablePayload}. */
-type AnswerableRequest = PendingRequest & {
-  readonly payload: AnswerablePayload;
-};
 
 const askHeadlessUserQuestion = Effect.fn(
   'approvalAdapter.askHeadlessUserQuestion',
@@ -132,38 +112,17 @@ const askHeadlessUserQuestion = Effect.fn(
   return userQuestionDecision(answers);
 });
 
-/** The view subscription below is forked into the caller's scope, which
- *  interrupts it on close. `session` is the headless run's session, threaded
- *  from the composition that opened it. */
+/**
+ * The headless run's host: its notices, and, in an interactive run, the
+ * prompt that answers each request. `session` is the headless run's
+ * session, threaded from the composition that opened it; a tool edit's
+ * preview is read from it.
+ */
 export function createHeadlessCliHostInteractions(
-  session: Pick<Session, 'request' | 'view'>,
+  session: Pick<Session, 'request'>,
   context: CliContext,
   hooks: HeadlessCliHostInteractionHooks = {},
-) {
-  /** Only an interactive run can answer a prompt. */
-  const promptsUnavailable = context.mode !== 'interactive';
-
-  /** Write one decision, and say whether it landed: a refused write leaves
-   *  the request listed and unanswered, so reporting the refusal as a
-   *  settlement would park the run on a request this host never takes
-   *  again. */
-  const decide = (
-    runId: RunId,
-    requestId: string,
-    decision: RequestDecision,
-  ): Effect.Effect<boolean> =>
-    session
-      .request({ kind: 'request.decide', runId, requestId, decision })
-      .pipe(
-        Effect.matchEffect({
-          onFailure: (error) =>
-            Effect.logWarning(
-              `The ${decision.action} decision for request ${requestId} was refused: ${toErrorMessage(error)}`,
-            ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
-          onSuccess: () => Effect.succeed(true),
-        }),
-      );
-
+): SessionHost {
   /** The prompt content for a tool edit: the session's preview of it, else
    *  the payload's own summary and why there is no diff. */
   const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
@@ -181,50 +140,28 @@ export function createHeadlessCliHostInteractions(
     },
   );
 
-  /** One pending request, answered: denied when this run has nobody to ask
-   *  (a request opened before the host or policy changed is listed pending,
-   *  and a prompt on a closed stdin never settles), else by the prompt.
-   *  Returns whether the decision reached the run history. */
-  const answer = Effect.fn('approvalAdapter.answer')(function* (
+  /** One request, answered by the prompt. A plugin's request is not this
+   *  host's to answer: the plugin that opens one, the external inquiry, is
+   *  unavailable on the CLI, so one listed was opened by another host in a
+   *  shared session and is answered there; this handler waits until the
+   *  view drops the request (the answerer interrupts it then). */
+  const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
-    payload: AnswerablePayload,
-  ) {
-    const requestId = payload.data.requestId;
-    if (promptsUnavailable) {
-      return yield* decide(runId, requestId, {
-        action: 'deny',
-        reason: approvalPolicyDenialMessage('deny-unpresentable'),
-      });
-    }
+    payload: PermissionPayload,
+  ): Effect.fn.Return<RequestDecision, Error> {
     const ask = (content: CliApprovalContent) =>
       askApproval(context, content, hooks);
     switch (payload.kind) {
       case 'bash':
-        return yield* decide(
-          runId,
-          requestId,
-          yield* ask({ summary: formatBashApprovalSummary(payload.data) }),
-        );
+        return yield* ask({ summary: formatBashApprovalSummary(payload.data) });
       case 'toolEdit':
-        return yield* decide(
-          runId,
-          requestId,
-          yield* ask(yield* toolEditContent(runId, payload)),
-        );
+        return yield* ask(yield* toolEditContent(runId, payload));
       case 'planApproval':
-        return yield* decide(
-          runId,
-          requestId,
-          yield* ask({
-            summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
-          }),
-        );
+        return yield* ask({
+          summary: `Plan approval requested:\n${JSON.stringify(payload.data.plan, null, 2)}`,
+        });
       case 'proposal':
-        return yield* decide(
-          runId,
-          requestId,
-          yield* ask(buildAgentProposalApprovalContent(payload.data)),
-        );
+        return yield* ask(buildAgentProposalApprovalContent(payload.data));
       case 'retry': {
         const summary = formatRetryRequestMessage(payload.data);
         // The summary is written under the prompt's hold, so the status
@@ -237,61 +174,27 @@ export function createHeadlessCliHostInteractions(
             return ask({ summary });
           }),
         );
-        if (decision.action === 'approve') {
-          return yield* decide(runId, requestId, REQUEST_ACTIONS.retry.y);
-        }
+        if (decision.action === 'approve') return REQUEST_ACTIONS.retry.y;
         // A dismissed retry is the operator stopping the task, not a policy
         // refusal; the note they left goes to stderr beside it.
         const note =
           (decision.action === 'reject' ? decision.feedback : decision.cause) ??
           undefined;
         writeTextStderr(note ? `${summary}\n${note}` : summary);
-        return yield* decide(runId, requestId, declineDecision('retry', note));
+        return declineDecision('retry', note);
       }
       case 'userQuestion':
-        return yield* decide(
-          runId,
-          requestId,
-          yield* askHeadlessUserQuestion(payload.data, context, hooks),
-        );
+        return yield* askHeadlessUserQuestion(payload.data, context, hooks);
+      case 'plugin':
+        return yield* Effect.never;
     }
   });
 
-  const host: HostInteractions = {
+  return {
     emit: hooks.emit,
-    approvalPromptsUnavailable: promptsUnavailable,
-    approvalDenied: (denial, runId) =>
-      warnApprovalDenied(context, denial, runId),
+    // Only an interactive run can answer a prompt.
+    ...(context.mode === 'interactive'
+      ? { approve: (pending) => approve(pending.runId, pending.payload) }
+      : { approvalPromptsUnavailable: true }),
   };
-  // One prompt per listed request, each on its own fiber so one prompt does
-  // not hold the others: the context's prompt lane still serializes the
-  // reads from stdin. A decision that did not land (refused, or a prompt
-  // that failed) answered nobody, so it is asked again on the next view that
-  // still lists the request; one that landed waits for the view to drop it.
-  return Effect.as(
-    Effect.forkScoped(
-      followPendingRequests(
-        session.view,
-        (view) =>
-          view.requests.filter(
-            (pending): pending is AnswerableRequest =>
-              pending.payload.kind !== 'plugin',
-          ),
-        (pending) =>
-          answer(pending.runId, pending.payload).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(
-                `The prompt for request ${pending.requestId} failed`,
-              ).pipe(
-                Effect.annotateLogs({ data: cause }),
-                withLogChannel(CHANNEL),
-                Effect.as(false),
-              ),
-            ),
-            Effect.flatMap((landed) => (landed ? Effect.never : Effect.void)),
-          ),
-      ),
-    ),
-    host,
-  );
 }

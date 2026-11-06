@@ -94,28 +94,24 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               yield* seedReport(session, runId, 'retained report bytes');
               yield* Context.get(session, SessionLog).transact([
                 {
-                  type: 'run.result',
+                  type: 'process.exit',
                   aggregateId: qualifyAggregateId('run', runId),
-                  result: {
-                    producer: 'subagent',
-                    output: { response: 'done', files: [] },
-                  },
+                  code: 0,
+                  timedOut: false,
                 },
-              ]);
-              yield* Context.get(session, SessionLog).transact([
                 {
                   type: 'run.end',
                   aggregateId: qualifyAggregateId('run', runId),
                   outcome: 'completed',
-                  output: { response: '', files: [] },
+                  output: { response: 'done', files: [] },
                 },
               ]);
               expect(yield* records.readReport()).toBe('retained report bytes');
-              // The result joins the terminal fact to the reply the delivery
-              // recorded, and drops the producer's own context.
+              // The result is the terminal fact with the process's exit.
               expect(yield* records.readResult()).toEqual({
                 outcome: 'completed',
                 output: { response: 'done', files: [] },
+                exit: { code: 0, timedOut: false },
               });
               yield* Context.get(session, SessionLog).transact([
                 {
@@ -129,7 +125,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   records.readRunRecord(),
                   records.readReport(),
                   records.readWorkspaceFiles(),
-                  records.readResultMeta(),
+                  records.readResult(),
                 ]),
               ).toEqual([false, null, null, [], null]);
               const retained = yield* Context.get(session, SessionLog).runRows(

@@ -18,7 +18,10 @@ import { DesktopToolEditApprovalHost } from '@desktop/main/desktopToolEditApprov
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import {
+  holdTestRun,
+  publishTestRunStart,
+} from '@test/support/sessionTestUtils';
 import {
   SessionGraph,
   sessionHandleOf,
@@ -107,6 +110,7 @@ const review = Effect.gen(function* () {
     const runId = Schema.decodeSync(RunIdSchema)('a40000');
     publishTestRunStart(session, runId);
     yield* Context.get(session, SessionLog).settled;
+    yield* holdTestRun(session, runId);
     return yield* Effect.forkScoped(
       requestToolEditApproval({
         path: '/workspace/notes.txt',

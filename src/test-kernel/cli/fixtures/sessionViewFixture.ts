@@ -69,8 +69,6 @@ function runViewFields(over: RunViewOverrides): RunView {
   const common = {
     id,
     identity: { kind: 'agent' as const, agent: 'agent' },
-    ownerId: null,
-    ownedHere: false,
     label: over.id,
     description: null,
     descriptionBy: null,
@@ -100,7 +98,6 @@ function runViewFields(over: RunViewOverrides): RunView {
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
-    readOnly: false,
     actions: [],
     forceExpanded: false,
     group: isInFlightPhase(status) ? ('running' as const) : ('recent' as const),
@@ -128,7 +125,7 @@ function runViewFields(over: RunViewOverrides): RunView {
     id,
     title: over.title ?? (over.description || (over.label ?? over.id)),
     live,
-    runsHere: over.runsHere ?? (live && (over.ownedHere ?? false)),
+    runsHere: over.runsHere ?? false,
     turnOver:
       over.turnOver ??
       (ended || status === RUN_PHASE.WAITING || group === 'interrupted'),

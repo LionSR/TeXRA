@@ -6,7 +6,7 @@
 import { Effect, SynchronizedRef } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { ModelAccess } from '@agent/runtime/modelAccess/ModelAccess';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunState } from '@shared/session/runState';

@@ -6,8 +6,7 @@
  * Failure modes:
  * - R14: a resumed child its parent's open call owns is activated on its
  *   own, or the parent twice, or the redirect is an error instead of the
- *   parent's handle; the redirect leaves a claim held or a listener of its
- *   own subscribed.
+ *   parent's handle; the redirect leaves a listener of its own subscribed.
  * - A labelled run's label request is left out of its result's usage or its
  *   view's, or the two disagree.
  * - A host's shutdown that stops a launch still opening, then interrupts
@@ -22,7 +21,6 @@ import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
-  claimHolder,
   crashedCopy,
   persistentTestSession,
   REAL_RUN_TIMEOUT,
@@ -52,10 +50,12 @@ const packageSession = (session: Context.Context<SessionServices>) =>
 
 /** The stored data of a `run.end` row, as far as these cases read it. */
 const RunEndData = Schema.fromJsonString(
-  Schema.Struct({
-    outcome: Schema.String,
-    reason: Schema.optional(Schema.String),
-  }),
+  Schema.Struct({ outcome: Schema.String }),
+);
+
+/** The stored data of a `run.stop` row. */
+const RunStopData = Schema.fromJsonString(
+  Schema.Struct({ reason: Schema.String }),
 );
 
 /** The outcomes of the run's `run.end` rows, in order. */
@@ -97,7 +97,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-handoff-'), { buildPerTest: true })((it) => {
       it.effect(
-        "R14: resuming a child its parent's open call owns resumes the parent once, names the child, and leaves no claim or listener",
+        "R14: resuming a child its parent's open call owns resumes the parent once, names the child, and leaves no listener",
         () =>
           Effect.gen(function* () {
             const roots = testWorkspaceRoots();
@@ -168,10 +168,8 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(endsOf(storage, parent)).toEqual(['completed']);
             expect(activationsAfter(storage, parent, cut)).toBe(1);
             expect(activationsAfter(storage, child, cut)).toBe(1);
-            for (const runId of [parent, child]) {
-              expect(claimHolder(storage, runId)).toBeNull();
+            for (const runId of [parent, child])
               expect(sdk.held(runId)).toBeUndefined();
-            }
             // Only the embedder's listener is left, and it goes with its scope.
             yield* untilSubscribed(sdk, [child]);
             yield* Scope.close(listener, Exit.void);
@@ -210,12 +208,17 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* untilStored(roots.storage, (rows) =>
               rows.some((row) => row.run === runId && row.type === 'run.end'),
             );
-            const ends = storedRows(roots.storage)
-              .filter((row) => row.run === runId && row.type === 'run.end')
+            const rows = storedRows(roots.storage).filter(
+              (row) => row.run === runId,
+            );
+            const stops = rows
+              .filter((row) => row.type === 'run.stop')
+              .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data));
+            const ends = rows
+              .filter((row) => row.type === 'run.end')
               .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data));
-            expect(ends).toStrictEqual([
-              { outcome: 'cancelled', reason: 'shutdown' },
-            ]);
+            expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
+            expect(ends).toStrictEqual([{ outcome: 'cancelled' }]);
           }),
       );
 

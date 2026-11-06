@@ -15,7 +15,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
-import { recordedDecision } from '@agent/runtime/requestPolicy';
+import { recordedDecision } from '@agent/runtime/requests';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,
@@ -25,7 +25,7 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import type {
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
@@ -129,7 +129,7 @@ interface DelegationProposalDecision {
 }
 
 type ProposalRequestError =
-  | DatabaseNotOwner
+  | DatabaseAggregateClosed
   | DatabaseReadFailed
   | DatabaseWriteFailed
   | RunHistoryRefused;

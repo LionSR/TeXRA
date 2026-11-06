@@ -7,7 +7,15 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Layer,
+  Scope,
+  Semaphore,
+  SynchronizedRef,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -25,6 +33,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import { RunFileService } from '@common/storage/runStorage';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -41,7 +50,6 @@ import type {
 import { RunHistory } from '@shared/session/runHistory';
 import type { RunState } from '@shared/session/runState';
 import type { Alongside } from '@shared/session/sessionEvents';
-import type { ClaimError } from '@shared/session/sessionLog';
 import { buildTerminalTool } from '@tools/structuredOutput';
 import { ProjectTools, type OpenStep } from '../loop/step';
 import type { ModelConfig } from '@texra-ai/llm';
@@ -66,11 +74,15 @@ interface LaunchEntry {
    *  fresh run's launch, else its rows' edge): a child detached mid-run
    *  keeps child behaviour until its next activation. */
   readonly parent: RunId | null;
+  /** The parent's call awaits the child and reads its end itself: the
+   *  end delivers nothing to the parent's input, and the run takes no
+   *  permit of the child-run budget (it rides its parent's). */
+  readonly awaited: boolean;
   readonly registration: Registration | null;
   readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
   /** Fails when a fresh run's claim, its birth's, cannot be held. */
-  readonly entered: (state: RunState) => Effect.Effect<void, ClaimError>;
+  readonly entered: (state: RunState) => Effect.Effect<void>;
   readonly initialUserMessage: string | undefined;
 }
 
@@ -84,6 +96,11 @@ interface LaunchEntry {
 export interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
+  /** No later turn reaches the run: a root that stops after its cycle, or
+   *  a child its parent's call awaits (the call reads its end and goes on).
+   *  A background child stops after its cycle too, but a delivery or a
+   *  message resumes it, so a result sent to it as a follow-up arrives. */
+  readonly oneShot?: boolean;
 }
 
 interface RunCallbacks {
@@ -98,6 +115,8 @@ const SCRIPT_TOOL = 'script';
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
   readonly runId: RunId;
+  /** When this launch or resume of the run started (its opening). */
+  readonly startedAt: number;
   readonly config: AgentConfig;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;
@@ -156,6 +175,15 @@ export interface AgentRunShape extends RunLaunch {
    */
   readonly scope: Scope.Scope;
   readonly callbacks: RunCallbacks;
+  /**
+   * The calls this run awaits children in, at most the child-run budget of
+   * them at once (`childRunConcurrencyBudget`). An awaited child rides its
+   * parent's slot in the session's budget (`ChildRunBudget`), so this is
+   * the one bound on a script's parallel `agent()` and `self()` calls. One
+   * semaphore per run: a child's own awaited calls never wait on its
+   * parent's, so nested delegation cannot deadlock.
+   */
+  readonly awaitedCalls: Semaphore.Semaphore;
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
@@ -323,6 +351,9 @@ export const agentRunLayer = (
         swapModel,
         scope,
         callbacks: input.callbacks,
+        awaitedCalls: Semaphore.makeUnsafe(
+          yield* resolveChildRunConcurrencyBudget(roots),
+        ),
       };
     }),
   ).pipe(Layer.provideMerge(sessionModelAccess));

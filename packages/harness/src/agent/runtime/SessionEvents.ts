@@ -2,8 +2,7 @@
  * The session event plane over its root's SQLite database. Publication commits
  * an ordered batch before waking readers. Listing and aggregate reads are
  * finite; the tails share one drain of the log (`logTails`). Wake
- * counters and commit ordinals are separate coordinates, so a claim change
- * can wake a reader without inventing an event.
+ * counters and commit ordinals are separate coordinates.
  */
 // Third-party imports
 import {
@@ -28,10 +27,8 @@ import {
 import { Database, type DatabaseWriteFailed } from '@shared/session/database';
 import { closesRunWindow } from '@shared/session/runRowReads';
 import {
-  afterCommit,
-  committing,
+  InPublisherJob,
   logTails,
-  PublisherJob,
   SessionEvents,
   type Append,
   type JobOptions,
@@ -167,23 +164,25 @@ export const sessionEventsLayer = Layer.effect(
   Effect.gen(function* () {
     const log = yield* Database;
     const { track, openWork } = openWorkTracker();
-    /** What a job's rows leave open is tracked once they commit, so an
-     *  attempt that rolls back (and runs again) leaves nothing behind. */
-    const tracked = (rows: readonly SessionEvent[]) =>
-      afterCommit(Effect.sync(() => track(rows)));
-    // Both of `appendAll`'s rejections (a lost claim, a failed write) pass
-    // through typed, not as defects.
-    const append: Append = (events) =>
-      Effect.tap(log.appendAll(events), tracked);
     /** One job: one transaction (`Database.job`), or in its place with
-     *  none (`order`). */
+     *  none (`order`). What its rows leave open is tracked once the
+     *  transaction committed, so a rolled-back job leaves nothing behind. */
     const inTransaction = <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
       order = false,
-    ): Effect.Effect<A, E | DatabaseWriteFailed> =>
-      order
-        ? committing((attempt) => attempt, job(ordering))
-        : log.job(Effect.suspend(() => job(append)));
+    ): Effect.Effect<A, E | DatabaseWriteFailed> => {
+      if (order) return job(ordering);
+      const appended: SessionEvent[] = [];
+      // Both of `appendAll`'s rejections (a closed aggregate, a failed
+      // write) pass through typed, not as defects.
+      const append: Append = (events) =>
+        Effect.tap(log.appendAll(events), (rows) =>
+          Effect.sync(() => appended.push(...rows)),
+        );
+      return log
+        .job(Effect.suspend(() => job(append)))
+        .pipe(Effect.tap(() => Effect.sync(() => track(appended))));
+    };
     const inbox = yield* Queue.unbounded<PublicationJob, Cause.Done>();
     // One job per take, never a batch: a job the close refuses is one the
     // consumer never took. It ends when the ended inbox runs dry.
@@ -241,7 +240,7 @@ export const sessionEventsLayer = Layer.effect(
       job: (append: Append) => Effect.Effect<A, E>,
       options: JobOptions = {},
     ): Effect.fn.Return<A, E | DatabaseWriteFailed> {
-      if ((yield* PublisherJob) !== null) return yield* reentered;
+      if (yield* InPublisherJob) return yield* reentered;
       const done = yield* Deferred.make<A, E | DatabaseWriteFailed>();
       const admitted = enqueue(
         settling(inTransaction(job, options.order), done),
@@ -255,12 +254,10 @@ export const sessionEventsLayer = Layer.effect(
     });
     const removeRun: SessionEventsShape['removeRun'] = (
       id,
-      mode,
       expectedStartCommit,
     ) =>
-      Effect.flatMap(
-        log.prepareRunRemoval(id, mode, expectedStartCommit),
-        (removal) => transact(() => Effect.tap(removal, tracked)),
+      transact(() => log.runRemoval(id, expectedStartCommit)).pipe(
+        Effect.tap((rows) => Effect.sync(() => track(rows))),
       );
     const detach: SessionEventsShape['detach'] = (job, options = {}) => {
       const admitted = enqueue({

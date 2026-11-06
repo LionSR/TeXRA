@@ -7,12 +7,11 @@
  * anchor. The fold publishes nothing before the replay marker, so the first
  * state a mounting reader sees already holds the listing, the aggregate
  * history, and the local snapshot; the tail then publishes every commit in
- * order. The waiting rule: a pending request on a run whose owner this
- * process holds (`self`) or whose owner is alive (`heldBy`) folds to
- * `waiting`; the same log with the owner gone folds to `interrupted`.
+ * order. The waiting rule: a pending request on a run a launch here holds
+ * folds to `waiting`; the same log with no launch folds to `interrupted`.
  */
 // Node imports
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import {
   existsSync,
   mkdtempSync,
@@ -31,23 +30,17 @@ import { DatabaseSync } from 'node:sqlite';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { build } from 'esbuild';
-import * as SqlDriver from '@effect/sql-sqlite-node/SqliteClient';
 import {
   Cause,
   Clock,
   Effect,
   Exit,
   Fiber,
-  type FileSystem,
   Layer,
-  type Path,
   Schema,
   Stream,
   SubscriptionRef,
-  Context,
 } from 'effect';
-import { TestClock } from 'effect/testing';
-import * as Reactivity from 'effect/reactivity/Reactivity';
 
 import { afterAll, beforeAll, describe, expect, vi } from 'vitest';
 
@@ -61,7 +54,6 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 }));
 
 import {
-  GlobalStateKey,
   qualifyAggregateId,
   RUN_PHASE,
   type RunId,
@@ -72,8 +64,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
-import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
@@ -85,21 +75,16 @@ import {
   TranscriptSubscriptions,
 } from '@controllers/session/sessionSources';
 import { makeSessionStore } from '@controllers/session/sessionStore';
-import { sessionRequests } from '@controllers/session/SessionRequests';
-import { openStore } from '@controllers/session/storeSchema';
 import { deletionCollector } from '@controllers/session/deletionCleanup';
 import {
   databaseLayer,
-  globalDatabaseLayer,
+  STORE_HELD_MESSAGE,
 } from '@controllers/session/Database';
-import { SessionRoots } from '@platform/rootedFs';
 import {
   runStateAppend,
   RunHistory,
   RunHistoryRefused,
   type RunCell,
-  SessionLog,
-  SessionViewAccess,
 } from '@shared/session/runHistory';
 import { SessionEventSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
@@ -111,14 +96,13 @@ import {
   scriptedSpawnerLayer,
 } from '@test/support/childProcessTestLayer';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
-import { globalValuesOver } from '@test/support/setupPlatform';
+import { readStoreSnapshot } from '@test/support/storeFaults';
 import { storePluginsLayer } from '@test/support/texraApp';
 import { inquiryThreadRow } from '@test/support/inquiryThreadRow';
 import { REPO_ROOT } from '@test/support/repoScan';
 import type { InquiryThreadSummary } from '@texra/shared/plugins/externalInquiry';
 import type { LeanLanguageServices } from '@texra/tools/lean/leanLanguageServices';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
-import type { GlobalValues } from '@texra-ai/harness/host';
 import type { ProcessProbe } from '@texra-ai/harness/node';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
@@ -140,14 +124,8 @@ vi.mock('@texra/tools/lean/direct/directLspAdapter', async () => {
 });
 
 /** A second OS process's writer: this build's `Database` over the store at
- *  `storage`, owned as `owner`, creating `run` and, once `<storage>/go`
- *  exists, holding the write lock for `hold` ms (a slow writer, announced by
- *  `<storage>/held`), then appending `rows` positions to it, one
- *  transaction each. */
+ *  `storage`, as `owner`, creating `run`. */
 const STORE_WRITER = `
-import { existsSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { Effect, Layer } from 'effect';
 import { databaseLayer } from '@controllers/session/Database';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
@@ -157,24 +135,11 @@ import { qualifyAggregateId } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
-const [storage, owner, run, rows, hold] = process.argv.slice(2);
-const id = qualifyAggregateId('run', run);
-const append = Effect.gen(function* () {
-  const db = yield* Database;
-  yield* db.appendAll([{ type: 'run.start', aggregateId: id,
+const [storage, owner, run] = process.argv.slice(2);
+const append = Effect.flatMap(Database, (db) =>
+  db.appendAll([{ type: 'run.start', aggregateId: qualifyAggregateId('run', run),
     identity: { kind: 'agent', agent: 'chat' }, userFollowUpSupport: 'unsupported',
-    parent: null, provenance: null }]);
-  while (!existsSync(join(storage, 'go'))) yield* Effect.sleep('1 millis');
-  const slow = new DatabaseSync(join(storage, 'texra.db'));
-  slow.exec('BEGIN IMMEDIATE');
-  writeFileSync(join(storage, 'held'), '');
-  yield* Effect.sleep(Number(hold));
-  slow.exec('COMMIT');
-  slow.close();
-  for (let i = 0; i < Number(rows); i += 1)
-    yield* db.appendAll([{ type: 'run.position', aggregateId: id,
-      payload: { family: 'toolUse', at: 'waiting' } }]);
-});
+    parent: null, provenance: null }]));
 await Effect.runPromise(append.pipe(Effect.provide(databaseLayer('persistent').pipe(
   Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
   Layer.provide(ProcessIdentity.layer(owner)),
@@ -362,13 +327,6 @@ beforeAll(() => {
   }
 });
 
-/** The view access a request handler reads: the fold's level and one run
- *  of it. */
-const viewAccess = (ref: SubscriptionRef.SubscriptionRef<SessionView>) => ({
-  ref,
-  run: (runId: RunId) => SubscriptionRef.getUnsafe(ref).runs.get(runId),
-});
-
 describe('session events and view', () => {
   it.effect('publishes complete replay and finite live batches in order', () =>
     Effect.gen(function* () {
@@ -456,7 +414,6 @@ describe('Sessions owner', () => {
             },
           },
         ]);
-        yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
       }).pipe(
         Effect.provide(
           databaseLayer('persistent').pipe(
@@ -495,109 +452,6 @@ describe('Sessions owner', () => {
         expect((yield* session.view.read([RUN])).requests).toHaveLength(1);
       }).pipe(Effect.provide(Sessions.layer({ platform, plugins: [] })));
     }),
-  );
-
-  /** The graph over one started run, with the global values and platform a
-   *  request handler reads. */
-  const withRequestServices = <A, E, R>(program: Effect.Effect<A, E, R>) =>
-    program.pipe(
-      Effect.provide(graph([runStart])),
-      Effect.provide(
-        globalValuesOver(
-          globalDatabaseLayer(createFakeWorkspaceRoots().globalStorage).pipe(
-            Layer.provide(ProcessIdentity.layer(SELF)),
-            Layer.provide(nodePlatformLayer),
-            Layer.orDie,
-          ),
-        ),
-      ),
-      Effect.provide(nodePlatformLayer),
-      Effect.provide(nodeSpawnerLayer),
-    );
-
-  it.effect(
-    'admits requests by current claims despite a stale displayed owner',
-    () =>
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const view = yield* SessionViewService;
-        const local = yield* SubscriptionRef.make(
-          Schema.decodeUnknownSync(LocalRuntimeStateSchema)({
-            self: [OTHER],
-            dead: [],
-            unreadable: [],
-          }),
-        );
-        const stop = vi.fn(() => ({
-          accepted: () => true,
-          settlement: Effect.void,
-        }));
-        // cast: the stop handler reads only these of the session's owners.
-        const session = Context.make(
-          SessionViewAccess,
-          // cast: the stop handler reads only the view's ref and its runs.
-          viewAccess(view.ref) as unknown as SessionViewAccess['Service'],
-        ).pipe(
-          // No launch of the run is held here.
-          // cast: the stop handler calls only `get` and `stop` of the runs.
-          Context.add(Runs, {
-            get: () => undefined,
-            stop,
-          } as unknown as Runs['Service']),
-          Context.add(
-            SessionRoots,
-            createFakeWorkspaceRoots({
-              globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
-            }),
-          ),
-        ) as Context.Context<SessionServices>;
-        const events = yield* SessionEvents;
-        const requests = sessionRequests({
-          log: { ...db, removeRun: events.removeRun },
-          // cast: no request here asks, decides or holds a claim.
-          asks: {} as Parameters<typeof sessionRequests>[0]['asks'],
-          // cast: nor does one read the session log.
-          sessionLog: {} as SessionLog['Service'],
-          view: Context.get(session, SessionViewAccess),
-          local,
-          plugins: toolTable([]),
-          services: yield* Effect.context<
-            | GlobalValues
-            | FileSystem.FileSystem
-            | Path.Path
-            | ChildProcessSpawner
-          >(),
-        });
-        // The displayed fold was built as SELF and considers this run writable.
-        // This requesting process is OTHER; it must respect the current claim.
-        yield* settle(view.ref, (v) => v.runs.has(RUN));
-        expect(
-          SubscriptionRef.getUnsafe(view.ref).runs.get(RUN)?.readOnly,
-        ).toBe(false);
-        const request = {
-          kind: 'run.stop',
-          runId: RUN,
-          reason: 'user',
-        } as const;
-        const refused = yield* requests
-          .request(request)
-          .pipe(Effect.flip, Effect.provide(session));
-        expect(refused._tag).toBe('NotOwner');
-        expect(stop).not.toHaveBeenCalled();
-
-        yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
-        yield* SubscriptionRef.update(view.ref, (v) => ({
-          ...v,
-          runs: new Map(
-            [...v.runs].map(([id, run]) => [id, { ...run, readOnly: true }]),
-          ),
-        }));
-        // A released claim is not held, even while the display still says so.
-        expect(
-          yield* requests.request(request).pipe(Effect.provide(session)),
-        ).toEqual({ kind: 'done' });
-        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, 'user');
-      }).pipe(withRequestServices),
   );
 });
 
@@ -846,11 +700,14 @@ describe('the session event table and its one publisher', () => {
           }
         });
       return Effect.gen(function* () {
-        // Any undecodable row of a run damages it, not only its start.
+        // Any undecodable row of a run damages it, not only its start. The
+        // store is held while open, so the row is damaged between opens.
+        yield* Effect.flatMap(Database, (db) =>
+          db.appendAll([runStart, olderStart, waiting]),
+        ).pipe(Effect.provide(substrate(storage)));
+        yield* corrupt(3);
         yield* Effect.gen(function* () {
           const db = yield* Database;
-          yield* db.appendAll([runStart, olderStart, waiting]);
-          yield* corrupt(3);
           expect(
             yield* Effect.flip(
               db.readAggregate(runStart.aggregateId, 0, ROW_TYPES),
@@ -871,12 +728,13 @@ describe('the session event table and its one publisher', () => {
           const view = yield* SessionViewService;
           yield* settle(
             view.ref,
-            (v) => v.runs.has(OLDER) && v.runs.get(RUN)?.readOnly === true,
+            (v) =>
+              v.runs.has(OLDER) &&
+              v.runs.get(RUN)?.statusNotice?.kind === 'damaged',
           );
           expect(
             (yield* SubscriptionRef.get(view.ref)).runs.get(RUN),
           ).toMatchObject({
-            readOnly: true,
             statusNotice: { kind: 'damaged' },
             actions: ['delete', 'openRunStorage', 'export', 'copy'],
           });
@@ -1035,14 +893,12 @@ describe('the session event table and its one publisher', () => {
         card(OLDER, {}),
       ];
       const count = (table: string) =>
-        Effect.sync(() => {
-          const raw = reader(storage);
-          try {
-            return raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n;
-          } finally {
-            raw.close();
-          }
-        });
+        Effect.sync(() =>
+          readStoreSnapshot(
+            storage,
+            (raw) => raw.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get()?.n,
+          ),
+        );
       const remove = (run: RunId) =>
         Effect.gen(function* () {
           const db = yield* Database;
@@ -1054,39 +910,42 @@ describe('the session event table and its one publisher', () => {
           ]);
           yield* Fiber.join(yield* yield* deletionCollector(db, storage));
         });
+      const opened = Layer.merge(substrate(storage), nodePlatformLayer);
       return Effect.gen(function* () {
-        const db = yield* Database;
-        yield* db.appendAll(drafts);
-        const cards = (yield* rowsOf(
-          db,
-          runStart.aggregateId,
-          olderStart.aggregateId,
-        )).filter((event) => event.type === 'tool.start');
-        expect(cards.map(({ input }) => JSON.stringify(input))).toEqual(
-          drafts
-            .slice(2)
-            .map((draft) => JSON.stringify('input' in draft && draft.input)),
-        );
-        const raw = reader(storage);
-        try {
-          const data = raw
-            .prepare("SELECT data FROM event WHERE type = 'tool.start'")
-            .all()
-            .map((row) => String(row.data));
-          expect(data.every((text) => !text.includes(shared))).toBe(true);
-          expect(data[0]).toContain('"$$b":"mine","$$$b":[{"$b":"');
-          const sizes = raw
-            .prepare('SELECT length(value) AS n FROM blob ORDER BY n DESC')
-            .all()
-            .map((row) => Number(row.n));
-          expect(sizes).toHaveLength(2);
-          expect(sizes[0]).toBeLessThan(shared.length / 10);
-        } finally {
-          raw.close();
-        }
-        yield* remove(RUN);
-        expect(yield* count('blob')).toBe(1);
-        expect(yield* count('event_blob')).toBe(1);
+        yield* Effect.gen(function* () {
+          const db = yield* Database;
+          yield* db.appendAll(drafts);
+          const cards = (yield* rowsOf(
+            db,
+            runStart.aggregateId,
+            olderStart.aggregateId,
+          )).filter((event) => event.type === 'tool.start');
+          expect(cards.map(({ input }) => JSON.stringify(input))).toEqual(
+            drafts
+              .slice(2)
+              .map((draft) => JSON.stringify('input' in draft && draft.input)),
+          );
+          const stored = readStoreSnapshot(storage, (raw) => ({
+            data: raw
+              .prepare("SELECT data FROM event WHERE type = 'tool.start'")
+              .all()
+              .map((row) => String(row.data)),
+            sizes: raw
+              .prepare('SELECT length(value) AS n FROM blob ORDER BY n DESC')
+              .all()
+              .map((row) => Number(row.n)),
+          }));
+          expect(stored.data.every((text) => !text.includes(shared))).toBe(
+            true,
+          );
+          expect(stored.data[0]).toContain('"$$b":"mine","$$$b":[{"$b":"');
+          expect(stored.sizes).toHaveLength(2);
+          expect(stored.sizes[0]).toBeLessThan(shared.length / 10);
+          yield* remove(RUN);
+          expect(yield* count('blob')).toBe(1);
+          expect(yield* count('event_blob')).toBe(1);
+        }).pipe(Effect.provide(opened));
+        // The store is held while open: the blob is damaged between opens.
         yield* Effect.sync(() => {
           const raw = reader(storage);
           try {
@@ -1095,535 +954,260 @@ describe('the session event table and its one publisher', () => {
             raw.close();
           }
         });
-        const reopened = yield* Effect.gen(function* () {
-          const fresh = yield* Database;
-          return yield* Effect.flip(
-            fresh.readAggregate(qualifyAggregateId('run', OLDER), 0, ROW_TYPES),
-          );
-        }).pipe(Effect.provide(substrate(storage)));
-        expect(reopened).toMatchObject({
-          cause: { _tag: 'DatabaseRowCorrupt', type: 'tool.start' },
-        });
-        yield* remove(OLDER);
-        expect(yield* count('blob')).toBe(0);
-      }).pipe(
-        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
-      );
-    },
-  );
-
-  it.effect(
-    'requires every dependent claim before committing a deletion',
-    () => {
-      const storage = workspace();
-      return Effect.gen(function* () {
-        const first = yield* Database;
-        const root = runStart.aggregateId;
-        const inquiry = qualifyAggregateId(
-          'plugin',
-          'external-inquiry:ei_012345abcdef',
-        );
-        const base = {
-          threadId: 'ei_012345abcdef',
-          parentRunId: RUN,
-          status: 'open',
-          lastQuestionPreview: 'Which boundary condition applies?',
-          lastActivityIso: '2026-09-06T12:00:00.000Z',
-          turnCount: 1,
-        } as const;
-        const thread = (patch: Partial<InquiryThreadSummary> = {}) =>
-          inquiryThreadRow({ ...base, ...patch });
-        // Every aggregate this case writes, the unrelated run's among them.
-        const stored = rowsOf(
-          first,
-          root,
-          olderStart.aggregateId,
-          inquiry,
-          qualifyAggregateId('run', NEWER),
-        );
-        const initial = yield* first.appendAll([
-          runStart,
-          olderStart,
-          thread({ status: 'answered' }),
-          thread({ parentRunId: OLDER, turnCount: 2 }),
-          thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
-          thread({ turnCount: 3 }),
-        ]);
-        const initialCommit = initial[0]?.commit;
-        if (initialCommit === undefined) throw new Error('nothing appended');
-        expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
-          root,
-        );
-        expect(
-          (yield* Effect.flip(
-            first.appendAll([
-              thread({
-                parentRunId: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
-              }),
-            ]),
-          ))._tag,
-        ).toBe('DatabaseWriteFailed');
-        // Visiting the first asker again must not let its delayed turn-1
-        // answer regress state and then admit the former asker's turn-2 open.
-        const staleBatches: SessionEventDraft[][] = [
-          [
-            thread({ status: 'answered' }),
-            thread({ parentRunId: OLDER, turnCount: 2 }),
-          ],
-          [thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 })],
-          [thread({ parentRunId: OLDER, turnCount: 2 })],
-        ];
-        for (const stale of staleBatches) {
-          expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
-            'DatabaseWriteFailed',
-          );
-        }
-        expect(yield* stored).toEqual(initial);
-        expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(
-          root,
-        );
-        yield* first.releaseClaims([inquiry]);
-        const removal: SessionEventDraft = {
-          type: 'run.removed',
-          aggregateId: root,
-        };
-        const refusesDeletion = Effect.gen(function* () {
-          const before = yield* SubscriptionRef.get(first.level);
-          expect(
-            (yield* Effect.flip(first.appendAll([waiting, removal])))._tag,
-          ).toBe('DatabaseWriteFailed');
-          expect(yield* stored).toEqual(initial);
-          expect(
-            (yield* first.aggregateState([root, inquiry])).every(
-              (row) => !row.closed,
-            ),
-          ).toBe(true);
-          expect(yield* SubscriptionRef.get(first.level)).toBe(before);
-        });
-        // An unclaimed dependent also has to be acquired, not silently closed.
-        yield* refusesDeletion;
         yield* Effect.gen(function* () {
-          const second = yield* Database;
-          yield* second.acquireClaims([inquiry]);
-          yield* refusesDeletion;
+          const fresh = yield* Database;
           expect(
             yield* Effect.flip(
-              Effect.flatten(
-                first.prepareRunRemoval(root, 'bulk', initialCommit),
+              fresh.readAggregate(
+                qualifyAggregateId('run', OLDER),
+                0,
+                ROW_TYPES,
               ),
             ),
-          ).toMatchObject({ _tag: 'DatabaseClaimRefused' });
-          expect(yield* stored).toEqual(initial);
-          yield* second.releaseClaims([inquiry]);
-        }).pipe(Effect.provide(substrate(storage, OTHER)));
-        const committed = [
-          ...(yield* first.appendAll([waiting])),
-          ...(yield* Effect.flatten(
-            first.prepareRunRemoval(root, 'bulk', initialCommit),
-          )),
-        ];
-        expect(committed.at(-1)).toMatchObject({
-          type: 'run.removed',
-          runIds: [RUN],
-        });
-        expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
-          committed.at(-1),
-        );
-        expect(committed.map((row) => [row.seq, row.commit])).toEqual([
-          [2, 7],
-          [3, 8],
-        ]);
-        expect(
-          (yield* first.aggregateState([root, inquiry])).every(
-            (row) => row.closed,
-          ),
-        ).toBe(true);
-        // Neither a late update nor a new inquiry can attach to the tombstoned
-        // asker: the closed thread refuses its writer, a closed parent the new one.
-        for (const [draft, refusal] of [
-          [thread(), 'DatabaseNotOwner'],
-          [thread({ parentRunId: OLDER }), 'DatabaseNotOwner'],
-          [thread({ threadId: 'ei_abcdef012345' }), 'DatabaseWriteFailed'],
-        ] as const) {
-          expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
-            refusal,
-          );
-        }
-        expect(yield* first.currentCommit).toBe(8);
-        const tombstone = committed.at(-1);
-        const cleanupError = new Error(
-          'The generated directory is not writable.',
-        );
-        if (tombstone?.type !== 'run.removed') throw new Error('no tombstone');
-        // A failed cleanup keeps the tombstone for the next pass.
-        expect(
-          yield* Effect.flip(
-            first.deletions.collect(tombstone, () => Effect.fail(cleanupError)),
-          ),
-        ).toBe(cleanupError);
-        expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
-          tombstone,
-        );
-        const unrelated: SessionEventDraft = {
-          ...runStart,
-          aggregateId: qualifyAggregateId('run', NEWER),
-        };
-        yield* first.deletions.collect(tombstone, (ids) =>
-          Effect.gen(function* () {
-            expect(ids).toEqual([RUN]);
-            // Cleanup runs outside the database write permit: unrelated
-            // runs remain writable while generated files are removed.
-            yield* first.appendAll([unrelated]);
-          }),
-        );
-        expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
-        // Collecting it again, as a second process would, is a no-op.
-        const again = vi.fn(() => Effect.void);
-        yield* first.deletions.collect(tombstone, again);
-        expect(again).not.toHaveBeenCalled();
-        expect((yield* stored).map((event) => event.aggregateId)).toEqual([
-          olderStart.aggregateId,
-          unrelated.aggregateId,
-        ]);
-        const replacement = yield* first.appendAll([runStart]);
-        expect(
-          (yield* Effect.flip(
-            Effect.flatten(
-              first.prepareRunRemoval(root, 'single', initialCommit),
-            ),
-          ))._tag,
-        ).toBe('DatabaseWriteFailed');
-        expect(yield* first.readAggregate(root, 0, ROW_TYPES)).toEqual(
-          replacement,
-        );
-        expect((yield* first.aggregateState([root]))[0]?.closed).toBe(false);
-        // The production worker removes the recorded generated directory,
-        // never a sibling or a linked file outside that directory.
-        const runs = join(storage, WORKSPACE_STORAGE_LAYOUT.runs);
-        const outside = join(storage, 'outside-runs');
-        yield* Effect.sync(() => {
-          mkdirSync(outside);
-          writeFileSync(join(outside, 'keep.tex'), 'outside');
-          symlinkSync(outside, runs, 'dir');
-        });
-        yield* first.appendAll([
-          { type: 'run.removed', aggregateId: unrelated.aggregateId },
-        ]);
-        yield* Fiber.join(yield* yield* deletionCollector(first, storage));
-        expect(existsSync(join(outside, 'keep.tex'))).toBe(true);
-        expect(
-          yield* first.aggregateState([unrelated.aggregateId]),
-        ).toMatchObject([{ closed: true }]);
-        yield* Effect.sync(() => rmSync(runs));
-        const generated = join(
-          storage,
-          WORKSPACE_STORAGE_LAYOUT.runs,
-          'ef56ab',
-        );
-        const sibling = join(storage, WORKSPACE_STORAGE_LAYOUT.runs, 'fe78bc');
-        const accepted = join(storage, 'accepted.tex');
-        yield* Effect.sync(() => {
-          mkdirSync(generated, { recursive: true });
-          mkdirSync(sibling);
-          writeFileSync(join(generated, 'output.tex'), 'generated');
-          writeFileSync(accepted, 'accepted workspace output');
-          symlinkSync(accepted, join(generated, 'reference.tex'));
-        });
-        yield* Fiber.join(yield* yield* deletionCollector(first, storage));
-        expect(existsSync(generated)).toBe(false);
-        expect(existsSync(sibling)).toBe(true);
-        expect(existsSync(accepted)).toBe(true);
-        expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual(
-          [],
-        );
-      }).pipe(
-        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
-      );
+          ).toMatchObject({
+            cause: { _tag: 'DatabaseRowCorrupt', type: 'tool.start' },
+          });
+          yield* remove(OLDER);
+          expect(yield* count('blob')).toBe(0);
+        }).pipe(Effect.provide(opened));
+      });
     },
   );
 
-  /**
-   * Two OS processes on one file: a child
-   * Node process appends to its run while this one appends to its own and
-   * reads. Failure modes: an append lost to `SQLITE_BUSY`; a seq or commit
-   * skipped or reused; a commit this connection observed going backwards;
-   * and this process's thread held in SQLite's busy wait past the 25 ms
-   * slice instead of retrying on its fiber schedule. That last mode is
-   * checked in two parts, neither a wall-clock bound (a shared runner
-   * stalls for seconds: 9 s seen on Windows CI). The slice itself is pinned
-   * as the store's opened connection reports it. And the child first holds
-   * the write lock for `HOLD_MS` while a ticker fiber runs every 5 ms: with
-   * the slice the retry sleeps (5 ms doubling to 250 ms) fill most of the
-   * hold, about 320 ticks, while a busy wait of `HOLD_MS / 3` or more leaves
-   * room for at most three attempts, so two retry sleeps (about 5 and 10 ms)
-   * and a few ticks. That catches a block the pragma does not show, such as
-   * a wait outside SQLite's busy handler.
-   */
-  it.live(
-    'shares one store with another OS process',
-    () => {
-      const storage = workspace();
-      const ROWS = 400;
-      const HOLD_MS = 2000;
-      /** Far below the 25 ms slice's count, above a long busy wait's. */
-      const MIN_TICKS = 20;
-      const own = qualifyAggregateId('run', RUN);
-      const theirs = qualifyAggregateId('run', OLDER);
-      return Effect.gen(function* () {
-        const writer = yield* Effect.promise(() => bundleStoreWriter(storage));
-        const db = yield* Database;
-        const observed: number[] = [];
-        yield* SubscriptionRef.changes(db.observedCommit).pipe(
-          Stream.runForEach((commit) =>
-            Effect.sync(() => observed.push(commit)),
-          ),
-          Effect.forkScoped,
-        );
-        yield* db.appendAll([runStart]);
-        const child = spawn(
-          process.execPath,
-          [writer, storage, OTHER, OLDER, String(ROWS), String(HOLD_MS)],
-          { stdio: ['ignore', 'inherit', 'inherit'] },
-        );
-        const exited = new Promise<number | null>((done) =>
-          child.on('exit', (code) => done(code)),
-        );
-        // The child has opened the store and created its run; it then holds
-        // the write lock, and both append at once, so the two contend for it.
-        while ((yield* db.aggregateState([theirs])).length === 0) {
-          expect(child.exitCode, 'the writer exited before writing').toBeNull();
-          yield* Effect.sleep('5 millis');
-        }
-        writeFileSync(join(storage, 'go'), '');
-        while (!existsSync(join(storage, 'held')))
-          yield* Effect.sleep('1 millis');
-        let ticks = 0;
-        yield* Effect.forever(
-          Effect.sync(() => (ticks += 1)).pipe(
-            Effect.andThen(Effect.sleep('5 millis')),
-          ),
-        ).pipe(Effect.forkScoped);
-        const blocked = performance.now();
-        for (let i = 0; i < ROWS; i += 1) {
-          const before = ticks;
-          yield* db.appendAll([waiting]);
-          if (i === 0) {
-            // The first append waited out the hold, so the check is not vacuous.
-            expect(performance.now() - blocked).toBeGreaterThan(HOLD_MS / 2);
-            // The retry sleeps on the fiber: the ticker runs through the hold.
-            expect(
-              ticks - before,
-              'the thread was held in SQLite for much of the hold',
-            ).toBeGreaterThanOrEqual(MIN_TICKS);
-          }
-          yield* db.readAggregate(own, i + 1, ROW_TYPES);
-        }
-        const code = yield* Effect.promise(() => exited);
-        expect(code).toBe(0);
-        const total = 2 * (ROWS + 1);
-        while ((yield* SubscriptionRef.get(db.observedCommit)) < total)
-          yield* Effect.sleep('50 millis');
-        const rows = yield* rowsOf(db, own, theirs);
-        expect(rows.map((row) => row.commit)).toEqual(
-          Array.from({ length: total }, (_, i) => i + 1),
-        );
-        for (const id of [own, theirs])
-          expect(
-            rows.filter((row) => row.aggregateId === id).map((row) => row.seq),
-          ).toEqual(Array.from({ length: ROWS + 1 }, (_, i) => i + 1));
-        expect(observed).toEqual(observed.toSorted((a, b) => a - b));
-        expect(observed.at(-1)).toBe(total);
-        const filename = join(realpathSync.native(storage), 'texra.db');
-        const opened = yield* openStore(
-          SqlDriver.make({ filename }),
-          SqlDriver.make({ filename, readonly: true, disableWAL: true }),
-          'persistent',
-          filename,
-          filename,
-        );
-        const [slice] = yield* opened.sql.unsafe<{ timeout: number }>(
-          'PRAGMA busy_timeout',
-          [],
-        );
-        expect(slice?.timeout).toBe(25);
-      }).pipe(
-        Effect.provide(
-          Layer.mergeAll(
-            substrate(storage),
-            nodePlatformLayer,
-            Reactivity.layer,
-          ),
-        ),
-        Effect.scoped,
-      );
-    },
-    30_000,
-  );
-
-  /**
-   * There is no lease file, so the only thing that frees a crashed
-   * process's claim is proving its recorded owner dead. A restart that meets
-   * a stale claim it cannot disprove never resumes the run, for the life of
-   * the store, so this is the one window whose regression costs every run
-   * that was live at the crash. Both owners here recorded the name another
-   * network gave this machine (macOS takes its hostname from DHCP or
-   * reverse DNS), which no proof reads: the crashed one's pid names no
-   * process, so it is dead, and this process under that name is alive. The
-   * follow-up the crash left queued reaches the restarted publisher's
-   * pending set where the claim moves.
-   */
-  it.live('reclaims a run whose recorded owner is provably dead', () => {
+  it.effect('closes a run tree with its dependents and collects it', () => {
     const storage = workspace();
-    const renamed = `${os.hostname().toLowerCase()}.elsewhere`;
-    const CRASHED = JSON.stringify([
-      renamed,
-      spawnSync(process.execPath, ['-e', '']).pid,
-      'exited',
-    ]);
-    const target = qualifyAggregateId('run', RUN);
-    const followUp = {
-      followUpId: 'left-queued',
-      content: { text: 'deliver me', from: { kind: 'user' as const } },
-    };
     return Effect.gen(function* () {
-      const { nodeProcesses } = yield* Effect.promise(
-        () => import('@platform/defaults/nodeProcesses'),
+      const first = yield* Database;
+      const root = runStart.aggregateId;
+      const inquiry = qualifyAggregateId(
+        'plugin',
+        'external-inquiry:ei_012345abcdef',
       );
-      const running = JSON.stringify([
-        renamed,
-        process.pid,
-        (yield* nodeProcesses
-          .selfIdentity()
-          .pipe(Effect.provide(nodePlatformLayer))) ?? null,
+      const base = {
+        threadId: 'ei_012345abcdef',
+        parentRunId: RUN,
+        status: 'open',
+        lastQuestionPreview: 'Which boundary condition applies?',
+        lastActivityIso: '2026-09-06T12:00:00.000Z',
+        turnCount: 1,
+      } as const;
+      const thread = (patch: Partial<InquiryThreadSummary> = {}) =>
+        inquiryThreadRow({ ...base, ...patch });
+      // Every aggregate this case writes, the unrelated run's among them.
+      const stored = rowsOf(
+        first,
+        root,
+        olderStart.aggregateId,
+        inquiry,
+        qualifyAggregateId('run', NEWER),
+      );
+      const initial = yield* first.appendAll([
+        runStart,
+        olderStart,
+        thread({ status: 'answered' }),
+        thread({ parentRunId: OLDER, turnCount: 2 }),
+        thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 }),
+        thread({ turnCount: 3 }),
       ]);
-      yield* Database.pipe(
-        Effect.flatMap((crashed) =>
-          crashed.appendAll([
-            runStart,
-            { type: 'followup.queued', aggregateId: target, ...followUp },
+      const initialCommit = initial[0]?.commit;
+      if (initialCommit === undefined) throw new Error('nothing appended');
+      expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(root);
+      expect(
+        (yield* Effect.flip(
+          first.appendAll([
+            thread({
+              parentRunId: Schema.decodeUnknownSync(RunIdSchema)('ffff00'),
+            }),
           ]),
-        ),
-        Effect.provide(substrate(storage, CRASHED)),
-      );
-      yield* Database.pipe(
-        Effect.flatMap((live) => live.appendAll([olderStart])),
-        Effect.provide(substrate(storage, running)),
-      );
-      yield* Effect.gen(function* () {
-        const restarted = yield* Database;
-        expect(
-          yield* restarted.claimOwner(qualifyAggregateId('run', OLDER)),
-        ).toEqual({ ownerId: running, liveness: 'alive' });
-        expect(yield* restarted.claimOwner(target)).toEqual({
-          ownerId: CRASHED,
-          liveness: 'dead',
-        });
-        // Fenced until the claim moves: the run is another owner's.
-        expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
-          'DatabaseNotOwner',
+        ))._tag,
+      ).toBe('DatabaseWriteFailed');
+      // Visiting the first asker again must not let its delayed turn-1
+      // answer regress state and then admit the former asker's turn-2 open.
+      const staleBatches: SessionEventDraft[][] = [
+        [
+          thread({ status: 'answered' }),
+          thread({ parentRunId: OLDER, turnCount: 2 }),
+        ],
+        [thread({ parentRunId: OLDER, status: 'answered', turnCount: 2 })],
+        [thread({ parentRunId: OLDER, turnCount: 2 })],
+      ];
+      for (const stale of staleBatches) {
+        expect((yield* Effect.flip(first.appendAll(stale)))._tag).toBe(
+          'DatabaseWriteFailed',
         );
-        yield* (yield* RunHistory).open(RUN, {
-          activation: () => Effect.succeed([]),
-        });
-        expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
-          SELF,
-        );
-        // The resumed run appends onto the rows the crash left behind.
-        expect((yield* restarted.appendAll([waiting]))[0]?.seq).toBe(3);
-      }).pipe(
-        Effect.provide(
-          runHistoryOverStore.pipe(
-            Layer.provideMerge(graph([], substrate(storage).pipe(Layer.orDie))),
-          ),
-        ),
+      }
+      expect(yield* stored).toEqual(initial);
+      expect((yield* first.aggregateState([inquiry]))[0]?.parentId).toBe(root);
+      const committed = [
+        ...(yield* first.appendAll([waiting])),
+        ...(yield* first.runRemoval(root, initialCommit)),
+      ];
+      expect(committed.at(-1)).toMatchObject({
+        type: 'run.removed',
+        runIds: [RUN],
+      });
+      expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
+        committed.at(-1),
       );
-    });
+      expect(committed.map((row) => [row.seq, row.commit])).toEqual([
+        [2, 7],
+        [3, 8],
+      ]);
+      expect(
+        (yield* first.aggregateState([root, inquiry])).every(
+          (row) => row.closed,
+        ),
+      ).toBe(true);
+      // Neither a late update nor a new inquiry can attach to the tombstoned
+      // asker: the closed thread refuses its writer, a closed parent the new one.
+      for (const [draft, refusal] of [
+        [thread(), 'DatabaseAggregateClosed'],
+        [thread({ parentRunId: OLDER }), 'DatabaseAggregateClosed'],
+        [thread({ threadId: 'ei_abcdef012345' }), 'DatabaseWriteFailed'],
+      ] as const) {
+        expect((yield* Effect.flip(first.appendAll([draft])))._tag).toBe(
+          refusal,
+        );
+      }
+      expect(yield* first.currentCommit).toBe(8);
+      const tombstone = committed.at(-1);
+      const cleanupError = new Error(
+        'The generated directory is not writable.',
+      );
+      if (tombstone?.type !== 'run.removed') throw new Error('no tombstone');
+      // A failed cleanup keeps the tombstone for the next pass.
+      expect(
+        yield* Effect.flip(
+          first.deletions.collect(tombstone, () => Effect.fail(cleanupError)),
+        ),
+      ).toBe(cleanupError);
+      expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
+        tombstone,
+      );
+      const unrelated: SessionEventDraft = {
+        ...runStart,
+        aggregateId: qualifyAggregateId('run', NEWER),
+      };
+      yield* first.deletions.collect(tombstone, (ids) =>
+        Effect.gen(function* () {
+          expect(ids).toEqual([RUN]);
+          // Cleanup runs outside the database write permit: unrelated
+          // runs remain writable while generated files are removed.
+          yield* first.appendAll([unrelated]);
+        }),
+      );
+      expect(yield* first.aggregateState([root, inquiry])).toEqual([]);
+      // Collecting it again, as a second process would, is a no-op.
+      const again = vi.fn(() => Effect.void);
+      yield* first.deletions.collect(tombstone, again);
+      expect(again).not.toHaveBeenCalled();
+      expect((yield* stored).map((event) => event.aggregateId)).toEqual([
+        olderStart.aggregateId,
+        unrelated.aggregateId,
+      ]);
+      const replacement = yield* first.appendAll([runStart]);
+      expect(
+        (yield* Effect.flip(first.runRemoval(root, initialCommit)))._tag,
+      ).toBe('DatabaseWriteFailed');
+      expect(yield* first.readAggregate(root, 0, ROW_TYPES)).toEqual(
+        replacement,
+      );
+      expect((yield* first.aggregateState([root]))[0]?.closed).toBe(false);
+      // The production worker removes the recorded generated directory,
+      // never a sibling or a linked file outside that directory.
+      const runs = join(storage, WORKSPACE_STORAGE_LAYOUT.runs);
+      const outside = join(storage, 'outside-runs');
+      yield* Effect.sync(() => {
+        mkdirSync(outside);
+        writeFileSync(join(outside, 'keep.tex'), 'outside');
+        symlinkSync(outside, runs, 'dir');
+      });
+      yield* first.appendAll([
+        { type: 'run.removed', aggregateId: unrelated.aggregateId },
+      ]);
+      yield* Fiber.join(yield* yield* deletionCollector(first, storage));
+      expect(existsSync(join(outside, 'keep.tex'))).toBe(true);
+      expect(
+        yield* first.aggregateState([unrelated.aggregateId]),
+      ).toMatchObject([{ closed: true }]);
+      yield* Effect.sync(() => rmSync(runs));
+      const generated = join(storage, WORKSPACE_STORAGE_LAYOUT.runs, 'ef56ab');
+      const sibling = join(storage, WORKSPACE_STORAGE_LAYOUT.runs, 'fe78bc');
+      const accepted = join(storage, 'accepted.tex');
+      yield* Effect.sync(() => {
+        mkdirSync(generated, { recursive: true });
+        mkdirSync(sibling);
+        writeFileSync(join(generated, 'output.tex'), 'generated');
+        writeFileSync(accepted, 'accepted workspace output');
+        symlinkSync(accepted, join(generated, 'reference.tex'));
+      });
+      yield* Fiber.join(yield* yield* deletionCollector(first, storage));
+      expect(existsSync(generated)).toBe(false);
+      expect(existsSync(sibling)).toBe(true);
+      expect(existsSync(accepted)).toBe(true);
+      expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual([]);
+    }).pipe(Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)));
   });
 
-  it.effect(
-    'fences a second writer and transfers only released claims together',
+  /**
+   * Two OS processes on one file: a session holds its store exclusively,
+   * so a second process opening it is refused at open with the message a
+   * host shows, and writes nothing. Failure modes: the second process opens
+   * and appends (two writers on one log); it waits in SQLite's busy handler
+   * instead of failing; the holder's own appends are disturbed; and a
+   * store nothing holds is refused.
+   */
+  it.live(
+    'refuses a store another OS process holds',
     () => {
       const storage = workspace();
+      const own = qualifyAggregateId('run', RUN);
+      const theirs = qualifyAggregateId('run', OLDER);
+      const writer = (): Effect.Effect<{
+        code: number | null;
+        stderr: string;
+      }> =>
+        Effect.promise(async () => {
+          const bundled = await bundleStoreWriter(storage);
+          const child = spawn(
+            process.execPath,
+            [bundled, storage, OTHER, OLDER],
+            { stdio: ['ignore', 'inherit', 'pipe'] },
+          );
+          let stderr = '';
+          child.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString();
+          });
+          const code = await new Promise<number | null>((done) =>
+            child.on('exit', (exit) => done(exit)),
+          );
+          return { code, stderr };
+        });
       return Effect.gen(function* () {
-        const first = yield* Database;
-        const targets = [
-          qualifyAggregateId('run', RUN),
-          qualifyAggregateId('run', OLDER),
-        ];
-        yield* first.appendAll([runStart, olderStart]);
-        yield* Effect.gen(function* () {
-          const second = yield* Database;
-          // The lost single-owner race is typed and names the holder.
-          const fenced = yield* Effect.flip(second.appendAll([waiting]));
-          expect(fenced).toMatchObject({
-            _tag: 'DatabaseNotOwner',
-            aggregateId: waiting.aggregateId,
-            ownerId: SELF,
-            closed: false,
-          });
-          expect((yield* Effect.flip(second.acquireClaims(targets)))._tag).toBe(
-            'DatabaseClaimRefused',
-          );
-          yield* second.releaseClaims(targets);
-          expect(
-            (yield* first.aggregateState(targets)).every(
-              (row) => row.ownerId === SELF,
-            ),
-          ).toBe(true);
-          yield* first.releaseClaims(targets);
-          expect(yield* first.currentCommit).toBe(2);
-          expect(
-            (yield* second.aggregateState(targets)).every(
-              (row) => row.ownerId === null,
-            ),
-          ).toBe(true);
-          const wakeBeforeTransfer = yield* SubscriptionRef.get(first.level);
-          yield* second.acquireClaims(targets);
-          yield* TestClock.adjust('250 millis');
-          expect(yield* SubscriptionRef.get(first.level)).toBeGreaterThan(
-            wakeBeforeTransfer,
-          );
-          expect(
-            (yield* first.aggregateState(targets)).every(
-              (row) => row.ownerId === OTHER,
-            ),
-          ).toBe(true);
-          expect(yield* second.currentCommit).toBe(2);
-          // The claim moved: the former holder is now the fenced writer.
-          expect(yield* Effect.flip(first.appendAll([waiting]))).toMatchObject({
-            _tag: 'DatabaseNotOwner',
-            ownerId: OTHER,
-            closed: false,
-          });
-          expect((yield* second.appendAll([waiting]))[0]?.commit).toBe(3);
-          const otherRoot = qualifyAggregateId('run', OLDER);
-          const otherStart = (yield* first.aggregateState([otherRoot]))[0]
-            ?.startCommit;
-          if (otherStart == null) throw new Error('no start commit');
-          for (const mode of ['bulk', 'automatic'] as const) {
-            expect(
-              yield* Effect.flip(
-                Effect.flatten(
-                  first.prepareRunRemoval(otherRoot, mode, otherStart),
-                ),
-              ),
-            ).toMatchObject({
-              _tag: 'DatabaseClaimRefused',
-              verdict: 'unprovable',
-            });
-          }
-          expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
-            false,
-          );
-          yield* Effect.flatten(
-            first.prepareRunRemoval(otherRoot, 'single', otherStart),
-          );
-          expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
-            true,
-          );
-        }).pipe(Effect.provide(substrate(storage, OTHER)));
-      }).pipe(Effect.provide(substrate(storage)));
+        const refused = yield* Effect.gen(function* () {
+          const db = yield* Database;
+          yield* db.appendAll([runStart]);
+          const refused = yield* writer();
+          expect(yield* db.appendAll([waiting])).toMatchObject([{ commit: 2 }]);
+          expect(yield* db.aggregateState([theirs])).toEqual([]);
+          expect((yield* rowsOf(db, own)).map((row) => row.commit)).toEqual([
+            1, 2,
+          ]);
+          return refused;
+        }).pipe(Effect.provide(substrate(storage)));
+        expect(refused.code).not.toBe(0);
+        expect(refused.stderr).toContain(STORE_HELD_MESSAGE);
+        // Closed here, the store is the next process's.
+        const free = yield* writer();
+        expect(free, free.stderr).toMatchObject({ code: 0 });
+        expect(
+          yield* Effect.flatMap(Database, (db) =>
+            db.aggregateState([theirs]),
+          ).pipe(Effect.provide(substrate(storage))),
+        ).toMatchObject([{ closed: false }]);
+      });
     },
+    30_000,
   );
 });
 

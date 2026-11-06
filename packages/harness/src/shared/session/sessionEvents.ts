@@ -20,18 +20,15 @@ import type {
   AggregateId,
   CommitOrdinal,
   OwnerId,
-  OwnerLiveness,
   SessionEvent,
   DisplaySessionEvent,
   SessionEventDraft,
 } from '@shared/schemas';
 import type {
   Database,
-  DatabaseClaimError,
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
-  DeletionMode,
 } from './database';
 import type { RunStateRowType } from './runState';
 import type { WithBlobs } from './historyTurns';
@@ -42,53 +39,12 @@ export interface OpenWork {
   readonly id: string;
 }
 
-/** The publisher job this fiber runs, null outside one. Inside a job the
- *  store's write lock is held, so a claim is the job's own and waiting on
- *  the publisher would never end. `committed` holds the actions to run once
- *  the job's transaction commits. */
-export const PublisherJob = Context.Reference<{
-  readonly committed: Effect.Effect<void>[];
-} | null>('@texra-ai/harness/session/PublisherJob', {
-  defaultValue: () => null,
-});
-
-/** Run `action` after the transaction of the publisher job this fiber runs
- *  commits, and never if it rolls back; outside a job, run it now. Use it
- *  for what a job changes in memory or says in a log (a reader ended, a
- *  warning), so nothing acts on rows that were never written. */
-export const afterCommit = (action: Effect.Effect<void>): Effect.Effect<void> =>
-  Effect.flatMap(PublisherJob, (job) =>
-    job === null
-      ? action
-      : Effect.sync(() => {
-          job.committed.push(action);
-        }),
-  );
-
-/**
- * Run a job through `transaction` (which may run its attempt again whole),
- * then what its last attempt left for after the commit ({@link afterCommit}),
- * in order: a rolled-back attempt's actions never run.
- */
-export const committing = <A, E, E2>(
-  transaction: <X, EX>(
-    attempt: Effect.Effect<X, EX>,
-  ) => Effect.Effect<X, EX | E2>,
-  job: Effect.Effect<A, E>,
-): Effect.Effect<A, E | E2> =>
-  transaction(
-    Effect.suspend(() => {
-      const committed: Effect.Effect<void>[] = [];
-      return Effect.map(
-        Effect.provideService(job, PublisherJob, { committed }),
-        (value) => ({ value, committed }),
-      );
-    }),
-  ).pipe(
-    Effect.flatMap(({ value, committed }) =>
-      Effect.as(Effect.all(committed, { discard: true }), value),
-    ),
-  );
+/** Whether this fiber runs a publisher job: inside one, the store's write
+ *  lock is held, so waiting on the publisher would never end. */
+export const InPublisherJob = Context.Reference<boolean>(
+  '@texra-ai/harness/session/InPublisherJob',
+  { defaultValue: () => false },
+);
 
 /** How a job runs. By default it is one SQLite transaction; `order` runs it
  *  in its place in the inbox with none, for a barrier or transient state
@@ -103,12 +59,14 @@ export interface JobOptions {
  *  continues from until the next open folds it: any job may append it as
  *  is, with the blobs it stores. */
 export type UnfoldedDraft = WithBlobs<
-  Exclude<SessionEventDraft, { type: Exclude<RunStateRowType, 'run.end'> }>
+  Exclude<
+    SessionEventDraft,
+    { type: Exclude<RunStateRowType, 'run.end' | 'run.stop'> }
+  >
 >;
 
 /** Rows another owner decides inside a job, appended with the job's own
- *  batch so both commit or neither; what deciding them holds (a claim)
- *  lasts for the job's scope. */
+ *  batch so both commit or neither. */
 export type Alongside<E = never> = Effect.Effect<
   readonly UnfoldedDraft[],
   E,
@@ -123,37 +81,21 @@ export type Append = (
   events: readonly UnfoldedDraft[],
 ) => Effect.Effect<
   readonly SessionEvent[],
-  DatabaseNotOwner | DatabaseWriteFailed
+  DatabaseAggregateClosed | DatabaseWriteFailed
 >;
 
 /**
  * The canonical hostname, pid, and nullable process-start tuple: the
- * `ownerId` stamped on every event the process appends and the `self` entry
- * of its local runtime snapshot. Resolved once at each process entry, where
- * the start identity can be awaited, and provided to the process layer.
- * Beside it, its liveness verdicts on claim owners, which every liveness
- * proof goes through (`proveRecorded`): a `dead` one is final.
+ * `origin` stamped on every event the process appends. Resolved once at each
+ * process entry, where the start identity can be awaited, and provided to
+ * the process layer.
  */
 export class ProcessIdentity extends Context.Service<
   ProcessIdentity,
-  {
-    readonly ownerId: OwnerId;
-    readonly owners: SubscriptionRef.SubscriptionRef<
-      ReadonlyMap<OwnerId, OwnerLiveness>
-    >;
-  }
+  { readonly ownerId: OwnerId }
 >()('@texra-ai/harness/session/ProcessIdentity') {
   static layer(ownerId: OwnerId): Layer.Layer<ProcessIdentity> {
-    return Layer.effect(
-      ProcessIdentity,
-      Effect.map(
-        SubscriptionRef.make<ReadonlyMap<OwnerId, OwnerLiveness>>(new Map()),
-        (owners) => ({
-          ownerId,
-          owners,
-        }),
-      ),
-    );
+    return Layer.succeed(ProcessIdentity)({ ownerId });
   }
 }
 
@@ -173,13 +115,13 @@ export class SessionEvents extends Context.Service<
      *  transaction, and return its value: reads of committed rows and the
      *  appends that depend on them, committed together or not at all, with
      *  no other write between them. An append refusal is one of two typed
-     *  failures: `DatabaseNotOwner`, a target the process does not
+     *  failures: `DatabaseAggregateClosed`, a target the process does not
      *  hold open, and `DatabaseWriteFailed`, the batch rolled back for any
      *  other reason; a job that lets one through writes nothing, and a
      *  transaction that fails to commit is `DatabaseWriteFailed` too.
-     *  Neither is retried or converted here. A job may run again
-     *  whole (`Database.job`), so it is database-only. Called from inside
-     *  a job, it is a defect: the job would wait on itself. */
+     *  Neither is retried or converted here. A job is database-only.
+     *  Called from inside a job, it is a defect: the job would wait on
+     *  itself. */
     readonly transact: <A, E>(
       job: (append: Append) => Effect.Effect<A, E>,
       options?: Pick<JobOptions, 'order'>,
@@ -196,21 +138,19 @@ export class SessionEvents extends Context.Service<
         append: Append,
       ) => Effect.Effect<
         unknown,
-        DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+        DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
       >,
       options?: JobOptions,
     ) => void;
-    /** Remove a run and its dependents: the liveness proofs run on the
-     *  caller's fiber, then the deletion's transaction runs as the next
-     *  job, so it commits in enqueue order and what this publisher tracks
-     *  forgets every run it names. */
+    /** Remove a run and its dependents: the deletion's transaction runs as
+     *  the next job, so it commits in enqueue order and what this publisher
+     *  tracks forgets every run it names. */
     readonly removeRun: (
       id: AggregateId,
-      mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
       readonly SessionEvent[],
-      DatabaseReadFailed | DatabaseClaimError
+      DatabaseAggregateClosed | DatabaseWriteFailed
     >;
     /** Close the plane: end the inbox and run what it holds, inside the
      *  one close deadline (`SESSION_CLOSE_DEADLINE_MS`). At the deadline

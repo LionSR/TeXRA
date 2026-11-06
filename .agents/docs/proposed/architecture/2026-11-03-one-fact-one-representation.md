@@ -189,7 +189,7 @@ The mechanism, then:
    `claimOwner`, `claimAll`, `reclaimable`, `provingOwners`, `DeletionMode`
    (whose only reader is `claimAll`), `DatabaseClaimRefused`,
    `heldElsewhereBy`, `claimStanding`, `NotOwner` and the `not-owner`
-   refusal; `DatabaseNotOwner` narrowed to its `closed` case; the liveness
+   refusal; `DatabaseAggregateClosed` narrowed to its `closed` case; the liveness
    machinery (`ownerLiveness.ts`, `leaseOwnerLiveness.ts`,
    `ProcessIdentity.owners`, `ProcessProbe`); `LocalRuntimeState.self` and
    `dead` replaced by `runsHere`, the registry's activation map that

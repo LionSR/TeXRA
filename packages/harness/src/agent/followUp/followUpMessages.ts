@@ -16,10 +16,7 @@ import {
   type RunRelation,
   type ScriptDeliverySummary,
 } from '@shared/schemas';
-import {
-  claimStanding,
-  type DatabaseReadFailed,
-} from '@shared/session/database';
+import { type DatabaseReadFailed } from '@shared/session/database';
 import {
   followUpReceipt,
   RECEIPT_ROW_TYPES,
@@ -28,7 +25,6 @@ import {
 import { SessionLog } from '@shared/session/runHistory';
 import {
   Conflict,
-  NotOwner,
   Rejected,
   Unavailable,
 } from '@shared/session/runtimeRequest';
@@ -199,8 +195,6 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   const id = item.caller;
   if (id === undefined) return false;
   const log = yield* SessionLog;
-  // Another live owner's run: the send is refused as any is, past this.
-  if (yield* heldElsewhere(log, runId)) return false;
   const deliveryId = sentFollowUpId(id);
   const first = yield* readFollowUp(log, runId, deliveryId);
   // None, or a deleted run, whose send the path past this refuses.
@@ -217,27 +211,17 @@ export const sentBefore = Effect.fn('sentBefore')(function* (
   return true;
 });
 
-/** Whether a live process other than this one holds run `runId`: its
- *  messages and their receipts are that process's to answer. */
-const heldElsewhere = (
-  log: Pick<SessionLog['Service'], 'owner'>,
-  runId: RunId,
-) =>
-  Effect.map(log.owner(runId), (claim) => claimStanding(claim).kind === 'held');
-
 /** The receipt of the message sent to run `runId` under the caller's `id`;
  *  with `wait`, once it is answered or unanswered. */
 export const sentReceipt = Effect.fn('sentReceipt')(function* (
-  log: Pick<SessionLog['Service'], 'history' | 'now' | 'tail' | 'owner'>,
+  log: Pick<SessionLog['Service'], 'history' | 'now' | 'tail'>,
   req: {
     readonly runId: RunId;
     readonly id: string;
     readonly wait?: boolean | null;
   },
-): Effect.fn.Return<FollowUpReceipt, Rejected | Unavailable | NotOwner> {
+): Effect.fn.Return<FollowUpReceipt, Rejected | Unavailable> {
   const { runId } = req;
-  if (yield* Effect.orDie(heldElsewhere(log, runId)))
-    return yield* new NotOwner({ runId });
   const found = yield* Effect.orDie(
     readFollowUp(log, runId, sentFollowUpId(req.id), req.wait === true),
   );

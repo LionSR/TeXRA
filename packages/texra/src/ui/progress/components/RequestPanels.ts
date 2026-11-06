@@ -142,7 +142,7 @@ export class RequestPanels extends LitElement {
         data-request-panel
         .permission=${permission}
         .answerability=${
-          this.run ? requestAnswerability(this.run, permission) : 'readOnly'
+          this.run ? requestAnswerability(this.run, permission) : 'resume'
         }
         .resumeRunId=${
           this.run?.actions.includes('resume') ? this.run.id : null

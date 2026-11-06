@@ -43,8 +43,9 @@ is the module map by concern. Run-loop rules are in
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
   missing or untrusted agent).
 - **Registry**: `runRegistry` (one entry per run: fiber, loop controls,
-  activation, serial lane; the single in-process liveness authority, with
-  admission, lookup and stop); `runs` (the session's `Runs` as hosts and
+  activation, serial lane; the one in-process answer to which runs are
+  launched here, published to the view as `runsHere`, with admission,
+  lookup and stop); `runs` (the session's `Runs` as hosts and
   tools see them, and a loop's `RunControls`).
 - **Session events**: `sessionServices` (every owner of a session, each its
   own service, as its runs and requests read them); `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
@@ -52,8 +53,8 @@ is the module map by concern. Run-loop rules are in
   `SessionHostInteractions` (the session's host port: diagnostics, approvals,
   retries, user questions, plugin requests, and other notices, and what a
   failed run presents on it).
-- **History and per-call services**: `RunHistory` (claims through
-  `Database`, reads and writes through `SessionLog`); `FollowUps` (pending
+- **History and per-call services**: `RunHistory` (reads and writes
+  through `SessionLog`); `FollowUps` (pending
   follow-up input, consumed one batch at a time); `ModelInvoker` (the one
   caller of the llm `Model`); `storedTurn` (turn conversion at the history
   boundary); `RunCall` and `ToolServices` (one tool invocation's
@@ -66,8 +67,9 @@ is the module map by concern. Run-loop rules are in
   `deliveryEnvelope` (the XML envelope every child path builds);
   `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a
   detached or process child, and which models a child may use).
-- **Control**: `runApprovalQueue`;
-  `requestPolicy` (what the approval policy decides when a request opens).
+- **Control**: `runApprovalQueue` (a run's grants); `requests` (a run's
+  questions to a person: opened through its cell with the policy's answer,
+  decided once, cancelled with the run's end).
 - **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged
   one-shot path through `ModelAccess`); `helperModelName` (the configured
   helper model, else the app catalog's default; with neither, a run's helper

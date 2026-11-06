@@ -2,8 +2,8 @@ import { layer } from '@effect/vitest';
 import { Effect, Context, Schema } from 'effect';
 import { expect } from 'vitest';
 import { RunIdSchema, qualifyAggregateId } from '@texra-ai/harness/schemas';
-import { finalizeRun } from '@agent/storage/runLifecycle';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { endRunRows } from '@agent/storage/runLifecycle';
+import { Inbox } from '@agent/followUp/Inbox';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -43,7 +43,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                     description: 'A described session',
                   },
                 ]),
-                finalizeRun({
+                endRunRows({
                   runId: id,
                   outcome: 'completed',
                 }).pipe(Effect.provide(session)),
@@ -73,7 +73,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           expect(
             (yield* Context.get(session, Inbox).read(id)).followUps,
           ).toHaveLength(1);
-          yield* finalizeRun({ runId: id, outcome: 'failed' }).pipe(
+          yield* endRunRows({ runId: id, outcome: 'failed' }).pipe(
             Effect.provide(session),
           );
           expect(

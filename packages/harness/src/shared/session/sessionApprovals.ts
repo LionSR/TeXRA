@@ -1,8 +1,8 @@
 /**
- * The shape of a session's approvals: the prompt lanes, a run's grants, and
- * the one reading of the policy. Built by `createSessionApprovals`
- * (`runApprovalQueue.ts`) and `sessionPermission` (`loop/toolGuard.ts`);
- * its tag is `Approvals` (`approvalDecision.ts`).
+ * The shape of a session's approvals: a run's grants and the one reading
+ * of the policy. Built by `sessionApprovals` (`runApprovalQueue.ts`) and
+ * `sessionPermission` (`loop/toolGuard.ts`); its tag is `Approvals`
+ * (`shared/session/runHistory.ts`).
  */
 
 import type {
@@ -10,33 +10,18 @@ import type {
   ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId, SessionEventDraft } from '@shared/schemas';
+import type {
+  RequestDecision,
+  RunId,
+  SessionEventDraft,
+} from '@shared/schemas';
 import type { Effect } from 'effect';
 import type {
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from './database';
 import type { UnfoldedDraft } from './sessionEvents';
-
-/**
- * One queued approval. A request can wait behind another prompt for long:
- * if the user turns its `grant` on meanwhile (say by answering the one
- * ahead with "approve and stop asking"), `bypassed` honours that decision
- * instead of prompting anyway.
- */
-interface QueuedApproval<A, E, R> {
-  /** The grant that answers the request instead, read as it reaches the
-   *  head of its lane; null when only a person answers it. */
-  readonly grant: ApprovalBypassKind | null;
-  /** Open the request and wait for its decision. */
-  readonly prompt: Effect.Effect<A, E, R>;
-  /** Result used instead when `grant` is on by dispatch time. */
-  readonly bypassed: Effect.Effect<A, E, R>;
-}
-
-/** The kinds whose prompts queue one at a time per run. */
-export type QueuedKind = Extract<ApprovalBypassKind, 'bash' | 'toolEdit'>;
 
 /** Each operation a run asks permission for (the guard's `OPERATIONS`). */
 export type ApprovalOperation =
@@ -50,35 +35,46 @@ export type ApprovalOperation =
 export type HookAnswer = 'allow' | 'ask' | undefined;
 
 /**
- * The session's approvals: prompt lanes and the run's grants. Enforcement
- * reads {@link bypass}; every change goes through {@link change}.
+ * The session's approvals: the run's grants. Enforcement reads
+ * {@link bypass}; every change goes through {@link change}.
  */
 export interface SessionApprovals {
-  /** Serialize prompts per run and kind, checking each one's grant when it
-   *  starts. */
-  enqueue<A, E, R>(
-    kind: QueuedKind,
-    runId: RunId,
-    approval: QueuedApproval<A, E, R>,
-  ): Effect.Effect<A, E, R>;
   /** Who bypasses one kind's prompts for a run, read from the view. */
   bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
   /** Update grants in one transaction, returning once durable and folded.
-   *  An unchanged grant writes nothing. Additional `rows` always commit in
-   *  that transaction. The caller holds the run's claim. */
+   *  An unchanged grant writes nothing. A grant turned on answers every
+   *  open request it covers in that transaction, unless the request says
+   *  only a person answers it. Additional `rows` always commit in it. */
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
     rows?: readonly UnfoldedDraft[],
   ): Effect.Effect<
     void,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+    DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
   >;
   /** Grants committed beside `run.activate`, read from the run's and its
    *  ancestors' rows, never from a view that may lag. */
   activationRows(
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
+  /**
+   * Record a surface's decision on `requestId` with the grant it came
+   * with, in one transaction: the grant's rows land whatever the request's
+   * state (so a request the run opens once it reads the decision is
+   * approved as it opens), the decision only if the request is still open
+   * (`false`: that lost race, or an id never opened), and the other open
+   * requests the grant covers are approved beside it.
+   */
+  decideUnder(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+    edit: (grants: ApprovalGrants) => ApprovalGrants,
+  ): Effect.Effect<
+    boolean,
+    DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
+  >;
   /**
    * The approval policy `runId`'s requests are decided under: the
    * project's persisted `approvalPolicy`, read at each call, narrowed

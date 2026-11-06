@@ -14,7 +14,7 @@ import { describe, expect } from 'vitest';
 
 // Local imports - package API under test
 import { RunIdSchema } from '@texra-ai/harness/schemas';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   emptySessionView,

@@ -42,14 +42,13 @@ export const RUN_ROW_READS = {
     'run.start',
     'run.detach',
     'run.activate',
+    'run.stop',
     'run.end',
     'followup.closed',
     'run.removed',
   ],
-  parks: ['child.park', 'run.report', 'run.activate', 'run.end'],
   requests: ['request.opened', 'request.decided'],
-  turns: ['child.turn'],
-  lifecycle: ['run.activate', 'run.end'],
+  lifecycle: ['run.activate', 'run.stop', 'run.end'],
   facts: ['plugin.fact'],
   results: ['tool.result'],
   script: ['script.call', 'tool.result'],
@@ -75,20 +74,22 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return {
         activation: row,
         end: null,
+        stop: null,
         inputClosed: false,
-        heldParks: [],
         lifecycles: [...rows.lifecycles, row],
       };
+    case 'run.stop':
+      return { stop: row };
     case 'run.end':
-      return { end: row, heldParks: [], lifecycles: [...rows.lifecycles, row] };
+      return { end: row, lifecycles: [...rows.lifecycles, row] };
     case 'followup.closed':
       return { inputClosed: true };
     case 'run.removed':
       return { inputClosed: true, removed: row };
     case 'run.report':
       return { report: row.report };
-    case 'run.result':
-      return { result: row.result };
+    case 'process.exit':
+      return { exit: row };
     case 'run.config':
       return { config: row.config };
     case 'run.position':
@@ -99,28 +100,12 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return { scriptCalls: [...rows.scriptCalls, row.payload] };
     case 'plugin.fact':
       return { facts: { ...rows.facts, [`${row.plugin}/${row.kind}`]: row } };
-    case 'child.turn': {
-      // `accepted` opens a turn; `settled` closes it, maybe an earlier one.
-      const turn = { key: row.attemptId, index: row.turnIndex };
-      const { active, lastCompleted } = rows.childTurn;
-      const closes = active?.key === turn.key && active.index === turn.index;
-      return row.phase === 'settled'
-        ? { childTurn: { active: closes ? null : active, lastCompleted: turn } }
-        : { childTurn: { active: turn, lastCompleted } };
-    }
     case 'run.description': {
       const label = row.by === 'model' ? { label: row } : {};
       // A user's title stands until the user renames again.
       return row.by === 'model' && rows.title?.by === 'user'
         ? label
         : { title: row, ...label };
-    }
-    case 'child.park': {
-      const held = { park: row, text: rows.report ?? '' };
-      return {
-        park: row,
-        ...(rows.end === null && { heldParks: [...rows.heldParks, held] }),
-      };
     }
     // The shared rows (`applyRunRow`), the transcript tier and the run
     // history record nothing here.
@@ -129,6 +114,7 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
     case 'request.opened':
     case 'request.decided':
     case 'log':
+    case 'process.output':
     case 'stage.start':
     case 'stage.end':
     case 'tool.start':
@@ -201,10 +187,9 @@ export const isRequestDecision = <R extends Pick<SessionEvent, 'type'>>(
 
 /**
  * The phase a lifecycle row puts its run in, or null for a row that changes
- * none: an activation and every loop step but `waiting` and `halted` open
- * the run window, `waiting` and a child's wait rest it, `run.end` ends it on
- * its outcome. `halted` is the loop's own word and leaves the phase to
- * `run.end`. The one statement of the rule: the session view's run window,
+ * none: an activation and every loop step but `waiting` open the run
+ * window, `waiting` and a child's wait rest it, `run.end` ends it on its
+ * outcome. The one statement of the rule: the session view's run window,
  * the transcript boundary, the held chunk text and the publisher's open
  * streams all follow it.
  */
@@ -213,12 +198,9 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
     case 'run.activate':
       return RUN_PHASE.RUNNING;
     case 'run.position':
-      if (row.payload.at === 'halted') return null;
       return row.payload.at === 'waiting'
         ? RUN_PHASE.WAITING
         : RUN_PHASE.RUNNING;
-    case 'child.park':
-      return row.phase === 'resumed' ? RUN_PHASE.RUNNING : RUN_PHASE.WAITING;
     case 'run.end':
       return row.outcome;
     default:
@@ -239,6 +221,7 @@ export const RECEIPT_ROW_TYPES = [
   'followup.consumed',
   'run.position',
   'run.activate',
+  'run.stop',
   'run.end',
   'run.removed',
 ] as const satisfies readonly SessionEvent['type'][];
@@ -300,8 +283,10 @@ function turnReceipt(
   turn: number,
 ): FollowUpReceipt {
   let end: RowOf<'run.end'> | null = null;
+  let stop: RowOf<'run.stop'> | null = null;
   for (const row of after) {
-    if (row.type === 'run.activate') end = null;
+    if (row.type === 'run.activate') end = stop = null;
+    if (row.type === 'run.stop') stop = row;
     if (row.type === 'run.end') end = row;
     if (row.type !== 'run.position') continue;
     const { at, outcome } = row.payload;
@@ -314,7 +299,7 @@ function turnReceipt(
     if (rowTurn > turn) return unansweredBy(turn, end);
   }
   // A shutdown cut the turn, which the resume continues.
-  return end === null || end.reason === 'shutdown'
+  return end === null || stop?.reason === 'shutdown'
     ? { state: 'incorporated', turn }
     : unansweredBy(turn, end);
 }

@@ -14,7 +14,7 @@ import { endRun } from '@agent/runtime/AgentRunLifecycle';
 import { type RunReport } from '@agent/runtime/runReport';
 import type { RunLaunch } from '@agent/runtime/run/AgentRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { SessionLog } from '@shared/session/runHistory';
 import { startAwaited } from '@test/support/runHandleFixtures';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -27,7 +27,7 @@ import {
 import { createTestLaunchContext } from './launchContextTestUtils';
 
 /** The run's committed `run.end` rows, once the session's writes settled:
- *  what the run's one terminal writer (`finalizeRun`) said. */
+ *  what the run's one terminal writer (`endRun`) said. */
 const runEnds = (session: Context.Context<SessionServices>, runId: RunId) =>
   Effect.andThen(
     Context.get(session, SessionLog).settled,
@@ -98,10 +98,10 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
     'does not let a stop abandon a run that completes without suspending',
     () =>
       Effect.gen(function* () {
-        // The window a stop could once fall into: the run has returned, its live
-        // interrupt context is detached, and its own finalize is parked at the
-        // persist await. The terminal is uninterruptible, so the stop its
-        // launch takes lands after the end the run reported.
+        // The window a stop could once fall into: the run has returned and
+        // its own end is parked at the persist await. The terminal is
+        // uninterruptible, so the stop its launch takes lands after the end
+        // the run reported.
         const { runId, ctx, session } = yield* lifecycleFixture();
         const parked = yield* parkTerminal(ctx, session);
 
@@ -123,12 +123,12 @@ layer(Layer.provideMerge(TestSession.layer(), SessionGraph.hosted), {
         // which is the window the stop below has to land in.
         yield* Deferred.await(parked.started);
 
-        // A shutdown: the sweep alone, the path this case took before the
-        // per-stop override went; a user stop's settlement also reads "Keep
-        // agents running" and may owe an end row behind the parked persist.
-        const stop = Context.get(session, Runs).stop(runId, 'shutdown');
-        expect(stop.accepted()).toBe(true);
-        yield* stop.settlement.pipe(Effect.provide(session));
+        // The stop a launch takes when its caller lets go: the fiber's
+        // interruption, writing nothing (a `stop` would queue its row behind
+        // the parked persist and land after it).
+        expect(registryOf(Context.get(session, Runs)).interrupt(runId)).toBe(
+          true,
+        );
 
         yield* Deferred.succeed(parked.release, undefined);
         yield* Fiber.await(running);

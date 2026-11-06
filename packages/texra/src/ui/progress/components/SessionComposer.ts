@@ -47,7 +47,12 @@ import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import './QueuedFollowUps';
 import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
-import type { SessionView, RunView, RunId } from '@texra-ai/harness/schemas';
+import {
+  isUnreadable,
+  type SessionView,
+  type RunView,
+  type RunId,
+} from '@texra-ai/harness/schemas';
 import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 @customElement('session-composer')
@@ -530,7 +535,7 @@ export class SessionComposer extends LitElement {
     const run = this.run;
     if (run && run.followUpSupport === 'unsupported') return nothing;
     const compact = this.compact;
-    const readOnly = run?.readOnly === true;
+    const readOnly = run != null && isUnreadable(run);
     const queued = (
       run ? (this.view?.queuedFollowUps.get(run.id) ?? []) : []
     ).map((followUp) => followUp.text);

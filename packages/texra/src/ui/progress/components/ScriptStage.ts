@@ -210,8 +210,6 @@ export class ScriptStage extends LitElement {
   @property({ attribute: false }) stage!: ScriptStageView;
   @property({ attribute: false }) view!: SessionView;
   @property({ attribute: false }) surface!: Surface;
-  /** The run the stage belongs to cannot act here (another owner, ended). */
-  @property({ type: Boolean }) readOnly = false;
   /** The run whose transcript holds the stage: the Log toggle's key. */
   @property({ attribute: false }) runId: RunId | null = null;
   /** The calls' own cards are open below the card. */
@@ -262,9 +260,7 @@ export class ScriptStage extends LitElement {
         variant="neutral"
         aria-label="More"
         >${waIcon('ellipsis')}</wa-button
-      ><wa-dropdown-item
-        value=${STOP_AGENT}
-        ?disabled=${this.readOnly || child.readOnly}
+      ><wa-dropdown-item value=${STOP_AGENT}
         >${waIcon('circle-stop', { slot: 'icon' })}Stop this
         agent</wa-dropdown-item
       ></wa-dropdown

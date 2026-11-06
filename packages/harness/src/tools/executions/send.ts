@@ -3,7 +3,7 @@
  * terminal session types into another pane. The one verb for every
  * run-to-run message: an orchestrator's follow-up to its subagent, a
  * subagent's note to its orchestrator, a peer's message to a sibling. A
- * child's automatic report rides the same row (`childRunLoop`), so the
+ * child's automatic report rides the same row (its run's end), so the
  * recipient reads every one of them the same way, at its next turn boundary.
  */
 
@@ -89,12 +89,6 @@ export const sendToRun = Effect.fn('ExecutionsTool.send')(function* (
   if (shown.severity === 'warning') {
     return yield* Effect.fail(
       new ToolError(`${name} did not accept the message: ${shown.message}`),
-    );
-  }
-  if (shown.severity === 'info') {
-    return executed(
-      `Message queued for ${name}. ${shown.message}`,
-      `Message queued for '${recipient.label}' (resume failed)`,
     );
   }
   const verb = result.status === 'sent' ? 'Sent' : 'Queued';

@@ -49,9 +49,7 @@ export interface WindowClient {
 /** What a window does for its project's tasks; a capability it leaves out
  *  is one it does not offer. */
 export interface WindowHost
-  extends
-    Pick<HostInteractions, 'emit' | 'approvalDenied'>,
-    EditorCapabilities {
+  extends Pick<HostInteractions, 'emit'>, EditorCapabilities {
   /** Files a task of the project wrote past the editor's own write path,
    *  as the service's announcer heard them: the host tells its own
    *  listeners (a file tree, decorations), as a task here would. */
@@ -63,9 +61,7 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.readDiagnostics ? (['readDiagnostics'] as const) : []),
     ...(host.addCriticism ? (['addCriticism'] as const) : []),
     ...(host.openPdf ? (['openPdf'] as const) : []),
-    ...(host.emit || host.approvalDenied || host.filesWritten
-      ? (['notices'] as const)
-      : []),
+    ...(host.emit || host.filesWritten ? (['notices'] as const) : []),
   ];
 }
 
@@ -96,11 +92,6 @@ function perform(
     case 'filesWritten':
       return Effect.sync(() => {
         host.filesWritten?.(call.absolutePaths);
-        return null;
-      });
-    case 'approvalDenied':
-      return Effect.sync(() => {
-        host.approvalDenied?.(call.denial, call.runId);
         return null;
       });
   }

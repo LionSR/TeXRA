@@ -146,7 +146,7 @@ export {
   type PluginToolServices,
 } from '@agent/runtime/ToolServices';
 // What `ChildRuns` launches: an agent's child, or an external process's
-// with the strategy its loop runs. A tool that launches children takes the
+// with the one turn it runs. A tool that launches children takes the
 // call fields every child launch takes (`CALL_FIELDS`) and its file lists
 // as `fileList` fields.
 export {
@@ -154,12 +154,11 @@ export {
   fileList,
   type ChildLaunch,
 } from '@agent/runtime/delegation/AgentTool';
-export type { ProcessChildLaunch } from '@agent/runtime/delegation/detachedChildRun';
 export type {
-  ChildRunPause,
-  ChildStrategyBase,
-  ProcessChildStrategy,
-} from '@agent/runtime/childRunLoop';
+  ProcessChildLaunch,
+  ProcessReport,
+  ProcessTurn,
+} from '@agent/runtime/processRun';
 // The XML a child's settled turn delivers to its parent.
 export {
   formatDelivery,

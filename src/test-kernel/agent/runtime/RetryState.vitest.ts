@@ -23,7 +23,7 @@ import {
 import { TestClock } from 'effect/testing';
 import { layer } from '@effect/vitest';
 
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import {
   type Model,
   MODEL_CONFIGS,
@@ -42,6 +42,7 @@ import {
   RunIdSchema,
   AgentConfigSchema,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
+  qualifyAggregateId,
   RUN_PHASE,
   type RunId,
 } from '@texra-ai/harness/schemas';
@@ -60,7 +61,6 @@ import { appendRow, positionRow } from '@agent/runtime/loop/rows';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { modelAccessLayer } from '@agent/runtime/modelAccess/ModelAccess';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RunHistory,
@@ -73,6 +73,7 @@ import { freshRunState, type RunState } from '@shared/session/runState';
 import {
   setTestApprovalPolicy,
   publishTestRunStart,
+  seedRows,
 } from '@test/support/sessionTestUtils';
 import { testAgentRun } from '@test/support/scriptedRunLayers';
 import { noopTrace } from '@test/support/noopTrace';
@@ -634,13 +635,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         () =>
           Effect.gen(function* () {
             const session = yield* isolatedTestSession();
-            const stopped = new Map<RunId, 'user' | 'shutdown'>();
-            const runs = Context.get(session, Runs);
-            const stopCause = runs.stopCause;
-            // The run's stop, whether or not this registry holds it.
-            vi.spyOn(runs, 'stopCause').mockImplementation(
-              (runId) => stopped.get(runId) ?? stopCause(runId),
-            );
             const operation = Schema.decodeUnknownSync(RemoteOperationSchema)({
               origin: ORIGIN,
               providerResponseId: PROVIDER_RESPONSE_ID,
@@ -688,7 +682,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               const kit = yield* openRun(session, model);
               const fiber = yield* Effect.forkChild(invokeOn(kit));
               yield* Deferred.await(observing);
-              stopped.set(kit.runId, reason);
+              // The stop's `run.stop` row, committed before the fiber is
+              // interrupted, as `RunsShape.stop` commits it: what the
+              // interrupted invocation reads its reason from.
+              yield* seedRows(Context.get(session, SessionLog))([
+                {
+                  type: 'run.stop',
+                  aggregateId: qualifyAggregateId('run', kit.runId),
+                  reason,
+                },
+              ]);
               yield* Fiber.interrupt(fiber);
               const state = yield* Context.get(session, RunHistory).load(
                 kit.runId,

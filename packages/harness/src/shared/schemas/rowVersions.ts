@@ -34,9 +34,9 @@ interface RowKind {
    * The run history and the transcript tier but `context.state` (the
    * run's context gauge, read from its newest row) are listed nowhere: a
    * cold initial load would pull the newest one of every run into every
-   * renderer for no reader. `run.position` and `child.park` are listed:
-   * the phase is read from them, so a listing without them would paint
-   * every waiting run as ready and every waiting child as busy.
+   * renderer for no reader. `run.position` is listed: the phase is read
+   * from it, so a listing without it would paint every waiting run as
+   * ready.
    */
   readonly listing: 'none' | 'own' | 'request' | 'followup' | 'lifecycle';
 }
@@ -73,6 +73,12 @@ export const RETIRED_ROW_KINDS: ReadonlyMap<string, 'display' | 'execution'> =
     ['run.fact', 'execution'],
     // The loop state a resume continued from.
     ['run.snapshot', 'execution'],
+    // A child's turns, parks and result manifest, which its resume and its
+    // parent's call read: a child is a run that ends, its `run.end` the
+    // result.
+    ['child.turn', 'execution'],
+    ['child.park', 'execution'],
+    ['run.result', 'execution'],
     // An approval request's binding to its tool call.
     ['tool.binding', 'execution'],
     // The workflow engine's journal, plan, script, calls and attempts.
@@ -110,7 +116,9 @@ export const CURRENT_VALUE_VERSION = 1;
 export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v2: the launching call's id and card are one `parent.call`, with no
   // top-level `parentCard`.
-  'run.start': { version: 2, listing: 'lifecycle' },
+  // v3: the parent call says whether it awaits the child (`awaited`); an
+  // earlier build's child end would deliver to a call that reads it.
+  'run.start': { version: 3, listing: 'lifecycle' },
   'run.activate': { ...V1, listing: 'own' },
   // v2: a recipe's script names its block and options; `toolConfig` is gone
   // (an earlier build's v1 row refuses its run as written by that build,
@@ -124,6 +132,7 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v6: no Copilot backend.
   'run.config': { version: 6, listing: 'own' },
   'run.detach': { ...V1, listing: 'own' },
+  'run.stop': { ...V1, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents`.
   // v3: the error's classification as `model.message` v9.
   // v4: an error always carries its `message` (an earlier build's error
@@ -139,8 +148,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // `result-lost`, `unexpected`); `context-window` and `missing-api-key` are
   // classifications, no longer kinds (an earlier build's classified end would
   // fail as damaged).
-  'run.end': { version: 7, listing: 'own' },
-  'child.park': { ...V1, listing: 'own' },
+  // v8: no `reason`: why a run stopped is its `run.stop` row (an earlier
+  // build's shutdown end would read as a person's stop, holding a child's
+  // delivery back and spending a retry).
+  'run.end': { version: 8, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   // v2: a model's summary carries its helper request's priced `usage`,
   // which the run's spend counts (a v1 summary would read as free).
@@ -187,7 +198,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v3: a halt carries no `reason`; the end's `reason` says what stopped the
   // run (an earlier build's closed halt would read as a crash and spend a
   // retry).
-  'run.position': { version: 3, listing: 'own' },
+  // v4: no `halted` position: `run.end` is the halt (an earlier build's halt
+  // row would fail its check).
+  'run.position': { version: 4, listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both.
   // v3: a user message names its attached media by blob address (`media`),
@@ -222,8 +235,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // would show a cut answer as complete).
   'response.finalized': { version: 2, listing: 'none' },
   'run.report': { ...V1, listing: 'own' },
-  // v2: no `cliWorkflow` producer and no delivery-time diffs.
-  'run.result': { version: 2, listing: 'own' },
+  'process.output': { ...V1, listing: 'none' },
+  'process.exit': { ...V1, listing: 'own' },
   'followup.closed': { ...V1, listing: 'own' },
   // v2: dispatch facts record `lane`, not `parallelSafe` (an earlier build's
   // v1 row refuses its run as written by that build).
@@ -294,7 +307,6 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // `reason` and `updatedInput`, not a `deny` reason alone (an earlier
   // build's row has no decision to read).
   'hook.outcome': { version: 2, listing: 'none' },
-  'child.turn': { ...V1, listing: 'none' },
 };
 
 /**

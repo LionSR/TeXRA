@@ -83,8 +83,8 @@ interface SessionExitControllerContext {
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
-  /** Stop the active run (writes a `halted` `run.position`): Ctrl-C on a
-   *  running turn is a `user` stop, every exit path a `shutdown`. */
+  /** Stop the active run (its `run.stop` row): Ctrl-C on a running turn
+   *  is a `user` stop, every exit path a `shutdown`. */
   readonly interruptActive: (reason: RunStopReason) => void;
 }
 

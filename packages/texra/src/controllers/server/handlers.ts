@@ -129,8 +129,7 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
 
 /** The live run `runId` continues in: itself, or the live run its parent
  *  chain reaches; null when `runId` is not live here. Live is what this
- *  process runs (`held`), not the claim the view shows (the view's
- *  `ownedHere`, which a fork's rows also take). */
+ *  process runs (`held`). */
 function liveRoot(session: LocalSession, runId: RunId): RunId | null {
   const view: SessionView = session.view.current();
   const live = (id: RunId) => session.held(id) !== undefined;

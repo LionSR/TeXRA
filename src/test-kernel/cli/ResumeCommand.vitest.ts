@@ -88,12 +88,6 @@ const seedRunRecord = (config: AgentConfig | null) =>
         payload: { family: 'toolUse', at: 'turn.ready', turn: 0 },
       },
     ]);
-    // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
-    // to be resumed is one nobody holds, so the seed gives the claim back: a
-    // hold taken and let go releases it.
-    yield* Effect.scoped(
-      Context.get(handle, SessionLog).hold(RUN_ID, { ends: true }),
-    );
     return handle;
   });
 

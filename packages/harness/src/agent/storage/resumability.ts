@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { recipeBlockOf, type ResumeRefusal, type RunId } from '@shared/schemas';
-import { claimStanding } from '@shared/session/database';
 import { continuesFromRows } from '@shared/session/runActions';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -23,8 +22,7 @@ type ResumabilityDecision =
     >;
 
 /**
- * The one answer to "can this run resume?", before ownership (`runRejection`
- * adds the claim). An opened run continues whatever its outcome: rows live
+ * The one answer to "can this run resume?". An opened run continues whatever its outcome: rows live
  * until deletion, so a failed or cancelled run continues from where they
  * left it. A task that ended does not: its recipe's result is
  * settled, so it runs again instead. One holding a fact of a plugin this
@@ -76,8 +74,9 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
 
 /**
  * {@link deriveResumability} as a refusal, or null when the run may
- * continue; facts that could not be read right now fail. Ownership is the
- * caller's: a resume reads this under the claim it already holds.
+ * continue; facts that could not be read right now fail. The one decider
+ * for a run with no loop here: a message's admission, a recovered child
+ * and a host's run record all ask it.
  */
 export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   runId: RunId,
@@ -91,21 +90,4 @@ export const checkpointRefusal = Effect.fn('checkpointRefusal')(function* (
   if (decision.kind === 'unusableCheckpoint')
     return { kind: 'unusableCheckpoint' };
   return decision;
-});
-
-/**
- * Why a resume of `runId` here is rejected, read from disk without changing
- * anything, or null when it may go ahead: nobody alive holds the claim, or
- * this process does with no loop behind it, which the resume takes over.
- * The one decider for a run with no loop here and no claim taken: a
- * message's admission, a recovered child and a host's run record all ask
- * it. The rejection is not stored. A fact that cannot be read fails.
- */
-export const runRejection = Effect.fn('runRejection')(function* (
-  runId: RunId,
-): Effect.fn.Return<ResumeRefusal | null, Error, SessionLog> {
-  const standing = claimStanding(yield* (yield* SessionLog).owner(runId));
-  if (standing.kind === 'held')
-    return { kind: 'ownedElsewhere', owner: standing.owner };
-  return yield* checkpointRefusal(runId);
 });

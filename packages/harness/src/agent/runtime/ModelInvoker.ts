@@ -76,7 +76,7 @@ import type { StateReadFailed } from '@shared/config/settings';
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 import { UsageLog, usageAgentName } from '@shared/usageLog';
 
-import { policyDecidedRows, SessionRequests } from './requestPolicy';
+import { decisionOf, policyDecidedRows } from './requests';
 import { AgentRun } from './run/AgentRun';
 import { runInvocation, RouteRetries } from './run/invocation';
 import { callModel, type CallResult } from './run/modelCall';
@@ -176,7 +176,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       const { runId, logger } = run;
       const log = yield* SessionLog;
       const roots = yield* SessionRoots;
-      const requests = yield* SessionRequests;
       const aggregateId = qualifyAggregateId('run', runId);
       const usageLog = yield* UsageLog;
       /** When each attempt was sent, by its reference, for pricing a failure
@@ -688,19 +687,22 @@ export const modelInvokerLayer = (): Layer.Layer<
             await: Effect.fn('ModelInvoker.await')(function* (requestId) {
               logger.debug('Waiting for manual retry');
               // The answer is the `request.decided` row the decide
-              // command lands; a closing plane cancels.
-              const row = yield* requests
-                .decision(runId, requestId, (yield* cell.current).commit)
-                .pipe(
-                  Effect.catch((error) =>
-                    Effect.sync(() => {
-                      logger.warn('The retry prompt closed before a decision', {
-                        data: error,
-                      });
-                      return null;
-                    }),
-                  ),
-                );
+              // command lands; a session that closes first cancels.
+              const row = yield* decisionOf(
+                runId,
+                requestId,
+                (yield* cell.current).commit,
+              ).pipe(
+                Effect.provideService(SessionLog, log),
+                Effect.catch((error) =>
+                  Effect.sync(() => {
+                    logger.warn('The retry prompt closed before a decision', {
+                      data: error,
+                    });
+                    return null;
+                  }),
+                ),
+              );
               if (row === null) return false;
               yield* cell.refresh;
               return true;

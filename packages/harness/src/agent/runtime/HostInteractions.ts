@@ -1,4 +1,4 @@
-import { Cause, Context, Effect, Layer, Predicate } from 'effect';
+import { Cause, Context, Effect, Predicate } from 'effect';
 import {
   agentErrorPresentation,
   classifyAgentError,
@@ -6,12 +6,9 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   aggregateTarget,
   type LaunchNotice,
-  type LocalRuntimeState,
-  type RunId,
   type SessionEvent,
 } from '@shared/schemas';
 import { recordOf } from '@shared/session/runRowReads';
@@ -61,13 +58,6 @@ export interface HostInteractions {
    * and when it withholds approval-gated tools from a run.
    */
   readonly approvalPromptsUnavailable?: boolean;
-  /**
-   * The session's approval policy closed a gate on `runId` (a command, edit,
-   * plan, delegation, retry or question) or withheld tools from it. Told
-   * after the fact, so a host can say why nothing was asked; it answers
-   * nothing.
-   */
-  approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
   dispose?(): void;
 }
 
@@ -209,10 +199,6 @@ export class SessionHostInteractions implements HostInteractions {
     return (this.attached ?? this.opened)?.approvalPromptsUnavailable === true;
   }
 
-  approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
-    (this.attached ?? this.opened)?.approvalDenied?.(denial, runId);
-  }
-
   /**
    * Dispose the attached host, then the one the session was opened with.
    * Each host's dispose is a scope finalizer, so both are disposed even when
@@ -297,20 +283,18 @@ function presentAgentFailure(
 
 /**
  * The session's one terminal-result presenter, run over each folded row:
- * a `run.end` this process (`self`) authored presents a root run's failure
- * to the attached host, or replays it to the next one. A child's (its
- * attached parent is the view's, which has the run's `run.start` once it
- * ended) is its parent's to report; any other row presents nothing.
+ * a `run.end` presents a root run's failure to the attached host, or
+ * replays it to the next one. A child's (its attached parent is the view's,
+ * which has the run's `run.start` once it ended) is its parent's to report;
+ * any other row presents nothing.
  */
 export const presentTerminalResult = Effect.fn('presentTerminalResult')(
   function* (
     row: SessionEvent,
-    self: LocalRuntimeState['self'],
   ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     const { end } = recordOf(row);
     if (target.kind !== 'run' || end === null || !end.error) return;
-    if (end.origin == null || !self.includes(end.origin)) return;
     if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
     yield* presentAgentFailure(yield* Interactions, end.error);
   },
@@ -321,19 +305,7 @@ export const presentTerminalResult = Effect.fn('presentTerminalResult')(
 export class Interactions extends Context.Service<
   Interactions,
   SessionHostInteractions
->()('@texra-ai/harness/session/Interactions') {
-  /** Over the host the session was opened with; disposed with the layer. */
-  static readonly layer = (
-    opened?: HostInteractions,
-  ): Layer.Layer<Interactions> =>
-    Layer.effect(
-      Interactions,
-      Effect.acquireRelease(
-        Effect.sync(() => new SessionHostInteractions(opened)),
-        (interactions) => interactions.dispose(),
-      ),
-    );
-}
+>()('@texra-ai/harness/session/Interactions') {}
 
 /** The failure a run's raw error stands for: a `Session` start's
  *  `RunFailure` by the failure it carries, an aggregate by its first. */

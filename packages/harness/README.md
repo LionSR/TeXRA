@@ -138,8 +138,7 @@ A later process can open the same root and call `session.resume(runId)` to
 continue a run from its committed history, returning the same `Run` handle that
 `start` returns. A run that cannot continue fails with `ResumeRefused`, whose
 `reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
-gives: its `kind` is `finished`, `ownedElsewhere`
-(a live process holds it, named by `owner`), `blocked` (the agent or plugin
+gives: its `kind` is `finished`, `blocked` (the agent or plugin
 named by `name` is missing, off or not trusted), `unusableCheckpoint`,
 `earlierBuild` (with its `cause`), or `notResumable` (it is running here, or
 it was deleted). If `runId` belongs to
@@ -358,11 +357,10 @@ the session store's source; in short:
 - **S4** A write fails (`DatabaseWriteFailed`): the batch rolled back and
   the call fails. Inside a run, the run ends, whatever the tool or model
   call that met it did with it.
-- **S5** The claim is not this process's (`DatabaseNotOwner` or
-  `DatabaseClaimRefused`, both typed): nothing was written. A run that loses its own
-  claim stops, with no retry. When another process holds the run, every
-  caller refuses the same way (`heldElsewhereBy`): a resume or follow-up
-  answers `ownedElsewhere`, a request `NotOwner`.
+- **S5** The aggregate is closed (`DatabaseAggregateClosed`, typed):
+  nothing was written. A run whose aggregate closed under it stops, with no
+  retry. A project store another process holds does not open at all: the
+  open fails with `STORE_HELD_MESSAGE`.
 
 ## Generated files and deletion
 

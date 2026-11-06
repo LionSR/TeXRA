@@ -27,14 +27,11 @@ import {
   MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
-  RESTING_SUBSTATES,
   RUN_SUBSTATE,
-  parkSubstate,
   recipeBlockOf,
   isPlainAgentIdentity,
   listingKeyOf,
   isTranscriptEvent,
-  ownerIdentity,
   blocksCaller,
   runIdentityDisplayName,
   emptyUsageStats,
@@ -43,6 +40,7 @@ import {
   type SessionViewInput,
   type ExistenceReconciliation,
   type LocalRuntimeState,
+  type UnreadableRun,
   type DisplaySessionEvent,
   type RunId,
   type TextChunk,
@@ -171,28 +169,21 @@ function applyInput(
 }
 
 /**
- * Run owners come from the database's live ownership records (each
- * aggregate's claim, carried by the `drained` and `replay.complete`
- * markers), not from who wrote the rows. A checked aggregate with no record
- * no longer exists.
+ * Existence comes from the database's sequence records (carried by the
+ * `drained` and `replay.complete` markers), not from who wrote the rows. A
+ * checked aggregate with no record no longer exists. The runs the same
+ * read found this build cannot open are recorded and re-derived.
  */
 function reconcileExistence(
   u: Update,
   existence: ExistenceReconciliation,
 ): void {
-  const unread = [...u.state.ownerUnread];
-  u.state.ownerUnread.clear();
-  for (const { aggregateId, ownerId } of existence.claims) {
-    const runId = runIdOf(aggregateId);
-    const run = runId === null ? undefined : u.view.runs.get(runId);
-    if (!run || run.ownerId === ownerId) continue;
-    setRun(u, { ...run, ownerId });
-    walkUp(u, run.id);
+  for (const { runId, reason } of existence.unreadable) {
+    if (u.state.unreadable.get(runId) === reason) continue;
+    u.state.unreadable.set(runId, reason);
+    if (u.view.runs.has(runId)) walkUp(u, runId);
   }
-  for (const id of unread) walkUp(u, id);
-  const present = new Set(
-    existence.claims.map(({ aggregateId }) => aggregateId),
-  );
+  const present = new Set(existence.present);
   for (const id of existence.checkedAggregateIds) {
     if (present.has(id)) continue;
     // The reader reports an aggregate with no record as absent whether it
@@ -237,10 +228,8 @@ interface SessionState {
   readonly latest: Map<string, number>;
   /** Each run's transcript working state (`transcriptState.ts`). */
   readonly transcripts: Map<RunId, TranscriptIndexes>;
-  /** The runs created since the last existence marker: who holds them is
-   *  not read yet, so none counts as interrupted toward `turnOver`, which
-   *  would mark its open rows final. */
-  readonly ownerUnread: Set<RunId>;
+  /** The runs this build cannot open, and why (`ExistenceReconciliation`). */
+  readonly unreadable: Map<RunId, UnreadableRun['reason']>;
   /** The latest local runtime snapshot. */
   local: LocalRuntimeState;
 }
@@ -251,8 +240,8 @@ function emptySessionState(): SessionState {
     rows: new Map(),
     latest: new Map(),
     transcripts: new Map(),
-    ownerUnread: new Set(),
-    local: { self: [], dead: [], unreadable: [] },
+    unreadable: new Map(),
+    local: { runsHere: [] },
   };
 }
 
@@ -315,12 +304,10 @@ function runIdOf(aggregateId: AggregateId): RunId | null {
  *  comes from the existence marker that ends the same batch. */
 function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
   u.state.transcripts.set(id, emptyTranscriptIndexes());
-  u.state.ownerUnread.add(id);
   const label = runIdentityDisplayName(event.identity);
   const common = {
     id,
     identity: event.identity,
-    ownerId: null,
     label,
     description: null,
     descriptionBy: null,
@@ -363,8 +350,6 @@ function createRun(u: Update, event: RunStartEvent, id: RunId): RunView {
     childIds: [],
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
-    ownedHere: false,
-    readOnly: false,
     actions: [],
     forceExpanded: false,
     group: 'recent' as const,
@@ -434,37 +419,27 @@ function refreshAncestors(u: Update, runId: RunId): void {
 /**
  * A run's derived fields (group, approval, status copy, liveness, rollup,
  * tree usage, actions, notice), from its facts, the local snapshot and its
- * children. A run that has not ended and that nobody holds is interrupted,
- * pending request or not. A run waits only while a held owner has a request
- * that blocks its tool; unheld, it reads as interrupted, since nothing
- * listens for the answer, and the request stays listed so a resume can ask
- * again. When `turnOver` changes, the transcript facts follow it.
+ * children. A run that has not ended and that no launch here holds is
+ * interrupted, pending request or not. A run waits only while a launch here
+ * has a request that blocks its tool; unheld, it reads as interrupted, since
+ * nothing listens for the answer, and the request stays listed so a resume
+ * can ask again. When `turnOver` changes, the transcript facts follow it.
  */
 function withAggregates(u: Update, run: RunView): RunView {
   const { view } = u;
-  const { local } = u.state;
-  const owner = run.ownerId;
-  const own = owner !== null && local.self.includes(owner);
-  const heldBy =
-    owner !== null && !own && !local.dead.includes(owner) ? owner : null;
-  const held = own || heldBy !== null;
-  const paused = RESTING_SUBSTATES.has(run.substate);
+  const held = u.state.local.runsHere.includes(run.id);
   // Only a request that blocks its tool is a wait: one that does not left
   // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
     (r) => r.runId === run.id && blocksCaller(r.payload),
   );
-  const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
+  const interrupted = !isTerminalOutcomePhase(run.status) && !held;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
-  const working = !interrupted && !paused && run.status === RUN_PHASE.RUNNING;
-  const turnOver =
-    isTranscriptSettlementPhase(run.status) ||
-    (interrupted && !u.state.ownerUnread.has(run.id));
-  const live = held && !paused && durableOutcome === null;
-  const unreadable = local.unreadable.find(
-    (entry) => entry.runId === run.id,
-  )?.reason;
+  const working = !interrupted && run.status === RUN_PHASE.RUNNING;
+  const turnOver = isTranscriptSettlementPhase(run.status) || interrupted;
+  const live = held && durableOutcome === null;
+  const unreadable = u.state.unreadable.get(run.id);
   const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const treeUsage = sumUsageStats([
     run.usage,
@@ -475,7 +450,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';
-  else if (isInFlightPhase(run.status) && !paused) group = 'running';
+  else if (isInFlightPhase(run.status)) group = 'running';
   let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
@@ -484,29 +459,24 @@ function withAggregates(u: Update, run: RunView): RunView {
     interrupted,
     waiting,
   });
-  const stranded = heldBy === null && unreadable !== undefined;
-  const readOnly = heldBy !== null || stranded;
-  const actions = runActions({ ...run, readOnly, group, live }, stranded);
+  const stranded = unreadable !== undefined;
+  const actions = runActions({ ...run, group, live }, stranded);
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   let statusNotice: RunView['statusNotice'] = null;
   if (unreadable !== undefined) statusNotice = { kind: unreadable };
   else if (interrupted) statusNotice = { kind: 'interrupted' };
-  else if (heldBy !== null)
-    statusNotice = { kind: 'held', pid: ownerIdentity(heldBy).pid };
   else if (run.lost !== null)
     statusNotice = { kind: 'lost', message: run.lost };
   const next = withDerived(run, {
     group,
     approval,
-    readOnly,
     actions,
-    ownedHere: own,
     forceExpanded,
     durableOutcome,
     working,
     turnOver,
     live,
-    runsHere: own && live,
+    runsHere: held && live,
     runStartedAt: working && !waiting ? run.turnStartedAt : null,
     rollup: rollupOf(children),
     treeUsage,
@@ -693,6 +663,7 @@ type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
 function applyRunEvent(run: RunView, event: OwnEvent): RunView {
   switch (event.type) {
     case 'log':
+    case 'process.output':
     case 'stage.start':
     case 'stage.end':
     case 'tool.start':
@@ -703,8 +674,10 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
     case 'run.start':
     case 'approval.policy':
     case 'run.removed':
+    case 'run.stop':
       // `applyEvent` creates and removes the run; the rest change the
-      // transcript or session-level fields.
+      // transcript or session-level fields, and a stop's interruption
+      // reaches the view as the end it leads to.
       return run;
     case 'run.activate': {
       // Every activation (the launch, a resume, a follow-up) sets the run
@@ -761,9 +734,6 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
         ...run,
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
-    case 'child.park':
-      run = movePhase(run, event.phase !== 'resumed', event.at);
-      return { ...run, substate: parkSubstate(event) };
     case 'run.detach': // the attached parent goes; the launch parent stays
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
@@ -796,10 +766,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
  *  the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
   if (rows.family === null || rows.at === null) return run;
-  if (
-    row.type === 'run.position' &&
-    (row.payload.at === 'waiting' || row.payload.at === 'halted')
-  )
+  if (row.type === 'run.position' && row.payload.at === 'waiting')
     run = { ...run, forkPoint: row.seq };
   const turn = rows.turn;
   const phase = phaseMoveOf(row);
@@ -809,9 +776,7 @@ function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
 }
 
 /** Set the run waiting (its turn is over: `turnStartedAt` clears) or
- *  running. The one phase writer for both rows that make a run wait: a
- *  loop's `run.position` at `waiting` and an agent-CLI child's
- *  `child.park`. */
+ *  running: the one phase writer, for a loop's `run.position`. */
 function movePhase(run: RunView, waiting: boolean, at: number): RunView {
   return {
     ...run,
@@ -1112,10 +1077,10 @@ function removeRun(u: Update, runId: RunId): boolean {
   return true;
 }
 
-/** A new local snapshot can change how any run reads (held here or
- *  elsewhere, interrupted, unreadable, blocked, its turn over), so every run
- *  is re-derived; `withDerived` keeps an unchanged one as it was. The reader
- *  sends a snapshot only when it changed. */
+/** A new local snapshot can change how any run reads (held here,
+ *  interrupted, blocked, its turn over), so every run is re-derived;
+ *  `withDerived` keeps an unchanged one as it was. The reader sends a
+ *  snapshot only when it changed. */
 function applyLocal(u: Update, local: LocalRuntimeState): void {
   u.state.local = local;
   for (const id of [...u.view.runs.keys()]) walkUp(u, id);
