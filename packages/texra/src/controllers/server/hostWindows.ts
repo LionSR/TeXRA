@@ -361,7 +361,7 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
       Effect.forEach(
         [...windows].filter(
           (window) =>
-            window.capabilities.has('notices') &&
+            window.capabilities.has('filesWritten') &&
             absolutePaths.some((path) => isPathWithin(window.project, path)),
         ),
         (window) => tell(window, { kind: 'filesWritten', absolutePaths }),

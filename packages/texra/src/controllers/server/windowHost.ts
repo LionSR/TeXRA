@@ -61,7 +61,8 @@ function capabilitiesOf(host: WindowHost): HostCapability[] {
     ...(host.readDiagnostics ? (['readDiagnostics'] as const) : []),
     ...(host.addCriticism ? (['addCriticism'] as const) : []),
     ...(host.openPdf ? (['openPdf'] as const) : []),
-    ...(host.emit || host.filesWritten ? (['notices'] as const) : []),
+    ...(host.emit ? (['notices'] as const) : []),
+    ...(host.filesWritten ? (['filesWritten'] as const) : []),
   ];
 }
 
@@ -85,15 +86,20 @@ function perform(
           .pipe(Effect.as(null)) ?? unoffered(call)
       );
     case 'notice':
-      return Effect.suspend(() => {
-        const presented = host.emit?.(call.notice.event, call.notice.payload);
-        return presented ?? Effect.void;
-      }).pipe(Effect.as(null));
+      return host.emit === undefined
+        ? unoffered(call)
+        : Effect.suspend(
+            () =>
+              host.emit?.(call.notice.event, call.notice.payload) ??
+              Effect.void,
+          ).pipe(Effect.as(null));
     case 'filesWritten':
-      return Effect.sync(() => {
-        host.filesWritten?.(call.absolutePaths);
-        return null;
-      });
+      return host.filesWritten === undefined
+        ? unoffered(call)
+        : Effect.sync(() => {
+            host.filesWritten?.(call.absolutePaths);
+            return null;
+          });
   }
 }
 

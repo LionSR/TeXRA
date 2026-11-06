@@ -21,12 +21,15 @@ import type { ManualCriticismEntry } from '@texra/tools/editorHost';
 import type { GenericDiagnostic } from '@texra/utils/diagnostics/diagnosticFormatting';
 
 /** What a window can do for a run. `notices` covers the runtime's notices
- *  and its approval-policy denials. */
+ *  and its approval-policy denials, which a window with `emit` presents;
+ *  `filesWritten` the files a task wrote, which a window with a file tree
+ *  follows. */
 const HOST_CAPABILITIES = [
   'readDiagnostics',
   'addCriticism',
   'openPdf',
   'notices',
+  'filesWritten',
 ] as const;
 export const HostCapabilitySchema = Schema.Literals(HOST_CAPABILITIES);
 export type HostCapability = typeof HostCapabilitySchema.Type;
@@ -102,7 +105,7 @@ export const CALL_CAPABILITY: Readonly<
   addCriticism: 'addCriticism',
   openPdf: 'openPdf',
   notice: 'notices',
-  filesWritten: 'notices',
+  filesWritten: 'filesWritten',
 };
 
 /** What each call answers with, when it answers with a value. */

@@ -707,18 +707,16 @@ function answerShared(
           });
         yield* parts.exportTranscript(request.runId);
         return done;
-      case 'latexdiff': {
-        const diff = yield* parts.runActions.workflowDiffRequest(request.runId);
-        if (diff) yield* parts.latexdiff.run(diff.runId);
+      case 'latexdiff':
+        yield* parts.runActions.workflowDiffRequest(request.runId);
+        yield* parts.latexdiff.run(request.runId);
         return done;
-      }
       case 'pack':
       case 'clean': {
         const files = yield* parts.runActions.workflowFileOperation(
           request.runId,
           request.kind,
         );
-        if (!files) return done;
         // An info result is shown; an error result rejects the request,
         // which the surface presents.
         const message = fileOpResultMessage(
