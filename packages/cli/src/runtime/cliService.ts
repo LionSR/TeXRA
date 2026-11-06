@@ -246,10 +246,15 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     }).pipe(Scope.provide(scope));
   return {
     storageRoot,
-    open: (workspace) =>
-      RcMap.get(projects, canonicalizeWorkspacePath(workspace)).pipe(
+    // A lookup that failed (a store another process still holds) is not
+    // kept for the idle time: the next open tries again.
+    open: (workspace) => {
+      const key = canonicalizeWorkspacePath(workspace);
+      return RcMap.get(projects, key).pipe(
+        Effect.tapError(() => RcMap.invalidate(projects, key)),
         Effect.provideContext(services),
-      ),
+      );
+    },
     opened: Effect.sync(() => new Map(open)),
     load,
   } satisfies Context.Service.Shape<typeof ServiceProjects>;

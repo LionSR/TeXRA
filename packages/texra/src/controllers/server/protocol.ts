@@ -102,9 +102,8 @@ export const ServiceInfoSchema = Schema.Struct({
 });
 export type ServiceInfo = typeof ServiceInfoSchema.Type;
 
-/** The running service's record, claimed once it listens: where a client
- *  finds it. */
-/** The record a storage root's service claims: a pointer to its socket.
+/** The record a storage root's service claims once it listens, where a
+ *  client finds it: a pointer to its socket.
  *  Its protocol and build are the hello's, read from the socket. */
 const ServiceRecordSchema = ServiceInfoSchema.mapFields(
   Struct.pick(['pid', 'startedAt']),

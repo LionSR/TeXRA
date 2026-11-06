@@ -35,6 +35,7 @@ import {
   type SessionView,
   emptyRunEndOutput,
   RUN_OUTCOME,
+  RUN_PHASE,
   type RunId,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
@@ -112,13 +113,19 @@ export class ServiceControl extends Context.Service<
 
 /** The tasks the service runs now, across its open projects: what its
  *  registry holds live, which an admitted run is before the view applies
- *  it. */
+ *  it. `atWork`: only those not waiting for their next message, a run the
+ *  view does not show yet counted as at work. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: Context.Service.Shape<typeof ServiceProjects>,
+  atWork = false,
 ): Effect.fn.Return<number> {
   let running = 0;
-  for (const session of (yield* projects.opened).values())
-    running += session.held().length;
+  for (const session of (yield* projects.opened).values()) {
+    const { runs } = session.view.current();
+    for (const { runId } of session.held())
+      if (!atWork || runs.get(runId)?.status !== RUN_PHASE.WAITING)
+        running += 1;
+  }
   return running;
 });
 
