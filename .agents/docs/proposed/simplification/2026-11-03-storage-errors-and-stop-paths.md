@@ -144,6 +144,22 @@ _Done 2026-11-05: `ScriptLimitExceeded` replaces the three script-limit
 classes, and the Lean read raises `LeanFileUnreadable` itself
 (`LeanFileReadError` is gone)._
 
+_Done 2026-11-06: `ModelError.kind` is six values, each with a reader
+(`unsupported` is `invalid-request`; `rate-limited`, `quota-exhausted`,
+`malformed-output` and `observation-deadline` are their status, `quota`
+and the kind they defaulted like; `authentication` stays, read by the
+once-per-invocation token renewal). `RouteUnavailable.reason` is a
+`missingApiKey` flag, the one fact read; `SecretsFailed.reason` and
+`PromptFailed.reason` are gone (no reader; one value). `userRetryable`
+went with #14655. Checked and kept, each with a reader:
+`HistoryQueryRefused.reason` (`rejected` branched in the executions
+query), `AgentCustomizeRefused.reason` (`exists` in the settings
+commands), `WindowCallFailed.reason` (mapped onto the diagnostics read's
+own), `RunHistoryInconsistent.reason` (`mismatched-delivery` through
+`RowRejection`), `SubscriptionOAuthError.kind` (`needsReauth`); and
+`isTransientHttpStatus` beside `isRetryableStatus`, whose 409 difference
+is documented at the first._
+
 **Give up.** Catching a failure by a name nobody catches it by.
 
 ## 4. Errors: one classifier per question
