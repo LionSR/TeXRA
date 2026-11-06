@@ -22,11 +22,11 @@ import type { RunIdentity } from '@texra-ai/harness/schemas';
 
 /** What a task started, by the kind of its run: the noun a count of them
  *  takes, in the order a summary lists them. */
-export const NESTED_NOUNS = {
+export const NESTED_NOUNS = Object.freeze({
   agent: 'agent',
   process: 'command',
   script: 'script',
-} as const satisfies Record<RunIdentity['kind'], string>;
+} as const satisfies Record<RunIdentity['kind'], string>);
 
 /** The agents a task started. */
 export const NESTED_AGENT = {
