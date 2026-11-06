@@ -468,6 +468,88 @@ task 模块；5 个 agent 和 5 个 skill 一起删。
 `texra run` 对着记录的调用重放一遍，就是不花模型钱的回归测试。本提案不
 建它，但这条路只有程序模块才走得通。
 
+## 接缝：run 怎么开始、怎么结束、结果去哪
+
+在动单位之前把今天每一条"接起来"的路径列出来，看哪些是统一的、哪些不是。
+结论先说：**结束的一侧已经是一个机制，开始的一侧有五种叫法，结果的读法
+有一处插件特例。** 本提案改的只是后两者。
+
+### 开始：谁启动一个 run，用什么命名它
+
+| 入口                                        | 命名方式                                                                                                                                                                                                                | 代码                                                                                                                               |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| host 的 launch form                         | `agent` 名、`launchTarget: agent \| team`、`selectedTeamId`、选项表                                                                                                                                                     | `LaunchSurfaceSchema` → `session.start({ config })`                                                                                |
+| `texra run <agent>`、`texra team run`       | agent 名、team id                                                                                                                                                                                                       | `packages/cli/src/commands/workflow.ts`、`team.ts`                                                                                 |
+| SDK                                         | `agent: name \| InlinePersona` 或整份 `config`                                                                                                                                                                          | `StartRequestSchema`（`runtimeRequest.ts`）                                                                                        |
+| host 自己按名字启动                         | `'latexFixer'`（编译失败后的修复，`script: null` 表示"聊天不是 recipe"）、`'merge'`（合并动作）、`'setup'`（onboarding）、`'polish'`（文本润色的 helper 调用标签）、schema 默认 `'correct'`、form 默认 `'orchestrator'` | `compileFixer.ts:130`、`hostRunActions.ts:437`、`setupLaunch.ts:53`、`textEnhancement.ts:50`、`agentConfig.ts:11`、`surface.ts:78` |
+| 模型：`agent()`                             | `agentName` 或内联 `persona`；`requireAgent` 在"可启动的 agent"里按 scope 和 shadowing 解析                                                                                                                             | `AgentTool.ts`、`proposalFlow.ts:50`                                                                                               |
+| 模型：`document_task()`                     | agent 名，子 run 开在 recipe 上，`script.kind: 'recipe'` 加 `block` 和 `options`                                                                                                                                        | `DocumentTaskTool.ts`                                                                                                              |
+| 模型：`self()`                              | 同一个 agent；fork 用 `forkSeed` 的 cut，或 fresh                                                                                                                                                                       | `SelfTool.ts`、`forkRun.ts`                                                                                                        |
+| 模型：`script` 后台、plan 的 "Run as Goal"  | 父 run 的 agent 和工具，`script.kind: 'background'`                                                                                                                                                                     | `backgroundScript.ts`、`PlanTool.ts`、`goalScript.ts`                                                                              |
+| 进程子运行（后台 bash、claude_code、codex） | 工具自己供给那一轮                                                                                                                                                                                                      | `processRun.ts`                                                                                                                    |
+| 恢复、fork、聊天续轮                        | 同一份 rows；`run.fork` 带 provenance；`continues` 继承上一轮的人工授权；`interactive` 让 run 等后续消息                                                                                                                | `resumeRun.ts`、`forkRun.ts`、`rootLaunch.ts:111`、`FollowUps.ts`                                                                  |
+
+一个 run 要跑什么，今天有五种表示：agent 名、team、内联 persona、recipe
+块、script kind。它们在同一张 `AgentConfig` 上共存，靠 `agentSource`、
+`persona`、`script`、`delegationAgentScope`、`cli.teamId` 五个字段互相排
+斥。本提案收成两种（`chat`、`program`），上表每一行的"命名方式"变成：
+host 和 CLI 启动 `chat`（默认）或一个 task；SDK 给 `{ system, tools }` 或
+`{ program, args }`；模型用 `agent()`、`task()`、`self()`；host 自己启动的
+六处变成对 bundled 常量或 bundled task 的调用（`fix-build` 是一个 task，
+`merge` 是一个 task，setup 是一份 chat 常量，`polish` 标签随目录消失，两
+个默认值删）。`requireAgent` 的 scope 和 shadowing 解析删。
+
+### 结束：一个终点，一种投递
+
+这一侧已经统一，本提案不动它：
+
+- **一个终点。** 每个 run 的 fiber 不管怎么退出都到 `endRun`
+  （`AgentRunLifecycle.ts`），一次事务写 `run.end`
+  `{ outcome, error, output: { response, files, structured } }`，同一事
+  务把子 run 的报告（`run.report`）排进父 run 的收件箱（`runLifecycle.ts`
+  "endRunRows"），除非父调用在等它。
+- **等与不等。** 脚本里的 `agent()` 默认等（`childLaunch.ts`，直接读子 run
+  的 end，解析成 `{ response, files, structured?, runId, outcome, cost, spent }`）；
+  `background: true`、直接调用、后台脚本、进程子运行走收件箱，父 run 下
+  一轮把整批排队项合成一条 user 消息（`FollowUps.ts`）；one-shot 父 run
+  在带内等。投递的信封只有一个构造器（`deliveryEnvelope.ts`），子 agent、
+  后台 bash、后台脚本、agent CLI 共用。
+- **停止与遗留。** `run.stop` 行加 fiber 中断；被停的子 agent 不投递，被停
+  的脚本投递一条"要恢复的 run"的通知；进程死掉留下的子 run 在父 run 恢复
+  时按自己的 id 恢复，不能恢复的报一次"结果未知"（`leftoverChildren.ts`）。
+- **goal。** 结果是 `completed` 或 `paused`（`needs_user`、`round_failed`、
+  `no_verdict`、`spend_cap`）；"暂停是一个结果，不是一个在等的 run"，继续
+  是新的 goal 或新的一轮。
+
+### 结果怎么被读：唯一的插件特例
+
+`output.structured` 有三种来源：`submit_output` 终端工具（带
+`outputSchema` 的 run）、recipe 脚本的返回值、后台脚本的返回值。前者和后
+者的读法是通用的：后台脚本投递"它的调用、调用写的文件、子 run 花了多少"
+（`scriptRun.ts` 的 `scriptEndDelivery`，文件由 `scriptRunCalls` 从调用结
+果折出来）。recipe 是特例：`recipeResult.ts` 按 `script.block` 找到插件的
+`AgentBlock.result`，用它的 `schema` 校验、`delivery()` 生成投递正文、
+`changes()` 列出写了哪些文件（`DOCUMENT_TASK_RESULT`，
+`documentResult.ts`）。这是 harness 里唯一一处"读一个结果要问插件"。
+
+本提案删掉它：一个 program 的结束就是一个脚本的结束。投递是通用的调用摘
+要加文件列表加返回值（JSON，有界），`document_propose` 的结果行本来就含
+"提议的文件和 diff"，摘要把它带上。`AgentBlockResult`、`recipeResult.ts`、
+`DOCUMENT_TASK_RESULT.delivery/changes` 删；documents 的 fact（UI 读 diff
+和 accept 用的）照旧由 `document_propose` 写。
+
+### 两个要注意的细节
+
+- **文件字段两类 run 都要。** `document_context` 从 `run.config` 读启动
+  时的 inputFiles、contextFiles、mediaFiles、outputFiles，launch form 和卡
+  片也显示它们。`NullableFileFieldsSchema` 留在联合的两个分支上；
+  `program.args` 就是这四组加 `instruction`。
+- **`self()` 只在 chat 的脚本里有意义。** 今天 "A task's script has no
+  conversation to fork" 已经拒绝 recipe 里的 fork；program 里没有
+  system 和 tools 可"再跑一次自己"，`self()` 在 program 里是错误，用
+  `agent()`。Q2 复用的 key 对 program 子 run 是源码摘要加 args 的文件指纹
+  加模型，替代今天的 `agent.name`、`persona`、`task.options`。
+
 ## 删除账
 
 | 删什么                                                                                      | 行数（量于 `c4c843a`） | 留什么                                        |
