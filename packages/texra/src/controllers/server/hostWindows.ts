@@ -146,12 +146,14 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
   const offers = (key: string, capability: HostCapability) =>
     target(key, capability) !== undefined;
 
-  /** Send a call that needs no answer. */
+  /** Send a call nothing waits on: the window carries it out and says
+   *  itself when it could not. */
   const tell = (window: Window, call: HostCall) =>
     Queue.offer(window.frames, {
       kind: 'call',
       id: randomUUID(),
       call,
+      awaited: false,
     }).pipe(Effect.asVoid);
 
   /** Send a call to the window `key`'s project routes it to and wait for
@@ -180,7 +182,12 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
       fail: (failure) => Deferred.fail(answered, failure).pipe(Effect.asVoid),
     });
     calls.set(id, window);
-    yield* Queue.offer(window.frames, { kind: 'call', id, call });
+    yield* Queue.offer(window.frames, {
+      kind: 'call',
+      id,
+      call,
+      awaited: true,
+    });
     const value = yield* Deferred.await(answered).pipe(
       Effect.timeoutOrElse({
         duration: within,
@@ -339,12 +346,11 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
     Effect.suspend(() => {
       const pending = calls.get(id)?.pending.get(id);
       if (pending !== undefined) return pending.answer(reply);
-      // A call nothing waits on (a notice): its failure is said here.
-      return reply.ok
-        ? Effect.void
-        : Effect.logWarning(
-            `A TeXRA window could not carry out a host call: ${reply.message}`,
-          );
+      // Only an awaited call is answered: one answered after its wait ended
+      // (its run gave up, or its window went) is late, not a notice.
+      return Effect.logWarning(
+        `A TeXRA window answered host call ${id} after its wait ended${reply.ok ? '' : `: ${reply.message}`}`,
+      );
     });
   const focus = (attachment: string) =>
     Effect.map(Clock.currentTimeMillis, (now) => {

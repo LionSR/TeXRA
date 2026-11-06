@@ -181,20 +181,27 @@ function attachTo(
   const send = (id: string, answer: HostAnswer) =>
     client['host.answer']({ id, answer });
   return Effect.gen(function* () {
-    const answer = (id: string, call: HostCall) =>
+    /** Carry out a call; an awaited one is answered however it ends, a
+     *  defect included, so the service never waits on a call that died
+     *  here; one nothing waits on says here when it could not be done. */
+    const answer = (id: string, call: HostCall, awaited: boolean) =>
       perform(host, call).pipe(
-        // Any end but an interrupt is answered, a defect included, so the
-        // service never waits on a call that died here.
         Effect.matchCauseEffect({
           onSuccess: (value) =>
-            send(id, { ok: true, value: toJsonValue(value) }),
+            awaited
+              ? send(id, { ok: true, value: toJsonValue(value) })
+              : Effect.void,
           onFailure: (cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.failCause(cause)
-              : send(id, {
-                  ok: false,
-                  message: toErrorMessage(Cause.squash(cause)),
-                }),
+              : awaited
+                ? send(id, {
+                    ok: false,
+                    message: toErrorMessage(Cause.squash(cause)),
+                  })
+                : Effect.logWarning(
+                    `This window could not carry out a host call (${call.kind})`,
+                  ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
         }),
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
@@ -224,7 +231,7 @@ function attachTo(
             ),
           );
         // Each call on its own fiber: a slow build never holds the next.
-        return Effect.forkScoped(answer(frame.id, frame.call));
+        return Effect.forkScoped(answer(frame.id, frame.call, frame.awaited));
       }),
     );
   }).pipe(
