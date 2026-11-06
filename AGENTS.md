@@ -38,9 +38,10 @@ pre-commit install        # optional hooks (needs `pip install pre-commit`)
 
 **Builds don't type check.** esbuild and Vite only strip types. Run
 `npm run typecheck` before committing; this is the most common way a change lands
-broken. It runs `tsc` over the root and test configs, then each package's own
-check; the harness's is its full build, which regenerates
-`packages/harness/dist/`.
+broken. It runs `tsc` over the root and test configs and each package's own
+check at once (`scripts/typecheck.mjs`), the harness's being its full build,
+which regenerates `packages/harness/dist/`; a failed check prints its output
+whole under its name.
 
 The pre-commit hook runs oxfmt on the staged paths; when it rewrites a file
 the commit stops, and you stage the output and commit again. CI runs

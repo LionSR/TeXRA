@@ -21,7 +21,7 @@
     "gate:typecheck": "corepack pnpm --filter @texra-ai/cli smoke:react-compiler && npm run format:check && npm run typecheck",
     "test:vscode": "node scripts/vscode-host-e2e-runner.mjs",
     "smoke:webviews": "corepack pnpm --filter texra vite:webviews && node scripts/verify-desktop.mjs smoke-webviews",
-    "typecheck": "tsc --noEmit --checkers 8 && tsc --noEmit --checkers 8 -p tsconfig.test-kernel.json && corepack pnpm --filter @texra-ai/harness build && corepack pnpm --filter @texra-ai/llm typecheck && corepack pnpm --filter @texra-ai/cli typecheck && corepack pnpm --filter @texra/trace-viewer run typecheck && corepack pnpm --filter @texra/desktop typecheck",
+    "typecheck": "node scripts/typecheck.mjs",
     "compile:fast": "corepack pnpm --filter texra compile:fast",
     "watch:fast": "corepack pnpm --filter texra watch:fast",
     "package:fast": "corepack pnpm --filter texra package:fast",
