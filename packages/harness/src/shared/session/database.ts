@@ -19,7 +19,6 @@ import {
   type Stream,
   type SubscriptionRef,
 } from 'effect';
-import { isSqlError } from 'effect/sql/SqlError';
 import { AggregateIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
@@ -54,12 +53,10 @@ export const AggregateStateSchema = Schema.Struct({
 export type AggregateState = typeof AggregateStateSchema.Type;
 
 /** A store failure's fields, and its text: a `SqlError`'s message and the
- *  SQLite error that says why (`database is locked`), its reason's cause. */
+ *  SQLite error that says why (`database is locked`), its reason's cause,
+ *  which `toErrorMessage` reads. */
 const storeFailure = { path: Schema.String, cause: Schema.Defect() };
-const storeFailureMessage = (cause: unknown): string =>
-  isSqlError(cause) && cause.reason.cause != null
-    ? `${cause.message}: ${toErrorMessage(cause.reason.cause)}`
-    : toErrorMessage(cause);
+const storeFailureMessage = (cause: unknown): string => toErrorMessage(cause);
 
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Schema.TaggedError<DatabaseOpenFailed>()(
