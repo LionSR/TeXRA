@@ -91,6 +91,11 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
     /** The running service is a newer build speaking another protocol: it
      *  stays until it exits, so waiting does not bring this client back. */
     newer: Schema.optional(Schema.Literal(true)),
+    /** The running service answered the hello with something this build
+     *  cannot read, or refused the hello itself: a build from before the
+     *  digest. Its socket, for the one procedure every build keeps,
+     *  `service.stop`. */
+    unspoken: Schema.optional(Schema.String),
   },
 ) {
   override get message(): string {
@@ -188,11 +193,18 @@ export function probeService(
     Effect.catch((error) =>
       nobodyListens(error)
         ? Effect.succeed(null)
-        : Effect.fail(
-            new ServiceUnavailable({
-              reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
-            }),
-          ),
+        : error._tag === 'TimeoutError'
+          ? Effect.fail(
+              new ServiceUnavailable({
+                reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
+              }),
+            )
+          : Effect.fail(
+              new ServiceUnavailable({
+                reason: `The TeXRA service on ${socket} speaks a protocol this build cannot read (${error.message}).`,
+                unspoken: socket,
+              }),
+            ),
     ),
   );
 }
@@ -322,7 +334,29 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
 > {
   if (process.platform === 'win32')
     return yield* new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED });
-  let info = yield* probeRecordedService;
+  // A service from before the digest cannot read this hello: it is older
+  // by construction, and `service.stop` is the one procedure it shares.
+  let info = yield* probeRecordedService.pipe(
+    Effect.catchIf(
+      (error) => error.unspoken !== undefined,
+      (error) =>
+        Effect.logInfo(
+          "Retiring a TeXRA service that speaks a protocol this build cannot read; it finishes its tasks and exits, then this build's starts.",
+        ).pipe(
+          Effect.andThen(
+            stopService(error.unspoken ?? '', true).pipe(
+              Effect.mapError(
+                (failure) =>
+                  new ServiceUnavailable({
+                    reason: `The older TeXRA service could not be asked to retire: ${failure.message}`,
+                  }),
+              ),
+            ),
+          ),
+          Effect.as(null),
+        ),
+    ),
+  );
   if (info !== null && isNewer(info))
     return yield* Effect.fail(newerService(info));
   if (info !== null && (isOlder(info) || info.draining)) {

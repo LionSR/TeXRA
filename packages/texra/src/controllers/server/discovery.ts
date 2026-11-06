@@ -1,6 +1,7 @@
 /**
  * Where a client finds the service: its record in the global root's current
- * values, naming the running service's pid, protocol, build and socket.
+ * values, naming the running service's pid, start time and socket (its
+ * protocol and build are the hello's).
  * Each service listens on a socket of its own (`serve-<pid>.sock`), so a
  * retired service that exits while its successor serves removes only its
  * own file (closing a Unix socket server unlinks its path, whatever file is

@@ -52,7 +52,12 @@ import {
   removeDeadSockets,
   servicePaths,
 } from './discovery';
-import { ServiceControl, serviceHandlers, ServiceProjects } from './handlers';
+import {
+  ServiceControl,
+  serviceHandlers,
+  ServiceProjects,
+  runningTasks,
+} from './handlers';
 import {
   BUILD_VERSION,
   ServiceInfoSchema,
@@ -253,12 +258,16 @@ export const serve = Effect.fn('server.serve')(function* (
     SubscriptionRef.changes(state),
     SubscriptionRef.changes(projects.load),
   );
-  // A drain ends once no task is at work and none is admitting.
+  // A drain ends once no task is at work and none is admitting. The
+  // projects' load is the trigger; the decision reads the registries, which
+  // hold a run as its admission ends, where the view shows it only once its
+  // rows fold.
   yield* Effect.forkScoped(
     facts.pipe(
-      Stream.filter(
-        ([now, load]) =>
-          now.leaving === 'drain' && now.admitting === 0 && load.working === 0,
+      Stream.filterEffect(([now]) =>
+        now.leaving === 'drain' && now.admitting === 0
+          ? Effect.map(runningTasks(projects, true), (atWork) => atWork === 0)
+          : Effect.succeed(false),
       ),
       Stream.runHead,
       Effect.andThen(Deferred.succeed(ended, 'drained')),
