@@ -30,6 +30,7 @@ import { Interactions } from '@agent/runtime/HostInteractions';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
+import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { SessionRoots } from '@platform/rootedFs';
@@ -545,9 +546,10 @@ HARNESS_DISPOSERS.push(announceForegroundApprovals());
  */
 const harnessRuns = new Set<RunId>();
 
-/** Mint a run: its `run.start` existence fact (PRD 6, item 2), then the
- *  `run.config` launch fact a real run publishes next, which names the model
- *  an agent runs on (a child's scrollback header waits for it). */
+/** Mint a run, held here from its birth: its `run.start` existence fact
+ *  (PRD 6, item 2), then the `run.config` launch fact a real run publishes
+ *  next, which names the model an agent runs on (a child's scrollback
+ *  header waits for it). */
 function seedRun(
   runId: RunId,
   options: {
@@ -565,6 +567,7 @@ function seedRun(
 ): void {
   if (harnessRuns.has(runId)) return;
   harnessRuns.add(runId);
+  holdRun(runId);
   const identity = options.identity ?? {
     kind: 'agent' as const,
     agent: options.agent ?? 'harness-agent',
@@ -591,6 +594,34 @@ function seedRun(
       }),
     });
   }
+}
+
+/**
+ * The runs held as launches of this session, as the registry holds a run
+ * from its birth job until its fiber ends: the view reads them as
+ * `runsHere`, which a run needs to read as running or waiting rather than
+ * interrupted. A fixture has no fiber, so each hold is one that never ends
+ * until the run's terminal row or removal releases it.
+ */
+const heldRuns = new Map<RunId, Fiber.Fiber<unknown, unknown>>();
+function holdRun(runId: RunId): void {
+  if (heldRuns.has(runId)) return;
+  heldRuns.set(
+    runId,
+    harnessRuntime.runSync(
+      registryOf(Context.get(harnessRuntimeSession, Runs)).start(
+        runId,
+        Effect.never,
+        (run) => run,
+      ),
+    ),
+  );
+}
+function releaseRun(runId: RunId): void {
+  const held = heldRuns.get(runId);
+  if (held === undefined) return;
+  heldRuns.delete(runId);
+  harnessRuntime.runFork(Fiber.interrupt(held));
 }
 
 /**
@@ -639,6 +670,7 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
   if (!harnessRuns.has(runId)) {
     throw new Error(`tui-harness: cannot end unknown run ${runId}`);
   }
+  releaseRun(runId);
   publish({
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
@@ -657,6 +689,7 @@ function seedDescription(runId: RunId, description: string): void {
 }
 
 function removeRun(runId: RunId): void {
+  releaseRun(runId);
   publish({
     type: 'run.removed',
     aggregateId: qualifyAggregateId('run', runId),

@@ -255,9 +255,11 @@ export class SessionFrames extends Context.Service<
                   ): readonly [FrameInputs, readonly SessionViewInput[][]] => {
                     if (!state.complete && frame.debug !== null)
                       state.debug = frame.debug;
-                    state.pending.push(...frame.events, ...frame.chunks);
+                    // The local snapshot before the rows it was read ahead
+                    // of (`cutFrame`).
                     if (frame.local)
                       state.pending.push({ _tag: 'local', local: frame.local });
+                    state.pending.push(...frame.events, ...frame.chunks);
                     if (frame.existence !== null) {
                       const marker: SessionViewInput = frame.replayComplete
                         ? {

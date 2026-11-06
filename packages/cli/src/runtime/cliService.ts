@@ -15,6 +15,7 @@ import {
   FileSystem,
   Path,
   Predicate,
+  Schedule,
   Scope,
 } from 'effect';
 
@@ -23,6 +24,7 @@ import { type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
+  storeHeld,
   withLogChannel,
   withPerKeyLane,
   type PerKeyLane,
@@ -71,6 +73,11 @@ import type { CliContext } from './cliContext';
 
 /** The service's own log channel. */
 const CHANNEL = 'cliService';
+
+/** How long a project store held by another process is tried again for:
+ *  a retiring service exits within a second of its last task, and its
+ *  stores close with it. */
+const STORE_RELEASE_WAIT = '15 seconds';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
@@ -161,10 +168,20 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
         const projectScope = yield* Scope.fork(scope);
         const opened = yield* Effect.gen(function* () {
           const roots = yield* openRoots(root, projectScope);
-          const session = yield* sessions.open(roots, {
-            persistent: true,
-            host: {},
-          });
+          // A project store is held by one process. The service this one
+          // replaced releases the project as it exits, a moment after it
+          // stopped taking work (`serve.ts`): a held store is tried again
+          // for a while before the open is refused.
+          const session = yield* sessions
+            .open(roots, { persistent: true, host: {} })
+            .pipe(
+              Effect.retry({
+                while: storeHeld,
+                schedule: Schedule.spaced('250 millis').pipe(
+                  Schedule.upTo({ duration: STORE_RELEASE_WAIT }),
+                ),
+              }),
+            );
           yield* recordFirstCompletedRun(session).pipe(
             Scope.provide(projectScope),
           );

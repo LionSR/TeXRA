@@ -587,54 +587,46 @@ export class RunRegistry implements RunsShape {
    * Detach all active subagents from a parent, promoting them to top-level:
    * they keep running and deliver through the follow-up queue. One job
    * decides which children are born and severs those durably, keeping the
-   * grants each inherited. The unborn ones have no row to carry it: once
-   * the batch commits (a refused one cuts none), before the publisher runs
-   * any birth job, their activations are cut, which their birth job reads
+   * grants each inherited. The unborn ones have no row to carry it: their
+   * activations are cut in the same job, once its batch is accepted (a
+   * refused one cuts none) and before the publisher takes another job, so
+   * their birth job, queued behind this one, reads the cut
    * ({@link bornDetached}): a child is born detached, or detached by rows.
    * The stop marked the parent before reading its children, so none is
    * admitted in between.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const { log } = this.init;
-    return log
-      .transact((tx) =>
-        Effect.gen({ self: this }, function* () {
-          const children = this.childRunIds(parentRunId);
-          // Each born child's kept grants, from its rows and its ancestors'.
-          const kept = new Map<RunId, ApprovalGrants>();
-          for (const id of children) {
-            const facts = yield* log.facts(id);
-            if (facts?.start == null || facts.grants === null) continue;
-            const parent = facts.start.parent?.id ?? parentRunId;
-            const line = yield* ancestryRows((run) => log.facts(run), parent);
-            kept.set(
-              id,
-              grantsKept(grantSource(line), id, parent, facts.grants),
-            );
-          }
-          if (kept.size > 0)
-            yield* tx.append(
-              [...kept].flatMap(([id, snapshot]) => {
-                const aggregateId = qualifyAggregateId('run', id);
-                return [
-                  { type: 'run.detach', aggregateId },
-                  { type: 'approval.policy', aggregateId, snapshot },
-                ] as const;
-              }),
-            );
-          return { children, kept };
-        }),
-      )
-      .pipe(
+    return log.transact((tx) =>
+      Effect.gen({ self: this }, function* () {
+        const children = this.childRunIds(parentRunId);
+        // Each born child's kept grants, from its rows and its ancestors'.
+        const kept = new Map<RunId, ApprovalGrants>();
+        for (const id of children) {
+          const facts = yield* log.facts(id);
+          if (facts?.start == null || facts.grants === null) continue;
+          const parent = facts.start.parent?.id ?? parentRunId;
+          const line = yield* ancestryRows((run) => log.facts(run), parent);
+          kept.set(id, grantsKept(grantSource(line), id, parent, facts.grants));
+        }
+        if (kept.size > 0)
+          yield* tx.append(
+            [...kept].flatMap(([id, snapshot]) => {
+              const aggregateId = qualifyAggregateId('run', id);
+              return [
+                { type: 'run.detach', aggregateId },
+                { type: 'approval.policy', aggregateId, snapshot },
+              ] as const;
+            }),
+          );
         // Only a child still here: one gone since has no birth left to cut.
-        Effect.map(({ children, kept }) => {
-          for (const id of children)
-            if (!kept.has(id)) {
-              const activation = this.activations.get(id);
-              if (activation) activation.unbornParent = null;
-            }
-        }),
-      );
+        for (const id of children)
+          if (!kept.has(id)) {
+            const activation = this.activations.get(id);
+            if (activation) activation.unbornParent = null;
+          }
+      }),
+    );
   }
 
   // ----------------------------------------------------------------- close

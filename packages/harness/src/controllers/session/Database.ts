@@ -55,6 +55,7 @@ import {
   DatabaseReadFailed,
   DatabaseStoreNewer,
   DatabaseWriteFailed,
+  type SessionOpenError,
 } from '@shared/session/database';
 import { factKindsOf } from '@tools/plugins';
 import { ToolRegistry, toolTable } from '@tools/toolTable';
@@ -181,6 +182,13 @@ export type StoreMode = 'persistent' | 'existing' | 'ephemeral' | 'global';
 export const STORE_HELD_MESSAGE =
   'Another TeXRA process holds this project; close it there first.';
 
+/** Whether a session failed to open because another process holds its
+ *  project store: what a service that replaces a retiring one waits out. */
+export const storeHeld = (error: SessionOpenError): boolean =>
+  error._tag === 'DatabaseOpenFailed' &&
+  error.cause instanceof Error &&
+  error.cause.message === STORE_HELD_MESSAGE;
+
 export const databaseLayer = (
   mode: StoreMode,
 ): Layer.Layer<
@@ -275,8 +283,10 @@ export const databaseLayer = (
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows.at(0)));
-      /** The store gate (`storeGate`), run once at open: the store's one
-       *  writer is this process, so what it holds cannot change under it. */
+      /** The store gate (`storeGate`), run at open. A project store's one
+       *  writer is this process, so what it holds cannot change under it;
+       *  the global store's other processes can be newer builds, so there
+       *  the gate runs again in every outermost write. */
       const factKinds = factKindsOf((yield* ToolRegistry).entries.values());
       const gate = storeGate(exec, factKinds);
       const reader = rowReader(path, factKinds, exec);
@@ -448,15 +458,19 @@ export const databaseLayer = (
       // writers) runs the body again whole. In a caller's transaction a body
       // is a savepoint.
       const own = <A, E>(
-        mode: 'read' | 'write' | 'derive',
+        txMode: 'read' | 'write' | 'derive',
         body: Effect.Effect<A, E>,
       ) =>
         Effect.flatMap(TxMode, (outer) =>
           outer !== null
             ? withTransaction(body)
-            : retryBusy(withTransaction(body)).pipe(
-                Effect.provideService(TxMode, mode),
-              ),
+            : retryBusy(
+                withTransaction(
+                  mode === 'global' && txMode !== 'read'
+                    ? Effect.andThen(gate, body)
+                    : body,
+                ),
+              ).pipe(Effect.provideService(TxMode, txMode)),
         );
       const transaction = <A, E, EBody>(
         mode: 'read' | 'write' | 'derive',

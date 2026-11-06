@@ -1,4 +1,6 @@
-import { hostname } from 'node:os';
+import { cpSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { hostname, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Effect, Layer } from 'effect';
 
 import { expect, test } from '@playwright/test';
@@ -70,6 +72,28 @@ function inEventDatabase<A, E>(
       ),
     ),
   );
+}
+
+/**
+ * `operation` over a copy of the store at `storagePath` and its write-ahead
+ * log: the running app holds the store itself, which admits no other
+ * process, so what it has committed is read from the files.
+ */
+async function inStoreSnapshot<A, E>(
+  fixture: DatabaseFixture,
+  storagePath: string,
+  operation: Effect.Effect<A, E, import('@shared/session/database').Database>,
+) {
+  const snapshot = mkdtempSync(join(tmpdir(), 'texra-e2e-store-snapshot-'));
+  try {
+    for (const name of ['texra.db', 'texra.db-wal']) {
+      const file = join(storagePath, name);
+      if (existsSync(file)) cpSync(file, join(snapshot, name));
+    }
+    return await inEventDatabase(fixture, snapshot, operation);
+  } finally {
+    rmSync(snapshot, { recursive: true, force: true });
+  }
 }
 
 async function writeCanonicalRunFixtures(
@@ -200,7 +224,7 @@ test('a new desktop process hydrates waiting and orphaned histories without rewr
           { runId: ORPHAN_RUN, status: 'running', group: 'interrupted' },
         ]),
       );
-    const reloaded = await inEventDatabase(
+    const reloaded = await inStoreSnapshot(
       fixture,
       storagePath,
       canonicalRows(fixture),

@@ -102,6 +102,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import {
+  type DatabaseOpenFailed,
   type DatabaseReadFailed,
   ProjectDatabases,
 } from '@shared/session/database';
@@ -364,7 +365,11 @@ const liveCache = new Map<
  */
 const liveRows = (
   storage: string,
-): Effect.Effect<Row[], DatabaseReadFailed, ProjectDatabases> =>
+): Effect.Effect<
+  Row[],
+  DatabaseOpenFailed | DatabaseReadFailed,
+  ProjectDatabases
+> =>
   Effect.scoped(
     Effect.gen(function* () {
       const db = yield* RcMap.get(yield* ProjectDatabases, storage);
@@ -752,7 +757,7 @@ const cleanPass = (
   ) => Effect.Effect<unknown, unknown, SessionOwner>,
   steps: (
     session: Context.Context<SessionServices>,
-  ) => Effect.Effect<void, unknown>,
+  ) => Effect.Effect<void, unknown, ProjectDatabases>,
 ) =>
   Effect.gen(function* () {
     const points = yield* Effect.scoped(
@@ -810,7 +815,7 @@ const resumeFrom = (
   steps: (
     session: Context.Context<SessionServices>,
     storage: string,
-  ) => Effect.Effect<void, unknown>,
+  ) => Effect.Effect<void, unknown, ProjectDatabases>,
 ) =>
   Effect.gen(function* () {
     const storage = join(roots.storage, `crash-${n}`);

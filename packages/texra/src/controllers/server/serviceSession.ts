@@ -71,8 +71,9 @@ function frameInputs(frame: EventsFrame): SessionViewInput[] {
   const inputs: SessionViewInput[] = [];
   if (frame.debug !== null)
     inputs.push({ _tag: 'debug', enabled: frame.debug });
-  inputs.push(...frame.events, ...frame.chunks);
+  // The local snapshot before the rows it was read ahead of (`cutFrame`).
   if (frame.local !== null) inputs.push({ _tag: 'local', local: frame.local });
+  inputs.push(...frame.events, ...frame.chunks);
   if (frame.existence !== null)
     inputs.push(
       frame.replayComplete

@@ -121,11 +121,15 @@ export const sessionInputsLayer = Layer.effect(
               ),
             );
             const replayExistence = reconcileExistence(replayState);
+            // The local snapshot goes before the rows it describes: a run
+            // folded before it reads as held by nothing, and the transcript
+            // rows an unheld run settles stay settled once it is known held.
             const initialLocal = yield* SubscriptionRef.get(local.ref);
-            replay.push(
-              { _tag: 'local', local: initialLocal },
-              { _tag: 'replay.complete', existence: replayExistence },
-            );
+            replay.splice(1, 0, { _tag: 'local', local: initialLocal });
+            replay.push({
+              _tag: 'replay.complete',
+              existence: replayExistence,
+            });
             // Every level replays on subscribe; changes during the cold read
             // are therefore covered by the first finite tail read.
             const wakes = Stream.mergeAll<unknown, never, never>(
@@ -197,14 +201,20 @@ export const sessionInputsLayer = Layer.effect(
                           },
                         }
                       : yield* readDurable(previous.cursor, previous.change);
+                  // The snapshot was read before the rows: it goes before
+                  // them, as in the replay.
+                  const changed: SessionViewInput[] = isDeepStrictEqual(
+                    previous.local,
+                    snapshot,
+                  )
+                    ? []
+                    : [{ _tag: 'local', local: snapshot }];
                   const inputs: SessionViewInput[] = textChunks(
                     previous.text,
                     nextText,
                   );
-                  if (!isDeepStrictEqual(previous.local, snapshot)) {
-                    inputs.push({ _tag: 'local', local: snapshot });
-                  }
                   if (
+                    changed.length > 0 ||
                     inputs.length > 0 ||
                     rows.length > 0 ||
                     cursor !== previous.cursor ||
@@ -218,6 +228,7 @@ export const sessionInputsLayer = Layer.effect(
                     inputs.push({ _tag: 'drained', cursor, existence });
                   }
                   const batch: SessionViewInput[] = [
+                    ...changed,
                     ...rows
                       .filter(isDisplaySessionEvent)
                       .map((event): SessionViewInput => ({
