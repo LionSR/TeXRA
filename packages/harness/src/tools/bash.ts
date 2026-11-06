@@ -290,7 +290,6 @@ function backgroundBashTurn(params: {
           }),
       exit: {
         code: result.noExitCode === true ? null : result.exitCode,
-        signal: null,
         timedOut: result.timedOut,
       },
     };

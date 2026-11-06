@@ -97,7 +97,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                   type: 'process.exit',
                   aggregateId: qualifyAggregateId('run', runId),
                   code: 0,
-                  signal: null,
                   timedOut: false,
                 },
                 {
@@ -112,7 +111,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               expect(yield* records.readResult()).toEqual({
                 outcome: 'completed',
                 output: { response: 'done', files: [] },
-                exit: { code: 0, signal: null, timedOut: false },
+                exit: { code: 0, timedOut: false },
               });
               yield* Context.get(session, SessionLog).transact([
                 {

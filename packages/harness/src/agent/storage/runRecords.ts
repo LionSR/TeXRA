@@ -357,8 +357,8 @@ export function getRunRecords(runId: RunId) {
         const end = yield* runEndOf(runId, held, lifecycles, history);
         if (end === null) return null;
         if (held.exit === null) return end;
-        const { code, signal, timedOut } = held.exit;
-        return { ...end, exit: { code, signal, timedOut } };
+        const { code, timedOut } = held.exit;
+        return { ...end, exit: { code, timedOut } };
       },
     ),
   };

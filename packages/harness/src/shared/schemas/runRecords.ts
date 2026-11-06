@@ -108,13 +108,13 @@ export type RunEnd = typeof RunEndSchema.Type;
 export const RunEndRowSchema = RunEndSchema.mapFields(Struct.omit(['usage']));
 
 /**
- * How a process run's command exited (the `process.exit` row): its code,
- * the signal that ended it, and whether the run's own timeout did. A run
- * a stop interrupted has none: the interruption is the fact.
+ * How a process run's command exited (the `process.exit` row): its code
+ * (null when it had none: it could not start, or died by a signal) and
+ * whether the run's own timeout ended it. A run a stop interrupted has
+ * none: the interruption is the fact.
  */
 export const ProcessExitSchema = Schema.Struct({
   code: Schema.NullOr(Schema.Int),
-  signal: Schema.NullOr(Schema.String),
   timedOut: Schema.Boolean,
 });
 export type ProcessExit = typeof ProcessExitSchema.Type;

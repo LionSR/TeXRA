@@ -43,7 +43,10 @@ import {
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
+import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
+
+const CHANNEL = 'processRun';
 
 /** What one process turn reports as it returns. */
 export interface ProcessReport {
@@ -185,6 +188,8 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
       description: childRunDescription(launch.description),
     });
     const logger = createChildTrace(log, runId);
+    // A turn that cannot be built ends the registered run failed; an end
+    // the store refuses leaves the run to read as interrupted, said here.
     const turn = yield* launch.open({ logger, runId }).pipe(
       Effect.onError((cause) =>
         Effect.sync(() => logger.close()).pipe(
@@ -196,7 +201,14 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
               report: null,
             }),
           ),
-          Effect.ignoreCause,
+          Effect.catchCause((refused) =>
+            Effect.logWarning(
+              `Process run ${runId} could not be ended after its turn failed to open; it reads as interrupted.`,
+            ).pipe(
+              Effect.annotateLogs({ data: Cause.squash(refused) }),
+              withLogChannel(CHANNEL),
+            ),
+          ),
         ),
       ),
     );

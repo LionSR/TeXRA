@@ -156,11 +156,16 @@ const answerRequests = (
             .pipe(
               Effect.provide(session),
               Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
-              // Decided meanwhile (a grant turned on, another surface):
-              // the row stands, and the view drops the request.
+              // The session took no decision: decided meanwhile (a grant
+              // turned on, another surface), or a run no fiber here drives,
+              // which its resume asks again. Said, then held until the
+              // view drops the request.
               Effect.catchIf(
                 (error) => error instanceof Unavailable,
-                () => Effect.void,
+                (error) =>
+                  Effect.logInfo(
+                    `The decision on request ${pending.requestId} was not recorded: ${error.reason}`,
+                  ).pipe(withLogChannel(CHANNEL)),
               ),
             ),
         ),

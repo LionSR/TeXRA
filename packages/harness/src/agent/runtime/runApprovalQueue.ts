@@ -95,14 +95,17 @@ const personOnly = (payload: PermissionPayload): boolean =>
   'allowBypass' in payload.data && !payload.data.allowBypass;
 
 /**
- * The approval of every request of `runId` still open that a grant `next`
- * turns on covers: decided in the transaction that records the grant, so
- * a person who answers "approve and stop asking" answers what waits
- * behind it too. A request another grant already covered, or one only a
- * person answers, is left as it is.
+ * The approval of every open request a grant `next` of `runId` turns on
+ * covers: the run's own, and those of the descendants whose edge stands
+ * and whose grants follow its (`resolveBypass` over the grants as they
+ * will be once `next` is recorded); decided in the transaction that
+ * records the grant, so a person who answers "approve and stop asking"
+ * answers what waits behind it too, down the tree. A request another
+ * grant already covered, or one only a person answers, is left as it is.
  */
 const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   log: Pick<SessionLogShape, 'runRows'>,
+  view: ApprovalGrantSource<RunId>,
   runId: RunId,
   recorded: ApprovalGrants,
   next: ApprovalGrants,
@@ -111,22 +114,42 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     (kind) => grantsOn(next, kind) && !grantsOn(recorded, kind),
   );
   if (turnedOn.length === 0) return [];
-  const aggregateId = qualifyAggregateId('run', runId);
-  const { requests } = yield* log.runRows(aggregateId, 'requests');
-  return Object.entries(requests).flatMap(([requestId, request]) =>
-    request.decision === null &&
-    !personOnly(request.payload) &&
-    turnedOn.some((kind) => bypassCovers(kind, request.payload.kind))
-      ? [
-          {
-            type: 'request.decided' as const,
-            aggregateId,
-            requestId,
-            decision: { action: 'approve' as const },
-          },
-        ]
-      : [],
-  );
+  const after: ApprovalGrantSource<RunId> = {
+    runs: view.runs,
+    policy: new Map(view.policy).set(runId, next),
+  };
+  // The run and its descendants, by their standing parent edges.
+  const reached = new Set([runId]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const [id, { parentId }] of view.runs)
+      if (parentId !== null && reached.has(parentId) && !reached.has(id)) {
+        reached.add(id);
+        grew = true;
+      }
+  }
+  const rows: SessionEventDraft[] = [];
+  for (const id of reached) {
+    const covering = turnedOn.filter(
+      (kind) => id === runId || resolveBypass(after, id, kind) !== null,
+    );
+    if (covering.length === 0) continue;
+    const aggregateId = qualifyAggregateId('run', id);
+    const { requests } = yield* log.runRows(aggregateId, 'requests');
+    for (const [requestId, request] of Object.entries(requests))
+      if (
+        request.decision === null &&
+        !personOnly(request.payload) &&
+        covering.some((kind) => bypassCovers(kind, request.payload.kind))
+      )
+        rows.push({
+          type: 'request.decided',
+          aggregateId,
+          requestId,
+          decision: { action: 'approve' },
+        });
+  }
+  return rows;
 });
 
 /** The session's approvals over its view, its record door and its
@@ -184,7 +207,7 @@ export const sessionApprovals: Effect.Effect<
             : [
                 ...rows,
                 policyRow(runId, next),
-                ...(yield* approvalsUnder(log, runId, recorded, next)),
+                ...(yield* approvalsUnder(log, view(), runId, recorded, next)),
               ];
           if (all.length > 0) yield* runStateAppend(tx.append)(all);
         }),
