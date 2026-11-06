@@ -9,6 +9,7 @@ import { type ToolResult } from '@texra-ai/harness';
 import { ToolContext } from '@texra-ai/harness/plugins';
 import {
   ChildRuns,
+  noLaterTurn,
   requireRun,
   type AgentTrace,
   type PluginToolServices,
@@ -176,7 +177,7 @@ export function dispatchAgentCliTool<R = never, S = never>(params: {
     const { run } = yield* requireRun(agentName);
     // The turn is delivered as a follow-up message. A one-shot run has no
     // later turn to take it: refuse rather than launch work nobody collects.
-    if (run.toolPolicy.oneShot === true) {
+    if (noLaterTurn(run)) {
       return yield* Effect.fail(
         new ToolError(
           `${agentName} is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Delegate with \`agent\`, which returns the child's result directly.`,

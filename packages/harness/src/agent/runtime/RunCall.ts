@@ -156,6 +156,10 @@ export interface ScriptScope extends ScriptSource {
 declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
     readonly toolPolicy: ToolPolicy;
+    /** The parent edge this activation runs under, and whether the
+     *  parent's call awaits it: with the policy, what {@link noLaterTurn}
+     *  reads. */
+    readonly entry: Pick<AgentRunShape['entry'], 'parent' | 'awaited'>;
     readonly config: AgentConfig;
     /** The provider API-key variables the run's launch brought
      *  (`StartOptions.apiKeys`), which a child it launches takes too. */
@@ -238,6 +242,18 @@ export interface RunCallShape {
    *  opens (an edit, a plan, a delegation proposal); absent: no answer. */
   readonly hook?: 'allow' | 'ask';
 }
+
+/**
+ * Whether no later turn reaches `run`: a root that stops after its cycle,
+ * or a child its parent's call awaits (the call reads its end and goes
+ * on). A background child stops after its cycle too, but a delivery or a
+ * message resumes it, so a result sent to it as a follow-up arrives.
+ */
+export const noLaterTurn = (
+  run: Pick<ToolRun, 'toolPolicy' | 'entry'>,
+): boolean =>
+  run.toolPolicy.stopAfterCycle === true &&
+  (run.entry.parent === null || run.entry.awaited);
 
 /** The current call's place in its run, which the run loop provides beside
  *  each call; null outside a run (a standalone host invocation), which is

@@ -139,7 +139,7 @@ export {
   type MemoryPinResult,
   type MemoryPreview,
 } from '@tools/memory/memoryStore';
-export { callerRun, requireRun } from '@agent/runtime/RunCall';
+export { callerRun, noLaterTurn, requireRun } from '@agent/runtime/RunCall';
 export {
   ChildRuns,
   type ChildRunsShape,
