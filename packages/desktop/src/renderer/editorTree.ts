@@ -1,3 +1,6 @@
+// Third-party imports
+import { normalizeFilePath } from '@texra-ai/harness/schemas';
+
 export interface EditorFileEntry {
   /** Workspace-relative path used as the editor's file-system key. */
   readonly path: string;
@@ -38,8 +41,7 @@ type NamedTreeNode = Pick<EditorTreeNode, 'kind' | 'name'>;
  * tree builders use.
  */
 function workspacePathSegments(path: string): string[] {
-  return path
-    .replaceAll('\\', '/')
+  return normalizeFilePath(path)
     .split('/')
     .filter((segment) => segment.length > 0 && segment !== '.');
 }
