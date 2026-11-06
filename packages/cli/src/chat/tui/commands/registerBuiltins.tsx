@@ -124,9 +124,10 @@ export function registerBuiltinSlashCommands(options: {
   onMemorySelect?: SelectHandler<string>;
   onResumeSelect?: SelectHandler<RunId>;
   onSkillSelect?: SelectHandler<SkillActivation>;
-  /** Reach the TeXRA service (`/tasks`), starting it when none runs. */
+  /** The TeXRA service's client (`/tasks`), through the chat's link; absent
+   *  where the chat holds none. */
   connectService?: () => Effect.Effect<
-    ServiceConnection,
+    Pick<ServiceConnection, 'client'>,
     Error,
     Scope.Scope | GlobalValues
   >;

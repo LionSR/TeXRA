@@ -10,7 +10,6 @@ import {
   Effect,
   Exit,
   FiberHandle,
-  Result,
   Scope,
   Stream,
   SubscriptionRef,
@@ -41,9 +40,9 @@ import {
   type CliContext,
 } from '@cli/runtime/cliContext';
 import {
-  reachCliService,
+  isLinked,
+  linkClient,
   serviceKeysNotice,
-  startCliService,
 } from '@cli/runtime/cliService';
 
 import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
@@ -65,11 +64,6 @@ import {
 } from '@cli/tui/terminalCleanup';
 import { getFirstRunDone } from '@texra/controllers/onboarding/onboardingFunnel';
 import { subscribeToSignalChanges } from '@texra/shared/signals';
-import {
-  START_TIMEOUT,
-  WINDOW_OUTDATED,
-  linkOutage,
-} from '@texra/controllers/server/client';
 import { documentTaskOf } from '@texra/tools/documents/documentTask';
 import { formatApprovalPolicy } from '@ui/copy/approvalPolicy';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
@@ -176,49 +170,17 @@ export async function runChat(
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
       // Every chat is a client of the one service, so other terminals and
-      // windows see its task: started here when none runs, before the
-      // platform links to it. One the platform could not link runs here,
-      // and says so once.
-      const started = yield* Effect.result(
-        startCliService(context.storageRoot),
-      );
+      // windows see its task: the platform starts it when none runs and
+      // holds the link, which reaches the service again (starting one when
+      // none answers) whenever it goes away. One the platform could not
+      // link runs here, and says so once.
       const services = yield* initCliPlatform({
         ...context,
         presentsStoreMovedAside: true,
+        startsService: true,
       });
-      const served = services.service !== undefined;
-      // A service that goes away mid-chat is started again once the
-      // link's own passive window has passed (a newer build that retired
-      // it is starting its replacement meanwhile, and must win the record),
-      // and again every few seconds until the link reaches one, so a start
-      // that fails while the trouble lasts is not the last; one that
-      // refuses this build (newer) is left alone.
-      if (services.service !== undefined) {
-        const link = services.service;
-        const restarts = yield* FiberHandle.make<void, never>().pipe(
-          Scope.provide(chatScope),
-        );
-        const restart = Effect.gen(function* () {
-          yield* Effect.sleep(START_TIMEOUT);
-          while ((yield* SubscriptionRef.get(link.client)) === null) {
-            yield* startCliService(context.storageRoot).pipe(
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  `The TeXRA service is not back: ${error.message}; trying again.`,
-                ),
-              ),
-            );
-            yield* Effect.sleep('5 seconds');
-          }
-        });
-        yield* Effect.forkScoped(
-          Stream.runForEach(linkOutage(link), (reason) =>
-            reason === null || reason === WINDOW_OUTDATED
-              ? FiberHandle.clear(restarts)
-              : FiberHandle.run(restarts, restart),
-          ),
-        ).pipe(Scope.provide(chatScope));
-      }
+      const link = isLinked(services.service) ? services.service : undefined;
+      const served = link !== undefined;
       // Where this chat's runs run: the service's session, or this one.
       const runSession = yield* services.runSession;
       // Said once the view is bound, which the transcript rows need.
@@ -241,7 +203,7 @@ export async function runChat(
             sessionStoreMovedAsideMessage(local.storeMovedAside),
           );
         startupNotices.push(
-          `This chat runs here only, so other terminals and windows will not see it: ${Result.isFailure(started) ? started.failure.message : (started.success ?? 'the TeXRA service did not answer')}`,
+          `This chat runs here only, so other terminals and windows will not see it: ${isLinked(services.service) ? 'the TeXRA service did not answer' : services.service.none}`,
         );
       }
       // Without a usable credential the chat still opens: the "Connect a
@@ -341,7 +303,7 @@ export async function runChat(
         startupNotices,
         services,
         runSession,
-        link: services.service,
+        link,
         runsElsewhere: served,
         defaults,
         firstRunSetupAgent,
@@ -613,7 +575,7 @@ export async function runChat(
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
     runSession,
-    connectService: () => reachCliService(context.storageRoot),
+    ...(link !== undefined && { connectService: () => linkClient(link) }),
     onAccountChanged: () =>
       connectChatModel(
         slashCommandContext(),

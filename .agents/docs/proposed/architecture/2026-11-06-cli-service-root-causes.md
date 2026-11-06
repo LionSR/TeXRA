@@ -62,16 +62,20 @@ again", which hits the same socket.
 
 Two designs end it; the owner chooses.
 
-- **One service per storage root, strictly.** A client that finds an
-  older service asks it to drain and waits on a published signal, the
-  socket's close (the client's `onDisconnect` already fires on it), then
-  starts its own; a project is never contended, so a held store at open is
-  an error, never a retry; the record names one socket path. Deletes:
-  `socketFor(pid)`, `removeDeadSockets`, the `retired` exclusion and
-  `NOT_YET_UP`, `STORE_RELEASE_WAIT` and the `storeHeld` retry,
-  `released`, the `hello.draining` field. Gives up: work in the new build
-  while the old build's long tasks finish; the windows show "finishing N
-  tasks before the update" for the drain's length.
+- **One service per storage root, strictly** (chosen by the owner, landed
+  on `simplify/service-one-door`). A client that finds an older service,
+  or one already draining, asks it to drain and waits on a published
+  signal, the socket's close (the client's `onDisconnect` already fires on
+  it), then starts its own; a draining service keeps its record and its
+  socket until it exits; a project is never contended, so a held store at
+  open is an error, never a retry. `hello.draining` is read by every
+  client now, not only by `texra service status`. Deletes: the early
+  record release, the `retired` exclusion, `STORE_RELEASE_WAIT` and the
+  `storeHeld` retry, `askServiceToStop`. Kept: the socket per pid and the
+  dead-socket sweep, since one socket path cannot be unlinked safely by a
+  service that may be racing another's listen (the pid names whose file
+  it is). Gives up: work in the new build while the old build's long tasks
+  finish; the client logs "finishing N running tasks" and waits.
 - **A per-project handoff on a signal.** The drain closes each project's
   session as its last run ends (`Sessions.drain`), and says so as a record
   in the global store, which the successor awaits through the store's
@@ -406,10 +410,15 @@ In order, each a PR that deletes what its root names:
    restart loop (§2.4). The admission stays the transport's (a draining
    session refusing its own starts would be the harness's `Sessions.drain`,
    which §2.1's per-project handoff needs and the strict design does not).
-2. **One service, one door** (§2.1, §2.4): the upgrade handoff on a
-   signal (the owner chooses strict one-service or the per-project
-   handoff) and the one `linkService`; the chat's restart loop and the
-   resolver copy go with it.
+2. **One service, one door** (§2.1, §2.4), on
+   `simplify/service-one-door`: the strict handoff on the socket's close
+   and the one `linkCliService` the platform calls (a command that runs
+   or lists tasks says `startsService`; the chat, `texra resume` and
+   `texra tasks` do), answering the link or why it holds none; the chat's
+   restart loop, the four other doors (`reachCliService`,
+   `startCliService`, `connectCliService`, `linkRunningCliService`) and
+   the start-then-link dance go with it. `probeCliService` stays for the
+   status and stop commands: a probe is not a door.
 3. **The session over the wire is the harness's** (R10 with §2.7, §3.1):
    the frame is `SessionViewInput[]`, the RPCs are `Session`'s members,
    `runView` lifted onto the trace port serves both sides, `task.ended`

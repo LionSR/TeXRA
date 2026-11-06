@@ -48,9 +48,9 @@ import type {
   PendingApprovalFact,
 } from '../state/approvalQueue';
 
-/** Opens (and, when none runs, starts) the service connection. */
+/** The service's client, through the chat's link. */
 type ConnectService = () => Effect.Effect<
-  ServiceConnection,
+  Pick<ServiceConnection, 'client'>,
   Error,
   Scope.Scope | GlobalValues
 >;

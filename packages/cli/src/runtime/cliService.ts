@@ -14,7 +14,7 @@ import {
   FileSystem,
   Path,
   RcMap,
-  Schedule,
+  Result,
   Scope,
   Stream,
   SubscriptionRef,
@@ -25,7 +25,6 @@ import { type LocalSession, type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
-  storeHeld,
   withLogChannel,
   StateStores,
 } from '@texra-ai/harness/host';
@@ -42,18 +41,13 @@ import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
-import {
-  BUILD_VERSION,
-  type ServiceInfo,
-} from '@texra/controllers/server/protocol';
+import { type ServiceInfo } from '@texra/controllers/server/protocol';
 import type {
   ServiceLoad,
   ServiceProject,
   ServiceProjects,
 } from '@texra/controllers/server/handlers';
 import {
-  ensureService,
-  isNewer,
   isOlder,
   linkService,
   probeRecordedService,
@@ -73,11 +67,6 @@ import type { CliContext } from './cliContext';
 
 /** The service's own log channel. */
 const CHANNEL = 'cliService';
-
-/** How long a project store held by another process is tried again for:
- *  a retiring service exits within a second of its last task, and its
- *  stores close with it. */
-const STORE_RELEASE_WAIT = '15 seconds';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
@@ -179,22 +168,14 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   > {
     const projectScope = yield* Effect.scope;
     const roots = yield* openRoots(root, projectScope);
-    // A project store is held by one process. The service this one
-    // replaced releases the project as it exits, a moment after it
-    // stopped taking work (`serve.ts`): a held store is tried again
-    // for a while before the open is refused.
-    // The session closes as the project is released, before its roots
+    // A project store is held by one process, and one service serves a
+    // storage root at a time (the client that replaces a service waits for
+    // its exit), so a held store is another process's to answer for. The
+    // session closes as the project is released, before its roots
     // (registered after them, so released first); the service's exit
     // closes every session ahead of that (`serve`'s settle).
     const session = yield* Effect.acquireRelease(
-      sessions.open(roots, { persistent: true, host: {} }).pipe(
-        Effect.retry({
-          while: storeHeld,
-          schedule: Schedule.spaced('250 millis').pipe(
-            Schedule.upTo({ duration: STORE_RELEASE_WAIT }),
-          ),
-        }),
-      ),
+      sessions.open(roots, { persistent: true, host: {} }),
       (opened) => Effect.asVoid(sessions.close(opened.roots)),
     );
     yield* recordFirstCompletedRun(session).pipe(Scope.provide(projectScope));
@@ -292,19 +273,6 @@ export const probeCliService: Effect.Effect<
  *  chat runs here, as where the service cannot run. */
 const NO_SERVICE = 'TEXRA_NO_SERVICE';
 
-/** Connect to the storage root's service, starting it when none answers
- *  and retiring one older than this build. Leaves the process's log sink as
- *  it is: what the chat uses. */
-export function reachCliService(
-  storageRoot: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope | GlobalValues> {
-  return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
-    off
-      ? Effect.fail(new Error(`${NO_SERVICE} is set`))
-      : ensureService(storageRoot, spawnOwnService(storageRoot)),
-  );
-}
-
 /** Start this build's service on `storageRoot`, detached. */
 const spawnOwnService = (storageRoot: string) =>
   spawnService(storageRoot, process.execPath, [
@@ -316,78 +284,64 @@ const spawnOwnService = (storageRoot: string) =>
 /** What the link's starter says instead of starting a service. */
 const NONE_RUNNING = 'no TeXRA service is running';
 
+/** The storage root's service as a CLI process holds it: linked for the
+ *  process's life, or why it holds none. */
+export type CliServiceLink = ServiceLink | { readonly none: string };
+
+/** Whether `link` holds a service. */
+export const isLinked = (link: CliServiceLink): link is ServiceLink =>
+  'client' in link;
+
 /**
- * The storage root's running service of this build's protocol, linked for
- * the caller's scope, or undefined when there is none to link:
- * `TEXRA_NO_SERVICE`, Windows, or no service running (a command never
- * starts one for itself). An older build's service holds the projects it
- * serves, and a project store is held by one process, so this build cannot
- * open one beside it: the command retires that service and links to the
- * one it starts in its place, as the chat does. A service that is there
- * but cannot be linked (a newer build's, an unreadable record, one that
- * does not answer) fails, so no command works beside it on the project's
- * store.
+ * The one door to the storage root's service: linked for the caller's
+ * scope, started when none answers if `start` (a command that runs or
+ * lists tasks), else linked only when one runs. An older build's service
+ * holds the projects it serves, and a project store is held by one
+ * process, so this build cannot open one beside it: the command retires
+ * that service and links to the one it starts in its place, whatever
+ * `start` says. Answers why it holds none where none is possible
+ * (`TEXRA_NO_SERVICE`, Windows), none runs and `start` is off, or the
+ * service could not be reached or started (a newer build's refuses this
+ * one): the caller says it, and works in process.
  */
-export const linkRunningCliService = Effect.fn('linkRunningCliService')(
-  function* (
-    storageRoot: string,
-  ): Effect.fn.Return<
-    ServiceLink | undefined,
-    Error,
-    Scope.Scope | GlobalValues
-  > {
-    if (yield* envFlag(NO_SERVICE)) return undefined;
-    if (process.platform === 'win32') return undefined;
-    const info = yield* probeRecordedService.pipe(
-      Effect.mapError(
-        (error) =>
-          new Error(`The TeXRA service could not be reached: ${error.reason}`),
-      ),
-    );
-    if (info === null) return undefined;
-    if (isNewer(info))
-      return yield* Effect.fail(
-        new Error(
-          `A newer TeXRA (${info.version}, pid ${info.pid}) serves this storage root; this build (${BUILD_VERSION}) cannot work beside it.`,
-        ),
-      );
-    return yield* linkService(
+export const linkCliService = Effect.fn('linkCliService')(function* (
+  storageRoot: string,
+  start: boolean,
+): Effect.fn.Return<CliServiceLink, never, Scope.Scope | GlobalValues> {
+  if (yield* envFlag(NO_SERVICE)) return { none: `${NO_SERVICE} is set` };
+  if (process.platform === 'win32') return { none: WINDOWS_UNSUPPORTED };
+  const reach = (reason: string) => ({
+    none: `The TeXRA service could not be reached: ${reason}`,
+  });
+  const probed = yield* Effect.result(probeRecordedService);
+  if (Result.isFailure(probed)) return reach(probed.failure.reason);
+  const info = probed.success;
+  if (info === null && !start) return { none: NONE_RUNNING };
+  const linked = yield* Effect.result(
+    linkService(
       storageRoot,
-      isOlder(info)
+      start || (info !== null && isOlder(info))
         ? spawnOwnService(storageRoot)
         : Effect.fail(new Error(NONE_RUNNING)),
-    ).pipe(
-      Effect.mapError(
-        (error) =>
-          new Error(`The TeXRA service could not be reached: ${error.reason}`),
-      ),
-    );
-  },
-);
-
-/**
- * Start the storage root's service when none answers, and leave it
- * running: what the chat and `texra resume` do before the platform comes
- * up, so the platform links to it ({@link linkRunningCliService}). Answers
- * null, or why this process uses none (`TEXRA_NO_SERVICE`, Windows), which
- * the caller says once; a service that cannot start fails with its reason.
- */
-export const startCliService = Effect.fn('startCliService')(function* (
-  storageRoot: string,
-): Effect.fn.Return<string | null, Error, GlobalValues> {
-  if (yield* envFlag(NO_SERVICE)) return `${NO_SERVICE} is set`;
-  if (process.platform === 'win32') return WINDOWS_UNSUPPORTED;
-  yield* Effect.scoped(reachCliService(storageRoot));
-  return null;
+    ),
+  );
+  return Result.isFailure(linked)
+    ? reach(linked.failure.reason)
+    : linked.success;
 });
 
-/** {@link reachCliService} for a client command, whose process prints only
- *  its own result. */
-export function connectCliService(
-  storageRoot: string,
-): Effect.Effect<ServiceConnection, Error, Scope.Scope | GlobalValues> {
-  return quietClient.pipe(Effect.andThen(reachCliService(storageRoot)));
-}
+/** The service's client through `link`, for one connection's use; a link
+ *  that holds none now fails with why. */
+export const linkClient = (
+  link: ServiceLink,
+): Effect.Effect<Pick<ServiceConnection, 'client'>, Error> =>
+  Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+    client === null
+      ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
+          Effect.fail(new Error(away)),
+        )
+      : Effect.succeed({ client }),
+  );
 
 /**
  * What a client says when this terminal sets a provider key the service

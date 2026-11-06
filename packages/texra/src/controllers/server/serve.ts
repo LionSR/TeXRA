@@ -4,19 +4,20 @@
  * service), and then lives until one of three things ends it:
  *
  * - a stop: `service.stop` without a drain, or the host's own shutdown;
- * - a drain (`service.stop` with `drain`, the upgrade path): the record is
- *   released at once, so a newer service can start and be found while this
- *   one finishes the tasks at work, and it exits when they end (a
- *   conversation waiting here for its next message stops with it,
- *   resumable);
+ * - a drain (`service.stop` with `drain`, the upgrade path): no task starts,
+ *   the tasks at work finish, and it exits when they end (a conversation
+ *   waiting here for its next message stops with it, resumable). It keeps
+ *   its record and its socket meanwhile: one service serves a storage root
+ *   at a time, and the client that asked waits for the socket to close
+ *   before it starts the next build's (`ensureService`), so a project is
+ *   never held by two processes;
  * - idleness: no project open (each is released once nothing has held it
  *   for `idleAfter`, a run at work included) and no task admitting, for
  *   `idleAfter` more (a conversation waiting for its next message stops
  *   with it, resumable, as in a drain).
  *
- * Whichever ends it, it leaves as a drain does first: no task starts and
- * the record is released, so no client finds a service that is exiting.
- * It never starts at login: a client starts it detached when none answers.
+ * Whichever ends it, it leaves as a drain does first: no task starts; the
+ * record is released as it exits. It never starts at login: a client starts it detached when none answers.
  * The sessions it opened are the host's to close once this returns. Every
  * fact the lifetime follows is a published one (the projects' load, the
  * admissions, the watch streams), never a poll.
@@ -150,22 +151,19 @@ export const serve = Effect.fn('server.serve')(function* (
     readonly leaving: 'drain' | 'end' | null;
     readonly admitting: number;
   }>({ leaving: null, admitting: 0 });
-  // Once: a drain releases the record early, and the exit releases what is
-  // left.
+  // Once, as the service exits.
   const release = yield* Effect.cached(
     releaseServiceRecord(paths, record).pipe(
       Effect.provideService(FileSystem.FileSystem, fs),
       Effect.provideService(GlobalValues, values),
     ),
   );
-  // No task starts from here on, and the record goes first: a newer
-  // service can start and be found while this one finishes on the
-  // connections it already holds. The first reason stands.
+  // No task starts from here on. The first reason stands.
   const leave = (why: 'drain' | 'end') =>
     SubscriptionRef.update(state, (now) => ({
       ...now,
       leaving: now.leaving ?? why,
-    })).pipe(Effect.andThen(release));
+    }));
   // Every end leaves first, so no task is admitted once the run has ended.
   const end = (exit: ServeExit) =>
     leave('end').pipe(

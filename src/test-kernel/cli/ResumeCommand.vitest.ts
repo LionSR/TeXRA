@@ -32,9 +32,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
 }));
-// The command starts the service a conversation continues in; none here.
+// The platform links the service a conversation continues in; none here.
 vi.mock('@cli/runtime/cliService', () => ({
-  startCliService: () => Effect.void,
+  isLinked: (link: { readonly none?: string }) => !('none' in link),
 }));
 
 vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
@@ -63,7 +63,7 @@ const seedRunRecord = (config: AgentConfig | null) =>
         session: Effect.succeed(session),
         runSession: Effect.succeed(session),
         reads: localRunReads(Effect.succeed(session)),
-        service: undefined,
+        service: { none: 'no service in this test' },
       }),
     );
     yield* Context.get(handle, SessionLog).transact([

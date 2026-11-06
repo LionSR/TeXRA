@@ -1,14 +1,14 @@
 import { defineCommand } from 'citty';
-import { Deferred, Effect, Exit } from 'effect';
+import { Deferred, Effect, Exit, SubscriptionRef } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
 import { holdSignals } from '@cli/runtime/processSignals';
-import { stopServiceAndWait } from '@texra/controllers/server/client';
+import { stopService } from '@texra/controllers/server/client';
 import { servicePaths } from '@texra/controllers/server/discovery';
 import { ServiceProjects } from '@texra/controllers/server/handlers';
 import { serve } from '@texra/controllers/server/serve';
-import type { ServiceInfo } from '@texra/controllers/server/protocol';
+import { PROTOCOL, type ServiceInfo } from '@texra/controllers/server/protocol';
 
 import {
   adoptLoginShellEnvironment,
@@ -17,7 +17,8 @@ import {
 } from '../runtime/cliContext';
 import {
   cliServiceProjects,
-  connectCliService,
+  isLinked,
+  linkCliService,
   probeCliService,
 } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
@@ -163,10 +164,10 @@ function emitStatus(context: CliContext, info: ServiceInfo | null): void {
 
 /** Ask the service to stop and wait until it is gone: its socket closes
  *  as it exits. */
-const stopService = Effect.gen(function* () {
+const stopRunningService = Effect.gen(function* () {
   const info = yield* probeCliService;
   if (info === null) return null;
-  yield* stopServiceAndWait(info.socket).pipe(
+  yield* stopService(info.socket, false).pipe(
     Effect.timeout(STOP_TIMEOUT),
     Effect.mapError(
       () =>
@@ -202,7 +203,7 @@ const stopCommand = defineCliCommand({
   install: 'service',
   catchExitCode: CliExitCode.AgentError,
   run: () =>
-    stopService.pipe(
+    stopRunningService.pipe(
       Effect.map((stopped) => {
         writeTextStderr(
           stopped === null
@@ -220,9 +221,18 @@ const restartCommand = defineCliCommand({
   install: 'service',
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('service.run')(function* (context) {
-    yield* stopService;
-    const { info } = yield* Effect.scoped(
-      connectCliService(context.storageRoot),
+    yield* stopRunningService;
+    // The one door, starting the service: its hello is the status shown.
+    const info = yield* Effect.scoped(
+      Effect.flatMap(linkCliService(context.storageRoot, true), (link) =>
+        isLinked(link)
+          ? Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+              client === null
+                ? Effect.fail(new Error('The TeXRA service is not linked.'))
+                : client['service.hello']({ protocol: PROTOCOL.digest }),
+            )
+          : Effect.fail(new Error(link.none)),
+      ),
     );
     emitStatus(context, info);
     return CliExitCode.Success;

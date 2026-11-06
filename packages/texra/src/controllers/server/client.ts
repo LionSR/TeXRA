@@ -2,10 +2,12 @@
  * A window's side of the service: connect over the socket, say hello, and
  * start the service when none answers. Starting is the host's (each host
  * runs the service entry with its own Node), so {@link ensureService}
- * takes it as a program. A service of an older build, or of another
- * protocol and no newer build, is retired: it drains its running tasks
- * while a new one starts. One of a newer build speaking another protocol
- * is left running and refused, and the caller stays in process.
+ * takes it as a program. One service serves a storage root at a time: a
+ * service of an older build, or of another protocol and no newer build, is
+ * retired (it drains its running tasks and exits), and the caller waits
+ * for its socket to close before starting its own; one already draining
+ * is waited for the same way. One of a newer build speaking another
+ * protocol is left running and refused, and the caller stays in process.
  */
 import { spawn } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
@@ -269,29 +271,15 @@ export function spawnService(
 }
 
 /**
- * Ask the service on `socket` to stop now, or to drain (`drain`). It skips
- * the protocol check `ensureService` makes, so an older client can still
- * stop a newer service: `service.stop` keeps its shape across protocols.
+ * Ask the service on `socket` to stop (now, or once its running tasks end
+ * with `drain`) and wait until it is gone. The answer is the socket closing
+ * under this connection: the service exits ahead of any response, so the
+ * ask is sent without awaiting one (`discard`: it completes as the handler
+ * starts). A socket nobody accepts on is a service already gone.
  */
-export function askServiceToStop(
+export const stopService = (
   socket: string,
   drain: boolean,
-): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
-  return Effect.scoped(
-    Effect.flatMap(connectService(socket), (client) =>
-      client['service.stop']({ drain }),
-    ),
-  );
-}
-
-/**
- * Ask the service on `socket` to stop now and wait until it is gone. The
- * answer is the socket closing under this connection: the service exits
- * as soon as it is asked, ahead of any response, so the ask is sent
- * without awaiting one (`discard`: it completes as the handler starts).
- */
-export const stopServiceAndWait = (
-  socket: string,
 ): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -300,20 +288,10 @@ export const stopServiceAndWait = (
         socket,
         Effect.asVoid(Deferred.succeed(gone, undefined)),
       );
-      yield* client['service.stop']({ drain: false }, { discard: true });
+      yield* client['service.stop']({ drain }, { discard: true });
       yield* Deferred.await(gone);
     }),
-  );
-
-/** Ask the service on `socket` to drain: it exits once its running tasks
- *  end. One that exited already is retired. */
-function retireService(
-  socket: string,
-): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> {
-  return askServiceToStop(socket, true).pipe(
-    Effect.catchIf(nobodyListens, () => Effect.void),
-  );
-}
+  ).pipe(Effect.catchIf(nobodyListens, () => Effect.void));
 
 /** The refusal of a running service of a newer build that speaks another
  *  protocol. */
@@ -325,9 +303,10 @@ const newerService = (info: ServiceInfo) =>
 
 /**
  * Connect to this storage root's service, starting it with `start` (which
- * spawns the service detached and returns) when none answers, and retiring
- * one that speaks an older protocol or runs an older build than this one
- * first.
+ * spawns the service detached and returns) when none answers. One that
+ * speaks an older protocol or runs an older build than this one is retired
+ * first, and one already draining waited for: either exits once its tasks
+ * end, and its socket's close is the signal to start.
  */
 export const ensureService = Effect.fn('server.ensureService')(function* (
   storageRoot: string,
@@ -346,18 +325,19 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   let info = yield* probeRecordedService;
   if (info !== null && isNewer(info))
     return yield* Effect.fail(newerService(info));
-  let retired: number | null = null;
-  if (info !== null && isOlder(info)) {
-    const retiring = info;
-    retired = info.pid;
+  if (info !== null && (isOlder(info) || info.draining)) {
+    const leaving = info;
+    const tasks = `${leaving.running} running task${leaving.running === 1 ? '' : 's'}`;
     yield* Effect.logInfo(
-      `Retiring the TeXRA service ${info.version} (protocol ${info.protocol}): it finishes its running tasks and exits.`,
+      leaving.draining
+        ? `The TeXRA service ${leaving.version} (pid ${leaving.pid}) is finishing its ${tasks} before it exits; waiting for it.`
+        : `Retiring the TeXRA service ${leaving.version} (protocol ${leaving.protocol}): it finishes its ${tasks} and exits, then this build's starts.`,
     );
-    yield* retireService(retiring.socket).pipe(
+    yield* stopService(leaving.socket, true).pipe(
       Effect.mapError(
         (error) =>
           new ServiceUnavailable({
-            reason: `The older TeXRA service (pid ${retiring.pid}) could not be asked to retire: ${error.message}`,
+            reason: `The older TeXRA service (pid ${leaving.pid}) could not be asked to retire: ${error.message}`,
           }),
       ),
     );
@@ -373,12 +353,11 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       ),
     );
     // The service claims the record once it listens, so the record's
-    // changes are the signal to probe on: not claimed yet, claimed by the
-    // retiring service still, or by a service that accepts but does not
-    // answer, all wait for the next change; a newer build's service that
-    // came up meanwhile refuses this one at once. Past the deadline, the
-    // last probe's reason stands; only "not yet up" reads as the service
-    // not answering.
+    // changes are the signal to probe on: not claimed yet, or claimed by a
+    // service that accepts but does not answer, both wait for the next
+    // change; a newer build's service that came up meanwhile refuses this
+    // one at once. Past the deadline, the last probe's reason stands; only
+    // "not yet up" reads as the service not answering.
     const lastRefusal = yield* Ref.make(
       new ServiceUnavailable({ reason: NOT_YET_UP }),
     );
@@ -386,7 +365,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       Effect.flatMap((answer) => {
         if (answer !== null && isNewer(answer))
           return Effect.fail(newerService(answer));
-        return answer !== null && compatible(answer) && answer.pid !== retired
+        return answer !== null && compatible(answer) && !answer.draining
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),

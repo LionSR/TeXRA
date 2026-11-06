@@ -57,7 +57,7 @@ function treeOf(view: SessionView, root: RunView['id']): Set<string> {
  */
 export function followAttachedTask(
   connect: () => Effect.Effect<
-    ServiceConnection,
+    Pick<ServiceConnection, 'client'>,
     Error,
     Scope.Scope | GlobalValues
   >,
