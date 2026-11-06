@@ -303,12 +303,20 @@ Design smells:
   places; `clients` reassigned after the protocol builds because `control`
   is built before its dependency. A `Deferred`, and `control` after
   `protocol`.
-- `sessions.closeAll` runs three times at exit (`settle`, the serve
-  command's finalizer, the session layer's own).
+- `sessions.closeAll` ran three times at exit (the CLI platform's
+  finalizer, the serve command's `settle`, the session layer's own).
+  Ended: the CLI's project scope closes the session it opened, and the
+  layer closes the rest; `settle` stays, since the service's sessions
+  must close before its socket does, which the layer's finalizer (at the
+  runtime's disposal, after the socket) cannot order.
 - The link's reconnect drops the first failure's reason
   (`Effect.catch(() => connect(start))`) and re-probes to find it again.
-- The loser of a start race exits with the usage code: a normal outcome
-  reported as misuse.
+  Kept: the first attempt waits the start window for a newer build's
+  service, so its reason is "not yet up" by design, and the second's is
+  the one worth saying.
+- The loser of a start race exited with the usage code: a normal outcome
+  reported as misuse. Ended: it says so and exits clean; a service that
+  cannot listen or claim its record exits with the error code.
 - Liveness of a service is decided three ways (record presence, the
   hello, `process.kill(pid, 0)` in `removeDeadSockets`); the record is a
   pointer, which is fine, but the dead-socket sweep is a second cleanup
@@ -469,6 +477,7 @@ Left for a later PR, each a smell, none a defect:
   past `ANSWER_WITHIN` logged as a notice failure); `editorHost` keyed by
   storage root beside `HostWindows` keyed by session; two windows on one
   project, where service sessions always read as "can ask".
-- §3.2's smells (the hello's `protocol`/`version` on the record, the
-  `released` flag, `closeAll` run three times, the link's reconnect
-  dropping the first failure's reason, the race loser's usage code).
+- §3.2's smells, less the two PR 3 ended (`closeAll` run three times,
+  the race loser's usage code) and the one it keeps with its reason (the
+  reconnect's first failure); the record's `protocol`/`version` and the
+  `released` flag went with PR 14771.
