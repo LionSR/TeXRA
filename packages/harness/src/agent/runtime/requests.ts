@@ -35,7 +35,6 @@ import {
 import { isRequestDecision } from '@shared/session/runRowReads';
 
 import {
-  APPROVAL_BYPASS_KINDS,
   resolveBypass,
   runPolicy,
   withUnborn,
@@ -51,7 +50,7 @@ import {
   type ApprovalPolicy,
 } from '@shared/approvalPolicy';
 import {
-  bypassCovers,
+  grantAnswering,
   decisionFits,
   qualifyAggregateId,
   type CommitOrdinal,
@@ -121,19 +120,19 @@ export const workAutoApproved = (
     (owners) => decideExecutable(owners, runId) === 'allow',
   );
 
-/** Whether a grant the run holds answers a request of `payload`'s kind:
- *  one whose bypass covers the kind, unless the request says only a
- *  person answers it (`allowBypass: false`, a hook's ask). */
+/** Whether a grant the run holds answers a request of `payload`'s kind
+ *  (`grantAnswering`, the guard's reading over the request's kind), unless
+ *  the request says only a person answers it (`allowBypass: false`, a
+ *  hook's ask). */
 const grantAnswers = (
   owners: PolicyOwners,
   runId: RunId,
   payload: PermissionPayload,
 ): boolean =>
   !('allowBypass' in payload.data && !payload.data.allowBypass) &&
-  APPROVAL_BYPASS_KINDS.some(
-    (kind) =>
-      bypassCovers(kind, payload.kind) &&
-      owners.approvals.bypass(runId, kind) !== null,
+  grantAnswering(
+    (kind) => owners.approvals.bypass(runId, kind) !== null,
+    payload.kind,
   );
 
 /** The policy's answer for one request, or undefined when a person

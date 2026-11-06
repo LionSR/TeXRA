@@ -25,6 +25,7 @@ import {
   isApprovalDenied,
 } from '@shared/approvalPolicy';
 import {
+  grantHeld,
   qualifyAggregateId,
   type DecisionOf,
   type HookOutcomePayload,
@@ -92,7 +93,10 @@ export const sessionPermission =
     const policy = approvals.policy(runId);
     const decision = decideApproval({
       policy,
-      scopedBypass: approvals.bypass(runId, grant) !== null,
+      scopedBypass: grantHeld(
+        (kind) => approvals.bypass(runId, kind) !== null,
+        grant,
+      ),
       canPresent,
     });
     const denied = isApprovalDenied(decision)
