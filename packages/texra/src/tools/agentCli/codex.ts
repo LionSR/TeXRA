@@ -1,14 +1,11 @@
 /**
  * Codex tool — spin off an OpenAI Codex agent via the @openai/codex-sdk.
  *
- * Mirrors the `agent` model: every call is async. Without a
- * thread_id, a new Codex session is launched and the result is delivered
- * as a follow-up to the parent stream. With a thread_id, the prompt is
- * enqueued as a follow-up instruction to an existing session. If a turn is
- * still processing, the prompt waits in that session's queue.
- * Each turn's result is delivered back to the parent via the follow-up
- * queue, so the orchestrator sees responses uniformly whether it or the
- * user drove the turn.
+ * Mirrors the `agent` model: every call is async, and every call is one
+ * turn, run as one child run that ends with its result delivered as a
+ * follow-up to the parent. Without a thread_id, a new Codex thread is
+ * started. With a thread_id, the prompt continues that thread; a thread
+ * whose turn is still running here refuses another until it is delivered.
  *
  * The Codex CLI handles its own auth (~/.codex/auth.json from `codex login`,
  * OPENAI_API_KEY, config files).
@@ -49,7 +46,7 @@ import { buildAgentWorkspaceOptions } from '@texra/tools/agentCli/agentWorkspace
 import { getCodexConfig, openCodexClient } from './codexImport';
 import { CodexThreads } from './agentCliSessionStores';
 import {
-  buildAgentCliLaunch,
+  buildAgentCliTurn,
   dispatchAgentCliTool,
   launchAgentCliSession,
   StreamedToolCards,
@@ -63,8 +60,10 @@ import {
   buildCodexTurnToolLog,
   codexCallCard,
 } from './codexShared';
-import type { ProcessChildStrategy } from '@texra-ai/harness/plugins';
-import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
+import type {
+  PluginToolServices,
+  ProcessTurn,
+} from '@texra-ai/harness/plugins';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 // Third-party type imports (import/order places these after local imports)
@@ -94,7 +93,7 @@ const CodexInputSchema = Schema.Struct({
   }),
   thread_id: Schema.optional(Schema.NullOr(Schema.String)).annotate({
     description:
-      'Resume an existing Codex thread with a follow-up instruction. The prompt is enqueued as the next turn; if the thread is currently processing, the prompt waits in its queue.',
+      'Continue an existing Codex thread with a follow-up instruction, as its next turn. A thread whose turn is still running refuses another until that turn is delivered.',
   }),
 });
 
@@ -298,65 +297,43 @@ function runStreamedTurn(
 }
 
 // ============================================================================
-// Codex session loop — one turn per enqueued prompt, delivers to parent
+// The child's turn: one Codex turn, delivered to the parent by its end
 // ============================================================================
 
-/**
- * Build the Codex session loop's strategy. The shared child run loop processes
- * prompts from the child's follow-up queue one at a time and delivers each
- * turn's result to the parent's follow-up queue; this strategy supplies the
- * Codex-specific turn run, registry bookkeeping, and result formatting.
- */
-function buildCodexLaunch(params: {
+/** The Codex child's one turn: the Codex-specific turn run and result
+ *  formatting over the shared agent-CLI turn. */
+function buildCodexTurn(params: {
   thread: Thread;
   logger: AgentTrace;
   runId: RunId;
-  initialPrompt: string;
-  /**
-   * The disk-based fallback thread id claimed synchronously in execute(). The
-   * loop promotes that reservation after its first turn succeeds.
-   */
-  resumeThreadId: string | undefined;
-  /** Release the fallback claim if the loop exits before promoting it. */
-  releaseFallbackClaim: (() => void) | undefined;
-  registry: AgentCliSessionRegistry;
-}): Effect.Effect<ProcessChildStrategy<RunResult>> {
-  const {
-    thread,
+  prompt: string;
+  /** The claim on the thread this turn continues, released as it ends. */
+  release: (() => void) | undefined;
+}): ProcessTurn {
+  const { thread, logger, runId, prompt } = params;
+  return buildAgentCliTurn({
     logger,
-    runId,
-    initialPrompt,
-    resumeThreadId: fallbackThreadId,
-    releaseFallbackClaim,
-  } = params;
-  return buildAgentCliLaunch({
-    logger,
-    runId,
     stageLabel: 'Codex session',
-    initialPrompt,
-    registry: params.registry,
-    releaseFallbackClaim,
-    runProviderTurn: (prompt) => runStreamedTurn(thread, prompt, logger),
-    resolveSessionIds: () => [fallbackThreadId, thread.id],
+    release: params.release,
+    runProviderTurn: runStreamedTurn(thread, prompt, logger),
     getUsage: codexTurnUsage,
-    formatDelivery: (turn, wallTimeMs, lastPrompt) =>
+    formatDelivery: (turn, wallTimeMs) =>
       formatDelivery({
         tag: 'codex-result',
         runId,
-        prompt: lastPrompt,
+        prompt,
         attributes: [{ name: 'thread-id', value: thread.id || null }],
         wallTime: `${(wallTimeMs / 1000).toFixed(1)}s`,
         response: turn.finalResponse,
         usage: codexTurnUsage(turn),
       }),
-    formatError: (_turn, err, lastPrompt) =>
+    formatError: (_turn, err) =>
       formatDelivery({
         tag: 'codex-error',
         runId,
-        prompt: lastPrompt,
+        prompt,
         message: toErrorMessage(err),
       }),
-    continueWith: ['codex', 'thread_id', fallbackThreadId],
   });
 }
 
@@ -410,7 +387,10 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
+  | PluginToolServices
+  | CodexThreads
+  | ChildProcessSpawner
+  | FileSystem.FileSystem
 > {
   // The workspace when a person approved the launch; everything when the
   // run's work is auto-approved.
@@ -422,15 +402,8 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
     agentName: CODEX_AGENT_NAME,
     store: CodexThreads,
     resumeId: input.thread_id ?? undefined,
-    prompt: input.prompt,
-    labels: {
-      notActiveLabel: 'Codex thread',
-      idParamName: 'thread_id',
-      summaryLabel: 'Codex',
-      queuedLabel: 'Codex thread',
-    },
-    launch: (releaseFallbackClaim) =>
-      launchCodexSession(input, sandboxMode, releaseFallbackClaim),
+    threadLabel: 'Codex thread',
+    launch: (release) => launchCodexSession(input, sandboxMode, release),
   });
 });
 
@@ -442,7 +415,7 @@ export const CodexTool = defineTool({
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
-    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like executions send to an `agent` subagent. ' +
+    'Pass thread_id on a later call to continue that thread with a follow-up instruction, one turn per call. ' +
     'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like `agent`. ' +
     'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`); codex runs in the working directory of the calling agent and takes no directory argument. ' +
     'codex and claude_code are both independent sandboxed coders distinct from the in-process `agent` specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
@@ -464,14 +437,13 @@ export const CodexTool = defineTool({
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
-  releaseFallbackClaim: (() => void) | undefined,
+  release: (() => void) | undefined,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolContext | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
+  PluginToolServices | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots, workingDirectory } = (yield* ToolContext).env;
-  const registry = yield* CodexThreads;
   const { thread, run } = yield* createCodexThread(
     input,
     sandboxMode,
@@ -483,23 +455,22 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     ),
   );
   return yield* launchAgentCliSession({
-    resumeId: input.thread_id ?? undefined,
     agentName: 'codex',
     prompt: input.prompt,
     modelRef: run.ref,
     registerFailedMessage: 'Failed to register Codex run.',
-    buildLaunch: ({ logger, runId }) =>
-      buildCodexLaunch({
-        thread,
-        logger,
-        runId,
-        initialPrompt: input.prompt,
-        resumeThreadId: input.thread_id ?? undefined,
-        releaseFallbackClaim,
-        registry,
-      }),
+    open: ({ logger, runId }) =>
+      Effect.succeed(
+        buildCodexTurn({
+          thread,
+          logger,
+          runId,
+          prompt: input.prompt,
+          release,
+        }),
+      ),
     summaryLabel: 'Codex',
     launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,
-    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to send a follow-up instruction.`,
+    followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to continue the thread.`,
   });
 });

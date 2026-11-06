@@ -9,18 +9,17 @@
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Clock, Effect, Schema, SynchronizedRef } from 'effect';
+import { Effect, Schema, SynchronizedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
-import { createScriptRunStrategy } from '@agent/runtime/scriptRun';
 import { type RunToolCall } from '@agent/runtime/RunCall';
 import {
   agentChildRunId,
   earlierChild,
 } from '@agent/runtime/delegation/agentChild';
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
-import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
+import { startChildRun } from '@agent/runtime/delegation/childLaunch';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
@@ -94,25 +93,12 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
   });
   // The script's opening commits here, under the session's runs; a launch
   // that fails before it fails this call.
-  yield* startDetachedChildRunLoop({
-    runId,
+  yield* startChildRun(runId, definition, {
+    identity: { kind: 'script', title },
     parentRunId,
-    agentName: title,
-    strategy: createScriptRunStrategy({
-      definition,
-      // Registered with its opening, which its run commits.
-      registration: {
-        identity: { kind: 'script', title },
-        parentRunId,
-        parentCall: { callId: call.callId, card: call.logId },
-        description: childRunDescription(title),
-        ...(grants !== undefined && { grants }),
-      },
-      runId,
-      startedAt: yield* Clock.currentTimeMillis,
-      ...(workingDirectory != null && { workingDirectory }),
-      title,
-    }),
+    parentCall: { callId: call.callId, card: call.logId, awaited: false },
+    description: childRunDescription(title),
+    ...(grants !== undefined && { grants }),
   });
   return receipt(title, runId, false);
 });

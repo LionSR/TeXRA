@@ -13,12 +13,6 @@ import type { Effect } from 'effect';
  * act on them; a stop is the run fiber's interruption, not a control.
  */
 export interface RunControls {
-  /** The loop ends after its current turn (`stopAfterCycle`), or the one a
-   *  Stop hook's block opens: it reads no input, so nothing may queue a
-   *  message on it. A resume of the same run
-   *  may not be one-shot, which is why this is the live loop's, not the
-   *  launch's `followUpSupport`. */
-  readonly oneShot: boolean;
   modelSwitchDisabledReason(
     model: string,
   ): Effect.Effect<string | undefined, Error>;
@@ -32,11 +26,6 @@ export interface LiveRun {
   readonly runId: RunId;
   /** Its running loop's controls, while one runs here. */
   readonly controls: RunControls | undefined;
-  /** Whether the loop live here reads a message: a one-shot loop
-   *  (headless, or an in-band child) ends after its turn and reads none,
-   *  and a run with no loop of its own (a background command) reads what
-   *  its launch said it takes. */
-  readonly readsMessages: boolean;
   /** Resolves once the fiber driving it here has exited. */
   readonly drained: Effect.Effect<void>;
 }

@@ -19,6 +19,8 @@
     "model.retry",
     "output.produced",
     "plugin.fact",
+    "process.exit",
+    "process.output",
     "request.decided",
     "request.opened",
     "response.finalized",

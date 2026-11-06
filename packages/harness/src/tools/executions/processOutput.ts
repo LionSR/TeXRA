@@ -1,6 +1,7 @@
 /**
- * `/executions/{id}/output`: a background command's durable `log` rows
- * projected into display lines, and the windowed read that serves them.
+ * `/executions/{id}/output`: a background command's durable
+ * `process.output` rows projected into display lines, and the windowed
+ * read that serves them.
  */
 
 // Third-party imports
@@ -16,11 +17,7 @@ import {
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
-import {
-  BASH_BACKGROUND_LOG_CAP_CHARS,
-  type BackgroundBashOutputSource,
-  getBackgroundBashOutputSource,
-} from '@shared/toolUse';
+import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { executed } from '@tools/core/result';
 import { describeRunNotice, formatRunStatus } from '../executionFormatters';
 
@@ -49,12 +46,11 @@ interface ProcessOutputProjection {
 /**
  * Flatten a background command's run rows into display lines.
  *
- * Only plain `log` rows count: stages, usage and every row with a typed
- * `messageType` are run bookkeeping, not command output, and a debug-level
- * line is a diagnostic. Tagged stdout/stderr chunks stay in commit order and
- * concatenate only while their source remains compatible, so chunk-split
- * lines are reconstructed without crossing a stream switch. Untagged lifecycle
- * rows flush any pending command fragment and render standalone.
+ * The command's output is its `process.output` rows, in commit order,
+ * concatenated while their stream stays the same, so chunk-split lines are
+ * reconstructed without crossing a stream switch. A plain `log` row (the
+ * truncation notice) flushes any pending fragment and renders standalone;
+ * every other row is run bookkeeping, not command output.
  */
 function projectProcessOutput(
   events: readonly SessionEvent[],
@@ -62,7 +58,7 @@ function projectProcessOutput(
   const lines: string[] = [];
   let chars = 0;
   let pendingText = '';
-  let pendingSource: BackgroundBashOutputSource | undefined;
+  let pendingStream: 'stdout' | 'stderr' | undefined;
 
   const emitText = (text: string, stderr: boolean): void => {
     // A trailing break terminates the last line rather than opening an empty
@@ -73,34 +69,33 @@ function projectProcessOutput(
     }
   };
   const flushPending = (): void => {
-    if (pendingText && pendingSource) {
-      emitText(pendingText, pendingSource === 'stderr');
+    if (pendingText && pendingStream) {
+      emitText(pendingText, pendingStream === 'stderr');
     }
     pendingText = '';
-    pendingSource = undefined;
+    pendingStream = undefined;
   };
 
   for (const event of events) {
+    if (event.type === 'process.output') {
+      if (!event.text) continue;
+      chars += event.text.length;
+      if (pendingStream && pendingStream !== event.stream) flushPending();
+      pendingStream = event.stream;
+      pendingText += event.text;
+      continue;
+    }
     if (event.type !== 'log' || event.level === LOG_LEVELS.DEBUG) continue;
     if ((event.messageType ?? MESSAGE_TYPES.DEFAULT) !== MESSAGE_TYPES.DEFAULT)
       continue;
     const text = event.message;
     if (!text) continue;
-
     chars += text.length;
-    const source = getBackgroundBashOutputSource(event.data);
-    if (!source) {
-      flushPending();
-      emitText(
-        text,
-        event.level === LOG_LEVELS.WARN || event.level === LOG_LEVELS.ERROR,
-      );
-      continue;
-    }
-
-    if (pendingSource && pendingSource !== source) flushPending();
-    pendingSource = source;
-    pendingText += text;
+    flushPending();
+    emitText(
+      text,
+      event.level === LOG_LEVELS.WARN || event.level === LOG_LEVELS.ERROR,
+    );
   }
   flushPending();
 
@@ -108,8 +103,8 @@ function projectProcessOutput(
 }
 
 /**
- * stdout/stderr of a background command, projected from the transcript log
- * its child run already writes (`createChildRun` in `tools/bash.ts`).
+ * stdout/stderr of a background command, projected from the output rows
+ * its run writes (`backgroundBashTurn` in `tools/bash.ts`).
  *
  * This is the only route readable *while the command runs*: `/report` and
  * `/result` are written at completion, and the completion follow-up carries

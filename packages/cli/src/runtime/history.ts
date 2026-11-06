@@ -7,7 +7,6 @@ import {
   isRunId,
   isTaskConfig,
   RUN_OUTCOME,
-  RUN_SUBSTATE,
   type RunId,
   type RunOutcome,
   serializeFilteredConfig,
@@ -56,9 +55,6 @@ function mergeHistoryFiles(
 /** A persisted run's status in `texra history`'s NDJSON and tab output. */
 const HISTORY_RUN_STATUS = {
   RESUMABLE: 'resumable',
-  /** A child a stop rested (`RunView.substate` paused): its parent's model
-   *  continues it by calling it again. */
-  PAUSED: 'paused',
   COMPLETED: RUN_OUTCOME.COMPLETED,
   CANCELLED: RUN_OUTCOME.CANCELLED,
   FAILED: RUN_OUTCOME.FAILED,
@@ -74,8 +70,6 @@ interface CliRunFacts {
   readonly resumable: boolean;
   /** The run's durable outcome; null or absent while none has landed. */
   readonly outcome?: RunOutcome | null;
-  /** A stop rested the run instead of ending it (a paused child). */
-  readonly paused?: boolean;
 }
 
 /** A run's CLI history standing: the frozen `status` and the `resumable`
@@ -93,9 +87,6 @@ interface CliRunStanding {
  * continue reports `unknown`.
  */
 function cliRunStanding(facts: CliRunFacts): CliRunStanding {
-  // A paused child is continued by its parent's model, never by `resume`.
-  if (facts.paused)
-    return { status: HISTORY_RUN_STATUS.PAUSED, resumable: false };
   const outcome = facts.outcome ?? undefined;
   const status =
     facts.resumable &&
@@ -248,7 +239,6 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const standing = cliRunStanding({
       resumable: config !== null && checkpointPresent,
       outcome: run?.durableOutcome,
-      paused: run?.substate === RUN_SUBSTATE.PAUSED,
     });
     const conversationPreview = createConversationPreview(conversation);
     const fullConversation = options.includeFullConversation
@@ -429,7 +419,6 @@ export function formatInvalidExportFormatText(raw: string): string {
 function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
-    status === HISTORY_RUN_STATUS.PAUSED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;
@@ -522,7 +511,6 @@ function toCliHistoryEntry(entry: AgentRunListingEntry): CliHistoryEntry {
   const { status, resumable } = cliRunStanding({
     resumable: entry.resumable,
     outcome: entry.outcome,
-    paused: entry.paused,
   });
   return {
     id: entry.id,

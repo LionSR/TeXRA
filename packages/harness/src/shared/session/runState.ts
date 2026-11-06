@@ -158,7 +158,7 @@ export type RunState = RunPosition &
  *  state ignores them. */
 type CardRowType = CardType | ResultType | EndType | 'plugin.fact';
 type CardType = 'tool.start' | 'tool.end' | 'stage.start' | 'stream.end';
-type ResultType = 'run.report' | 'run.result' | 'child.turn' | 'child.park';
+type ResultType = 'run.report' | 'process.exit';
 type EndType = 'stage.end' | 'followup.closed'; // and what it closes
 /** The row types the run state reads, each with a handler in
  *  `ROW_HANDLERS`. A run's input is not among them: the inbox reads it. */

@@ -108,41 +108,28 @@ export type RunEnd = typeof RunEndSchema.Type;
 export const RunEndRowSchema = RunEndSchema.mapFields(Struct.omit(['usage']));
 
 /**
- * What a producer recorded beside a run's terminal fact, written as the
- * `run.result` row. It carries only what no other row does: the producer's
- * own context and a subagent's delivered reply (a child loop's `run.end` carries none, by
- * rule, and a child waiting for its next turn has none yet). Outcome, error,
- * usage and a workflow's files are read from their own rows — never copied
- * here (one run model, section 3.3).
+ * How a process run's command exited (the `process.exit` row): its code,
+ * the signal that ended it, and whether the run's own timeout did. A run
+ * a stop interrupted has none: the interruption is the fact.
  */
-export const ResultMetaSchema = Schema.Union([
-  Schema.Struct({
-    producer: Schema.Literal('backgroundBash'),
-    exitCode: Schema.optional(Schema.Int),
-    wallTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-    success: Schema.Boolean,
-    timedOut: Schema.optional(Schema.Boolean),
-    command: Schema.String,
-  }),
-  Schema.Struct({
-    producer: Schema.Literal('subagent'),
-    output: RunEndOutputSchema,
-  }),
-]);
-/** What a producer recorded beside a run's terminal fact. */
-export type ResultMeta = typeof ResultMetaSchema.Type;
+export const ProcessExitSchema = Schema.Struct({
+  code: Schema.NullOr(Schema.Int),
+  signal: Schema.NullOr(Schema.String),
+  timedOut: Schema.Boolean,
+});
+export type ProcessExit = typeof ProcessExitSchema.Type;
 
 /**
- * One run's result as `readResult` answers it: its terminal fact with the
- * output its delivery reported, the terminal fields absent while the run
- * has not ended, or a background command's own record.
+ * One run's result as `readResult` answers it: its terminal fact, the
+ * terminal fields absent while the run has not ended, and a process run's
+ * exit once its command exited.
  */
-export const RunResultSchema = Schema.Union([
-  ResultMetaSchema.members[0],
-  RunEndSchema.mapFields(
-    Struct.assign({ outcome: Schema.optional(RunOutcomeSchema) }),
-  ),
-]);
+export const RunResultSchema = RunEndSchema.mapFields(
+  Struct.assign({
+    outcome: Schema.optional(RunOutcomeSchema),
+    exit: Schema.optional(ProcessExitSchema),
+  }),
+);
 /** One run's result as `readResult` answers it. */
 export type RunResult = typeof RunResultSchema.Type;
 
@@ -167,8 +154,6 @@ export const AgentRunListingEntrySchema = Schema.Struct({
   timestamp: Schema.String,
   /** The run's durable outcome (its `run.end`), null while none has landed. */
   outcome: Schema.NullOr(RunOutcomeSchema),
-  /** A stop rested the run (the fold's paused substate), a status of its own. */
-  paused: Schema.optional(Schema.Literal(true)),
   /** AI-generated summary of what the session aimed to accomplish. */
   description: Schema.optional(Schema.String),
   /** The model the run is on, as the view folds it: its newest

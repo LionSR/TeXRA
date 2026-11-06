@@ -304,7 +304,7 @@ describe('submitFollowUp', () => {
           withResumePort(tryResumeRun),
           Effect.provide(session),
         ),
-      ).toEqual({ status: 'queued' });
+      ).toEqual({ status: 'sent' });
 
       // A producer repeating the same logical result must not append
       // another parent message; the live generation reads the one row.
@@ -372,7 +372,7 @@ describe('Inbox delivery identity (#9531)', () => {
         );
 
         expect(Exit.isFailure(first)).toBe(true);
-        expect(second).toEqual(Exit.succeed({ kind: 'queued', read: true }));
+        expect(second).toEqual(Exit.succeed({ kind: 'queued' }));
         expect(queued(id)).toEqual(['child result']);
       }),
   );
@@ -404,7 +404,6 @@ describe('Inbox closed input', () => {
         yield* followUps.open(closed);
         expect(yield* followUps.send(closed, user('reopened'))).toMatchObject({
           kind: 'queued',
-          read: true,
         });
       }),
   );

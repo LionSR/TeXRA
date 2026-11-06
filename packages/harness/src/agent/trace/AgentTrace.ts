@@ -106,6 +106,8 @@ export interface AgentTrace {
   info(message: string, options?: LogOptions): void;
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
+  /** A chunk of a process run's output, on its stream (`process.output`). */
+  output(stream: 'stdout' | 'stderr', text: string): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;

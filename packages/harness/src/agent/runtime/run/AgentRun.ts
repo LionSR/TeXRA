@@ -65,6 +65,10 @@ interface LaunchEntry {
    *  fresh run's launch, else its rows' edge): a child detached mid-run
    *  keeps child behaviour until its next activation. */
   readonly parent: RunId | null;
+  /** The parent's call awaits the child and reads its end itself: the
+   *  end delivers nothing to the parent's input, and the run takes no
+   *  permit of the child-run budget (it rides its parent's). */
+  readonly awaited: boolean;
   readonly registration: Registration | null;
   readonly seed?: RegisterRunOptions['seed'] | null;
   readonly opening: Alongside;
@@ -83,6 +87,10 @@ interface LaunchEntry {
 export interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
+  /** No later turn reaches the run: a root that stops after its cycle. A
+   *  child stops after its cycle too, but a delivery or a message resumes
+   *  it, so a result sent to it as a follow-up still arrives. */
+  readonly oneShot?: boolean;
 }
 
 interface RunCallbacks {
@@ -97,6 +105,8 @@ const SCRIPT_TOOL = 'script';
  *  the run's `AgentRun` carries whole. */
 export interface RunLaunch {
   readonly runId: RunId;
+  /** When this launch or resume of the run started (its opening). */
+  readonly startedAt: number;
   readonly config: AgentConfig;
   /** The persona the run is, with the tools it declares. */
   readonly persona: Persona;

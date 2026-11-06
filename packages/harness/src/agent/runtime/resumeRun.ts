@@ -7,7 +7,7 @@
  * drives is refused as not resumable. Recovered children use the same
  * continuous delivery driver as newly launched children.
  */
-import { Clock, Effect, Result, Schema } from 'effect';
+import { Effect, Result, Schema } from 'effect';
 
 import {
   describeFollowUpFailure,
@@ -30,13 +30,10 @@ import {
 } from '@shared/schemas';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
-import { createScriptRunStrategy } from './scriptRun';
 import { resumeBlocker } from './resumeBlocker';
 
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { prepareAgentDefinition } from './AgentLaunchContext';
-import { nativeChildRunLaunch } from './childRunLoop';
 import {
   registryOf,
   type AgentRunServices,
@@ -237,28 +234,14 @@ const openResume = Effect.fn('resumeRun.open')(function* (
   // A stop asked while those reads ran: the registry ends the run on its
   // rows as this opening fails; there is nothing to activate.
   if (runs.stopAsked(runId) !== null) return yield* refuse(REFUSED);
-  if (parentRunId === undefined) {
-    const definition = yield* prepareAgentDefinition({
-      config,
-      stopAfterCycle: options.stopAfterCycle,
-    });
-    return yield* executeAgent(definition, runId, { tools: options.tools });
-  }
-  const native = {
-    runId,
-    startedAt: yield* Clock.currentTimeMillis,
-    workingDirectory: config.workingDirectory ?? undefined,
-    // What a resumed run takes from the resume's caller.
-    resume: { ...options, config, parent: Effect.succeed(parentRunId) },
-  };
-  const { script } = config;
-  return yield* nativeChildRunLaunch(runs, {
-    runId,
+  // A child runs one cycle and ends with its report; a root as its caller
+  // asks.
+  const definition = yield* prepareAgentDefinition({
+    config,
+    stopAfterCycle: options.stopAfterCycle || parentRunId !== undefined,
+  });
+  return yield* executeAgent(definition, runId, {
+    tools: options.tools,
     parentRunId,
-    agentName: config.agent,
-    strategy:
-      script?.kind === 'background'
-        ? createScriptRunStrategy({ ...native, title: script.title })
-        : createNativeSubagentStrategy(native),
-  }).open;
+  });
 });

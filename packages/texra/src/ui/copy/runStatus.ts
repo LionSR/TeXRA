@@ -55,7 +55,6 @@ const RUN_STATUS_LABEL = {
   ready: 'Ready',
   waiting: 'Idle',
   resuming: 'Resuming',
-  paused: 'Paused',
   interrupted: 'Interrupted',
   waitingOnUser: 'Waiting on you',
 } as const satisfies Record<RunStatusKey, string>;

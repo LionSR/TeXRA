@@ -110,11 +110,11 @@ When the tool fires:
 
 1. A new stream tab opens on the ProgressBoard labelled `codex` or `claude_code`.
 2. You see the side agent's reasoning, the commands it runs, the file changes it makes, and any web searches (<wa-icon library="texra" name="globe"></wa-icon>), all live.
-3. When the turn ends, the stream's status dot turns blue and its label reads **Idle**. Type into it to send a follow-up, or select <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to close the session.
+3. When the turn ends, the run shows **Completed**. Each call is one turn: to send a follow-up, the agent calls the tool again with the `thread_id` or `session_id` the result carried. Select <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop** to end a turn early.
 4. The result (final message and token cost) is handed back to the TeXRA agent that asked for it, which then continues its own work.
 
 <DelegatedStreamHero />
-<p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, and web searches), then shows <strong>Idle</strong> and hands its result back to the calling agent.</p>
+<p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, and web searches), then shows <strong>Completed</strong> and hands its result back to the calling agent.</p>
 
 ## MCP servers
 
@@ -187,7 +187,7 @@ The exact error message is shown inline on the row, below its description. Read 
 
 **`codex login` opens a terminal but nothing happens.** The button runs `codex login` in a fresh integrated terminal. Focus the terminal and press **Enter** if the browser didn't open, or paste the login URL manually.
 
-**Session stuck in Idle after a reload.** TeXRA interrupts Codex threads when the extension reloads. Close the tab and start a new turn; pass the previous `thread_id` to continue where you left off.
+**A turn interrupted by a reload.** TeXRA interrupts Codex turns when the extension reloads; the run shows Interrupted. Start a new turn, passing the previous `thread_id` to continue where you left off.
 
 ### Claude Code
 

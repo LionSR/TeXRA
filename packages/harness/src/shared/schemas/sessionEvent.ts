@@ -33,7 +33,7 @@ import { listingTypeOf } from './rowVersions';
 import {
   RunEndRowSchema,
   RunRecordFieldsSchema,
-  ResultMetaSchema,
+  ProcessExitSchema,
   RunStopReasonSchema,
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
@@ -145,8 +145,16 @@ const RunParentSchema = Schema.Struct({
   /** The parent's tool call that launched this run (an `agent` call's
    *  child, a background `script` run), which owns it until it detaches,
    *  with its tool card (`logId`: a provider may reuse a call id, never a
-   *  card); null for a child no call launched. */
-  call: Schema.NullOr(Schema.Struct({ callId: NonEmpty, card: NonEmpty })),
+   *  card); null for a child no call launched. `awaited`: the call reads
+   *  the child's end itself, so the end delivers nothing to the parent's
+   *  input; a background child's end is queued on it. */
+  call: Schema.NullOr(
+    Schema.Struct({
+      callId: NonEmpty,
+      card: NonEmpty,
+      awaited: Schema.Boolean,
+    }),
+  ),
 });
 export type RunParent = typeof RunParentSchema.Type;
 
@@ -256,18 +264,6 @@ const DisplayRowDraftSchema = Schema.Union([
    * from nothing else.
    */
   durable('run.end', RunEndRowSchema.fields),
-  /**
-   * A child driven by the child loop, which has no run history or rounds, parks
-   * on its own row (one run model, 3.3): `parked` before the loop blocks on
-   * its queue, `resumed` when a batch starts the next turn, `paused` when a stop
-   * rests it with no `run.end`, keeping the `resumeId` a tool call continues
-   * it by. Listed under its own type (`ROW_KINDS`): a cold
-   * listing that dropped it would paint every parked child as busy.
-   */
-  durable('child.park', {
-    phase: Schema.Literals(['parked', 'resumed', 'paused']),
-    resumeId: Schema.optional(Schema.String),
-  }),
   /** A run's title, and who gave it: the model's summary, or the user's
    *  rename, which a later model title does not replace. `usage` is the
    *  priced helper request that wrote a model's summary, part of the run's
@@ -331,7 +327,9 @@ const DisplaySessionEventDraftSchema = Schema.Union([
  *  claim reopens it or it activates again. */
 const RunRecordEventDraftSchema = Schema.Union([
   durable('run.report', { report: Schema.NullOr(Schema.String) }),
-  durable('run.result', { result: ResultMetaSchema }),
+  /** How a process run's command exited, written with its end; a stop
+   *  writes none (the interruption is the fact). */
+  durable('process.exit', ProcessExitSchema.fields),
   durable('followup.closed', {}),
 ]);
 /**
@@ -349,19 +347,6 @@ const RunHistoryEventDraftSchema = Schema.Union([
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   durable('context.blob', { payload: ContextBlobSchema }),
   durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
-  /**
-   * One child turn's identity and fate, the child loop's own bookkeeping.
-   * The key is structural, (run, attempt, turn index), so an accepted turn
-   * always folds to one identity and a later attempt reusing the run id
-   * never collides with it. `accepted` without `settled` is the active
-   * turn; the latest `settled` is the last turn whose delivery ran: its
-   * parent's `followup.queued` commits in the same transaction.
-   */
-  durable('child.turn', {
-    attemptId: Schema.String.check(Schema.isMinLength(1)),
-    turnIndex: Schema.Int.check(Schema.isGreaterThan(0)),
-    phase: Schema.Literals(['accepted', 'settled']),
-  }),
 ]);
 export const SessionEventDraftSchema = Schema.Union([
   ...DisplaySessionEventDraftSchema.members,
@@ -446,7 +431,6 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
     case 'run.detach':
     case 'run.stop':
     case 'run.end':
-    case 'child.park':
     case 'run.description':
     case 'followup.queued':
     case 'followup.consumed':
@@ -464,8 +448,9 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':
+    case 'process.output':
     case 'run.report':
-    case 'run.result':
+    case 'process.exit':
     case 'followup.closed':
     case 'model.message':
     case 'context.edit':
@@ -475,7 +460,6 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
     case 'tools.offered':
     case 'context.blob':
     case 'hook.outcome':
-    case 'child.turn':
       return { parent: null, borrowsClaim: false, closes: false };
   }
 }
@@ -524,7 +508,7 @@ export function pendingKeyOf(
 
 /** Every `AgentEvent` arm but the chunk: each is stored as a row of its run. */
 // prettier-ignore
-export const TRACE_ROW_TYPES = Object.freeze(['log', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
+export const TRACE_ROW_TYPES = Object.freeze(['log', 'process.output', 'stage.start', 'stage.end', 'tool.start', 'tool.end', 'usage', 'context.state', 'stream.start', 'stream.end'] as const satisfies readonly DisplaySessionEvent['type'][]);
 
 export const DISPLAY_EVENT_TYPES: readonly string[] = Object.freeze(
   DisplaySessionEventDraftSchema.members.map(

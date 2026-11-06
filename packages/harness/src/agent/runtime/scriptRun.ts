@@ -3,28 +3,25 @@
  * background, made by a child run of its own (`AgentConfig.script`). The run
  * is the native tool-use program whose one response is that call, so it
  * replays from its rows as a foreground script does. This is what it tells
- * its parent: the strategy that delivers its result once, and the fold of
- * its rows that summarizes it (its calls, the files they wrote, what its
- * children spent).
+ * its parent at its end (`childEndReport`): the fold of its rows that
+ * summarizes it (its calls, the files they wrote, what its children spent),
+ * as its result, its failure, or the notice a person's stop leaves.
  */
 import { Clock, Effect, Result, Schema } from 'effect';
-import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
-import type { NativeChildStrategy } from '@agent/runtime/childRunLoop';
-import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type { RunReport } from '@agent/runtime/runReport';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import {
   qualifyAggregateId,
+  RUN_OUTCOME,
   type RunId,
+  type RunOutcome,
   type ToolResultPayload,
   type ScriptDeliverySummary,
   type ScriptTally,
 } from '@shared/schemas';
 import { scriptSummaryElement } from '@shared/subagentFollowup';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 /** What became of one call a script issued, as its rows say. */
 type ScriptCallStatus =
@@ -229,84 +226,69 @@ const resumeHint = (runId: RunId): string =>
   `Nothing continues it on its own. Resuming run ${runId} hands its finished calls back from its rows and runs the rest.`;
 
 /**
- * The strategy a background script's run takes: the native tool-use child,
- * whose turn is the script, delivering once under one id, so a resumed run's
- * delivery is a replay of one its earlier owner admitted. A script that
- * failed is a completed run whose delivery says so; a user's stop leaves a
- * notice naming the run to resume.
+ * What a background script's run delivers at its end: its calls' result
+ * and summary when the script ran to its result, else its failure (the
+ * script call's error, the run's own, or a run that ended with no result).
  */
-export function createScriptRunStrategy(
-  params: Parameters<typeof createNativeSubagentStrategy>[0] & {
-    readonly title: string;
-  },
-): NativeChildStrategy<RunReport, AgentRunServices> {
-  const { runId, title, startedAt } = params;
+export const scriptEndDelivery = Effect.fn('scriptRun.endDelivery')(function* (
+  runId: RunId,
+  title: string,
+  outcome: RunOutcome,
+  /** The run's own failure, when it ended failed. */
+  failure: string | null,
+  /** When this launch or resume of the run started. */
+  startedAt: number,
+): Effect.fn.Return<string, Error, SessionLog | SessionViewAccess> {
   const attributes = [{ name: 'title', value: title }];
-  const native = createNativeSubagentStrategy(params);
-  return {
-    ...native,
-    stageLabel: `Script '${title}'`,
-    formatDelivery: Effect.fn('scriptRun.formatDelivery')(function* () {
-      const { script } = yield* scriptRunCalls(runId);
-      if (script?.result.status === 'executed')
-        return formatDelivery({
-          tag: DELIVERY_TAG.scriptResult,
-          runId,
-          attributes,
-          response: script.result.output ?? '',
-          lines: [
-            scriptSummaryElement(
-              yield* scriptRunSummary(
-                runId,
-                title,
-                'completed',
-                null,
-                startedAt,
-              ),
-            ),
-          ],
-        });
-      const cause =
-        script?.result.status === 'error'
-          ? script.result.error
-          : 'The script ended without a result.';
-      return formatDelivery({
-        tag: DELIVERY_TAG.scriptError,
-        runId,
-        attributes,
-        lines: [
-          scriptSummaryElement(
-            yield* scriptRunSummary(runId, title, 'failed', cause, startedAt),
-          ),
-        ],
-        message: cause,
-      });
-    }),
-    formatError: (_turn, err) =>
-      formatDelivery({
-        tag: DELIVERY_TAG.scriptError,
-        runId,
-        attributes,
-        message: `${toErrorMessage(err)}\n${resumeHint(runId)}`,
-      }),
-    script: {
-      deliveryId: `${runId}:script:delivery`,
-      stopNotice: Effect.fn('scriptRun.stopNotice')(function* () {
-        const summary = yield* scriptRunSummary(
-          runId,
-          title,
-          'stopped',
-          null,
-          startedAt,
-        );
-        return formatDelivery({
-          tag: DELIVERY_TAG.scriptError,
-          runId,
-          attributes,
-          lines: [scriptSummaryElement(summary)],
-          message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
-        });
-      }),
-    },
-  };
-}
+  const { script } = yield* scriptRunCalls(runId);
+  if (outcome === RUN_OUTCOME.COMPLETED && script?.result.status === 'executed')
+    return formatDelivery({
+      tag: DELIVERY_TAG.scriptResult,
+      runId,
+      attributes,
+      response: script.result.output ?? '',
+      lines: [
+        scriptSummaryElement(
+          yield* scriptRunSummary(runId, title, 'completed', null, startedAt),
+        ),
+      ],
+    });
+  const cause =
+    script?.result.status === 'error'
+      ? script.result.error
+      : (failure ?? 'The script ended without a result.');
+  return formatDelivery({
+    tag: DELIVERY_TAG.scriptError,
+    runId,
+    attributes,
+    lines: [
+      scriptSummaryElement(
+        yield* scriptRunSummary(runId, title, 'failed', cause, startedAt),
+      ),
+    ],
+    message: failure === null ? cause : `${cause}\n${resumeHint(runId)}`,
+  });
+});
+
+/** The notice a background script stopped by a person leaves its parent:
+ *  what it had done, and the run to resume. */
+export const scriptStopNotice = Effect.fn('scriptRun.stopNotice')(function* (
+  runId: RunId,
+  title: string,
+  startedAt: number,
+): Effect.fn.Return<string, Error, SessionLog | SessionViewAccess> {
+  const summary = yield* scriptRunSummary(
+    runId,
+    title,
+    'stopped',
+    null,
+    startedAt,
+  );
+  return formatDelivery({
+    tag: DELIVERY_TAG.scriptError,
+    runId,
+    attributes: [{ name: 'title', value: title }],
+    lines: [scriptSummaryElement(summary)],
+    message: `The script '${title}' was stopped after ${summary.tally.ok} of ${summary.tally.total} calls. ${resumeHint(runId)}`,
+  });
+});

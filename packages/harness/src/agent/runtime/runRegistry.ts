@@ -20,7 +20,6 @@ import {
   Fiber,
   Schema,
   type Scope,
-  Semaphore,
 } from 'effect';
 
 import type { stopRun } from '@agent/storage/runLifecycle';
@@ -36,7 +35,6 @@ import {
   qualifyAggregateId,
   type RunId,
   RunStopReasonSchema,
-  USER_FOLLOW_UP_SUPPORT,
   type RunStopReason,
 } from '@shared/schemas';
 import type { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
@@ -143,8 +141,6 @@ export class RunRegistry implements RunsShape {
   >();
   /** The runs whose stop is committing: a start is refused meanwhile. */
   private readonly stopping = new Set<RunId>();
-  /** The session's child-run concurrency budget, made on first use. */
-  private budget: Semaphore.Semaphore | undefined;
   private disposed = false;
   /** Set by {@link stopAll}: the session is closing. */
   private closing = false;
@@ -185,11 +181,6 @@ export class RunRegistry implements RunsShape {
     const opening = this.starting.get(runId);
     if (fiber === undefined && opening === undefined) return undefined;
     const controls = this.controls.get(runId);
-    const readsMessages =
-      controls !== undefined
-        ? !controls.oneShot
-        : this.init.view.run(runId)?.followUpSupport !==
-          USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
     // An opening run drains once its start settled and the fiber it
     // forked, if any, exited.
     const drained =
@@ -199,7 +190,7 @@ export class RunRegistry implements RunsShape {
             Deferred.await(opening?.settled ?? Deferred.makeUnsafe<void>()),
             () => this.liveRun(runId)?.drained ?? Effect.void,
           );
-    return { runId, controls, readsMessages, drained };
+    return { runId, controls, drained };
   }
 
   /** The children one parent's detach or stop covers: each run held here
@@ -343,21 +334,6 @@ export class RunRegistry implements RunsShape {
           }),
         ),
       );
-    });
-  }
-
-  /** The session's one child-run concurrency budget: the cap on concurrently
-   *  live native child model conversations (`childRunBudget.ts` holds the
-   *  design and the configured value). Made at `permits` on first call and
-   *  re-pinned on every later one, so a settings change takes effect at the
-   *  next child launch and sharing loops pick it up on their next turn. */
-  childRunBudget(permits: number): Effect.Effect<Semaphore.Semaphore> {
-    return Effect.suspend(() => {
-      const existing = this.budget;
-      if (existing) return existing.resize(permits).pipe(Effect.as(existing));
-      const budget = Semaphore.makeUnsafe(permits);
-      this.budget = budget;
-      return Effect.succeed(budget);
     });
   }
 

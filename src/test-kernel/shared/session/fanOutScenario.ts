@@ -229,7 +229,10 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(CHILD, T.child, {
     type: 'run.start',
     identity: CHILD_IDENTITY,
-    parent: { ...log.parent(ROOT), call: { callId: 'call-1', card: 'call-1' } },
+    parent: {
+      ...log.parent(ROOT),
+      call: { callId: 'call-1', card: 'call-1', awaited: false },
+    },
     provenance: null,
     userFollowUpSupport: 'nativeInteractive',
   });

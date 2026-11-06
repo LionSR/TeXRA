@@ -5,10 +5,10 @@
  * A call's child is named by the call and its intent attempt
  * (`agentChildRunId`), so a resumed call finds what an earlier attempt
  * launched. The child's own aggregate says what became of it: `run.start` is
- * the launch, and a settled turn with a `run.result` manifest under its
- * `run.end` is its durable answer. A child a crash or a stop cut short is
- * resumed under its own id, not launched again; any other ended child's
- * end is the call's answer, which the model reads and decides on.
+ * the launch, and its `run.end` is its durable answer. A child a crash or a
+ * clean close cut short is resumed under its own id, not launched again;
+ * any other ended child's end is the call's answer, which the model reads
+ * and decides on.
  *
  * A script's awaited call may also be answered by a completed call before
  * it with the same prompt, options and file bytes (`reusable`).
@@ -22,11 +22,7 @@ import { Context, type Deferred, Effect, FileSystem, Stream } from 'effect';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
-import {
-  getRunRecords,
-  callChildRunId,
-  readChildTurnState,
-} from '@agent/storage/runRecords';
+import { getRunRecords, callChildRunId } from '@agent/storage/runRecords';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import {
   qualifyAggregateId,
@@ -42,7 +38,7 @@ import { type SessionView } from '@shared/session/sessionView';
 import { errorResult } from '@tools/core/result';
 
 // Local file imports
-import { resumeSubagentInBand } from './inBandSubagentRun';
+import { resumeSubagentInBand } from './childLaunch';
 
 /** Most children one script may launch, by `agent()` and `self()` together. */
 const AGENT_CALL_LIMIT = 1000;
@@ -113,54 +109,25 @@ type ChildStanding =
 const standingOf = Effect.fn('agent.childStanding')(function* (
   runId: RunId,
 ): Effect.fn.Return<ChildStanding, DatabaseReadFailed, AgentRunServices> {
-  const records = getRunRecords(runId);
-  const end = yield* records.readRunEnd();
-  const turns = yield* readChildTurnState(runId);
-  // `childRunLoop` commits a turn's acceptance just before the turn runs:
-  // one that never settled was cut short, and continues where it stopped.
-  // A child with no end continues too: resuming one that settled its turn
-  // re-parks, finishes at once with the answer its rows hold and settles,
-  // with no model call and no tool run. Its own history decides about its
-  // own unfinished calls.
+  const facts = yield* (yield* SessionLog).facts(runId);
+  const end = yield* getRunRecords(runId).readRunEnd();
+  // No end, or the end this process's clean close wrote: cut short, and
+  // continues where it stopped. A stop of the person's ends the call.
   if (
     end === null ||
-    (turns.active !== null && end.outcome !== RUN_OUTCOME.FAILED)
+    (end.outcome === RUN_OUTCOME.CANCELLED &&
+      facts?.stop?.reason === 'shutdown')
   )
     return { kind: 'resume' };
-  const meta = yield* records.readResultMeta();
-  const delivered = meta?.producer === 'subagent' ? meta : null;
+  // Failed before its first turn began: nothing it did can be repeated.
   if (
-    turns.active === null &&
-    turns.lastCompleted === null &&
-    delivered === null &&
-    end.outcome !== RUN_OUTCOME.COMPLETED
+    end.outcome === RUN_OUTCOME.FAILED &&
+    (facts?.position === null || facts?.position.payload.at === 'turn.ready')
   )
     return { kind: 'fresh' };
-  // A completed child whose delivery manifest is missing has no answer to
-  // read back: it is a failure that says so, not a completion with no
-  // output.
-  if (end.outcome === RUN_OUTCOME.COMPLETED && delivered === null)
-    return {
-      kind: 'answered',
-      result: {
-        ...end,
-        outcome: RUN_OUTCOME.FAILED,
-        error: {
-          kind: 'unexpected',
-          message:
-            'The agent completed, but its result was not recorded. Its work may be done: check before calling it again.',
-        },
-      },
-    };
   // Anything else ended: its end answers the call as it stands, a failure
   // included, and the model reads that answer and decides what follows.
-  return {
-    kind: 'answered',
-    result:
-      delivered !== null && end.outcome === RUN_OUTCOME.COMPLETED
-        ? { ...end, output: { ...end.output, ...delivered.output } }
-        : end,
-  };
+  return { kind: 'answered', result: end };
 });
 
 /** What the child an earlier attempt of the call left settles it to. */

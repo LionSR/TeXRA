@@ -305,8 +305,6 @@ private rows themselves are never sent to a renderer
 - `hook.outcome` (folded: yes): A hook point's recorded outcome; a recorded
   point never runs again (`shared/schemas/hookOutcome.ts#HookOutcomePayloadSchema`,
   `agent/runtime/loop/hooks.ts#hooksAt`).
-- `child.turn` (folded: no): A child loop's turn identity and fate, `accepted`
-  or `settled` (`shared/schemas/sessionEvent.ts#'child.turn'`).
 
 The `model.message` arms:
 
@@ -328,7 +326,8 @@ The `model.message` arms:
 
 ### 3.2 Run records (private to the runtime)
 
-`run.report` holds the run's report text, `run.result` its result metadata, and
+`run.report` holds the run's report text (a child's delivery, written with its
+`run.end`), `process.exit` how a process run's command exited, and
 `followup.closed` marks its input closed until the run's next `run.activate`
 reopens it (`shared/schemas/sessionEvent.ts#RunRecordEventDraftSchema`,
 `shared/session/runRowReads.ts#recordFacts`, `agent/followUp/Inbox.ts#admission`).
@@ -347,8 +346,6 @@ also read by `applyRunRows`.
   binding.
 - `run.detach` (folded: no): A stop severed the parent edge.
 - `run.end` (folded: no): The terminal fact: outcome, classified error, output.
-- `child.park` (folded: no): A child loop's park: `parked`, `resumed`,
-  `paused`.
 - `run.removed` (folded: no): The tombstone: last row of its aggregate, final.
 - `run.description` (folded: no): A title, by `model` or `user`.
 - `plugin.fact` (folded: no): A plugin's own kind; core never reads `value`.
@@ -464,9 +461,13 @@ leaves open cancelled and its unread input dropped
 naming its reason first, and for a run no fiber here drives, the `run.end`
 in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A run whose
 history does not load ends with its `run.end` and its requests uncancelled,
-with a warning (`agent/storage/runLifecycle.ts#endIn`). A child the child
-loop drives has no run history and writes no position; it parks on
-`child.park` rows (`shared/schemas/sessionEvent.ts#'child.park'`).
+with a warning (`agent/storage/runLifecycle.ts#endIn`). Every child is a
+run that ends: a native child runs one cycle and ends with its report; a
+process child (a background command, an agent CLI's turn) is one turn of
+its process, ended with its exit (`agent/runtime/processRun.ts`). A child's
+end queues its report on its parent's input in the same transaction, under
+`${runId}:${activation}` (`agent/storage/runLifecycle.ts#parentDelivery`),
+unless the parent's call awaits it or the child was detached.
 
 **W6.** Every failed attempt of a turn or a summary that reaches failure
 recording MUST commit a `failed` row whose `next` is the move after it; a
@@ -804,15 +805,13 @@ unless the item names another test:
   outcome-unknown runs again only after a person's retry (a call rejoining a
   standing or newly decided request runs at once, section 9).
 - **I5**: An owned child that ended cleanly answers its call; it is not launched
-  again without a person's retry; no child is left without a terminal row,
-  except one deliberately paused with a `child.park` `paused` row so it can be
-  called again (`agent/runtime/delegation/childRun.ts#'paused'`). Also
+  again without a person's retry; no child is left without a terminal row. Also
   asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I6**: A child's result is delivered to its parent at most once; a result
   whose child was detached, or whose parent cannot take it, stays in the
   child's run report with a warning
-  (`agent/runtime/childTurnResult.ts#deliverIn`). Asserted by
+  (`agent/storage/runLifecycle.ts#parentDelivery`). Asserted by
   `src/test-kernel/support/crashConformance.ts#'reads every child result settled before the crash, exactly once'`.
 - **I7**: A fork keeps the history it was registered with; compaction keeps
   the context it committed.

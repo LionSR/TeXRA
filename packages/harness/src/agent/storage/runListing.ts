@@ -4,11 +4,7 @@ import { Effect, Stream, Predicate } from 'effect';
 
 import { isAgentRunRecord } from '@agent/core/definition/RunRecord';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  qualifyAggregateId,
-  type AgentRunListingEntry,
-  RUN_SUBSTATE,
-} from '@shared/schemas';
+import { qualifyAggregateId, type AgentRunListingEntry } from '@shared/schemas';
 import { recordsOf } from '@shared/session/runFacts';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -58,7 +54,6 @@ export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<
           id,
           timestamp: new Date(run.launchedAt).toISOString(),
           outcome: run.durableOutcome,
-          ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
           ...(run.model === null ? {} : { model: run.model }),
           resumable: resumeFrom.kind === 'checkpoint',

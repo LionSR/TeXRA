@@ -8,7 +8,6 @@ import stableStringify from 'safe-stable-stringify';
 
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { Inbox } from '@agent/followUp/Inbox';
-import type { TransactionPart } from '@agent/runtime/childTurnResult';
 import { consumedRows } from '@agent/runtime/loop/rows';
 import { SessionRoots } from '@platform/rootedFs';
 import {
@@ -35,11 +34,13 @@ import {
   registrationDrafts,
   runEndDraft,
 } from '@shared/session/runFacts';
+import type { RunRows } from '@shared/session/runRowsShape';
 import type {
   RunHistoryDraft,
   RunInputDraft,
   RunState,
 } from '@shared/session/runState';
+import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionTransaction } from '@shared/session/sessionLog';
 import { ensureError } from '@utils/errors/errorMessage';
 import { getRunRecords } from './runRecords';
@@ -144,6 +145,13 @@ export interface RunEnding {
   readonly error?: RunEnd['error'];
   /** What the run produced; absent (empty) for a stop's end or a child. */
   readonly output?: RunEndOutput;
+  /** A child's report: the envelope its parent reads, kept as the run's
+   *  `run.report` and queued on the parent's input unless the parent's
+   *  call awaits the child (it reads the end itself) or the child was
+   *  detached. Null, or absent: nothing to report (a stop, a root). */
+  readonly report?: string | null;
+  /** Rows committed ahead of the end (a process run's exit). */
+  readonly leading?: readonly UnfoldedDraft[];
 }
 
 /** The `run.end` the store holds once the transaction committed, and
@@ -191,47 +199,96 @@ const cancelledRequests = (
   );
 
 /**
+ * A child's report queued on its parent's input, decided in the job
+ * committing the child's end, under the id of this lifecycle
+ * (`${runId}:${activation}`): a replay of the end writes nothing, and a
+ * second delivery of one lifecycle is a duplicate. A closed, deleted or
+ * unreadable parent refuses it, with a warning once the job commits; the
+ * child's own rows still commit.
+ */
+const parentDelivery = Effect.fn('parentDelivery')(function* (
+  runId: RunId,
+  facts: RunRows,
+  text: string,
+): Effect.fn.Return<readonly RunInputDraft[], never, Inbox | Scope.Scope> {
+  const parent = facts.parent;
+  if (parent === null || parent.call?.awaited === true) return [];
+  const item = {
+    text,
+    from: { kind: 'run', runId } as const,
+    deliveryId: `${runId}:${facts.activation?.commit ?? 0}`,
+  };
+  const admitted = yield* Inbox.use((inbox) =>
+    inbox.admission(parent.id, item, {}),
+  ).pipe(
+    Effect.catchTags({
+      DatabaseReadFailed: (error) =>
+        Effect.as(
+          Effect.logWarning(
+            `Run ${runId}: its report was not delivered; parent run ${parent.id} is closed or cannot be read.`,
+          ).pipe(Effect.annotateLogs({ data: error })),
+          { rows: [], sent: { kind: 'refused', reason: 'notResumable' } },
+        ),
+      // A delivery names no caller id, so nothing conflicts with it.
+      Conflict: Effect.die,
+    }),
+  );
+  if (admitted.sent.kind === 'refused')
+    yield* Effect.logWarning(
+      `Run ${runId}: its report was not delivered; parent run ${parent.id} is unavailable (${admitted.sent.reason}). The report stays on the run.`,
+    );
+  return admitted.rows;
+});
+
+/**
  * A run's end in `tx`'s job, decided from what it reads under the lock:
- * the requests it leaves open cancelled, its unread input dropped, its
- * closure, its `run.end`, and a child's last turn beside it (`lastTurn`).
- * `leading` rows commit ahead of them (a stop's `run.stop`). A run never
- * created has nothing to end; one that ended in its current lifecycle
- * keeps that end. A run whose rows this build cannot load ends unloaded,
- * with a warning, requests uncancelled.
+ * the requests it leaves open cancelled, a root's unread input dropped (a
+ * child's stays: a message to a child that ended is its resume's), its
+ * closure, its `run.end`, a child's report with its parent's delivery
+ * ({@link parentDelivery}), and `leading` rows ahead of them (a stop's
+ * `run.stop`, a process run's exit). A run never created has nothing to
+ * end; one that ended in its current lifecycle keeps that end. A run whose
+ * rows this build cannot load ends unloaded, with a warning, requests
+ * uncancelled.
  */
 export const endIn = Effect.fn('endIn')(function* (
   tx: Pick<SessionTransaction, 'append'>,
   input: RunEnding,
-  lastTurn?: TransactionPart,
-  leading: readonly RunInputDraft[] = [],
+  leading: readonly UnfoldedDraft[] = [],
 ): Effect.fn.Return<EndedRun, Error, EndServices | Scope.Scope> {
   const { append } = tx;
   const { runId, outcome, error } = input;
   const log = yield* SessionLog;
   const facts = yield* log.facts(runId);
   if (facts === null) return { end: null, wrote: false };
+  const ahead = [...leading, ...(input.leading ?? [])];
   if (facts.end !== null) {
     if (error !== undefined)
       yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
-    if (leading.length > 0) yield* append(leading);
+    if (ahead.length > 0) yield* append(ahead);
     return { end: endOf(facts.end), wrote: false };
   }
-  const last: Effect.Success<TransactionPart> = yield* (
-    lastTurn ?? Effect.succeed({ rows: [] })
-  );
-  const end = runEndDraft(runId, {
-    outcome,
-    error,
-    note: last.note,
-    output: input.output,
-  });
-  const unapplied = (yield* (yield* Inbox).read(runId)).followUps;
+  const end = runEndDraft(runId, { outcome, error, output: input.output });
+  const unapplied =
+    facts.parent === null ? (yield* (yield* Inbox).read(runId)).followUps : [];
+  const target = qualifyAggregateId('run', runId);
+  const report =
+    input.report == null
+      ? []
+      : [
+          {
+            type: 'run.report' as const,
+            aggregateId: target,
+            report: input.report,
+          },
+          ...(yield* parentDelivery(runId, facts, input.report)),
+        ];
   const beside = [
-    ...leading,
+    ...ahead,
     ...consumedRows(runId)(unapplied, { kind: 'dropped', reason: 'ended' }),
     ...log.closure(runId, outcome),
     end,
-    ...last.rows,
+    ...report,
   ];
   const cell = yield* Effect.result(
     (yield* RunHistory).open(runId, { within: append }),
@@ -258,16 +315,11 @@ export const endIn = Effect.fn('endIn')(function* (
  */
 export const endRunRows = Effect.fn('endRunRows')(function* (
   input: RunEnding,
-  lastTurn?: TransactionPart,
-  leading: readonly RunInputDraft[] = [],
 ): Effect.fn.Return<EndedRun, Error, EndServices> {
   const log = yield* SessionLog;
   const services = yield* endServices;
   return yield* log.transact((tx) =>
-    endIn(tx, input, lastTurn, leading).pipe(
-      Effect.scoped,
-      Effect.provide(services),
-    ),
+    endIn(tx, input).pipe(Effect.scoped, Effect.provide(services)),
   );
 });
 
@@ -297,9 +349,7 @@ export const stopRun = Effect.fn('stopRun')(function* (
         yield* tx.append([stop]);
         return;
       }
-      yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, undefined, [
-        stop,
-      ]);
+      yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, [stop]);
     }).pipe(Effect.scoped, Effect.provide(services)),
   );
 });

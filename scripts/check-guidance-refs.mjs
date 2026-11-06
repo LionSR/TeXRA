@@ -217,16 +217,19 @@ function readEventTypes() {
 }
 
 const EVENT_TYPES = readEventTypes();
-// The namespaces the vocabulary owns (`run`, `tool`, `request`, ...). A
+// The namespaces the vocabulary owns (`run`, `tool`, `process`, ...). A
 // backticked dotted token under one of them is read as a citation of a row and
-// must name a real arm; anything else (`process.env`, `docs/`-prefixed paths,
-// camelCase members) is left alone. Prose that names a retired row on purpose
-// uses the same `<!-- guidance-refs-ignore -->` block marker as a dead path.
+// must name a real arm; anything else (`docs/`-prefixed paths, camelCase
+// members) is left alone. Prose that names a retired row on purpose uses the
+// same `<!-- guidance-refs-ignore -->` block marker as a dead path.
 const EVENT_NAMESPACES = new Set(
   [...EVENT_TYPES]
     .filter((type) => type.includes('.'))
     .map((type) => type.split('.')[0]),
 );
+// Node's `process` global shares its name with the process-run rows
+// (`process.output`, `process.exit`): its members are not citations.
+const NOT_ROWS = new Set(['process.env', 'process.cwd']);
 const EVENT_TYPE_SHAPE = /^[a-z][a-z0-9]*(?:\.[a-z][a-zA-Z0-9]*)+$/u;
 // A bare filename whose stem is a namespace (`run.ts`, `context.ts`, `flow.md`)
 // has the same shape as a citation, and reporting it as an unknown event type
@@ -238,6 +241,7 @@ const FILE_EXTENSION =
 
 /** Whether a backticked token is read as naming a row of the run vocabulary. */
 function citesEventType(candidate) {
+  if (NOT_ROWS.has(candidate)) return false;
   if (EVENT_TYPES.has(candidate)) return true;
   if (FILE_EXTENSION.test(candidate)) return false;
   return (

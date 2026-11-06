@@ -27,9 +27,7 @@ import {
   MESSAGE_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
-  RESTING_SUBSTATES,
   RUN_SUBSTATE,
-  parkSubstate,
   recipeBlockOf,
   isPlainAgentIdentity,
   listingKeyOf,
@@ -430,18 +428,17 @@ function refreshAncestors(u: Update, runId: RunId): void {
 function withAggregates(u: Update, run: RunView): RunView {
   const { view } = u;
   const held = u.state.local.runsHere.includes(run.id);
-  const paused = RESTING_SUBSTATES.has(run.substate);
   // Only a request that blocks its tool is a wait: one that does not left
   // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
     (r) => r.runId === run.id && blocksCaller(r.payload),
   );
-  const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
+  const interrupted = !isTerminalOutcomePhase(run.status) && !held;
   const waiting = pendingOwn && held && !isTerminalOutcomePhase(run.status);
   const durableOutcome = isTerminalOutcomePhase(run.status) ? run.status : null;
-  const working = !interrupted && !paused && run.status === RUN_PHASE.RUNNING;
+  const working = !interrupted && run.status === RUN_PHASE.RUNNING;
   const turnOver = isTranscriptSettlementPhase(run.status) || interrupted;
-  const live = held && !paused && durableOutcome === null;
+  const live = held && durableOutcome === null;
   const unreadable = u.state.unreadable.get(run.id);
   const children = run.childIds.flatMap((id) => view.runs.get(id) ?? []);
   const treeUsage = sumUsageStats([
@@ -453,7 +450,7 @@ function withAggregates(u: Update, run: RunView): RunView {
   let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';
-  else if (isInFlightPhase(run.status) && !paused) group = 'running';
+  else if (isInFlightPhase(run.status)) group = 'running';
   let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
@@ -666,6 +663,7 @@ type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
 function applyRunEvent(run: RunView, event: OwnEvent): RunView {
   switch (event.type) {
     case 'log':
+    case 'process.output':
     case 'stage.start':
     case 'stage.end':
     case 'tool.start':
@@ -736,9 +734,6 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
         ...run,
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
-    case 'child.park':
-      run = movePhase(run, event.phase !== 'resumed', event.at);
-      return { ...run, substate: parkSubstate(event) };
     case 'run.detach': // the attached parent goes; the launch parent stays
       return run.parentId === null ? run : { ...run, parentId: null };
     case 'run.description':
@@ -781,9 +776,7 @@ function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
 }
 
 /** Set the run waiting (its turn is over: `turnStartedAt` clears) or
- *  running. The one phase writer for both rows that make a run wait: a
- *  loop's `run.position` at `waiting` and an agent-CLI child's
- *  `child.park`. */
+ *  running: the one phase writer, for a loop's `run.position`. */
 function movePhase(run: RunView, waiting: boolean, at: number): RunView {
   return {
     ...run,

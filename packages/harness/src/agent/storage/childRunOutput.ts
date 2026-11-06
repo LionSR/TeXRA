@@ -30,9 +30,8 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     >,
   ) {
     const store = getRunRecords(reference.runId);
-    const [runEnd, resultMeta, config] = yield* Effect.all([
+    const [runEnd, config] = yield* Effect.all([
       store.readRunEnd(),
-      store.readResultMeta(),
       store.readConfig(),
     ]);
     const view = yield* SessionViewAccess;
@@ -46,7 +45,6 @@ const checkDeclaredChildOutput = Effect.fn('checkDeclaredChildOutput')(
     // A completed recipe's changes are its declared outputs: the files it
     // wrote, which its block names (`AgentBlock.result.changes`).
     const recipe =
-      resultMeta?.producer === 'subagent' &&
       runEnd?.outcome === RUN_OUTCOME.COMPLETED
         ? yield* readRecipeResult(
             config,

@@ -24,6 +24,29 @@ export const STREAMING_TEXT_ROW_KIND: Partial<
   [MESSAGE_TYPES.SCRATCHPAD]: 'scratchpad',
 };
 
+/** One chunk of a process run's output onto the transcript: a plain log
+ *  row, its stderr at the warning level. */
+export function recordProcessOutputRow(
+  d: Draft,
+  event: Extract<TranscriptEvent, { type: 'process.output' }>,
+): void {
+  const level = event.stream === 'stderr' ? 'warn' : 'info';
+  const base = open(
+    d,
+    d.stampId,
+    event.stageId,
+    MESSAGE_TYPES.DEFAULT,
+    true,
+    level,
+  );
+  write(d, {
+    kind: 'log',
+    base,
+    text: event.text,
+    payload: { messageType: MESSAGE_TYPES.DEFAULT, data: undefined },
+  });
+}
+
 /** One `log` event onto the transcript: its payload decoded once, and a
  *  payload its schema rejects written as an error row naming the
  *  diagnostic, never dropped. */

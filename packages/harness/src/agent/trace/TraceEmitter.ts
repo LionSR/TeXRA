@@ -95,6 +95,11 @@ export class TraceEmitter implements AgentTrace {
     this.emitLog('warn', message, options);
   }
 
+  /** A chunk of a process run's output, on its stream. */
+  output(stream: 'stdout' | 'stderr', text: string): void {
+    this.emit({ type: 'process.output', stream, text });
+  }
+
   error(message: string, options: LogOptions = {}): void {
     this.emitLog('error', message, options);
   }

@@ -27,7 +27,6 @@ import {
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
   RUN_PHASE,
-  RUN_SUBSTATE,
   RunPhaseSchema,
   RunSubstateSchema,
   RunIdSchema,
@@ -113,9 +112,8 @@ export const RunViewSchema = Schema.Struct({
   facts: Schema.Record(Schema.String, JsonValueSchema),
   worktree: Schema.NullOr(WorktreeInfoSchema),
   /** The durable phase, from `run.activate` (running), `run.position`
-   *  (`waiting` waits, any other step runs), `child.park` (an agent-CLI
-   *  child's own wait row, which has no loop to step), and `run.end` (the
-   *  outcome); `ready` before the first activation. An interrupted run
+   *  (`waiting` waits, any other step runs), and `run.end` (the outcome);
+   *  `ready` before the first activation. An interrupted run
    *  keeps it and reads as interrupted through the copy; unreadable rows
    *  are a notice, never a status. */
   status: Schema.Union([RunPhaseSchema, Schema.Literal(RUN_LIFECYCLE_READY)]),
@@ -167,8 +165,8 @@ export const RunViewSchema = Schema.Struct({
   lastTimestamp: Schema.Number,
   /** The run's one-based turn, from its latest `run.position` (the loop
    *  commits `state.turn + 1`; the row's `round` counts model calls). Null
-   *  before the first position, after every activation, and for a run with
-   *  no loop of its own (an agent-CLI child waits through `child.park`). */
+   *  before the first position, after every activation, and for a process
+   *  run, which has no loop of its own. */
   turn: Schema.NullOr(Count),
   followUpSupport: UserFollowUpSupportSchema,
   /** Latest `context.state`. */
@@ -242,8 +240,7 @@ export function rollupOf(
   const rollup = { total: 0, running: 0, finished: 0 };
   for (const child of children) {
     const idle =
-      child.status === RUN_PHASE.WAITING &&
-      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
+      child.status === RUN_PHASE.WAITING && child.group === 'running';
     const under = below(child);
     rollup.total += 1 + under.total;
     rollup.running += (child.live && !idle ? 1 : 0) + under.running;

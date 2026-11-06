@@ -186,8 +186,6 @@ export const OutcomeSchema = Schema.Union([
     kind: Schema.Literal('followUp'),
     id: Schema.String,
     status: Schema.Literals(['sent', 'queued']),
-    /** A queued input whose recovery wake did not reach the run. */
-    wake: Schema.optional(Schema.NullOr(Schema.Literal('failed'))),
     receipt: FollowUpReceiptSchema,
   }),
   Schema.Struct({

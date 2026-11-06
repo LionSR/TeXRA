@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import { SessionRequests } from '@agent/runtime/requestPolicy';
-import { closeLeftoverRun } from '@agent/runtime/runLaunchGuard';
+import { closeLeftoverRun } from '@agent/runtime/leftoverChildren';
 import { withLogChannel } from '@logger/effectLog';
 import { isLoopDriven, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
@@ -20,7 +20,7 @@ const warning = (message: string, runId: RunId) => (error: unknown) =>
  * before session open that no resume will finish. One left running with no
  * parent, a detach having let it go, is closed as interrupted
  * ({@link closeLeftoverRun}); one with a parent
- * is that parent's to finish as it resumes (`closeLeftoverChildren`). An
+ * is that parent's to finish as it resumes (`resumeLeftoverChildren`). An
  * ended background shell is removed: a shell is not resumable, its end gave
  * its parent its result, and a detached one's report was there to read in
  * the session that ended it.

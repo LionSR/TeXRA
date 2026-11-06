@@ -46,11 +46,12 @@
  *   next model boundary; then `/compact`, whose turn commits a
  *   `context.edit` replacing the history; then a turn whose approved
  *   `codex` call runs the hook (`hook.outcome`) and launches a Codex child,
- *   on a stand-in Codex CLI first on PATH, that parks after its turn
- *   (`child.park`); then the turn held, a message typed behind it, and the
- *   user's stop, which detaches the child (`run.detach`), so that
- *   follow-up stays queued; the exit ends the child. The stand-in is a
- *   POSIX script, so the generator runs on macOS and Linux. Only the chat
+ *   on a stand-in Codex CLI first on PATH, whose turn is held; then the
+ *   chat's turn held, a message typed behind it, and the user's stop, which
+ *   detaches the running child (`run.detach`), so that follow-up stays
+ *   queued; the child's turn is then released and it ends on its own
+ *   (`run.end`, `run.report`). The stand-in is a POSIX script, so the
+ *   generator runs on macOS and Linux. Only the chat
  *   makes a goal: the headless policy approves a plan without one. Each
  *   keystroke
  *   waits for the screen or the store to show the step before it, so the
@@ -722,7 +723,8 @@ async function generate(root) {
   await waitingAfter('the chat waiting after the compaction', turn);
   // A turn that launches a Codex child and is then held, a message typed
   // behind it, and the user's stop: the follow-up stays queued on the
-  // stopped run, and the stop detaches the parked child.
+  // stopped run, and the stop detaches the running child, whose turn is
+  // released after it and ends it as a root.
   await send('Hold this turn.');
   await shows('the Codex call approval', 'y approve');
   tty.write('y');
@@ -742,24 +744,15 @@ async function generate(root) {
         0 && tty.screen().includes('Ctrl-C stop'),
     tty,
   );
-  writeFileSync(path.join(root, 'codex.release'), '');
-  await until(
-    'the parked Codex child',
-    () =>
-      codexRows(`e.type = 'child.park'
-        AND json_extract(e.data, '$.phase') = 'parked'`) > 0,
-    tty,
-  );
   tty.write('Queued behind the held turn.');
   await shows('the typed follow-up', '› Queued behind the held turn.');
   tty.write('\r');
-  // The goal's result, two messages typed to the open chat, the Codex
-  // turn's result, and this.
+  // The goal's result, two messages typed to the open chat, and this.
   await until(
     'the queued follow-up',
     () =>
       chatRows(`e.type = 'followup.queued'
-        AND json_extract(e.data, '$.control') IS NULL`) === 5,
+        AND json_extract(e.data, '$.control') IS NULL`) === 4,
     tty,
   );
   tty.write('\x03');
@@ -772,6 +765,14 @@ async function generate(root) {
     tty,
   );
   await shows('the idle prompt', 'Ctrl-C exit');
+  // The detached child's turn goes on: released, it ends as a root, its
+  // report kept on the run.
+  writeFileSync(path.join(root, 'codex.release'), '');
+  await until(
+    'the ended Codex child',
+    () => codexRows(`e.type = 'run.end'`) > 0,
+    tty,
+  );
   tty.write('\x03');
   const exit = await tty.exited;
   // The chat's last run is the one the user stopped, which ended cancelled:

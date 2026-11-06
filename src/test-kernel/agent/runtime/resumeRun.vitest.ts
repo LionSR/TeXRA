@@ -177,7 +177,6 @@ describe(
 
               expect(yield* send(session, runId, 'raced')).toEqual({
                 kind: 'queued',
-                read: false,
               });
               yield* config.release;
               expect(yield* Fiber.join(resumed)).toMatchObject(ACTIVATED);

@@ -1,15 +1,12 @@
-import { Clock, Effect, Schema, type Scope } from 'effect';
-
 // Third-party imports
+import { Clock, Effect, Schema, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import { registerRun } from '@agent/storage/runLifecycle';
 import {
   TOOL_RESULT_TRUNCATION_HEAD_CHARS,
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/runtime/run/toolResultText';
-import type { ProcessChildStrategy } from '@agent/runtime/childRunLoop';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
 import {
@@ -19,28 +16,17 @@ import {
   type BashDeliveryStreamExcerpt,
 } from '@agent/runtime/delegation/bashDelivery';
 import {
-  childRunDescription,
-  createChildRun,
-} from '@agent/runtime/delegation/childRun';
-import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
+  launchProcessChild,
+  type ProcessTurn,
+} from '@agent/runtime/processRun';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   BASH_BACKGROUND_LOG_CAP_CHARS,
   BASH_TOOL_DEFAULT_TIMEOUT_MS,
-  backgroundBashOutputData,
 } from '@shared/toolUse';
-import {
-  ToolError,
-  type ExecResult,
-  type RunId,
-  type ToolResult,
-  USER_FOLLOW_UP_SUPPORT,
-  generateRunId,
-} from '@shared/schemas';
+import { ToolError, type RunId, type ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settings';
-import { SessionLog } from '@shared/session/runHistory';
 import { executed } from '@tools/core/result';
-import { ensureError } from '@utils/errors/errorMessage';
 import { previewLabel, stripControlCharacters } from '@utils/text/stringUtils';
 import { executeCommand } from '@utils/system/execUtils';
 import { appendHead, appendTail } from '@utils/text/appendTail';
@@ -219,14 +205,12 @@ const BashInputSchema = Schema.Struct({
 type BashInput = typeof BashInputSchema.Type;
 
 /**
- * The child-run strategy for one background shell command: a single terminal
- * turn that runs the process, streams its output into the child's tab, and
- * hands the loop the formatted delivery and result manifest. Everything else a
- * background child needs — the follow-up queue claim, the wake-aware parent
- * delivery, report persistence, the interrupt target, and terminal
- * finalization — is the loop's, exactly as it is for every other child type.
+ * The one turn of a background shell command: it runs the process, records
+ * its output on the run's trace, and reports the formatted delivery with
+ * the command's exit. Everything else a background child needs (its
+ * registration, its end and the parent's delivery) is the process run's.
  */
-function createBackgroundBashStrategy(params: {
+function backgroundBashTurn(params: {
   runId: RunId;
   call: BackgroundBashCall;
   timeoutMs: number;
@@ -237,7 +221,7 @@ function createBackgroundBashStrategy(params: {
    */
   settings: SettingsStores;
   logger: AgentTrace;
-}): ProcessChildStrategy<ExecResult, ChildProcessSpawner> {
+}): ProcessTurn {
   const { runId, call, logger } = params;
   const { command } = call;
   // Whitespace normalization is off here: a background log is delivered
@@ -254,88 +238,68 @@ function createBackgroundBashStrategy(params: {
     BACKGROUND_OUTPUT_TAIL_CHARS,
     captureOptions,
   );
-  let loggedChars = 0;
-  let logCapReached = false;
-  const logChunk = (chunk: string, level: 'info' | 'warn'): void => {
-    if (logCapReached) return;
-    loggedChars += chunk.length;
-    if (loggedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
-      logCapReached = true;
+  let recordedChars = 0;
+  let capReached = false;
+  const record = (stream: 'stdout' | 'stderr', chunk: string): void => {
+    if (capReached) return;
+    recordedChars += chunk.length;
+    if (recordedChars > BASH_BACKGROUND_LOG_CAP_CHARS) {
+      capReached = true;
       logger.warn(
         `[Stream log truncated at ${(BASH_BACKGROUND_LOG_CAP_CHARS / 1000).toFixed(0)}k chars: tail available in follow-up result]`,
       );
       return;
     }
-    logger[level](chunk, {
-      data: backgroundBashOutputData(level === 'warn' ? 'stderr' : 'stdout'),
-    });
+    logger.output(stream, chunk);
   };
 
-  const delivery = (result: ExecResult, wallTimeMs: number): string =>
-    formatBashDelivery(
-      runId,
-      call,
-      wallTimeMs,
-      result,
-      toDeliveryExcerpt(stdout),
-      toDeliveryExcerpt(stderr),
-    );
+  const run = Effect.gen(function* () {
+    const startedAt = yield* Clock.currentTimeMillis;
+    const result = yield* executeCommand(command, {
+      cwd: params.cwd,
+      settings: params.settings,
+      timeout: params.timeoutMs,
+      buffer: false,
+      // A stop interrupts this call: its release signals the shell's whole
+      // process group, so no backgrounded job or piped child is left.
+      onStdout: (chunk) => {
+        stdout.append(chunk);
+        record('stdout', chunk);
+      },
+      onStderr: (chunk) => {
+        stderr.append(chunk);
+        record('stderr', chunk);
+      },
+    });
+    const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
+    // `executeCommand` never fails on a non-zero exit: it answers with the
+    // exit code, so the failure is reported, its output still delivered.
+    return {
+      report: formatBashDelivery(
+        runId,
+        call,
+        wallTimeMs,
+        result,
+        toDeliveryExcerpt(stdout),
+        toDeliveryExcerpt(stderr),
+      ),
+      ...(result.success
+        ? {}
+        : {
+            failure: `Background bash failed with exit code ${result.exitCode}.`,
+          }),
+      exit: {
+        code: result.noExitCode === true ? null : result.exitCode,
+        signal: null,
+        timedOut: result.timedOut,
+      },
+    };
+  });
 
   return {
     stageLabel: 'Background command',
-    launch: () =>
-      executeCommand(command, {
-        cwd: params.cwd,
-        settings: params.settings,
-        timeout: params.timeoutMs,
-        buffer: false,
-        // A stop interrupts this call: its release signals the shell's whole
-        // process group, so no backgrounded job or piped child is left.
-        onStdout: (chunk) => {
-          stdout.append(chunk);
-          logChunk(chunk, 'info');
-        },
-        onStderr: (chunk) => {
-          stderr.append(chunk);
-          logChunk(chunk, 'warn');
-        },
-      }),
-
-    interruptedTurn: () => ({
-      success: false,
-      stdout: '',
-      stderr: 'Command aborted by user',
-      timedOut: false,
-      exitCode: 130,
-    }),
-
-    // `executeCommand` never fails on a non-zero exit — it answers with the
-    // exit code, so the failure is an application-level one.
-    isTurnError: (turn) => !turn.success,
-    turnErrorMessage: (turn) =>
-      `Background bash failed with exit code ${turn.exitCode}.`,
-
-    formatDelivery: (turn, wallTimeMs) =>
-      Effect.try({ try: () => delivery(turn, wallTimeMs), catch: ensureError }),
-    // A failed exit still produced real output: deliver the full excerpt, not
-    // the bare error form. `formatBashError` is only for a throw, where there
-    // is no result to report.
-    formatError: (turn, err, wallTimeMs) =>
-      turn ? delivery(turn, wallTimeMs) : formatBashError(runId, call, err),
-
-    buildResultMeta: (turn, _isError, wallTimeMs) =>
-      Effect.sync(() =>
-        turn
-          ? {
-              producer: 'backgroundBash' as const,
-              exitCode: turn.exitCode,
-              wallTimeMs,
-              success: turn.success,
-              timedOut: turn.timedOut,
-              command,
-            }
-          : undefined,
-      ),
+    run,
+    reportError: (error) => formatBashError(runId, call, error),
   };
 }
 
@@ -355,15 +319,9 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
   if (input.run_in_background) {
     const call = yield* requireToolRun('bash run_in_background');
     // A background shell delivers its result as a follow-up message; a
-    // one-shot run ends after the current cycle, so nothing is left to collect
-    // it. Every other child type already answers this case — agent-CLI
-    // refuses, native subagents degrade to the parent trace, a script runs in
-    // the foreground — and a background shell cannot degrade, because the follow-up
-    // IS its delivery. The approval the loop already took is spent by the
-    // time this refuses: in the SDK path (`packages/harness/src/effect/sessionPrograms.ts`)
-    // the `finally` kills the process group, so launching here would run the
-    // user's command and then discard its result with nothing reported.
-    if (call.run.toolPolicy.stopAfterCycle)
+    // one-shot run has no later turn to take it, and the session's close
+    // would kill the command and discard its result with nothing reported.
+    if (call.run.toolPolicy.oneShot === true)
       return yield* Effect.fail(
         new ToolError(
           'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',
@@ -456,65 +414,43 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
   timeoutMs: number,
   cwd?: string,
 ) {
-  const { runId: parentRunId } = call.run;
-  const log = yield* SessionLog;
-  const roots = yield* SessionRoots;
-  return yield* Effect.uninterruptibleMask(
-    Effect.fnUntraced(function* (restore) {
-      const runId = generateRunId();
-      const { command } = input;
-      const preview = previewLabel(command);
-
-      // The durable record states only what a shell command has: no run
-      // mode, no model.
-      yield* registerRun(
-        runId,
-        { name: 'bash', instruction: command },
-        {
-          identity: { kind: 'process', tool: 'bash' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          parentRunId,
-          // The run's name reaches terminals (the task list): no control characters.
-          description: childRunDescription(
-            stripControlCharacters(
-              input.description?.trim() || command,
-              ' ',
-            ).trim(),
-          ),
-        },
-      );
-
-      // The shell launches under the session's runs the engine door holds.
-      yield* startDetachedChildRunLoop({
-        runId,
-        parentRunId,
-        agentName: 'bash',
-        createChildRun: () =>
-          restore(Effect.void).pipe(Effect.as(createChildRun(log, runId))),
-        buildLaunch: (childRun) =>
-          Effect.sync(() =>
-            createBackgroundBashStrategy({
-              runId,
-              call: input,
-              timeoutMs,
-              cwd,
-              settings: roots,
-              logger: childRun.logger,
-            }),
-          ),
-      });
-
-      return executed(
-        [
-          `Command launched in background.`,
-          `Run ID: ${runId}`,
-          'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
-          `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
-          `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
-        ].join('\n'),
-        `Launched background: ${preview}`,
-      );
-    }),
+  const { command } = input;
+  const preview = previewLabel(command);
+  const settings = yield* SessionRoots;
+  // The durable record states only what a shell command has: no run mode,
+  // no model. The run's name reaches terminals (the task list): no control
+  // characters.
+  const runId = yield* launchProcessChild(
+    { runId: call.run.runId, logId: call.logId },
+    {
+      identity: { kind: 'process', tool: 'bash' },
+      config: { name: 'bash', instruction: command },
+      description: stripControlCharacters(
+        input.description?.trim() || command,
+        ' ',
+      ).trim(),
+      open: ({ logger, runId }) =>
+        Effect.succeed(
+          backgroundBashTurn({
+            runId,
+            call: input,
+            timeoutMs,
+            cwd,
+            settings,
+            logger,
+          }),
+        ),
+    },
+  );
+  return executed(
+    [
+      `Command launched in background.`,
+      `Run ID: ${runId}`,
+      'Result arrives automatically as a follow-up message when complete. Continue other work or end your turn.',
+      `To read its output so far (works while it runs): executions tool with path=/executions/${runId}/output`,
+      `Only if you cannot proceed without the result, block with the executions tool: path=/executions/${runId} action=wait`,
+    ].join('\n'),
+    `Launched background: ${preview}`,
   );
 });
 

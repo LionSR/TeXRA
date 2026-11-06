@@ -1028,12 +1028,11 @@ export function crashConformanceSuite(
          * script awaits an `agent()` child of its own: a resume never launches
          * that child again for its call (I5).
          *
-         * A child the cut left unfinished (a turn accepted and not settled, or
-         * none begun) is a background run whose process died: the parent's
-         * resume finishes it, resuming an agent or a script under its own id,
-         * and ending a command with a notice that its outcome is unknown. A
-         * child left as the cut found it, never resumed and its parent never
-         * told, is the failure.
+         * A child the cut left unfinished (no end) is a background run whose
+         * process died: the parent's resume finishes it, resuming an agent or
+         * a script under its own id, and ending a command with a notice that
+         * its outcome is unknown. A child left as the cut found it, never
+         * resumed and its parent never told, is the failure.
          *
          */
         if (runs('child-results'))
@@ -1047,67 +1046,59 @@ export function crashConformanceSuite(
                   rows
                     .filter((row) => row.run === root && row.type === type)
                     .map((row) => String(json(row).followUpId));
-                /** The results the children delivered, by follow-up id. */
-                const settled = (rows: readonly Row[]) => [
-                  ...new Set(
-                    ids(rows, 'followup.queued').filter((id) =>
-                      id.endsWith(':delivery'),
-                    ),
-                  ),
-                ];
-                /** The root's children whose settled turns outnumber, or trail,
-                 *  their delivered or held results: a cut between the two. */
-                const apart = (rows: readonly Row[]) =>
+                /** The root's children, in launch order. */
+                const children = (rows: readonly Row[]) =>
                   rows
                     .filter(
                       (row) => row.type === 'run.start' && row.parent === root,
                     )
-                    .map((child) => child.run)
-                    .filter(
-                      (child) =>
-                        rows.filter(
-                          (row) =>
-                            row.run === child &&
-                            row.type === 'child.turn' &&
-                            json(row).phase === 'settled',
-                        ).length !==
-                        settled(rows).filter((id) => id.startsWith(`${child}:`))
-                          .length,
-                    );
+                    .map((child) => child.run);
+                /** The results the children delivered, by follow-up id
+                 *  (`${child}:${activation}`, a child's end delivers once per
+                 *  lifecycle). */
+                const settled = (rows: readonly Row[]) => {
+                  const kids = children(rows);
+                  return [
+                    ...new Set(
+                      ids(rows, 'followup.queued').filter((id) =>
+                        kids.some((child) => id.startsWith(`${child}:`)),
+                      ),
+                    ),
+                  ];
+                };
+                /** The root's children whose ends that report (a completed
+                 *  or failed end) outnumber, or trail, their delivered
+                 *  results: a cut between the two, which one transaction
+                 *  never leaves. */
+                const apart = (rows: readonly Row[]) =>
+                  children(rows).filter(
+                    (child) =>
+                      rows.filter(
+                        (row) =>
+                          row.run === child &&
+                          row.type === 'run.end' &&
+                          json(row).outcome !== 'cancelled',
+                      ).length !==
+                      settled(rows).filter((id) => id.startsWith(`${child}:`))
+                        .length,
+                  );
                 const allRead = (rows: readonly Row[]) => {
                   const consumed = new Set(ids(rows, 'followup.consumed'));
                   return settled(rows).every((id) => consumed.has(id));
                 };
-                /** The root's children a cut at `n` left unfinished: a turn
-                 *  accepted and not settled, or none begun and no end, in the
-                 *  rows up to `n`. */
+                /** The root's children a cut at `n` left unfinished: no end
+                 *  in the rows up to `n`. */
                 const cutShort = (rows: readonly Row[], n: number) =>
-                  rows
-                    .filter(
-                      (row) =>
-                        row.commit <= n &&
-                        row.type === 'run.start' &&
-                        row.parent === root,
-                    )
-                    .map((child) => child.run)
-                    .filter((child) => {
-                      const before = rows.filter(
-                        (row) => row.run === child && row.commit <= n,
-                      );
-                      const turns = (phase: string) =>
-                        before.filter(
-                          (row) =>
-                            row.type === 'child.turn' &&
-                            json(row).phase === phase,
-                        ).length;
-                      const accepted = turns('accepted');
-                      return (
-                        accepted > turns('settled') ||
-                        (accepted === 0 &&
-                          !before.some((row) => row.type === 'run.end'))
-                      );
-                    });
-                /** Whether `child` settled a turn or ended after commit `after`. */
+                  children(rows.filter((row) => row.commit <= n)).filter(
+                    (child) =>
+                      !rows.some(
+                        (row) =>
+                          row.run === child &&
+                          row.commit <= n &&
+                          row.type === 'run.end',
+                      ),
+                  );
+                /** Whether `child` ended after commit `after`. */
                 const finished = (
                   rows: readonly Row[],
                   child: string,
@@ -1117,9 +1108,7 @@ export function crashConformanceSuite(
                     (row) =>
                       row.run === child &&
                       row.commit > after &&
-                      (row.type === 'run.end' ||
-                        (row.type === 'child.turn' &&
-                          json(row).phase === 'settled')),
+                      row.type === 'run.end',
                   );
                 /** Every result read, every held child ended, every child the
                  *  cut left unfinished finished after it, and every child the
@@ -1261,12 +1250,7 @@ export function crashConformanceSuite(
                     )
                     // cast: the store's logical id of a run aggregate is its RunId.
                     .map((row) => row.run as RunId);
-                const began = (rows: readonly Row[]) =>
-                  commands(rows).filter((run) =>
-                    of(rows, run, 'child.turn').some(
-                      (row) => json(row).phase === 'accepted',
-                    ),
-                  ).length;
+                const began = (rows: readonly Row[]) => commands(rows).length;
                 const { points, clean } = yield* cleanPass(
                   roots,
                   (session) =>
@@ -1352,7 +1336,7 @@ export function crashConformanceSuite(
                   final.filter((row) => row.run === run && row.commit > n);
                 expect(reopened.released).toBe(true);
                 // Both commands the dead process left running end failed,
-                // once, with the notice; neither runs again: no turn begun
+                // once, with the notice; neither runs again: no exit recorded
                 // after the cut, no run launched.
                 for (const run of [control, detached]) {
                   expect(
@@ -1366,11 +1350,7 @@ export function crashConformanceSuite(
                     expect.stringContaining('its outcome is unknown'),
                   ]);
                   expect(
-                    after(run).filter(
-                      (row) =>
-                        row.type === 'child.turn' &&
-                        json(row).phase === 'accepted',
-                    ),
+                    after(run).filter((row) => row.type === 'process.exit'),
                   ).toEqual([]);
                 }
                 expect(

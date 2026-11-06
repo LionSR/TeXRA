@@ -22,7 +22,6 @@ export type RunOutcome = typeof RunOutcomeSchema.Type;
 export const USER_FOLLOW_UP_SUPPORT = {
   UNSUPPORTED: 'unsupported',
   NATIVE_INTERACTIVE: 'nativeInteractive',
-  TERMINAL_BACKED: 'terminalBacked',
 } as const;
 
 export const UserFollowUpSupportSchema = Schema.Enum(USER_FOLLOW_UP_SUPPORT);
@@ -63,26 +62,10 @@ export type TaskGroupStatus = typeof TaskGroupStatusSchema.Type;
 export const RUN_SUBSTATE = {
   STARTING: 'starting',
   RESUMING: 'resuming',
-  /** Rested by a stop (`child.park` `paused`): not ended, continued by
-   *  calling the child again. */
-  PAUSED: 'paused',
 } as const;
 
 export const RunSubstateSchema = Schema.Enum(RUN_SUBSTATE);
 export type RunSubstate = typeof RunSubstateSchema.Type;
-
-/** A child's park as its substate: a pause, else none. */
-export function parkSubstate(park: {
-  readonly phase: string;
-}): RunSubstate | null {
-  return park.phase === 'paused' ? RUN_SUBSTATE.PAUSED : null;
-}
-
-/** Substates of a child at rest that is not a lost run: it is not ended
- *  and nothing drives it, by design. */
-export const RESTING_SUBSTATES: ReadonlySet<RunSubstate | null> = new Set([
-  RUN_SUBSTATE.PAUSED,
-]);
 
 /**
  * Wire-level lifecycle status of a run with no lifecycle recorded yet. `as const`

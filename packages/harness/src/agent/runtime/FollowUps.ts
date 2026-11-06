@@ -16,9 +16,9 @@
  * provider-visible difference is the message count of a multi-item batch.
  *
  * The run's conversation opens its own reader (`claimFollowUps`, from its
- * own `AgentRun`); it is never a context service. A child launched from a
- * parent's tool call runs in that call's fiber, so a context service would
- * hand the child its parent's input.
+ * own `AgentRun`); it is never a context service. A child's launch opens in
+ * its parent's tool-call fiber, so a context service would hand the child
+ * its parent's input.
  */
 import {
   Effect,

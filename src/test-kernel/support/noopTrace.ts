@@ -42,6 +42,7 @@ export const noopTrace: AgentTrace = {
   info: NOOP,
   warn: NOOP,
   error: NOOP,
+  output: NOOP,
 
   openStage() {
     return new NoopStageHandle(crypto.randomUUID());

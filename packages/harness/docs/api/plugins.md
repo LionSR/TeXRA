@@ -116,6 +116,8 @@ interface AgentTrace {
   info(message: string, options?: LogOptions): void;
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
+  /** A chunk of a process run's output, on its stream (`process.output`). */
+  output(stream: 'stdout' | 'stderr', text: string): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;
@@ -408,19 +410,6 @@ interface ChildRunDelivery {
 }
 ```
 
-## ChildRunPause
-
-A stopped child's pause: the notice its parent reads, and the id a
-tool call names to continue it (a Codex thread, a Claude session), which
-the `child.park` row keeps so that call reactivates this same run.
-
-```ts
-interface ChildRunPause {
-  readonly text: string;
-  readonly resumeId?: string;
-}
-```
-
 ## ChildRuns
 
 The door, as the run loop provides it beside each call ({@link childRuns});
@@ -433,10 +422,10 @@ const ChildRuns: Reference<ChildRunsShape>
 ## ChildRunsShape
 
 A plugin tool's one door to the session's runs. It launches children of
-its call's run: an agent's (`launch`: the child's settled result, or its
-receipt for a background launch, within the issuing script's concurrency
-budget) or an external process's (`launchProcess`: its run id, outside
-the budget); a plugin's tool reaches no other launch. And it reaches a
+its call's run: an agent's (`launch`: the child's result, or its receipt
+for a background launch) or an external process's (`launchProcess`: its
+run id, outside the child-run budget); a plugin's tool reaches no other
+launch. And it reaches a
 run of the session by id: its input, live parent edge, records, whether
 it holds a request, and the plugin's own facts on it. Each needs the
 call's run; a standalone host call has none.
@@ -446,9 +435,9 @@ interface ChildRunsShape {
   readonly launch: (
     launch: ChildLaunch,
   ) => Effect.Effect<ToolResult, Error, PluginToolServices>;
-  readonly launchProcess: <TTurn>(
-    launch: ProcessChildLaunch<TTurn>,
-  ) => Effect.Effect<RunId, Error>;
+  readonly launchProcess: (
+    launch: ProcessChildLaunch,
+  ) => Effect.Effect<RunId, Error, ToolContext | RunServices>;
   /** The run's input: what a tool sends it, and when it takes no more. */
   readonly inbox: (runId: RunId) => Effect.Effect<RunInbox, Error>;
   /** Its attached parent as the rows record it (`run.start`, then a
@@ -481,38 +470,6 @@ interface ChildRunsShape {
     runId: RunId,
     requestId: string,
   ) => Effect.Effect<boolean, Error>;
-}
-```
-
-## ChildStrategyBase
-
-What every child strategy says of its turns; `R` names the services a
-turn reads, forwarded to the loop's caller.
-
-```ts
-interface ChildStrategyBase<TTurn, R> {
-  /** Stage label opened on the child trace (e.g. "Codex session"). */
-  readonly stageLabel: string;
-  /** A turn that did not throw but reports an error (an SDK error result). */
-  isTurnError?(turn: TTurn): boolean;
-  /** The error message to log for a non-throwing failure, if it has one. */
-  turnErrorMessage?(turn: TTurn): string | undefined;
-  /** The success delivery XML: an Effect over `R`, since a recipe-run
-   *  subagent writes its diff files on the way. */
-  formatDelivery(
-    turn: TTurn,
-    wallTimeMs: number,
-  ): Effect.Effect<string, Error, R>;
-  /** The error delivery XML (turn is null when the call threw). */
-  formatError(turn: TTurn | null, err: unknown, wallTimeMs: number): string;
-  /** The result manifest persisted beside each turn's report, success or
-   *  failure (`turn` null when the call threw), so a failure overwrites a
-   *  stale interim one. */
-  buildResultMeta?(
-    turn: TTurn | null,
-    isError: boolean,
-    wallTimeMs: number,
-  ): Effect.Effect<ResultMeta | undefined, Error, R>;
 }
 ```
 
@@ -696,16 +653,12 @@ message's alone:
 
 - `readFailed`: the run's claim or state could not be read just now
   (a busy or failing store), which says nothing about the run itself.
-- `oneShot`: the run's live loop ends after its current turn and reads
-  no message (headless, or an in-band child), or the run has no loop of
-  its own and its launch takes none (a background command).
 - `notParent`: the sender is not the run's parent.
 
 ```ts
 type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
-  | 'oneShot'
   | 'notParent';
 ```
 
@@ -1237,65 +1190,20 @@ type PluginToolServices =
 
 ## ProcessChildLaunch
 
-A child run an external process drives, launched from a plugin's tool:
-how it reads (`identity`), its record, its task label, and the strategy
-its loop runs, built around the trace of the child the launch created. With
-`resumeId`, the paused child of the caller that kept that id is
-activated again instead of a new run.
+A process child as the tool launching it describes it: how it reads
+(`identity`), its record, its task label, and the turn built around the
+trace of the run the launch registered.
 
 ```ts
-interface ProcessChildLaunch<TTurn> {
-  readonly identity: Extract<RunIdentity, { kind: 'agent' }>;
-  readonly config: AgentConfig;
+interface ProcessChildLaunch {
+  readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process' }>;
+  readonly config: RunRecord;
   readonly description: string;
-  readonly resumeId?: string;
-  readonly buildLaunch: (ctx: {
+  readonly open: (ctx: {
     readonly logger: AgentTrace;
     readonly runId: RunId;
-  }) => Effect.Effect<ProcessChildStrategy<TTurn>, Error>;
+  }) => Effect.Effect<ProcessTurn, Error>;
 }
-```
-
-## ProcessChildStrategy
-
-An external process's strategy (agent CLI, background bash): each turn's
-result commits in the loop, which then waits for the child's next batch:
-a one-turn command whose killed process still has a result, or a coding
-agent's CLI session (`cli`), a turn per batch of follow-ups.
-
-```ts
-type ProcessChildStrategy<TTurn, R = never> = ChildStrategyBase<
-  TTurn,
-  R
-> & {
-  /** A stop interrupts the turn's fiber: a foreign call takes its signal
-   *  from that interruption (`Effect.abortSignal`, `Effect.tryPromise`). */
-  launch(): Effect.Effect<TTurn, Error, R>;
-} & (
-    | {
-        /** The turn a stop cut short, rebuilt from what the child buffered
-         *  and delivered: a killed OS process's exit code and output. */
-        interruptedTurn(): TTurn;
-        readonly cli?: undefined;
-      }
-    | {
-        readonly cli: {
-          /** The next turn, from the queued follow-ups. */
-          runTurn(
-            followUps: readonly FollowUpContent[],
-          ): Effect.Effect<TTurn, Error, R>;
-          /** What the paused child had done and how the parent's model
-           *  continues it; undefined cancels it instead. */
-          pauseNotice(): ChildRunPause | undefined;
-          /** After a successful turn: register the session/thread id, etc. */
-          onTurnSuccess(turn: TTurn): void;
-          /** Release provider-owned registry entries; called once, before a
-           *  failed or interrupted delivery or at the end. */
-          releaseSessionOwnership(): void;
-        };
-        readonly interruptedTurn?: undefined;
-      }
-  );
 ```
 
 ## ProcessPluginLayer
@@ -1311,6 +1219,41 @@ sessions close while its services are still up.
 interface ProcessPluginLayer<ROut = never> {
   readonly layer: Layer.Layer<ROut, never, PluginLayerServices>;
   readonly drain?: Effect.Effect<void, never, ROut>;
+}
+```
+
+## ProcessReport
+
+What one process turn reports as it returns.
+
+```ts
+interface ProcessReport {
+  /** The delivery its parent reads (`formatDelivery`). */
+  readonly report: string;
+  /** A failure the process reported without throwing (a failed exit, an
+   *  SDK's error result): the run ends failed with it, its report still
+   *  delivered. */
+  readonly failure?: string;
+  /** How a command exited, recorded as the run's `process.exit` row. */
+  readonly exit?: ProcessExit;
+}
+```
+
+## ProcessTurn
+
+A process child's one turn, built around the run's trace.
+
+```ts
+interface ProcessTurn {
+  /** The stage opened on the run's trace for the turn ("Codex session"). */
+  readonly stageLabel: string;
+  /** The turn: the whole process, its output on the trace, over the
+   *  process's services (a spawner, the filesystem). A stop interrupts it:
+   *  a foreign call takes its signal from that interruption
+   *  (`Effect.abortSignal`). */
+  readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>;
+  /** The delivery of a turn that threw. */
+  readonly reportError: (error: Error) => string;
 }
 ```
 
@@ -1754,17 +1697,15 @@ interface StreamOptions {
 ## SubmitFollowUpResult
 
 Three outcomes: the input reached a running loop, it waits in the run's
-queue for the next turn, or it was not admitted for a worded reason. A
-delivery the admission boundary had already accepted is `sent`. A resume
-the input started that the run refused is told by the resume itself; a
-queued input whose run could not even be read for a wake is still queued
-(`wake: 'failed'`): the input belongs to the run, and an explicit Resume
-delivers it.
+queue for its next turn (the resume the send started, or an explicit
+one), or it was not admitted for a worded reason. A delivery the
+admission boundary had already accepted is `sent`. A resume the input
+started that the run refused is told by the resume itself.
 
 ```ts
 type SubmitFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; wake?: 'failed' | null }
+  | { status: 'queued' }
   | { status: 'failed'; reason: FollowUpFailureReason };
 ```
 
@@ -2041,6 +1982,10 @@ anywhere beneath it — the property an SDK embedder wants.
 interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
+  /** No later turn reaches the run: a root that stops after its cycle. A
+   *  child stops after its cycle too, but a delivery or a message resumes
+   *  it, so a result sent to it as a follow-up still arrives. */
+  readonly oneShot?: boolean;
 }
 ```
 

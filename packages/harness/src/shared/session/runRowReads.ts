@@ -47,9 +47,7 @@ export const RUN_ROW_READS = {
     'followup.closed',
     'run.removed',
   ],
-  parks: ['child.park', 'run.report', 'run.activate', 'run.stop', 'run.end'],
   requests: ['request.opened', 'request.decided'],
-  turns: ['child.turn'],
   lifecycle: ['run.activate', 'run.stop', 'run.end'],
   facts: ['plugin.fact'],
   results: ['tool.result'],
@@ -90,8 +88,8 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return { inputClosed: true, removed: row };
     case 'run.report':
       return { report: row.report };
-    case 'run.result':
-      return { result: row.result };
+    case 'process.exit':
+      return { exit: row };
     case 'run.config':
       return { config: row.config };
     case 'run.position':
@@ -102,15 +100,6 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return { scriptCalls: [...rows.scriptCalls, row.payload] };
     case 'plugin.fact':
       return { facts: { ...rows.facts, [`${row.plugin}/${row.kind}`]: row } };
-    case 'child.turn': {
-      // `accepted` opens a turn; `settled` closes it, maybe an earlier one.
-      const turn = { key: row.attemptId, index: row.turnIndex };
-      const { active, lastCompleted } = rows.childTurn;
-      const closes = active?.key === turn.key && active.index === turn.index;
-      return row.phase === 'settled'
-        ? { childTurn: { active: closes ? null : active, lastCompleted: turn } }
-        : { childTurn: { active: turn, lastCompleted } };
-    }
     case 'run.description': {
       const label = row.by === 'model' ? { label: row } : {};
       // A user's title stands until the user renames again.
@@ -118,8 +107,6 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
         ? label
         : { title: row, ...label };
     }
-    case 'child.park':
-      return { park: row };
     // The shared rows (`applyRunRow`), the transcript tier and the run
     // history record nothing here.
     case 'followup.queued':
@@ -127,6 +114,7 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
     case 'request.opened':
     case 'request.decided':
     case 'log':
+    case 'process.output':
     case 'stage.start':
     case 'stage.end':
     case 'tool.start':
@@ -213,8 +201,6 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
       return row.payload.at === 'waiting'
         ? RUN_PHASE.WAITING
         : RUN_PHASE.RUNNING;
-    case 'child.park':
-      return row.phase === 'resumed' ? RUN_PHASE.RUNNING : RUN_PHASE.WAITING;
     case 'run.end':
       return row.outcome;
     default:

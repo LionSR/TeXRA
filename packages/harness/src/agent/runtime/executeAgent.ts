@@ -8,7 +8,7 @@
  * through `rootRun` (`session.start`), a resume through `resumeRun`, and a
  * child's strategy through `programs.executeAgent`.
  */
-import { Effect, Exit, Fiber, Layer, Scope } from 'effect';
+import { Clock, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -36,6 +36,7 @@ import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 
 import { endRun } from './AgentRunLifecycle';
+import { ChildRunBudget } from './childRunBudget';
 import { openToolUse, runToolUse } from './loop/toolUse';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
@@ -47,7 +48,6 @@ import {
 } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
 import type { RunReport } from './runReport';
-import type { ChildRunTurns } from './childRunLoop';
 import type { PreparedAgentDefinition } from './AgentLaunchContext';
 
 const CHANNEL = 'executeAgent';
@@ -60,8 +60,6 @@ export interface ExecuteAgentOptions {
   /** A resumed run's parent, as its rows hold it, read once by the resume;
    *  a fresh run's is its registration's. */
   readonly parentRunId?: RunId;
-  /** The child-run policy: each turn's permit, each turn's settlement. */
-  readonly turns?: ChildRunTurns<RunReport, AgentRunServices>;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
@@ -93,9 +91,11 @@ const enterRun = Effect.fn('enterRun')(function* (
       ? null
       : yield* registrationRows(runId, config, {
           ...options.registration,
-          userFollowUpSupport: stopAfterCycle
-            ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
-            : USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+          // A child takes a message as its resume; a one-shot root none.
+          userFollowUpSupport:
+            stopAfterCycle && options.registration.parentRunId === undefined
+              ? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED
+              : USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
         });
   if (registered !== null && registered.start === null)
     return yield* new AgentError({
@@ -124,7 +124,16 @@ const enterRun = Effect.fn('enterRun')(function* (
   const seed = options.registration?.seed ?? null;
   const parent =
     options.registration?.parentRunId ?? options.parentRunId ?? null;
-  return { logger, entry: { parent, registration, seed, opening, entered } };
+  // Whether the parent's call awaits the child: a fresh run's
+  // registration says; a resumed run's rows do.
+  const awaited =
+    options.registration !== undefined
+      ? options.registration.parentCall?.awaited === true
+      : ((yield* log.facts(runId))?.parent?.call?.awaited ?? false);
+  return {
+    logger,
+    entry: { parent, awaited, registration, seed, opening, entered },
+  };
 });
 
 /**
@@ -205,10 +214,14 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
 
   const launch: RunLaunch = {
     runId,
+    startedAt: yield* Clock.currentTimeMillis,
     workingDirectory,
     config,
     persona,
-    toolPolicy: { stopAfterCycle },
+    toolPolicy: {
+      stopAfterCycle,
+      oneShot: stopAfterCycle && entry.parent === null,
+    },
     logger: agentLogger,
     parentStage,
     opening,
@@ -288,9 +301,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
           )
         : Effect.void,
     );
-    const loop = runToolUse({ turns: options.turns, resume }, opening).pipe(
-      Effect.provide(services),
-    );
+    const loop = runToolUse({ resume }, opening).pipe(Effect.provide(services));
     const flow = resume
       ? loop
       : Effect.andThen(
@@ -317,14 +328,20 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     // fibers waiting on them (`SessionRequests.ask`). The backstop wait is
     // `ensuring`, not a generator `finally`: the driver skips a `finally`
     // after a failed `yield*`, ending the run early.
-    return yield* Effect.uninterruptibleMask((restore) =>
+    const ended = Effect.uninterruptibleMask((restore) =>
       Effect.flatMap(
         Effect.exit(
           restore(flow.pipe(settleDescriptionOnExit(sessionDescription))),
         ),
-        (exit) => endRun(launch, exit, options.turns?.finishLastTurn),
+        (exit) => endRun(launch, exit),
       ),
     ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
+    // A background child runs under the session's child-run budget; an
+    // awaited one rides its parent's turn, a root takes none.
+    const { parent, awaited } = launch.entry;
+    return parent === null || awaited
+      ? yield* ended
+      : yield* (yield* ChildRunBudget).withPermits(1)(ended);
   }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
   return { activation: opening.activation, run };
 });

@@ -50,7 +50,7 @@ import { backgroundCompaction } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { claimFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
-import { closeLeftoverChildren } from '../runLaunchGuard';
+import { resumeLeftoverChildren } from '../leftoverChildren';
 import {
   appendRow,
   configRow,
@@ -72,7 +72,6 @@ import { stepFor } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { registryOf, Runs, type AgentRunServices } from '../runRegistry';
 import type { RunControls } from '../runs';
-import type { ChildRunBoundary } from '../childRunLoop';
 import type { RunReport } from '../runReport';
 
 const BLANK_TOOL_RESULT_CONTINUATION =
@@ -82,8 +81,6 @@ const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 interface ToolUseStart {
   /** The caller launched this as a resume; the run history decides what it is. */
   readonly resume: boolean;
-  /** A native child's turn permit, and the turn result its boundary commits. */
-  readonly turns?: ChildRunBoundary<RunReport, AgentRunServices>;
 }
 
 /** What {@link openToolUse} committed: the run's cell, the commit of the
@@ -295,10 +292,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     stepFor(run, state, kind, isChild(), openingSystem);
 
   // ------------------------------------------------------------ host port
-  const controls: RunControls = {
-    oneShot: run.toolPolicy.stopAfterCycle === true,
-    ...modelSwitchPort(run, access, yield* Inbox, Effect.succeed(cell)),
-  };
+  const controls: RunControls = modelSwitchPort(
+    run,
+    access,
+    yield* Inbox,
+    Effect.succeed(cell),
+  );
 
   /** A turn's exit, and a handed-down call's run's at its park: a failed
    *  call's error fails it and is the reply (`turnResponse`). */
@@ -420,7 +419,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------- the loop
   const loopBody = Effect.fn('loopBody')(function* (cell: RunCell) {
     // A resumed run first finishes what its children were left as.
-    if (start.resume) yield* closeLeftoverChildren(runId);
+    if (start.resume) yield* resumeLeftoverChildren(runId);
     for (;;) {
       let state = yield* cell.current;
       const parked =
@@ -463,9 +462,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         yield* followUps.consume(cell, batch);
       }
-      const turn: RunExit = yield* start.turns
-        ? start.turns.turnPermit(runTurn(cell))
-        : runTurn(cell);
+      const turn: RunExit = yield* runTurn(cell);
       state = turn.state;
       if (turn.outcome === 'cancelled') {
         return finish(state, RUN_OUTCOME.CANCELLED);
@@ -476,22 +473,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // barrier lets the open streams `waiting` closes count every one.
       yield* log.settled;
       // The turn boundary, in one batch: Stop hooks, the steps (`waiting`
-      // closes open streams and is the rest a resume's receipt reads), a
-      // child's turn result with its parent's delivery, and a Stop hook's
-      // block or input already queued.
+      // closes open streams and is the rest a resume's receipt reads), and
+      // a Stop hook's block or input already queued.
       const reply = turnResponse(turn.state);
       const { rows: hooks, block } = yield* stopHooks(run, turn, reply);
       const goesOn =
         !run.toolPolicy.stopAfterCycle && turn.outcome === 'completed';
-      const childTurn =
-        start.turns && goesOn && block === null
-          ? yield* start.turns.finishTurn(result(turn.outcome, state))
-          : null;
       const ending = [
         positionRow(runId, state, 'turn.end', turn.outcome),
         ...log.closure(runId),
         positionRow(runId, state, 'waiting'),
-        ...(childTurn?.rows ?? []),
       ];
       const next =
         block ?? (goesOn ? yield* followUps.input.read('turn') : null);
@@ -499,10 +490,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         next !== null && !isChild() ? yield* openStep(state, 'park') : null;
       state =
         next === null
-          ? yield* cell.append([...hooks, ...ending], childTurn?.alongside)
+          ? yield* cell.append([...hooks, ...ending])
           : yield* followUps.consume(cell, next, {
               rows: [...hooks, ...ending, ...(pin?.rows ?? [])],
-              alongside: childTurn?.alongside,
             });
       if (turn.outcome === 'completed') {
         const cost = state.usage.totalCost;
@@ -518,8 +508,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // run ends at its park, however its turn ended.
       if (run.toolPolicy.stopAfterCycle && turn.outcome === 'completed')
         return finish(state, turn.outcome);
-      if (childTurn !== null)
-        yield* Effect.uninterruptible(childTurn.wakeParent);
     }
   });
 

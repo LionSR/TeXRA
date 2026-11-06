@@ -67,10 +67,11 @@ export interface InboxItem {
   readonly caller?: string;
 }
 
-/** How a send landed. `queued.read`: a reader here takes it (else: `wake`). */
+/** How a send landed: queued for the run (a reader here takes it, or its
+ *  resume does), a replay of a row already queued, or refused. */
 export type Sent =
   | { readonly kind: 'duplicate' }
-  | { readonly kind: 'queued'; readonly read: boolean }
+  | { readonly kind: 'queued' }
   | { readonly kind: 'refused'; readonly reason: Refusal };
 /** Why a send wrote nothing: a closed input, a non-parent. */
 type Refusal = 'notResumable' | 'notParent';
@@ -82,8 +83,6 @@ export interface SendOptions {
   readonly hold?: QueuedFollowUp['holdUntil'];
   /** Only from the run's parent: its rows' edge, read in this job. */
   readonly fromParent?: boolean;
-  /** No generation here reads the row: the input with it queued must owe a wake (`needsWake`). */
-  readonly wakesOnly?: boolean;
 }
 
 /** A send decided inside a job: its rows, and how it landed. */
@@ -277,9 +276,7 @@ export class SessionInbox {
       Effect.sync((): Sent => {
         const reader = this.readers.get(runId);
         reader?.notify();
-        return replay
-          ? { kind: 'duplicate' }
-          : { kind: 'queued', read: reader !== undefined };
+        return replay ? { kind: 'duplicate' } : { kind: 'queued' };
       });
     return Effect.gen({ self: this }, function* () {
       const input = yield* this.read(runId);
@@ -296,10 +293,6 @@ export class SessionInbox {
         (f) => f.followUpId === row.followUpId,
       );
       if (!queuedStill && !input.taken.has(row.followUpId)) {
-        // The row commits after every row read here.
-        const followUps = [...input.followUps, { ...row, commit: Infinity }];
-        if (options.wakesOnly === true && !needsWake({ ...input, followUps }))
-          return only(CLOSED);
         const aggregate = qualifyAggregateId('run', runId);
         const queued = { type: 'followup.queued', ...row } as const;
         return {

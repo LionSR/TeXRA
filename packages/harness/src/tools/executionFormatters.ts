@@ -154,18 +154,10 @@ export function buildSummaryTailLines(
   category: RunDisplayCategory,
   hasChildren: boolean,
   report: string | null,
-  options: { readonly suppressReport?: boolean } = {},
 ): string[] {
   const lines: string[] = [];
 
-  if (report && options.suppressReport) {
-    lines.push(
-      '',
-      `Result: delivered automatically to this parent run as a follow-up message. Use /executions/${runId}/report to read the persisted report explicitly.`,
-    );
-  } else if (report) {
-    lines.push('', 'Result:', report);
-  }
+  if (report) lines.push('', 'Result:', report);
 
   const paths = getAvailablePaths(category, hasChildren);
   lines.push(

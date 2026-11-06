@@ -933,8 +933,7 @@ export function createChatSessionController(
         // to it rather than starting a second root beside it.
         if (
           continuing &&
-          (stoppedClaim === undefined || outcome.value.status === 'queued') &&
-          outcome.value.wake == null
+          (stoppedClaim === undefined || outcome.value.status === 'queued')
         )
           yield* Effect.forkIn(
             Effect.ignoreCause(stoppedClaim ?? Effect.void).pipe(

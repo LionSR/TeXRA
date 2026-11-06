@@ -37,6 +37,7 @@ import {
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
+import { isInFlightPhase } from '@shared/runs/runStatus';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
@@ -69,8 +70,6 @@ import {
 } from './executions/toolInput';
 import { listExecutions } from './executions/executionListing';
 import { missingRun, sendToRun } from './executions/send';
-import { turnAttributionNote } from './executions/turnAttribution';
-import { shouldSkipWait } from './executions/waitCoordination';
 import { scriptCallsView } from './executions/scriptCallsView';
 
 interface RunToolContext {
@@ -196,14 +195,11 @@ const EXECUTION_ROUTES: ReadonlyArray<{
     path: '/executions/{id}',
     summary: 'Execution summary (agent, model, timestamp, status, children)',
     actions: {
-      view: ({ context, runId }) =>
-        showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport: false,
-        }),
+      view: ({ context, runId }) => showSummary(context, runId),
       wait: Effect.fn('wait')(function* ({ context, input, runId }) {
         yield* waitForRuns(context, input.timeout, [runId]);
-        // The child's deliveries still queued on the caller: this result
-        // answers them, and its settlement consumes them with it.
+        // The child's report still queued on the caller: this result
+        // answers it, and its settlement consumes it with it.
         const { followUps } = yield* (yield* SessionLog).runRows(
           qualifyAggregateId('run', context.runId),
           'input',
@@ -211,9 +207,7 @@ const EXECUTION_ROUTES: ReadonlyArray<{
         const answered = followUps
           .map(({ followUpId }) => followUpId)
           .filter((followUpId) => followUpId.startsWith(`${runId}:`));
-        const summary = yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport: answered.length === 0,
-        });
+        const summary = yield* showSummary(context, runId);
         return { ...summary, consumedFollowUps: answered };
       }),
       kill: ({ context, runId }) => handleKill(context, runId),
@@ -360,7 +354,22 @@ function resolveRunId(
   );
 }
 
-/** Wait for runs to change status, with timeout. */
+/** Whether a wait on `runId` is over: no launch of it is in flight here
+ *  (`RunsShape.get`), or it left the in-flight phases on `view`. A run
+ *  launched here whose start has not been applied yet is running. */
+const waitOver = (
+  runs: Runs['Service'],
+  view: SessionView,
+  runId: RunId,
+): boolean => {
+  if (runs.get(runId) === undefined) return true;
+  const run = view.runs.get(runId);
+  return (
+    run !== undefined && run.status !== 'ready' && !isInFlightPhase(run.status)
+  );
+};
+
+/** Wait for runs to end, with timeout. */
 const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   context: RunToolContext,
   timeout: number,
@@ -368,15 +377,14 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
 ) {
   const { runs } = context;
   const candidates = ids?.length ? ids : runs.get().map((r) => r.runId);
-  // Skip runs already done (see shouldSkipWait) on the view the wait starts from.
   const initial = SubscriptionRef.getUnsafe((yield* SessionViewAccess).ref);
   const pendingIds = [...new Set(candidates)].filter(
-    (id) => !shouldSkipWait(runs, initial, id),
+    (id) => !waitOver(runs, initial, id),
   );
   if (pendingIds.length === 0) return;
 
   yield* awaitStatusChange(context, initial, timeout, pendingIds, (view) =>
-    pendingIds.every((id) => shouldSkipWait(runs, view, id)),
+    pendingIds.every((id) => waitOver(runs, view, id)),
   );
 });
 
@@ -394,9 +402,6 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
 const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
   context: RunToolContext,
   runId: RunId,
-  options: {
-    readonly suppressAutoDeliveredSubagentReport?: boolean;
-  } = {},
 ) {
   const view = yield* (yield* SessionViewAccess).read([runId]);
   const run = view.runs.get(runId);
@@ -427,22 +432,12 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     lines.push(...children.map((child) => `  ${formatChildLine(child)}`));
   }
 
-  // A report the caller already received as a follow-up is elided; a wait
-  // answers one still queued and shows it here. Only a launch in flight here
-  // proves the child-run loop delivered it (a background bash run included).
-  const suppressReport =
-    options.suppressAutoDeliveredSubagentReport === true &&
-    run.identity.kind === 'agent' &&
-    run.parentId === context.runId &&
-    context.runs.get(runId) !== undefined;
-
   lines.push(
     ...buildSummaryTailLines(
       runId,
       runDisplayCategory(run),
       children.length > 0,
       report,
-      { suppressReport },
     ),
   );
 
@@ -492,17 +487,13 @@ const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const records = getRunRecords(runId);
-  const [report, note] = yield* Effect.all(
-    [records.readReport(), turnAttributionNote(runId)],
-    { concurrency: 2 },
-  );
+  const report = yield* getRunRecords(runId).readReport();
   if (!report) {
     return executed(
       `No report found for run ${runId}. Reports are persisted when subagents or background processes complete.`,
     );
   }
-  return executed(note ? `${note}\n\n${report}` : report);
+  return executed(report);
 });
 
 /**
@@ -513,20 +504,13 @@ const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const [result, note] = yield* Effect.all(
-    [getRunRecords(runId).readResult(), turnAttributionNote(runId)],
-    { concurrency: 2 },
-  );
+  const result = yield* getRunRecords(runId).readResult();
   if (!result) {
     return executed(
       `No structured result recorded for ${runId} yet. It is written when the run completes.`,
     );
   }
-  // The note rides INSIDE the JSON: /result is the machine-readable
-  // chaining endpoint, so prefixed prose would break JSON.parse
-  // consumers precisely in the interrupted-turn case it describes.
-  const payload = note ? { turnAttribution: note, ...result } : result;
-  return executed(JSON.stringify(payload, null, 2));
+  return executed(JSON.stringify(result, null, 2));
 });
 
 const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (

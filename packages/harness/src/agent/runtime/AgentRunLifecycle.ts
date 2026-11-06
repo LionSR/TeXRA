@@ -3,7 +3,7 @@
  * ({@link endRun}) the run program's terminal reaches, which commits the
  * run's `run.end` in one transaction and reports the run to its caller.
  */
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Clock, Effect, Exit } from 'effect';
 
 import { logSdkError } from '@agent/trace/helpers';
 import { endRunRows } from '@agent/storage/runLifecycle';
@@ -19,9 +19,9 @@ import {
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
+import { childEndReport } from './childDelivery';
 import type { RunReport } from './runReport';
-import type { ChildRunTurns } from './childRunLoop';
-import type { SessionServices } from './rootLaunch';
+import type { AgentRunServices } from './runRegistry';
 import type { RunLaunch } from './run/AgentRun';
 
 const CHANNEL = 'agentRunLifecycle';
@@ -59,10 +59,6 @@ export function endVerdict(exit: Exit.Exit<RunOutcome, unknown>): EndVerdict {
     : { outcome, error: Cause.squash(cause) };
 }
 
-/** A child's last turn, finished under the outcome its end resolves; `R`,
- *  what finishing it reads of the run. */
-type FinishLastTurn<R> = ChildRunTurns<RunReport, R>['finishLastTurn'];
-
 /** The report of a run that ended before its loop produced an output. */
 function emptyReport(ctx: RunLaunch, outcome: RunOutcome): RunReport {
   const misses = ctx.opening?.attachedMemoryMisses ?? [];
@@ -92,18 +88,17 @@ function withResolvedOutcome(
  * reaches this exactly once, as the exit of the one masked region the
  * program runs in. The transcript stage ends first, then the `run.end`
  * row commits in one transaction with everything the end decides
- * (`endRunRows`); an end the store refused fails the fiber once, logged,
- * and the run reads as interrupted at its next open. A root's failure is
- * logged here and raised as an `AgentError` once its end committed; a
- * child's rides its report, which its delivery reports. Uninterruptible: a
- * stop lands before this or after its row, never inside.
+ * (`endRunRows`): a child's report with its parent's delivery among them
+ * (`childEndReport`). An end the store refused fails the fiber once,
+ * logged, and the run reads as interrupted at its next open. A root's
+ * failure is logged here and raised as an `AgentError` once its end
+ * committed; a child's rides its report. Uninterruptible: a stop lands
+ * before this or after its row, never inside.
  */
-export const endRun = Effect.fn('endRun')(function* <R = never>(
+export const endRun = Effect.fn('endRun')(function* (
   ctx: RunLaunch,
   exit: Exit.Exit<RunReport, Error>,
-  /** A child's last turn result, from the result its run ends with. */
-  finish?: FinishLastTurn<R>,
-): Effect.fn.Return<RunReport, Error, SessionServices | R> {
+): Effect.fn.Return<RunReport, Error, AgentRunServices> {
   const { runId } = ctx;
   const agentIdentifier = ctx.config.agent;
   const carried = Exit.isSuccess(exit) ? exit.value : undefined;
@@ -180,24 +175,45 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
           ...(carried ?? emptyReport(ctx, verdict.outcome)),
           ...(failure !== undefined && { failure }),
         };
-  const lastTurn =
-    finish !== undefined && childResult !== undefined
-      ? yield* finish(withResolvedOutcome(childResult, verdict.outcome))
-      : undefined;
+  const log = yield* SessionLog;
   // Rows the store refused fail the run unless a stop ended it, whoever
   // ends it.
-  const lost = yield* (yield* SessionLog).lost(runId);
+  const lost = yield* log.lost(runId);
   const failed =
     lost !== undefined && verdict.outcome !== RUN_OUTCOME.CANCELLED;
-  const ended = yield* endRunRows(
-    {
-      runId,
-      outcome: failed ? RUN_OUTCOME.FAILED : verdict.outcome,
-      error: lost ?? error,
-      output: carried?.output,
-    },
-    lastTurn,
-  ).pipe(
+  const outcome = failed ? RUN_OUTCOME.FAILED : verdict.outcome;
+  // What the child tells its parent, from its report as the end resolves
+  // it; a report that cannot be built is the end's error, delivered as
+  // such rather than lost.
+  const report =
+    childResult === undefined
+      ? null
+      : yield* childEndReport(
+          ctx,
+          withResolvedOutcome(childResult, outcome),
+          (yield* log.facts(runId))?.stop?.reason ?? null,
+          (yield* Clock.currentTimeMillis) - ctx.startedAt,
+        ).pipe(
+          Effect.catch((unbuilt) =>
+            Effect.as(
+              logLifecycleWarning(
+                `Run ${runId}: its report could not be built`,
+                {
+                  runId,
+                  error: unbuilt,
+                },
+              ),
+              `The run ${runId} ended ${outcome}, but its report could not be built: ${unbuilt.message}`,
+            ),
+          ),
+        );
+  const ended = yield* endRunRows({
+    runId,
+    outcome,
+    error: lost ?? error,
+    output: carried?.output,
+    report,
+  }).pipe(
     Effect.tapError((unsaved) =>
       logLifecycleWarning(`Run ${runId}: its end could not be saved`, {
         runId,
@@ -205,8 +221,8 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
       }),
     ),
   );
-  const outcome = ended.end?.outcome ?? verdict.outcome;
-  yield* Effect.logDebug(`Task completed with outcome: ${outcome}`).pipe(
+  const resolved = ended.end?.outcome ?? outcome;
+  yield* Effect.logDebug(`Task completed with outcome: ${resolved}`).pipe(
     withLogChannel(CHANNEL),
   );
   // The run's stop is its fiber's interruption: the end commits, and the
@@ -214,7 +230,7 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
   if (Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause))
     return yield* Effect.failCause(exit.cause);
   if (childResult !== undefined && parentRunId !== null)
-    return withResolvedOutcome(childResult, outcome);
+    return withResolvedOutcome(childResult, resolved);
   if (thrown !== undefined && error !== undefined)
     // A root run's failure. Once its `run.end` row committed, the
     // session's presenter shows that row (`presentTerminalResult`); a run
@@ -224,5 +240,5 @@ export const endRun = Effect.fn('endRun')(function* <R = never>(
       cause: thrown,
       ...(error.kind === 'model' ? { failure } : {}),
     });
-  return withResolvedOutcome(carried ?? emptyReport(ctx, outcome), outcome);
+  return withResolvedOutcome(carried ?? emptyReport(ctx, resolved), resolved);
 }, Effect.uninterruptible);

@@ -49,11 +49,12 @@ function readableMessages(
  * `run.activate`, `run.end`), over the messages readable at idle. While the
  * run's current lifecycle has not ended (it waits on a child, or its
  * generation left without an end), any run's message wakes it, as the
- * user's does. Once it ended, only the user's message or a child's delivery
- * does, and after a user's Stop (that lifecycle's `run.stop` says `user`)
- * only the user's message committed after that stop: a run's message never
- * revives a run that ended, and a host's notification wakes nothing: it is
- * read by a generation already running.
+ * user's does. Once it ended, only the user's message, a child's delivery
+ * or its parent's follow-up (a child that ended continues for it) does,
+ * and after a user's Stop (that lifecycle's `run.stop` says `user`) only
+ * the user's message committed after that stop: a peer's message never
+ * revives a run that ended, and a host's notification wakes nothing: it
+ * is read by a generation already running.
  */
 export function needsWake(input: RunRows): boolean {
   // A resumed run that crashed carries no end, so no earlier Stop of it
@@ -64,7 +65,11 @@ export function needsWake(input: RunRows): boolean {
     ({ commit, content: { from } }) => {
       if (from.kind === 'notification') return false;
       if (from.kind === 'user') return !stopped || commit > stop.commit;
-      if (from.kind === 'run' && from.relation === 'child') return !stopped;
+      if (
+        from.kind === 'run' &&
+        (from.relation === 'child' || from.relation === 'parent')
+      )
+        return !stopped;
       return end === null;
     },
   );

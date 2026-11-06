@@ -14,12 +14,17 @@ import {
   Layer,
   Option,
   Scope,
+  Semaphore,
   Stream,
   SubscriptionRef,
 } from 'effect';
 
 import { Inbox, SessionInbox } from '@agent/followUp/Inbox';
 import { wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import {
+  ChildRunBudget,
+  resolveChildRunConcurrencyBudget,
+} from '@agent/runtime/childRunBudget';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import {
   Interactions,
@@ -192,6 +197,25 @@ const inboxLayer = Layer.effect(
   }),
 );
 
+/** The session's child-run budget, sized from the setting at open; a
+ *  setting that cannot be read leaves the default and says so. */
+const budgetLayer = (open: SessionHandleInit) =>
+  Layer.effect(
+    ChildRunBudget,
+    resolveChildRunConcurrencyBudget(open.roots).pipe(
+      Effect.map((permits) => Semaphore.makeUnsafe(permits)),
+      Effect.catch((error) =>
+        Effect.logWarning(
+          'The child-run budget setting could not be read.',
+        ).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.as(ChildRunBudget.defaultValue()),
+        ),
+      ),
+    ),
+  );
+
 /** The session's runs: their fork captures the context here, over every
  *  owner a run reads, one fiber per run under its id. Disposed first, so
  *  no run is admitted over a session that is unwinding. */
@@ -330,6 +354,7 @@ export const sessionOwnersLayer = (
 > =>
   consumersLayer(open).pipe(
     Layer.provideMerge(runsLayer(open)),
+    Layer.provideMerge(budgetLayer(open)),
     Layer.provideMerge(requestsLayer),
     Layer.provideMerge(approvalsLayer),
     Layer.provideMerge(Interactions.layer(open.interactions)),

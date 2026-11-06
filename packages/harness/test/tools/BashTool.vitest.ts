@@ -5,15 +5,7 @@ import { strict as assert } from 'node:assert';
 import { layer } from '@effect/vitest';
 
 // Third-party imports
-import {
-  Deferred,
-  Effect,
-  Layer,
-  Schedule,
-  Schema,
-  SubscriptionRef,
-  Context,
-} from 'effect';
+import { Deferred, Effect, Layer, Schedule, Schema, Context } from 'effect';
 import { afterEach, vi } from 'vitest';
 
 // Local imports
@@ -44,7 +36,6 @@ import {
   TestSession,
 } from '@test/support/testKernel';
 import { BashTool } from '@tools/bash';
-import { shouldSkipWait } from '@tools/executions/waitCoordination';
 import * as execUtils from '@utils/system/execUtils';
 import type { ToolResult } from '@texra-ai/harness';
 import type { ExecResult } from '@texra-ai/harness/node';
@@ -180,13 +171,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           vi.spyOn(resumeRunModule, 'resumeRun').mockImplementation(
             (woken, options) => {
               if (woken === parentRunId) {
-                skippedAtResumeTime ??= shouldSkipWait(
-                  Context.get(session, Runs),
-                  SubscriptionRef.getUnsafe(
-                    Context.get(session, SessionViewAccess).ref,
-                  ),
-                  runId,
-                );
+                // A wait is over once no launch of the run is held here.
+                skippedAtResumeTime ??=
+                  Context.get(session, Runs).get(runId) === undefined;
                 Deferred.doneUnsafe(wakeReached, Effect.void);
               }
               return resume(woken, options);

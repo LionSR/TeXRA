@@ -37,29 +37,23 @@ export const followUpServices = Effect.map(
  *
  * - `readFailed`: the run's claim or state could not be read just now
  *   (a busy or failing store), which says nothing about the run itself.
- * - `oneShot`: the run's live loop ends after its current turn and reads
- *   no message (headless, or an in-band child), or the run has no loop of
- *   its own and its launch takes none (a background command).
  * - `notParent`: the sender is not the run's parent.
  */
 export type FollowUpFailureReason =
   | ResumeRefusal['kind']
   | 'readFailed'
-  | 'oneShot'
   | 'notParent';
 
 /**
  * Three outcomes: the input reached a running loop, it waits in the run's
- * queue for the next turn, or it was not admitted for a worded reason. A
- * delivery the admission boundary had already accepted is `sent`. A resume
- * the input started that the run refused is told by the resume itself; a
- * queued input whose run could not even be read for a wake is still queued
- * (`wake: 'failed'`): the input belongs to the run, and an explicit Resume
- * delivers it.
+ * queue for its next turn (the resume the send started, or an explicit
+ * one), or it was not admitted for a worded reason. A delivery the
+ * admission boundary had already accepted is `sent`. A resume the input
+ * started that the run refused is told by the resume itself.
  */
 export type SubmitFollowUpResult =
   | { status: 'sent' }
-  | { status: 'queued'; wake?: 'failed' | null }
+  | { status: 'queued' }
   | { status: 'failed'; reason: FollowUpFailureReason };
 
 /** How one input is delivered to a run. */
@@ -87,16 +81,11 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
   readFailed: "This run couldn't be read right now. Try again in a moment.",
   notResumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
-  oneShot:
-    'This run ends after its current turn and reads no messages. Start a new agent task to continue.',
   notParent:
     'This run is not a child of the sender: it was detached or launched by another run.',
   blocked:
     "This task's agent, or the plugin it comes from, is missing, off or not trusted. It can continue once that is fixed.",
 };
-
-const FOLLOW_UP_WAKE_FAILED_MESSAGE =
-  'Message queued, but the run could not be resumed automatically. Resume it to deliver the message, or start a new agent task.';
 
 /** The one wording of each refusal, shared by every host and tool output. */
 export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
@@ -105,13 +94,11 @@ export function describeFollowUpFailure(reason: FollowUpFailureReason): string {
 
 export function presentFollowUpResult(
   result: SubmitFollowUpResult,
-): { severity: 'none' } | { severity: 'info' | 'warning'; message: string } {
+): { severity: 'none' } | { severity: 'warning'; message: string } {
   if (result.status === 'failed') {
     const message = describeFollowUpFailure(result.reason);
     return { severity: 'warning', message };
   }
-  if (result.status === 'queued' && result.wake === 'failed')
-    return { severity: 'info', message: FOLLOW_UP_WAKE_FAILED_MESSAGE };
   return { severity: 'none' };
 }
 
@@ -171,11 +158,11 @@ export const wakeIfOwed = Effect.fn('wakeIfOwed')(function* (
  * row, this asks the inbox whether the run owes a resume (`wakeIfOwed`,
  * over `SessionInbox.owesResume`) and relays its answer.
  *
- * A launch in flight here decides for itself (`LiveRun.readsMessages`): a
- * one-shot loop ends after its turn and reads none. With no launch here,
- * the persisted facts decide: the run's records whether it can continue
- * (a state that cannot be read cannot), and its input rows, in the send's
- * job, whether this message wakes it (`needsWake`).
+ * A run a launch here holds reads the row itself, at its next request or
+ * turn boundary; a child that ends with it queued is resumed for it. With
+ * no launch here, the persisted facts decide: the run's records whether
+ * it can continue (a state that cannot be read cannot), and its input
+ * rows, in the send's job, whether this message wakes it (`needsWake`).
  */
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
@@ -193,10 +180,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     if (yield* sentBefore(runId, item, hold, attach))
       return { status: 'sent' } as const;
     const live = runs.get(runId);
-    if (live !== undefined) {
-      if (!live.readsMessages)
-        return { status: 'failed', reason: 'oneShot' } as const;
-    } else {
+    if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(
         Effect.catch((error) =>
           Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
@@ -216,21 +200,24 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (facts?.stop !== null && facts?.end === null) yield* live.drained;
     }
     const media = attach === undefined ? {} : yield* attach;
-    return yield* inbox.send(
+    const landed = yield* inbox.send(
       runId,
       { ...item, ...media },
-      { hold, fromParent, wakesOnly: live === undefined },
+      { hold, fromParent },
     );
+    return { status: 'landed', landed, live: live !== undefined } as const;
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
-  if ('status' in sent) return sent;
+  if (sent.status !== 'landed') return sent;
+  const { landed, live } = sent;
   // The sender is not its parent, its input is closed (deleted, or torn
   // down with nothing queued), or the session is disposed.
-  if (sent.kind === 'refused') return { status: 'failed', reason: sent.reason };
-  if (sent.kind === 'queued' && sent.read) return { status: 'sent' };
-  // The sender hears the resume start, not the resumed turn end.
-  if ((yield* wakeIfOwed(runId)) === false)
-    return { status: 'queued', wake: 'failed' };
-  return { status: sent.kind === 'duplicate' ? 'sent' : 'queued' };
+  if (landed.kind === 'refused')
+    return { status: 'failed', reason: landed.reason };
+  if (landed.kind === 'duplicate' || live) return { status: 'sent' };
+  // The sender hears the resume start, not the resumed turn end; a wake
+  // that could not read the run leaves the row for an explicit resume.
+  yield* wakeIfOwed(runId);
+  return { status: 'queued' };
 });
 
 /**
