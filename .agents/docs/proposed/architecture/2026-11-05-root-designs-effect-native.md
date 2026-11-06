@@ -648,6 +648,27 @@ code by mapping `Unavailable` once. The drainer keeps one read cursor beside
 the bounded read: a bound on the event stream alone cannot finish a cutoff
 that names a pruned row or a tail already past the head.
 
+**Addendum (2026-11-06): the service side.** This root names the client's
+three sessions and the hosts' verbs; the service that serves them has roots
+of its own, read after PR 14769's review rounds and recorded in
+`2026-11-06-cli-service-root-causes.md`. In brief: the upgrade handoff keeps
+two services alive on files, polls and a fifteen-second store retry the R1
+slice added, and the drain is unbounded, so the retry is broken on its own
+terms (one service per root on a signal, or a per-project handoff on the
+record stream; the owner chooses); a project's lifetime is a hand-rolled
+`RcMap` (leases, idle time, lanes, a sweep); the service's own lifetime is
+a one-second poll over counters beside the sessions' own liveness; five
+doors reach one service and the chat starts it twice; the protocol version
+is an integer copied from a digest the bump test already computes; the
+service's environment is a second environment patched with a notice; the
+handlers re-derive an end (read without its activation, fabricated when
+missing), a live root and an admission the session already owns; the
+frame re-declares `SessionViewInput[]` as nine fields decoded three
+times; `serviceSession.ts`'s run view skips the harness's transcript
+guard; a notice to a host without `emit` vanishes. The plan there is five
+PRs; R10's two become its third and fourth, and the digest, `RcMap` and
+the signals go first, since the one `Session` is served over them.
+
 ## Order
 
 Each root depends on the ones above it in this list; a slice is a deletion
