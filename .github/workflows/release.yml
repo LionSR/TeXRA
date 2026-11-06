@@ -1,7 +1,9 @@
 name: Release
 
 # Fires once a GitHub Release is published. Tags are cut in pairs off the same
-# commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI. Creating the
+# commit: `vX.Y.Z` for the extension, `cli-vX.Y.Z` for the CLI. The SDK pair
+# (`@texra-ai/llm`, `@texra-ai/harness`) has its own version and its own tag,
+# `sdk-vX.Y.Z`, cut whenever what the two packages ship changed. Creating the
 # tag/release itself stays a manual step (gh release create) so a human still
 # curates the changelog body and decides when to go public; this workflow only
 # handles the build + publish that follows.
@@ -196,40 +198,12 @@ jobs:
       - name: Require green CI on the tagged commit
         uses: ./.github/actions/require-green-ci
 
-      - name: Resolve npm dist-tag from tag, package version and pre-release flag
+      - name: Resolve npm dist-tag
         id: channel
-        env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          RELEASE_IS_PRERELEASE: ${{ github.event.release.prerelease }}
-        run: |
-          version=$(node -p "require('./packages/cli/package.json').version")
-          if [ "$RELEASE_TAG" != "cli-v$version" ]; then
-            echo "::error::Release tag '$RELEASE_TAG' does not match packages/cli/package.json version '$version' (expected 'cli-v$version')"
-            exit 1
-          fi
-
-          if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            npm_tag=latest
-          elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-preview\.[1-9][0-9]*$ ]]; then
-            npm_tag=preview
-          else
-            echo "::error::Version '$version' is neither X.Y.Z nor X.Y.Z-preview.N; nothing publishes it."
-            exit 1
-          fi
-
-          # The GitHub pre-release flag and the version form must agree, so a
-          # preview can never be published under `latest` and a stable version
-          # never under `preview`.
-          if [ "$npm_tag" = preview ] && [ "$RELEASE_IS_PRERELEASE" != true ]; then
-            echo "::error::'$RELEASE_TAG' is a preview version but the GitHub release is not marked pre-release. Recreate it with 'gh release create --prerelease'."
-            exit 1
-          fi
-          if [ "$npm_tag" = latest ] && [ "$RELEASE_IS_PRERELEASE" = true ]; then
-            echo "::error::'$RELEASE_TAG' is a stable version but the GitHub release is marked pre-release. Previews are 'cli-vX.Y.Z-preview.N'."
-            exit 1
-          fi
-          echo "npm_tag=$npm_tag" >> "$GITHUB_OUTPUT"
-          echo "Channel: npm dist-tag $npm_tag ($version)"
+        uses: ./.github/actions/npm-dist-tag
+        with:
+          manifest: packages/cli/package.json
+          tag-prefix: cli-v
 
       - name: Setup workspace
         uses: ./.github/actions/setup-workspace
@@ -246,3 +220,49 @@ jobs:
         # The dist-tag is always explicit: `npm publish` defaults to `latest`,
         # which is exactly where a preview must never land.
         run: npm publish --tag "$NPM_TAG"
+
+  publish-sdk:
+    name: Publish SDK to npm (Trusted Publishing)
+    if: ${{ startsWith(github.event.release.tag_name, 'sdk-v') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      checks: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Require green CI on the tagged commit
+        uses: ./.github/actions/require-green-ci
+
+      # The harness's version names the release; the publish script fails
+      # unless the llm's is the same.
+      - name: Resolve npm dist-tag
+        id: channel
+        uses: ./.github/actions/npm-dist-tag
+        with:
+          manifest: packages/harness/package.json
+          tag-prefix: sdk-v
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup-workspace
+        with:
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Use an npm CLI recent enough for trusted publishing
+        run: npm install -g npm@^11.5.1
+
+      - name: Install the packed tarballs and run the example
+        run: pnpm --filter @texra-ai/harness run example:packed
+
+      - name: Dry-run the publish
+        env:
+          NPM_TAG: ${{ steps.channel.outputs.npm_tag }}
+        run: node packages/harness/scripts/publish-npm.mjs --tag "$NPM_TAG" --dry-run
+
+      - name: Publish @texra-ai/llm, then @texra-ai/harness
+        env:
+          NPM_TAG: ${{ steps.channel.outputs.npm_tag }}
+        run: node packages/harness/scripts/publish-npm.mjs --tag "$NPM_TAG"
