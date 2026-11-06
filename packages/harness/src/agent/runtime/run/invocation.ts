@@ -241,23 +241,33 @@ const consult = <A, E, R>(
     : asker.await(move.requestId);
 };
 
-/** The pause before an automatic resend, unchained or not. */
+/**
+ * The pause before an automatic resend, unchained or not: as long as the
+ * provider asked (`retryAfterMs`), else the base backoff. A failure llm
+ * scoped to a route cooled that route in the gate, which waits the next
+ * send out, so the loop waits nothing more for it.
+ */
 const pauseBefore = <A, E, R>(
   driver: InvocationDriver<A, E, R>,
   next: FailedNext,
-  failure: AttemptFailure,
+  { error }: AttemptFailure,
 ): Effect.Effect<void> => {
+  if (next.kind !== 'unchain' && next.kind !== 'retry') return Effect.void;
+  const vendor = error instanceof ModelError ? error : undefined;
+  const delayMs =
+    vendor?.scope !== undefined
+      ? 0
+      : (vendor?.retryAfterMs ?? RETRY_BACKOFF_MS);
   if (next.kind === 'unchain')
     driver.logger.warn(
-      `Chained response gone (${failure.error.message}); retrying once with the full transcript.`,
+      `Chained response gone (${error.message}); retrying once with the full transcript.`,
     );
-  else if (next.kind === 'retry')
+  else
     driver.logger.debug(
-      `Model request failed; automatic retry in ${RETRY_BACKOFF_MS}ms.`,
-      { data: failure.error.message },
+      `Model request failed; automatic retry in ${delayMs}ms.`,
+      { data: error.message },
     );
-  else return Effect.void;
-  return Effect.sleep(RETRY_BACKOFF_MS);
+  return delayMs > 0 ? Effect.sleep(delayMs) : Effect.void;
 };
 
 /** The move after `failure` of attempt `ref`, read off the attempts
