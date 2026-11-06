@@ -7,13 +7,14 @@
  * a run ends, so a finished fan-out carries no since), one row per
  * dispatched child run (`dispatchedChildren`: a script's calls are listed by
  * its stage; nested children indented under theirs), and the inquiry
- * threads the run opened. The `inquiries` scope is the same card over the
- * inquiry threads alone (the workflow body, whose run board already lists
- * every call). Every row is a child of the session view: label, status,
- * tone, latest line, and clock facts come from `view.runs`; the host paints
- * the glyph and the time. The card's open state is the surface's
- * (`Surface.groups`, key {@link DISPATCH_GROUP_KEY}); a toggle goes out as
- * a `group` action. Selecting a row is the navigation.
+ * threads the run opened. A card with no child to list is headed by its
+ * inquiry threads, which the `inquiries` scope makes of any run (the
+ * workflow body, whose run board already lists every call). Every row is a
+ * child of the session view: label, status, tone, latest line, and clock
+ * facts come from `view.runs`; the host paints the glyph and the time. The
+ * card's open state is the surface's (`Surface.groups`, key
+ * {@link DISPATCH_GROUP_KEY}); a toggle goes out as a `group` action.
+ * Selecting a row is the navigation.
  */
 
 // Third-party imports
@@ -297,8 +298,9 @@ export class BackgroundTasksPanel extends LitElement {
         return count > 0 ? [formatResultCount(count, noun)] : [];
       })
       .join(', ');
+    // With no child to count, the card is its inquiry threads alone.
     const summary =
-      this.scope === 'inquiries'
+      children.length === 0
         ? html`${waIcon('comments')} Inquiries
             <wa-badge variant="neutral" appearance="outlined" pill
               >${inquiries.length}</wa-badge
