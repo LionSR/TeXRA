@@ -14,7 +14,7 @@
  * transaction ended at, from the store's own `observedCommit`: a batch
  * commits whole, so those are the crash points. For each point N the suite
  * copies the clean store, truncates it to commits 1..N (the store a process
- * killed after commit N leaves), hands its claims to a dead owner, opens a
+ * killed after commit N leaves), opens a
  * fresh session over it and resumes the root run. The copy is rebuilt as
  * the store stood at commit N (`crashAt`), and the run's files and the
  * workspace's command effects are put back as the clean pass had them at

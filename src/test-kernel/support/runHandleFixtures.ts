@@ -41,8 +41,8 @@ export const testRunRegistry: Effect.Effect<
   // The empty fold the registry reads its grants from.
   SubscriptionRef.make(emptySessionView('test-run-registry')),
   (fork, emptyView) =>
-    // The registry reads its session's view (empty here), claims (no-ops)
-    // and its own `run.detach` batches (dropped); nothing else.
+    // The registry reads its session's view (empty here) and its own
+    // `run.detach` batches (dropped); nothing else.
     new RunRegistry({
       // cast: the registry reads only these members of its view.
       view: {

@@ -172,8 +172,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
           Effect.gen(function* () {
             const parent = yield* parkedParent();
             const runId = generateRunId();
-            // The child holds its claim until its manifest is durable: another
-            // process taking it in between would find nothing to recover.
+            // The call returns only once the child's manifest is durable.
             const faults = yield* sessionStoreFaults(parent.storage);
             const persisting = yield* faults.holdNext(
               'appendAll',
@@ -194,8 +193,7 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
               parent: { id: parent.runId },
             });
             expect(result.result.outcome).toBe('completed');
-            // The report and the manifest are durable once the call returns,
-            // and the child let its claim go.
+            // The report and the manifest are durable once the call returns.
             expect(rows.map((row) => row.type)).toEqual(
               expect.arrayContaining(['run.report', 'run.result', 'run.end']),
             );

@@ -33,8 +33,8 @@ const start = (session: Session, runId: RunId) =>
     Effect.andThen(Context.get(session, SessionLog).settled),
   );
 
-/** Open the run aggregate the way the loop does: claim, then the
- *  position that opens it. */
+/** Open the run aggregate the way the loop does: its activation, then
+ *  the position that opens it. */
 const open = (session: Session, runId: RunId) =>
   Effect.gen(function* () {
     const cell = yield* Context.get(session, RunHistory).open(runId, {

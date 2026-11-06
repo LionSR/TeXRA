@@ -6,8 +6,7 @@
  * Failure modes:
  * - R14: a resumed child its parent's open call owns is activated on its
  *   own, or the parent twice, or the redirect is an error instead of the
- *   parent's handle; the redirect leaves a claim held or a listener of its
- *   own subscribed.
+ *   parent's handle; the redirect leaves a listener of its own subscribed.
  * - A labelled run's label request is left out of its result's usage or its
  *   view's, or the two disagree.
  * - A host's shutdown that stops a launch still opening, then interrupts
@@ -96,7 +95,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
   layer(SessionGraph.hosted, { excludeTestServices: true })((it) => {
     it.layer(validationHost('texra-handoff-'), { buildPerTest: true })((it) => {
       it.effect(
-        "R14: resuming a child its parent's open call owns resumes the parent once, names the child, and leaves no claim or listener",
+        "R14: resuming a child its parent's open call owns resumes the parent once, names the child, and leaves no listener",
         () =>
           Effect.gen(function* () {
             const roots = testWorkspaceRoots();
