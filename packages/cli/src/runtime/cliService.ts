@@ -7,27 +7,26 @@
 import * as path from 'node:path';
 
 import {
-  Clock,
   Context,
   Duration,
   Effect,
   Exit,
   FileSystem,
   Path,
-  Predicate,
+  RcMap,
   Schedule,
   Scope,
+  Stream,
+  SubscriptionRef,
 } from 'effect';
 
 import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
-import { type Sessions } from '@texra-ai/harness';
+import { type LocalSession, type Sessions } from '@texra-ai/harness';
 import {
   AppState,
   type GlobalValues,
   storeHeld,
   withLogChannel,
-  withPerKeyLane,
-  type PerKeyLane,
   StateStores,
 } from '@texra-ai/harness/host';
 import {
@@ -38,7 +37,7 @@ import {
   JsonStore,
   setLogSink,
 } from '@texra-ai/harness/node';
-import { ensureError } from '@texra-ai/harness/schemas';
+import { ensureError, RUN_PHASE } from '@texra-ai/harness/schemas';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
 import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
@@ -48,6 +47,7 @@ import {
   type ServiceInfo,
 } from '@texra/controllers/server/protocol';
 import type {
+  ServiceLoad,
   ServiceProject,
   ServiceProjects,
 } from '@texra/controllers/server/handlers';
@@ -81,7 +81,11 @@ const STORE_RELEASE_WAIT = '15 seconds';
 
 /**
  * The service's projects over the CLI's node roots, opened in `scope` and
- * closed with it.
+ * closed with it. A project is its session, opened on first use and
+ * released once nothing has held it for `idleAfter` (`RcMap`): a client's
+ * lease is its scope on `open`, and a run at work holds a lease of the
+ * project's own, taken as the view shows one and let go as none is left,
+ * so a project with a task running never idles out.
  */
 export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   context: Pick<CliContext, 'storageRoot'>,
@@ -89,6 +93,7 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
   /** The process's sessions, which each project's session is also opened
    *  through. */
   sessions: Context.Service.Shape<typeof Sessions>,
+  idleAfter: Duration.Input,
 ) {
   const { storageRoot } = context;
   const globalState = yield* AppState;
@@ -145,123 +150,127 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
     >(),
   );
+  // The sessions open now, by storage root, and the load they carry: what
+  // the task list reads and the service's lifetime follows.
+  const open = new Map<string, LocalSession>();
+  const load = yield* SubscriptionRef.make<ServiceLoad>({
+    open: 0,
+    working: 0,
+  });
+  const count = (opened: number, working: number) =>
+    SubscriptionRef.update(load, (now) => ({
+      open: now.open + opened,
+      working: now.working + working,
+    }));
   // Each project's approval policy is its persisted setting, which the
   // session reads at every decision through these following config stores:
   // a change any client writes applies to the next request, and nothing a
   // window holds can replace it.
-  //
-  // A project is its session and the scope its stores live in, leased by
-  // the callers that use it. Opening, leasing and closing one run on the
-  // project's lane, so a close sees every lease taken before it and an open
-  // after it opens the project anew.
-  interface Project extends ServiceProject {
-    readonly scope: Scope.Closeable;
-    leases: number;
-    idleSince: number;
-  }
-  const projects = new Map<string, Project>();
-  const lanes = new Map<string, PerKeyLane>();
-  const lease = (root: string) =>
-    Effect.gen(function* () {
-      let project = projects.get(root);
-      if (project === undefined) {
-        const projectScope = yield* Scope.fork(scope);
-        const opened = yield* Effect.gen(function* () {
-          const roots = yield* openRoots(root, projectScope);
-          // A project store is held by one process. The service this one
-          // replaced releases the project as it exits, a moment after it
-          // stopped taking work (`serve.ts`): a held store is tried again
-          // for a while before the open is refused.
-          const session = yield* sessions
-            .open(roots, { persistent: true, host: {} })
-            .pipe(
-              Effect.retry({
-                while: storeHeld,
-                schedule: Schedule.spaced('250 millis').pipe(
-                  Schedule.upTo({ duration: STORE_RELEASE_WAIT }),
-                ),
-              }),
-            );
-          yield* recordFirstCompletedRun(session).pipe(
-            Scope.provide(projectScope),
-          );
-          // A store moved aside at open (pre-1.0 or corrupt) is said once,
-          // in the service's log and to the project's first window: the
-          // windows open no store of their own to notice it.
-          const moved = session.storeMovedAside;
-          if (moved) {
-            const message = sessionStoreMovedAsideMessage(moved);
-            yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
-            yield* session.emit('requestShowInstruction', {
-              key: `store-moved-aside-${moved.aside}`,
-              message,
-            });
-          }
-          return { session };
-        }).pipe(Effect.onError(() => Scope.close(projectScope, Exit.void)));
-        project = { ...opened, scope: projectScope, leases: 0, idleSince: 0 };
-        projects.set(root, project);
-      }
-      project.leases += 1;
-      return project;
-    }).pipe(withPerKeyLane(lanes, root));
-  const open = (workspace: string) => {
-    const root = canonicalizeWorkspacePath(workspace);
-    return Effect.acquireRelease(lease(root), (project) =>
-      Effect.map(Clock.currentTimeMillis, (now) => {
-        project.leases -= 1;
-        if (project.leases === 0) project.idleSince = now;
-      }),
-    ).pipe(
-      Effect.map(({ session }): ServiceProject => ({ session })),
-      Effect.mapError(ensureError),
-      Effect.provideContext(services),
+  const lookup = Effect.fn('cliServiceProjects.lookup')(function* (
+    root: string,
+  ): Effect.fn.Return<
+    ServiceProject,
+    Error,
+    | Scope.Scope
+    | ChildProcessSpawner
+    | FileSystem.FileSystem
+    | Path.Path
+    | StateStores
+  > {
+    const projectScope = yield* Effect.scope;
+    const roots = yield* openRoots(root, projectScope);
+    // A project store is held by one process. The service this one
+    // replaced releases the project as it exits, a moment after it
+    // stopped taking work (`serve.ts`): a held store is tried again
+    // for a while before the open is refused.
+    // The session closes as the project is released, before its roots
+    // (registered after them, so released first); the service's exit
+    // closes every session ahead of that (`serve`'s settle).
+    const session = yield* Effect.acquireRelease(
+      sessions.open(roots, { persistent: true, host: {} }).pipe(
+        Effect.retry({
+          while: storeHeld,
+          schedule: Schedule.spaced('250 millis').pipe(
+            Schedule.upTo({ duration: STORE_RELEASE_WAIT }),
+          ),
+        }),
+      ),
+      (opened) => Effect.asVoid(sessions.close(opened.roots)),
     );
-  };
-  /** Close `root` if it is still unleased, holds no run and has been idle
-   *  for `idleMs`; a run held restarts its idle time. */
-  const closeIfIdle = (root: string, idleMs: number) =>
-    Effect.gen(function* () {
-      const project = projects.get(root);
-      if (project === undefined || project.leases > 0) return undefined;
-      const now = yield* Clock.currentTimeMillis;
-      const { session } = project;
-      // What this process runs now (its registry), not the claims the view
-      // shows: a run held here keeps the project open.
-      if (session.held().length > 0) {
-        project.idleSince = now;
-        return undefined;
-      }
-      if (now - project.idleSince < idleMs) return undefined;
-      projects.delete(root);
-      // The stores close even if the session's close fails.
-      yield* sessions
-        .close(session.roots)
-        .pipe(Effect.ensuring(Scope.close(project.scope, Exit.void)));
-      return session;
-    }).pipe(withPerKeyLane(lanes, root), Effect.provideContext(services));
+    yield* recordFirstCompletedRun(session).pipe(Scope.provide(projectScope));
+    // A store moved aside at open (pre-1.0 or corrupt) is said once, in
+    // the service's log and to the project's first window: the windows
+    // open no store of their own to notice it.
+    const moved = session.storeMovedAside;
+    if (moved) {
+      const message = sessionStoreMovedAsideMessage(moved);
+      yield* Effect.logWarning(message).pipe(withLogChannel(CHANNEL));
+      yield* session.emit('requestShowInstruction', {
+        key: `store-moved-aside-${moved.aside}`,
+        message,
+      });
+    }
+    yield* Effect.acquireRelease(
+      Effect.andThen(
+        Effect.sync(() => open.set(session.roots.storage, session)),
+        count(1, 0),
+      ),
+      () =>
+        Effect.andThen(
+          Effect.sync(() => open.delete(session.roots.storage)),
+          count(-1, 0),
+        ),
+    );
+    // A run at work holds the project through a lease of the project's
+    // own (not one waiting for its next message, which the service's close
+    // stops, resumable).
+    let hold: Scope.Closeable | null = null;
+    const follow = (busy: boolean) =>
+      Effect.gen(function* () {
+        if (busy === (hold !== null)) return;
+        if (busy) {
+          hold = yield* Scope.make();
+          // The entry exists: this runs inside its own lookup's scope.
+          yield* RcMap.get(projects, root).pipe(
+            Scope.provide(hold),
+            Effect.orDie,
+          );
+          yield* count(0, 1);
+          return;
+        }
+        const held = hold;
+        hold = null;
+        if (held !== null) yield* Scope.close(held, Exit.void);
+        yield* count(0, -1);
+      });
+    yield* Effect.forkScoped(
+      Stream.runForEach(
+        session.view.changes.pipe(
+          Stream.map((view) =>
+            [...view.runs.values()].some(
+              (run) => run.runsHere && run.status !== RUN_PHASE.WAITING,
+            ),
+          ),
+          Stream.changes,
+        ),
+        follow,
+      ).pipe(Effect.ensuring(follow(false))),
+    );
+    return { session };
+  });
+  const projects: RcMap.RcMap<string, ServiceProject, Error> =
+    yield* RcMap.make({
+      lookup: (root: string) => lookup(root).pipe(Effect.mapError(ensureError)),
+      idleTimeToLive: idleAfter,
+    }).pipe(Scope.provide(scope));
   return {
     storageRoot,
-    open,
-    opened: Effect.sync(
-      () =>
-        new Map(
-          [...projects.values()].map(({ session }) => [
-            session.roots.storage,
-            session,
-          ]),
-        ),
-    ),
-    closeIdle: (idleFor) =>
-      Effect.map(
-        // Each project closes in its own lane, so they close at once.
-        Effect.forEach(
-          [...projects.keys()],
-          (root) => closeIfIdle(root, Duration.toMillis(idleFor)),
-          { concurrency: 'unbounded' },
-        ),
-        (closed) => closed.filter(Predicate.isNotUndefined),
+    open: (workspace) =>
+      RcMap.get(projects, canonicalizeWorkspacePath(workspace)).pipe(
+        Effect.provideContext(services),
       ),
+    opened: Effect.sync(() => new Map(open)),
+    load,
   } satisfies Context.Service.Shape<typeof ServiceProjects>;
 });
 

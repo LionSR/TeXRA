@@ -392,11 +392,20 @@ Design smells:
 
 In order, each a PR that deletes what its root names:
 
-1. **Service lifetime** (§2.2, §2.3, §2.5, §3.2): `RcMap` projects, a
-   draining session that refuses its own starts, signals for idle, drain
-   and stop, the digest as the protocol identity, the dead record fields
-   and the hand-written "once" gone. Harness: the registry's lease per
-   live run and `Sessions.drain`. No behaviour change a user sees.
+1. **Service lifetime** (§2.2, §2.3, §2.5, §3.2), on
+   `simplify/service-lifetime`: `RcMap` projects with a lease of the
+   project's own while a run works; the service's idle, drain and stop
+   as signals over the projects' load, the admissions and the watch
+   streams (the one-second check, `admitted`, `idleSince`, `released` and
+   the 250 ms flush gone; a five-second deadline on the watch streams'
+   end stays, as a bound, not a wait); `texra service stop` and a
+   starting client wait on the socket's close and the record's change
+   stream; the digest as the protocol identity; the record's dead fields,
+   the duplicate `closeAll` and the `runningTasks` option gone. Left in
+   place, for PR 2: the fifteen-second store retry (§2.1) and the chat's
+   restart loop (§2.4). The admission stays the transport's (a draining
+   session refusing its own starts would be the harness's `Sessions.drain`,
+   which §2.1's per-project handoff needs and the strict design does not).
 2. **One service, one door** (§2.1, §2.4): the upgrade handoff on a
    signal (the owner chooses strict one-service or the per-project
    handoff) and the one `linkService`; the chat's restart loop and the

@@ -17,6 +17,8 @@ import {
   Effect,
   Exit,
   Layer,
+  Option,
+  Predicate,
   Ref,
   Schedule,
   Schema,
@@ -33,6 +35,7 @@ import { nodeFileServices } from '@texra-ai/harness/node';
 import {
   prepareServiceDirectories,
   readServiceRecord,
+  serviceRecordChanges,
   servicePaths,
 } from './discovery';
 
@@ -281,6 +284,27 @@ export function askServiceToStop(
   );
 }
 
+/**
+ * Ask the service on `socket` to stop now and wait until it is gone. The
+ * answer is the socket closing under this connection: the service exits
+ * as soon as it is asked, ahead of any response, so the ask is sent
+ * without awaiting one (`discard`: it completes as the handler starts).
+ */
+export const stopServiceAndWait = (
+  socket: string,
+): Effect.Effect<void, SocketError | RpcClientError.RpcClientError> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const gone = yield* Deferred.make<void>();
+      const client = yield* connectService(
+        socket,
+        Effect.asVoid(Deferred.succeed(gone, undefined)),
+      );
+      yield* client['service.stop']({ drain: false }, { discard: true });
+      yield* Deferred.await(gone);
+    }),
+  );
+
 /** Ask the service on `socket` to drain: it exits once its running tasks
  *  end. One that exited already is retired. */
 function retireService(
@@ -348,19 +372,17 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
           }),
       ),
     );
-    // Not listening yet, listening but still starting, or still the
-    // retiring service: all wait for this protocol's own service.
-    // A newer protocol's service that came up meanwhile (a newer build
-    // replaced the one this window spoke to) refuses this one at once: no
-    // wait for a service of this protocol that will not come. Past the
-    // deadline, which interrupts a probe still in flight (a record read on
-    // a stalled mount has no timeout of its own), the last completed
-    // probe's reason stands; only "not yet up" reads as the service not
-    // answering.
+    // The service claims the record once it listens, so the record's
+    // changes are the signal to probe on: not claimed yet, claimed by the
+    // retiring service still, or by a service that accepts but does not
+    // answer, all wait for the next change; a newer build's service that
+    // came up meanwhile refuses this one at once. Past the deadline, the
+    // last probe's reason stands; only "not yet up" reads as the service
+    // not answering.
     const lastRefusal = yield* Ref.make(
       new ServiceUnavailable({ reason: NOT_YET_UP }),
     );
-    info = yield* probeRecordedService.pipe(
+    const probed = probeRecordedService.pipe(
       Effect.flatMap((answer) => {
         if (answer !== null && isNewer(answer))
           return Effect.fail(newerService(answer));
@@ -369,10 +391,21 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
       Effect.tapError((refusal) => Ref.set(lastRefusal, refusal)),
-      Effect.retry({
-        schedule: Schedule.spaced('200 millis'),
-        while: (error) => error.newer !== true,
-      }),
+      Effect.catchIf(
+        (error) => error.newer !== true,
+        () => Effect.succeed(null),
+      ),
+    );
+    info = yield* serviceRecordChanges.pipe(
+      Stream.mapEffect(() => probed),
+      Stream.filter(Predicate.isNotNull),
+      Stream.runHead,
+      Effect.flatMap(
+        Option.match({
+          onNone: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),
+          onSome: Effect.succeed,
+        }),
+      ),
       Effect.timeoutOrElse({
         duration: START_TIMEOUT,
         orElse: () => Effect.flatMap(Ref.get(lastRefusal), Effect.fail),

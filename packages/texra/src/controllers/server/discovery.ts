@@ -14,7 +14,14 @@ import { hash } from 'node:crypto';
 import { lstatSync } from 'node:fs';
 import * as path from 'node:path';
 
-import { Effect, FileSystem, PlatformError, Predicate, Result } from 'effect';
+import {
+  Effect,
+  FileSystem,
+  PlatformError,
+  Predicate,
+  Result,
+  Stream,
+} from 'effect';
 
 import { type DatabaseReadFailed } from '@texra-ai/harness';
 import { type DatabaseWriteFailed, GlobalValues } from '@texra-ai/harness/host';
@@ -132,6 +139,16 @@ const sameService = (
   a: ServiceRecord | undefined,
   b: ServiceRecord | undefined,
 ): boolean => a?.pid === b?.pid && a?.startedAt === b?.startedAt;
+
+/** Emits as subscribed, then after each commit, by any process, that
+ *  changed the storage root's service record: what a client starting a
+ *  service waits on. */
+export const serviceRecordChanges: Stream.Stream<void, never, GlobalValues> =
+  Stream.unwrap(
+    Effect.map(GlobalValues, (values) =>
+      values.changes(TEXRA_SERVICE, [CURRENT]),
+    ),
+  );
 
 /** The record of the storage root's running service, or null when there is
  *  none. */

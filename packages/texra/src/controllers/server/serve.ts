@@ -9,14 +9,17 @@
  *   one finishes the tasks at work, and it exits when they end (a
  *   conversation waiting here for its next message stops with it,
  *   resumable);
- * - idleness: no client connected and no task at work for `idleAfter` (a
- *   conversation waiting for its next message stops with it, resumable, as
- *   in a drain).
+ * - idleness: no project open (each is released once nothing has held it
+ *   for `idleAfter`, a run at work included) and no task admitting, for
+ *   `idleAfter` more (a conversation waiting for its next message stops
+ *   with it, resumable, as in a drain).
  *
  * Whichever ends it, it leaves as a drain does first: no task starts and
  * the record is released, so no client finds a service that is exiting.
  * It never starts at login: a client starts it detached when none answers.
- * The sessions it opened are the host's to close once this returns.
+ * The sessions it opened are the host's to close once this returns. Every
+ * fact the lifetime follows is a published one (the projects' load, the
+ * admissions, the watch streams), never a poll.
  */
 import * as NodeSocketServer from '@effect/platform-node/NodeSocketServer';
 import {
@@ -27,10 +30,10 @@ import {
   Effect,
   FileSystem,
   Layer,
-  Ref,
-  Schedule,
   Schema,
   type Scope,
+  Stream,
+  SubscriptionRef,
 } from 'effect';
 import { RpcSerialization, RpcServer } from 'effect/rpc';
 
@@ -48,12 +51,7 @@ import {
   removeDeadSockets,
   servicePaths,
 } from './discovery';
-import {
-  runningTasks,
-  ServiceControl,
-  serviceHandlers,
-  ServiceProjects,
-} from './handlers';
+import { ServiceControl, serviceHandlers, ServiceProjects } from './handlers';
 import {
   BUILD_VERSION,
   ServiceInfoSchema,
@@ -100,12 +98,10 @@ interface ServeOptions {
   readonly settle: Effect.Effect<void>;
 }
 
-/** How long the watch streams get to carry the finished tasks' last rows
- *  (their framers cut every 16 ms) before the socket closes. */
-const FRAME_FLUSH = '250 millis';
-
-/** How often the idle and drain checks run. */
-const CHECK_INTERVAL = '1 second';
+/** How long the watch streams get, after the tasks are stopped, to end
+ *  with their sessions and carry the last rows before the socket closes: a
+ *  deadline for a client that is not reading, not a wait. */
+const WATCH_END_DEADLINE = '5 seconds';
 
 /**
  * Serve {@link TexraRpcs} on the storage root's socket until the service
@@ -146,68 +142,36 @@ export const serve = Effect.fn('server.serve')(function* (
   const record: ServiceRecord = { pid: process.pid, socket, startedAt };
   const values = yield* GlobalValues;
   const ended = yield* Deferred.make<ServeExit>();
-  // Whether the service is leaving, the task admissions under way, and how
-  // many were ever admitted: one value, so an admission is claimed in the
-  // same step that checks for a drain, a drain never misses a start that is
-  // not a held run yet, and an idle exit never ends one begun since it
-  // looked.
-  const admissions = yield* Ref.make({
-    draining: false,
-    admitting: 0,
-    admitted: 0,
-  });
-  let clients: Effect.Effect<number> = Effect.succeed(0);
+  // The service's own lifecycle facts: why it is leaving, if it is (a
+  // drain finishes its tasks first, an end stops them), and the task
+  // admissions under way; one value, so an admission is claimed in the
+  // same step that checks for a leave.
+  const state = yield* SubscriptionRef.make<{
+    readonly leaving: 'drain' | 'end' | null;
+    readonly admitting: number;
+  }>({ leaving: null, admitting: 0 });
   // Once: a drain releases the record early, and the exit releases what is
   // left.
-  let released = false;
-  const release = Effect.suspend(() => {
-    if (released) return Effect.void;
-    released = true;
-    return releaseServiceRecord(paths, record);
-  }).pipe(
-    Effect.provideService(FileSystem.FileSystem, fs),
-    Effect.provideService(GlobalValues, values),
+  const release = yield* Effect.cached(
+    releaseServiceRecord(paths, record).pipe(
+      Effect.provideService(FileSystem.FileSystem, fs),
+      Effect.provideService(GlobalValues, values),
+    ),
   );
   // No task starts from here on, and the record goes first: a newer
   // service can start and be found while this one finishes on the
-  // connections it already holds.
-  const leave = Ref.update(admissions, (state) => ({
-    ...state,
-    draining: true,
-  })).pipe(Effect.andThen(release));
+  // connections it already holds. The first reason stands.
+  const leave = (why: 'drain' | 'end') =>
+    SubscriptionRef.update(state, (now) => ({
+      ...now,
+      leaving: now.leaving ?? why,
+    })).pipe(Effect.andThen(release));
   // Every end leaves first, so no task is admitted once the run has ended.
   const end = (exit: ServeExit) =>
-    leave.pipe(Effect.andThen(Deferred.succeed(ended, exit)), Effect.asVoid);
-  const control: Context.Service.Shape<typeof ServiceControl> = {
-    version: BUILD_VERSION,
-    socket,
-    startedAt,
-    clients: Effect.suspend(() => clients),
-    draining: Effect.map(Ref.get(admissions), (state) => state.draining),
-    admission: Effect.acquireRelease(
-      Ref.modify(admissions, (state) =>
-        state.draining
-          ? [false, state]
-          : [
-              true,
-              {
-                ...state,
-                admitting: state.admitting + 1,
-                admitted: state.admitted + 1,
-              },
-            ],
-      ),
-      (admitted) =>
-        admitted
-          ? Ref.update(admissions, (state) => ({
-              ...state,
-              admitting: state.admitting - 1,
-            }))
-          : Effect.void,
-    ),
-    idleAfter: Duration.fromInputUnsafe(options.idleAfter),
-    stop: (drain) => (drain ? leave : end('stopped')),
-  };
+    leave('end').pipe(
+      Effect.andThen(Deferred.succeed(ended, exit)),
+      Effect.asVoid,
+    );
   const protocol = yield* Layer.build(
     RpcServer.layerProtocolSocketServer.pipe(
       Layer.provide(RpcSerialization.layerNdjson),
@@ -217,12 +181,37 @@ export const serve = Effect.fn('server.serve')(function* (
     Effect.map((context) => Context.get(context, RpcServer.Protocol)),
     Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
   );
-  clients = protocol.clientIds.pipe(Effect.map((ids) => ids.size));
   yield* fs
     .chmod(socket, 0o600)
     .pipe(
       Effect.mapError((cause) => new ServiceListenFailed({ socket, cause })),
     );
+  const control: Context.Service.Shape<typeof ServiceControl> = {
+    version: BUILD_VERSION,
+    socket,
+    startedAt,
+    clients: Effect.map(protocol.clientIds, (ids) => ids.size),
+    draining: Effect.map(
+      SubscriptionRef.get(state),
+      (now) => now.leaving !== null,
+    ),
+    admission: Effect.acquireRelease(
+      SubscriptionRef.modify(state, (now) =>
+        now.leaving !== null
+          ? [false, now]
+          : [true, { ...now, admitting: now.admitting + 1 }],
+      ),
+      (admitted) =>
+        admitted
+          ? SubscriptionRef.update(state, (now) => ({
+              ...now,
+              admitting: now.admitting - 1,
+            }))
+          : Effect.void,
+    ),
+    watching: yield* SubscriptionRef.make(0),
+    stop: (drain) => (drain ? leave('drain') : end('stopped')),
+  };
   yield* Effect.forkScoped(
     RpcServer.make(TexraRpcs).pipe(
       Effect.provide(
@@ -260,45 +249,65 @@ export const serve = Effect.fn('server.serve')(function* (
     `TeXRA service ${BUILD_VERSION} listening on ${socket}`,
   );
 
-  const idleAfter = Duration.toMillis(options.idleAfter);
-  let idleSince: number | null = null;
-  const check = Effect.gen(function* () {
-    // Read before the runs: once draining, no admission starts, and one
-    // that ended since this read holds its run.
-    const { draining, admitting, admitted } = yield* Ref.get(admissions);
-    // Only the tasks at work hold the service, draining or idle: a
-    // conversation waiting here for its next message is stopped with
-    // the service, resumable, so one a closed chat left here does not keep
-    // the service up for good.
-    const working = yield* runningTasks(projects, false);
-    const now = yield* Clock.currentTimeMillis;
-    if (draining) {
-      if (working === 0 && admitting === 0)
-        yield* Deferred.succeed(ended, 'drained');
-      return;
-    }
-    const busy = working > 0 || admitting > 0 || (yield* control.clients) > 0;
-    idleSince = busy ? null : (idleSince ?? now);
-    if (idleSince === null || now - idleSince < idleAfter) return;
-    // Idle only if nothing was admitted since the read above: the leave is
-    // the same step as that check, so a start that won it keeps its run.
-    const idle = yield* Ref.modify(admissions, (state) =>
-      state.draining || state.admitting > 0 || state.admitted !== admitted
-        ? [false, state]
-        : [true, { ...state, draining: true }],
-    );
-    if (idle) yield* end('idle');
-  });
+  // The facts the lifetime follows, as they change: the service's own and
+  // its projects' load.
+  const facts = Stream.zipLatest(
+    SubscriptionRef.changes(state),
+    SubscriptionRef.changes(projects.load),
+  );
+  // A drain ends once no task is at work and none is admitting.
   yield* Effect.forkScoped(
-    check.pipe(Effect.repeat(Schedule.spaced(CHECK_INTERVAL))),
+    facts.pipe(
+      Stream.filter(
+        ([now, load]) =>
+          now.leaving === 'drain' && now.admitting === 0 && load.working === 0,
+      ),
+      Stream.runHead,
+      Effect.andThen(Deferred.succeed(ended, 'drained')),
+    ),
+  );
+  // Idle: no project open and nothing admitting, for `idleAfter`. The leave
+  // is decided in the same step that checks the admissions again, so a
+  // start that landed meanwhile keeps its run.
+  yield* Effect.forkScoped(
+    facts.pipe(
+      Stream.map(
+        ([now, load]) =>
+          now.leaving === null && now.admitting === 0 && load.open === 0,
+      ),
+      Stream.changes,
+      Stream.debounce(options.idleAfter),
+      Stream.filter((idle) => idle),
+      Stream.mapEffect(() =>
+        SubscriptionRef.modify(state, (now) =>
+          now.leaving === null && now.admitting === 0
+            ? [true, { ...now, leaving: 'end' as const }]
+            : [false, now],
+        ),
+      ),
+      Stream.filter((left) => left),
+      Stream.runHead,
+      Effect.andThen(end('idle')),
+    ),
   );
   yield* Effect.forkScoped(
     Deferred.await(options.shutdown).pipe(Effect.andThen(end('stopped'))),
   );
   const exit = yield* Deferred.await(ended);
   yield* Effect.logInfo(`TeXRA service exiting: ${exit}`);
-  yield* leave;
+  yield* leave('end');
   yield* options.settle;
-  yield* Effect.sleep(FRAME_FLUSH);
+  // The watch streams end with the sessions the settle closed, each having
+  // carried its tasks' last rows; the socket closes once they have.
+  yield* SubscriptionRef.changes(control.watching).pipe(
+    Stream.filter((open) => open === 0),
+    Stream.runHead,
+    Effect.timeout(WATCH_END_DEADLINE),
+    Effect.catch(() =>
+      Effect.logInfo(
+        `A watch stream was still open ${WATCH_END_DEADLINE} after the tasks stopped; closing the socket.`,
+      ),
+    ),
+  );
   return exit;
 }, Effect.scoped);
