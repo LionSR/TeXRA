@@ -115,12 +115,12 @@ agent runtime"）。本提案是把这句话落到用户可创造的单位上。
 
 ### 四种单位
 
-| 单位     | 是什么                                          | 谁写             | 落在哪                                                                      |
-| -------- | ----------------------------------------------- | ---------------- | --------------------------------------------------------------------------- |
-| 程序模块 | 一个 ES 模块，默认导出 `async (args) => result` | 插件、用户、模型 | 插件：`builtIn:<name>`；用户：`.texra/tasks/`；模型：内联在 `script` 调用里 |
-| persona  | `{ prompt, tools, temperature }`                | 程序的作者       | 程序里的字面量；bundled 的 `assistant`、`setup`、`creator` 三个文件         |
-| 工具     | 带审批和重放语义的能力                          | 插件             | `Plugin.tools`，不变                                                        |
-| 项目约定 | 这个项目的记号、引用、风格                      | 用户             | `AGENTS.md`，PromptBuilder 已经读它                                         |
+| 单位        | 是什么                                                             | 谁写             | 落在哪                                                                      |
+| ----------- | ------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------------------- |
+| 程序模块    | 一个 ES 模块，默认导出 `async (args) => result`                    | 插件、用户、模型 | 插件：`builtIn:<name>`；用户：`.texra/tasks/`；模型：内联在 `script` 调用里 |
+| chat 的参数 | `{ system, tools, model }`，不是一个名词（"persona 不是单位"一节） | 程序的作者       | `agent()` 的参数；bundled 的 `assistant` 是一个 `system.md` 加一个工具列表  |
+| 工具        | 带审批和重放语义的能力                                             | 插件             | `Plugin.tools`，不变                                                        |
+| 项目约定    | 这个项目的记号、引用、风格                                         | 用户             | `AGENTS.md`，PromptBuilder 已经读它                                         |
 
 没有 skill，没有 team，没有 custom agents 目录。可复用的文本是导出字符串的
 模块，`import { rubric } from './rubrics/logic.js'`。通用知识（Wolfram 怎么
@@ -208,6 +208,46 @@ program: { source, modules, digest, author: 'model' | 'plugin' | 'workspace', ti
   这一步不改任何用户可见的东西。
 - 聊天本身仍是内核原生的模型轮次。"一切都是程序"（聊天循环也是 guest 脚
   本）与 run loop 唯一写者的契约冲突，不做；联合类型给它留门。
+
+### persona 不是单位
+
+负责人 2026-11-06："persona 好像是个奇怪的设计；import code 更 end to
+end。"同意。persona 是 agent 文件时代的名词：把 prompt、tools、temperature
+打包成可按名字引用的东西，是为了复用；代码里复用就是 import 一个对象或
+一段文本，harness 不需要为此设名词。一次子运行需要的只是 system 文本、
+工具列表和模型，那是模型调用的参数，不是"角色"。
+
+端到端之后只剩两种 run 和三个全局：
+
+```
+run.chat    { system, tools, model, instruction, files… }   内核的模型循环
+run.program { source, modules, digest, author, args }       沙箱里的程序
+
+agent(prompt, { system, tools, model })   启动一个 chat 子运行
+task(name, args)                          启动一个 program 子运行
+self(prompt)                              同 system、同 tools 的 chat 子运行
+```
+
+没有 persona 对象，没有 agent 文件，没有 `AgentSource`、`AgentCatalog`、
+YAML 扫描、`basedOn`，没有插件的 `agents/` 目录。复用是普通代码：
+
+```js
+import system from './reviewer.md'; // 文本 import，钉在 run 上
+const REVIEW_TOOLS = ['read_file', 'grep', 'glob', 'bash'];
+const report = await agent(`Review ${file}`, { system, tools: REVIEW_TOOLS });
+```
+
+三个 bundled "agent" 各归其位：`assistant` 是 `system.md` 加一个工具列
+表，是 chat 的默认参数；`setup` 跑探针、改配置、装扩展，是程序；`creator`
+写文件、跑一次、交付，也是程序。SDK 入口随之变直：
+`session.start({ system, tools, instruction })` 或
+`session.start({ program, args })`。`run.config` 本来就把 inline persona
+整个存下，持久化不变；`self()` 的 `asCaller` 变成"复制父运行的 system 和
+tools"。picker 列 chat 和 task；`texra run` 接 task 名或 `chat`。
+
+这比上文多删 `packages/harness/src/agent/index/` 整个（1410 行）、
+`AgentSource` 和插件 agent 加载，并使 1.0 PRD "Agent 文件和 imports"一节
+作废（第四处改口，见下）。
 
 ### 启动面
 
@@ -392,6 +432,10 @@ revise({
    一行）。删掉它失去导入第三方 skill 包；模型仍能 `read_file` 用户指给它
    的任何 Markdown，程序能 import 任何文本。安装式插件的 commands、MCP 和
    hooks 不受影响。
+4. **PRD "Agent 文件和 imports"**："Agent 文件是可复用的 persona 和能力配
+   置… 文件形式本身不需要被替换"，以及 R6 的"文件与 inline 定义一致"验收。
+   本提案没有 agent 文件也没有 persona，只有 chat 的参数；R6 因只剩一种形
+   式而平凡成立。`nodePlatform({ agentsDir })` 变为 `tasksDir`。
 
 不与之冲突的：无流程引擎、历史一个写者、一个 persona 解析路径（R6）、
 `agent()` 替代 delegation 工具（Q7）、Q2 的结果复用、Q5 的一次脚本审批。
