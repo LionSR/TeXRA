@@ -256,7 +256,6 @@ export const childResult = Effect.fn('AgentTool.childResult')(function* (
       {
         name: 'Skipped',
         summary: `Skipped '${agentName}'`,
-        diagnostics: { reason: 'user', runId },
       },
     );
   if (result.outcome !== 'completed')

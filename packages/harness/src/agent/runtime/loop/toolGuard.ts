@@ -145,7 +145,6 @@ const answerOf = (outcomes: readonly HookOutcomePayload[]) => {
 const hookDenied = (tool: string, why: string): ToolResult => ({
   status: 'error',
   error: `Blocked by a PreToolUse hook: ${why}`,
-  diagnostics: { code: 'hook_denied', tool },
 });
 
 /** The result that replaces the call when the chain stops it over its
