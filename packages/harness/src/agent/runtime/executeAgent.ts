@@ -1,13 +1,14 @@
 /**
- * The run program, fresh or resumed: what a run opens with (its entry
- * rows, its trace and stage, its opening), the services it runs under, the
- * description generated beside it, and the terminal that ends it
- * (`endRun`, `AgentRunLifecycle`). A root launch reaches it through
- * `rootRun` (`session.start`), a resume through `resumeRun`, and a child's
- * strategy through `programs.executeAgent`; it runs on a fiber
- * `RunRegistry.start` forked, whose context carries the session's services.
+ * The run program, fresh or resumed, in two phases: the opening, which
+ * commits in the caller's fiber (the run's entry rows, its trace held until
+ * then, its first step) and answers the commit of that batch; and the run,
+ * which the registry forks under the run's id (`RunRegistry.start`) and
+ * which runs the loop with the per-run layer and ends through the one
+ * terminal (`endRun`, `AgentRunLifecycle`). A root launch reaches it
+ * through `rootRun` (`session.start`), a resume through `resumeRun`, and a
+ * child's strategy through `programs.executeAgent`.
  */
-import { Deferred, Effect, Exit, Fiber, Layer } from 'effect';
+import { Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -35,7 +36,7 @@ import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
 
 import { endRun } from './AgentRunLifecycle';
-import { runToolUse } from './loop/toolUse';
+import { openToolUse, runToolUse } from './loop/toolUse';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import {
@@ -65,16 +66,13 @@ export interface ExecuteAgentOptions {
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /**
-   * The one admission hook, with the run admitted and the commit of the
-   * batch that opened this activation (a fresh run's opening, a resume's
-   * `run.activate`). The run runs it as that batch commits, which it holds:
-   * keep it short.
-   */
-  readonly onAdmitted?: (
-    runId: RunId,
-    commit: CommitOrdinal,
-  ) => Effect.Effect<void>;
+}
+
+/** A run whose opening committed: the commit of that batch, and the run
+ *  itself, which the fiber that owns the run (the registry's) runs once. */
+export interface PreparedRun {
+  readonly activation: CommitOrdinal;
+  readonly run: Effect.Effect<RunReport, Error, AgentRunServices>;
 }
 
 /**
@@ -82,13 +80,11 @@ export interface ExecuteAgentOptions {
  * the opening's batch carries it up to its first stream (the prompt line and
  * the run's stage commit with the opening), the rest is published once that
  * settled. One that never enters drops it. A run that exists is refused.
- * `opened` is done as the run enters: its description is a row of it.
  */
 const enterRun = Effect.fn('enterRun')(function* (
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions,
-  opened: Deferred.Deferred<void>,
 ) {
   const log = yield* SessionLog;
   const { config, stopAfterCycle } = definition;
@@ -120,14 +116,11 @@ const enterRun = Effect.fn('enterRun')(function* (
       .slice(0, carried)
       .flatMap((e) => runEventDraft(runId, e) ?? []);
   });
-  const entered: RunLaunch['entry']['entered'] = (state) =>
+  const entered: RunLaunch['entry']['entered'] = () =>
     Effect.sync(() => {
       for (const e of held?.slice(carried) ?? []) log.publish(runId, e);
       held = null;
-    }).pipe(
-      Effect.andThen(Deferred.succeed(opened, undefined)),
-      Effect.andThen(options.onAdmitted?.(runId, state.commit) ?? Effect.void),
-    );
+    });
   const seed = options.registration?.seed ?? null;
   const parent =
     options.registration?.parentRunId ?? options.parentRunId ?? null;
@@ -144,7 +137,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions,
-  opened: Deferred.Deferred<void>,
 ) {
   const { config, persona, modelConfig, stopAfterCycle } = definition;
   // The run's working directory is decided here, once: absolute or absent.
@@ -162,7 +154,6 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     definition,
     runId,
     options,
-    opened,
   );
 
   // Log the initial instruction as a user message so the run's tab
@@ -232,40 +223,31 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
 });
 
 /**
- * The run program, fresh or resumed: it opens the run's entry (a fresh run
- * registers with its opening, `options.registration`; a resume activates
- * the run its rows hold) and runs the loop with the per-run layer: its
- * `AgentRun` and the invoker, over the session's services its fiber
- * carries. Every way the loop exits reaches the run's terminal
- * (`endRun`) exactly once, as the exit of the one masked region it runs
- * in: a started run is always finalized, and a failed one arrives as a
- * FAILED report carrying its failure. Root launches use `rootRun` and
- * resumes `resumeRun`; this runs on a fiber `RunRegistry.start` forked,
- * whose context carries the session's services.
+ * The run program, fresh or resumed. The opening runs here, in the
+ * caller's fiber: it resolves the run's context and its per-run layer (its
+ * `AgentRun` and the invoker, over the session's services the fiber
+ * carries) and commits the run's entry (a fresh run registers with its
+ * opening, `options.registration`; a resume activates the run its rows
+ * hold), so a launch that fails before the run exists fails here with no
+ * run behind it. The run it answers runs the loop over that opening, and
+ * every way the loop exits reaches the run's terminal (`endRun`) exactly
+ * once, as the exit of the one masked region it runs in: a started run is
+ * always finalized, and a failed one arrives as a FAILED report carrying
+ * its failure. Root launches use `rootRun` and resumes `resumeRun`; a
+ * caller runs `run` only on the fiber `RunRegistry.start` forked for it.
  */
-export const executeAgent: (
+export const executeAgent = Effect.fn('executeAgent')(function* (
   definition: PreparedAgentDefinition,
   runId: RunId,
   options: ExecuteAgentOptions,
-) => Effect.Effect<RunReport, Error, AgentRunServices> = Effect.fn(
-  'executeAgent',
-)(function* (
-  definition: PreparedAgentDefinition,
-  runId: RunId,
-  options: ExecuteAgentOptions,
-) {
-  // Done once the run exists: its description is a row of it.
-  const opened = yield* Deferred.make<void>();
-  const launch = yield* buildAgentLaunchContext(
-    definition,
-    runId,
-    options,
-    opened,
-  );
-  const { config } = launch;
+): Effect.fn.Return<PreparedRun, Error, AgentRunServices> {
+  // The run's resources: released as the run's fiber exits, or here when
+  // the opening fails first.
+  const scope = yield* Scope.make();
   const resume = options.registration === undefined;
-  const loop = runToolUse({ turns: options.turns, resume }).pipe(
-    Effect.provide(
+  const prepared = yield* Effect.gen(function* () {
+    const launch = yield* buildAgentLaunchContext(definition, runId, options);
+    const services = yield* Layer.build(
       modelInvokerLayer().pipe(
         Layer.provideMerge(
           agentRunLayer(launch, {
@@ -275,68 +257,74 @@ export const executeAgent: (
           }),
         ),
       ),
+    );
+    const opening = yield* openToolUse({ resume }).pipe(
+      Effect.provide(services),
+    );
+    return { launch, services, opening };
+  }).pipe(
+    Scope.provide(scope),
+    Effect.onExit((exit) =>
+      Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void,
     ),
   );
-
-  // A root run of a session that labels its runs gets its description
-  // concurrently with the run, settled before the run ends
-  // (`settleDescriptionOnExit`), so the metadata write cannot recreate a
-  // run deleted by another host. A resumed run whose process died before
-  // its description was written gets one now. A child of the run's fiber,
-  // so the run's stop interrupts it, as it interrupts the run.
-  const labelled = launch.entry.parent === null && (yield* RunLabels);
-  const sessionDescription = yield* Effect.forkChild(
-    labelled
-      ? Deferred.await(opened).pipe(
-          Effect.andThen(
-            generateSessionDescription(
-              runId,
-              config,
-              definition.agentEntry.description,
-              resume,
-            ),
+  const { launch, services, opening } = prepared;
+  const { config } = launch;
+  const run = Effect.gen(function* () {
+    // A root run of a session that labels its runs gets its description
+    // concurrently with the run, settled before the run ends
+    // (`settleDescriptionOnExit`), so the metadata write cannot recreate a
+    // run deleted by another host. A resumed run whose process died before
+    // its description was written gets one now. A child of the run's
+    // fiber, so the run's stop interrupts it, as it interrupts the run.
+    const labelled = launch.entry.parent === null && (yield* RunLabels);
+    const sessionDescription = yield* Effect.forkChild(
+      labelled
+        ? generateSessionDescription(
+            runId,
+            config,
+            definition.agentEntry.description,
+            resume,
+          )
+        : Effect.void,
+    );
+    const loop = runToolUse({ turns: options.turns, resume }, opening).pipe(
+      Effect.provide(services),
+    );
+    const flow = resume
+      ? loop
+      : Effect.andThen(
+          // The run directory is created by the first write into it.
+          Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+            Effect.annotateLogs({
+              data: {
+                agent: config.agent,
+                model: config.model,
+                input: config.inputFiles[0] ?? '(none)',
+                outputs: config.outputFiles.length,
+              },
+            }),
+            withLogChannel(CHANNEL),
           ),
-        )
-      : Effect.void,
-  );
-  const flow = resume
-    ? loop
-    : Effect.andThen(
-        // The run directory is created by the first write into it.
-        Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-          Effect.annotateLogs({
-            data: {
-              agent: config.agent,
-              model: config.model,
-              input: config.inputFiles[0] ?? '(none)',
-              outputs: config.outputFiles.length,
-            },
-          }),
-          withLogChannel(CHANNEL),
+          loop,
+        );
+    // The flow is an Effect: a fiber interruption reaches its provider work
+    // directly, and its finalizers run before the resources above are
+    // disposed. The run starts only inside the region whose exit is the
+    // terminal, so no stop lands between the two: a started run is always
+    // finalized. The host's stop is this run fiber's interruption
+    // (`RunRegistry.stop`); the requests this run left open close with the
+    // fibers waiting on them (`SessionRequests.ask`). The backstop wait is
+    // `ensuring`, not a generator `finally`: the driver skips a `finally`
+    // after a failed `yield*`, ending the run early.
+    return yield* Effect.uninterruptibleMask((restore) =>
+      Effect.flatMap(
+        Effect.exit(
+          restore(flow.pipe(settleDescriptionOnExit(sessionDescription))),
         ),
-        loop,
-      );
-  // The flow is an Effect: a fiber interruption reaches its provider work
-  // directly, and its finalizers run before the resources above are
-  // disposed. A fresh run is born with its opening, a resume activates
-  // with its cell: both inside the flow, so the terminal ends either. The
-  // run starts only inside the region whose exit is the terminal, so no
-  // stop lands between the two: a started run is always finalized. The
-  // host's stop is this run fiber's interruption (`RunRegistry.interrupt`);
-  // the requests this run left open close with the fibers waiting on them
-  // (`SessionRequests.ask`). The backstop wait is `ensuring`, not a
-  // generator `finally`: the driver skips a `finally` after a failed
-  // `yield*`, ending the run early.
-  const report = yield* Effect.uninterruptibleMask((restore) =>
-    Effect.flatMap(
-      Effect.exit(
-        restore(flow.pipe(settleDescriptionOnExit(sessionDescription, opened))),
+        (exit) => endRun(launch, exit, options.turns?.finishLastTurn),
       ),
-      (exit) => endRun(launch, exit, options.turns?.finishLastTurn),
-    ),
-  ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
-  yield* Effect.logDebug(`Task completed with outcome: ${report.outcome}`).pipe(
-    withLogChannel(CHANNEL),
-  );
-  return report;
-}, Effect.scoped);
+    ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
+  }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
+  return { activation: opening.activation, run };
+});

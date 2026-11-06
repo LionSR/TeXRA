@@ -11,8 +11,8 @@
  *   offered to the run it resumed;
  * - a run another live process holds is resumed here, or the host
  *   rearranges itself before the refusal;
- * - a user's stop while a resume decides is lost: the stop writes the end,
- *   and the resume activates the stopped run anyway;
+ * - a user's stop while a resume decides is lost: the stop writes no
+ *   `run.stop` row or no end, or the resume activates the stopped run anyway;
  * - R20: a message retried under its id once the run's input closed is
  *   refused, sent again or resumes the run, instead of answering with the
  *   first send's receipt; or a different message under that id is sent.
@@ -32,7 +32,7 @@ import {
 import { Conflict, type LocalSession, Sessions } from '@texra-ai/harness';
 import { ValidationModel } from '@texra-ai/harness/host';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
@@ -101,6 +101,13 @@ const endsOf = (storage: string, runId: RunId) =>
     .filter((row) => row.run === runId && row.type === 'run.end')
     // cast: a `run.end` row's data holds the run's outcome.
     .map((row) => (JSON.parse(row.data) as { outcome: string }).outcome);
+
+/** The reasons of the run's `run.stop` rows, in order. */
+const stopsOf = (storage: string, runId: RunId) =>
+  storedRows(storage)
+    .filter((row) => row.run === runId && row.type === 'run.stop')
+    // cast: a `run.stop` row's data holds the stop's reason.
+    .map((row) => (JSON.parse(row.data) as { reason: string }).reason);
 
 /** `session` as the package hands it to an embedder (`Sessions.open`),
  *  over the block's process services. */
@@ -229,7 +236,7 @@ describe(
         );
 
         it.effect(
-          "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
+          "a user's stop while a resume decides records its reason, ends the run cancelled, and the resume activates nothing",
           () =>
             Effect.gen(function* () {
               const { session, runId, storage } = yield* parkedRunAfterCrash();
@@ -238,16 +245,19 @@ describe(
               // before it launches: the stop lands there.
               const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
-                Effect.exit(resume(runId, { session })),
+                resume(runId, { session }),
               );
               yield* input.reached;
 
-              const stop = Context.get(session, Runs).stop(runId, 'user');
-              expect(Context.get(session, Runs).stopCause(runId)).toBe('user');
-              yield* stop.settlement.pipe(Effect.provide(session));
+              // The resume holds the run as it decides: the stop is taken,
+              // and the resume ends the run in the batch that records it.
+              expect(
+                yield* Context.get(session, Runs).stop(runId, 'user'),
+              ).toBe(true);
               yield* input.release;
-              yield* Fiber.join(resumed);
+              expect(yield* Fiber.join(resumed)).toHaveProperty('failed');
 
+              expect(stopsOf(storage, runId)).toEqual(['user']);
               expect(endsOf(storage, runId)).toEqual(['cancelled']);
               expect(activations(storage, runId)).toBe(1);
             }),

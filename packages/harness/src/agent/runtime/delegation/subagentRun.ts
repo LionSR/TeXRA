@@ -6,7 +6,7 @@
  */
 
 // Third-party imports
-import { Clock, Deferred, Effect, Schema } from 'effect';
+import { Clock, Effect, Schema } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 
 // Local imports
@@ -19,7 +19,6 @@ import {
 } from '@shared/approvalBypassKind';
 import {
   AgentConfigSchema,
-  type CommitOrdinal,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
@@ -93,9 +92,9 @@ export interface ApprovalMeta {
 /**
  * Launch one detached child under `runId` and return the receipt the model
  * reads: the child's result arrives later as a follow-up. The receipt names
- * a child that exists: the call waits for the child's opening to commit,
- * and a launch that fails before it fails the call, which the parent reads
- * as the call's result.
+ * a child that exists: the child's opening commits in this fiber, and a
+ * launch that fails before it fails the call, which the parent reads as
+ * the call's result.
  */
 export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
   function* (
@@ -117,7 +116,6 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
       config: Schema.decodeUnknownSync(AgentConfigSchema)(childConfigPayload),
     });
     const { config } = definition;
-    const opened = yield* Deferred.make<CommitOrdinal>();
     yield* startDetachedChildRunLoop({
       runId,
       parentRunId,
@@ -134,9 +132,7 @@ export const launchDetachedSubagent = Effect.fn('launchDetachedSubagent')(
         runId,
         startedAt,
         workingDirectory,
-        onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
       }),
-      opened,
     });
 
     const meta = launch.approvalMeta;

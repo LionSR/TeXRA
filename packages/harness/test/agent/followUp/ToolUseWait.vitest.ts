@@ -11,9 +11,9 @@ import { describe, expect } from 'vitest';
 import { generateRunId, qualifyAggregateId } from '@texra-ai/harness/schemas';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { appendRow, positionRow } from '@agent/runtime/loop/rows';
-import { runToolUse } from '@agent/runtime/loop/toolUse';
+import { openToolUse, runToolUse } from '@agent/runtime/loop/toolUse';
 import { attachedMedia } from '@agent/runtime/run/mediaInput';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { SessionRoots } from '@platform/rootedFs';
 import { RunHistory, SessionLog } from '@shared/session/runHistory';
 import { type RunState } from '@shared/session/runState';
@@ -44,7 +44,10 @@ interface LoopInit extends ScriptedRunInit {
 }
 
 function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
-  return runToolUse({ resume: init.resume === true }).pipe(
+  return Effect.flatMap(
+    openToolUse({ resume: init.resume === true }),
+    (opened) => runToolUse({ resume: init.resume === true }, opened),
+  ).pipe(
     Effect.provide(
       Layer.mergeAll(
         scriptedInvokerLayer(init.script, requests),

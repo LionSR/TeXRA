@@ -26,9 +26,17 @@ export const testRunFork: Effect.Effect<
   FiberSet.makeRuntime<RunServices>(),
   // A test registry stands for no session, so what it starts reads none of
   // a session's services.
-  // cast: nothing the runtime starts asks for a session service.
-  (fork) => fork as RunRegistryInit['fork'],
+  (fork): RunRegistryInit['fork'] =>
+    (_runId, effect) =>
+      // cast: nothing the runtime starts asks for a session service.
+      fork(effect as Effect.Effect<never, never, RunServices>),
 );
+
+/** A test registry's launches open on the calling fiber, which stands for
+ *  the session ({@link testRunFork}). */
+// cast: nothing a test registry opens asks for a session service.
+export const testRunInSession = ((effect) =>
+  effect) as RunRegistryInit['inSession'];
 
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
@@ -55,6 +63,7 @@ export const testRunRegistry: Effect.Effect<
       } as unknown as RunRegistryInit['log'],
       runsHere: () => {},
       roots: testWorkspaceRoots(),
+      inSession: testRunInSession,
       fork,
       programs: testRunPrograms,
       wake: () => {},
@@ -69,15 +78,10 @@ export const testRunPrograms: RunPrograms = {
       Effect.promise(() => import('@agent/runtime/executeAgent')),
       (module) => module.executeAgent(...args),
     ),
-  resume: (...args) =>
-    Effect.flatMap(
-      Effect.promise(() => import('@agent/runtime/resumeRun')),
-      (module) => module.decideResume(...args),
-    ),
-  finalize: (...args) =>
+  stop: (...args) =>
     Effect.flatMap(
       Effect.promise(() => import('@agent/storage/runLifecycle')),
-      (module) => module.finalizeRun(...args),
+      (module) => module.stopRun(...args),
     ),
 };
 
@@ -92,7 +96,6 @@ export function admitInterruptibleRun(
   runs: RunsShape,
   runId: RunId,
   onInterrupt: () => void,
-  launchParent: RunId | null = null,
 ): Fiber.Fiber<void> {
   const interruptEffect = Effect.sync(onInterrupt);
   // Awaited as a root launch awaits: interrupting this fiber stops the run.
@@ -101,22 +104,21 @@ export function admitInterruptibleRun(
       runs,
       runId,
       Effect.never.pipe(Effect.onInterrupt(() => interruptEffect)),
-      launchParent,
     ).pipe(Effect.ignore),
   );
 }
 
-/** A run admitted at `runs`' door and awaited, as a root launch awaits its
- *  program: the caller's interruption stops it. */
+/** A run started at `runs`' door with nothing to open, and awaited: the
+ *  caller's interruption stops it. Its parent, when it has one, is the
+ *  view's (`run.start` published first). */
 export function startAwaited<A, E, R extends AgentRunServices>(
   runs: RunsShape,
   runId: RunId,
   program: Effect.Effect<A, E, R>,
-  launchParent: RunId | null = null,
 ): Effect.Effect<A, E | Error> {
   return Effect.flatMap(
-    registryOf(runs).start(runId, program, (run) => run, launchParent),
-    (fiber) =>
+    registryOf(runs).start(runId, { open: Effect.void, run: () => program }),
+    ({ fiber }) =>
       Fiber.join(fiber).pipe(Effect.onInterrupt(() => Fiber.interrupt(fiber))),
   );
 }

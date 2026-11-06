@@ -5,12 +5,9 @@ import { Cause, Clock, Effect, Exit, type Fiber, type Semaphore } from 'effect';
 
 import type { AgentTrace, StageHandle } from '@agent/trace/AgentTrace';
 import type { TraceEmitter } from '@agent/trace/TraceEmitter';
-import {
-  endActivation,
-  endVerdict,
-  type EndVerdict,
-} from '@agent/runtime/AgentRunLifecycle';
-import { Inbox, followUpServices } from '@agent/followUp/ToolUseFollowUp';
+import { endVerdict, type EndVerdict } from '@agent/runtime/AgentRunLifecycle';
+import { followUpServices } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import type { FollowUpServices } from '@agent/followUp/ToolUseFollowUp';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import {
@@ -34,11 +31,13 @@ import {
   type TurnResultRow,
 } from '@agent/runtime/childTurnResult';
 import { pauseChildRun } from '@agent/runtime/delegation/childRun';
+import { endRunRows } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { SessionRoots } from '@platform/rootedFs';
 import {
   RUN_OUTCOME,
   qualifyAggregateId,
+  type CommitOrdinal,
   type FollowUpContent,
   type ResultMeta,
   type RunId,
@@ -128,20 +127,31 @@ export interface ChildStrategyBase<TTurn, R> {
   ): Effect.Effect<ResultMeta | undefined, Error, R>;
 }
 
+/** A native run its strategy opened: the commit of its opening, and the
+ *  run itself, which the loop drives on the run's fiber. */
+export interface PreparedChildRun<TTurn, R> {
+  readonly activation: CommitOrdinal;
+  readonly run: Effect.Effect<TTurn, Error, R>;
+}
+
 /** A native run's strategy: its program is the child's one turn, owns its
  *  input wait, and offers each turn boundary through `turns`. */
 export interface NativeChildStrategy<
   TTurn,
   R = never,
 > extends ChildStrategyBase<TTurn, R> {
-  /** `notify` is an awaiting caller's live progress; a background child
-   *  reports none. A child reports no spend: its priced calls are rows on
-   *  its own run, summed over the run tree. Its run calls `turns` within
-   *  this effect, under the services it runs with. */
-  launch(
+  /** Open the run in the caller's fiber (its registration or activation
+   *  batch commits here, so a launch that fails first leaves no run) and
+   *  answer it prepared; its run then runs on its own fiber
+   *  (`RunRegistry.start`). `notify` is an awaiting caller's live progress;
+   *  a background child reports none. A child reports no spend: its priced
+   *  calls are rows on its own run, summed over the run tree. Its run
+   *  calls `turns` within the prepared run, under the services it runs
+   *  with. */
+  prepare(
     notify: ((update: SubagentProgressUpdate) => void) | undefined,
     turns: ChildRunTurns<TTurn, R | FollowUpServices>,
-  ): Effect.Effect<TTurn, Error, R>;
+  ): Effect.Effect<PreparedChildRun<TTurn, R>, Error, R>;
   /** An interrupted turn has no new result to record. */
   isTurnInterrupted(turn: TTurn): boolean;
   /** A script run reports once, under one delivery id (a resumed script's
@@ -252,8 +262,8 @@ type ChildEnd =
 /**
  * One child loop's state, passed through the functions below: its setup,
  * its turn, and `end`, its last turn's result. A stop is its run fiber's
- * interruption, its reason the registry activation's. The activation mints
- * its turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record.
+ * interruption, its reason the run's `run.stop` row. The loop mints its
+ * turn keys (`attemptId`, `turnIndex`), which the `child.turn` rows record.
  */
 class ChildLoop<TTurn, R> {
   readonly attemptId = randomUUID();
@@ -573,44 +583,47 @@ const finishInterimTurn = Effect.fn('childRunLoop.finishInterimTurn')(
 );
 
 /**
- * A native child: its launch runs the whole run on its own fiber and offers
- * its turn boundaries through `nativeTurns`; a launch that fails before its
- * run's birth tells the parent as input alone.
+ * A native child: its prepared run (its opening committed) runs whole on
+ * this fiber and reaches its turn boundaries through `nativeTurns`.
  */
 const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
+  run: Effect.Effect<TTurn, Error, R>,
 ): Effect.fn.Return<TTurn | undefined, Error, R | AgentRunServices> {
-  const { runId } = loop.params;
   loop.turnStart = yield* Clock.currentTimeMillis;
-  const turned = yield* attemptTurn(
-    loop,
-    Effect.suspend(() =>
-      strategy.launch(loop.params.notify, nativeTurns(loop, strategy)),
-    ),
-  );
+  const turned = yield* attemptTurn(loop, run);
   const { turn } = turned;
   // A turn that reports itself stopped stops the child.
   if (turn !== null && !loop.awaited && strategy.isTurnInterrupted(turn))
     return yield* Effect.interrupt;
   noteFailure(loop, turned);
-  // A launch that failed before its run's birth: there is no run to end,
-  // and the launch waiting for the birth fails with it.
-  if (
-    loop.turnIndex === 0 &&
-    loop.failure !== undefined &&
-    (yield* (yield* SessionLog).facts(runId)) === null
-  )
-    return yield* Effect.fail(ensureError(loop.failure.cause));
   yield* endTurns(loop, turned);
   return turn ?? undefined;
 });
 
 /**
  * A process child: each turn's result commits here before the loop waits on
- * `input` for its next batch; a stop interrupts the turn or the wait.
+ * its input for the next batch; a stop interrupts the turn or the wait. Its
+ * reader is its own, released as its end: it takes no more input here.
  */
-const driveProcess = Effect.fn('childRunLoop.driveProcess')(function* <
+const driveProcess = <TTurn, R>(
+  loop: ChildLoop<TTurn, R>,
+  strategy: ProcessChildStrategy<TTurn, R>,
+): Effect.Effect<TTurn | undefined, Error, R | AgentRunServices> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const { runId } = loop.params;
+      const reader = yield* Inbox.use((inbox) => inbox.open(runId));
+      yield* Effect.addFinalizer(() =>
+        Inbox.useSync((inbox) => inbox.release(runId, reader, true)),
+      );
+      return yield* processTurns(loop, strategy, reader);
+    }),
+  );
+
+/** A process child's turns over its reader ({@link driveProcess}). */
+const processTurns = Effect.fn('childRunLoop.processTurns')(function* <
   TTurn,
   R,
 >(
@@ -656,13 +669,10 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
   R,
 >(loop: ChildLoop<TTurn, R>, strategy: NativeChildStrategy<TTurn, R>) {
   const { runId, parentRunId } = loop.params;
-  if (
-    strategy.script === undefined ||
-    loop.awaited ||
-    loop.runs.stopCause(runId) !== 'user'
-  )
-    return;
-  const held = (yield* (yield* SessionLog).facts(runId))?.end?.outcome;
+  if (strategy.script === undefined || loop.awaited) return;
+  const facts = yield* (yield* SessionLog).facts(runId);
+  if (facts?.stop?.reason !== 'user') return;
+  const held = facts.end?.outcome;
   if (held !== undefined && held !== RUN_OUTCOME.CANCELLED) return;
   const text = yield* strategy.script
     .stopNotice()
@@ -684,8 +694,8 @@ const sendStopNotice = Effect.fn('childRunLoop.sendStopNotice')(function* <
  * The child's end, carrying the last turn's result unless its run's end
  * took it: a stopped process child that can be continued pauses; a native
  * child whose own lifecycle ended it commits that result alone; any other
- * end is the activation's ({@link endActivation}), a native child's only
- * while it still holds the run.
+ * end commits here ({@link endRunRows}; an end the run already wrote
+ * stands).
  */
 const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
@@ -694,32 +704,30 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
   const { params } = loop;
   const { runId } = params;
   const { end } = loop;
-  const { outcome, reason, error } = verdict;
+  const { outcome, error } = verdict;
   const lastTurn =
     end.kind === 'finished' && !end.handedOff
       ? turnResultPart(end.result, loop.trace)
       : undefined;
   // A `run.end` that never wrote fails the loop: its terminal fact is gone.
-  const endRun = (ownerless: boolean) =>
-    Effect.flatMap(
-      endActivation({
+  const endRun = Effect.suspend(() => {
+    loop.stage?.end(outcome);
+    return endRunRows(
+      {
         runId,
-        ownerless,
         outcome,
-        reason,
         ...(error != null && { error: classifyAgentError(error) }),
-        stage: loop.stage,
-        lastTurn: () => Effect.succeed(lastTurn),
-      }),
-      ({ persistFailure: cause }) =>
-        cause === undefined
-          ? Effect.void
-          : Effect.fail(
-              new Error(`Child run ${runId} terminal state was not persisted`, {
-                cause,
-              }),
-            ),
+      },
+      lastTurn,
+    ).pipe(
+      Effect.mapError(
+        (cause) =>
+          new Error(`Child run ${runId} terminal state was not persisted`, {
+            cause,
+          }),
+      ),
     );
+  });
   if (params.childRun !== undefined) {
     const port = params.childRun;
     const pause =
@@ -731,11 +739,12 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
       (yield* pauseChildRun(runId, port, pause, lastTurn, loop.stage))
     )
       return;
-    return yield* endRun(false).pipe(
+    return yield* endRun.pipe(
+      Effect.asVoid,
       Effect.ensuring(Effect.sync(() => port.logger.close())),
     );
   }
-  if (outcome !== RUN_OUTCOME.COMPLETED) yield* endRun(true);
+  if (outcome !== RUN_OUTCOME.COMPLETED) yield* endRun;
   else if (lastTurn !== undefined) yield* commitPart(lastTurn);
   yield* sendStopNotice(loop, params.strategy);
 });
@@ -744,8 +753,8 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
  * The loop's terminal (exit protocol): a stop lands before or after it, so
  * the terminal row, the provider ids and the stage are all handled on every
  * exit; the body's failure propagates as itself, joined by the cleanup's.
- * The parent is woken once the generation let the child's lane go
- * ({@link startChildRunLoop}).
+ * The parent is woken for the result the end delivered once the run's
+ * fiber has left the registry (`RunRegistry.start`).
  */
 const endChildLoop = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
@@ -760,7 +769,6 @@ const endChildLoop = <TTurn, R>(
         Exit.isSuccess(body) && failure !== undefined
           ? Exit.fail(failure.cause)
           : Exit.map(body, () => RUN_OUTCOME.COMPLETED),
-        loop.runs.stopCause(loop.params.runId),
       );
       // Debug-only driver diagnostic: how the loop ended.
       yield* loop.log('debug', 'childRunLoop loop.terminated', {
@@ -785,67 +793,133 @@ const endChildLoop = <TTurn, R>(
     }),
   );
 
-/** The launched run, all on its fiber, whose generation holds the child's
- *  claim: its setup (the budget its turns take, its stage), a process
- *  child's reader, its turns, and its terminal on every exit. */
+/** The run on its fiber: its setup (the budget its turns take, its
+ *  stage), its turns (`drive`), and its terminal on every exit, the
+ *  provider ids released after it. */
 const runChildLoop = <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
+  drive: Effect.Effect<TTurn | undefined, Error, R | AgentRunServices>,
 ): Effect.Effect<TTurn | undefined, Error, R | AgentRunServices> =>
   Effect.gen(function* () {
     const { params } = loop;
-    const { runId } = params;
     if (params.childRun === undefined && !loop.awaited)
       loop.budget = yield* loop.runs.childRunBudget(
         yield* resolveChildRunConcurrencyBudget(yield* SessionRoots),
       );
     loop.stage = loop.trace?.openStage(params.strategy.stageLabel);
-    // A native child's own loop opens its reader, as any run's loop does.
-    if (params.childRun === undefined)
-      return yield* driveNative(loop, params.strategy);
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        const reader = yield* Inbox.use((inbox) => inbox.open(runId));
-        // Its end is the child's: it takes no more input here.
-        yield* Effect.addFinalizer(() =>
-          Inbox.useSync((inbox) => inbox.release(runId, reader, true)),
-        );
-        return yield* driveProcess(loop, params.strategy, reader);
-      }),
-    );
-  }).pipe(Effect.onExit((body) => endChildLoop(loop, body)));
+    return yield* drive;
+  }).pipe(
+    Effect.onExit((body) => endChildLoop(loop, body)),
+    Effect.ensuring(Effect.sync(() => loop.releaseOwnership())),
+  );
+
+/** A native child's loop parameters ({@link ChildRunLoopParams}). */
+export type NativeChildRunLoopParams<TTurn, R = never> = Extract<
+  ChildRunLoopParams<TTurn, R>,
+  { readonly childRun?: undefined }
+>;
+
+/** A process child's loop parameters ({@link ChildRunLoopParams}). */
+export type ProcessChildRunLoopParams<TTurn, R = never> = Extract<
+  ChildRunLoopParams<TTurn, R>,
+  { readonly childRun: ChildRunPort }
+>;
+
+/** A native child's loop as a launch opens it ({@link nativeChildRunLaunch}):
+ *  the commit of its opening, and the loop over the prepared run. */
+export interface OpenedChildRunLoop<TTurn> {
+  readonly activation: CommitOrdinal;
+  readonly run: Effect.Effect<TTurn | undefined, Error, AgentRunServices>;
+}
 
 /**
- * Own one child's delivery, queue, concurrency budget and terminal cleanup.
- * A native launch runs on its own fiber and offers its turn boundaries to
- * this loop; process strategies return a turn and wait for their next batch
- * here.
+ * A native child's launch on `runs` (`RunRegistry.start`): `open` has its
+ * strategy open the run in the caller's fiber (`prepare`) and answers the
+ * loop that drives the prepared run on the run's fiber, owning its
+ * delivery, concurrency budget and terminal cleanup; `lastTurn` reads the
+ * turn the loop ended with once that fiber is done.
  */
-export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
-  params: ChildRunLoopParams<TTurn, R>,
-): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | Runs> {
+export function nativeChildRunLaunch<TTurn, R extends AgentRunServices = never>(
+  runs: RunRegistry,
+  params: NativeChildRunLoopParams<TTurn, R>,
+): {
+  readonly open: Effect.Effect<
+    OpenedChildRunLoop<TTurn>,
+    Error,
+    AgentRunServices
+  >;
+  readonly lastTurn: () => LastTurn | undefined;
+} {
+  const loop = new ChildLoop<TTurn, R>(params, runs);
+  const { strategy } = params;
+  return {
+    open: Effect.map(
+      strategy.prepare(params.notify, nativeTurns(loop, strategy)),
+      (prepared) => ({
+        activation: prepared.activation,
+        run: runChildLoop(loop, driveNative(loop, strategy, prepared.run)),
+      }),
+    ),
+    lastTurn: lastTurnOf(loop),
+  };
+}
+
+/**
+ * Start a native child's loop on its own fiber ({@link nativeChildRunLaunch}
+ * through `RunRegistry.start`). Answers the commit of its opening; a
+ * refused launch fails this with no fiber behind it.
+ */
+export function startNativeChildRunLoop<
+  TTurn,
+  R extends AgentRunServices = never,
+>(
+  params: NativeChildRunLoopParams<TTurn, R>,
+): Effect.Effect<
+  StartedChildRunLoop<TTurn> & { readonly activation: CommitOrdinal },
+  Error,
+  Runs
+> {
   return Effect.flatMap(Runs, (runs) => {
-    const loop = new ChildLoop(params, registryOf(runs));
-    // Admitted a tick later; a refused one still lets an agent CLI's
-    // provider ids go. The parent may read this child at once: it is woken
-    // once the generation let the child's claim go.
-    const launched = loop.runs.start(
-      params.runId,
-      runChildLoop(loop),
-      (admitted) =>
-        Effect.andThen(Effect.yieldNow, admitted).pipe(
-          Effect.ensuring(Effect.sync(() => loop.releaseOwnership())),
-          Effect.onExit(() =>
-            loop.end.kind === 'finished'
-              ? wakeParent(loop.end.result.delivery, loop.trace)
-              : Effect.void,
-          ),
-        ),
-      params.parentRunId,
+    const launch = nativeChildRunLaunch(registryOf(runs), params);
+    return Effect.map(
+      registryOf(runs).start(params.runId, {
+        open: launch.open,
+        run: (opened) => opened.run,
+      }),
+      ({ opened, fiber }) => ({
+        fiber,
+        activation: opened.activation,
+        lastTurn: launch.lastTurn,
+      }),
     );
-    return Effect.map(launched, (fiber) => ({
-      fiber,
-      lastTurn: () =>
-        loop.end.kind === 'finished' ? loop.end.turn : undefined,
-    }));
   });
 }
+
+/**
+ * Start a registered process child's loop on its own fiber: its strategy
+ * returns a turn and waits for the next batch here, and the loop owns its
+ * delivery, queue and terminal cleanup.
+ */
+export function startProcessChildRunLoop<
+  TTurn,
+  R extends AgentRunServices = never,
+>(
+  params: ProcessChildRunLoopParams<TTurn, R>,
+): Effect.Effect<StartedChildRunLoop<TTurn>, Error, Runs> {
+  return Effect.flatMap(Runs, (runs) => {
+    const loop = new ChildLoop<TTurn, R>(params, registryOf(runs));
+    return Effect.map(
+      loop.runs.start(params.runId, {
+        open: Effect.void,
+        run: () => runChildLoop(loop, driveProcess(loop, params.strategy)),
+      }),
+      ({ fiber }) => ({ fiber, lastTurn: lastTurnOf(loop) }),
+    );
+  });
+}
+
+/** The turn `loop` ended with, read once its fiber is done. */
+const lastTurnOf =
+  <TTurn, R>(loop: ChildLoop<TTurn, R>) =>
+  (): LastTurn | undefined =>
+    loop.end.kind === 'finished' ? loop.end.turn : undefined;

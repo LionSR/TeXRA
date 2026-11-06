@@ -53,8 +53,6 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         readonly definition: PreparedAgentDefinition;
         /** The child's registration, which its opening commits. */
         readonly registration: RegisterRunOptions;
-        /** Told the commit of the child's opening (`ExecuteAgentOptions`). */
-        readonly onAdmitted?: ExecuteAgentOptions['onAdmitted'];
         readonly resume?: never;
       }
     | {
@@ -62,7 +60,7 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         /** A persisted child, resumed under its stored config with the
          *  parent its rows hold (`parent`), read as its run starts, under
          *  the claim its loop holds. */
-        readonly resume: Pick<ExecuteAgentOptions, 'onAdmitted' | 'tools'> & {
+        readonly resume: Pick<ExecuteAgentOptions, 'tools'> & {
           readonly config: AgentConfig;
           readonly parent: Effect.Effect<RunId | undefined, Error, SessionLog>;
           readonly stopAfterCycle?: boolean;
@@ -97,45 +95,48 @@ export function createNativeSubagentStrategy(
     // that carries no message of its own (`turnErrorMessage`).
     stageLabel: config.script == null ? 'Native subagent' : 'Native recipe run',
 
-    launch: (notify, turns) =>
-      runNative(
-        Effect.gen(function* () {
-          const { programs } = registryOf(yield* Runs);
-          const options = {
-            onProgress: notify,
-            turns: {
-              turnPermit: turns.turnPermit,
-              finishTurn: (turn: RunReport) =>
-                Effect.suspend(() => {
-                  lastResult = turn;
-                  return turns.finishTurn(turn);
-                }),
-              finishLastTurn: (turn: RunReport) =>
-                Effect.suspend(() => {
-                  lastResult = turn;
-                  return turns.finishLastTurn(turn);
-                }),
-            },
-          };
-          if (params.resume) {
-            const { config, parent, stopAfterCycle, ...launch } = params.resume;
-            const definition = yield* prepareAgentDefinition({
-              config,
-              stopAfterCycle,
-            });
-            return yield* programs.executeAgent(definition, params.runId, {
-              ...launch,
+    prepare: (notify, turns) =>
+      Effect.gen(function* () {
+        const { programs } = registryOf(yield* Runs);
+        const options = {
+          onProgress: notify,
+          turns: {
+            turnPermit: turns.turnPermit,
+            finishTurn: (turn: RunReport) =>
+              Effect.suspend(() => {
+                lastResult = turn;
+                return turns.finishTurn(turn);
+              }),
+            finishLastTurn: (turn: RunReport) =>
+              Effect.suspend(() => {
+                lastResult = turn;
+                return turns.finishLastTurn(turn);
+              }),
+          },
+        };
+        const prepared = params.resume
+          ? yield* Effect.gen(function* () {
+              const { config, parent, stopAfterCycle, ...launch } =
+                params.resume;
+              const definition = yield* prepareAgentDefinition({
+                config,
+                stopAfterCycle,
+              });
+              return yield* programs.executeAgent(definition, params.runId, {
+                ...launch,
+                ...options,
+                parentRunId: yield* parent,
+              });
+            })
+          : yield* programs.executeAgent(params.definition, params.runId, {
               ...options,
-              parentRunId: yield* parent,
+              registration: { ...params.registration, seed: params.seed },
             });
-          }
-          return yield* programs.executeAgent(params.definition, params.runId, {
-            ...options,
-            registration: { ...params.registration, seed: params.seed },
-            ...(params.onAdmitted && { onAdmitted: params.onAdmitted }),
-          });
-        }),
-      ),
+        return {
+          activation: prepared.activation,
+          run: runNative(prepared.run),
+        };
+      }),
 
     isTurnInterrupted: (turn) => turn.outcome === RUN_OUTCOME.CANCELLED,
     isTurnError: (turn) => turn.failure !== undefined,

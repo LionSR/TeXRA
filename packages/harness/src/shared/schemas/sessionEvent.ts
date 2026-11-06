@@ -34,6 +34,7 @@ import {
   RunEndRowSchema,
   RunRecordFieldsSchema,
   ResultMetaSchema,
+  RunStopReasonSchema,
 } from './runRecords';
 import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
@@ -241,6 +242,13 @@ const DisplayRowDraftSchema = Schema.Union([
    *  fact after `run.start` that moves the edge. */
   durable('run.detach', {}),
   /**
+   * A stop asked of the run, and why: a person's, or this process's
+   * shutdown. Committed before the run's fiber is interrupted, so the end
+   * that follows reads the reason here; a run with no fiber here ends in
+   * the same batch. The one row every reader of "why it stopped" reads.
+   */
+  durable('run.stop', { reason: RunStopReasonSchema }),
+  /**
    * The terminal fact: outcome, the classified error behind a failure, and
    * a tool-use run's reply (usage and workflow files have their own rows).
    * Written once per lifecycle, by the storage finalizer, after the run's
@@ -436,6 +444,7 @@ export function edgesOf(draft: SessionEventDraft): AggregateEdges {
     case 'run.activate':
     case 'run.config':
     case 'run.detach':
+    case 'run.stop':
     case 'run.end':
     case 'child.park':
     case 'run.description':

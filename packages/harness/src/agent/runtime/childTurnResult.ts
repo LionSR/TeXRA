@@ -9,8 +9,13 @@
  */
 import { Context, Effect, type Scope } from 'effect';
 
-import type { InboxItem, Sent, SendOptions } from '@agent/followUp/Inbox';
-import { Inbox, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import {
+  Inbox,
+  type InboxItem,
+  type Sent,
+  type SendOptions,
+} from '@agent/followUp/Inbox';
+import { wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import { getRunRecords, persistedParentRunId } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
@@ -321,9 +326,7 @@ export const wakeParent = Effect.fn('childTurnResult.wakeParent')(function* (
   trace: AgentTrace | undefined,
 ) {
   if (delivery === undefined) return;
-  const woken = yield* wakeIfOwed(delivery.to);
-  // The child's boundary waits for its parent's resumed turn.
-  if (woken !== false) return yield* woken;
+  if (yield* wakeIfOwed(delivery.to)) return;
   yield* warn(
     trace,
     'Turn result queued for the parent, but the parent could not be read to resume it; an explicit Resume delivers it.',

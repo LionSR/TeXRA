@@ -6,20 +6,22 @@
  * here, and a late loop failure nobody awaits is logged. A process child
  * (a background shell, an agent CLI) is registered before its loop exists,
  * so its trace and strategy are built under the launch guard, which ends
- * the run when that hand-off fails. A native child needs no guard: its run
- * opens on its loop's fiber, whose end is the loop's.
+ * the run when that hand-off fails. A native child needs no guard: its
+ * opening commits in the caller's fiber, so a launch that fails first
+ * leaves no run, and its run's end is its own fiber's.
  */
 // Third-party imports
-import { Cause, Deferred, Effect, Fiber } from 'effect';
+import { Cause, Effect, Fiber } from 'effect';
 
 // Local imports
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import { activationIfOpened } from '@agent/runtime/AgentLaunchContext';
 import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
-  startChildRunLoop,
+  startNativeChildRunLoop,
+  startProcessChildRunLoop,
   type ChildRunLoopParams,
   type ChildRunPort,
+  type NativeChildRunLoopParams,
   type ProcessChildStrategy,
   type StartedChildRunLoop,
 } from '@agent/runtime/childRunLoop';
@@ -31,7 +33,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { SessionLog } from '@shared/session/runHistory';
 import {
   USER_FOLLOW_UP_SUPPORT,
-  type CommitOrdinal,
   type RunId,
   type RunIdentity,
 } from '@shared/schemas';
@@ -44,16 +45,7 @@ import {
 /** A native child's loop parameters, or a process child's with the setup
  *  the launch guard runs: its trace, then its strategy around it. */
 type DetachedChildRunInput<TTurn, R> =
-  | (Extract<
-      ChildRunLoopParams<TTurn, R>,
-      { readonly childRun?: undefined }
-    > & {
-      /** The deferred the strategy's `onAdmitted` completes with the run's
-       *  opening commit. Given, the start waits for it: the caller's receipt
-       *  names a run that exists, and a loop that ends before the opening
-       *  fails the start with the launch's failure. */
-      readonly opened?: Deferred.Deferred<CommitOrdinal>;
-    })
+  | NativeChildRunLoopParams<TTurn, R>
   | (Omit<ChildRunLoopParams<never>, 'strategy' | 'childRun'> & {
       /** Create the stream inside the launch guard, before any stream-dependent setup. */
       readonly createChildRun: () => Effect.Effect<ChildRunPort>;
@@ -80,25 +72,14 @@ export function startDetachedChildRunLoop<
 >(
   input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<StartedChildRunLoop<TTurn>, Error, R | SessionServices> {
-  if (!('createChildRun' in input)) {
-    const { opened, ...params } = input;
-    const started = Effect.uninterruptible(
-      params.awaited === true
-        ? startChildRunLoop(params)
-        : Effect.tap(startChildRunLoop(params), (loop) =>
-            logLateFailure(params.agentName, loop.fiber),
+  if (!('createChildRun' in input))
+    return Effect.uninterruptible(
+      input.awaited === true
+        ? startNativeChildRunLoop(input)
+        : Effect.tap(startNativeChildRunLoop(input), (loop) =>
+            logLateFailure(input.agentName, loop.fiber),
           ),
     );
-    // Interruptible: a cancelled caller stops waiting, not the child.
-    return opened === undefined
-      ? started
-      : Effect.tap(started, ({ fiber }) =>
-          Effect.raceFirst(
-            Deferred.await(opened),
-            Fiber.join(fiber).pipe(Effect.andThen(activationIfOpened(opened))),
-          ),
-        );
-  }
   const { createChildRun, buildLaunch, ...loopParams } = input;
   return runWithLaunchGuard(
     input.runId,
@@ -106,7 +87,11 @@ export function startDetachedChildRunLoop<
       const port = yield* createChildRun();
       const loop = yield* buildLaunch(port).pipe(
         Effect.flatMap((strategy) =>
-          startChildRunLoop({ ...loopParams, childRun: port, strategy }),
+          startProcessChildRunLoop({
+            ...loopParams,
+            childRun: port,
+            strategy,
+          }),
         ),
         // A setup that failed before the loop: the guard ends the run.
         Effect.onError(() => Effect.sync(() => port.logger.close())),

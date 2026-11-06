@@ -62,8 +62,7 @@ export function isInFlightPhase(
 /**
  * Where the loop stands, as its own branches read it: between turns
  * (`waiting`, `turn.ended`) or somewhere inside a turn. Never written: derived
- * from the run's `run.position` rows, so it is not the stored `halted`
- * position, which changes no phase.
+ * from the run's `run.position` rows.
  */
 export type RunLoopPhase =
   | 'model.ready'
@@ -73,25 +72,23 @@ export type RunLoopPhase =
   | 'turn.ended';
 
 /**
- * The phase a position leaves an opened loop in. A `halted` position changes
- * none: a stop keeps the phase the loop stopped in, so a resume continues
- * from there. `turn.ready` is input consumed while waiting, still between
- * turns; a `turn.end` that no `waiting` or `turn.begin` follows in its batch
- * is the round loop's last round closed, the run concluded before its
- * terminal row. A run's first position opens it: its opening batch's
- * `turn.ready`, or a fork's `waiting`. A halt opens nothing.
+ * The phase a position leaves an opened loop in. A stop writes no
+ * position: the loop stops in the phase its newest position names, so a
+ * resume continues from there. `turn.ready` is input consumed while
+ * waiting, still between turns; a `turn.end` that no `waiting` or
+ * `turn.begin` follows in its batch is the round loop's last round closed,
+ * the run concluded before its terminal row. A run's first position opens
+ * it: its opening batch's `turn.ready`, or a fork's `waiting`.
  */
-const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
-  {
-    'turn.ready': 'waiting',
-    'turn.begin': 'model.ready',
-    'response.ready': 'model.submitted',
-    'results.ready': 'results.ready',
-    'turn.end': 'turn.ended',
-    waiting: 'waiting',
-  };
+const PHASE_AT: Readonly<Record<PositionAt, RunLoopPhase>> = {
+  'turn.ready': 'waiting',
+  'turn.begin': 'model.ready',
+  'response.ready': 'model.submitted',
+  'results.ready': 'results.ready',
+  'turn.end': 'turn.ended',
+  waiting: 'waiting',
+};
 export const phaseAfter = (
   phase: RunLoopPhase | null,
   at: PositionAt | null | undefined,
-): RunLoopPhase | null =>
-  at == null || at === 'halted' ? phase : PHASE_AT[at];
+): RunLoopPhase | null => (at == null ? phase : PHASE_AT[at]);

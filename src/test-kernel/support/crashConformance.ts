@@ -637,20 +637,6 @@ function violations(
         earlier.commit < child.commit && callOf(earlier) === callOf(child),
     ),
   );
-  // A run's halt and its end are one fact: a halt committed without its end
-  // reads as an interrupted run, which an automatic resume carries on. The
-  // prefix ends where a transaction did, so a halt in it has its end too.
-  const haltedApart = prefix.filter(
-    (row) =>
-      row.type === 'run.position' &&
-      payload(row).at === 'halted' &&
-      !prefix.some(
-        (end) =>
-          end.type === 'run.end' &&
-          end.run === row.run &&
-          end.commit > row.commit,
-      ),
-  );
   const got = outcome(final, root);
   // A command or an edit whose body the prefix started and never settled is
   // not run again: it settles as outcome unknown, and the model decides.
@@ -738,9 +724,6 @@ function violations(
       ? null
       : 'a child was left without a terminal row',
     unfinalized.length === 0 ? null : 'an answer was never finalized',
-    haltedApart.length === 0
-      ? null
-      : 'a run halted in another transaction than its end',
   ].filter((violation) => violation !== null);
 }
 

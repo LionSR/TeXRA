@@ -454,17 +454,19 @@ delivery its settlements do not match is a defect
 (`agent/runtime/RunHistory.ts#'mismatched-delivery'`).
 
 **W5.** The positions are `turn.ready`, `turn.begin`, `response.ready`,
-`results.ready`, `turn.end`, `waiting` and `halted`
-(`shared/schemas/runHistoryEvent.ts#PositionAtSchema`). A `halted` or
-`turn.end` position MUST carry an outcome, and every other position MUST NOT
-carry one (`shared/schemas/runHistoryEvent.ts#RunPositionPayloadSchema`). The
-`halted` position MUST commit in the same batch as the run's `run.end`
-(`agent/storage/runLifecycle.ts#endIn`,
-`agent/runtime/loop/rows.ts#haltedPositionRow`). A run whose history does not
-load ends with its `run.end` and no `halted` position, with a warning
-(`agent/storage/runLifecycle.ts#endIn`). A child the child loop drives has no
-run history and writes no position; it parks on `child.park` rows
-(`shared/schemas/sessionEvent.ts#'child.park'`).
+`results.ready`, `turn.end` and `waiting`
+(`shared/schemas/runHistoryEvent.ts#PositionAtSchema`). A `turn.end` position
+MUST carry an outcome, and every other position MUST NOT carry one
+(`shared/schemas/runHistoryEvent.ts#RunPositionPayloadSchema`). A run's end
+is its `run.end` alone, committed in one transaction with the requests it
+leaves open cancelled and its unread input dropped
+(`agent/storage/runLifecycle.ts#endIn`); a stop commits a `run.stop` row
+naming its reason first, and for a run no fiber here drives, the `run.end`
+in the same batch (`agent/storage/runLifecycle.ts#stopRun`). A run whose
+history does not load ends with its `run.end` and its requests uncancelled,
+with a warning (`agent/storage/runLifecycle.ts#endIn`). A child the child
+loop drives has no run history and writes no position; it parks on
+`child.park` rows (`shared/schemas/sessionEvent.ts#'child.park'`).
 
 **W6.** Every failed attempt of a turn or a summary that reaches failure
 recording MUST commit a `failed` row whose `next` is the move after it; a
@@ -547,7 +549,7 @@ so the live path and the resume path are the same steps
 same program, `runToolUse`, with `resume: true`, through the same run program as
 a fresh launch, `executeAgent` without a registration
 (`agent/runtime/executeAgent.ts#executeAgent`), reached from `resumeRun`
-(`agent/runtime/resumeRun.ts#resumeQueuedToolUse`).
+(`agent/runtime/resumeRun.ts#resumeRun`).
 
 A resume MUST be refused when the rows hold no opened run
 (`agent/runtime/loop/runProgram.ts#NOT_RESUMABLE_MESSAGE`). A fresh launch MUST
@@ -676,20 +678,22 @@ not ended and is not among them is interrupted
 
 ### 7.2 Resume
 
-A resume reads the run's records, its queued input, whether an open call of
-its parent owns it, and whether its rows can be continued, then launches it on
-the run's lane (`agent/runtime/resumeRun.ts#decideResume`). A run whose
+A resume is one launch of the run on the session's registry
+(`agent/runtime/resumeRun.ts#resumeRun`, `agent/runtime/runRegistry.ts#start`):
+its opening reads the run's records, its queued input, whether an open call of
+its parent owns it, and whether its rows can be continued, then commits the
+run's activation (`agent/runtime/resumeRun.ts#openResume`). A run whose
 records are gone, or deleted or whose input closed while those reads ran, is
-refused (`agent/runtime/resumeRun.ts#decideResume`). A resume is the run's
-activation from the call: a second resume of the run joins it and gets its
-result, a stop reaches it before it admits the run (a user's stop ends the run
-cancelled, and nothing is admitted after), and the last caller to leave before
-any took its answer stops it (`agent/runtime/resumeRun.ts#resumeRun`,
-`agent/followUp/ToolUseFollowUp.ts#openResume`); a run another launch holds in
-this process is refused. A child an open call of its parent owns resumes
-through that parent (`agent/runtime/resumeRun.ts#owningCall`; a resume a wake
-took follows it itself, whoever opened it,
-`agent/followUp/ToolUseFollowUp.ts#answered`, and the package's resume through
+refused, as the opening's failure, with no fiber behind it
+(`agent/runtime/resumeRun.ts#openResume`). The registry holds the run from the
+resume's first read: a second resume, or any launch, of the run meanwhile is
+refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop asked meanwhile
+ends the run cancelled on its rows, whether the opening committed or failed,
+and refuses the launch (`agent/runtime/runRegistry.ts#RunStoppedAtStart`,
+`agent/runtime/runRegistry.ts#stopAsked`). A child an open call of its parent
+owns resumes through that parent (`agent/runtime/resumeRun.ts#owningCall`; a
+resume a wake took follows it itself, whoever opened it,
+`agent/followUp/ToolUseFollowUp.ts#wakeRun`, and the package's resume through
 `effect/sessionPrograms.ts#redirectedFrom`).
 
 The activation is one transaction: it folds the stored rows and commits the

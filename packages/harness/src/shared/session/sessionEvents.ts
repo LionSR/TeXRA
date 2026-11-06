@@ -59,7 +59,10 @@ export interface JobOptions {
  *  continues from until the next open folds it: any job may append it as
  *  is, with the blobs it stores. */
 export type UnfoldedDraft = WithBlobs<
-  Exclude<SessionEventDraft, { type: Exclude<RunStateRowType, 'run.end'> }>
+  Exclude<
+    SessionEventDraft,
+    { type: Exclude<RunStateRowType, 'run.end' | 'run.stop'> }
+  >
 >;
 
 /** Rows another owner decides inside a job, appended with the job's own

@@ -9,7 +9,7 @@
  * the parent as one follow-up (`createScriptRunStrategy`), and a resume
  * replays it from its own rows.
  */
-import { Clock, Deferred, Effect, Schema, SynchronizedRef } from 'effect';
+import { Clock, Effect, Schema, SynchronizedRef } from 'effect';
 
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { offeredBy } from '@agent/runtime/loop/step';
@@ -22,11 +22,7 @@ import {
 import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import { startDetachedChildRunLoop } from '@agent/runtime/delegation/detachedChildRun';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
-import {
-  AgentConfigSchema,
-  type CommitOrdinal,
-  type RunId,
-} from '@shared/schemas';
+import { AgentConfigSchema, type RunId } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 
 /** What the model reads for a script sent to the background. */
@@ -96,8 +92,8 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       },
     }),
   });
-  const opened = yield* Deferred.make<CommitOrdinal>();
-  // The script launches under the session's runs the engine door holds.
+  // The script's opening commits here, under the session's runs; a launch
+  // that fails before it fails this call.
   yield* startDetachedChildRunLoop({
     runId,
     parentRunId,
@@ -116,11 +112,7 @@ export const launchBackgroundScript = Effect.fn('script.background')(function* (
       startedAt: yield* Clock.currentTimeMillis,
       ...(workingDirectory != null && { workingDirectory }),
       title,
-      onAdmitted: (_, commit) => Deferred.succeed(opened, commit),
     }),
-    // The receipt names a run that exists: the start waits for its
-    // opening, and a launch that fails before it fails this call.
-    opened,
   });
   return receipt(title, runId, false);
 });

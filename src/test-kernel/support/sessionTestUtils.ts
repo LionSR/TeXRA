@@ -92,12 +92,10 @@ export const holdTestRun = (
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     yield* Effect.acquireRelease(
-      registryOf(Context.get(session, Runs)).start(
-        runId,
-        Effect.never,
-        (run) => run,
-      ),
-      (fiber) => Fiber.interrupt(fiber),
+      registryOf(Context.get(session, Runs))
+        .start(runId, { open: Effect.void, run: () => Effect.never })
+        .pipe(Effect.orDie),
+      ({ fiber }) => Fiber.interrupt(fiber),
     );
     yield* SubscriptionRef.changes(
       Context.get(session, SessionViewAccess).ref,

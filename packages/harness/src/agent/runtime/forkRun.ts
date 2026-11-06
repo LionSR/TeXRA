@@ -111,9 +111,9 @@ const cutOf = Effect.fn('forkRun.cut')(function* (
   const parks = (yield* log.runRows(aggregate, 'positions')).positions.filter(
     (row) =>
       before === undefined
-        ? row.payload.at === 'waiting' || row.payload.at === 'halted'
+        ? row.payload.at === 'waiting'
         : row.commit < before &&
-          ['waiting', 'halted', 'turn.begin'].includes(row.payload.at),
+          ['waiting', 'turn.begin'].includes(row.payload.at),
   );
   const settledAt = (seq: number) =>
     Effect.map(runHistory.load(from, seq), (state) =>

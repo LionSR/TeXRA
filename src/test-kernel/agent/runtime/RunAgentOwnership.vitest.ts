@@ -63,9 +63,7 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(yield* Effect.flip(launch(session, runId))).toMatchObject({
               message: `Run is already running: ${runId}`,
             });
-            yield* Context.get(session, Runs)
-              .stop(runId, 'user')
-              .settlement.pipe(Effect.provide(session));
+            yield* Context.get(session, Runs).stop(runId, 'user');
             yield* Fiber.await(first);
             expect(
               storedRows(roots.storage).filter(

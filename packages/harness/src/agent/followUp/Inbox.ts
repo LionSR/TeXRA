@@ -5,7 +5,7 @@
  * time is the only lock, and when a row may be read is data on it
  * (`holdUntil`, `RunInput`).
  */
-import { Effect, Result, type Scope } from 'effect';
+import { Context, Effect, Result, type Scope } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
@@ -346,3 +346,10 @@ const warnWith =
 
 /** Whether the run has a pending message, not just one of its own requests. */
 const queued = (input: RunRows): boolean => input.followUps.some(isMessage);
+
+/** The session's follow-up inbox ({@link SessionInbox}): every run's input,
+ *  one reader each, which every message to a run is admitted through.
+ *  Built by the session layer and disposed with the session. */
+export class Inbox extends Context.Service<Inbox, SessionInbox>()(
+  '@texra-ai/harness/session/Inbox',
+) {}

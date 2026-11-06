@@ -124,6 +124,7 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v6: no Copilot backend.
   'run.config': { version: 6, listing: 'own' },
   'run.detach': { ...V1, listing: 'own' },
+  'run.stop': { ...V1, listing: 'own' },
   // v2: a recipe's value is `structured`, with no `documents`.
   // v3: the error's classification as `model.message` v9.
   // v4: an error always carries its `message` (an earlier build's error
@@ -139,7 +140,10 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // `result-lost`, `unexpected`); `context-window` and `missing-api-key` are
   // classifications, no longer kinds (an earlier build's classified end would
   // fail as damaged).
-  'run.end': { version: 7, listing: 'own' },
+  // v8: no `reason`: why a run stopped is its `run.stop` row (an earlier
+  // build's shutdown end would read as a person's stop, holding a child's
+  // delivery back and spending a retry).
+  'run.end': { version: 8, listing: 'own' },
   'child.park': { ...V1, listing: 'own' },
   'run.removed': { ...V1, listing: 'lifecycle' },
   // v2: a model's summary carries its helper request's priced `usage`,
@@ -187,7 +191,9 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // v3: a halt carries no `reason`; the end's `reason` says what stopped the
   // run (an earlier build's closed halt would read as a crash and spend a
   // retry).
-  'run.position': { version: 3, listing: 'own' },
+  // v4: no `halted` position: `run.end` is the halt (an earlier build's halt
+  // row would fail its check).
+  'run.position': { version: 4, listing: 'own' },
   // v2: no `latexdiff` or `missingOutputs` message type; a plugin's fact
   // holds both.
   // v3: a user message names its attached media by blob address (`media`),

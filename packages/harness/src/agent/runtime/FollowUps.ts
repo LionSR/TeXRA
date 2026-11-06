@@ -32,7 +32,7 @@ import {
   followUpDisplay,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import type { FollowUpBatch, RunInput } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace/helpers';
 import {

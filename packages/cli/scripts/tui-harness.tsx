@@ -609,10 +609,12 @@ function holdRun(runId: RunId): void {
   heldRuns.set(
     runId,
     harnessRuntime.runSync(
-      registryOf(Context.get(harnessRuntimeSession, Runs)).start(
-        runId,
-        Effect.never,
-        (run) => run,
+      Effect.map(
+        registryOf(Context.get(harnessRuntimeSession, Runs)).start(runId, {
+          open: Effect.void,
+          run: () => Effect.never,
+        }),
+        ({ fiber }) => fiber,
       ),
     ),
   );

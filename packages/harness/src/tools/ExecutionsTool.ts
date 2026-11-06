@@ -481,15 +481,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   }
 
   // Its children follow the session's stop policy (`RunRegistry.stop`).
-  const success = yield* Effect.suspend(() => {
-    const stop = runs.stop(runId, 'user');
-    // Asked after the settlement: a detaching stop interrupts the run
-    // only once its children have left it, so that is when it knows
-    // whether a live target took the stop.
-    return stop.settlement.pipe(
-      Effect.andThen(Effect.sync(() => stop.accepted())),
-    );
-  }).pipe(Effect.uninterruptible);
+  const success = yield* runs.stop(runId, 'user').pipe(Effect.uninterruptible);
   if (success) return executed(`Run ${runId} terminated.`);
   return yield* Effect.fail(
     new ToolError(`Run ${runId} could not be terminated.`),

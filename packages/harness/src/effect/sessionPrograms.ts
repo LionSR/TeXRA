@@ -156,12 +156,11 @@ const start = Effect.fn('start')(function* (
     return yield* runFailure(
       new Error(`Run ${runId} already exists in this session.`),
     );
-  // `rootRun` stops a run whose opening is interrupted. A caller
-  // interrupted after the run opened, before this hands its handle back,
-  // never holds the run either: it let go, so the registry stops it as a
-  // release, which a stop recorded first (a shutdown's) outranks. Only a
-  // run this call opened, so a caller that never opened one stops nobody
-  // else's.
+  // A caller interrupted while the run opens never holds it: the opening
+  // unwinds with it. One interrupted after the run opened, before this
+  // hands its handle back, let go of a run that runs: the registry ends it
+  // as a release. Only a run this call opened, so a caller that never
+  // opened one stops nobody else's.
   let opened = false;
   return yield* rootRun({ ...input, config, runId }).pipe(
     Effect.provideService(SessionOwner, owner),

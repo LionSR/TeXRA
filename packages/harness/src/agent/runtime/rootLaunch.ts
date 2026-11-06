@@ -1,14 +1,7 @@
-import {
-  Context,
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import {
   SessionRoots,
   type StorageFs,
@@ -31,10 +24,7 @@ import {
   type SessionLog,
 } from '@shared/session/runHistory';
 import { humanGrant } from './runApprovalQueue';
-import {
-  activationIfOpened,
-  prepareAgentDefinition,
-} from './AgentLaunchContext';
+import { prepareAgentDefinition } from './AgentLaunchContext';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
 import { applyHelperModelPreference } from './helperModelName';
 import { registryOf, Runs } from './runRegistry';
@@ -109,11 +99,13 @@ type RootLaunch = typeof StartOptionsSchema.Type &
 
 /**
  * START HERE: a root launch, what `session.start` runs. The composition
- * root's `SessionOwner` must still hold the session. It answers the commit
- * of the run's opening once that commits, the run going on on the session's
- * fork; a launch that fails first fails this, and the caller's interruption
- * before then stops the run. A run that opened never fails this: its end,
- * failed or not, is its `run.end` row's.
+ * root's `SessionOwner` must still hold the session. It resolves the
+ * model and the definition, commits the run's opening in this fiber
+ * (`executeAgent`), and forks the run under its id on the session
+ * (`RunRegistry.start`); it answers the commit of that opening. A launch
+ * that fails before the run exists fails this with no run behind it; a
+ * run that opened never fails this: its end, failed or not, is its
+ * `run.end` row's.
  *
  * A run with a parent, or one that is resumed rather than registered here
  * (a child's strategy, `resumeRun`), runs the lower-level `executeAgent`
@@ -128,60 +120,7 @@ export const rootRun = Effect.fn('rootRun')(function* (
     return yield* Effect.fail(
       new Error('This session is closed; open it again to launch a run.'),
     );
-  const opened = yield* Deferred.make<CommitOrdinal>();
-  const onAdmitted = (_: RunId, commit: CommitOrdinal) =>
-    Deferred.succeed(opened, commit);
-  return yield* Effect.uninterruptibleMask((restore) =>
-    Effect.flatMap(
-      registryOf(runs).start(
-        launch.runId,
-        admittedRun(launch, onAdmitted),
-        (run) => run,
-      ),
-      (fiber) =>
-        restore(
-          Effect.raceFirst(
-            Deferred.await(opened),
-            Fiber.await(fiber).pipe(
-              Effect.flatMap((exit) =>
-                Exit.isFailure(exit) && !Deferred.isDoneUnsafe(opened)
-                  ? Effect.failCause(exit.cause)
-                  : activationIfOpened(opened),
-              ),
-            ),
-          ),
-        ).pipe(
-          // A caller interrupted as the run opened never holds it: its
-          // launch is interrupted, which the registry records as a release
-          // of the run (`RunRegistry.admit`), behind any stop recorded first.
-          Effect.tap(() => restore(Effect.void)),
-          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
-        ),
-    ),
-  );
-});
-
-/**
- * The run a root launch admits, on the launched fiber, whose generation
- * holds the run's claim: it resolves the model and runs the run. The run is
- * born with its opening, so a launch that fails before it leaves no run:
- * its failure is the launch's.
- */
-const admittedRun = Effect.fn('admittedRun')(function* (
-  launch: RootLaunch,
-  onAdmitted: NonNullable<ExecuteAgentOptions['onAdmitted']>,
-) {
   const { runId, continues, approval } = launch;
-  // Resolve the selected model before registering the run. The helper
-  // model swap reads the enabled-model list and the routing switches, so it
-  // takes this session's setting slots.
-  const config = launch.helperModel
-    ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
-    : launch.config;
-  const definition = yield* prepareAgentDefinition({
-    config,
-    stopAfterCycle: launch.interactive !== true,
-  });
   // A chat round takes the human grants of the round it continues, never
   // its launch limit: the round asks with the chat's policy now. A launch
   // whose delegated work starts approved grants every bypass over them.
@@ -200,12 +139,27 @@ const admittedRun = Effect.fn('admittedRun')(function* (
   // policy later never widens this run.
   const limit: ApprovalPolicyLimit | undefined =
     approval?.policy === 'yolo' ? undefined : approval?.policy;
-  return yield* executeAgent(definition, runId, {
-    tools: launch.tools,
-    onAdmitted,
-    registration: {
-      identity: { kind: 'agent', agent: definition.config.agent },
-      grants: limit === undefined ? grants : { ...grants, limit },
-    },
+  // The model (the helper model swap reads the enabled-model list and the
+  // routing switches from this session's setting slots), the agent and its
+  // tools resolve in the opening, each refused before any run is registered.
+  const { opened } = yield* registryOf(runs).start(runId, {
+    open: Effect.gen(function* () {
+      const config = launch.helperModel
+        ? yield* applyHelperModelPreference(launch.config, yield* SessionRoots)
+        : launch.config;
+      const definition = yield* prepareAgentDefinition({
+        config,
+        stopAfterCycle: launch.interactive !== true,
+      });
+      return yield* executeAgent(definition, runId, {
+        tools: launch.tools,
+        registration: {
+          identity: { kind: 'agent', agent: definition.config.agent },
+          grants: limit === undefined ? grants : { ...grants, limit },
+        },
+      });
+    }),
+    run: (prepared) => prepared.run,
   });
+  return opened.activation;
 });

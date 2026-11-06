@@ -4,14 +4,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import {
-  Context,
-  Deferred,
-  Effect,
-  FileSystem,
-  Path,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, FileSystem, Path, SubscriptionRef } from 'effect';
 import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
 import {
@@ -19,8 +12,8 @@ import {
   followUpServices,
   runInbox,
   submitFollowUp,
-  Inbox,
 } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { sentFollowUpId, sentReceipt } from '@agent/followUp/followUpMessages';
 import {
   narrows,
@@ -229,8 +222,7 @@ const decideRequest = (
 };
 
 /** Queued on the run's input by its live loop's controls, answered once the
- *  input holds it: a resume in flight is waited on until it activates the
- *  run or answers without (refused), never until the resumed turn rests. */
+ *  input holds it. */
 const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: `run.${'compact' | 'model'}` }>,
@@ -238,12 +230,6 @@ const viaControls = Effect.fn('SessionRequests.viaControls')(function* (
 ): Effect.fn.Return<Outcome, RequestError, Inbox> {
   const { runId } = req;
   const unavailable = (reason: string) => new Unavailable({ runId, reason });
-  const attempt = runs.attemptOf(runId);
-  if (attempt !== undefined)
-    yield* Effect.raceFirst(
-      attempt.answer,
-      Deferred.await(attempt.admitted),
-    ).pipe(Effect.exit);
   const controls = runs.get(runId)?.controls;
   if (controls === undefined)
     return yield* unavailable(
@@ -357,10 +343,10 @@ export function sessionRequests(
     }
     const runs = registryOf(yield* Runs);
     if (req.kind === 'run.stop') {
-      // Admitted on its rows unless a launch here holds it, opened or not.
+      // Admitted on its rows unless a fiber here drives it.
       if (runs.get(req.runId) === undefined) yield* admit(deps, req);
-      return yield* runs.stop(req.runId, req.reason).settlement.pipe(
-        // An unread setting or a refused end row: the run is still in flight.
+      return yield* runs.stop(req.runId, req.reason).pipe(
+        // An unread setting or a refused row: the run is still in flight.
         Effect.mapError(
           (error): RequestError =>
             new Unavailable({
@@ -370,7 +356,6 @@ export function sessionRequests(
         ),
         Effect.as(done),
         Effect.uninterruptible,
-        Effect.provideContext(yield* sessionServices),
       );
     }
     yield* requireRunAction(deps, req);

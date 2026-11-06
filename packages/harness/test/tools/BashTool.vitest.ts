@@ -8,7 +8,6 @@ import { layer } from '@effect/vitest';
 import {
   Deferred,
   Effect,
-  Fiber,
   Layer,
   Schedule,
   Schema,
@@ -27,10 +26,11 @@ import {
   type RunId,
   RunIdSchema,
 } from '@texra-ai/harness/schemas';
-import { registryOf, Runs } from '@agent/runtime/runRegistry';
+import * as resumeRunModule from '@agent/runtime/resumeRun';
+import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { Inbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { SessionViewAccess } from '@shared/session/runHistory';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -149,18 +149,16 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
 
   it.layer(perTest, { buildPerTest: true })((it) => {
     it.effect(
-      '#8093 regression: finalizes the background run before its wake step resolves, so a resumed parent never self-stalls waiting on it',
+      '#8093 regression: the background run has ended and left the registry before its parent is woken, so a resumed parent never self-stalls waiting on it',
       () =>
         Effect.gen(function* () {
-          // Regression: waking a WAITING parent (`wakeRun`) can
-          // await the ENTIRE resumed parent turn. If that wake were awaited before
-          // this run's own finalize (as it used to be, delivering via a
-          // single wake-aware call before `finalizeBackground`), a resumed parent
-          // that immediately calls `executions` with action=wait on this same
-          // run could find it still RUNNING and block on itself for the
-          // whole wait budget. Prove the ordering: hold the resume open and
-          // confirm the run is already untracked (terminal) by the time the
-          // resume is even invoked.
+          // Regression: a resumed parent that at once calls `executions`
+          // with action=wait on this run must find it done, never still
+          // held here, or it blocks on its own wake for the whole wait
+          // budget. The registry wakes the parent for the delivered result
+          // only once the run's fiber, which wrote the run's end, has left
+          // it: prove the order by reading, as the wake's resume begins,
+          // whether a wait would skip the run.
           vi.spyOn(execUtils, 'executeCommand').mockReturnValue(
             Effect.succeed({
               success: true,
@@ -177,20 +175,23 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           // cast: '' names no run until the launch reports its id.
           let runId = '' as RunId;
           const wakeReached = Deferred.makeUnsafe<void>();
-          // The resume a wake starts is the run's one resume in flight.
-          const { programs } = registryOf(Context.get(session, Runs));
-          const decide = programs.resume;
-          vi.spyOn(programs, 'resume').mockImplementation((...args) => {
-            skippedAtResumeTime ??= shouldSkipWait(
-              Context.get(session, Runs),
-              SubscriptionRef.getUnsafe(
-                Context.get(session, SessionViewAccess).ref,
-              ),
-              runId,
-            );
-            Deferred.doneUnsafe(wakeReached, Effect.void);
-            return decide(...args);
-          });
+          // The parent's wake for the delivered result is its resume.
+          const resume = resumeRunModule.resumeRun;
+          vi.spyOn(resumeRunModule, 'resumeRun').mockImplementation(
+            (woken, options) => {
+              if (woken === parentRunId) {
+                skippedAtResumeTime ??= shouldSkipWait(
+                  Context.get(session, Runs),
+                  SubscriptionRef.getUnsafe(
+                    Context.get(session, SessionViewAccess).ref,
+                  ),
+                  runId,
+                );
+                Deferred.doneUnsafe(wakeReached, Effect.void);
+              }
+              return resume(woken, options);
+            },
+          );
           yield* Effect.promise(() => parkRunWaiting(session, parentRunId));
 
           yield* Effect.addFinalizer(() =>
@@ -203,9 +204,9 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           runId = launched;
 
           yield* Deferred.await(wakeReached);
-          // The wake step was reached — this run must already be finalized,
-          // never still RUNNING, so a resumed parent that waits on it right now
-          // resolves immediately instead of racing its own wake.
+          // The wake was reached: this run has ended and is no longer held,
+          // so a resumed parent that waits on it right now resolves at once
+          // instead of racing its own wake.
           assert.equal(skippedAtResumeTime, true);
         }),
     );
@@ -223,12 +224,12 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
           );
           assert.ok(runId, 'Launch output should report a run id');
 
-          // The user stop lands CANCELLED on the run phase; only afterwards does
-          // the killed process report its non-zero exit.
-          const stopSettlement = yield* Effect.forkChild(
-            Context.get(session, Runs)
-              .stop(runId, 'user')
-              .settlement.pipe(Effect.provide(session)),
+          // The user stop records its reason and interrupts the run's loop;
+          // the killed process's non-zero exit, reported after, is not the
+          // run's outcome.
+          assert.equal(
+            yield* Context.get(session, Runs).stop(runId, 'user'),
+            true,
           );
           resolveCommand({
             success: false,
@@ -238,7 +239,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
             exitCode: 143,
           });
 
-          yield* Fiber.join(stopSettlement);
           yield* getRunRecords(runId)
             .readRunEnd()
             .pipe(

@@ -333,10 +333,7 @@ export function applyTranscriptEvent(
     written: [],
     touched: false,
   };
-  if (
-    event.type === 'run.position' &&
-    (event.payload.at === 'waiting' || event.payload.at === 'halted')
-  )
+  if (event.type === 'run.position' && event.payload.at === 'waiting')
     d.ix.lastWait = event.seq;
   const phase = phaseMoveOf(event);
   if (phase !== null) moveBoundary(d, phase);

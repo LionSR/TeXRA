@@ -94,10 +94,6 @@ export function emptyRunEndOutput(): RunEndOutput {
  */
 export const RunEndSchema = Schema.Struct({
   outcome: RunOutcomeSchema,
-  /** Why a cancelled end stopped the run: a person's stop or this process's
-   *  shutdown. Absent on any other end, and on a cancel neither gave (a
-   *  holder's release). */
-  reason: Schema.optional(RunStopReasonSchema),
   error: Schema.optional(RunEndErrorSchema),
   usage: Schema.optional(RunUsageTotalsSchema),
   output: RunEndOutputSchema,

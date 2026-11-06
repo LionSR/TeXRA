@@ -35,6 +35,7 @@
     "run.result",
     "run.snapshot",
     "run.start",
+    "run.stop",
     "script.call",
     "stage.end",
     "stage.start",

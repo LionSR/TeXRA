@@ -32,9 +32,8 @@ type RequestState = {
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
-  /** Where the loop stands, or stood when it halted: a halt row changes
-   *  `outcome`, not this. */
-  readonly at: Exclude<PositionAt, 'halted'> | null;
+  /** Where the loop stands. */
+  readonly at: PositionAt | null;
   readonly outcome: RunOutcome | null;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */
@@ -75,6 +74,9 @@ export type RunRows = RunPosition & {
    *  began (null until it ends): a resumed run never carries an old end. */
   readonly activation: RowOf<'run.activate'> | null;
   readonly end: RowOf<'run.end'> | null;
+  /** The stop asked of this lifecycle (`run.stop`), null until one is:
+   *  why the run stopped, or is stopping. */
+  readonly stop: RowOf<'run.stop'> | null;
   /** Its deletion marker (`run.removed`), once one landed. */
   readonly removed: RowOf<'run.removed'> | null;
   /** Its input is closed: the latest of `run.activate`, `followup.closed`

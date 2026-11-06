@@ -5,9 +5,8 @@
  */
 import { Cause, Effect, Exit } from 'effect';
 
-import { openResume } from '@agent/followUp/ToolUseFollowUp';
 import { checkpointRefusal } from '@agent/storage/resumability';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import { endRunRows } from '@agent/storage/runLifecycle';
 import { owningCall } from '@agent/storage/runRecords';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
@@ -26,16 +25,16 @@ import {
 } from './childTurnResult';
 import { endVerdict } from './AgentRunLifecycle';
 import { formatDelivery } from './deliveryEnvelope';
+import { resumeRun } from './resumeRun';
 import { Runs } from './runRegistry';
 import type { SessionServices } from './rootLaunch';
 
 /**
  * Hand a registered process child to its loop, which owns its end from
- * there. A hand-off that fails ends the run ownerless (an end the run
- * already wrote stands) as its lifecycle would end it (`endVerdict`), with
- * its classified error, which lets its birth's claim go. The ending's
- * failures join the hand-off's own as one aggregate; an interruption
- * unwinds as itself.
+ * there. A hand-off that fails ends the run (an end the run already wrote
+ * stands) as its lifecycle would end it (`endVerdict`), with its
+ * classified error. The ending's failures join the hand-off's own as one
+ * aggregate; an interruption unwinds as itself.
  */
 export function runWithLaunchGuard<A, E, R>(
   runId: RunId,
@@ -48,16 +47,11 @@ export function runWithLaunchGuard<A, E, R>(
         Exit.isSuccess(exit)
           ? Effect.void
           : Effect.gen(function* () {
-              const { outcome, reason, error } = endVerdict(
-                Exit.failCause(exit.cause),
-                (yield* Runs).stopCause(runId),
-              );
+              const { outcome, error } = endVerdict(Exit.failCause(exit.cause));
               const end = yield* Effect.exit(
-                finalizeRun({
+                endRunRows({
                   runId,
                   outcome,
-                  reason,
-                  ownerless: true,
                   ...(error != null && { error: classifyAgentError(error) }),
                 }),
               );
@@ -99,9 +93,8 @@ const TAG_OF = {
  * Tell `parent`, once per child, that `child`'s work was interrupted and its
  * outcome is unknown (`why`: what refused its resume; `finished`, it cannot
  * continue by its kind). A child not ended ends failed with the notice as
- * its last turn's result (its own report alone with no parent), under its
- * own claim for that end alone; one that ended (a clean close stopped a
- * task) only sends it.
+ * its last turn's result (its own report alone with no parent); one that
+ * ended (a clean close stopped a task) only sends it.
  */
 const reportInterrupted = Effect.fn('reportInterrupted')(function* (
   parent: RunId | null,
@@ -138,13 +131,9 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
     to: parent,
     end: 'failed',
   });
-  yield* Effect.scoped(
-    finalizeRun({
-      runId: child.id,
-      outcome: RUN_OUTCOME.FAILED,
-      ownerless: true,
-      lastTurn: () => Effect.succeed(turnResultPart(result, undefined)),
-    }),
+  yield* endRunRows(
+    { runId: child.id, outcome: RUN_OUTCOME.FAILED },
+    turnResultPart(result, undefined),
   );
 });
 
@@ -157,7 +146,7 @@ const cutShort = ({ childTurn }: RunRows): boolean =>
  * The one closer of what a dead process or a clean close left of `run`: a
  * child of `parent` as it resumes, or a process run a detach left with no
  * parent as a session opens (`sweepLeftoverRuns`). One cut short whose
- * process is gone, or that a clean close stopped (its `run.end` reason
+ * process is gone, or that a clean close stopped (its `run.stop` reason
  * `shutdown`), is resumed under its own id when its rows can continue,
  * so its result reaches its parent as it would have; one that cannot
  * continue (a background command, a task that ended, a resume refused once
@@ -173,20 +162,18 @@ export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   if ((yield* Runs).get(run.id) !== undefined) return;
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || !cutShort(facts)) return;
-  if (facts.end !== null && facts.end.reason !== 'shutdown') return;
+  if (facts.end !== null && facts.stop?.reason !== 'shutdown') return;
   if ((yield* owningCall(run.id)) !== null) return;
   const report = (why: string) => reportInterrupted(parent, run, facts, why);
   const rejection = yield* checkpointRefusal(run.id);
   if (rejection !== null) return yield* report(rejection.kind);
-  const attempt = yield* openResume(run.id, {}, true);
-  if (attempt === undefined) return;
   // A resume refused once it decides is reported; one blocked on a missing
   // agent or plugin, or one that failed, is left for the next resume, said
-  // once.
+  // once. Forked: the caller goes on while the child's opening commits.
   const told = (what: string) => (error: unknown) =>
     warn(undefined, `Child run ${run.id} ${what}`, { parent, error });
   yield* Effect.forkScoped(
-    Effect.matchEffect(attempt.answer, {
+    Effect.matchEffect(resumeRun(run.id, {}), {
       onSuccess: (answer) =>
         'failed' in answer && answer.failed.kind !== 'blocked'
           ? report(answer.failed.kind)

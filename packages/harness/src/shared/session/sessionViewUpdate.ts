@@ -676,8 +676,10 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
     case 'run.start':
     case 'approval.policy':
     case 'run.removed':
+    case 'run.stop':
       // `applyEvent` creates and removes the run; the rest change the
-      // transcript or session-level fields.
+      // transcript or session-level fields, and a stop's interruption
+      // reaches the view as the end it leads to.
       return run;
     case 'run.activate': {
       // Every activation (the launch, a resume, a follow-up) sets the run
@@ -769,10 +771,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
  *  the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
   if (rows.family === null || rows.at === null) return run;
-  if (
-    row.type === 'run.position' &&
-    (row.payload.at === 'waiting' || row.payload.at === 'halted')
-  )
+  if (row.type === 'run.position' && row.payload.at === 'waiting')
     run = { ...run, forkPoint: row.seq };
   const turn = rows.turn;
   const phase = phaseMoveOf(row);

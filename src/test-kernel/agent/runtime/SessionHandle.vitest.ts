@@ -91,7 +91,10 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
           Effect.gen(function* () {
             attempted = true;
             const refused = yield* registryOf(Context.get(session, Runs))
-              .withInactiveRunStep(generateRunId(), Effect.void)
+              .start(generateRunId(), {
+                open: Effect.void,
+                run: () => Effect.never,
+              })
               .pipe(Effect.flip, Effect.orDie);
             expect(refused.message).toBe(
               'Cannot register run work after session disposal.',

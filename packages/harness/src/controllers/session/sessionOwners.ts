@@ -9,6 +9,7 @@ import {
   Cause,
   Context,
   Effect,
+  FiberMap,
   FiberSet,
   Layer,
   Option,
@@ -17,8 +18,8 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { SessionInbox } from '@agent/followUp/Inbox';
-import { Inbox, wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox, SessionInbox } from '@agent/followUp/Inbox';
+import { wakeIfOwed } from '@agent/followUp/ToolUseFollowUp';
 import { executeAgent } from '@agent/runtime/executeAgent';
 import {
   Interactions,
@@ -28,10 +29,9 @@ import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
 import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { requestAsks, SessionRequests } from '@agent/runtime/requestPolicy';
-import { decideResume } from '@agent/runtime/resumeRun';
 import { ProjectTools } from '@agent/runtime/loop/step';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import { stopRun } from '@agent/storage/runLifecycle';
 import {
   registryOf,
   RunRegistry,
@@ -45,7 +45,7 @@ import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/SessionEvents';
 import { withLogChannel } from '@logger/effectLog';
 import { workspaceEnvironmentLayer } from '@platform/defaults/nodePlatform';
 import { SessionRoots, sessionFsLayer } from '@platform/rootedFs';
-import type { SessionCloseReport } from '@shared/schemas';
+import type { RunId, SessionCloseReport } from '@shared/schemas';
 import { Database, type DatabaseReadFailed } from '@shared/session/database';
 import type { SessionInputs } from '@shared/session/sessionInputs';
 import {
@@ -83,9 +83,10 @@ const logFailure =
 /**
  * The store, for the owners above it: its doors past the log; the
  * consumers' scope, closed last so the teardown publishes and settles while
- * the tails and the view live; the runs' fibers, interrupted after the
- * owners above are disposed and before the publisher drains; the deletion
- * pass; and the startup cohort, read before anyone can launch.
+ * the tails and the view live; the runs' fibers (one per run, under its id)
+ * and the session's own, interrupted after the owners above are disposed
+ * and before the publisher drains; the deletion pass; and the startup
+ * cohort, read before anyone can launch.
  */
 class SessionStoreParts extends Context.Service<
   SessionStoreParts,
@@ -93,6 +94,7 @@ class SessionStoreParts extends Context.Service<
     readonly store: SessionStore;
     readonly view: SessionViewAccess['Service'];
     readonly consumers: Scope.Closeable;
+    readonly runFibers: FiberMap.FiberMap<RunId>;
     readonly fibers: FiberSet.FiberSet;
     readonly collectDeletions: Effect.Effect<void>;
     readonly cohort: Iterable<RunView>;
@@ -119,8 +121,17 @@ class SessionStoreParts extends Context.Service<
         // The publisher drains inside the close deadline, after the runs'
         // fibers published their last rows.
         yield* Effect.addFinalizer(() => store.close);
+        const runFibers = yield* FiberMap.make<RunId>();
         const fibers = yield* FiberSet.make();
-        return { store, view, consumers, fibers, collectDeletions, cohort };
+        return {
+          store,
+          view,
+          consumers,
+          runFibers,
+          fibers,
+          collectDeletions,
+          cohort,
+        };
       }),
     );
 }
@@ -182,15 +193,20 @@ const inboxLayer = Layer.effect(
 );
 
 /** The session's runs: their fork captures the context here, over every
- *  owner a run reads. Disposed first, so no run is admitted over a session
- *  that is unwinding. */
+ *  owner a run reads, one fiber per run under its id. Disposed first, so
+ *  no run is admitted over a session that is unwinding. */
 const runsLayer = (open: SessionHandleInit) =>
   Layer.effect(
     Runs,
     Effect.gen(function* () {
-      const fork = yield* FiberSet.runtime((yield* SessionStoreParts).fibers)<
-        Exclude<AgentRunServices, Runs>
-      >();
+      const { fibers, runFibers } = yield* SessionStoreParts;
+      const fork =
+        yield* FiberSet.runtime(fibers)<Exclude<AgentRunServices, Runs>>();
+      const forkRun =
+        yield* FiberMap.runtime(runFibers)<Exclude<AgentRunServices, Runs>>();
+      // The session's context, as the fork above captures it: what its
+      // launches open and run on, whichever fiber asks.
+      const services = yield* Effect.context<Exclude<AgentRunServices, Runs>>();
       // Each run's `.env`, read as it launches.
       const env = workspaceEnvironmentLayer(open.roots.workspace);
       const local = (yield* LocalRuntimeSource).ref;
@@ -202,8 +218,10 @@ const runsLayer = (open: SessionHandleInit) =>
         runsHere: (runIds) =>
           void fork(SubscriptionRef.set(local, { runsHere: [...runIds] })),
         roots: open.roots,
-        fork: (run) => fork(Effect.provide(run, env)),
-        programs: { executeAgent, resume: decideResume, finalize: finalizeRun },
+        inSession: (effect) =>
+          Effect.provide(Effect.provide(effect, env), services),
+        fork: (runId, run) => forkRun(runId, Effect.provide(run, env)),
+        programs: { executeAgent, stop: stopRun },
         wake: (id) =>
           void fork(wakeIfOwed(id).pipe(Effect.provideService(Runs, runs))),
       });
@@ -264,18 +282,18 @@ const consumersLayer = (open: SessionHandleInit) =>
 export const stopSessionRuns = (
   session: Context.Context<SessionServices>,
 ): Effect.Effect<SessionCloseReport> =>
-  Effect.suspend(() => {
+  Effect.gen(function* () {
     const runs = registryOf(Context.get(session, Runs));
-    runs.stopAll();
-    return runs.awaitDrained().pipe(
-      Effect.interruptible,
-      Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-      Effect.map((drained) => {
-        const settled = Option.isSome(drained);
-        const abandoned = settled ? [] : runs.get().map((run) => run.runId);
-        return { settled, abandoned };
-      }),
-    );
+    yield* runs.stopAll();
+    const drained = yield* runs
+      .awaitDrained()
+      .pipe(
+        Effect.interruptible,
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      );
+    const settled = Option.isSome(drained);
+    const abandoned = settled ? [] : runs.get().map((run) => run.runId);
+    return { settled, abandoned };
   });
 
 /** The session's approvals, with the one reading of its policy

@@ -18,6 +18,7 @@ import {
 
 import { runNoun } from '@agent/runtime/forkRun';
 import { RunLive } from '@agent/runtime/runRegistry';
+import type { RunsShape } from '@agent/runtime/runs';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -193,14 +194,21 @@ const copyOrRemoveRunDir = Effect.fn('runStorage.copyOrRemoveRunDir')(
   },
 );
 
-/** The registry's step on an inactive run, which refuses one anything
- *  still runs and holds a launch back until it ends. */
-interface InactiveRunStep {
-  readonly withInactiveRunStep: <A, E, R>(
-    runId: RunId,
-    operation: Effect.Effect<A, E, R>,
-  ) => Effect.Effect<A, E | Error, R>;
-}
+/** The session's runs, asked whether a fiber here drives the run: a step
+ *  on an inactive run refuses one that is. */
+type InactiveRunStep = Pick<RunsShape, 'get'>;
+
+/** `operation` on `runId` if no fiber here drives it; `RunLive` if one does. */
+const onInactiveRun = <A, E, R>(
+  runs: InactiveRunStep,
+  runId: RunId,
+  operation: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | RunLive, R> =>
+  Effect.suspend((): Effect.Effect<A, E | RunLive, R> =>
+    runs.get(runId) === undefined
+      ? operation
+      : Effect.fail(new RunLive({ runId })),
+  );
 
 /** A `run.delete`, or a listing's removal: the admitted lifetime's rows
  *  removed from the log once the registry's inactive run step holds the
@@ -222,20 +230,19 @@ export const deleteAdmittedRun = (
         reason: `The ${runNoun(deps.view, runId)} has no recorded start.`,
       });
     }
-    yield* runs
-      .withInactiveRunStep(
-        runId,
-        deps.log.removeRun(aggregateId, admitted.startCommit),
-      )
-      .pipe(
-        Effect.mapError((error): RequestError => {
-          if (error instanceof RunLive) return new RunActive({ runId });
-          return new Unavailable({
-            runId,
-            reason: `The ${runNoun(deps.view, runId)} could not be removed from the listing.`,
-          });
-        }),
-      );
+    yield* onInactiveRun(
+      runs,
+      runId,
+      deps.log.removeRun(aggregateId, admitted.startCommit),
+    ).pipe(
+      Effect.mapError((error): RequestError => {
+        if (error instanceof RunLive) return new RunActive({ runId });
+        return new Unavailable({
+          runId,
+          reason: `The ${runNoun(deps.view, runId)} could not be removed from the listing.`,
+        });
+      }),
+    );
     return { kind: 'done' } as const;
   });
 };
@@ -255,39 +262,36 @@ export const runFiles = Effect.fn('runFiles')(function* (
   RunFilesServices | SessionRoots
 > {
   const roots = yield* SessionRoots;
-  return yield* runs
-    .withInactiveRunStep(
-      req.runId,
-      copyOrRemoveRunDir(req.runId, req.files).pipe(
-        Effect.map((found): RunFilesResult => {
-          if (!found) return { status: 'noFiles' };
-          return req.files.op === 'copy'
-            ? { status: 'done', to: req.files.to }
-            : { status: 'done' };
-        }),
-        Effect.catch((error) =>
-          Effect.logError(
-            `The ${req.files.op} of run ${req.runId} failed`,
-          ).pipe(
-            Effect.annotateLogs({ data: error }),
-            Effect.as<RunFilesResult>({
-              status: 'error',
-              error: toErrorMessage(error),
-            }),
-          ),
+  return yield* onInactiveRun(
+    runs,
+    req.runId,
+    copyOrRemoveRunDir(req.runId, req.files).pipe(
+      Effect.map((found): RunFilesResult => {
+        if (!found) return { status: 'noFiles' };
+        return req.files.op === 'copy'
+          ? { status: 'done', to: req.files.to }
+          : { status: 'done' };
+      }),
+      Effect.catch((error) =>
+        Effect.logError(`The ${req.files.op} of run ${req.runId} failed`).pipe(
+          Effect.annotateLogs({ data: error }),
+          Effect.as<RunFilesResult>({
+            status: 'error',
+            error: toErrorMessage(error),
+          }),
         ),
       ),
-    )
-    .pipe(
-      Effect.mapError((cause) =>
-        cause instanceof Rejected
-          ? cause
-          : new Rejected({
-              reason: `This run is running: ${toErrorMessage(cause)}`,
-            }),
-      ),
-      Effect.map((result) => ({ kind: 'runFiles', result }) as const),
-      (program) => withSessionFs(roots, program),
-      withLogChannel('runFiles'),
-    );
+    ),
+  ).pipe(
+    Effect.mapError((cause) =>
+      cause instanceof Rejected
+        ? cause
+        : new Rejected({
+            reason: `This run is running: ${toErrorMessage(cause)}`,
+          }),
+    ),
+    Effect.map((result) => ({ kind: 'runFiles', result }) as const),
+    (program) => withSessionFs(roots, program),
+    withLogChannel('runFiles'),
+  );
 });

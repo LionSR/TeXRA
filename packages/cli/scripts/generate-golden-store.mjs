@@ -71,7 +71,7 @@
  *   fixture's artifact (`golden-effect/approved.txt`), which the golden
  *   suite puts back before it resumes the run.
  * - one `golden_child` run, deleted with `texra history delete` once
- *   `texra serve` holds the project open: the tombstoned run, which no
+ *   `texra serve` has left the project: the tombstoned run, which no
  *   later open is left to collect.
  * - last, a `golden_script` task in that service (`texra tasks start`) that
  *   sends a shell command to the background, and the service's
@@ -479,15 +479,25 @@ process.stdin.on('end', function answer() {
   return { run, start, chat, serve, store, project, hooks };
 }
 
-/** Rows of the workspace store, read from outside the CLI. */
+/** Rows of the workspace store, read from outside the CLI: from a copy of
+ *  its files, since the CLI holds the store exclusively while it runs. */
 function query(file, sql, params = []) {
   if (file === null || !existsSync(file)) return [];
-  const db = new DatabaseSync(file, { readOnly: true });
+  const copy = mkdtempSync(path.join(tmpdir(), 'texra-golden-read-'));
   try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    return db.prepare(sql).all(...params);
+    for (const suffix of ['', '-wal'])
+      if (existsSync(file + suffix))
+        cpSync(file + suffix, path.join(copy, path.basename(file) + suffix));
+    const db = new DatabaseSync(path.join(copy, path.basename(file)), {
+      readOnly: true,
+    });
+    try {
+      return db.prepare(sql).all(...params);
+    } finally {
+      db.close();
+    }
   } finally {
-    db.close();
+    rmSync(copy, { recursive: true, force: true });
   }
 }
 
@@ -756,8 +766,8 @@ async function generate(root) {
   await until(
     'the stopped chat',
     () =>
-      chatRows(`e.type = 'run.position'
-        AND json_extract(e.data, '$.payload.at') = 'halted'`) > 0 &&
+      chatRows(`e.type = 'run.stop'
+        AND json_extract(e.data, '$.reason') = 'user'`) > 0 &&
       codexRows(`e.type = 'run.detach'`) > 0,
     tty,
   );
@@ -919,11 +929,12 @@ async function generate(root) {
     .find((id) => !before.has(id));
   if (doomed === undefined) fail('no golden_child run to delete');
 
-  // The service (`texra serve`, a window's), last: its task sends a shell
+  // The service (`texra serve`, a window's): its task sends a shell
   // command to the background, which runs once `bash.release` appears and
   // reports back. The service's `task.resume` of that finished command, a
   // run with no agent record, closes its input (`followup.closed`) and
-  // refuses it. No open follows, which would remove the finished command.
+  // refuses it. The one open that follows, the deletion below, removes
+  // nothing of it: a finished command goes with the next open after that.
   // The service follows the project's persisted policy (the user's local
   // config beside its store), never a client's: Auto-approve, so the
   // background command runs unasked.
@@ -938,13 +949,6 @@ async function generate(root) {
     })}\n`,
   );
   await cli.serve(async ({ client, call, handle: service }) => {
-    // The tombstone, made once the service holds the project open (any
-    // project call opens it): a later open would collect it.
-    await call('task.request', {
-      workspace: cli.project,
-      request: { kind: 'request.preview', runId: doomed, requestId: '-' },
-    });
-    cli.run(['history', 'delete', doomed, '--yes', '--print']);
     const { runId: task } = JSON.parse(
       client([
         'tasks',
@@ -1001,6 +1005,11 @@ async function generate(root) {
       service,
     );
   });
+
+  // The tombstone, last: the service holds the store while it runs, so the
+  // deletion is a CLI's own open once the service has left, and no open
+  // follows that would collect it (or remove the finished command).
+  cli.run(['history', 'delete', doomed, '--yes', '--print']);
 
   // A TeX stand-in that ran: the store would hold what this machine's TeX
   // answers.

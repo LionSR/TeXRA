@@ -179,9 +179,9 @@ export const RunViewSchema = Schema.Struct({
   /** The task this one was forked from and the settled point it was cut at
    *  (`run.start.provenance`); null for a run its own launch began. */
   forkedFrom: Schema.NullOr(Schema.Struct({ id: RunIdSchema, at: Positive })),
-  /** The `seq` of the run's newest wait (a `run.position` at `waiting` or
-   *  `halted`): the settled point a whole-task fork cuts at; null before
-   *  its first turn ends, when there is nothing to fork. */
+  /** The `seq` of the run's newest wait (a `run.position` at `waiting`):
+   *  the point a whole-task fork cuts at; null before its first turn ends,
+   *  when there is nothing to fork. */
   forkPoint: Schema.NullOr(Positive),
   /** The parent's tool card that launched this run (`run.start.parent.call.card`). */
   parentCard: Schema.NullOr(Schema.String),

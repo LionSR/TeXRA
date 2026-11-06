@@ -55,6 +55,7 @@ export type RunHistoryDraft = Live<
 >;
 type RunHistoryDraftType =
   | 'run.position'
+  | 'run.stop'
   | 'run.end'
   | 'model.message'
   | 'context.edit'
@@ -167,10 +168,11 @@ export type RunStateRowType = Exclude<
 >;
 /** The drafts any job may commit without the run's cell: the ones the run
  *  state does not read (a run's input and the display rows above), and the
- *  run's end, which nothing continues from until the next open folds it. */
+ *  run's stop and end, which nothing continues from until the next open
+ *  folds them. */
 export type RunInputDraft = Exclude<
   RunHistoryDraft,
-  { type: Exclude<RunStateRowType, 'run.end'> }
+  { type: Exclude<RunStateRowType, 'run.end' | 'run.stop'> }
 >;
 
 /** The state a run starts from: every field at its zero, no family bound
@@ -321,9 +323,9 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
   'run.position': { requires: 'any', apply: applySharedRow },
   'request.opened': { requires: 'existing', apply: applySharedRow },
   'request.decided': { requires: 'existing', apply: applySharedRow },
-  'run.end': {
-    // The lifecycle's end. A shutdown's cut the attempt it stopped, which
-    // spends no retry when the run resumes.
+  'run.stop': {
+    // A shutdown's stop cut the attempt it stopped, which spends no retry
+    // when the run resumes.
     requires: 'existing',
     apply: (state, row) =>
       Result.succeed({
@@ -334,6 +336,8 @@ const ROW_HANDLERS: { readonly [K in RunStateRowType]: RowHandler<K> } = {
             : state.invocation,
       }),
   },
+  // The lifecycle's end: nothing continues from it until the next open.
+  'run.end': { requires: 'existing', apply: (state) => Result.succeed(state) },
   'run.activate': {
     requires: 'existing',
     apply: (state) =>

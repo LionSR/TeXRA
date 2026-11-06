@@ -1,11 +1,8 @@
 import { Context, Effect, Schema, type Scope } from 'effect';
 import type { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { AgentCatalog } from '@agent/index/agentCatalog';
-import {
-  Inbox,
-  runInbox,
-  type RunInbox,
-} from '@agent/followUp/ToolUseFollowUp';
+import { runInbox, type RunInbox } from '@agent/followUp/ToolUseFollowUp';
+import { Inbox } from '@agent/followUp/Inbox';
 import { getRunRecords } from '@agent/storage/runRecords';
 import {
   launchChildAgent,

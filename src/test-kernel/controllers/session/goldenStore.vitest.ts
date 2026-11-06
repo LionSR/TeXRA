@@ -124,10 +124,10 @@ const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
 /** Killed after its command's effect, before the command's result. */
 const KILLED = Schema.decodeUnknownSync(RunIdSchema)('a00000000010');
-/** The service's task, and the background command it sent, whose input the
- *  service's resume closed. */
+/** The service's task; the background command it sent, whose input the
+ *  service's resume closed, is a finished shell the deletion's open swept
+ *  (its rows stay, under its deletion marker, for the next open to collect). */
 const SERVICE_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000012');
-const BACKGROUND = Schema.decodeUnknownSync(RunIdSchema)('a00000000013');
 /** The `texra run --output` document task and the revisions its recipe
  *  ran, named by the calls that launched them. */
 const DOCUMENT_TASK = Schema.decodeUnknownSync(RunIdSchema)('a00000000005');
@@ -439,13 +439,12 @@ describe('the golden 1.0 store', () => {
         // Killed while its command's result was uncommitted: it still reads
         // as running, its owner dead.
         run(KILLED, 'golden_effect', { status: 'running', outcome: null }),
-        // Stopped with `texra tasks stop` once its command reported back.
+        // Stopped with `texra tasks stop` once its command reported back;
+        // the command itself was swept with the deletion's open.
         run(SERVICE_TASK, 'golden_script', {
           status: 'cancelled',
           outcome: 'cancelled',
-          children: [BACKGROUND],
         }),
-        run(BACKGROUND, 'bash', { parent: SERVICE_TASK }),
       ]);
       expect(folded.requests).toEqual([]);
       // The Codex turn's result and the message typed behind the stopped
@@ -709,7 +708,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     return { sent, process: SessionGraph.with([], model) };
   };
   /** The chat's last model response. */
-  const RESPONSE = 605;
+  const RESPONSE = 596;
   /** The golden store, with `rewrite` applied, and a session over it. */
   const goldenSession = (rewrite?: string) =>
     Effect.gen(function* () {

@@ -42,14 +42,15 @@ export const RUN_ROW_READS = {
     'run.start',
     'run.detach',
     'run.activate',
+    'run.stop',
     'run.end',
     'followup.closed',
     'run.removed',
   ],
-  parks: ['child.park', 'run.report', 'run.activate', 'run.end'],
+  parks: ['child.park', 'run.report', 'run.activate', 'run.stop', 'run.end'],
   requests: ['request.opened', 'request.decided'],
   turns: ['child.turn'],
-  lifecycle: ['run.activate', 'run.end'],
+  lifecycle: ['run.activate', 'run.stop', 'run.end'],
   facts: ['plugin.fact'],
   results: ['tool.result'],
   script: ['script.call', 'tool.result'],
@@ -75,9 +76,12 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
       return {
         activation: row,
         end: null,
+        stop: null,
         inputClosed: false,
         lifecycles: [...rows.lifecycles, row],
       };
+    case 'run.stop':
+      return { stop: row };
     case 'run.end':
       return { end: row, lifecycles: [...rows.lifecycles, row] };
     case 'followup.closed':
@@ -195,10 +199,9 @@ export const isRequestDecision = <R extends Pick<SessionEvent, 'type'>>(
 
 /**
  * The phase a lifecycle row puts its run in, or null for a row that changes
- * none: an activation and every loop step but `waiting` and `halted` open
- * the run window, `waiting` and a child's wait rest it, `run.end` ends it on
- * its outcome. `halted` is the loop's own word and leaves the phase to
- * `run.end`. The one statement of the rule: the session view's run window,
+ * none: an activation and every loop step but `waiting` open the run
+ * window, `waiting` and a child's wait rest it, `run.end` ends it on its
+ * outcome. The one statement of the rule: the session view's run window,
  * the transcript boundary, the held chunk text and the publisher's open
  * streams all follow it.
  */
@@ -207,7 +210,6 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
     case 'run.activate':
       return RUN_PHASE.RUNNING;
     case 'run.position':
-      if (row.payload.at === 'halted') return null;
       return row.payload.at === 'waiting'
         ? RUN_PHASE.WAITING
         : RUN_PHASE.RUNNING;
@@ -294,8 +296,10 @@ function turnReceipt(
   turn: number,
 ): FollowUpReceipt {
   let end: RowOf<'run.end'> | null = null;
+  let stop: RowOf<'run.stop'> | null = null;
   for (const row of after) {
-    if (row.type === 'run.activate') end = null;
+    if (row.type === 'run.activate') end = stop = null;
+    if (row.type === 'run.stop') stop = row;
     if (row.type === 'run.end') end = row;
     if (row.type !== 'run.position') continue;
     const { at, outcome } = row.payload;
@@ -308,7 +312,7 @@ function turnReceipt(
     if (rowTurn > turn) return unansweredBy(turn, end);
   }
   // A shutdown cut the turn, which the resume continues.
-  return end === null || end.reason === 'shutdown'
+  return end === null || stop?.reason === 'shutdown'
     ? { state: 'incorporated', turn }
     : unansweredBy(turn, end);
 }

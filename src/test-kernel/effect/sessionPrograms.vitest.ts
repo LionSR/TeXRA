@@ -50,10 +50,12 @@ const packageSession = (session: Context.Context<SessionServices>) =>
 
 /** The stored data of a `run.end` row, as far as these cases read it. */
 const RunEndData = Schema.fromJsonString(
-  Schema.Struct({
-    outcome: Schema.String,
-    reason: Schema.optional(Schema.String),
-  }),
+  Schema.Struct({ outcome: Schema.String }),
+);
+
+/** The stored data of a `run.stop` row. */
+const RunStopData = Schema.fromJsonString(
+  Schema.Struct({ reason: Schema.String }),
 );
 
 /** The outcomes of the run's `run.end` rows, in order. */
@@ -206,12 +208,17 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             yield* untilStored(roots.storage, (rows) =>
               rows.some((row) => row.run === runId && row.type === 'run.end'),
             );
-            const ends = storedRows(roots.storage)
-              .filter((row) => row.run === runId && row.type === 'run.end')
+            const rows = storedRows(roots.storage).filter(
+              (row) => row.run === runId,
+            );
+            const stops = rows
+              .filter((row) => row.type === 'run.stop')
+              .map((row) => Schema.decodeUnknownSync(RunStopData)(row.data));
+            const ends = rows
+              .filter((row) => row.type === 'run.end')
               .map((row) => Schema.decodeUnknownSync(RunEndData)(row.data));
-            expect(ends).toStrictEqual([
-              { outcome: 'cancelled', reason: 'shutdown' },
-            ]);
+            expect(stops).toStrictEqual([{ reason: 'shutdown' }]);
+            expect(ends).toStrictEqual([{ outcome: 'cancelled' }]);
           }),
       );
 

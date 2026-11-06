@@ -107,8 +107,7 @@ const defectsAsErrors = <A, R>(
  * No end, or no finished turn, fails with the loop's failure as the cause;
  * an end that says failed fails with the child's error. Any other end is
  * returned with the turn's output once its `run.result` manifest is read
- * back: the end can commit without it (a refused last turn leaves a
- * `result-lost` end alone, `finalizeRun`), and recovery reads the manifest
+ * back: the end can commit without it, and recovery reads the manifest
  * (`standingOf`), so a completion without one is refused here as there.
  *
  * A loop failure after the turn finished does not rewrite the outcome when the
