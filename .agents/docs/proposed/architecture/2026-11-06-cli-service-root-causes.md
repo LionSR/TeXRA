@@ -453,22 +453,18 @@ toolbar actions refuse with `Rejected`, the run actions take the catalog
 as a service (§3.3's three verified defects and the `Effect.context`
 capture).
 
-Left for a later PR, each a smell of §3.3, none a defect:
+A sixth commit took the hosts' repeated decisions (`setApiKey` once,
+with the retry's prompt built from it; the custom agent directory read
+in the shared body and opened through `files.openDirectory`; a host's
+own request kinds as a table, the refusal of a kind it lacks worded
+once; the run actions' ports keeping `ProcessServices`, so no host
+re-enters the runtime), the launch wait (`SHOW_LAUNCHED_WITHIN`: a
+surface selects a run this window started once its view holds the
+run's activation, which the handle names) and the window-side presenter
+instance (the session presenter over the window's own host).
 
-- The hosts' repeated decisions: `setApiKey` bound twice per host (the
-  banner's verb and `runs.promptForApiKey`; one optional-provider verb,
-  the retry built from it in the shared body); `openCustomAgentDirectory`
-  read in both hosts beside `files.openDirectory` (the shared body reads
-  `AgentDirectories.custom()` and opens it through that verb); the
-  refusal wording for an `own` kind a host lacks, per host (`own` as
-  optional members per kind, the router wording the refusal once); the
-  `withProcessServices` re-entry inside `openFinalOutput` in both hosts
-  (the port keeps `ProcessServices` in its requirements).
-- `openGuiWindow.ts`'s other jobs: `showLaunched` and its ten-second
-  `SHOW_LAUNCHED_WITHIN` (selection on arrival is a surface fact applied
-  when the view holds the run); the window-side `SessionHostInteractions`
-  instance (`presentRunFailure` over the window's own `emit`, the replay
-  class kept in the session only); the message wording.
+Left for a later PR, each a smell, none a defect:
+
 - The notice round-trips (`tell` mints an id nothing awaits; an answer
   past `ANSWER_WITHIN` logged as a notice failure); `editorHost` keyed by
   storage root beside `HostWindows` keyed by session; two windows on one
