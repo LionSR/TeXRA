@@ -9,7 +9,6 @@ import {
   Cause,
   Context,
   Deferred,
-  Duration,
   Effect,
   Fiber,
   FiberMap,
@@ -43,17 +42,15 @@ import type { ApprovalHandler, SessionHost } from './sessions.js';
 
 const CHANNEL = 'agentPackage';
 
-/** How long the handler has to answer one request before it is denied. */
-const APPROVAL_HANDLER_TIMEOUT = Duration.minutes(10);
-
 /** How a decision the session refused to record is tried again, briefly,
  *  before the next view offers its request again. */
 const DECIDE_RETRY = Schedule.exponential('100 millis').pipe(Schedule.jittered);
 
 /** The handler's decision on `pending`, or a denial naming why it gave
- *  none it can use: a failure, a throw, no answer in time, or a decision the
- *  request's kind does not take. A withdrawal (the prompt interrupted) stays
- *  one: it is no decision at all. */
+ *  none it can use: a failure, a throw, or a decision the request's kind
+ *  does not take. It waits as long as the handler does: a person's prompt
+ *  carries its own deadline, or none. A withdrawal (the prompt
+ *  interrupted) stays one: it is no decision at all. */
 const decisionOf = (
   host: AnsweringHost,
   pending: PendingRequest,
@@ -66,7 +63,6 @@ const decisionOf = (
         ? Effect.succeed(decision)
         : Effect.fail(new Error(mismatch));
     }),
-    Effect.timeout(APPROVAL_HANDLER_TIMEOUT),
     Effect.catchCause((cause) =>
       Cause.hasInterruptsOnly(cause)
         ? Effect.interrupt

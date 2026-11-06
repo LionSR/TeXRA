@@ -171,8 +171,9 @@ a `PendingRequest` (which run asks, the request's id, and its `payload`, whose
 waits on (also listed in `SessionView.requests`), or an embedder can answer a
 listed request directly with `session.request({ kind: 'request.decide', ... })`;
 whichever answer lands first is the decision. A handler that fails, throws, or
-has not answered within ten minutes denies the request and logs a warning, so no
-run stays waiting on a handler that went quiet.
+answers with a decision the request's kind does not take denies the request and
+logs a warning; it may take as long as it needs, so a person's prompt carries its
+own deadline, or none.
 
 A request is a stored row and survives restarts. On a persistent session, a run
 interrupted while waiting for approval still waits after a restart: reopen the

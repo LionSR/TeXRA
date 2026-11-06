@@ -234,9 +234,8 @@ rather than per finding:
   `shared/schemas/request.ts`): `grantHeld` reads it for the guard and
   `grantAnswering` for the opener, so super yolo answers a bash call at
   the guard as it did at the open.
-- **Two readings of "cut short".** `leftoverChildren.cutShort` and
-  `agentChild.standingOf` both decide "no end, or the end a clean close's
-  stop wrote" from `RunRows`. One predicate on `RunRows` would own it.
+- **Two readings of "cut short", ended in the hosts' PR.**
+  `agentChild.standingOf` reads `leftoverChildren.cutShort` now.
 - **`ToolPolicy.oneShot`** (§1.6): a derivable column.
 - **`reportInterrupted`'s delivery id** carries an `:interrupted` suffix the
   end's `${runId}:${activation}` does not; the executions tool's `wait`
@@ -256,11 +255,9 @@ rather than per finding:
   harness enforces it once, in `submitFollowUp` (`acceptsFollowUp` is a view
   affordance that reads the same field). One fact, one representation would
   make it a boolean.
-- **The ten-minute `APPROVAL_HANDLER_TIMEOUT`** (`requestAnswerer`) now
-  bounds the headless operator's prompt as well as a programmatic handler:
-  an operator who answers after ten minutes finds the request denied. The
-  old adapter's own loop had no clock. A host's prompt should carry its own
-  deadline, or none.
+- **The ten-minute `APPROVAL_HANDLER_TIMEOUT`, ended in the hosts' PR.**
+  The answerer waits as long as the handler does; a host's prompt carries
+  its own deadline, or none.
 - **The two edges, after the one reading above.** Super yolo on with
   bash off no longer opens a bash request only to decide it in the same
   batch: the guard allows it. A `call` operation's bash-kind request with
@@ -307,11 +304,10 @@ rather than per finding:
   client of the service, whose windows answer prompts through
   `request.decide`), §1.5 (R8's second half), §1.4 (denied-request
   notice). §3's one reading of a grant landed there (PR 14772).
-- Harness, small: §3's one `cutShort` predicate (`agentChild.standingOf`
-  still reads its own), one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
-  boolean, the handler timeout off the operator's prompt, `resumeOwnedChild`
-  through `openResume`, the await's interruption through `RunRegistry.stop`,
-  the close deadline over the stop writes, a hold per agent-CLI turn.
+- Harness, small: one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
+  boolean, `resumeOwnedChild` through `openResume`, the await's
+  interruption through `RunRegistry.stop`, the close deadline over the stop
+  writes, a hold per agent-CLI turn.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
 - The CLI service and its sessions, read after this PR's review rounds:

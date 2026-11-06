@@ -19,6 +19,7 @@ import { createHash } from 'node:crypto';
 
 // Third-party imports
 import { Context, type Deferred, Effect, FileSystem, Stream } from 'effect';
+import { cutShort } from '@agent/runtime/leftoverChildren';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 
 // Local imports
@@ -111,13 +112,9 @@ const standingOf = Effect.fn('agent.childStanding')(function* (
 ): Effect.fn.Return<ChildStanding, DatabaseReadFailed, AgentRunServices> {
   const facts = yield* (yield* SessionLog).facts(runId);
   const end = yield* getRunRecords(runId).readRunEnd();
-  // No end, or the end this process's clean close wrote: cut short, and
+  // Cut short (no end, or the end this process's clean close wrote):
   // continues where it stopped. A stop of the person's ends the call.
-  if (
-    end === null ||
-    (end.outcome === RUN_OUTCOME.CANCELLED &&
-      facts?.stop?.reason === 'shutdown')
-  )
+  if (end === null || facts === null || cutShort(facts))
     return { kind: 'resume' };
   // Failed before its first turn began: nothing it did can be repeated.
   if (
