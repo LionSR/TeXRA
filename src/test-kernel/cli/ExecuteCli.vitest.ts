@@ -95,6 +95,7 @@ function runSessionFake(session: LocalSession): LocalSession {
         Effect.map((): Run => ({
           runId:
             input.runId ?? assert.fail('the CLI mints the id of every run'),
+          activation: 0,
           result: Effect.tryPromise({
             try: () =>
               // cast: each case's `rootLaunch` stub resolves with the run's end.

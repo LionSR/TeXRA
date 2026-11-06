@@ -436,6 +436,10 @@ interface LocalSession extends Session {
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
     ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
   };
+  /** The {@link Run} of `runId`'s activation at `activation`, as `start`
+   *  or `resume` handed it out: a host that carries a handle across a
+   *  process boundary answers its members from here. */
+  readonly run: (runId: RunId, activation: CommitOrdinal) => Run;
   /** One run's stored records. */
   readonly records: (runId: RunId) => RunRecords;
   /** The runs a person started (not child runs), newest first, each with
@@ -702,6 +706,10 @@ One run of an agent, from the moment it exists in its session.
 interface Run {
   /** The run's id, known before its first model call. */
   readonly runId: RunId;
+  /** The commit of the activation this handle is for: the one `start` or
+   *  `resume` opened, or the running one a resume of a live run answers.
+   *  {@link LocalSession.run} rebuilds the handle from it. */
+  readonly activation: CommitOrdinal;
   /** Set when you resumed a child run that its parent was still waiting
    *  on: the parent resumes instead (this handle is the parent's), and
    *  this names the child you asked for. */
@@ -903,9 +911,11 @@ interface Session {
   /**
    * Continue a stored run from where its history stops, with the same kind
    * of handle {@link start} gives. Pass the custom `tools` it was started
-   * with. Resuming a run already resuming here returns the same handle; a
-   * run that cannot continue fails with {@link ResumeRefused}, whose
-   * `reason` says why.
+   * with. A run already running or resuming here is not started again: the
+   * handle of its running activation is answered, and `input` is not read.
+   * A child an open call of its parent owns resumes the parent, whose
+   * handle names the child (`redirectedFrom`). A run that cannot continue
+   * fails with {@link ResumeRefused}, whose `reason` says why.
    */
   readonly resume: (
     runId: RunId,

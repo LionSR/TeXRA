@@ -36,6 +36,7 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
+  activationView,
   AgentError,
   StateReadFailed,
   StateWriteFailed,
@@ -301,11 +302,11 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const graph = yield* WebviewSessions.open(key).pipe(
     Effect.provideContext(sessions),
   );
-  // The window's own view: the listing, plus the transcripts its watches
-  // name. A change of that set is a new generation of one watch, from the
-  // cursor and history the view already holds, as a webview resubscribes.
-  const watches = new Map<number, readonly TranscriptSubscription[]>();
-  let watchIds = 0;
+  // The window's own view: the listing, plus the transcripts its readers
+  // name, each on a port of its own. A change of that set is a new
+  // generation of one watch, from the cursor and history the view already
+  // holds, as a webview resubscribes.
+  const watches = new Map<string, readonly TranscriptSubscription[]>();
   const feed = yield* FiberHandle.make<void, never>();
   const lane = Semaphore.makeUnsafe(1);
   let generation = 0;
@@ -347,6 +348,15 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       );
     }),
   );
+  /** Name `set`'s transcripts to the view on `port` (empty: the port's
+   *  subscriptions end). */
+  const subscribe = (port: string, set: readonly TranscriptSubscription[]) =>
+    Effect.suspend(() => {
+      if (set.length === 0) watches.delete(port);
+      else watches.set(port, set);
+      return resubscribe;
+    });
+  let watchPorts = 0;
   yield* resubscribe;
   // The service went (offline: the feed stops) or the link reached it
   // again (the view resubscribes from where it is). The window tells it
@@ -361,16 +371,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     ),
   );
   const scope = yield* Effect.scope;
-  /** The service's answer to how a task it runs ended, with `at`, its
-   *  log's commit when it answered: asked of the service the link holds,
-   *  again of the next one if the link is lost meanwhile (a retired service
-   *  finishes its tasks first). A service that cannot answer fails it
-   *  offline. */
-  const answered = (runId: RunId) =>
+  /** The service's answer to how the activation of a task it runs ended
+   *  (`Run.result` there), with `at`, its log's position when it answered:
+   *  asked of the service the link holds, or the next one, once the link
+   *  has one. A service that cannot answer fails it offline. */
+  const answered = (runId: RunId, activation: CommitOrdinal) =>
     Effect.flatMap(connected, (client) =>
-      client['task.ended']({ workspace, runId }),
+      client['task.result']({ workspace, runId, activation }),
     ).pipe(
-      Effect.retry({ times: 2 }),
       // One classification: a service that answered the end could not be
       // read fails with its reason; anything else is the link, offline.
       Effect.catch((error) =>
@@ -428,17 +436,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const watch: Session['view']['watch'] = (set, from) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        yield* Effect.acquireRelease(
-          Effect.suspend(() => {
-            const id = (watchIds += 1);
-            watches.set(id, set);
-            return Effect.as(resubscribe, id);
-          }),
-          (id) =>
-            Effect.suspend(() => {
-              watches.delete(id);
-              return resubscribe;
-            }),
+        const port = `watch/${(watchPorts += 1)}`;
+        yield* Effect.acquireRelease(subscribe(port, set), () =>
+          subscribe(port, []),
         );
         const cursor = yield* Ref.make(from.cursor);
         return SubscriptionRef.changes(link.client).pipe(
@@ -483,11 +483,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         );
       }),
     );
-  /** The run the service admitted, as this window holds it: its end is the
-   *  service's answer (asked once, at once, while the activation it ends is
-   *  this one), held until this window's fold shows it too; its view this
-   *  window's fold sliced to this activation; and its trace read back from
-   *  the service's rows of this activation through the watch. */
+  /** The run the service admitted, as this window holds it: the `Run` of
+   *  the activation the service named, over this window's view and the
+   *  service's rows. Its end is the service's answer (asked once, at once),
+   *  held until this window's view shows it too; its view this window's,
+   *  sliced to the activation as a run here slices it; and its trace read
+   *  back from the service's rows of the activation through the watch. */
   const runOf = Effect.fn('runOf')(function* (
     {
       runId,
@@ -495,7 +496,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     }: { readonly runId: RunId; readonly activation: CommitOrdinal },
     redirectedFrom?: RunId,
   ): Effect.fn.Return<Run> {
-    const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
+    const answer = Fiber.join(
+      yield* Effect.forkIn(answered(runId, activation), scope),
+    );
     const result = yield* Effect.cached(Effect.flatMap(answer, endOf));
     // The service's commit when it answered, past every row the run
     // wrote, failed or not. With no answer (no service will give one,
@@ -504,20 +507,13 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     let answeredAt: CommitOrdinal = -1;
     return {
       runId,
+      activation,
       ...(redirectedFrom !== undefined && { redirectedFrom }),
       result,
-      // From the first level at or past the activation, as a run here
-      // slices it (an earlier one can show the run absent, interrupted, or
-      // with its previous activation's outcome), to this activation's
-      // outcome, or the result.
-      view: graph.view.changes.pipe(
-        Stream.dropWhile(
-          (level) => level.cursor < activation || !level.runs.has(runId),
-        ),
-        Stream.takeUntil(
-          (level) => level.runs.get(runId)?.durableOutcome != null,
-        ),
-        Stream.haltWhen(Effect.exit(result)),
+      view: activationView(
+        { current: graph.view.current, changes: graph.view.changes, subscribe },
+        runId,
+        activation,
       ),
       // The service's rows, through the watch; the service's log is the
       // store, settled once it answered.

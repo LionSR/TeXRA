@@ -23,21 +23,9 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import {
-  Internal,
-  type LocalSession,
-  Rejected,
-  type Run,
-  type RunEnd,
-} from '@texra-ai/harness';
+import { Internal, type LocalSession, Rejected } from '@texra-ai/harness';
 import { launchNoticeOf } from '@texra-ai/harness/host';
-import {
-  type SessionView,
-  emptyRunEndOutput,
-  RUN_OUTCOME,
-  type RunId,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
@@ -53,7 +41,6 @@ import {
 
 import { HostWindows } from './hostWindows';
 import { listTasks, runLaunchFacts } from './taskList';
-import type { CommitOrdinal } from '@texra-ai/harness/transcript';
 
 /** A project the service serves: its session, as every host drives it. */
 export interface ServiceProject {
@@ -121,40 +108,6 @@ export const runningTasks = Effect.fn('server.runningTasks')(function* (
   return running;
 });
 
-/** The live run `runId` continues in: itself, or the live run its parent
- *  chain reaches; null when `runId` is not live here. Live is what this
- *  process runs (`held`). */
-function liveRoot(session: LocalSession, runId: RunId): RunId | null {
-  const view: SessionView = session.view.current();
-  const live = (id: RunId) => session.held(id) !== undefined;
-  if (!live(runId)) return null;
-  let root = runId;
-  for (
-    let parent = view.runs.get(root)?.parentId;
-    parent != null && live(parent);
-    parent = view.runs.get(root)?.parentId
-  )
-    root = parent;
-  return root;
-}
-
-/** A window's handle of `run`: its id, and a commit inside the activation
- *  the handle is for, the first view level showing that activation. */
-function admittedTask(run: Run) {
-  return Stream.runHead(run.view).pipe(
-    Effect.flatMap(
-      Option.match({
-        onNone: () =>
-          Effect.fail(
-            new TaskFailed({ message: 'The task ended before it started.' }),
-          ),
-        onSome: (level) =>
-          Effect.succeed({ runId: run.runId, activation: level.cursor }),
-      }),
-    ),
-  );
-}
-
 /** A handler that died answers `Internal` under a reference the service
  *  log carries the cause under, as the session bridge does. */
 const internal = Effect.fn('handlers.internal')(function* (
@@ -163,49 +116,6 @@ const internal = Effect.fn('handlers.internal')(function* (
   const ref = randomUUID();
   yield* Effect.logError(`Service request ${ref} failed`, cause);
   return new Internal({ ref });
-});
-
-/**
- * What `runId` ends with in `session`: once every owner of the run here has
- * left, its `run.end` as the run's records hold it, and `at`, the cursor of
- * the first level that shows the run no longer live, or gone: a view at or
- * past it holds the run's end, or its removal. A run that ended with no
- * `run.end` (deleted) ends with the outcome its view shows, without output;
- * a store that cannot be read fails the answer, never reads as an empty end.
- */
-const runEnded = Effect.fn('runEnded')(function* (
-  { session }: ServiceProject,
-  runId: RunId,
-): Effect.fn.Return<RunEnd & { at: CommitOrdinal }, TaskFailed> {
-  yield* session.held(runId)?.drained ?? Effect.void;
-  const ended = Option.getOrUndefined(
-    yield* session.view.changes.pipe(
-      Stream.filter((view) => {
-        const run = view.runs.get(runId);
-        return run === undefined || !run.live;
-      }),
-      Stream.runHead,
-    ),
-  );
-  const run = ended?.runs.get(runId);
-  const at = ended?.cursor ?? session.view.current().cursor;
-  const end = yield* session
-    .records(runId)
-    .readRunEnd()
-    .pipe(
-      Effect.mapError(
-        (error) =>
-          new TaskFailed({
-            message: `Task ${runId} ended; its result could not be read: ${error.message}`,
-          }),
-      ),
-    );
-  if (end !== null) return { ...end, at };
-  return {
-    outcome: run?.durableOutcome ?? RUN_OUTCOME.CANCELLED,
-    output: emptyRunEndOutput(),
-    at,
-  };
 });
 
 /**
@@ -366,11 +276,20 @@ export const serviceHandlers = TexraRpcs.toLayer(
             );
           }),
         ),
-      'task.ended': ({ workspace, runId }) =>
+      'task.result': ({ workspace, runId, activation }) =>
         Effect.scoped(
-          Effect.flatMap(open(workspace), (project) =>
-            runEnded(project, runId),
-          ),
+          Effect.gen(function* () {
+            const { session } = yield* open(workspace);
+            const end = yield* session
+              .run(runId, activation)
+              .result.pipe(
+                Effect.mapError(
+                  (error) => new TaskFailed({ message: error.message }),
+                ),
+              );
+            // The result arrives once the session's view shows the end.
+            return { ...end, at: session.view.head() };
+          }),
         ),
       'task.config': ({ workspace, runId }) =>
         records(workspace, runId, (session) =>
@@ -447,7 +366,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
             const { session } = yield* open(workspace);
-            const run: Run = yield* admit(
+            const run = yield* admit(
               runs,
               // A service task stays open for its windows' follow-ups.
               session.start({ ...start, interactive: true }),
@@ -461,7 +380,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   }),
                 ),
             );
-            return yield* admittedTask(run);
+            return { runId: run.runId, activation: run.activation };
           }),
         ),
       'host.attach': ({ workspace, capabilities }) =>
@@ -526,14 +445,9 @@ export const serviceHandlers = TexraRpcs.toLayer(
           Effect.gen(function* () {
             yield* refuseWhileDraining;
             const { session } = yield* open(workspace);
-            // A run this service is running needs no resume: the client that
-            // asks takes up the conversation it belongs to, where it is (a
-            // chat left it waiting here).
-            // A live root's handle is for the activation the view shows it
-            // in now; a later one starts only once that one ends.
-            const live = liveRoot(session, runId);
-            if (live !== null)
-              return { runId: live, activation: session.view.current().cursor };
+            // A run this service is running is answered as it runs: the
+            // client takes up the conversation it belongs to (a chat left
+            // it waiting here), which the session names.
             const run = yield* admit(
               runs,
               session.resume(runId, { interactive: true }),
@@ -545,7 +459,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
                   }),
                 ),
             );
-            return yield* admittedTask(run);
+            return { runId: run.runId, activation: run.activation };
           }),
         ),
     };

@@ -4,7 +4,7 @@
  * caller. The refusal is decided from the run's records; then the run is
  * opened in the caller's fiber and forked under its id (`RunRegistry.start`),
  * which answers the commit of its activation. A run a fiber here already
- * drives is refused as not resumable. A child a dead process left resumes
+ * drives is answered as it runs. A child a dead process left resumes
  * here too (`resumeLeftoverChildren`), so its end reaches its parent as it
  * would have.
  */
@@ -135,8 +135,9 @@ interface OpenedResume {
  * under its parent's edge. Answers once the activation committed. The
  * whole of it is the registry's launch (`RunRegistry.start`), on the
  * session's context whichever fiber asks (a host's, a wake's, a tool's):
- * a run a fiber here drives or opens is refused, and a stop asked while
- * the decision reads ends the run and opens nothing.
+ * a run a fiber here drives or opens is answered as it runs
+ * ({@link joinOpening}), and a stop asked while the decision reads ends
+ * the run and opens nothing.
  */
 export const resumeRun = (
   runId: RunId,
@@ -165,33 +166,34 @@ export const resumeRun = (
   });
 
 /**
- * A resume refused because a launch here holds the run: one still opening
- * (a wake's resume of the same input, a host's second resume) is joined,
- * and answers the activation it committed once it forked the run; a run
- * already live, or whose opening failed, is not resumable.
+ * A resume of a run a launch here holds: one still opening (a wake's resume
+ * of the same input, a host's second resume) is joined, then the run is
+ * answered as it runs here: the activation it runs, or, for a child an open
+ * call of its parent owns, that parent, whose conversation it belongs to.
+ * One whose opening failed is not resumable.
  */
 const joinOpening = (
   runs: RunRegistry,
   runId: RunId,
 ): Effect.Effect<ResumeHandOff> =>
-  Effect.suspend(() => {
-    const opening = runs.openingOf(runId);
-    if (opening === undefined) return Effect.succeed(REFUSED);
-    return opening.pipe(
+  Effect.suspend(() =>
+    (runs.openingOf(runId) ?? Effect.void).pipe(
       Effect.andThen(
         runs.inSession(
           Effect.gen(function* () {
             if (runs.get(runId) === undefined) return REFUSED;
+            const owner = yield* owningCall(runId);
+            if (owner !== null) return { ownedBy: owner.parentRunId };
             const facts = yield* (yield* SessionLog).facts(runId);
-            return facts?.activation === null || facts === null
+            return facts?.activation == null
               ? REFUSED
               : { activation: facts.activation.commit };
           }),
         ),
       ),
       Effect.catch(() => Effect.succeed(REFUSED)),
-    );
-  });
+    ),
+  );
 
 /** The resume's opening: its decision, then the run's activation. */
 const openResume = Effect.fn('resumeRun.open')(function* (

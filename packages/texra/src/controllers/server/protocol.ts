@@ -20,8 +20,9 @@
  *   for one `Subscribe`, the frames the webview bridge already carries.
  * - `task.request`: one `RuntimeRequest` (send, approve, stop, fork, a
  *   model switch, a pending tool edit's preview, …).
- * - `task.start` / `task.resume`: launch or continue a task in the service;
- *   `task.ended`: the outcome it ends with.
+ * - `task.start` / `task.resume`: launch or continue a task in the service,
+ *   answered with the run and the activation the window's handle is for;
+ *   `task.result`: that activation's stored end (`Run.result`).
  * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
  *   setup, and what its transcript exports read, from the service's own
  *   records; `tasks.history`, `task.detail`, `task.skills` and
@@ -135,9 +136,9 @@ const TaskSummarySchema = Schema.Struct({
 });
 export type TaskSummary = typeof TaskSummarySchema.Type;
 
-/** The run a `task.start` or `task.resume` reached, and a commit inside the
- *  activation it reached: a window's handle reads that activation's events
- *  from the rows up to it, whatever later activation the run has by then. */
+/** The run a `task.start` or `task.resume` reached, and the commit of the
+ *  activation it reached (`Run.activation`): a window's handle is for that
+ *  activation, whatever later activation the run has by then. */
 const TaskAdmitted = Schema.Struct({
   runId: RunIdSchema,
   activation: CommitOrdinalSchema,
@@ -221,12 +222,13 @@ export const TexraRpcs = RpcGroup.make(
     success: TaskAdmitted,
     error: TaskFailed,
   }),
-  /** What a task's current activation ends with, once it ends: its
-   *  stored end; and `at`, the service's view position where it saw the
-   *  end, so a window's view at or past it shows the end (or the run's
-   *  removal) too. */
-  Rpc.make('task.ended', {
-    payload: { workspace, runId: RunIdSchema },
+  /** What the task's activation at `activation` ends with, once it ends:
+   *  its stored end (`Run.result`, which fails when none was stored or it
+   *  cannot be read); and `at`, the service's log position once its view
+   *  showed the end, so a window's view at or past it shows the end (or the
+   *  run's removal) too. */
+  Rpc.make('task.result', {
+    payload: TaskAdmitted.mapFields(Struct.assign({ workspace })),
     success: RunEndSchema.mapFields(Struct.assign({ at: CommitOrdinalSchema })),
     error: TaskFailed,
   }),
