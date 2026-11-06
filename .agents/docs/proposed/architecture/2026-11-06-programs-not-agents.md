@@ -264,6 +264,42 @@ Q3 的按模型回退标志留给过不了线的模型。
 `texra run` 对着记录的调用重放一遍，就是不花模型钱的回归测试。本提案不
 建它，但这条路只有程序模块才走得通。
 
+### built-in 与 custom 的边界
+
+一句话：built-in 是产品承诺能跑的东西，custom 是用户积累的东西；两者的
+关系是 import，不是覆盖。
+
+一个东西是 built-in 要同时满足三条：零配置能跑（不依赖 Lean、Zotero、
+Wolfram 这类外部件；需要外部件的归插件，带 `<plugin>:` 命名空间）；我们
+测它（有 journey 或 E2E）；它编码的是 TeXRA 自己的契约（`\criticize{}`
+的格式、输出文档的格式、`document_*` 的调用顺序），不是领域知识。rubric、
+口味、学科约定是知识，归 custom 或 `AGENTS.md`。按这三条，built-in 只剩
+三个 persona 和 documents 插件自己的八个 task 模块，后者是 built-in 只因
+为插件得演示自己的工具怎么用。
+
+custom 扩展 built-in 的方式是 import。bundled 的 task 把内部函数和参数一
+起导出，用户包一层：
+
+```js
+// .texra/tasks/logic-review.js
+import { annotate } from 'builtIn:documents';
+import { rubric } from './rubrics/logic.js';
+export const description = 'Annotate for argument structure only.';
+export default (args) => annotate({ ...args, rubric });
+```
+
+上游改了 `annotate`，包装自动跟上；要完全不同的行为就复制那 25 行。今天
+的 `customizeCopy`、`basedOn` 和 newer-built-in 提示存在的唯一理由是
+built-in 太大、改得太勤，用户复制一份 400 行就漂移；两个条件都随本提案
+消失，机制跟着删。
+
+同名不覆盖。built-in 带 `builtIn:` 命名空间，永远不与用户文件撞名；项目
+的 `.texra/tasks/` 和用户的 `~/.texra/tasks/` 之间撞名是扫描期错误，指出
+两个路径。沉默的 shadowing 是 silent degradation。
+
+一个棘轮：built-in 的数量只降不升。新增一个 built-in 要同时交一个 journey
+测试，并写明它为什么不能是 custom 或插件。
+
 ## 删除账
 
 | 删什么                                                                        | 行数（量于 `c4c843a`） | 留什么                                        |
@@ -298,6 +334,101 @@ Q3 的按模型回退标志留给过不了线的模型。
 
 不与之冲突的：无流程引擎、历史一个写者、一个 persona 解析路径（R6）、
 `agent()` 替代 delegation 工具（Q7）、Q2 的结果复用、Q5 的一次脚本审批。
+
+## 更彻底的方案：Unix
+
+比本提案再往前一步就是 Unix。记录它，是为了说明本提案停在哪里、为什么，
+以及从它借走什么。
+
+### E：texra 是一个过滤器，shell 是编排器
+
+Unix 的四条原则逐一套上去：
+
+- **模型是过滤器。** `cat paper.tex | texra ask -s proofread.md > out.tex`。
+  `texra` 是读 stdin 写 stdout 的命令，背后一个 daemon 存历史。没有 agent，
+  persona 是 `-s` 后面的文件。
+- **task 是可执行文件。** `.texra/bin/annotate` 是任意语言的脚本，里面调
+  `texra ask`、`latexmk`、`latexdiff`。流水线是管道：
+  `texra annotate paper.tex | texra apply paper.tex`。bundled 和 custom 的区
+  别只是在 PATH 上的位置。
+- **工具是 PATH 上的 CLI，不是插件。** 今天有 44 个工具定义，
+  `packages/texra/src/tools` 约 20800 行、`packages/harness/src/tools` 约
+  12500 行。Wolfram 已经是"在 bash 里跑 wolframscript"，latexdiff、texcount、
+  pdftotext、arxiv、Zotero 本质上都是一个 CLI 加一段 `--help`。模型本来就
+  会用 CLI；bash 工具加命令守卫就是整个集成机制，MCP 通过一个桥变成 CLI。
+  `Plugin` 接口缩成"PATH 上的一个目录加 `AGENTS.md` 的一段"。
+- **持久化靠内容寻址，不靠重放。** 下一小节。
+
+删掉的东西：agent 目录、插件系统、QuickJS 沙箱、模块解析、task 契约、
+skills、teams，和三个 host 里渲染嵌套卡片树的大部分。剩下：一个 CLI、一个
+daemon、按目录分层的 `AGENTS.md`、`.texra/bin`、make。
+
+### make 是什么意思：缓存对重放
+
+`make` 是 Unix 的构建工具：Makefile 写明每个目标文件依赖哪些输入、用什么
+命令生成；make 只重做输入比目标新的步骤。构建中途失败再跑一次，做完的目
+标直接跳过。现代变体（nix、bazel）不看时间戳看内容哈希：输入内容没变，
+产物直接复用。这是 Unix 对"流水线中断了怎么续"和"改了一行要不要全重跑"
+的回答：不记录执行过程，只缓存产物。
+
+套到 TeXRA：目标是 task 的产物（run 存储里 `r0/` 的文件）；输入是输入文
+件的内容、task 源码的摘要、指令和模型；命令是跑这个 task。Q2 的结果复用
+（codemode 文档 "Cross-script reuse"）今天就是它的雏形：`agent()` 的结果按
+prompt、每个影响运行的选项和每个引用文件的指纹哈希，范围是发出 `script`
+调用的 run 和它的后台脚本。扩到 `task()`、跨 run 生效，就是"改了 `paper.tex`
+一行，重跑整条流水线，只有输入变了的步骤真的跑"。
+
+它和重放的区别：
+
+|        | 重放                                           | 缓存                                 |
+| ------ | ---------------------------------------------- | ------------------------------------ |
+| 范围   | 一个 run 内                                    | 跨 run                               |
+| 做什么 | 按记录顺序把结果交回程序，精确续跑被中断的程序 | 按输入匹配复用产物                   |
+| 性质   | 正确性需要它                                   | 优化，也是 Unix 式的持久化           |
+| 钥匙   | 调用序号加 `(toolName, input)` 一致            | 输入内容、源码摘要、指令、模型的哈希 |
+
+完整的 E 用缓存替代重放，这是它最大的代价：一个跑了三小时的 goal 进程死
+了，能续的前提是每一步都幂等且已缓存，脚本本身可以重跑。E-lite 两者都留。
+能安全缓存的前提是产物不直接改工作区，而是进 run 存储再由用户 accept；这
+正是 documents 今天的设计，也是 `task()` 比 `agent()` 更适合缓存的原因。
+
+### 它撞的四面墙
+
+- **Windows。** 学术用户相当一部分在 Windows 上用 VS Code 扩展，"shell 是
+  编排器"在那里没有 shell。这一条单独就否决 E 的字面版本。
+- **1.0 PRD 的 P0 承诺。** 公开 SDK 入口、调用持久化的故障点测试、运行所有
+  权、codemode 的重放，全是进程内契约。E 把 SDK 变成 "spawn texra"，是另一
+  个产品。
+- **审批粒度。** 沙箱让每个嵌套调用在执行前过 hooks、守卫、审批，并在卡片
+  树里可见；shell 脚本要调什么，跑到那一行才知道。
+- **三个 host 的 UI。** 嵌套卡片、diff 视图、accept files、Pass N of M 全来
+  自 run history 的行，进程只有 stdout。
+
+### E-lite：把原则搬进来，不搬掉 harness
+
+本提案已经是"everything is a file"：task、persona、rubric 是文件，run 是目
+录，memory 是文件。还差四条，每条都能单独落：
+
+1. **工具是 CLI，bespoke 工具要有理由。** 一个插件工具只在三种情况下有资
+   格存在：需要审批语义（write、edit 的 diff 审批）、需要写 run history 的
+   行（`document_*`、`agent()`）、需要结构化结果供脚本分支。其余的
+   （extract_figures、extract_bib_entries、arxiv、Zotero、latex preview）变
+   成 `.texra/bin` 或随包的 CLI，模型用 bash 调，`--help` 是文档。这一刀砍
+   的是三万两千行里最大的一块，也让 `Plugin` 接口瘦一半。它把插件作者的扩
+   展方式从"写一个 Plugin"改成"写一个 CLI"，是负责人问题 6。
+2. **发现靠文件系统，不靠目录。** picker 和模型都读 `.texra/tasks/` 和
+   `.texra/bin/`，`description` 和 `--help` 就是元数据。没有注册、没有设置页
+   里的 catalog。
+3. **headless 走文本流。** `texra run` 已经输出 NDJSON；再让它从 stdin 读
+   文件列表、向 stdout 打产物路径，shell 组合就免费了：
+   `texra run annotate paper.tex | texra run apply`。
+4. **缓存是一等机制。** 把 Q2 的内容寻址复用从 `agent()` 扩到 `task()`，
+   范围从一个 run 扩到会话。重放仍负责中断续跑，缓存负责"改了一行重跑整
+   条流水线"。
+
+`.texra/tasks/*.js` 仍是 JS 而不是 bash，只因为 Windows 和重放；它已经是
+"小程序、文本进出、靠文件组合"的东西。本提案的推荐是 D 加这四条；第 1
+条收益最大、争议也最大。
 
 ## 权衡
 
@@ -345,6 +476,9 @@ Q3 的按模型回退标志留给过不了线的模型。
 5. 第 1 期先做，还是等 1.0 PRD 的在途线（线 7、9、11）合完？推荐：第 1
    期只碰 `agentConfig.ts`、`goalScript.ts`、`documentRecipe.ts` 和沙箱的
    模块加载，和在途线不重叠，可以并行。
+6. E-lite 第 1 条：把只包装一个 CLI 的插件工具改成 `.texra/bin` 或随包的
+   CLI，bespoke 工具只留需要审批语义、写行或结构化结果的？推荐：接受，
+   作为第 4 期之后的第 5 期，先从 `latex-extract` 和 `arxiv` 两个插件试。
 
 ## 不做的事
 
