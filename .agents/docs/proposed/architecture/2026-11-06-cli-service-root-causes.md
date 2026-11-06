@@ -394,45 +394,38 @@ Design smells:
 
 ## 4. The plan
 
-In order, each a PR that deletes what its root names:
+Two PRs, not five: the two decisions above are made (the owner chose the
+strict handoff and keys with the start), and the rest groups by the files
+it touches, one commit per root inside each PR, as PR 14769 did.
 
-1. **Service lifetime** (§2.2, §2.3, §2.5, §3.2), on
-   `simplify/service-lifetime`: `RcMap` projects with a lease of the
-   project's own while a run works; the service's idle, drain and stop
-   as signals over the projects' load, the admissions and the watch
-   streams (the one-second check, `admitted`, `idleSince`, `released` and
-   the 250 ms flush gone; a five-second deadline on the watch streams'
-   end stays, as a bound, not a wait); `texra service stop` and a
-   starting client wait on the socket's close and the record's change
-   stream; the digest as the protocol identity; the record's dead fields,
-   the duplicate `closeAll` and the `runningTasks` option gone. Left in
-   place, for PR 2: the fifteen-second store retry (§2.1) and the chat's
-   restart loop (§2.4). The admission stays the transport's (a draining
-   session refusing its own starts would be the harness's `Sessions.drain`,
-   which §2.1's per-project handoff needs and the strict design does not).
-2. **One service, one door** (§2.1, §2.4), on
-   `simplify/service-one-door`: the strict handoff on the socket's close
-   and the one `linkCliService` the platform calls (a command that runs
-   or lists tasks says `startsService`; the chat, `texra resume` and
-   `texra tasks` do), answering the link or why it holds none; the chat's
-   restart loop, the four other doors (`reachCliService`,
-   `startCliService`, `connectCliService`, `linkRunningCliService`) and
-   the start-then-link dance go with it. `probeCliService` stays for the
-   status and stop commands: a probe is not a door.
-3. **The session over the wire is the harness's** (R10 with §2.7, §3.1):
-   the frame is `SessionViewInput[]`, the RPCs are `Session`'s members,
-   `runView` lifted onto the trace port serves both sides, `task.ended`
-   and the fabricated end go, `Subscribe.session` goes. The verified
-   defects of §3.1 end here, not by patches: the activation-less end read
-   is a protocol change on a path this deletes.
-4. **Hosts bind verbs** (R10 with §3.3): `GuiSession` goes with the one
-   `Session`; the three hosts' repeated decisions move into the shared
-   body; `openGuiWindow.ts` keeps the router and loses the other four
-   jobs; the presenter is the requesting window's `emit`; a host without
-   `emit` is not a presenter; the toolbar actions fail instead of
-   answering `done`.
-5. **A task's environment** (§2.6): keys with the start. Needs the
-   owner's decision on keys over the socket.
+1. **The service's lifetime, one service, one door** (§2.1 to §2.5, §3.2),
+   PR 14771 on `simplify/service-lifetime`, three commits: the digest as
+   the protocol identity; `RcMap` projects and the service's idle, drain
+   and stop as signals over the projects' load, the admissions and the
+   watch streams (the one-second check, `admitted`, `idleSince`,
+   `released` and the 250 ms flush gone; a five-second deadline on the
+   watch streams' end stays, as a bound); the strict handoff on the
+   socket's close (a draining service keeps its record and socket until it
+   exits, every client reads `hello.draining`, the store retry and the
+   early release go) and the one `linkCliService` the platform calls (a
+   command that runs or lists tasks says `startsService`; the link answers
+   the service or why it holds none; the chat's restart loop and the four
+   other doors go). Kept: the socket per pid and the dead-socket sweep (one
+   path cannot be unlinked safely by a service racing another's listen);
+   the admission as the transport's (a draining session refusing its own
+   starts would be the harness's `Sessions.drain`, which only the
+   per-project handoff needed).
+2. **The hosts** (§2.6, §2.7, §3.1, §3.3; R10 whole): the frame is
+   `SessionViewInput[]`, the RPCs are `Session`'s members, `runView`
+   lifted onto the trace port serves both sides, `task.ended` and the
+   fabricated end go, `Subscribe.session` goes (the verified defects of
+   §3.1 end here, not by patches); `GuiSession` goes with the one
+   `Session`, the three hosts' repeated decisions move into the shared
+   body, `openGuiWindow.ts` keeps the router and loses its other four
+   jobs, the presenter is the requesting window's `emit`, a host without
+   `emit` is not a presenter, the toolbar actions fail instead of
+   answering `done`; and a task's provider keys travel with its start
+   (`StartOptions`, never a row), read by the run's model binding.
 
 Amend R10 in PR 14766 with §2.1 to §2.6 and §3.1 to §3.3: its "Design"
 names the client's three sessions and the hosts' verbs, not the service's
