@@ -310,3 +310,8 @@ rather than per finding:
   the close deadline over the stop writes, a hold per agent-CLI turn.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
+- The CLI service and its sessions, read after this PR's review rounds:
+  `2026-11-06-cli-service-root-causes.md` (the upgrade handoff, the
+  projects' and the service's lifetime, the wire, the windows), which
+  extends R10 and names the fifteen-second store retry this PR's R1 slice
+  added as a wait to delete.

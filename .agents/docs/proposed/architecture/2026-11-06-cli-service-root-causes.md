@@ -313,21 +313,109 @@ Design smells:
   (Effect's `ChildProcess` takes no file descriptor for stdio); the start
   race is handled by the record's compare-and-set.
 
+### 3.3 Windows and attach
+
+Verified defects:
+
+- **A notice to a host without `emit` vanishes.** `presentOn`
+  (`HostInteractions.ts`) returns `Effect.void` when the host has no
+  `emit`; a service session opens with `host: {}` (`cliService.ts`,
+  `initPlatform.ts`), so until a window attaches, a notice is neither
+  shown, logged nor queued, against what the session's contract says
+  ("waits for the next one") and what the replay class exists for. The
+  same shape in the answerer's overlay and in the window host, whose
+  `notices` capability is granted by `emit || filesWritten` while a notice
+  needs `emit`, so a window with only `filesWritten` answers `ok` having
+  shown nothing. Root cause: a capability decided from optional members at
+  two sites. Design: a host without `emit` is not a presenter (the notice
+  queues for the next, or is said at warn); `notices` splits into what
+  each call needs.
+- **Toolbar actions that do nothing.** `workflowConfig` answers
+  `undefined` with a log line ("this toolbar path has no messaging port",
+  `hostRunActions.ts`); `latexdiff`, `pack` and `clean` answer `done`
+  when there is nothing to do, where the same body answers `Rejected` for
+  an error result (`openGuiWindow.ts`). Design: fail with `Rejected`; the
+  surface presents it.
+- **The pre-run failure's presenter is decided per branch.** The local
+  branch presents through the session's `Interactions` (the last-focused
+  window, which may not be the one that asked); the service branch pins a
+  private `new SessionHostInteractions()` to the window; the replay class
+  is instantiated only because the port type reaches `fallbackMessage`
+  through it. Design: `presentRunFailure` takes a plain `emit`, the
+  requesting window's, in both cases; the window-side instance goes.
+- `Effect.context<AgentCatalog>()` captured and re-provided whole in
+  `hostRunActions.ts`, where the guardrail says `Context.pick`.
+
+Design smells:
+
+- **`GuiSession` is an option for a special case.** `serviceSession`
+  already hides where runs run, yet the window still branches on
+  `service` for records (`local.records` versus `serviceRecords`) and for
+  the link it attaches through. Design: `Session` carries `records(runId)`
+  and its link, both implementations fill it, the union goes (R10's F4).
+- **One decision, three hosts.** `openGuiWindow.ts` and the two host
+  request modules re-enter the runtime inside branches because two ports
+  erase their requirements while the verb table already runs in
+  `ProcessServices`; `setApiKey` is bound twice per host; the custom agent
+  directory is read in both hosts beside `files.openDirectory`; the
+  refusal wording for a kind a host lacks is per host, against the
+  header's "refusal wording lives here once". Design: optional binding
+  members, the shared body reads the fact and words the refusal once,
+  ports keep `ProcessServices` in their requirements.
+- **`openGuiWindow.ts` does five jobs**: composition root, the
+  session-location switch, a presenter adapter, a launch-lifecycle wait
+  (`showLaunched`, a fixed ten-second `SHOW_LAUNCHED_WITHIN` ending in a
+  toast), message wording, and the request router. Only the router over
+  the binding table is this module's; composition is each host's root;
+  selection on arrival is a surface fact applied when the view holds the
+  run, and the timer goes.
+- **Notice round-trips and misreported late answers.** `tell` mints an
+  id nothing awaits; the window answers it anyway; `answer` reads any
+  unknown id as a notice, so an answer past `ANSWER_WITHIN` is logged as
+  a notice failure or dropped. Design: the frame says whether an answer
+  is wanted. `ANSWER_WITHIN` itself is a per-kind constant table where the
+  window answers every end and a detach fails every pending call, so the
+  timeout covers only a hung handler.
+- **Replay** (`SessionHostInteractions.use`) is relied on by the service
+  (a project's session opens before its first window attaches) and by the
+  GUI's gap between open and link; the window-side instance never replays.
+  Keep it in the session only.
+- `editorHost` keys attachments by storage root with
+  overwrite-and-identity-delete while `HostWindows` keys surfaces by
+  session identity: two keys for one fact.
+- Two windows on one project: calls and notices go to the last-focused
+  only; an open approval whose window is gone is a row any surface decides
+  (fine), but service sessions always read as "can ask" because
+  `HostWindows` holds the attachment fact and the policy never reads it.
+
 ## 4. The plan
 
 In order, each a PR that deletes what its root names:
 
-1. **Service lifetime** (§2.2, §2.3, §2.5): `RcMap` projects, signals for
-   idle and drain, the digest as the protocol identity. Harness-free
-   except the registry's lease per live run. No behaviour change a user
-   sees.
-2. **One service, one door** (§2.1, §2.4): strict one-service upgrade and
-   the one `linkService`. Needs the owner's decision on the upgrade wait.
-3. **Hosts bind verbs** (R10, with §2.7): the one `Session` and the RPCs
-   as its members; the handlers' re-derivations go.
-4. **A task's environment** (§2.6): keys with the start. Needs the owner's
-   decision on keys over the socket.
+1. **Service lifetime** (§2.2, §2.3, §2.5, §3.2): `RcMap` projects, a
+   draining session that refuses its own starts, signals for idle, drain
+   and stop, the digest as the protocol identity, the dead record fields
+   and the hand-written "once" gone. Harness: the registry's lease per
+   live run and `Sessions.drain`. No behaviour change a user sees.
+2. **One service, one door** (§2.1, §2.4): the upgrade handoff on a
+   signal (the owner chooses strict one-service or the per-project
+   handoff) and the one `linkService`; the chat's restart loop and the
+   resolver copy go with it.
+3. **The session over the wire is the harness's** (R10 with §2.7, §3.1):
+   the frame is `SessionViewInput[]`, the RPCs are `Session`'s members,
+   `runView` lifted onto the trace port serves both sides, `task.ended`
+   and the fabricated end go, `Subscribe.session` goes. The verified
+   defects of §3.1 end here, not by patches: the activation-less end read
+   is a protocol change on a path this deletes.
+4. **Hosts bind verbs** (R10 with §3.3): `GuiSession` goes with the one
+   `Session`; the three hosts' repeated decisions move into the shared
+   body; `openGuiWindow.ts` keeps the router and loses the other four
+   jobs; the presenter is the requesting window's `emit`; a host without
+   `emit` is not a presenter; the toolbar actions fail instead of
+   answering `done`.
+5. **A task's environment** (§2.6): keys with the start. Needs the
+   owner's decision on keys over the socket.
 
-Amend R10 in PR 14766 with §2.1 to §2.6: its "Design" names the client's
-three sessions and the hosts' verbs, not the service's lifetime, which
-this note adds.
+Amend R10 in PR 14766 with §2.1 to §2.6 and §3.1 to §3.3: its "Design"
+names the client's three sessions and the hosts' verbs, not the service's
+lifetime nor the wire's shape, which this note adds.
