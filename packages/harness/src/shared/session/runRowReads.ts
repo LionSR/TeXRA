@@ -221,6 +221,7 @@ export const RECEIPT_ROW_TYPES = [
   'followup.consumed',
   'run.position',
   'run.activate',
+  'run.stop',
   'run.end',
   'run.removed',
 ] as const satisfies readonly SessionEvent['type'][];

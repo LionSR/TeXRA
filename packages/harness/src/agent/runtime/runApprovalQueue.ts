@@ -104,7 +104,7 @@ const personOnly = (payload: PermissionPayload): boolean =>
  * grant already covered, or one only a person answers, is left as it is.
  */
 const approvalsUnder = Effect.fn('approvalsUnder')(function* (
-  log: Pick<SessionLogShape, 'runRows'>,
+  log: Pick<SessionLogShape, 'runRows' | 'facts'>,
   view: ApprovalGrantSource<RunId>,
   runId: RunId,
   recorded: ApprovalGrants,
@@ -116,10 +116,6 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     (kind) => grantsOn(next, kind) && !grantsOn(recorded, kind),
   );
   if (turnedOn.length === 0) return [];
-  const after: ApprovalGrantSource<RunId> = {
-    runs: view.runs,
-    policy: new Map(view.policy).set(runId, next),
-  };
   // The run and its descendants, by their standing parent edges.
   const reached = new Set([runId]);
   for (let grew = true; grew;) {
@@ -130,6 +126,18 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
         grew = true;
       }
   }
+  // The grants as they will be once `next` is recorded, over each reached
+  // run's committed grants, not the view's, which can lag a grant a run
+  // turned off a moment ago.
+  const policy = new Map(view.policy);
+  for (const id of reached) {
+    const grants = (yield* log.facts(id))?.grants;
+    if (grants != null) policy.set(id, grants);
+  }
+  const after: ApprovalGrantSource<RunId> = {
+    runs: view.runs,
+    policy: policy.set(runId, next),
+  };
   const rows: SessionEventDraft[] = [];
   for (const id of reached) {
     const covering = turnedOn.filter(

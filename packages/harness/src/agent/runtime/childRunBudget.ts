@@ -9,9 +9,10 @@ import { Context, Effect, Semaphore } from 'effect';
  *
  * Root runs, process children, and awaited children (which run while their
  * parent is blocked awaiting them, so physical concurrency is unchanged)
- * never acquire. Acquisition queues rather than rejects: a launch beyond the
- * budget starts as soon as a slot frees, and a queued run cancelled before
- * its slot never starts model work.
+ * never acquire; a run's awaited calls are bounded by its own semaphore of
+ * the same size (`AgentRun.awaitedCalls`). Acquisition queues rather than
+ * rejects: a launch beyond the budget starts as soon as a slot frees, and a
+ * queued run cancelled before its slot never starts model work.
  */
 
 import { Settings, type SettingsStores } from '@shared/config/settings';

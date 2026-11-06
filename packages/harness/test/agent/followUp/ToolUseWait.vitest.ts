@@ -180,6 +180,60 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
             yield* Fiber.interrupt(again.fiber);
           }),
       );
+
+      it.effect(
+        'a one-shot child resumed for a queued message runs its turn, then ends',
+        () =>
+          Effect.gen(function* () {
+            const session = yield* quietSession();
+            const parentRunId = generateRunId();
+            const runId = startedRun(session, parentRunId);
+            const first = yield* forkLoop({
+              runId,
+              session,
+              parentRunId,
+              stopAfterCycle: true,
+              script: [textTurn('first cycle')],
+            });
+            expect((yield* Fiber.join(first.fiber)).outcome).toBe('completed');
+
+            // Its parent's message, queued once the child ended: the resume
+            // that delivers it runs the turn it asks for, not the end alone.
+            const asked = 'now check the boundary case';
+            publishTestRows(session, [
+              {
+                type: 'followup.queued' as const,
+                aggregateId: qualifyAggregateId('run', runId),
+                followUpId: 'follow-up-2',
+                content: {
+                  text: asked,
+                  from: {
+                    kind: 'run' as const,
+                    runId: parentRunId,
+                    relation: 'parent' as const,
+                  },
+                },
+              },
+            ]);
+            yield* Context.get(session, SessionLog).settled;
+
+            const resumed = yield* forkLoop({
+              runId,
+              session,
+              parentRunId,
+              stopAfterCycle: true,
+              resume: true,
+              script: [textTurn('second cycle')],
+            });
+            expect((yield* Fiber.join(resumed.fiber)).outcome).toBe(
+              'completed',
+            );
+            expect(resumed.requests).toHaveLength(1);
+            expect(
+              userTexts(yield* Context.get(session, RunHistory).load(runId)),
+            ).toContain(asked);
+          }),
+      );
     });
 
     describe('a parked root run', () => {

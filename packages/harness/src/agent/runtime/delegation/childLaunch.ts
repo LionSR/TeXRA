@@ -24,6 +24,7 @@ import {
   executeAgent,
   type ExecuteAgentOptions,
 } from '@agent/runtime/executeAgent';
+import { RunCall } from '@agent/runtime/RunCall';
 import {
   registryOf,
   Runs,
@@ -119,9 +120,24 @@ const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
  * Await the child `runId` this call owns: `start` opens it (a launch or a
  * resume), then the call waits for the run here to end and reads its end.
  * No end, or a failed one, fails with the child's error; any other end is
- * the answer, its output as the run recorded it.
+ * the answer, its output as the run recorded it. The call holds one of
+ * its run's awaited-call permits throughout (`AgentRun.awaitedCalls`): at
+ * most the child-run budget of a run's awaited children run at once.
  */
 const awaitChildRun = Effect.fn('awaitChildRun')(function* (
+  runId: RunId,
+  start: Effect.Effect<unknown, Error, AgentRunServices>,
+): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices> {
+  const call = yield* RunCall;
+  if (call === null)
+    return yield* Effect.fail(
+      new Error(`Subagent ${runId} is awaited outside a tool call.`),
+    );
+  return yield* call.run.awaitedCalls.withPermits(1)(childRunEnd(runId, start));
+}, defectsAsErrors);
+
+/** {@link awaitChildRun}'s wait, under its permit. */
+const childRunEnd = Effect.fn('childRunEnd')(function* (
   runId: RunId,
   start: Effect.Effect<unknown, Error, AgentRunServices>,
 ): Effect.fn.Return<ChildRunEnd, Error, AgentRunServices> {
@@ -156,7 +172,7 @@ const awaitChildRun = Effect.fn('awaitChildRun')(function* (
       ),
     );
   return { runId, result };
-}, defectsAsErrors);
+});
 
 /** What an awaited child's launch takes. */
 interface AwaitedChildLaunch {

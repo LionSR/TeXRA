@@ -323,7 +323,8 @@ export const endRunRows = Effect.fn('endRunRows')(function* (
  * The rows a stop commits for `runId`: its `run.stop` row, and, for a run
  * no fiber here drives (`end`), its CANCELLED end in the same batch. A run
  * with no rows, or whose lifecycle ended, gets none: there is nothing to
- * stop.
+ * stop. The first stop of a lifecycle stands: a person's outranks the
+ * shutdown that follows it, and a second ask adds no row.
  */
 export const stopRun = Effect.fn('stopRun')(function* (
   runId: RunId,
@@ -336,16 +337,21 @@ export const stopRun = Effect.fn('stopRun')(function* (
     Effect.gen(function* () {
       const facts = yield* log.facts(runId);
       if (facts === null || facts.end !== null) return;
-      const stop = {
-        type: 'run.stop',
-        aggregateId: qualifyAggregateId('run', runId),
-        reason,
-      } as const;
+      const stop =
+        facts.stop === null
+          ? [
+              {
+                type: 'run.stop',
+                aggregateId: qualifyAggregateId('run', runId),
+                reason,
+              } as const,
+            ]
+          : [];
       if (!end) {
-        yield* tx.append([stop]);
+        if (stop.length > 0) yield* tx.append(stop);
         return;
       }
-      yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, [stop]);
+      yield* endIn(tx, { runId, outcome: RUN_OUTCOME.CANCELLED }, stop);
     }).pipe(Effect.scoped, Effect.provide(services)),
   );
 });

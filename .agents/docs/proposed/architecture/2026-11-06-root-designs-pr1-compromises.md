@@ -166,6 +166,64 @@ A second round, two independent reviews of the three commits as landed:
   interruption cancels the request, the headless adapter's plugin case).
   Rewritten to what the code does.
 
+A third round, from the Codex review threads on the PR, fixed at the root
+rather than per finding:
+
+- **A child resumed for a message ended without reading it.** The loop's
+  parked branch read `stopAfterCycle` as "end when parked", so a one-shot
+  child woken by its parent's message ended at once, and the wake repeated
+  (the queued row stayed). `stopAfterCycle` now means "end after one
+  cycle": a queued message starts that cycle (`loop/toolUse.ts`). The one
+  regression test of this round (`ToolUseWait`: a one-shot child resumed
+  for a queued message runs its turn, then ends) failed first.
+- **The registry read the run tree through held fibers' direct edges.**
+  A stop's cascade and the "has active children" read listed the held
+  runs whose parent edge named the run, so a grandchild under an ended
+  child escaped a stop, and a completed run with a live grandchild read
+  as done (its input closed as terminal, its deletion accepted, and the
+  deletion's cascade took the grandchild's rows and files). One reading
+  now: `heldUnder` walks the stored parent edges to any depth
+  (`RunRegistry.heldUnder`, `hasLiveDescendants`). A stop writes the run's
+  own `run.stop` first, so a child registering under it meanwhile is
+  refused (`registrationRows`), then stops every held run under it, then
+  interrupts the run.
+- **A deletion or a file operation checked liveness once.** The old lane
+  (`withInactiveRunStep`) made the operation and a launch mutually
+  exclusive for the operation's whole lifetime; the cut kept one `get`.
+  `RunRegistry.withInactiveRun` is that step again: it refuses a run live
+  here or with live work under it, holds the run for the operation, and a
+  launch arriving meanwhile waits for it.
+- **A stop during a committed opening leaked the opening's resources.**
+  The registry wrote the stop and the end on the rows and discarded the
+  prepared run, whose scope (its model binding, its plugin holds) only its
+  program closes. Now the stop row goes in, the run is forked and
+  interrupted before its first step, and its one terminal (`endRun`) ends
+  it and releases the scope; `RunStoppedAtStart` is gone with the second
+  ending path.
+- **A second stop overwrote a person's.** `stopRun` appended a `run.stop`
+  for every ask, and the facts keep the latest, so a session's shutdown
+  stop replaced the user's and the next resume restarted work a person
+  had stopped. The first stop of a lifecycle stands.
+- **An awaited script call had no bound.** Awaited children ride their
+  parent's slot in the session's budget, and the per-script semaphore the
+  cut removed was the only bound on a script's parallel `agent()` and
+  `self()` calls, which the setting promises. Each run now carries its own
+  semaphore of the budget's size (`AgentRun.awaitedCalls`), held across
+  the call's launch and wait (`awaitChildRun`); one per run, so a child's
+  calls never wait on its parent's and nested delegation cannot deadlock.
+- **A grant's sweep authorized against the view.** `approvalsUnder`
+  resolved each descendant's grants from the view, which can lag a
+  descendant's own `bypass: off` already committed; it now reads each
+  reached run's committed grants (`facts`). The descendant list itself is
+  still the view's (§1.3).
+- **Two readers decided whether a message wakes a run.** `submitFollowUp`
+  skipped the wake when the run was live a moment before the send
+  committed; a run that exited meanwhile kept the row unread. The inbox's
+  one reading (`owesResume`) runs after every landed send.
+- **The follow-up receipt's query left out `run.stop`**, so a turn a
+  shutdown cut read as cancelled instead of continued. Added to
+  `RECEIPT_ROW_TYPES`.
+
 ## 3. Red flags that stand
 
 - **Repetition.** "A grant answers a request of this kind" is read twice:
@@ -217,6 +275,16 @@ A second round, two independent reviews of the three commits as landed:
   only record. The registry's `stop` is the one writer of that row;
   routing the await's interruption through it would make the child's
   rows say why.
+- **The session's close deadline** bounds the drain of the runs, not the
+  stop rows `stopAll` writes first: a slow publisher delays a close past
+  the five seconds before the timeout starts. One deadline over both
+  would need the stop writes interruptible, which a durable append is not
+  by design.
+- **An agent-CLI plugin switched off mid-turn** releases its session
+  registry (the busy set); switched on again, a second call on the same
+  thread passes the claim. A hold per running turn would keep the
+  registry; recorded, not fixed (§1.2 asks whether the registry stays at
+  all).
 - **`ProcessReport.failure` beside `ProcessReport.exit`**: a failed exit is
   said twice, as the exit code and as the failure message the end records.
   One reading (`exit.code !== 0` is the failure, the message its report)
@@ -238,6 +306,7 @@ A second round, two independent reviews of the three commits as landed:
 - Harness, small: §3's one `cutShort` predicate (`agentChild.standingOf`
   still reads its own), one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
   boolean, the handler timeout off the operator's prompt, `resumeOwnedChild`
-  through `openResume`, the await's interruption through `RunRegistry.stop`.
+  through `openResume`, the await's interruption through `RunRegistry.stop`,
+  the close deadline over the stop writes, a hold per agent-CLI turn.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.

@@ -41,7 +41,6 @@ import {
   RunLive,
   type RunRegistry,
   Runs,
-  RunStoppedAtStart,
 } from './runRegistry';
 import type { RunReport } from './runReport';
 
@@ -107,7 +106,6 @@ function refusalFor(
   error: Error,
   runId: RunId,
 ): Effect.Effect<ResumeRefusalAnswer, Error> {
-  if (error instanceof RunStoppedAtStart) return Effect.succeed(REFUSED);
   const refused = runReadRefusal(error);
   if (refused === undefined) return Effect.fail(error);
   const cause = toErrorMessage(error);

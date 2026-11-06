@@ -218,11 +218,14 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   // down with nothing queued), or the session is disposed.
   if (landed.kind === 'refused')
     return { status: 'failed', reason: landed.reason };
-  if (landed.kind === 'duplicate' || live) return { status: 'sent' };
-  // The sender hears the resume start, not the resumed turn end; a wake
-  // that could not read the run leaves the row for an explicit resume.
+  if (landed.kind === 'duplicate') return { status: 'sent' };
+  // Whether the row wakes the run is the inbox's one reading
+  // (`owesResume`), after the commit: a run live a moment ago may have
+  // exited meanwhile, and one with a reader here owes nothing. The sender
+  // hears the resume start, not the resumed turn end; a wake that could
+  // not read the run leaves the row for an explicit resume.
   yield* wakeIfOwed(runId);
-  return { status: 'queued' };
+  return { status: live ? 'sent' : 'queued' };
 });
 
 /**

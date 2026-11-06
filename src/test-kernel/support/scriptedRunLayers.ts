@@ -12,6 +12,7 @@ import {
   Layer,
   Schema,
   type Scope,
+  Semaphore,
   SynchronizedRef,
 } from 'effect';
 
@@ -340,6 +341,7 @@ export function testAgentRun(
         Effect.scoped(next(current)),
       ),
     callbacks: {},
+    awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
     ...run,
     ...over,
   };

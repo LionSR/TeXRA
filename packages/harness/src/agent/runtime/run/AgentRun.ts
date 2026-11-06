@@ -7,7 +7,15 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
-import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Layer,
+  Scope,
+  Semaphore,
+  SynchronizedRef,
+} from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ITool } from '@agent/core/tools/ToolTypes';
@@ -25,6 +33,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { CLAUDE_COUNTERPART_TOOLS } from '@common/plugins/hookConfig';
 import { RunFileService } from '@common/storage/runStorage';
+import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import { SessionRoots } from '@platform/rootedFs';
 import type { Secrets } from '@platform/secrets';
 import {
@@ -166,6 +175,15 @@ export interface AgentRunShape extends RunLaunch {
    */
   readonly scope: Scope.Scope;
   readonly callbacks: RunCallbacks;
+  /**
+   * The calls this run awaits children in, at most the child-run budget of
+   * them at once (`childRunConcurrencyBudget`). An awaited child rides its
+   * parent's slot in the session's budget (`ChildRunBudget`), so this is
+   * the one bound on a script's parallel `agent()` and `self()` calls. One
+   * semaphore per run: a child's own awaited calls never wait on its
+   * parent's, so nested delegation cannot deadlock.
+   */
+  readonly awaitedCalls: Semaphore.Semaphore;
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
@@ -333,6 +351,9 @@ export const agentRunLayer = (
         swapModel,
         scope,
         callbacks: input.callbacks,
+        awaitedCalls: Semaphore.makeUnsafe(
+          yield* resolveChildRunConcurrencyBudget(roots),
+        ),
       };
     }),
   ).pipe(Layer.provideMerge(sessionModelAccess));

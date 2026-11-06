@@ -1,5 +1,13 @@
 /** Explicit call capabilities over the calling fiber's process services. */
-import { Context, Effect, Layer, Schema, Scope, SynchronizedRef } from 'effect';
+import {
+  Context,
+  Effect,
+  Layer,
+  Schema,
+  Scope,
+  Semaphore,
+  SynchronizedRef,
+} from 'effect';
 
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { Interactions } from '@agent/runtime/HostInteractions';
@@ -103,6 +111,7 @@ export function nativeToolTestLayer(
     opening: null,
     fileService: new RunFileService(run.runId, roots),
     callbacks: {},
+    awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
     ...runFields,
     runId: run.runId,
     toolPolicy: run.toolPolicy,

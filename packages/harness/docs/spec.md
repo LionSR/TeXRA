@@ -689,9 +689,10 @@ refused, as the opening's failure, with no fiber behind it
 (`agent/runtime/resumeRun.ts#openResume`). The registry holds the run from the
 resume's first read: a second resume, or any launch, of the run meanwhile is
 refused (`agent/runtime/runRegistry.ts#RunLive`), and a stop asked meanwhile
-ends the run cancelled on its rows, whether the opening committed or failed,
-and refuses the launch (`agent/runtime/runRegistry.ts#RunStoppedAtStart`,
-`agent/runtime/runRegistry.ts#stopAsked`). A child an open call of its parent
+is applied as the opening answers: a failed opening's run ends cancelled on
+its rows, and a committed one is forked and interrupted at once, so its one
+terminal ends it (`agent/runtime/runRegistry.ts#stopAsked`,
+`agent/runtime/runRegistry.ts#stopRows`). A child an open call of its parent
 owns resumes through that parent (`agent/runtime/resumeRun.ts#owningCall`; a
 resume a wake took follows it itself, whoever opened it,
 `agent/followUp/ToolUseFollowUp.ts#wakeRun`, and the package's resume through

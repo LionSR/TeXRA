@@ -160,7 +160,7 @@ export const settleRun =
     return Effect.map(Runs, (service) =>
       lease.release(
         outcome === RUN_OUTCOME.COMPLETED &&
-          !registryOf(service).hasActiveChildren(cell.runId)
+          !registryOf(service).hasLiveDescendants(cell.runId)
           ? 'terminal'
           : 'recoverable',
       ),

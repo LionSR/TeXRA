@@ -445,7 +445,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const step = yield* openStep(state, 'park');
           if (step.rows.length > 0) state = yield* cell.append(step.rows);
         }
-        if (run.toolPolicy.stopAfterCycle) {
+        // A one-shot run ends at its park, unless a message queued for it
+        // starts its cycle: a child resumed for its parent's message.
+        if (run.toolPolicy.stopAfterCycle && !queued) {
           return finish(
             state,
             afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
