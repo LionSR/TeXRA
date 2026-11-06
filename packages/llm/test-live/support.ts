@@ -343,7 +343,7 @@ export function liveProtocol(spec: LiveProtocol): void {
                 continuation: FOREIGN_CONTINUATION,
               }),
             );
-            expect(error.kind).toBe('unsupported');
+            expect(error.kind).toBe('invalid-request');
           }),
         );
       }
