@@ -110,10 +110,18 @@ const runServe = Effect.fn('runServe')(function* (
   }).pipe(Effect.scoped);
   return yield* served.pipe(
     Effect.as(CliExitCode.Success),
-    Effect.catchTag(['ServiceAlreadyRunning', 'ServiceUnavailable'], (error) =>
+    // Another service of this root listens: a normal outcome of two
+    // clients starting one at once, said in the log and exited clean.
+    Effect.catchTag('ServiceAlreadyRunning', (error) =>
       Effect.sync(() => {
         writeTextStderr(error.message);
-        return CliExitCode.Usage;
+        return CliExitCode.Success;
+      }),
+    ),
+    Effect.catchTag('ServiceUnavailable', (error) =>
+      Effect.sync(() => {
+        writeTextStderr(error.message);
+        return CliExitCode.AgentError;
       }),
     ),
   );

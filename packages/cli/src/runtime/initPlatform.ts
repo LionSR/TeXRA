@@ -362,18 +362,18 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         }
 
         // The shutdown is this scope's close, its finalizers run in the
-        // reverse of their registration: every session closes first (its
-        // runs stopped and finished, its artifacts flushed). That stops
+        // reverse of their registration: the project scope first, which
+        // closes the session it opened ahead of its roots (its runs
+        // stopped and finished, its artifacts flushed). That stops
         // agent-spawned OS children before the process exits, as the
         // extension and desktop hosts do: a background `bash` run is its own
         // process group (see execUtils), which its lifeline kills only once
         // `texra` is gone, and this close stops it first so its run finishes.
-        // Then the project scope, and the runtime last, draining the usage
-        // log.
+        // Then the runtime, whose session layer closes any session another
+        // door opened, and drains the usage log.
         const scope = Scope.makeUnsafe();
         yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
         yield* Scope.addFinalizer(scope, closeProject);
-        yield* Scope.addFinalizer(scope, Effect.asVoid(sessions.closeAll));
         const platform = {
           roots,
           session: openSession,
