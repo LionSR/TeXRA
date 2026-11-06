@@ -175,9 +175,76 @@ nothing.
 
 ## 3. The reviews' findings
 
-(Filled from the three read-only reviews once they report: the wire and
-`serviceSession.ts`; windows and attach; what the lifecycle review adds to
-§2.)
+Three independent read-only reviews, each over its slice, with the
+author's verification of every claim recorded here (the file opened, the
+line read). Ranked within each slice.
+
+### 3.1 The wire and `serviceSession.ts`
+
+Verified defects:
+
+- **`task.ended` answers the wrong activation.** `handlers.ts` calls
+  `readRunEnd()` with no activation, where the store's read takes `after`
+  (`runRecords.ts`) and the harness's own run handle passes the activation
+  (`runHandle.ts`); a run resumed by another window between its end and
+  the read answers the later end. Root cause: the service re-derives
+  `Run.result` instead of serving the one it holds from `session.start`
+  (§2.7). The fix is R10's: `task.ended` streams the run's own result;
+  `runEnded` goes. Not patched here: the payload carries no activation,
+  so the patch would be a protocol change for a path the root deletes.
+- **An invented end.** `runEnded` fabricates `{outcome: durableOutcome ??
+  CANCELLED, output: empty}` where the harness fails with "ended without
+  a stored end"; `at` falls back to the current cursor over a stream that
+  ended. Two contracts for one fact; silent degradation. Ends with the
+  item above.
+- **The client's run view skips the harness's transcript guard.**
+  `serviceSession.ts`'s `runOf` re-implements `runView` (`runHandle.ts`):
+  the same `dropWhile`/`takeUntil` over the view, minus the
+  `transcriptSeq.has(replayed)` guard, so the first level a window reads
+  can lack the run's transcript. Root cause: a second `Run` written beside
+  the harness's (R10's F4). Design: `replayTrace` already takes an
+  abstract port (`runTrace.ts`); `runView` lifted onto that port serves
+  both sides, and the service exposes `Run`'s members (`task.result`,
+  `task.view`) instead of the client re-deriving them.
+- **`Subscribe.session` spelled three ways.** `serviceSession.ts` sends
+  `roots.storage`, `taskAttach.ts` the workspace folder, and `handlers.ts`
+  overwrites both with the session's key; the webview path rejects a
+  mismatch (`SessionBridge.ts`) where the RPC path silently repairs it.
+  Design: the field leaves the RPC `Subscribe`; `workspace` names the
+  project.
+- **Liveness decided three ways; the resume redirect duplicated.**
+  `taskList.ts` reads `runsHere`, `handlers.ts` `held(id)` and `held()`
+  joined with the view's status; `liveRoot` walks `parentId` to find the
+  parent's handle, which `session.resume` already does (`ownedBy`,
+  `redirectedFrom` in `sessionPrograms.ts`). Design: the handler calls
+  `session.resume` and lets the harness answer (§2.7).
+- `Effect.retry({ times: 2 })` in `serviceSession.ts` retries a
+  `TaskFailed` "result could not be read" before classifying it.
+
+Design smells:
+
+- **The frame is nine fields and two decoders.** `EventsFrame` re-declares
+  the harness's `SessionViewInput[]` as fields (`cursor`, `events`,
+  `chunks`, `local`, `host`, `debug`, `replayComplete`, `existence`), so
+  the reader's one ordering (`sessionInputs.ts`: debug, local, listing,
+  subscriptions, aggregates, replay complete; every tail batch closed by
+  `drained`) is re-established three times: `cutFrame` keeps only the last
+  `local` and drops `subscriptions`; `SessionFrames.inputs` re-orders and
+  re-synthesises them; `frameInputs` does it again. Design: the frame is
+  `{ generation, cursor, inputs: SessionViewInput[] }` (the schema exists,
+  `sessionViewInput.ts`); the three decoders and most of `cutFrame` go,
+  and ordering lives in the reader alone.
+- **The protocol version is a symptom** (§2.5): the five bumps on this
+  branch were all harness row schemas, never a procedure; `PROTOCOL.shapes`
+  is the content hash and `version` a hand-copied integer of it; the
+  promise that `service.stop` keeps its shape across versions is
+  unenforced. Per-procedure digests exchanged at hello make it checkable.
+- **A host snapshot on a channel that never carries one.** `task.watch`
+  builds a `SubscriptionRef(null)` per watch for `EventsFrame.host`, a
+  nullable special case for the webview path; `SessionFrames.host` exists
+  for it.
+- `runningTasks(projects, parked)` (§2.2); the polls (§2.3, and the 200 ms
+  startup probe in `client.ts`, whose signal could be the record write).
 
 ## 4. The plan
 
