@@ -292,16 +292,17 @@ export function reachCliService(
   return Effect.flatMap(envFlag(NO_SERVICE), (off) =>
     off
       ? Effect.fail(new Error(`${NO_SERVICE} is set`))
-      : ensureService(
-          storageRoot,
-          spawnService(storageRoot, process.execPath, [
-            ...process.execArgv,
-            readCliEntrypointPath(),
-            'serve',
-          ]),
-        ),
+      : ensureService(storageRoot, spawnOwnService(storageRoot)),
   );
 }
+
+/** Start this build's service on `storageRoot`, detached. */
+const spawnOwnService = (storageRoot: string) =>
+  spawnService(storageRoot, process.execPath, [
+    ...process.execArgv,
+    readCliEntrypointPath(),
+    'serve',
+  ]);
 
 /** What the link's starter says instead of starting a service. */
 const NONE_RUNNING = 'no TeXRA service is running';
@@ -309,11 +310,14 @@ const NONE_RUNNING = 'no TeXRA service is running';
 /**
  * The storage root's running service of this build's protocol, linked for
  * the caller's scope, or undefined when there is none to link:
- * `TEXRA_NO_SERVICE`, Windows, no service running, or an older build's
- * service, which a command leaves running (the chat retires and replaces
- * it; a command never starts or stops one). A service that is there but
- * cannot be linked (a newer build's, an unreadable record, one that does not
- * answer) fails, so no command works beside it on the project's store.
+ * `TEXRA_NO_SERVICE`, Windows, or no service running (a command never
+ * starts one for itself). An older build's service holds the projects it
+ * serves, and a project store is held by one process, so this build cannot
+ * open one beside it: the command retires that service and links to the
+ * one it starts in its place, as the chat does. A service that is there
+ * but cannot be linked (a newer build's, an unreadable record, one that
+ * does not answer) fails, so no command works beside it on the project's
+ * store.
  */
 export const linkRunningCliService = Effect.fn('linkRunningCliService')(
   function* (
@@ -331,7 +335,7 @@ export const linkRunningCliService = Effect.fn('linkRunningCliService')(
           new Error(`The TeXRA service could not be reached: ${error.reason}`),
       ),
     );
-    if (info === null || isOlder(info)) return undefined;
+    if (info === null) return undefined;
     if (info.protocol > PROTOCOL.version)
       return yield* Effect.fail(
         new Error(
@@ -340,7 +344,9 @@ export const linkRunningCliService = Effect.fn('linkRunningCliService')(
       );
     return yield* linkService(
       storageRoot,
-      Effect.fail(new Error(NONE_RUNNING)),
+      isOlder(info)
+        ? spawnOwnService(storageRoot)
+        : Effect.fail(new Error(NONE_RUNNING)),
     ).pipe(
       Effect.mapError(
         (error) =>
