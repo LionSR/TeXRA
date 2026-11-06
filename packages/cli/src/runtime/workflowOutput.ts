@@ -108,11 +108,7 @@ const probeOutputPath = Effect.fn('probeOutputPath')(
       flagLabel === '--output-dir' ? target : pathService.dirname(target);
     const stats = yield* fs
       .stat(target)
-      .pipe(
-        Effect.catchReason('PlatformError', 'NotFound', () =>
-          Effect.succeed(null),
-        ),
-      );
+      .pipe(Effect.catchIf(absentReason, () => Effect.succeed(null)));
     if (stats === null) {
       yield* fs.makeDirectory(requiredDirectory, { recursive: true });
     }

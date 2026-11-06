@@ -41,6 +41,7 @@ import {
   SubscriptionTokenResponseSchema,
 } from '../subscriptionSessionSchema.js';
 import { toErrorMessage } from '../support.js';
+import { isRetryableStatus } from '../../errors.js';
 import type {
   CredentialStore,
   SecretsFailed,
@@ -284,7 +285,7 @@ const revokeSession = Effect.fn('chatgpt.revokeSession')(function* (
       schedule: Schedule.exponential('1 second'),
       while: (error) =>
         error._tag === 'OAuthNetworkError' ||
-        (error._tag === 'OAuthHttpError' && error.status >= 500),
+        (error._tag === 'OAuthHttpError' && isRetryableStatus(error.status)),
     }),
     Effect.mapError(
       (cause) =>
