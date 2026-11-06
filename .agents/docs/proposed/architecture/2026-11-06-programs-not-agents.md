@@ -151,6 +151,7 @@ run.program { source, modules, digest, author, title, tools, timeoutMs, args }  
 agent(prompt, { system, tools, model, … })   启动一个 chat 子运行
 task(name, args)                             启动一个 program 子运行
 self(prompt, { fork })                       同 system、同 tools 的 chat 子运行
+receive()                                    等自己收件箱的下一条消息（"大一统"一节）
 ```
 
 - `background`、`recipe` 和用户 task 合为 `program`；`author`
@@ -550,6 +551,76 @@ host 和 CLI 启动 `chat`（默认）或一个 task；SDK 给 `{ system, tools 
   `agent()`。Q2 复用的 key 对 program 子 run 是源码摘要加 args 的文件指纹
   加模型，替代今天的 `agent.name`、`persona`、`task.options`。
 
+## 大一统：程序加收件箱
+
+goal mode 之所以看起来 codemode native，是因为它把三件事分开了：触发是
+一次按钮（批准 plan），启动是一段两行脚本（`goalScript()`），策略是一个可
+替换的模块（`goal.strategy`）。把这三件事推到每一个入口上，就是统一。
+
+两条公理，仓库里各有一半：
+
+1. **凡是在跑的东西都是程序。** 叶子是模型循环（chat），其余都是调
+   `agent()` 的程序。goal、document recipe、后台脚本、用户 task 是同一类
+   （"run 的两类"）。
+2. **凡是发生在一个程序身上的事都是它收件箱里的一条消息。** 收件箱已经通
+   用：用户文本、子 run 的报告、同级消息、订阅通知（PR webhook）都走它
+   （`agent/followUp/`，"runs talk as a graph: any run may message any run"）。
+
+于是触发就是发消息，所有入口归成一种：
+
+| 触发                          | 今天怎么接                                       | 统一后                                                                       |
+| ----------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------- |
+| 批准 plan，"Run as Goal"      | `goalScript()` 生成两行脚本，`PlanTool` 特殊启动 | `start({ program: goal, args })`，不特殊                                     |
+| launch form 点 Run            | 按 agent 还是 task 拼不同的 `AgentConfig`        | `start({ program: edit, args })`                                             |
+| `texra run`                   | 同上                                             | 同上                                                                         |
+| 编译失败后修复                | `compileFixer.ts` 手拼 config 启 `latexFixer`    | `start({ program: fix-build, args: { run } })`，或 task 自己在 `verify` 里修 |
+| 模型要 fan-out                | 脚本里 `Promise.all(agent…)`                     | 不变，这本来就是统一后的样子                                                 |
+| PR 开了、CI 红了              | 订阅通知投进某个 run 的收件箱                    | 投给一个在 `receive()` 上等的程序                                            |
+| 用户在聊天里回话              | chat 叶子的下一轮                                | 不变                                                                         |
+| 一个程序要等另一个            | `executions wait`                                | 不变                                                                         |
+| host 的其他事件（保存、定时） | 无                                               | host 的 `followUp.send`（`session.request` 已有这扇门）                      |
+
+### 缺的那一个原语：`receive()`
+
+今天脚本不能读自己的收件箱（codemode 文档："a script never reads its
+inbox; a result it awaits is an `agent()` value"）。程序只能"启动、等子
+run、结束"，不能"等事件"。goal 的 `needs_user` 因此必须结束 run，用户回话
+是父聊天的新一轮，再开一个新 goal。
+
+加一个全局 `receive()`：等自己收件箱的下一条消息。它是一次普通调用：结果
+是那条消息，记在行上，重放时交回；等待是 `run.position waiting`，叶子已
+经有这个位置。有了它：
+
+```js
+// .texra/tasks/ci-watch.js
+await tools.github_subscription({ repo, events: ['check_run'] });
+for (;;) {
+  const event = await receive();
+  if (event.kind === 'check_run' && event.conclusion === 'failure')
+    await agent(`Fix the red build:\n${event.log}`, {
+      tools: ['bash', 'read_file', 'edit_file'],
+    });
+}
+```
+
+这就是 dispatch multi agent flow、goal、document task、CI 看守变成同一种
+东西的那一步：一个有收件箱的程序。触发器不需要一张事件表，程序自己订
+阅、自己等；host 的事件全是 `followUp.send`。
+
+### 边界
+
+- **chat 叶子是唯一不是程序的东西。** 把它也包成
+  `return agent(msg, { interactive })` 可以做到一切皆程序，但每个对话多一
+  个 run 层，卡片多一层，没有收益。goal 已经付了这层代价（后台脚本加
+  `self()` 子 run），它值；聊天不值。
+- **PRD "暂停是一个结果，不是一个在等的 run"不被推翻。** 一个策略可以选择
+  结束并返回 `paused`，也可以选择 `receive()`。哪个是默认由 `builtIn:goal`
+  这段代码决定，内核两样都给。这正是"策略是代码"的意思。
+- **沙箱的"没有定时器"不变。** 定时触发是 host 往收件箱发消息，程序只是
+  `receive()`。
+- **脚本 24 小时的墙钟上限**要为长期程序放开，或让 `receive()` 的等待不
+  计入；否则 CI 看守一天一断。
+
 ## 其他 surface：目录概念今天伸到哪里
 
 逐个面清点"agent、team、skill、document task、编排者"这些概念的触点
@@ -773,6 +844,10 @@ prompt、每个影响运行的选项和每个引用文件的指纹哈希，范�
    `program`、`workflow`（AGENTS.md 禁的是流程引擎，不是这个词，但容易误
    读）。推荐 `recipe`：`.texra/recipes/`、`recipe('annotate', args)`、
    `texra run <recipe>`、`texra recipes types`。定了之后本文一次 grep 改名。
+6. **`receive()`。** 加这个全局，让程序能等自己收件箱的下一条消息（"大一
+   统"一节）？它让触发器统一成发消息，代价是脚本的墙钟上限要为等待放
+   开。推荐：加，放在第 2 期之后作为第 3 期的一部分，先用 CI 看守一个
+   bundled task 验证。
 
 ## 决定记录
 
