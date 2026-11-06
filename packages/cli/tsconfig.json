@@ -12,9 +12,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "scripts/**/*.ts",
-    "scripts/**/*.tsx",
-    "../harness/src/**/*.d.ts",
-    "../texra/src/types/**/*.d.ts"
+    "scripts/**/*.tsx"
   ],
   "exclude": []
 }

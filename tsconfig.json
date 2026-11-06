@@ -154,6 +154,10 @@
     "skipLibCheck": true,
     "types": ["node", "vscode"]
   },
+  "files": [
+    "packages/harness/src/types/ambient.d.ts",
+    "packages/texra/src/types/ambient.d.ts"
+  ],
   "include": [
     "packages/harness/src/**/*.ts",
     "packages/harness/src/**/*.tsx",

@@ -1,11 +1,6 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {},
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "../harness/src/types/**/*.d.ts",
-    "../texra/src/types/**/*.d.ts"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["node_modules"]
 }
