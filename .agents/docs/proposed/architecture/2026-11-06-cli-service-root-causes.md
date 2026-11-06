@@ -50,18 +50,37 @@ service's exit). Root cause: the upgrade is a handoff protocol between two
 processes, written with files, polling and timers, and R1's one-writer
 store then has to be polled for the moment the old process lets go.
 
-Design: one service per storage root, strictly. A client that finds an
-older service asks it to drain and waits on a published signal, the
-socket's close (the client's `onDisconnect` already fires on it), then
-starts its own; a project is never contended, so a held store at open is
-an error, never a retry. The record names one socket path, not one per
-pid. Deletes: `socketFor(pid)`, `removeDeadSockets`, the `retired`
-exclusion and `NOT_YET_UP`, `STORE_RELEASE_WAIT` and the `storeHeld`
-retry, `released`. Gives up: work in the new build while the old build's
-long tasks finish; a user who upgrades mid-task waits for the drain, and
-the TUI says so. The owner decides whether that wait is acceptable; the
-alternative (the old service hands its projects to the new one) is a
-larger protocol than the one this removes.
+The retry is broken on its own terms (the lifecycle review verified it):
+the drain waits for `working === 0` with no bound (`serve.ts`), a task
+runs for minutes, and after fifteen seconds every `task.start`,
+`task.watch` and `state.get` for that project on the new service fails
+with the held-store message until the old process exits. A window that
+stays linked to the retiring service fares no better: the link reconnects
+only when the socket closes, `hello.draining` is read by `texra service
+status` alone, and every start it asks is refused with "start the task
+again", which hits the same socket.
+
+Two designs end it; the owner chooses.
+
+- **One service per storage root, strictly.** A client that finds an
+  older service asks it to drain and waits on a published signal, the
+  socket's close (the client's `onDisconnect` already fires on it), then
+  starts its own; a project is never contended, so a held store at open is
+  an error, never a retry; the record names one socket path. Deletes:
+  `socketFor(pid)`, `removeDeadSockets`, the `retired` exclusion and
+  `NOT_YET_UP`, `STORE_RELEASE_WAIT` and the `storeHeld` retry,
+  `released`, the `hello.draining` field. Gives up: work in the new build
+  while the old build's long tasks finish; the windows show "finishing N
+  tasks before the update" for the drain's length.
+- **A per-project handoff on a signal.** The drain closes each project's
+  session as its last run ends (`Sessions.drain`), and says so as a record
+  in the global store, which the successor awaits through the store's
+  change stream (`GlobalValues.changes`) instead of a timer; a window on
+  the retiring service is moved to the successor as its project closes.
+  Keeps the concurrent upgrade; costs one record kind, the move, and the
+  two-services machinery the first design deletes.
+
+Either way the timer goes, and "retiring" stops being an error string.
 
 ### 2.2 A project's lifetime is hand-rolled
 
@@ -89,13 +108,27 @@ carry the last rows before the socket closes). Root cause: idle and drain
 are facts of three live counts (clients, leases, live runs) read by
 polling, and the end of the watch streams is approximated by a timer.
 
-Design: idle is "no client, no lease, no live run" as one stream of those
-counts (`SubscriptionRef.changes` of each, merged), debounced by
-`idleAfter`; a drain is a `Latch` closed over admission plus the
-`FiberSet`'s empty wait; the socket closes after the watch streams end,
-which the framer's end flush guarantees, so no sleep. Deletes:
-`CHECK_INTERVAL`, `FRAME_FLUSH`, `admissions.admitted`, `idleSince`,
-`released`. Gives up: nothing.
+"Tasks at work" has two owners meanwhile: the `admissions` counts beside
+`session.held()`, with comments in `serve.ts` describing the gap between
+them, although the harness's registry already refuses a launch on a
+session that is closing. And every lifecycle fact is sampled where a
+signal exists: `GlobalValues.changes` publishes record changes, yet
+`ensureService` polls the record every 200 ms for a minute, `texra
+service stop` polls hello every 200 ms for thirty seconds (because
+`service.stop` answers "once the stop is asked", not once it ended), the
+chat's restart loop sleeps a minute then retries every five seconds,
+`cliServiceProjects` retries the store every 250 ms, and the idle sweep
+runs every minute.
+
+Design: a draining session refuses `start` and `resume` itself, so
+`admission` and `refuseWhileDraining` go; idle is "no client, no lease,
+no live run" as one stream of those counts (`SubscriptionRef.changes` of
+each, merged), debounced by `idleAfter`; a drain is a `Latch` closed over
+admission plus the `FiberSet`'s empty wait; `service.stop` answers when
+`ended` resolves; a client awaits the record stream; the socket closes
+after the watch streams end, which the framer's end flush guarantees, so
+no sleep. Deletes: `CHECK_INTERVAL`, `FRAME_FLUSH`, the `admissions` ref,
+`idleSince`, `released`, every poll above. Gives up: nothing.
 
 ### 2.4 Five doors to one service, and a two-phase startup
 
@@ -110,10 +143,15 @@ process holds this project" is decided in the client at three moments,
 because `initCliPlatform` must know local-versus-service before it opens
 the project's roots, so a caller starts the service ahead of it.
 
+`linkRunningCliService` is a copy of `ensureService`'s first half: "a
+newer protocol fails" is decided in three places, `isOlder` read in two,
+the Windows gate in four, `TEXRA_NO_SERVICE` in three.
+
 Design: one `linkService(storageRoot)` the platform calls once (start when
-none, retire older, refuse newer, reconnect for its life); the in-process
-session only where a service is impossible (`TEXRA_NO_SERVICE`, Windows),
-decided in the same call. With R10's one `Session`, the platform's
+none, retire older, refuse newer, reconnect for its life); "a command
+starts none" is the failing start program it already passes; the
+in-process session only where a service is impossible (`TEXRA_NO_SERVICE`,
+Windows), decided in the same call. With R10's one `Session`, the platform's
 `session` / `runSession` / `reads` / `service` union collapses to the one
 session the link answers. Deletes: four of the five entries, the
 start-then-link dance in the chat and the resume command,
@@ -245,6 +283,35 @@ Design smells:
   for it.
 - `runningTasks(projects, parked)` (§2.2); the polls (§2.3, and the 200 ms
   startup probe in `client.ts`, whose signal could be the record write).
+
+### 3.2 The service's lifecycle
+
+Verified defects: the broken drain handoff and the window left on a
+retiring service (§2.1); two owners of "tasks at work" and the six polls
+(§2.3); the resolver copied and the two-phase startup (§2.4).
+
+Design smells:
+
+- `ServiceRecord.protocol` and `version` are written at claim and read
+  nowhere (every reader takes the hello): dead persisted data; the record
+  is a pointer to a socket.
+- A hand-written "once": the `released` flag with `leave` run from four
+  places; `clients` reassigned after the protocol builds because `control`
+  is built before its dependency. A `Deferred`, and `control` after
+  `protocol`.
+- `sessions.closeAll` runs three times at exit (`settle`, the serve
+  command's finalizer, the session layer's own).
+- The link's reconnect drops the first failure's reason
+  (`Effect.catch(() => connect(start))`) and re-probes to find it again.
+- The loser of a start race exits with the usage code: a normal outcome
+  reported as misuse.
+- Liveness of a service is decided three ways (record presence, the
+  hello, `process.kill(pid, 0)` in `removeDeadSockets`); the record is a
+  pointer, which is fine, but the dead-socket sweep is a second cleanup
+  beside `releaseServiceRecord` (gone under §2.1's first design).
+- Kept as is: the hand `spawn` for the detached service is justified
+  (Effect's `ChildProcess` takes no file descriptor for stdio); the start
+  race is handled by the record's compare-and-set.
 
 ## 4. The plan
 
