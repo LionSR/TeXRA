@@ -13,7 +13,6 @@ import {
 import { type CliContext } from '@cli/runtime/cliContext';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { localRunReads } from '@cli/runtime/runReads';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
 import {
   SessionGraph,
@@ -62,7 +61,6 @@ const seedRunRecord = (config: AgentConfig | null) =>
         runtime: yield* SessionGraph.runtime,
         session: Effect.succeed(session),
         runSession: Effect.succeed(session),
-        reads: localRunReads(Effect.succeed(session)),
         service: { none: 'no service in this test' },
       }),
     );

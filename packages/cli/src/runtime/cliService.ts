@@ -335,7 +335,7 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
 export const linkClient = (
   link: ServiceLink,
 ): Effect.Effect<Pick<ServiceConnection, 'client'>, Error> =>
-  Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+  Effect.flatMap(link.client.get, (client) =>
     client === null
       ? Effect.flatMap(SubscriptionRef.get(link.away), (away) =>
           Effect.fail(new Error(away)),

@@ -6,13 +6,7 @@
  * row type the run history keeps private, no store facet and no claim leaves
  * here.
  */
-import {
-  Context,
-  Effect,
-  type PlatformError,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
@@ -37,7 +31,6 @@ import {
   type RunWorkspaceFile,
   type TranscriptSubscription,
 } from '@shared/schemas';
-import type { DatabaseReadFailed } from '@shared/session/database';
 import { SessionLog, SessionViewAccess } from '@shared/session/runHistory';
 import type { RequestError } from '@shared/session/runtimeRequest';
 import { readCompletedRunConversation } from '@transcript/completedRunArchive';
@@ -49,50 +42,43 @@ import {
 import type { LocalSession } from './sessions.js';
 
 /**
- * One run's committed records ({@link LocalSession.records}), read from the
- * session's store as of each call. A run that never existed or was removed
- * reads as absent: no config, no end, nothing to resume.
+ * One run's committed records (`Session.records`), read from the session's
+ * store as of each call. A run that never existed or was removed reads as
+ * absent: no config, no end, nothing to resume. A read fails with the
+ * store's error, or, on a session another process holds, with why that
+ * process did not answer.
  */
 export interface RunRecords {
   /** Its `run.start` is still listed. */
-  readonly exists: () => Effect.Effect<boolean, DatabaseReadFailed>;
+  readonly exists: () => Effect.Effect<boolean, Error>;
   /** Its saved setup; null for a run that saved none (not an agent's). */
-  readonly readConfig: () => Effect.Effect<
-    AgentConfig | null,
-    DatabaseReadFailed
-  >;
+  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
   /** The report its agent wrote, or null. */
-  readonly readReport: () => Effect.Effect<string | null, DatabaseReadFailed>;
+  readonly readReport: () => Effect.Effect<string | null, Error>;
   /** Its terminal fact (outcome, error, output, usage), or null while it
    *  has not ended. */
-  readonly readRunEnd: () => Effect.Effect<RunEnd | null, DatabaseReadFailed>;
+  readonly readRunEnd: () => Effect.Effect<RunEnd | null, Error>;
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
-  readonly readResult: () => Effect.Effect<
-    RunResult | null,
-    DatabaseReadFailed
-  >;
+  readonly readResult: () => Effect.Effect<RunResult | null, Error>;
   /** The workspace files its settled calls edited that are still there,
    *  under its working directory, by path. */
   readonly readWorkspaceFiles: () => Effect.Effect<
-    RunWorkspaceFile[],
-    DatabaseReadFailed | PlatformError.PlatformError
+    readonly RunWorkspaceFile[],
+    Error
   >;
   /** The skills its latest step listed. */
-  readonly readSkills: () => Effect.Effect<
-    readonly string[],
-    DatabaseReadFailed
-  >;
+  readonly readSkills: () => Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: () => Effect.Effect<boolean>;
+  readonly readResumable: () => Effect.Effect<boolean, Error>;
   /** Why a resume of it here is refused before its agent is checked
    *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
-  readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
+  readonly readConversation: () => Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
   readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
 }
@@ -110,7 +96,7 @@ export interface HeldRun {
   ) => Effect.Effect<string | undefined, Error>;
 }
 
-/** What {@link LocalSession.deleteRuns} did with the runs it was asked for. */
+/** What `Session.deleteRuns` did with the runs it was asked for. */
 export interface RunDeletion {
   /** How many listed runs the target named. */
   readonly listed: number;

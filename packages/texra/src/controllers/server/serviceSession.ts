@@ -32,6 +32,7 @@ import {
   type ITool,
   type Run,
   type RunEnd,
+  type RunRecords,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -52,11 +53,7 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import {
-  TaskRecordsFailed,
-  type ProjectStateFailed,
-  type TaskFailed,
-} from './protocol';
+import type { ProjectStateFailed, TaskFailed } from './protocol';
 import type {
   CommitOrdinal,
   TranscriptSubscription,
@@ -73,7 +70,7 @@ const callService = <A, E>(
   offline: (reason: string) => E,
   use: (client: ServiceClient) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
-  Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+  Effect.flatMap(link.client.get, (client) =>
     client === null
       ? Effect.flatMap(SubscriptionRef.get(link.away), (reason) =>
           Effect.fail(offline(reason)),
@@ -81,47 +78,25 @@ const callService = <A, E>(
       : use(client),
   );
 
-/**
- * A window's reads of its project's task records, answered by the service
- * from its own session: the run's saved setup, and what its transcript
- * exports read. The window opens no records of its own in service mode. A
- * service that is offline, or did not answer, fails the read `offline`.
- */
-export const serviceRecords = (link: ServiceLink, workspace: string) => {
-  const ask = <A>(
-    runId: RunId,
-    use: (
-      client: ServiceClient,
-    ) => Effect.Effect<
-      A,
-      TaskRecordsFailed | { readonly _tag: 'RpcClientError'; message: string }
-    >,
-  ): Effect.Effect<A, TaskRecordsFailed> =>
-    callService(
-      link,
-      (message) => new TaskRecordsFailed({ runId, reason: 'offline', message }),
-      (client) =>
-        use(client).pipe(
-          Effect.mapError((error) =>
-            error._tag === 'TaskRecordsFailed'
-              ? error
-              : new TaskRecordsFailed({
-                  runId,
-                  reason: 'offline',
-                  message: `The TeXRA service did not answer: ${error.message}`,
-                }),
-          ),
+/** A call the service answers or fails as the session's own `Error`: the
+ *  service's refusal as the class it failed with, a transport failure or
+ *  an offline link worded for the user. */
+const asked = <A>(
+  link: ServiceLink,
+  use: (client: ServiceClient) => Effect.Effect<A, Error>,
+): Effect.Effect<A, Error> =>
+  callService(
+    link,
+    (reason) => new Error(`The TeXRA service did not answer: ${reason}`),
+    (client) =>
+      use(client).pipe(
+        Effect.mapError((error) =>
+          Predicate.isTagged(error, 'RpcClientError')
+            ? new Error(`The TeXRA service did not answer: ${error.message}`)
+            : error,
         ),
-    );
-  return {
-    readConfig: (runId: RunId) =>
-      ask(runId, (client) => client['task.config']({ workspace, runId })),
-    exportInput: (runId: RunId) =>
-      ask(runId, (client) => client['task.exportInput']({ workspace, runId })),
-    exportTrace: (runId: RunId) =>
-      ask(runId, (client) => client['task.exportTrace']({ workspace, runId })),
-  };
-};
+      ),
+  );
 
 /** How many times a change to a project state key is tried again while
  *  another writer moves the key between its read and its write. */
@@ -281,7 +256,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   /** The client, once the link has one; or the refusal, once a newer
    *  TeXRA's service refused this window, which no reconnect undoes. */
   const connected = Stream.merge(
-    SubscriptionRef.changes(link.client).pipe(
+    link.client.changes.pipe(
       Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
@@ -323,7 +298,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       }));
       yield* graph.frames.begin(generation);
       yield* graph.view.subscribe(WINDOW_PORT, aggregates);
-      const client = yield* SubscriptionRef.get(link.client);
+      const client = yield* link.client.get;
       // Offline: the link's return resubscribes.
       if (client === null) return yield* FiberHandle.clear(feed);
       yield* FiberHandle.run(
@@ -363,7 +338,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   // nothing else: the project's approval policy is its persisted setting,
   // which the service reads itself.
   yield* Effect.forkScoped(
-    SubscriptionRef.changes(link.client).pipe(
+    link.client.changes.pipe(
       Stream.drop(1),
       Stream.runForEach((client) =>
         client === null ? Effect.void : resubscribe,
@@ -441,7 +416,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           subscribe(port, []),
         );
         const cursor = yield* Ref.make(from.cursor);
-        return SubscriptionRef.changes(link.client).pipe(
+        return link.client.changes.pipe(
           Stream.switchMap((client) =>
             client === null
               ? Stream.empty
@@ -552,13 +527,48 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           tools: tools.map((tool) => tool.definition.name),
           message: "The TeXRA service cannot run a window's own tools.",
         });
+  /** `Session.records`: each member one procedure of the service. */
+  const records = (runId: RunId): RunRecords => {
+    const ask = <A>(
+      read: (
+        client: ServiceClient,
+        input: { workspace: string; runId: RunId },
+      ) => Effect.Effect<A, Error>,
+    ) => asked(link, (client) => read(client, { workspace, runId }));
+    return {
+      exists: () => ask((client, input) => client['records.exists'](input)),
+      readConfig: () => ask((client, input) => client['records.config'](input)),
+      readReport: () => ask((client, input) => client['records.report'](input)),
+      readRunEnd: () => ask((client, input) => client['records.runEnd'](input)),
+      readResult: () => ask((client, input) => client['records.result'](input)),
+      readWorkspaceFiles: () =>
+        ask((client, input) => client['records.workspaceFiles'](input)),
+      readSkills: () => ask((client, input) => client['records.skills'](input)),
+      readResumable: () =>
+        ask((client, input) => client['records.resumable'](input)),
+      readRejection: () =>
+        ask((client, input) => client['records.rejection'](input)),
+      readConversation: () =>
+        ask((client, input) => client['records.conversation'](input)),
+      readTrace: () => ask((client, input) => client['records.trace'](input)),
+    };
+  };
   return {
     roots,
     view: {
       current: graph.view.current,
       changes: graph.view.changes,
       watch,
+      read: (runIds) =>
+        asked(link, (client) => client['session.view']({ workspace, runIds })),
     },
+    records,
+    listRuns: () =>
+      asked(link, (client) => client['session.listRuns']({ workspace })),
+    deleteRuns: (target) =>
+      asked(link, (client) =>
+        client['session.deleteRuns']({ workspace, target }),
+      ),
     request,
     start: ({ tools, ...start }) => {
       if (!('config' in start))

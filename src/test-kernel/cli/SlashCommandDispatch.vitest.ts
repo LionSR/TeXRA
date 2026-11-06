@@ -12,7 +12,6 @@ import { notices } from '@cli/chat/tui/state/transcript';
 import { resetCliState } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { localRunReads } from '@cli/runtime/runReads';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { SessionGraph, TestSession } from '@test/support/testKernel';
@@ -27,7 +26,6 @@ const processServices = Effect.gen(function* () {
   return {
     stores: makeFakeSettingsStores().stores,
     runtime: yield* SessionGraph.runtime,
-    reads: localRunReads(Effect.succeed(session)),
     runSession: session,
   };
 });

@@ -192,21 +192,6 @@ const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
       session: overrides.session ?? makeSession(),
       runSession: mocks.sessionStub(),
       served: false,
-      records: (runId: RunId) => {
-        const records = mocks.getRunRecords(runId);
-        return {
-          readConfig: () =>
-            Effect.tryPromise({
-              try: () => records.readConfig(),
-              catch: ensureError,
-            }),
-          exists: () =>
-            Effect.tryPromise({
-              try: () => records.exists(),
-              catch: ensureError,
-            }),
-        };
-      },
       sessionContext: makeSessionContext(),
       chatScope,
       shutdownScope: scope,
@@ -239,6 +224,22 @@ function installSession(
   const ref = installed ?? installableViewRef();
   mocks.sessionStub.mockReturnValue({
     roots: testWorkspaceRoots(),
+    // The run's records the chat reads: its saved setup, whether it exists.
+    records: (runId: RunId) => {
+      const records = mocks.getRunRecords(runId);
+      return {
+        readConfig: () =>
+          Effect.tryPromise({
+            try: () => records.readConfig(),
+            catch: ensureError,
+          }),
+        exists: () =>
+          Effect.tryPromise({
+            try: () => records.exists(),
+            catch: ensureError,
+          }),
+      };
+    },
     // The chat's host attaches for the session's life; detaching it is the
     // stub's own mock.
     attach: vi.fn(() =>

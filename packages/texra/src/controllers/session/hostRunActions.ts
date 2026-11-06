@@ -2,7 +2,6 @@
 
 import {
   Cancelled,
-  DatabaseReadFailed,
   Rejected,
   type RequestError,
   type RequestRefusal,
@@ -46,7 +45,6 @@ import {
   documentsOf,
 } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
-import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 
 import {
   planCompileFixer,
@@ -75,11 +73,7 @@ interface WorkflowFileOperationResult {
  *  run could not answer for it (`cause`). */
 class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
   'RunConfigUnreadable',
-  {
-    runId: RunIdSchema,
-    message: Schema.String,
-    cause: Schema.Union([DatabaseReadFailed, TaskRecordsFailed]),
-  },
+  { runId: RunIdSchema, message: Schema.String, cause: Schema.Defect() },
 ) {}
 
 /** The launch facts an action adds to a validated request, as the
@@ -94,10 +88,7 @@ export interface HostRunActionPorts {
    *  none. */
   readonly readConfig: (
     runId: RunId,
-  ) => Effect.Effect<
-    AgentConfig | null,
-    DatabaseReadFailed | TaskRecordsFailed
-  >;
+  ) => Effect.Effect<AgentConfig | null, Error>;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
   /** Bring the host's progress surface into view for a run this window just

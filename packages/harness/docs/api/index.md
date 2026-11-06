@@ -398,8 +398,8 @@ type LaunchError = AgentNotFound | ToolsRefused;
 ## LocalSession
 
 A session this process holds, as `Sessions.open` returns it: everything
-a {@link Session} has, plus direct reads of its store (run listing,
-records, deletion) and of the runs this process is running.
+a {@link Session} has, plus the runs this process is running, its store's
+positions and its notices.
 
 ```ts
 interface LocalSession extends Session {
@@ -412,9 +412,6 @@ interface LocalSession extends Session {
     readonly subscribe: (
       set: readonly TranscriptSubscription[],
     ) => Effect.Effect<void, never, Scope.Scope>;
-    /** A one-off snapshot built from the store: every run's summary, and
-     *  the full transcript of the runs named. */
-    readonly read: (runIds: readonly RunId[]) => Effect.Effect<SessionView>;
     /** The position of the store's latest write. Pass it to
      *  {@link events} to see only what is written from now on. */
     readonly head: () => CommitOrdinal;
@@ -440,26 +437,12 @@ interface LocalSession extends Session {
    *  or `resume` handed it out: a host that carries a handle across a
    *  process boundary answers its members from here. */
   readonly run: (runId: RunId, activation: CommitOrdinal) => Run;
-  /** One run's stored records. */
-  readonly records: (runId: RunId) => RunRecords;
-  /** The runs a person started (not child runs), newest first, each with
-   *  its saved setup. */
-  readonly listRuns: () => Effect.Effect<AgentRunListingEntry[], Error>;
   /** The run `runId` if this process is running it, or every run it is
    *  running. */
   readonly held: {
     (runId: RunId): HeldRun | undefined;
     (): readonly HeldRun[];
   };
-  /**
-   * Delete one run, or every stored run (`'all'`). A run another live
-   * process is running is skipped and reported as `active`. Deleting a
-   * single run may take it from a process that cannot be proved alive or
-   * dead; `'all'` never does.
-   */
-  readonly deleteRuns: (
-    target: RunId | 'all',
-  ) => Effect.Effect<RunDeletion, DatabaseReadFailed>;
   /** Show a notice through the attached host; a notice raised while no
    *  host is attached waits for the next one. */
   readonly emit: SessionHostInteractions['emit'];
@@ -755,7 +738,7 @@ class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
 
 ## RunDeletion
 
-What {@link LocalSession.deleteRuns} did with the runs it was asked for.
+What `Session.deleteRuns` did with the runs it was asked for.
 
 ```ts
 interface RunDeletion {
@@ -797,51 +780,44 @@ type RunId = typeof RunIdSchema.Type;
 
 ## RunRecords
 
-One run's committed records ({@link LocalSession.records}), read from the
-session's store as of each call. A run that never existed or was removed
-reads as absent: no config, no end, nothing to resume.
+One run's committed records (`Session.records`), read from the session's
+store as of each call. A run that never existed or was removed reads as
+absent: no config, no end, nothing to resume. A read fails with the
+store's error, or, on a session another process holds, with why that
+process did not answer.
 
 ```ts
 interface RunRecords {
   /** Its `run.start` is still listed. */
-  readonly exists: () => Effect.Effect<boolean, DatabaseReadFailed>;
+  readonly exists: () => Effect.Effect<boolean, Error>;
   /** Its saved setup; null for a run that saved none (not an agent's). */
-  readonly readConfig: () => Effect.Effect<
-    AgentConfig | null,
-    DatabaseReadFailed
-  >;
+  readonly readConfig: () => Effect.Effect<AgentConfig | null, Error>;
   /** The report its agent wrote, or null. */
-  readonly readReport: () => Effect.Effect<string | null, DatabaseReadFailed>;
+  readonly readReport: () => Effect.Effect<string | null, Error>;
   /** Its terminal fact (outcome, error, output, usage), or null while it
    *  has not ended. */
-  readonly readRunEnd: () => Effect.Effect<RunEnd | null, DatabaseReadFailed>;
+  readonly readRunEnd: () => Effect.Effect<RunEnd | null, Error>;
   /** Its result as delivered: the terminal fact with the output its
    *  delivery reported, or a background command's own record. */
-  readonly readResult: () => Effect.Effect<
-    RunResult | null,
-    DatabaseReadFailed
-  >;
+  readonly readResult: () => Effect.Effect<RunResult | null, Error>;
   /** The workspace files its settled calls edited that are still there,
    *  under its working directory, by path. */
   readonly readWorkspaceFiles: () => Effect.Effect<
-    RunWorkspaceFile[],
-    DatabaseReadFailed | PlatformError.PlatformError
+    readonly RunWorkspaceFile[],
+    Error
   >;
   /** The skills its latest step listed. */
-  readonly readSkills: () => Effect.Effect<
-    readonly string[],
-    DatabaseReadFailed
-  >;
+  readonly readSkills: () => Effect.Effect<readonly string[], Error>;
   /** Its rows hold a point it continues from, ownership aside; rows that
    *  cannot be read (logged) hold none. */
-  readonly readResumable: () => Effect.Effect<boolean>;
+  readonly readResumable: () => Effect.Effect<boolean, Error>;
   /** Why a resume of it here is refused before its agent is checked
    *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
   /** Its conversation as every conversation view renders it. */
-  readonly readConversation: () => Effect.Effect<ExportNode[], Error>;
+  readonly readConversation: () => Effect.Effect<readonly ExportNode[], Error>;
   /** Its exported trace: its display rows and its record. */
   readonly readTrace: () => Effect.Effect<AssembleTraceResult, Error>;
 }
@@ -873,9 +849,10 @@ type RuntimeRequest = typeof RuntimeRequestSchema.Type;
 
 ## Session
 
-One workspace's runs, the view of them, and the hosts attached to it.
-`Sessions.open` gives the {@link LocalSession} this process holds; a
-window connected to a background process holds a plain `Session`.
+One workspace's runs, the view of them, its store's records, and the
+hosts attached to it. `Sessions.open` gives the {@link LocalSession}
+this process holds; a window connected to a background process holds a
+plain `Session`, whose members that process answers.
 
 ```ts
 interface Session {
@@ -896,7 +873,29 @@ interface Session {
       set: readonly TranscriptSubscription[],
       from: { readonly cursor: CommitOrdinal; readonly debug: boolean },
     ) => Stream.Stream<readonly SessionViewInput[]>;
+    /** A one-off snapshot built from the store: every run's summary, and
+     *  the full transcript of the runs named. */
+    readonly read: (
+      runIds: readonly RunId[],
+    ) => Effect.Effect<SessionView, Error>;
   };
+  /** One run's stored records. */
+  readonly records: (runId: RunId) => RunRecords;
+  /** The runs a person started (not child runs), newest first, each with
+   *  its saved setup. */
+  readonly listRuns: () => Effect.Effect<
+    readonly AgentRunListingEntry[],
+    Error
+  >;
+  /**
+   * Delete one run, or every stored run (`'all'`). A run another live
+   * process is running is skipped and reported as `active`. Deleting a
+   * single run may take it from a process that cannot be proved alive or
+   * dead; `'all'` never does.
+   */
+  readonly deleteRuns: (
+    target: RunId | 'all',
+  ) => Effect.Effect<RunDeletion, Error>;
   /**
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has

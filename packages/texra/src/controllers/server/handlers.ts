@@ -23,11 +23,15 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import { Internal, type LocalSession, Rejected } from '@texra-ai/harness';
+import {
+  Internal,
+  type LocalSession,
+  Rejected,
+  type RunRecords,
+} from '@texra-ai/harness';
 import { launchNoticeOf } from '@texra-ai/harness/host';
 import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 
 import {
@@ -40,7 +44,7 @@ import {
 } from './protocol';
 
 import { HostWindows } from './hostWindows';
-import { listTasks, runLaunchFacts } from './taskList';
+import { listTasks } from './taskList';
 
 /** A project the service serves: its session, as every host drives it. */
 export interface ServiceProject {
@@ -193,50 +197,29 @@ export const serviceHandlers = TexraRpcs.toLayer(
             (error) => new TaskFailed({ message: error.message }),
           ),
         );
-    /** What `read` answers from `runId`'s records in the project's session,
-     *  read where the run is held; a run the session does not hold is
-     *  unknown, not a run without records. */
-    const records = <A>(
-      workspace: string,
-      runId: RunId,
-      read: (session: LocalSession) => Effect.Effect<A, Error>,
-    ): Effect.Effect<A, TaskRecordsFailed> =>
-      Effect.scoped(
-        projects.open(workspace).pipe(
-          Effect.mapError(
-            (error) =>
-              new TaskRecordsFailed({
-                runId,
-                reason: 'unreadable',
-                message: error.message,
-              }),
+    /** A handler over the project's session: `read` answers it, and a
+     *  failure is `failed`'s to word. */
+    const over =
+      <E>(failed: (message: string) => E) =>
+      <A>(
+        workspace: string,
+        read: (session: LocalSession) => Effect.Effect<A, Error>,
+      ): Effect.Effect<A, E> =>
+        Effect.scoped(
+          projects.open(workspace).pipe(
+            Effect.flatMap(({ session }) => read(session)),
+            Effect.mapError((error) => failed(error.message)),
           ),
-          // Whether the run exists, from the log rather than the live
-          // view: a session the open just (re)built has applied nothing yet.
-          Effect.flatMap(({ session }) =>
-            Effect.flatMap(session.view.read([runId]), (level) =>
-              level.runs.has(runId)
-                ? read(session).pipe(
-                    Effect.mapError(
-                      (error) =>
-                        new TaskRecordsFailed({
-                          runId,
-                          reason: 'unreadable',
-                          message: error.message,
-                        }),
-                    ),
-                  )
-                : Effect.fail(
-                    new TaskRecordsFailed({
-                      runId,
-                      reason: 'unknownRun',
-                      message: `The TeXRA service holds no task ${runId} in ${workspace}.`,
-                    }),
-                  ),
-            ),
-          ),
-        ),
-      );
+        );
+    const session = over((message) => new TaskFailed({ message }));
+    /** One member of `Session.records(runId)` over the project's session. */
+    const record =
+      <A>(read: (records: RunRecords) => Effect.Effect<A, Error>) =>
+      ({ workspace, runId }: { workspace: string; runId: RunId }) =>
+        over((message) => new TaskRecordsFailed({ runId, message }))(
+          workspace,
+          (held) => read(held.records(runId)),
+        );
     return {
       'service.hello': Effect.fn('handlers.service.hello')(function* () {
         return {
@@ -291,66 +274,25 @@ export const serviceHandlers = TexraRpcs.toLayer(
             return { ...end, at: session.view.head() };
           }),
         ),
-      'task.config': ({ workspace, runId }) =>
-        records(workspace, runId, (session) =>
-          session.records(runId).readConfig(),
-        ),
-      'task.exportInput': ({ workspace, runId }) =>
-        records(workspace, runId, (session) =>
-          Effect.map(
-            loadChatExportInput(runId, session),
-            ({ config, exportInput }) => ({ config, exportInput }),
-          ),
-        ),
-      'task.exportTrace': ({ workspace, runId }) =>
-        records(workspace, runId, (session) =>
-          session.records(runId).readTrace(),
-        ),
-      'tasks.history': ({ workspace }) =>
-        Effect.scoped(
-          Effect.flatMap(open(workspace), ({ session }) =>
-            session
-              .listRuns()
-              .pipe(
-                Effect.mapError(
-                  (error) => new TaskFailed({ message: error.message }),
-                ),
-              ),
-          ),
-        ),
-      'task.detail': ({ workspace, runId }) =>
-        records(workspace, runId, (session) => {
-          const stored = session.records(runId);
-          return Effect.all(
-            {
-              run: Effect.map(session.view.read([runId]), (view) =>
-                runLaunchFacts(view.runs.get(runId)),
-              ),
-              result: stored.readResult(),
-              report: stored.readReport(),
-              conversation: stored.readConversation(),
-              workspaceFiles: stored.readWorkspaceFiles(),
-              resumable: stored.readResumable(),
-            },
-            { concurrency: 5 },
-          );
-        }),
-      'task.skills': ({ workspace, runId }) =>
-        records(workspace, runId, (session) =>
-          session.records(runId).readSkills(),
-        ),
-      'tasks.delete': ({ workspace, target }) =>
-        Effect.scoped(
-          Effect.flatMap(open(workspace), ({ session }) =>
-            session
-              .deleteRuns(target)
-              .pipe(
-                Effect.mapError(
-                  (error) => new TaskFailed({ message: error.message }),
-                ),
-              ),
-          ),
-        ),
+      'session.view': ({ workspace, runIds }) =>
+        session(workspace, (held) => held.view.read(runIds)),
+      'session.listRuns': ({ workspace }) =>
+        session(workspace, (held) => held.listRuns()),
+      'session.deleteRuns': ({ workspace, target }) =>
+        session(workspace, (held) => held.deleteRuns(target)),
+      'records.exists': record((records) => records.exists()),
+      'records.config': record((records) => records.readConfig()),
+      'records.report': record((records) => records.readReport()),
+      'records.runEnd': record((records) => records.readRunEnd()),
+      'records.result': record((records) => records.readResult()),
+      'records.workspaceFiles': record((records) =>
+        records.readWorkspaceFiles(),
+      ),
+      'records.skills': record((records) => records.readSkills()),
+      'records.resumable': record((records) => records.readResumable()),
+      'records.rejection': record((records) => records.readRejection()),
+      'records.conversation': record((records) => records.readConversation()),
+      'records.trace': record((records) => records.readTrace()),
       'task.request': ({ workspace, request }) =>
         Effect.scoped(
           projects.open(workspace).pipe(

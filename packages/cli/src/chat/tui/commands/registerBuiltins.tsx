@@ -72,7 +72,6 @@ import {
   modelAccessContribution,
 } from './modelAccessContribution';
 import type { Session } from '@texra-ai/harness';
-import type { CliRunReads } from '@cli/runtime/runReads';
 import type {
   GlobalValues,
   ProcessRuntime,
@@ -98,7 +97,6 @@ export function registerBuiltinSlashCommands(options: {
    *  their programs on, from the same surface. */
   runtime: ProcessRuntime;
   /** The project's stored runs `/resume` lists, where they are held. */
-  reads: CliRunReads;
   /** Where the commands' run requests and resumes land: the chat's session,
    *  here or in the service. */
   runSession: Session;
@@ -299,11 +297,15 @@ export function registerBuiltinSlashCommands(options: {
     ),
     (value: string) => options.onMemorySelect?.(value) ?? Effect.void,
   );
-  // `/resume` lists the project's stored runs; bind the reads here so the
+  // `/resume` lists the project's stored runs; bind the session here so the
   // command still uses the one plain-picker adapter.
   const ResumeListFormAdapter = makeSelectFormAdapter<RunId>(
     (formProps) => (
-      <ResumeListForm runtime={runtime} reads={options.reads} {...formProps} />
+      <ResumeListForm
+        runtime={runtime}
+        session={options.runSession}
+        {...formProps}
+      />
     ),
     (id: RunId) => options.onResumeSelect?.(id) ?? Effect.void,
   );

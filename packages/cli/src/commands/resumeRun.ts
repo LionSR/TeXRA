@@ -96,7 +96,10 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   const stores = yield* initCliPlatform({ ...context, startsService: true });
   if (!isLinked(stores.service))
     writeTextStderr(`This task runs here: ${stores.service.none}`);
-  const configResult = yield* Effect.result(stores.reads.config(id));
+  const runSession = yield* stores.runSession;
+  const configResult = yield* Effect.result(
+    runSession.records(id).readConfig(),
+  );
   if (Result.isFailure(configResult)) {
     writeTextStderr(loadFailureMessage(id, configResult.failure));
     return CliExitCode.AgentError;
@@ -127,15 +130,13 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
       );
       return CliExitCode.Usage;
     }
-    const forked = yield* Effect.result(
-      forkRun(yield* stores.runSession, id, null),
-    );
+    const forked = yield* Effect.result(forkRun(runSession, id, null));
     if (Result.isFailure(forked)) {
       writeTextStderr(requestErrorText(forked.failure));
       return CliExitCode.Usage;
     }
     const forkId = forked.success;
-    const forkConfig = yield* stores.reads.config(forkId);
+    const forkConfig = yield* runSession.records(forkId).readConfig();
     if (!forkConfig) {
       writeTextStderr(`Task ${forkId} was forked without a configuration.`);
       return CliExitCode.AgentError;

@@ -19,7 +19,6 @@ import {
   listCliHistoryEntries,
   readCliHistoryDetails,
 } from '@cli/runtime/history';
-import { localRunReads } from '@cli/runtime/runReads';
 import { SessionLog } from '@shared/session/runHistory';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -53,19 +52,11 @@ const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
 
 /** The CLI's history reads over the process session, as a chat no service
  *  serves holds them. */
-const historyReads = Effect.map(TestSession, (session) =>
-  localRunReads(Effect.succeed(session)),
-);
-
-const historyEntries = Effect.flatMap(historyReads, listCliHistoryEntries);
+const historyEntries = Effect.flatMap(TestSession, listCliHistoryEntries);
 
 const historyDetails = (id: RunId) =>
   Effect.flatMap(TestSession, (session) =>
-    readCliHistoryDetails(
-      localRunReads(Effect.succeed(session)),
-      session.roots.storage,
-      id,
-    ),
+    readCliHistoryDetails(session, session.roots.storage, id),
   );
 
 /**

@@ -23,10 +23,9 @@
  * - `task.start` / `task.resume`: launch or continue a task in the service,
  *   answered with the run and the activation the window's handle is for;
  *   `task.result`: that activation's stored end (`Run.result`).
- * - `task.config` / `task.exportInput` / `task.exportTrace`: a task's saved
- *   setup, and what its transcript exports read, from the service's own
- *   records; `tasks.history`, `task.detail`, `task.skills` and
- *   `tasks.delete`: what the CLI's history and status read and delete.
+ * - `session.view` / `session.listRuns` / `session.deleteRuns` and the
+ *   `records.*` procedures: `Session`'s store reads and deletion, one
+ *   procedure per member, answered from the service's own session.
  * - `host.attach` / `host.focus` / `host.answer`: a window offering its host
  *   capabilities to its project's tasks (see `hostCalls.ts`).
  * - `state.get` / `state.set`: the project's state store, which a window
@@ -42,23 +41,23 @@ import {
   AgentRunListingEntrySchema,
   JsonValueSchema,
   LaunchNoticeSchema,
+  ResumeRefusalSchema,
   RunEndSchema,
   RunIdSchema,
   RunRecordFieldsSchema,
   RunResultSchema,
-  RunViewSchema,
   RunWorkspaceFileSchema,
   RUN_STATUS_KEYS,
   OutcomeSchema,
   RequestErrorSchema,
   RuntimeRequestSchema,
+  SessionViewSchema,
   StartRequestSchema,
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
   DisplaySessionEventSchema,
 } from '@texra-ai/harness/transcript';
-import { ChatExportInputSchema } from '@texra/agent/export/schemas';
 
 import {
   EventsFrameSchema,
@@ -70,8 +69,6 @@ import {
   HostFrameSchema,
 } from './hostCalls';
 import { ExportNodeSchema, type ValueFamily } from '@texra-ai/harness/host';
-
-import { RUN_LAUNCH_FACT_FIELDS } from './taskList';
 
 /**
  * The build every TeXRA bundle carries: the workspace version, stamped by
@@ -153,16 +150,11 @@ export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   notice: Schema.optional(LaunchNoticeSchema),
 }) {}
 
-/** Why a task's records have no answer: the service holds no such run in
- *  the project, its records would not read, or (on the client side only) the
- *  service is offline or did not answer. */
+/** Why a run's records have no answer: the service could not open the
+ *  project, or its store refused the read. */
 export class TaskRecordsFailed extends Schema.TaggedError<TaskRecordsFailed>()(
   'TaskRecordsFailed',
-  {
-    runId: RunIdSchema,
-    reason: Schema.Literals(['offline', 'unknownRun', 'unreadable']),
-    message: Schema.String,
-  },
+  { runId: RunIdSchema, message: Schema.String },
 ) {}
 
 /** Why the project's state has no answer: the service could not open the
@@ -232,15 +224,93 @@ export const TexraRpcs = RpcGroup.make(
     success: RunEndSchema.mapFields(Struct.assign({ at: CommitOrdinalSchema })),
     error: TaskFailed,
   }),
-  /** The run's saved setup; null when it saved none. */
-  Rpc.make('task.config', {
+  /** `Session.view.read`: a snapshot built from the store, with the full
+   *  transcript of the runs named. */
+  Rpc.make('session.view', {
+    payload: { workspace, runIds: Schema.Array(RunIdSchema) },
+    success: SessionViewSchema,
+    error: TaskFailed,
+  }),
+  /** `Session.listRuns`: the runs a person started in the project, newest
+   *  first. */
+  Rpc.make('session.listRuns', {
+    payload: { workspace },
+    success: Schema.Array(AgentRunListingEntrySchema),
+    error: TaskFailed,
+  }),
+  /** `Session.deleteRuns`: delete one stored run, or every one; a run the
+   *  service still runs is skipped and reported as `active`. */
+  Rpc.make('session.deleteRuns', {
+    payload: {
+      workspace,
+      target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
+    },
+    success: Schema.Struct({
+      listed: Schema.Int,
+      deleted: Schema.Array(RunIdSchema),
+      active: Schema.Array(RunIdSchema),
+      failed: Schema.Array(
+        Schema.Struct({ runId: RunIdSchema, error: RequestErrorSchema }),
+      ),
+    }),
+    error: TaskFailed,
+  }),
+  // `Session.records(runId)`, a procedure per member: a run the store does
+  // not hold reads as absent, as it does there.
+  Rpc.make('records.exists', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Boolean,
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.config', {
     payload: { workspace, runId: RunIdSchema },
     success: Schema.NullOr(AgentConfigSchema),
     error: TaskRecordsFailed,
   }),
+  Rpc.make('records.report', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(Schema.String),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.runEnd', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(RunEndSchema),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.result', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(RunResultSchema),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.workspaceFiles', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(RunWorkspaceFileSchema),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.skills', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(Schema.String),
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.resumable', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Boolean,
+    error: TaskRecordsFailed,
+  }),
+  Rpc.make('records.rejection', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.NullOr(ResumeRefusalSchema),
+    error: TaskRecordsFailed,
+  }),
+  /** The run's conversation as every conversation view renders it. */
+  Rpc.make('records.conversation', {
+    payload: { workspace, runId: RunIdSchema },
+    success: Schema.Array(ExportNodeSchema),
+    error: TaskRecordsFailed,
+  }),
   /** What the HTML transcript export reads: the run's display rows and its
    *  record (`assembleTrace`), or why it has none. */
-  Rpc.make('task.exportTrace', {
+  Rpc.make('records.trace', {
     payload: { workspace, runId: RunIdSchema },
     success: Schema.Union([
       Schema.Struct({
@@ -257,66 +327,6 @@ export const TexraRpcs = RpcGroup.make(
       }),
     ]),
     error: TaskRecordsFailed,
-  }),
-  /** What the transcript export reads: the run's setup and the assembled
-   *  input, each null when the run has none (`loadChatExportInput`). */
-  Rpc.make('task.exportInput', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Struct({
-      config: Schema.NullOr(AgentConfigSchema),
-      exportInput: Schema.NullOr(ChatExportInputSchema),
-    }),
-    error: TaskRecordsFailed,
-  }),
-  /** The runs a person started in the project, newest first, as a history
-   *  list shows them (`LocalSession.listRuns`). */
-  Rpc.make('tasks.history', {
-    payload: { workspace },
-    success: Schema.Array(AgentRunListingEntrySchema),
-    error: TaskFailed,
-  }),
-  /** What a history detail reads of a run beyond its setup and its
-   *  conversation: the launch facts its view holds (null for a run the
-   *  view no longer lists), its result, its report, the workspace files it
-   *  edited that are still there, and whether its rows hold a point to
-   *  continue from. */
-  Rpc.make('task.detail', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Struct({
-      run: Schema.NullOr(
-        RunViewSchema.mapFields(Struct.pick(RUN_LAUNCH_FACT_FIELDS)),
-      ),
-      result: Schema.NullOr(RunResultSchema),
-      report: Schema.NullOr(Schema.String),
-      /** Its conversation as every conversation view renders it. */
-      conversation: Schema.Array(ExportNodeSchema),
-      workspaceFiles: Schema.Array(RunWorkspaceFileSchema),
-      resumable: Schema.Boolean,
-    }),
-    error: TaskRecordsFailed,
-  }),
-  /** The skills the run's latest step listed. */
-  Rpc.make('task.skills', {
-    payload: { workspace, runId: RunIdSchema },
-    success: Schema.Array(Schema.String),
-    error: TaskRecordsFailed,
-  }),
-  /** Delete one stored run, or every one (`LocalSession.deleteRuns`): a run
-   *  the service still runs is skipped and reported as `active`. */
-  Rpc.make('tasks.delete', {
-    payload: {
-      workspace,
-      target: Schema.Union([RunIdSchema, Schema.Literal('all')]),
-    },
-    success: Schema.Struct({
-      listed: Schema.Int,
-      deleted: Schema.Array(RunIdSchema),
-      active: Schema.Array(RunIdSchema),
-      failed: Schema.Array(
-        Schema.Struct({ runId: RunIdSchema, error: RequestErrorSchema }),
-      ),
-    }),
-    error: TaskFailed,
   }),
   Rpc.make('host.attach', {
     payload: {

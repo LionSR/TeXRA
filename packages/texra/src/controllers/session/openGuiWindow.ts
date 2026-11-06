@@ -31,7 +31,6 @@ import {
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  type LocalSession,
   type Run,
   type Session,
   type WorkspaceRoots,
@@ -75,8 +74,6 @@ import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
-import { serviceRecords } from '@texra/controllers/server/serviceSession';
-import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import {
   attachWindowHost,
   type WindowClient,
@@ -99,15 +96,13 @@ import { SessionBridge } from './SessionBridge';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { HostDraftRequests } from './hostDraftRequests';
 
-/** Where a window's runs run: this process's own session, whose windows
- *  attach through `link`, or the service's. */
-export type GuiSession =
-  | {
-      readonly session: LocalSession;
-      readonly service?: undefined;
-      readonly link: ServiceLink<WindowClient>;
-    }
-  | { readonly session: Session; readonly service: ServiceLink };
+/** A window's runs: its project's session, wherever its runs run (here,
+ *  or in the background service), and the link the window attaches
+ *  through (this process's windows, or the service's). */
+export interface GuiSession {
+  readonly session: Session;
+  readonly link: ServiceLink<WindowClient>;
+}
 
 /** The kinds the shared body answers. */
 const SHARED_HOST_REQUEST_KINDS = [
@@ -368,52 +363,25 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
 
   // The window is its project's window wherever its runs run: here,
   // through this process's own windows, or in the service, whose runs ask
-  // it for the same. Its own failures before a run opens it presents
-  // itself when its runs run in the service.
+  // it for the same. Its own failures before a run opens, it presents
+  // itself.
   const workspace = roots.workspace ?? roots.storage;
-  const { present, readConfig, exportRecords } = yield* runs.service ===
-  undefined
-    ? Effect.gen(function* () {
-        yield* Effect.forkScoped(
-          attachWindowHost(runs.link, workspace, host.window, ports.focused),
-        );
-        const local = runs.session;
-        return {
-          present: local,
-          readConfig: (runId: RunId) => local.records(runId).readConfig(),
-          exportRecords: {
-            input: (runId: RunId) => loadChatExportInput(runId, local),
-            trace: (runId: RunId) => local.records(runId).readTrace(),
-          },
-        };
-      })
-    : Effect.gen(function* () {
-        const windowPresent = new SessionHostInteractions();
-        yield* Effect.addFinalizer(() => windowPresent.dispose());
-        yield* Effect.acquireRelease(windowPresent.use(host.window), (detach) =>
-          Effect.sync(detach),
-        );
-        yield* Effect.forkScoped(
-          attachWindowHost(runs.service, workspace, host.window, ports.focused),
-        );
-        // While the link holds no service, the banner says why (reaching it
-        // again, or refused by a newer TeXRA), so the view never sits frozen
-        // without saying so.
-        yield* Effect.forkScoped(
-          Stream.runForEach(linkOutage(runs.service), (reason) =>
-            snapshot.setServiceOffline(reason),
-          ),
-        );
-        const remote = serviceRecords(runs.service, roots.workspace ?? '');
-        return {
-          present: windowPresent,
-          readConfig: remote.readConfig,
-          exportRecords: {
-            input: remote.exportInput,
-            trace: remote.exportTrace,
-          },
-        };
-      });
+  const present = new SessionHostInteractions();
+  yield* Effect.addFinalizer(() => present.dispose());
+  yield* Effect.acquireRelease(present.use(host.window), (detach) =>
+    Effect.sync(detach),
+  );
+  yield* Effect.forkScoped(
+    attachWindowHost(runs.link, workspace, host.window, ports.focused),
+  );
+  // While the link holds no service, the banner says why (reaching it
+  // again, or refused by a newer TeXRA), so the view never sits frozen
+  // without saying so; a link to this process is never away.
+  yield* Effect.forkScoped(
+    Stream.runForEach(linkOutage(runs.link), (reason) =>
+      snapshot.setServiceOffline(reason),
+    ),
+  );
 
   const toolEditApprovals = new ToolEditApprovalController({
     host: ports.toolEdits,
@@ -465,7 +433,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
         Effect.andThen(snapshot.clearAgentConfigBanner),
       ),
     roots,
-    readConfig,
+    readConfig: (runId: RunId) => session.records(runId).readConfig(),
     present,
     session,
     scope,
@@ -517,7 +485,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           showInfo: host.showInfoMessage,
           showWarning: host.showWarningMessage,
           roots,
-          records: exportRecords,
+          session,
           latexPreamble: host.export.latexPreamble,
           templatePath: traceViewerTemplatePath(host.export.resourcesPath),
         }),

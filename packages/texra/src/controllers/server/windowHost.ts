@@ -151,7 +151,7 @@ export const attachWindowHost = Effect.fn('server.attachWindowHost')(function* <
     ),
   );
   yield* Effect.forkScoped(
-    Stream.runForEach(SubscriptionRef.changes(link.client), (client) =>
+    Stream.runForEach(link.client.changes, (client) =>
       client === null
         ? FiberHandle.clear(attachment)
         : FiberHandle.run(

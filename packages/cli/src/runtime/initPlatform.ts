@@ -42,7 +42,6 @@ import {
 import { CliExitCode } from './exitCodes';
 import { holdSignals, type SignalPolicy } from './processSignals';
 import { isLinked, linkCliService, type CliServiceLink } from './cliService';
-import { localRunReads, serviceRunReads, type CliRunReads } from './runReads';
 import type { CliContext } from './cliContext';
 import type { SettingsStores } from '@texra-ai/harness/host';
 
@@ -60,7 +59,6 @@ let installed:
       readonly session: Effect.Effect<LocalSession, SessionOpenError>;
       readonly service: CliServiceLink;
       readonly runSession: Effect.Effect<Session, SessionOpenError>;
-      readonly reads: CliRunReads;
       readonly shutdownScope: Scope.Closeable;
       readonly shutdown: Effect.Effect<void>;
     }
@@ -126,15 +124,13 @@ export type CliPlatformServices = SettingsStores & {
   readonly session: Effect.Effect<LocalSession, SessionOpenError>;
   /** The storage root's service, linked for the process's life, when one
    *  answered at init (or was started, `startsService`); the project's
-   *  state and runs are then its ({@link runSession}, {@link reads}), and
-   *  this process opens no store of the project. Else why none, which the
-   *  caller says. */
+   *  state and runs are then its ({@link runSession}), and this process
+   *  opens no store of the project. Else why none, which the caller says. */
   readonly service: CliServiceLink;
-  /** Where the chat's runs and requests land: the service's session when
-   *  one holds the project, else {@link session}. */
+  /** Where the chat's runs and requests land, and the project's stored
+   *  runs are read: the service's session when one holds the project, else
+   *  {@link session}. */
   readonly runSession: Effect.Effect<Session, SessionOpenError>;
-  /** The project's stored runs, read where they are held. */
-  readonly reads: CliRunReads;
 };
 
 /**
@@ -348,7 +344,7 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         );
 
         // The service's session of the project, folded here for the
-        // process's life, where the chat's runs and the reads go.
+        // process's life, where the chat's runs and the record reads go.
         const runSession =
           link === undefined
             ? openSession
@@ -357,10 +353,6 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
                   Scope.provide(projectScope),
                 ),
               );
-        const reads =
-          link === undefined
-            ? localRunReads(openSession)
-            : serviceRunReads(link, context.cwd);
 
         // The one-time telemetry notice: a single stderr line, then a state
         // flag. A quiet run neither prints it nor marks it shown.
@@ -387,7 +379,6 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
           session: openSession,
           service,
           runSession,
-          reads,
           shutdownScope: scope,
           shutdown: yield* Effect.cached(Scope.close(scope, Exit.void)),
         };
@@ -415,7 +406,6 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
     session: platform.session,
     service: platform.service,
     runSession: platform.runSession,
-    reads: platform.reads,
     shutdownScope: platform.shutdownScope,
     roots,
   };

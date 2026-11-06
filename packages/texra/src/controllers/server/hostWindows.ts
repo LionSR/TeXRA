@@ -56,7 +56,7 @@ import {
   type HostFrame,
   type Notice,
 } from './hostCalls';
-import type { ServiceLink } from './client';
+import { followed, type ServiceLink } from './client';
 import type { WindowClient } from './windowHost';
 import type { Session, SessionHost } from '@texra-ai/harness';
 
@@ -375,11 +375,14 @@ const make = Effect.fn('make')(function* (editors: EditorHostShape) {
      *  attaches through: always this process, never away. */
     localLink: (session: Session): Effect.Effect<ServiceLink<WindowClient>> =>
       Effect.all({
-        client: SubscriptionRef.make<WindowClient | null>({
-          'host.attach': ({ capabilities }) => attach(session, capabilities),
-          'host.answer': (input) => answer(input.id, input.answer),
-          'host.focus': ({ attachment }) => focus(attachment),
-        }),
+        client: Effect.map(
+          SubscriptionRef.make<WindowClient | null>({
+            'host.attach': ({ capabilities }) => attach(session, capabilities),
+            'host.answer': (input) => answer(input.id, input.answer),
+            'host.focus': ({ attachment }) => focus(attachment),
+          }),
+          followed,
+        ),
         away: SubscriptionRef.make(''),
         refusalTold: Ref.make(false),
       }),

@@ -5,15 +5,7 @@
 // Run start/resume/stop orchestration lives in ../chatSessionController;
 // this module keeps only composition, rendering glue, and the Ink lifecycle.
 
-import {
-  Cause,
-  Effect,
-  Exit,
-  FiberHandle,
-  Scope,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Effect, Exit, FiberHandle, Scope, Stream } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import {
@@ -390,7 +382,6 @@ export async function runChat(
   const slashCommandContext = (): SlashCommandContext => ({
     cliContext: context,
     session,
-    reads: services.reads,
     runSession,
     stores: services,
     runtime: services.runtime,
@@ -437,7 +428,7 @@ export async function runChat(
         // the link reaches it again: the chat says so, rather than going
         // quiet.
         yield* Stream.runForEach(
-          SubscriptionRef.changes(link.client).pipe(Stream.drop(1)),
+          link.client.changes.pipe(Stream.drop(1)),
           (client) =>
             Effect.sync(() =>
               appendLocalNotice(
@@ -527,10 +518,6 @@ export async function runChat(
     session,
     runSession,
     served: runsElsewhere,
-    records: (runId) => ({
-      readConfig: () => services.reads.config(runId),
-      exists: () => services.reads.exists(runId),
-    }),
     sessionContext: { ...context, quietLogs: true },
     chatScope,
     shutdownScope: services.shutdownScope,
@@ -588,7 +575,6 @@ export async function runChat(
       ),
     stores: services,
     runtime,
-    reads: services.reads,
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
