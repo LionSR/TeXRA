@@ -67,16 +67,23 @@ const defectsAsErrors = <A, R>(
  * Start a fresh native child on the session's registry: its opening (its
  * registration batch) in this fiber, its run forked under its id. Answers
  * the commit of its opening; a launch that fails before the run exists
- * fails this with no run behind it.
+ * fails this with no run behind it. The child runs with the provider keys
+ * its parent's start carried (`RunCall`), awaited or not: the registry
+ * forks it on the session's environment, which holds none of them.
  */
 export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
   definition: PreparedAgentDefinition,
   registration: RegisterRunOptions,
-  options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools' | 'apiKeys'> = {},
+  options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
+  const call = yield* RunCall;
   const { opened } = yield* registryOf(yield* Runs).start(runId, {
-    open: executeAgent(definition, runId, { ...options, registration }),
+    open: executeAgent(definition, runId, {
+      ...options,
+      apiKeys: call?.run.apiKeys,
+      registration,
+    }),
     run: (prepared) => prepared.run,
   });
   return opened.activation;
@@ -92,14 +99,15 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
   parentRunId: RunId,
-  options: Pick<ExecuteAgentOptions, 'onProgress' | 'apiKeys'>,
+  options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
+  const call = yield* RunCall;
   const runs = registryOf(yield* Runs);
   const { opened } = yield* runs.start(runId, {
     open: openResume(
       runs,
       runId,
-      { stopAfterCycle: true, ...options },
+      { stopAfterCycle: true, ...options, apiKeys: call?.run.apiKeys },
       parentRunId,
     ).pipe(
       Effect.catchTag('ResumeRefused', ({ answer }) =>
@@ -203,7 +211,6 @@ export const executeSubagentInBand = (
   awaitChildRun(
     launch.runId,
     Effect.gen(function* () {
-      const call = yield* RunCall;
       const definition = yield* prepareAgentDefinition({
         config: Schema.decodeUnknownSync(AgentConfigSchema)(
           launch.configPayload,
@@ -222,7 +229,7 @@ export const executeSubagentInBand = (
           grants: launch.grants,
           seed: launch.seed,
         },
-        { onProgress: launch.notify, apiKeys: call?.run.apiKeys },
+        { onProgress: launch.notify },
       );
     }),
   );
@@ -234,10 +241,7 @@ export const resumeSubagentInBand = (
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>
   awaitChildRun(
     launch.runId,
-    Effect.flatMap(RunCall, (call) =>
-      resumeOwnedChild(launch.runId, launch.parentRunId, {
-        onProgress: launch.notify,
-        apiKeys: call?.run.apiKeys,
-      }),
-    ),
+    resumeOwnedChild(launch.runId, launch.parentRunId, {
+      onProgress: launch.notify,
+    }),
   );
