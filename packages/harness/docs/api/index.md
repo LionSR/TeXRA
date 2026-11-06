@@ -95,8 +95,8 @@ A host's answer to each request a run of the session waits on: an
 approval, a denial with its reason, or for a retry, `retry` or `cancel`.
 The session records it as the request's `request.decided`, through the
 same `request.decide` a {@link Session.request} sends. A handler that
-fails, throws, answers with a decision the request's kind does not take,
-or has not answered within ten minutes is a denial, with the cause logged.
+fails, throws, or answers with a decision the request's kind does not
+take is a denial, with the cause logged; it may take as long as it needs.
 
 ```ts
 type ApprovalHandler = (
