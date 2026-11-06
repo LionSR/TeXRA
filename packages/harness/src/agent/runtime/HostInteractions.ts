@@ -61,9 +61,17 @@ export interface HostInteractions {
   dispose?(): void;
 }
 
+/** A host that presents: one with `emit`. A host without it (a headless
+ *  process, a service session before a window attaches) presents nothing,
+ *  and a notice raised on it waits for the next host that does. */
+type Presenter = HostInteractions & Required<Pick<HostInteractions, 'emit'>>;
+
+const isPresenter = (host: HostInteractions | undefined): host is Presenter =>
+  host?.emit !== undefined;
+
 /** A queued or live presentation, bound to the host it presents on. */
 type PresentationProgram = (
-  interactions: HostInteractions,
+  interactions: Presenter,
 ) => Effect.Effect<void, HostPresentationFailed>;
 
 /**
@@ -73,12 +81,12 @@ type PresentationProgram = (
  * throws synchronously reaches the caller as {@link HostPresentationFailed}.
  */
 function presentOn<K extends RuntimePresentationEvent>(
-  interactions: HostInteractions,
+  interactions: Presenter,
   event: K,
   payload: RuntimePresentationEventPayloads[K],
 ): Effect.Effect<void, HostPresentationFailed> {
   return Effect.suspend(() => {
-    const presented = interactions.emit?.(event, payload);
+    const presented = interactions.emit(event, payload);
     if (presented === undefined) return Effect.void;
     return Effect.forkDetach(
       presented.pipe(
@@ -101,9 +109,10 @@ function presentOn<K extends RuntimePresentationEvent>(
 
 /**
  * Stable per-session presentation owner. The session serves this object
- * once (`Interactions`), while one host at a time attaches and detaches; the host the
- * session was opened with answers while none is, and notices raised while
- * none is are replayed to the next one.
+ * once (`Interactions`), while one host at a time attaches and detaches;
+ * the host the session was opened with answers while none is. Notices
+ * raised while no attached or opened host presents (none, or none with
+ * `emit`) are replayed to the next host that does.
  */
 export class SessionHostInteractions implements HostInteractions {
   /** The attached host, while one is. */
@@ -145,9 +154,11 @@ export class SessionHostInteractions implements HostInteractions {
         if (this.attached === interactions) this.attached = undefined;
         interactions.dispose?.();
       };
-      return this.replayPendingPresentations(interactions).pipe(
-        Effect.as(detach),
-      );
+      return (
+        isPresenter(interactions)
+          ? this.replayPendingPresentations(interactions)
+          : Effect.void
+      ).pipe(Effect.as(detach));
     });
   }
 
@@ -177,7 +188,7 @@ export class SessionHostInteractions implements HostInteractions {
         ),
       );
     return Effect.suspend(() => {
-      const active = this.attached ?? this.opened;
+      const active = [this.attached, this.opened].find(isPresenter);
       if (active) {
         return present(active).pipe(
           Effect.catch((failure) =>
@@ -244,7 +255,7 @@ export class SessionHostInteractions implements HostInteractions {
     'SessionHostInteractions.replayPendingPresentations',
   )(
     { self: this },
-    function* (interactions: HostInteractions): Effect.fn.Return<void> {
+    function* (interactions: Presenter): Effect.fn.Return<void> {
       while (
         this.attached === interactions &&
         this.pendingPresentationReplays.length > 0

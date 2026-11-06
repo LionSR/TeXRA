@@ -5,8 +5,9 @@
  * transcript rows by `readCompletedRunConversation`; the HTML export path
  * uses `assembleTrace` instead.
  *
- * The export input also crosses the service's RPC edge (`task.exportInput`),
- * so its shapes are schemas and the types derive from them.
+ * The conversation's nodes cross the service's RPC edge
+ * (`records.conversation`), so the shapes are schemas and the types derive
+ * from them.
  */
 
 import { Schema } from 'effect';

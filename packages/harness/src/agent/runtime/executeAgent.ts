@@ -8,7 +8,15 @@
  * through `rootRun` (`session.start`), a resume through `resumeRun`, and a
  * child's launch through `startChildRun` (`delegation/childLaunch.ts`).
  */
-import { Clock, Effect, Exit, Fiber, Layer, Scope } from 'effect';
+import {
+  Clock,
+  ConfigProvider,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Scope,
+} from 'effect';
 
 import { ModelProvider } from '@texra-ai/llm';
 import { buildTemplateInputs } from '@agent/prompt/templateInputs';
@@ -34,6 +42,7 @@ import type { RegisterRunOptions } from '@shared/session/runFacts';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import { parseWorkingDirectory } from '@tools/pathResolution';
+import { ProjectEnvironment } from '@utils/system/nodeWorkspace';
 
 import { endRun } from './AgentRunLifecycle';
 import { ChildRunBudget } from './childRunBudget';
@@ -62,6 +71,10 @@ export interface ExecuteAgentOptions {
   readonly parentRunId?: RunId;
   /** Run-scoped tools added to the agent without mutating the default registry. */
   readonly tools?: readonly ITool<Error, PluginToolServices>[];
+  /** The provider API-key variables the launch brings, by variable name
+   *  (`StartOptions.apiKeys`): in the run's environment after its project's
+   *  `.env` and before this process's. */
+  readonly apiKeys?: Readonly<Record<string, string>>;
   /** Fires on meaningful progress: plan changes and tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
 }
@@ -217,6 +230,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     startedAt: yield* Clock.currentTimeMillis,
     workingDirectory,
     config,
+    apiKeys: options.apiKeys,
     persona,
     toolPolicy: {
       stopAfterCycle,
@@ -236,6 +250,32 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
   };
   return launch;
 });
+
+/**
+ * `effect` in the run's environment with the launch's `apiKeys` in it:
+ * the project's `.env` first, then the keys, then this process's, for the
+ * model binding (`ModelAccess`, which captures the config provider where
+ * its layer is built) and for what a child process inherits
+ * (`ProjectEnvironment`). Without keys, the environment as it is.
+ */
+const withApiKeys =
+  (apiKeys: Readonly<Record<string, string>> | undefined) =>
+  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> => {
+    if (apiKeys === undefined || Object.keys(apiKeys).length === 0)
+      return effect;
+    return Effect.flatMap(ProjectEnvironment, (project) => {
+      const variables = { ...apiKeys, ...project };
+      return effect.pipe(
+        Effect.provideService(ProjectEnvironment, variables),
+        Effect.updateService(ConfigProvider.ConfigProvider, (ambient) =>
+          ConfigProvider.orElse(
+            ConfigProvider.fromEnvRecord(variables),
+            ambient,
+          ),
+        ),
+      );
+    });
+  };
 
 /**
  * The run program, fresh or resumed. The opening runs here, in the
@@ -293,6 +333,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     );
     return { launch, services, opening };
   }).pipe(
+    withApiKeys(options.apiKeys),
     Scope.provide(scope),
     Effect.onExit((exit) =>
       Exit.isFailure(exit) ? Scope.close(scope, exit) : Effect.void,
@@ -348,5 +389,8 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
       ),
     ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
   }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
-  return { activation: opening.activation, run };
+  return {
+    activation: opening.activation,
+    run: withApiKeys(options.apiKeys)(run),
+  };
 });

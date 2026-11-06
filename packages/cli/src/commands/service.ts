@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Deferred, Effect, Exit, SubscriptionRef } from 'effect';
+import { Deferred, Effect, Exit } from 'effect';
 
 import { Sessions } from '@texra-ai/harness';
 import { entryChannel, entryMessage, setLogSink } from '@texra-ai/harness/node';
@@ -239,7 +239,7 @@ const restartCommand = defineCliCommand({
     const info = yield* Effect.scoped(
       Effect.flatMap(linkCliService(context.storageRoot, true), (link) =>
         isLinked(link)
-          ? Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+          ? Effect.flatMap(link.client.get, (client) =>
               client === null
                 ? Effect.fail(new Error('The TeXRA service is not linked.'))
                 : client['service.hello']({ protocol: PROTOCOL.digest }),

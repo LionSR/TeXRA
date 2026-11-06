@@ -141,6 +141,7 @@ export const rootRun = Effect.fn('rootRun')(function* (
       });
       return yield* executeAgent(definition, runId, {
         tools: launch.tools,
+        apiKeys: launch.apiKeys,
         registration: {
           identity: { kind: 'agent', agent: definition.config.agent },
           grants: limit === undefined ? grants : { ...grants, limit },

@@ -24,13 +24,13 @@ import {
   executeAgent,
   type ExecuteAgentOptions,
 } from '@agent/runtime/executeAgent';
+import { openResume } from '@agent/runtime/resumeRun';
 import { RunCall } from '@agent/runtime/RunCall';
 import {
   registryOf,
   Runs,
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
-import { checkpointRefusal } from '@agent/storage/resumability';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
@@ -67,7 +67,9 @@ const defectsAsErrors = <A, R>(
  * Start a fresh native child on the session's registry: its opening (its
  * registration batch) in this fiber, its run forked under its id. Answers
  * the commit of its opening; a launch that fails before the run exists
- * fails this with no run behind it.
+ * fails this with no run behind it. The child runs with the provider keys
+ * its parent's start carried (`RunCall`), awaited or not: the registry
+ * forks it on the session's environment, which holds none of them.
  */
 export const startChildRun = Effect.fn('startChildRun')(function* (
   runId: RunId,
@@ -75,42 +77,49 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
   registration: RegisterRunOptions,
   options: Pick<ExecuteAgentOptions, 'onProgress' | 'tools'> = {},
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
+  const call = yield* RunCall;
   const { opened } = yield* registryOf(yield* Runs).start(runId, {
-    open: executeAgent(definition, runId, { ...options, registration }),
+    open: executeAgent(definition, runId, {
+      ...options,
+      apiKeys: call?.run.apiKeys,
+      registration,
+    }),
     run: (prepared) => prepared.run,
   });
   return opened.activation;
 });
 
 /**
- * Resume the child `runId` of `parentRunId` that its open call owns (the
- * call is this one, so no other resume is asked whether it may): the run
- * continues from its rows under its stored configuration, one cycle, on
- * the session's registry. Refused when its rows cannot continue.
+ * Resume the child `runId` of `parentRunId` that its open call owns, through
+ * the one resume path (`openResume`, which lets the owner through where it
+ * sends any other caller to the owner): the run continues from its rows
+ * under its stored configuration, one cycle, on the session's registry.
+ * Refused when its rows cannot continue.
  */
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
   parentRunId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const rejection = yield* checkpointRefusal(runId);
-  if (rejection !== null)
-    return yield* Effect.fail(
-      new Error(
-        `Subagent ${runId} cannot be resumed here (${rejection.kind}).`,
+  const call = yield* RunCall;
+  const runs = registryOf(yield* Runs);
+  const { opened } = yield* runs.start(runId, {
+    open: openResume(
+      runs,
+      runId,
+      { stopAfterCycle: true, ...options, apiKeys: call?.run.apiKeys },
+      parentRunId,
+    ).pipe(
+      Effect.catchTag('ResumeRefused', ({ answer }) =>
+        Effect.fail(
+          new Error(
+            'failed' in answer
+              ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
+              : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
+          ),
+        ),
       ),
-    );
-  const config = yield* getRunRecords(runId).readConfig();
-  if (config === null)
-    return yield* Effect.fail(
-      new Error(`Subagent ${runId} has no stored configuration to resume.`),
-    );
-  const definition = yield* prepareAgentDefinition({
-    config,
-    stopAfterCycle: true,
-  });
-  const { opened } = yield* registryOf(yield* Runs).start(runId, {
-    open: executeAgent(definition, runId, { ...options, parentRunId }),
+    ),
     run: (prepared) => prepared.run,
   });
   return opened.activation;
@@ -194,7 +203,8 @@ interface AwaitedChildLaunch {
 
 /** Launch one child under the run id its caller derived and read its end
  *  back; recovering an earlier attempt belongs to the caller that owns the
- *  call identity (`recoverAgentChild`). */
+ *  call identity (`recoverAgentChild`). The child takes the keys the
+ *  calling run's launch brought. */
 export const executeSubagentInBand = (
   launch: AwaitedChildLaunch,
 ): Effect.Effect<ChildRunEnd, Error, AgentRunServices> =>

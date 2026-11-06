@@ -459,13 +459,29 @@ const SERVICE_OFFLINE =
 export const WINDOW_OUTDATED =
   'This window is older than the running TeXRA service; reload or update TeXRA.';
 
+/** A value as its readers follow it: what it is now, and each value from
+ *  the current one on. */
+export interface Followed<A> {
+  readonly get: Effect.Effect<A>;
+  readonly changes: Stream.Stream<A>;
+}
+
+/** `ref` as its readers follow it; only its holder sets it. */
+export const followed = <A>(
+  ref: SubscriptionRef.SubscriptionRef<A>,
+): Followed<A> => ({
+  get: SubscriptionRef.get(ref),
+  changes: SubscriptionRef.changes(ref),
+});
+
 /** A window's lasting hold on the service: the client it is connected
  *  through, or null while the service is away and the link reaches it
  *  again; and, while it is null, why. A window of a session its own
  *  process opened holds a link to that process (`HostWindows.localLink`),
- *  whose client is only what a window attaches through. */
+ *  whose client is only what a window attaches through: a link to the
+ *  service is one of those too. */
 export interface ServiceLink<Client = ServiceClient> {
-  readonly client: SubscriptionRef.SubscriptionRef<Client | null>;
+  readonly client: Followed<Client | null>;
   /** Why `client` is null, as a window says it: reconnecting
    *  ({@link SERVICE_OFFLINE}), or refused by a newer service
    *  ({@link WINDOW_OUTDATED}). */
@@ -477,17 +493,13 @@ export interface ServiceLink<Client = ServiceClient> {
 
 /** Why `link` holds no service now, at each change: its `away` while its
  *  client is null, null while it holds one. What a window's banner says. */
-export const linkOutage = (link: ServiceLink): Stream.Stream<string | null> =>
-  Stream.merge(
-    SubscriptionRef.changes(link.client),
-    SubscriptionRef.changes(link.away),
-  ).pipe(
+export const linkOutage = (
+  link: ServiceLink<unknown>,
+): Stream.Stream<string | null> =>
+  Stream.merge(link.client.changes, SubscriptionRef.changes(link.away)).pipe(
     Stream.mapEffect(() =>
       Effect.map(
-        Effect.all([
-          SubscriptionRef.get(link.client),
-          SubscriptionRef.get(link.away),
-        ]),
+        Effect.all([link.client.get, SubscriptionRef.get(link.away)]),
         ([client, away]) => (client === null ? away : null),
       ),
     ),
@@ -588,5 +600,5 @@ export const linkService = Effect.fn('server.linkService')(function* (
       }),
     ),
   );
-  return { client, away, refusalTold };
+  return { client: followed(client), away, refusalTold };
 });

@@ -15,6 +15,43 @@ helpers the hosts share for files, errors and logs.
 No stability promise: names move here when they leave the root entry and
 leave when the hosts stop needing them.
 
+## activationView
+
+`Run.view` of `runId`'s activation at `activation`, for every reader of
+it: the levels from the first that holds the activation, the run and its
+transcript, to the first that holds the activation's durable outcome, or
+shows the run gone. The transcript tier folds only for subscribed
+aggregates: while the view is read, on a port of its own, the run and its
+descendants are subscribed, taken before the first level is, so even an
+ended run's one level holds its transcript; descendants join as the view
+gains them.
+
+```ts
+function activationView(
+  source: ActivationViewSource,
+  runId: RunId,
+  activation: CommitOrdinal,
+): Stream.Stream<SessionView>
+```
+
+## ActivationViewSource
+
+What an activation's view is read over: a session view's levels, and
+the port its reader keeps the run's transcripts subscribed on (`set`
+empty: the port's subscriptions end). A session handle's own view, or a
+window's view of a session elsewhere.
+
+```ts
+interface ActivationViewSource {
+  readonly current: () => SessionView;
+  readonly changes: Stream.Stream<SessionView>;
+  readonly subscribe: (
+    port: string,
+    set: readonly TranscriptSubscription[],
+  ) => Effect.Effect<void>;
+}
+```
+
 ## AgentCatalog
 
 The process's agent catalog (see {@link AgentCatalogShape}).
@@ -2261,9 +2298,10 @@ function sessionFsLayer(
 ## SessionHostInteractions
 
 Stable per-session presentation owner. The session serves this object
-once (`Interactions`), while one host at a time attaches and detaches; the host the
-session was opened with answers while none is, and notices raised while
-none is are replayed to the next one.
+once (`Interactions`), while one host at a time attaches and detaches;
+the host the session was opened with answers while none is. Notices
+raised while no attached or opened host presents (none, or none with
+`emit`) are replayed to the next host that does.
 
 ```ts
 class SessionHostInteractions implements HostInteractions

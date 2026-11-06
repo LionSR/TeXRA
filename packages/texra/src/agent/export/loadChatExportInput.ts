@@ -23,7 +23,7 @@ import { DateTime, Effect, Schema } from 'effect';
 
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
-import type { LocalSession } from '@texra-ai/harness';
+import type { Session } from '@texra-ai/harness';
 import type { ExportNode } from '@texra-ai/harness/host';
 import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
 
@@ -38,7 +38,7 @@ import type { RunView, RunId, AgentConfig } from '@texra-ai/harness/schemas';
 export class ChatExportInputUnreadable extends Schema.TaggedError<ChatExportInputUnreadable>()(
   'ChatExportInputUnreadable',
   {
-    part: Schema.Literals(['config', 'conversation']),
+    part: Schema.Literals(['config', 'conversation', 'view']),
     message: Schema.String,
     cause: Schema.Defect(),
   },
@@ -60,7 +60,7 @@ export interface ChatExportLoadResult {
 }
 
 function unreadable(
-  part: 'config' | 'conversation',
+  part: 'config' | 'conversation' | 'view',
   cause: unknown,
 ): ChatExportInputUnreadable {
   return new ChatExportInputUnreadable({
@@ -72,7 +72,7 @@ function unreadable(
 
 export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
   id: RunId,
-  session: LocalSession,
+  session: Session,
 ): Effect.fn.Return<ChatExportLoadResult, ChatExportInputUnreadable> {
   const records = session.records(id);
   const [config, conversation, view] = yield* Effect.all(
@@ -83,7 +83,9 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
       records
         .readConversation()
         .pipe(Effect.mapError((cause) => unreadable('conversation', cause))),
-      session.view.read([]),
+      session.view
+        .read([])
+        .pipe(Effect.mapError((cause) => unreadable('view', cause))),
     ],
     { concurrency: 3 },
   );

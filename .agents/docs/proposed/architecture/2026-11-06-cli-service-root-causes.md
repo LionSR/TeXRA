@@ -430,3 +430,45 @@ it touches, one commit per root inside each PR, as PR 14769 did.
 Amend R10 in PR 14766 with §2.1 to §2.6 and §3.1 to §3.3: its "Design"
 names the client's three sessions and the hosts' verbs, not the service's
 lifetime nor the wire's shape, which this note adds.
+
+### Status
+
+PR 2 (`simplify/service-hosts`, stacked on PR 14771) landed, one commit
+per root: the frame is the reader's batch and the host snapshot its own
+message, `Subscribe.session` off the RPC (§3.1's frame and session
+findings); a window's handle is the harness's `Run` for its activation
+(`Run.activation`, `LocalSession.run`, `task.result` for `task.ended`,
+`activationView` shared, a resume of a live run answers its handle in
+the harness; §2.7 and §3.1's activation, invented-end, transcript-guard
+and liveness findings, and the `retry` before classification); one
+`Session` on both sides (`records`, `listRuns`, `deleteRuns`, `view.read`
+mirrored as `records.*` and `session.*` procedures; `GuiSession`'s union,
+`CliRunReads`, `serviceRecords` and the export's records pair gone; a
+link's `client` as a followed value, so one link type serves every
+window; §3.3's `GuiSession` smell); a task's provider keys travel with
+its start and resume (`StartOptions.apiKeys`, `environmentApiKeys`;
+`serviceKeysNotice` and its login shell gone; §2.6); a host without
+`emit` is not a presenter and `notices` splits from `filesWritten`, the
+toolbar actions refuse with `Rejected`, the run actions take the catalog
+as a service (§3.3's three verified defects and the `Effect.context`
+capture).
+
+A sixth commit took the hosts' repeated decisions (`setApiKey` once,
+with the retry's prompt built from it; the custom agent directory read
+in the shared body and opened through `files.openDirectory`; a host's
+own request kinds as a table, the refusal of a kind it lacks worded
+once; the run actions' ports keeping `ProcessServices`, so no host
+re-enters the runtime), the launch wait (`SHOW_LAUNCHED_WITHIN`: a
+surface selects a run this window started once its view holds the
+run's activation, which the handle names) and the window-side presenter
+instance (the session presenter over the window's own host).
+
+Left for a later PR, each a smell, none a defect:
+
+- The notice round-trips (`tell` mints an id nothing awaits; an answer
+  past `ANSWER_WITHIN` logged as a notice failure); `editorHost` keyed by
+  storage root beside `HostWindows` keyed by session; two windows on one
+  project, where service sessions always read as "can ask".
+- §3.2's smells (the hello's `protocol`/`version` on the record, the
+  `released` flag, `closeAll` run three times, the link's reconnect
+  dropping the first failure's reason, the race loser's usage code).

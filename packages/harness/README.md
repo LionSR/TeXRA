@@ -140,13 +140,15 @@ continue a run from its committed history, returning the same `Run` handle that
 `reason` is a `ResumeRefusal`, the same value `records(runId).readRejection()`
 gives: its `kind` is `finished`, `blocked` (the agent or plugin
 named by `name` is missing, off or not trusted), `unusableCheckpoint`,
-`earlierBuild` (with its `cause`), or `notResumable` (it is running here, or
-it was deleted). If `runId` belongs to
-a child run owned by an active parent call, `session.resume` resumes the parent
-and sets `run.redirectedFrom` to the requested child `runId`. Pass the same
-custom `tools` to `resume` that were passed to `start`. Calling `resume` on a
-run already resuming in this process joins the active resume and returns the
-same `Run`.
+`earlierBuild` (with its `cause`), or `notResumable` (it was deleted). If
+`runId` belongs to a child run owned by an active parent call,
+`session.resume` resumes the parent and sets `run.redirectedFrom` to the
+requested child `runId`. Pass the same custom `tools` to `resume` that were
+passed to `start`. Calling `resume` on a run already running or resuming in
+this process starts nothing: it returns the `Run` of the activation running,
+and reads no input. `run.activation` is that activation's commit;
+`session.run(runId, activation)` gives the same handle again, which a host
+uses to answer a handle it carried across a process boundary.
 
 ```ts
 const program = Effect.gen(function* () {
@@ -169,8 +171,9 @@ a `PendingRequest` (which run asks, the request's id, and its `payload`, whose
 waits on (also listed in `SessionView.requests`), or an embedder can answer a
 listed request directly with `session.request({ kind: 'request.decide', ... })`;
 whichever answer lands first is the decision. A handler that fails, throws, or
-has not answered within ten minutes denies the request and logs a warning, so no
-run stays waiting on a handler that went quiet.
+answers with a decision the request's kind does not take denies the request and
+logs a warning; it may take as long as it needs, so a person's prompt carries its
+own deadline, or none.
 
 A request is a stored row and survives restarts. On a persistent session, a run
 interrupted while waiting for approval still waits after a restart: reopen the

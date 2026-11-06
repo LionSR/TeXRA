@@ -185,9 +185,10 @@ type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
  * host takes (`resumeRun`), with the caller's custom tools. A child an open
  * call of its parent owns, as its records say under its claim in its own
  * resume job, is not resumed here: its parent is, whose handle names the
- * child it was asked for. One whose edge is cut resumes itself. A refusal
- * arrives before the run is activated, so it fails this, naming the run
- * refused.
+ * child it was asked for. One whose edge is cut resumes itself. A run
+ * already running here answers the handle of the activation it runs. A
+ * refusal arrives before the run is activated, so it fails this, naming the
+ * run refused.
  */
 function resume(
   session: Context.Context<SessionServices>,
@@ -195,7 +196,7 @@ function resume(
   input: ResumeInput = {},
   redirectedFrom?: RunId,
 ): Effect.Effect<Run, ResumeError> {
-  const { tools, interactive } = input;
+  const { tools, interactive, apiKeys } = input;
   return Effect.gen(function* () {
     yield* admitTools(
       tools ?? [],
@@ -204,6 +205,7 @@ function resume(
     const resumed = yield* resumeRun(runId, {
       stopAfterCycle: interactive !== true,
       tools,
+      apiKeys,
     }).pipe(Effect.provide(session), Effect.mapError(runFailure));
     if ('ownedBy' in resumed)
       return yield* resume(
@@ -236,6 +238,7 @@ function sessionOf(
     ...sessionReads(session),
     start: (input) => start(session, services, owner, input),
     resume: (runId, input) => resume(session, runId, input),
+    run: (runId, activation) => runView(session, runId, activation),
     request: (req) => requests.request(req).pipe(Effect.provide(session)),
     attach: (host) => attachHost(session, host),
   };

@@ -206,23 +206,44 @@ export type DecisionOf<K extends PermissionPayload['kind']> =
     >
   | RefusalDecision;
 
-/** The request kinds each bypass approves; the delegated-work grant covers
- *  all three. A question, a retry, a plan approval and a plugin's request
- *  never appear here: they need an answer, or carry their own credential
- *  semantics. */
-const COVERED_KINDS: Readonly<
-  Record<ApprovalBypassKind, readonly PermissionPayload['kind'][]>
+/** The grant that answers a request of each kind a grant can answer. A
+ *  question, a retry, a plan approval and a plugin's request never appear
+ *  here: they need an answer, or carry their own credential semantics. */
+const GRANT_OF: Readonly<
+  Partial<Record<PermissionPayload['kind'], ApprovalBypassKind>>
+> = { bash: 'bash', toolEdit: 'toolEdit', proposal: 'superYolo' };
+
+/** The grants that stand for each grant: its own, and the delegated-work
+ *  grant, which stands for every one. */
+const STANDS_FOR: Readonly<
+  Record<ApprovalBypassKind, readonly ApprovalBypassKind[]>
 > = {
-  bash: ['bash'],
-  toolEdit: ['toolEdit'],
-  superYolo: ['proposal', 'toolEdit', 'bash'],
+  bash: ['bash', 'superYolo'],
+  toolEdit: ['toolEdit', 'superYolo'],
+  superYolo: ['superYolo'],
+};
+
+/** Whether a grant `held` stands for `grant`: the one reading, before a
+ *  request opens (the guard's operation) and as it opens (its kind). */
+export const grantHeld = (
+  held: (bypass: ApprovalBypassKind) => boolean,
+  grant: ApprovalBypassKind,
+): boolean => STANDS_FOR[grant].some(held);
+
+/** Whether a grant `held` answers a request of `kind`. */
+export const grantAnswering = (
+  held: (bypass: ApprovalBypassKind) => boolean,
+  kind: PermissionPayload['kind'],
+): boolean => {
+  const grant = GRANT_OF[kind];
+  return grant !== undefined && grantHeld(held, grant);
 };
 
 /** Whether `bypass` approves requests of `kind`. */
 export const bypassCovers = (
   bypass: ApprovalBypassKind,
   kind: PermissionPayload['kind'],
-): boolean => COVERED_KINDS[bypass].includes(kind);
+): boolean => grantAnswering((held) => held === bypass, kind);
 
 /** Whether `decision` is one `request` takes ({@link DecisionOf}). */
 export function decisionFits<P extends AnswerSource>(

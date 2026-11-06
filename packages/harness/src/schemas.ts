@@ -47,6 +47,7 @@ export {
   rollupOf,
   RunViewSchema,
   sessionActivity,
+  SessionViewSchema,
   type Attention,
   type RequestAnswerability,
   type SessionTitleState,
@@ -141,6 +142,7 @@ export type {
   UsageRoute,
   WorkspaceFileLocation,
 } from '@shared/schemas';
+export { ResumeRefusalSchema } from '@shared/schemas';
 // Where a run's lifecycle status stands: in flight (running, or waiting for
 // its next input), ended, or settled enough for its transcript. Whether a
 // run is working right now is the view's `working`, never read off the phase.

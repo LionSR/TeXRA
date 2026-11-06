@@ -1,6 +1,6 @@
-import { it } from '@effect/vitest';
+import { layer } from '@effect/vitest';
 import { Effect, Schema } from 'effect';
-import { describe, expect } from 'vitest';
+import { expect } from 'vitest';
 
 import { apiKeySecretName, type ApiKeyProviderId } from '@texra-ai/llm';
 import type { Session } from '@texra-ai/harness';
@@ -8,8 +8,9 @@ import { Secrets } from '@texra-ai/harness/host';
 import { RunIdSchema, type RuntimeRequest } from '@texra-ai/harness/schemas';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import { SessionGraph } from '@test/support/testKernel';
 
-describe('ProgressApiKeyRetryController', () => {
+layer(SessionGraph.hosted)('ProgressApiKeyRetryController', (it) => {
   it.effect(
     'does not retry when a depleted provider key was not changed',
     () => {

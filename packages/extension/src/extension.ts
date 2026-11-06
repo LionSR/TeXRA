@@ -429,7 +429,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   let windowSession: GuiSession;
   if (Result.isSuccess(reached)) {
     windowSession = {
-      service: reached.success,
+      link: reached.success,
       session: yield* serviceSession(
         reached.success,
         roots.workspace ?? '',

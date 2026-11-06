@@ -157,6 +157,9 @@ declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
     readonly toolPolicy: ToolPolicy;
     readonly config: AgentConfig;
+    /** The provider API-key variables the run's launch brought
+     *  (`StartOptions.apiKeys`), which a child it launches takes too. */
+    readonly apiKeys?: Readonly<Record<string, string>>;
     readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
     readonly scope: Scope.Scope;
     readonly opening: TemplateOpening | null;

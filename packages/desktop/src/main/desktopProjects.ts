@@ -16,7 +16,7 @@ import {
   type Path,
 } from 'effect';
 
-import { type LocalSession, type Session, Sessions } from '@texra-ai/harness';
+import { type Session, Sessions } from '@texra-ai/harness';
 import {
   withPerKeyLane,
   type PerKeyLane,
@@ -65,21 +65,14 @@ interface DesktopProjectFacts {
 
 /** An open project: its session opened here, or the service's, which
  *  this process holds no store, run or claim of. */
-export type DesktopProject = DesktopProjectFacts &
-  (
-    | {
-        readonly session: LocalSession;
-        readonly service?: undefined;
-        /** What the window attaches through: this process's windows. */
-        readonly link: ServiceLink<WindowClient>;
-      }
-    | {
-        /** Where this project's runs run: the background service. */
-        readonly session: Session;
-        readonly service: ServiceLink;
-        readonly root: string;
-      }
-  );
+export type DesktopProject = DesktopProjectFacts & {
+  /** The folder; absent for the no-workspace session. */
+  readonly root: string | undefined;
+  readonly session: Session;
+  /** What the window attaches through: this process's windows, or the
+   *  service. */
+  readonly link: ServiceLink<WindowClient>;
+};
 
 /** What the window shows and offers, as one value its surfaces follow. */
 export interface DesktopProjectsState {
@@ -284,7 +277,7 @@ const openProjectSession = Effect.fn('openProjectSession')(function* (
     return {
       ...facts,
       root,
-      service,
+      link: service,
       session: yield* serviceSession(service, root, roots),
     };
   // The no-workspace session's runs, and every run without a service, run

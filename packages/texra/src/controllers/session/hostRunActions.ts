@@ -2,7 +2,6 @@
 
 import {
   Cancelled,
-  DatabaseReadFailed,
   Rejected,
   type RequestError,
   type RequestRefusal,
@@ -15,8 +14,9 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
-  type AgentCatalog,
+  AgentCatalog,
   getHelperModelName,
+  type ProcessServices,
   type ModelHostFactUnreadable,
   StateReadFailed,
   withLogChannel,
@@ -46,7 +46,6 @@ import {
   documentsOf,
 } from '@texra/shared/plugins/documents';
 import type { MessageHost, NotificationFailed } from '@texra/hosts/uiHosts';
-import { TaskRecordsFailed } from '@texra/controllers/server/protocol';
 
 import {
   planCompileFixer,
@@ -55,13 +54,6 @@ import {
 import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
 
 const CHANNEL = 'HostRunActions';
-
-/** The workflow toolbar's latexdiff over a run's outputs, as each host's
- *  diff command takes it. The run id is the whole request: the diff reads
- *  the run's recorded outputs from the session's fold when it starts. */
-export interface WorkflowDiffRequest {
-  runId: RunId;
-}
 
 /** What the workflow toolbar's pack or clean of a run's files did, and the
  *  input file its message names. */
@@ -75,11 +67,7 @@ interface WorkflowFileOperationResult {
  *  run could not answer for it (`cause`). */
 class RunConfigUnreadable extends Schema.TaggedError<RunConfigUnreadable>()(
   'RunConfigUnreadable',
-  {
-    runId: RunIdSchema,
-    message: Schema.String,
-    cause: Schema.Union([DatabaseReadFailed, TaskRecordsFailed]),
-  },
+  { runId: RunIdSchema, message: Schema.String, cause: Schema.Defect() },
 ) {}
 
 /** The launch facts an action adds to a validated request, as the
@@ -94,10 +82,7 @@ export interface HostRunActionPorts {
    *  none. */
   readonly readConfig: (
     runId: RunId,
-  ) => Effect.Effect<
-    AgentConfig | null,
-    DatabaseReadFailed | TaskRecordsFailed
-  >;
+  ) => Effect.Effect<AgentConfig | null, Error>;
   /** Where a failure before a run opens is presented. */
   readonly present: Pick<SessionHostInteractions, 'emit'>;
   /** Bring the host's progress surface into view for a run this window just
@@ -118,7 +103,7 @@ export interface HostRunActionPorts {
   openFinalOutput(
     config: AgentConfig,
     result: RunEnd,
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, Error, ProcessServices>;
   loadModelOptions(): Effect.Effect<
     Parameters<typeof planCompileFixer>[0]['modelOptions'],
     ModelHostFactUnreadable | StateReadFailed
@@ -145,16 +130,16 @@ export interface HostRunActions {
   runValidated(
     config: AgentConfig,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, Error>;
+  ): Effect.Effect<Run, Error, ProcessServices>;
   /** Merge `editedFile` into `baseFile`: the merge agent's document task on
    *  the helper model, answering once its run is admitted. */
   merge(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, RequestRefusal | StateReadFailed>;
+  ): Effect.Effect<void, RequestRefusal | StateReadFailed, ProcessServices>;
   resume(
     runId: RunId,
-  ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
+  ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable, ProcessServices>;
   /** The saved setup Run again… opens the launch form on. */
   runAgain(
     runId: RunId,
@@ -169,23 +154,24 @@ export interface HostRunActions {
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
-    | RunFailure
+    | RunFailure,
+    ProcessServices
   >;
-  /** The toolbar's latexdiff; `undefined` (a no-op) with no workflow config. */
+  /** The toolbar's latexdiff may run: the run still offers `files` and is
+   *  a document task's with a saved config; else `Rejected`, which the
+   *  surface presents. */
   workflowDiffRequest(
     runId: RunId,
-  ): Effect.Effect<
-    WorkflowDiffRequest | undefined,
-    Rejected | RunConfigUnreadable
-  >;
+  ): Effect.Effect<void, Rejected | RunConfigUnreadable>;
   /** Pack or clean a workflow run's files, from its saved config: the
    *  action check, then the session's `run.files`, which the process that
-   *  holds the run does with it held. No workflow config is a no-op. */
+   *  holds the run does with it held. A run that is not a document task's,
+   *  or saved no config, is `Rejected`. */
   workflowFileOperation(
     runId: RunId,
     operation: 'pack' | 'clean',
   ): Effect.Effect<
-    WorkflowFileOperationResult | undefined,
+    WorkflowFileOperationResult,
     RequestError | RunConfigUnreadable
   >;
   /** A new task holding the run's conversation up to `at` (its latest
@@ -210,7 +196,7 @@ export const createHostRunActions = Effect.fn(
   FileSystem.FileSystem | AgentCatalog
 > {
   // The catalog the merge's task resolves its agent against.
-  const catalog = yield* Effect.context<AgentCatalog>();
+  const catalog = yield* AgentCatalog;
   // Resolved once here and carried: the planner's workspace probes below
   // read through this filesystem rather than taking one from whatever
   // context each of its callers happens to run on.
@@ -278,7 +264,7 @@ export const createHostRunActions = Effect.fn(
   const startAgentRequest = (
     config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, Rejected | Cancelled> =>
+  ): Effect.Effect<Run, Rejected | Cancelled, ProcessServices> =>
     decodeLaunchConfig(config).pipe(
       Effect.flatMap((decoded) =>
         runValidated(decoded, options).pipe(
@@ -290,7 +276,7 @@ export const createHostRunActions = Effect.fn(
   const runAgentRequest = (
     config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<void, Rejected | Cancelled | RunFailure> =>
+  ): Effect.Effect<void, Rejected | Cancelled | RunFailure, ProcessServices> =>
     startAgentRequest(config, options).pipe(
       Effect.flatMap((run) => Effect.asVoid(run.result)),
     );
@@ -319,24 +305,22 @@ export const createHostRunActions = Effect.fn(
     return config ?? undefined;
   });
 
-  /** The saved config of a document task's run, or `undefined` when the
-   *  toolbar action does not apply. */
+  /** The saved config of a document task's run. `files` holds on every
+   *  settled run, so a request on a run that saved no config, or that is
+   *  not a document task's, is refused here, which the surface presents. */
   const workflowConfig = Effect.fn('HostRunActions.workflowConfig')(function* (
     runId: RunId,
   ) {
     const config = yield* readConfig(runId);
-    if (!config) {
-      // Record the refusal because this toolbar path has no messaging port.
-      yield* Effect.logWarning(
-        `Workflow action skipped for stream ${runId}: the run has no persisted config.`,
-      ).pipe(withLogChannel(CHANNEL));
-      return undefined;
-    }
-    // `files` holds on every settled run: this is what keeps a stale
-    // request off a run that is not a document task.
-    return recipeBlockOf(config) === DOCUMENT_TASK_BLOCK.key
-      ? config
-      : undefined;
+    if (!config)
+      return yield* new Rejected({
+        reason: 'This run saved no setup to act on.',
+      });
+    if (recipeBlockOf(config) !== DOCUMENT_TASK_BLOCK.key)
+      return yield* new Rejected({
+        reason: 'This action applies to a document task.',
+      });
+    return config;
   });
 
   /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
@@ -441,7 +425,7 @@ export const createHostRunActions = Effect.fn(
         },
         roots,
       ).pipe(
-        Effect.provideContext(catalog),
+        Effect.provideService(AgentCatalog, catalog),
         Effect.catchTags({
           DocumentTaskRefused: refuse,
           AgentCatalogLoadError: refuse,
@@ -452,15 +436,13 @@ export const createHostRunActions = Effect.fn(
     workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
       function* (runId) {
         yield* requireAction(runId, 'files');
-        const config = yield* workflowConfig(runId);
-        return config ? { runId } : undefined;
+        yield* workflowConfig(runId);
       },
     ),
     workflowFileOperation: Effect.fn('HostRunActions.workflowFileOperation')(
       function* (runId, operation) {
         // `run.files` is gated and held by the session's request handler.
         const config = yield* workflowConfig(runId);
-        if (!config) return undefined;
         const inputFile = config.inputFiles[0] ?? '';
         // A pack names its folder for the input; a clean needs none.
         if (operation === 'pack' && !inputFile)

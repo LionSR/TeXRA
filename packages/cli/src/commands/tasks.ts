@@ -6,7 +6,7 @@
  * runs, so a task outlives the terminal that started it.
  */
 import { defineCommand } from 'citty';
-import { Effect, Fiber, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 
 import {
   type RunId,
@@ -34,9 +34,9 @@ import {
 import {
   isLinked,
   linkClient,
-  serviceKeysNotice,
   type CliServiceLink,
 } from '../runtime/cliService';
+import { environmentApiKeys } from '@texra/controllers/server/serviceSession';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
@@ -218,8 +218,6 @@ const startCommand = defineCliCommand({
       projectApprovalPolicy(services.config),
     );
     if (refused !== undefined) writeTextStderr(refused);
-    // Asked beside the launch, so a slow login shell never delays it.
-    const keys = yield* Effect.forkChild(serviceKeysNotice());
     const agent = yield* resolveCliRunAgent(services, ctx.args.agent);
     const model = yield* selectCliRunModel(
       context,
@@ -246,11 +244,13 @@ const startCommand = defineCliCommand({
     const { runId } = yield* Effect.flatMap(linkClient(link), ({ client }) =>
       client['task.start']({
         workspace: context.cwd,
-        start: { config, approval: launchApproval(requested) },
+        start: {
+          config,
+          approval: launchApproval(requested),
+          apiKeys: environmentApiKeys(),
+        },
       }),
     ).pipe(Effect.mapError(ensureError));
-    const notice = yield* Fiber.join(keys);
-    if (notice !== null) writeTextStderr(notice);
     emitCliResult(context, {
       json: { runId, workspace: context.cwd },
       ndjson: { kind: 'task', task: { runId, workspace: context.cwd } },

@@ -16,6 +16,7 @@ import {
   Unavailable,
 } from '@texra-ai/harness';
 import { Secrets } from '@texra-ai/harness/host';
+import type { ProcessServices } from '@texra-ai/harness/host';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 
 /**
@@ -42,7 +43,7 @@ interface ProgressApiKeyRetryControllerDeps {
    *  this controller re-reads. */
   promptForApiKey(
     provider: ApiKeyProviderId,
-  ): Effect.Effect<void, ApiKeyPromptFailed, Secrets>;
+  ): Effect.Effect<void, ApiKeyPromptFailed, ProcessServices>;
   /** The session holding the retry: its view says whether the retry still
    *  waits, and the decision lands through its requests. */
   readonly session: Pick<Session, 'request'> & {

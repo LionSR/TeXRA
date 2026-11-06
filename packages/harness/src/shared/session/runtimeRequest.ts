@@ -362,6 +362,13 @@ export const StartOptionsSchema = Schema.Struct({
   /** Keep the run open for follow-up messages after each answer, as a chat
    *  window does. Absent, the run ends after its first answer. */
   interactive: Schema.optional(Schema.Boolean),
+  /** The provider API-key variables of the environment the start comes
+   *  from (`OPENAI_API_KEY`, …), by variable name: a key a terminal set for
+   *  this invocation, which a task running in another process would not
+   *  see. The run reads them after its project's `.env` and before that
+   *  process's environment, when its model binds and in what it hands a
+   *  child agent CLI. Never stored: a resume passes them again. */
+  apiKeys: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
 
 /**

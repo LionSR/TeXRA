@@ -6,6 +6,7 @@
  * listing folded here, and a watch is the service's feed, read back as the
  * fold inputs it carries.
  */
+import { API_KEY_ENV_NAMES } from '@texra-ai/llm';
 import { JsonValueSchema, type RunId } from '@texra-ai/harness/schemas';
 import {
   Cause,
@@ -32,17 +33,18 @@ import {
   type ITool,
   type Run,
   type RunEnd,
+  type RunRecords,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
+  activationView,
   AgentError,
   StateReadFailed,
   StateWriteFailed,
   type StateStore,
   replayTrace,
 } from '@texra-ai/harness/host';
-import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
 import { attachWindowHost } from './windowHost';
@@ -52,36 +54,14 @@ import {
   type ServiceClient,
   type ServiceLink,
 } from './client';
-import {
-  TaskRecordsFailed,
-  type ProjectStateFailed,
-  type TaskFailed,
-} from './protocol';
+import type { ProjectStateFailed, TaskFailed } from './protocol';
 import type {
   CommitOrdinal,
   TranscriptSubscription,
-  SessionViewInput,
 } from '@texra-ai/harness/transcript';
 
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
-
-/** A service frame as the view inputs it carries (not its host snapshot). */
-function frameInputs(frame: EventsFrame): SessionViewInput[] {
-  const inputs: SessionViewInput[] = [];
-  if (frame.debug !== null)
-    inputs.push({ _tag: 'debug', enabled: frame.debug });
-  // The local snapshot before the rows it was read ahead of (`cutFrame`).
-  if (frame.local !== null) inputs.push({ _tag: 'local', local: frame.local });
-  inputs.push(...frame.events, ...frame.chunks);
-  if (frame.existence !== null)
-    inputs.push(
-      frame.replayComplete
-        ? { _tag: 'replay.complete', existence: frame.existence }
-        : { _tag: 'drained', cursor: frame.cursor, existence: frame.existence },
-    );
-  return inputs;
-}
 
 /** The service's client now; `offline` words a call made while the link
  *  holds none, with why it holds none (`ServiceLink.away`). A reconnect
@@ -91,7 +71,7 @@ const callService = <A, E>(
   offline: (reason: string) => E,
   use: (client: ServiceClient) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
-  Effect.flatMap(SubscriptionRef.get(link.client), (client) =>
+  Effect.flatMap(link.client.get, (client) =>
     client === null
       ? Effect.flatMap(SubscriptionRef.get(link.away), (reason) =>
           Effect.fail(offline(reason)),
@@ -99,47 +79,25 @@ const callService = <A, E>(
       : use(client),
   );
 
-/**
- * A window's reads of its project's task records, answered by the service
- * from its own session: the run's saved setup, and what its transcript
- * exports read. The window opens no records of its own in service mode. A
- * service that is offline, or did not answer, fails the read `offline`.
- */
-export const serviceRecords = (link: ServiceLink, workspace: string) => {
-  const ask = <A>(
-    runId: RunId,
-    use: (
-      client: ServiceClient,
-    ) => Effect.Effect<
-      A,
-      TaskRecordsFailed | { readonly _tag: 'RpcClientError'; message: string }
-    >,
-  ): Effect.Effect<A, TaskRecordsFailed> =>
-    callService(
-      link,
-      (message) => new TaskRecordsFailed({ runId, reason: 'offline', message }),
-      (client) =>
-        use(client).pipe(
-          Effect.mapError((error) =>
-            error._tag === 'TaskRecordsFailed'
-              ? error
-              : new TaskRecordsFailed({
-                  runId,
-                  reason: 'offline',
-                  message: `The TeXRA service did not answer: ${error.message}`,
-                }),
-          ),
+/** A call the service answers or fails as the session's own `Error`: the
+ *  service's refusal as the class it failed with, a transport failure or
+ *  an offline link worded for the user. */
+const asked = <A>(
+  link: ServiceLink,
+  use: (client: ServiceClient) => Effect.Effect<A, Error>,
+): Effect.Effect<A, Error> =>
+  callService(
+    link,
+    (reason) => new Error(`The TeXRA service did not answer: ${reason}`),
+    (client) =>
+      use(client).pipe(
+        Effect.mapError((error) =>
+          Predicate.isTagged(error, 'RpcClientError')
+            ? new Error(`The TeXRA service did not answer: ${error.message}`)
+            : error,
         ),
-    );
-  return {
-    readConfig: (runId: RunId) =>
-      ask(runId, (client) => client['task.config']({ workspace, runId })),
-    exportInput: (runId: RunId) =>
-      ask(runId, (client) => client['task.exportInput']({ workspace, runId })),
-    exportTrace: (runId: RunId) =>
-      ask(runId, (client) => client['task.exportTrace']({ workspace, runId })),
-  };
-};
+      ),
+  );
 
 /** How many times a change to a project state key is tried again while
  *  another writer moves the key between its read and its write. */
@@ -266,6 +224,20 @@ export const serviceProjectState = (
   };
 };
 
+/**
+ * The provider API keys this process's environment holds, as a start or a
+ * resume sends them to the service (`StartOptions.apiKeys`): a key a
+ * terminal or a window was given reaches the task it asks for, wherever
+ * the task runs.
+ */
+export const environmentApiKeys = (): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    API_KEY_ENV_NAMES.flatMap((name) => {
+      const value = process.env[name]?.trim();
+      return value ? [[name, value]] : [];
+    }),
+  );
+
 /** A failure of a call to the service, as a run's own. */
 const runFailure = (message: string, cause: Error = new Error(message)) =>
   new RunFailure({ cause, message });
@@ -299,7 +271,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   /** The client, once the link has one; or the refusal, once a newer
    *  TeXRA's service refused this window, which no reconnect undoes. */
   const connected = Stream.merge(
-    SubscriptionRef.changes(link.client).pipe(
+    link.client.changes.pipe(
       Stream.filter(Predicate.isNotNull),
       Stream.map((client) => ({ client })),
     ),
@@ -320,11 +292,11 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const graph = yield* WebviewSessions.open(key).pipe(
     Effect.provideContext(sessions),
   );
-  // The window's own view: the listing, plus the transcripts its watches
-  // name. A change of that set is a new generation of one watch, from the
-  // cursor and history the view already holds, as a webview resubscribes.
-  const watches = new Map<number, readonly TranscriptSubscription[]>();
-  let watchIds = 0;
+  // The window's own view: the listing, plus the transcripts its readers
+  // name, each on a port of its own. A change of that set is a new
+  // generation of one watch, from the cursor and history the view already
+  // holds, as a webview resubscribes.
+  const watches = new Map<string, readonly TranscriptSubscription[]>();
   const feed = yield* FiberHandle.make<void, never>();
   const lane = Semaphore.makeUnsafe(1);
   let generation = 0;
@@ -341,7 +313,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       }));
       yield* graph.frames.begin(generation);
       yield* graph.view.subscribe(WINDOW_PORT, aggregates);
-      const client = yield* SubscriptionRef.get(link.client);
+      const client = yield* link.client.get;
       // Offline: the link's return resubscribes.
       if (client === null) return yield* FiberHandle.clear(feed);
       yield* FiberHandle.run(
@@ -350,7 +322,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           workspace,
           subscribe: {
             kind: 'subscribe',
-            session: key,
             generation,
             debug: view.debug,
             cursor: view.cursor,
@@ -367,13 +338,22 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       );
     }),
   );
+  /** Name `set`'s transcripts to the view on `port` (empty: the port's
+   *  subscriptions end). */
+  const subscribe = (port: string, set: readonly TranscriptSubscription[]) =>
+    Effect.suspend(() => {
+      if (set.length === 0) watches.delete(port);
+      else watches.set(port, set);
+      return resubscribe;
+    });
+  let watchPorts = 0;
   yield* resubscribe;
   // The service went (offline: the feed stops) or the link reached it
   // again (the view resubscribes from where it is). The window tells it
   // nothing else: the project's approval policy is its persisted setting,
   // which the service reads itself.
   yield* Effect.forkScoped(
-    SubscriptionRef.changes(link.client).pipe(
+    link.client.changes.pipe(
       Stream.drop(1),
       Stream.runForEach((client) =>
         client === null ? Effect.void : resubscribe,
@@ -381,16 +361,14 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     ),
   );
   const scope = yield* Effect.scope;
-  /** The service's answer to how a task it runs ended, with `at`, its
-   *  log's commit when it answered: asked of the service the link holds,
-   *  again of the next one if the link is lost meanwhile (a retired service
-   *  finishes its tasks first). A service that cannot answer fails it
-   *  offline. */
-  const answered = (runId: RunId) =>
+  /** The service's answer to how the activation of a task it runs ended
+   *  (`Run.result` there), with `at`, its log's position when it answered:
+   *  asked of the service the link holds, or the next one, once the link
+   *  has one. A service that cannot answer fails it offline. */
+  const answered = (runId: RunId, activation: CommitOrdinal) =>
     Effect.flatMap(connected, (client) =>
-      client['task.ended']({ workspace, runId }),
+      client['task.result']({ workspace, runId, activation }),
     ).pipe(
-      Effect.retry({ times: 2 }),
       // One classification: a service that answered the end could not be
       // read fails with its reason; anything else is the link, offline.
       Effect.catch((error) =>
@@ -401,7 +379,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
             ).pipe(
               Effect.annotateLogs({ data: error }),
               Effect.andThen(SubscriptionRef.get(link.away)),
-              Effect.flatMap((reason) => Effect.fail(runFailure(reason))),
+              // The link's reason once it has one; until then the call's.
+              Effect.flatMap((reason) =>
+                Effect.fail(runFailure(reason || error.message)),
+              ),
             ),
       ),
     );
@@ -448,20 +429,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
   const watch: Session['view']['watch'] = (set, from) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        yield* Effect.acquireRelease(
-          Effect.suspend(() => {
-            const id = (watchIds += 1);
-            watches.set(id, set);
-            return Effect.as(resubscribe, id);
-          }),
-          (id) =>
-            Effect.suspend(() => {
-              watches.delete(id);
-              return resubscribe;
-            }),
+        const port = `watch/${(watchPorts += 1)}`;
+        yield* Effect.acquireRelease(subscribe(port, set), () =>
+          subscribe(port, []),
         );
         const cursor = yield* Ref.make(from.cursor);
-        return SubscriptionRef.changes(link.client).pipe(
+        return link.client.changes.pipe(
           Stream.switchMap((client) =>
             client === null
               ? Stream.empty
@@ -471,7 +444,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                       workspace,
                       subscribe: {
                         kind: 'subscribe',
-                        session: key,
                         generation: 0,
                         debug: from.debug,
                         cursor: at,
@@ -481,7 +453,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   ),
                 ).pipe(
                   Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
-                  Stream.map(frameInputs),
+                  Stream.map((frame) => frame.inputs),
                   Stream.filter((inputs) => inputs.length > 0),
                   // A lost service's stream fails, or is interrupted
                   // when the link closes its connection: either ends
@@ -504,11 +476,12 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
         );
       }),
     );
-  /** The run the service admitted, as this window holds it: its end is the
-   *  service's answer (asked once, at once, while the activation it ends is
-   *  this one), held until this window's fold shows it too; its view this
-   *  window's fold sliced to this activation; and its trace read back from
-   *  the service's rows of this activation through the watch. */
+  /** The run the service admitted, as this window holds it: the `Run` of
+   *  the activation the service named, over this window's view and the
+   *  service's rows. Its end is the service's answer (asked once, at once),
+   *  held until this window's view shows it too; its view this window's,
+   *  sliced to the activation as a run here slices it; and its trace read
+   *  back from the service's rows of the activation through the watch. */
   const runOf = Effect.fn('runOf')(function* (
     {
       runId,
@@ -516,7 +489,9 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     }: { readonly runId: RunId; readonly activation: CommitOrdinal },
     redirectedFrom?: RunId,
   ): Effect.fn.Return<Run> {
-    const answer = Fiber.join(yield* Effect.forkIn(answered(runId), scope));
+    const answer = Fiber.join(
+      yield* Effect.forkIn(answered(runId, activation), scope),
+    );
     const result = yield* Effect.cached(Effect.flatMap(answer, endOf));
     // The service's commit when it answered, past every row the run
     // wrote, failed or not. With no answer (no service will give one,
@@ -525,20 +500,23 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     let answeredAt: CommitOrdinal = -1;
     return {
       runId,
+      activation,
       ...(redirectedFrom !== undefined && { redirectedFrom }),
       result,
-      // From the first level at or past the activation, as a run here
-      // slices it (an earlier one can show the run absent, interrupted, or
-      // with its previous activation's outcome), to this activation's
-      // outcome, or the result.
-      view: graph.view.changes.pipe(
-        Stream.dropWhile(
-          (level) => level.cursor < activation || !level.runs.has(runId),
+      // The view ends as a run's here does, on the level that shows the
+      // activation's outcome or the run gone; and once the result has
+      // failed (the service died under the task, the link refused), when no
+      // such level is coming through the watch.
+      view: activationView(
+        { current: graph.view.current, changes: graph.view.changes, subscribe },
+        runId,
+        activation,
+      ).pipe(
+        Stream.haltWhen(
+          Effect.flatMap(Effect.exit(result), (exit) =>
+            Exit.isFailure(exit) ? Effect.void : Effect.never,
+          ),
         ),
-        Stream.takeUntil(
-          (level) => level.runs.get(runId)?.durableOutcome != null,
-        ),
-        Stream.haltWhen(Effect.exit(result)),
       ),
       // The service's rows, through the watch; the service's log is the
       // store, settled once it answered.
@@ -577,13 +555,48 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           tools: tools.map((tool) => tool.definition.name),
           message: "The TeXRA service cannot run a window's own tools.",
         });
+  /** `Session.records`: each member one procedure of the service. */
+  const records = (runId: RunId): RunRecords => {
+    const ask = <A>(
+      read: (
+        client: ServiceClient,
+        input: { workspace: string; runId: RunId },
+      ) => Effect.Effect<A, Error>,
+    ) => asked(link, (client) => read(client, { workspace, runId }));
+    return {
+      exists: () => ask((client, input) => client['records.exists'](input)),
+      readConfig: () => ask((client, input) => client['records.config'](input)),
+      readReport: () => ask((client, input) => client['records.report'](input)),
+      readRunEnd: () => ask((client, input) => client['records.runEnd'](input)),
+      readResult: () => ask((client, input) => client['records.result'](input)),
+      readWorkspaceFiles: () =>
+        ask((client, input) => client['records.workspaceFiles'](input)),
+      readSkills: () => ask((client, input) => client['records.skills'](input)),
+      readResumable: () =>
+        ask((client, input) => client['records.resumable'](input)),
+      readRejection: () =>
+        ask((client, input) => client['records.rejection'](input)),
+      readConversation: () =>
+        ask((client, input) => client['records.conversation'](input)),
+      readTrace: () => ask((client, input) => client['records.trace'](input)),
+    };
+  };
   return {
     roots,
     view: {
       current: graph.view.current,
       changes: graph.view.changes,
       watch,
+      read: (runIds) =>
+        asked(link, (client) => client['session.view']({ workspace, runIds })),
     },
+    records,
+    listRuns: () =>
+      asked(link, (client) => client['session.listRuns']({ workspace })),
+    deleteRuns: (target) =>
+      asked(link, (client) =>
+        client['session.deleteRuns']({ workspace, target }),
+      ),
     request,
     start: ({ tools, ...start }) => {
       if (!('config' in start))
@@ -592,7 +605,10 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       const refused = windowTools(tools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
-        client['task.start']({ workspace, start }).pipe(
+        client['task.start']({
+          workspace,
+          start: { ...start, apiKeys: start.apiKeys ?? environmentApiKeys() },
+        }).pipe(
           Effect.mapError((error) =>
             refusedByService(
               `The TeXRA service could not start the task: ${error.message}`,
@@ -606,7 +622,11 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
       const refused = windowTools(input?.tools);
       if (refused) return Effect.fail(refused);
       return callService(link, runFailure, (client) =>
-        client['task.resume']({ workspace, runId }).pipe(
+        client['task.resume']({
+          workspace,
+          runId,
+          apiKeys: input?.apiKeys ?? environmentApiKeys(),
+        }).pipe(
           Effect.mapError((error) => refusedByService(error.message, error)),
         ),
       ).pipe(

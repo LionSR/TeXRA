@@ -88,7 +88,9 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const model = run?.model ?? meta.model;
     // The skills the run's latest step lists, read from its rows.
     const activeSkills =
-      activeRunId === undefined ? [] : yield* context.reads.skills(activeRunId);
+      activeRunId === undefined
+        ? []
+        : yield* context.runSession.records(activeRunId).readSkills();
     const [option] = yield* readModelOptions(context.stores, [model]);
     appendLocalNotice(
       formatCliSessionStatus({

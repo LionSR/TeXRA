@@ -32,7 +32,7 @@ import {
 } from '@texra/shared/hostBridgeTypes';
 
 import { parseTraceData } from './traceDataSchema';
-import { traceFrame } from './traceFrames';
+import { traceFrame, traceHost } from './traceFrames';
 import type { TraceDocument } from '@texra-ai/harness/schemas';
 
 // The inline trace `standaloneTraceHtml` writes into the exported page.
@@ -89,6 +89,11 @@ function installTraceHostBridge(document: Promise<TraceDocument>): void {
         case 'subscribe':
           document.then(
             (loaded) => {
+              deliver({
+                kind: 'host',
+                session: TRACE_SESSION,
+                host: traceHost(loaded),
+              });
               deliver(traceFrame(loaded, TRACE_SESSION, up, cut));
               if (selected) return;
               selected = true;

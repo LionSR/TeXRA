@@ -226,15 +226,16 @@ rather than per finding:
 
 ## 3. Red flags that stand
 
-- **Repetition.** "A grant answers a request of this kind" is read twice:
-  `sessionPermission` (`loop/toolGuard.ts`) before a request opens, and
-  `grantAnswers` (`agent/runtime/requests.ts`) as it opens, for the race
-  between the two. One owner: `openRequest` could take the policy's reading
-  from the guard as data; left for the hosts' PR with the request's
-  `answeredBy`.
-- **Two readings of "cut short".** `leftoverChildren.cutShort` and
-  `agentChild.standingOf` both decide "no end, or the end a clean close's
-  stop wrote" from `RunRows`. One predicate on `RunRows` would own it.
+- **Repetition, ended in the hosts' PR.** "A grant answers a request of
+  this kind" was read twice: `sessionPermission` (`loop/toolGuard.ts`)
+  before a request opens, over the operation's own grant alone, and
+  `grantAnswers` (`agent/runtime/requests.ts`) as it opens, over every
+  grant that covers the kind. One table now (`GRANT_OF`, `STANDS_FOR` in
+  `shared/schemas/request.ts`): `grantHeld` reads it for the guard and
+  `grantAnswering` for the opener, so super yolo answers a bash call at
+  the guard as it did at the open.
+- **Two readings of "cut short", ended in the hosts' PR.**
+  `agentChild.standingOf` reads `leftoverChildren.cutShort` now.
 - **`ToolPolicy.oneShot`** (§1.6): a derivable column.
 - **`reportInterrupted`'s delivery id** carries an `:interrupted` suffix the
   end's `${runId}:${activation}` does not; the executions tool's `wait`
@@ -254,21 +255,18 @@ rather than per finding:
   harness enforces it once, in `submitFollowUp` (`acceptsFollowUp` is a view
   affordance that reads the same field). One fact, one representation would
   make it a boolean.
-- **The ten-minute `APPROVAL_HANDLER_TIMEOUT`** (`requestAnswerer`) now
-  bounds the headless operator's prompt as well as a programmatic handler:
-  an operator who answers after ten minutes finds the request denied. The
-  old adapter's own loop had no clock. A host's prompt should carry its own
-  deadline, or none.
-- **`sessionPermission` and `grantAnswers` disagree at two edges.** Super
-  yolo on with bash off opens a request and decides it in the same batch
-  (the guard says ask, the grant answers); a `call` operation's bash-kind
-  request with `allowBypass: false` is asked even under super yolo, where
-  the old lane head let it through. Both follow from the two readings
-  above; one owner ends them.
-- **`resumeOwnedChild`** (an awaited call's resume of its child) repeats
-  `openResume` with fewer checks: no `checkpointRefusal`, no closed-input
-  read, no stop asked meanwhile. Correct today because the call owns the
-  run, and a second site for the same decision.
+- **The ten-minute `APPROVAL_HANDLER_TIMEOUT`, ended in the hosts' PR.**
+  The answerer waits as long as the handler does; a host's prompt carries
+  its own deadline, or none.
+- **The two edges, after the one reading above.** Super yolo on with
+  bash off no longer opens a bash request only to decide it in the same
+  batch: the guard allows it. A `call` operation's bash-kind request with
+  `allowBypass: false` is still asked under super yolo: a hook's `ask`
+  names a person, and both readings honour it; the old lane head's pass
+  was the defect.
+- **`resumeOwnedChild`, ended in the hosts' PR.** An awaited call's
+  resume of its child runs `openResume` as its owner, with every check the
+  one resume path makes.
 - **`awaitChildRun`'s interruption** (the parent stopped while waiting on a
   child in band) interrupts the child's fiber directly, so the child ends
   cancelled with no `run.stop` row of its own; its parent's stop is the
@@ -301,13 +299,15 @@ rather than per finding:
 
 ## 4. Follow-ups
 
-- Hosts' PR (R6+R10): §1.1 (TUI `approve`), §1.5 (R8's second half), §1.4
-  (denied-request notice), §3's `answeredBy`.
-- Harness, small: §3's one `cutShort` predicate (`agentChild.standingOf`
-  still reads its own), one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
-  boolean, the handler timeout off the operator's prompt, `resumeOwnedChild`
-  through `openResume`, the await's interruption through `RunRegistry.stop`,
-  the close deadline over the stop writes, a hold per agent-CLI turn.
+- Hosts' PR (R6+R10): §1.1 (TUI `approve`; moot while the TUI is a
+  client of the service, whose windows answer prompts through
+  `request.decide`), §1.5 (R8's second half), §1.4 (denied-request
+  notice). §3's one reading of a grant landed there (PR 14772).
+- Harness, small: one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
+  boolean, the await's interruption through `RunRegistry.stop` (the
+  registry's `stop` already cascades a stop row to every held descendant;
+  what is left is a tool call interrupted for another reason), the close
+  deadline over the stop writes, a hold per agent-CLI turn.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
 - The CLI service and its sessions, read after this PR's review rounds:

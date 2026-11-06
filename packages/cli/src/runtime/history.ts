@@ -11,7 +11,11 @@ import {
   type RunOutcome,
   serializeFilteredConfig,
 } from '@texra-ai/harness/schemas';
-import type { AgentRunListingEntry, RunResult } from '@texra-ai/harness';
+import type {
+  AgentRunListingEntry,
+  RunResult,
+  Session,
+} from '@texra-ai/harness';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
@@ -20,12 +24,12 @@ import { absentReason } from '@texra-ai/harness/node';
 import { runOutcomeToCliRunStatus } from '@cli/schemas/cliOutput';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
+import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
 import type { ChatExportInput } from '@texra/agent/export/schemas';
 import { runStatusLabel } from '@ui/copy/runStatus';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
-import type { CliRunReads } from './runReads';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -200,33 +204,46 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
   return isRunId(raw) ? raw : undefined;
 }
 
-/** The history readers take the project's reads (`CliPlatformServices.reads`):
- *  this process's own store, or the service's, whichever holds the runs. */
+/** The history readers take the project's session
+ *  (`CliPlatformServices.runSession`): this process's own, or the
+ *  service's, whichever holds the runs. */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
-  function* (reads: CliRunReads) {
-    return (yield* reads.listRuns()).map(toCliHistoryEntry);
+  function* (session: Session) {
+    return (yield* session.listRuns()).map(toCliHistoryEntry);
   },
 );
 
 export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
   function* (
-    reads: CliRunReads,
+    session: Session,
     storage: string,
     id: RunId,
     options: { includeFullConversation?: boolean } = {},
   ) {
-    const [config, detail, generatedFiles] = yield* Effect.all(
-      [reads.config(id), reads.detail(id), listRunGeneratedFiles(id, storage)],
-      { concurrency: 3 },
-    );
-    const {
-      run,
+    const records = session.records(id);
+    const [
+      config,
+      view,
       result,
       report,
       conversation,
       workspaceFiles,
-      resumable: checkpointPresent,
-    } = detail;
+      checkpointPresent,
+      generatedFiles,
+    ] = yield* Effect.all(
+      [
+        records.readConfig(),
+        session.view.read([id]),
+        records.readResult(),
+        records.readReport(),
+        records.readConversation(),
+        records.readWorkspaceFiles(),
+        records.readResumable(),
+        listRunGeneratedFiles(id, storage),
+      ],
+      { concurrency: 8 },
+    );
+    const run = view.runs.get(id);
     if (!run && !config && conversation.length === 0 && !checkpointPresent) {
       return null;
     }
@@ -305,9 +322,9 @@ type CliHistoryExportInputResult =
  */
 export const readCliHistoryExportInput = Effect.fn(
   'cli.readCliHistoryExportInput',
-)(function* (reads: CliRunReads, id: RunId) {
+)(function* (session: Session, id: RunId) {
   const [exists, { config, exportInput }] = yield* Effect.all(
-    [reads.exists(id), reads.exportInput(id)],
+    [session.records(id).exists(), loadChatExportInput(id, session)],
     { concurrency: 2 },
   );
   if (exportInput)
@@ -349,10 +366,10 @@ export function readCliHistoryStandaloneTemplate(
 
 /** Delete what `target` names among the stored runs, where they are held. */
 export const deleteCliHistory = Effect.fn('deleteCliHistory')(function* (
-  reads: CliRunReads,
+  session: Session,
   target: RunId | 'all',
 ) {
-  const { listed, deleted, active, failed } = yield* reads.deleteRuns(target);
+  const { listed, deleted, active, failed } = yield* session.deleteRuns(target);
   if (target === 'all')
     return {
       deleted: 'all',

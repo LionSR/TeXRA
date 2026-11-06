@@ -53,6 +53,7 @@ export {
   EventInputSchema,
   LocalRuntimeStateSchema,
   ResumeBlockedSchema,
+  SessionViewInputSchema,
   TextChunkSchema,
   TranscriptSubscriptionSchema,
   type CommitOrdinal,

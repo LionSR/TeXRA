@@ -26,6 +26,7 @@ import { SessionViewAccess, SessionLog } from '@shared/session/runHistory';
 
 import { formatDelivery } from './deliveryEnvelope';
 import { resumeRun } from './resumeRun';
+import { AgentRun, type RunLaunch } from './run/AgentRun';
 import { Runs } from './runRegistry';
 
 const CHANNEL = 'leftoverChildren';
@@ -95,25 +96,29 @@ export const cutShort = ({ end, stop }: RunRows): boolean =>
   (end.outcome === RUN_OUTCOME.CANCELLED && stop?.reason === 'shutdown');
 
 /** The one closer of what a dead process or a clean close left of `run`
- *  ({@link resumeLeftoverChildren}, `sweepLeftoverRuns`). */
+ *  ({@link resumeLeftoverChildren}, `sweepLeftoverRuns`). A child resumed
+ *  under its parent takes the keys the parent's activation carries, as a
+ *  child it starts does; a sweep has no parent and brings none. */
 export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
-  parent: RunId | null,
+  parent: Pick<RunLaunch, 'runId' | 'apiKeys'> | null,
   run: RunView,
 ) {
   if ((yield* Runs).get(run.id) !== undefined) return;
   const facts = yield* (yield* SessionLog).facts(run.id);
   if (facts === null || !cutShort(facts)) return;
   if ((yield* owningCall(run.id)) !== null) return;
-  const report = (why: string) => reportInterrupted(parent, run, facts, why);
+  const parentRunId = parent?.runId ?? null;
+  const report = (why: string) =>
+    reportInterrupted(parentRunId, run, facts, why);
   const rejection = yield* checkpointRefusal(run.id);
   if (rejection !== null) return yield* report(rejection.kind);
   // A resume refused once it decides is reported; one blocked on a missing
   // agent or plugin, or one that failed, is left for the next resume, said
   // once. Forked: the caller goes on while the child's opening commits.
   const told = (what: string) => (error: unknown) =>
-    warn(`Child run ${run.id} ${what}`, { parent, error });
+    warn(`Child run ${run.id} ${what}`, { parent: parentRunId, error });
   yield* Effect.forkScoped(
-    Effect.matchEffect(resumeRun(run.id, {}), {
+    Effect.matchEffect(resumeRun(run.id, { apiKeys: parent?.apiKeys }), {
       onSuccess: (answer) =>
         'failed' in answer && answer.failed.kind !== 'blocked'
           ? report(describeFollowUpFailure(answer.failed.kind))
@@ -123,14 +128,16 @@ export const closeLeftoverRun = Effect.fn('closeLeftoverRun')(function* (
   );
 });
 
-/** {@link closeLeftoverRun} of `runId`'s children, as `runId` resumes. */
+/** {@link closeLeftoverRun} of the resuming run's children (`AgentRun`). */
 export const resumeLeftoverChildren = Effect.fn('resumeLeftoverChildren')(
-  function* (runId: RunId) {
+  function* () {
+    const parent = yield* AgentRun;
     // The listing with this run's activation applied: a child is started
     // under a run the view reads as running, not as stopped.
     yield* (yield* SessionLog).settled;
     const { runs } = yield* (yield* SessionViewAccess).read([]);
     for (const child of runs.values())
-      if (child.parentId === runId) yield* closeLeftoverRun(runId, child);
+      if (child.parentId === parent.runId)
+        yield* closeLeftoverRun(parent, child);
   },
 );

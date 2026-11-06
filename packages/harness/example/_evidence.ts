@@ -91,7 +91,7 @@ export const writeEvidence = (
     const records = session.records(runId);
     const conversation = yield* records.readConversation();
     const runs = [...session.view.current().runs.values()];
-    const children: Record<string, ExportNode[]> = {};
+    const children: Record<string, readonly ExportNode[]> = {};
     for (const run of runs)
       if (run.id !== runId)
         children[run.id] = yield* session.records(run.id).readConversation();
