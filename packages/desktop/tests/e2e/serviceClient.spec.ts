@@ -32,7 +32,7 @@ import {
   scriptedModel,
   serviceStatus,
 } from './serviceFixture.js';
-import { cleanupDirectory } from './workspaceStorageFixture.js';
+import { cleanupDirectory, withStoreCopy } from './workspaceStorageFixture.js';
 
 test.skip(process.platform === 'win32', 'no service runs on Windows yet');
 
@@ -253,22 +253,23 @@ function openedToolEdit(dataRoot: string, runId: string): string | undefined {
     ? readdirSync(storage).find((name) => name.startsWith('work-'))
     : undefined;
   if (project === undefined) return undefined;
-  const db = new DatabaseSync(join(storage, project, 'texra.db'), {
-    readOnly: true,
+  // The service holds the store: its rows are read from a copy.
+  return withStoreCopy(join(storage, project), (copy) => {
+    const db = new DatabaseSync(join(copy, 'texra.db'), { readOnly: true });
+    try {
+      const row = db
+        .prepare(
+          `SELECT json_extract(e.data, '$.requestId') AS requestId FROM event e
+           JOIN event_sequence s ON s.id = e.aggregate
+           WHERE s.logical_id = ? AND e.type = 'request.opened'
+             AND json_extract(e.data, '$.payload.kind') = 'toolEdit'`,
+        )
+        .get(runId) as { readonly requestId: string } | undefined;
+      return row?.requestId;
+    } finally {
+      db.close();
+    }
   });
-  try {
-    const row = db
-      .prepare(
-        `SELECT json_extract(e.data, '$.requestId') AS requestId FROM event e
-         JOIN event_sequence s ON s.id = e.aggregate
-         WHERE s.logical_id = ? AND e.type = 'request.opened'
-           AND json_extract(e.data, '$.payload.kind') = 'toolEdit'`,
-      )
-      .get(runId) as { readonly requestId: string } | undefined;
-    return row?.requestId;
-  } finally {
-    db.close();
-  }
 }
 
 test('a tool edit the app changed keeps its changes when another window answers it in the service, and a later answer is refused', async () => {

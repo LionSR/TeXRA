@@ -29,7 +29,7 @@ import {
   scriptedModel,
   serviceStatus,
 } from './serviceFixture.js';
-import { cleanupDirectory } from './workspaceStorageFixture.js';
+import { cleanupDirectory, withStoreCopy } from './workspaceStorageFixture.js';
 
 const PROPOSED = 'Tighten the prose.';
 const EDITED = 'Tighten the prose; keep the macros.';
@@ -45,14 +45,16 @@ function storeRows<T>(
   const project = existsSync(storage)
     ? readdirSync(storage).find((name) => name.startsWith('work-'))
     : undefined;
-  const file = project && join(storage, project, 'texra.db');
-  if (!file || !existsSync(file)) return [];
-  const db = new DatabaseSync(file, { readOnly: true });
-  try {
-    return db.prepare(sql).all(...params) as T[];
-  } finally {
-    db.close();
-  }
+  if (!project || !existsSync(join(storage, project, 'texra.db'))) return [];
+  // The service holds the store: its rows are read from a copy.
+  return withStoreCopy(join(storage, project), (copy) => {
+    const db = new DatabaseSync(join(copy, 'texra.db'), { readOnly: true });
+    try {
+      return db.prepare(sql).all(...params) as T[];
+    } finally {
+      db.close();
+    }
+  });
 }
 
 /** The files one of the launch form's lists holds, in order. */
