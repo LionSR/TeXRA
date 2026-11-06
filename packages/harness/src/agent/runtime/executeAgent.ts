@@ -232,12 +232,7 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     config,
     apiKeys: options.apiKeys,
     persona,
-    toolPolicy: {
-      stopAfterCycle,
-      // No later turn reaches a root that stops after its cycle, nor an
-      // awaited child: its parent's call reads its end and goes on.
-      oneShot: stopAfterCycle && (entry.parent === null || entry.awaited),
-    },
+    toolPolicy: { stopAfterCycle },
     logger: agentLogger,
     parentStage,
     opening,

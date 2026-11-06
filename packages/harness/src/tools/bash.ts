@@ -8,7 +8,11 @@ import {
   TOOL_RESULT_TRUNCATION_TAIL_CHARS,
 } from '@agent/runtime/run/toolResultText';
 import { ToolContext } from '@agent/core/tools/ToolTypes';
-import { requireToolRun, type RunToolCall } from '@agent/runtime/RunCall';
+import {
+  noLaterTurn,
+  requireToolRun,
+  type RunToolCall,
+} from '@agent/runtime/RunCall';
 import {
   formatBashDelivery,
   formatBashError,
@@ -320,7 +324,7 @@ const executeBashTool = Effect.fn('executeBashTool')(function* (
     // A background shell delivers its result as a follow-up message; a
     // one-shot run has no later turn to take it, and the session's close
     // would kill the command and discard its result with nothing reported.
-    if (call.run.toolPolicy.oneShot === true)
+    if (noLaterTurn(call.run))
       return yield* Effect.fail(
         new ToolError(
           'bash run_in_background is unavailable in one-shot runs: it delivers its result as a follow-up message, and this run ends after the current cycle so no follow-up can be collected. Run the command in the foreground instead (omit run_in_background), raising `timeout` if it needs longer than the default.',

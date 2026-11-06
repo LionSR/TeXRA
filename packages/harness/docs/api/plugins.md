@@ -1009,6 +1009,17 @@ Child agents: the `agent` tool.
 const multiAgent: Plugin
 ```
 
+## noLaterTurn
+
+Whether no later turn reaches `run`: a root that stops after its cycle,
+or a child its parent's call awaits (the call reads its end and goes
+on). A background child stops after its cycle too, but a delivery or a
+message resumes it, so a result sent to it as a follow-up arrives.
+
+```ts
+const noLaterTurn: (run: Pick<ToolRun, "toolPolicy" | "entry">) => boolean
+```
+
 ## nullishWithDefault
 
 An optional tool-input field whose absence resolves to `fallback` before
@@ -1981,13 +1992,10 @@ anywhere beneath it — the property an SDK embedder wants.
 
 ```ts
 interface ToolPolicy {
-  /** Stop a tool-use run after one model/tool cycle instead of waiting. */
+  /** Stop a tool-use run after one model/tool cycle instead of waiting.
+   *  Whether a later turn can still reach the run is `noLaterTurn`
+   *  (`RunCall.ts`), read off this and the launch's parent edge. */
   readonly stopAfterCycle?: boolean;
-  /** No later turn reaches the run: a root that stops after its cycle, or
-   *  a child its parent's call awaits (the call reads its end and goes on).
-   *  A background child stops after its cycle too, but a delivery or a
-   *  message resumes it, so a result sent to it as a follow-up arrives. */
-  readonly oneShot?: boolean;
 }
 ```
 

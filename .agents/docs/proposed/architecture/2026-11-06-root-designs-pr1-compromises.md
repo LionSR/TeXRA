@@ -67,8 +67,9 @@ Each item: what the note asked, what landed, why, and what ends it.
    child is `stopAfterCycle` now, so a tool can no longer read "no later turn
    reaches this run" off it; `oneShot` is that fact (`stopAfterCycle && parent
    === null`), derived once in `executeAgent`, because a tool holds no parent
-   edge. Costs: a derivable column. Ends with: the tool call reading its
-   run's parent edge from `RunCall`, which R8's second half may carry.
+   edge. Costs: a derivable column. Ended (PR 3 of the root designs): a
+   tool's run carries its launch's parent edge (`ToolRun.entry`), and
+   `noLaterTurn(run)` reads the fact where it is asked; `oneShot` is gone.
 7. **A background child resumed by a delivery reports twice.** A child that
    launched a background command ends and reports; the command's result
    queues on the ended child, the registry wakes it, it runs one more cycle
@@ -236,7 +237,8 @@ rather than per finding:
   the guard as it did at the open.
 - **Two readings of "cut short", ended in the hosts' PR.**
   `agentChild.standingOf` reads `leftoverChildren.cutShort` now.
-- **`ToolPolicy.oneShot`** (§1.6): a derivable column.
+- **`ToolPolicy.oneShot`, ended in PR 3** (§1.6): `noLaterTurn` reads the
+  policy and the parent edge off the run.
 - **`reportInterrupted`'s delivery id** carries an `:interrupted` suffix the
   end's `${runId}:${activation}` does not; the executions tool's `wait`
   consumes both by prefix. Two id shapes for one lifecycle's deliveries.

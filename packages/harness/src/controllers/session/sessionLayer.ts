@@ -425,8 +425,11 @@ export function ownerProcessLayer({
 
 /**
  * The owner over the map: each method runs on its caller's fiber with the
- * map provided. Its release closes what is still open, plugins drained
- * first, before the map's own release unwinds the entries.
+ * map provided. A close, of one session or of all, drains the plugins
+ * first: what a plugin admitted for a session (a GitHub poll round's
+ * delivery) lands before that session closes, not after. Its release
+ * closes what is still open before the map's own release unwinds the
+ * entries.
  */
 const sessionOwnerLayer = Layer.effect(
   SessionOwner,
@@ -437,8 +440,6 @@ const sessionOwnerLayer = Layer.effect(
       effect: Effect.Effect<A, E, SessionMap>,
     ): Effect.Effect<A, E> => Effect.provideService(effect, SessionMap, map);
     const closeAll = Effect.gen(function* () {
-      // What a plugin admitted for a session (a GitHub poll round's
-      // delivery) lands before that session closes, not after.
       yield* catalog.drain;
       return yield* Effect.forEach(
         yield* listSessions,
@@ -450,7 +451,8 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
-      close: (root) => withMap(closeSession(root)),
+      close: (root) =>
+        withMap(Effect.andThen(catalog.drain, closeSession(root))),
       closeAll,
     };
   }),

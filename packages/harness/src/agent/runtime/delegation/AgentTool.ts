@@ -19,7 +19,7 @@ import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
-import { RunCall, requireToolRun } from '@agent/runtime/RunCall';
+import { RunCall, noLaterTurn, requireToolRun } from '@agent/runtime/RunCall';
 import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
@@ -374,7 +374,7 @@ const agentCall = Effect.fn('AgentTool.agentCall')(function* (
 
   // Awaited in a script unless sent to the background, and always in a
   // one-shot run, which has no later turn for a follow-up to reach.
-  const oneShot = run.toolPolicy.oneShot === true;
+  const oneShot = noLaterTurn(run);
   const awaited =
     oneShot || (script !== undefined && launch.background !== true);
   // A task, a structured call and a trusted script's call reach the child
