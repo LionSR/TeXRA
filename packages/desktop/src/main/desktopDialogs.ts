@@ -95,7 +95,6 @@ export function createDesktopDialogs(
           }),
         catch: (cause) =>
           new PromptFailed({
-            reason: 'presentation-failed',
             member: 'confirm',
             message: `The confirmation dialog could not be shown: ${toErrorMessage(cause)}`,
             cause,

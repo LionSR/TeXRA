@@ -79,7 +79,6 @@ describe('a subscription that cannot bill', () => {
   // message, the facts were lost to every stored row and notice.
   it('is recorded with its route, its sign-in need and the session failure', () => {
     const lapsed = new RouteUnavailable({
-      reason: 'unavailable',
       message: 'The refresh token was revoked.',
       session: { route: 'chatgpt-subscription', needsReauth: true },
     });

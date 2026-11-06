@@ -32,15 +32,16 @@ export class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
  * be read, the subscription session needs a sign-in, or the model is unknown
  * or unavailable. A failure of the
  * harness's own model access, never a vendor's (that is llm's `ModelError`).
- * `missing-api-key` is the one reason a host acts on (it offers the key
- * setting); every other reason is read as its message, which for a
+ * A missing key is the one fact a host acts on (it offers the key
+ * setting); any other failure is read as its message, which for a
  * subscription session is the session's own failure, classified with its
  * route and remedy (`subscription-session`) by `providerErrorOf`.
  */
 export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
   'RouteUnavailable',
   {
-    reason: Schema.Literals(['missing-api-key', 'unavailable']),
+    /** The route's credential is not set anywhere the run reads. */
+    missingApiKey: Schema.optional(Schema.Literal(true)),
     message: Schema.String,
     /** A signed-in subscription that could not bill the call: its route,
      *  and whether only a fresh sign-in can help (else it may recover). */
@@ -55,10 +56,6 @@ export class RouteUnavailable extends Schema.TaggedError<RouteUnavailable>()(
 ) {
   /** `cause`, read as the reason no route can carry the call. */
   static of(cause: Error): RouteUnavailable {
-    return new RouteUnavailable({
-      reason: 'unavailable',
-      message: cause.message,
-      cause,
-    });
+    return new RouteUnavailable({ message: cause.message, cause });
   }
 }
