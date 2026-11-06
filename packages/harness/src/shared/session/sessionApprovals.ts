@@ -13,7 +13,7 @@ import type { ApprovalPolicy } from '@shared/approvalPolicy';
 import type { RunId, SessionEventDraft } from '@shared/schemas';
 import type { Effect } from 'effect';
 import type {
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from './database';
@@ -65,14 +65,14 @@ export interface SessionApprovals {
   bypass(runId: RunId, kind: ApprovalBypassKind): 'goal' | 'human' | null;
   /** Update grants in one transaction, returning once durable and folded.
    *  An unchanged grant writes nothing. Additional `rows` always commit in
-   *  that transaction. The caller holds the run's claim. */
+   *  that transaction. */
   change(
     runId: RunId,
     edit: (grants: ApprovalGrants) => ApprovalGrants,
     rows?: readonly UnfoldedDraft[],
   ): Effect.Effect<
     void,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+    DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
   >;
   /** Grants committed beside `run.activate`, read from the run's and its
    *  ancestors' rows, never from a view that may lag. */

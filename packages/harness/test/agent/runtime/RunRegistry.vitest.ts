@@ -127,12 +127,12 @@ function createRegistry(
             }),
           )
         : Effect.succeed([])) as SessionLog['Service']['transact'],
-    hold: () => Effect.void,
   };
   const registry = new RunRegistry({
     roots: Context.get(real, SessionRoots),
     view,
     log,
+    runsHere: () => {},
     fork,
     programs: testRunPrograms,
     wake: () => {},

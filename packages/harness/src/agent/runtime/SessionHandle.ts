@@ -18,10 +18,7 @@ import type {
   RunId,
   SessionEvent,
 } from '@shared/schemas';
-import type {
-  DatabaseReadFailed,
-  DeletionMode,
-} from '@shared/session/database';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type {
   RequestError,
@@ -96,7 +93,6 @@ export interface SessionRequestsShape {
    *  a user's `run.delete`. */
   readonly removeRun: (
     runId: RunId,
-    mode: DeletionMode,
     expectedStartCommit: CommitOrdinal,
   ) => Effect.Effect<void, RequestError, SessionServices>;
   /**

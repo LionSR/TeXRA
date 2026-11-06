@@ -115,16 +115,14 @@ export function traceFrame(
         : []),
     ],
     chunks: [],
-    local: { self: [], dead: [], unreadable: [] },
+    local: { runsHere: [] },
     host: traceHost(trace),
     debug: subscribe.debug,
     replayComplete: true,
     existence: {
       checkedAggregateIds,
-      claims: checkedAggregateIds.map((aggregateId) => ({
-        aggregateId,
-        ownerId: null,
-      })),
+      present: checkedAggregateIds,
+      unreadable: [],
     },
   };
 }

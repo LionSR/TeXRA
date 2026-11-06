@@ -88,8 +88,6 @@ export function describeRunNotice(run: RunView): string | null {
       return 'an earlier build wrote it, and this build cannot open it';
     case 'interrupted':
       return 'the process running it stopped before it finished; resume it to continue';
-    case 'held':
-      return `held by another process (pid ${notice.pid})`;
     case 'lost':
       return notice.message;
   }

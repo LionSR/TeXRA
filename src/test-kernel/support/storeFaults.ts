@@ -16,15 +16,22 @@
  *   does. Every operation runs the real store's code unless a fault is
  *   armed, and the faults go with the caller's scope.
  * - {@link parkedRunAfterCrash} is a process killed with a run parked: the
- *   committed store copied to a fresh root, claims held by a dead owner
- *   (or one the case names), and a fresh session opened over it.
+ *   committed store copied to a fresh root, and a fresh session opened
+ *   over it.
  * - {@link validationHost} is the host those sessions run on, one per test:
  *   a temp-dir platform whose model is the validation model
  *   (`TEXRA_INTERNAL_VALIDATE_*`): a golden fixture agent plays its script,
  *   any other agent answers with what it was sent.
  */
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import * as os from 'node:os';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
@@ -71,12 +78,11 @@ import { FakeHost, sessionHandleOf, TestSession } from './testKernel';
 import { testWorkspaceRoots } from './testWorkspaceRoots';
 import type { Sessions } from '@texra-ai/harness';
 
-const WRITES = ['appendAll', 'job', 'acquireClaims', 'releaseClaims'] as const;
+const WRITES = ['appendAll', 'job'] as const;
 const READS = [
   'readRunRecords',
   'readAggregate',
   'readInputBatch',
-  'claimOwner',
   'aggregateState',
 ] as const;
 /** The store operations a fault can be armed on. */
@@ -228,19 +234,12 @@ export const sessionStoreFaults = (
     };
   });
 
-/** A process of this host that is provably gone: its start never matches. */
-const DEAD_OWNER = JSON.stringify([
-  os.hostname().toLowerCase(),
-  process.pid,
-  'killed',
-]);
-
 /** The store's file in a session root. */
 const storeFile = (storage: string) => join(storage, 'texra.db');
 
 /**
  * Rebuild a copy of the clean store as a process killed after commit `n`
- * left it, its claims held by a dead owner: every durable table at the cut,
+ * left it: every durable table at the cut,
  * not the later store with rows cut away. Rows, their blobs and sequences
  * go back to commit `n`; a plugin aggregate hangs where its last fact at
  * the cut put it; current values and input history written after the cut's
@@ -249,12 +248,7 @@ const storeFile = (storage: string) => join(storage, 'texra.db');
  * build's, so the gate reads it as it would at the cut.
  * The projections rebuild from the rows on open.
  */
-export function crashAt(
-  clean: string,
-  storage: string,
-  n: number,
-  owner: string = DEAD_OWNER,
-): void {
+export function crashAt(clean: string, storage: string, n: number): void {
   mkdirSync(storage, { recursive: true });
   cpSync(clean, storeFile(storage));
   const db = new DatabaseSync(storeFile(storage));
@@ -273,8 +267,7 @@ export function crashAt(
       DELETE FROM blob WHERE digest NOT IN (SELECT digest FROM event_blob);
       UPDATE event_sequence SET
         seq = (SELECT max(seq) FROM event WHERE aggregate = event_sequence.id),
-        closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END,
-        owner_id = CASE WHEN owner_id IS NULL THEN NULL ELSE '${owner}' END;
+        closed_by = CASE WHEN closed_by > ${n} THEN NULL ELSE closed_by END;
       UPDATE event_sequence SET parent_id = (
         SELECT p.id FROM event e JOIN event_sequence p
           ON p.kind = 'run' AND p.logical_id = json_extract(e.data, '$.parent')
@@ -291,26 +284,48 @@ export function crashAt(
 }
 
 /**
- * A process killed now: what the store at `storage` has committed, and the
- * run files beside it, copied to a fresh root with every claim held by a
- * dead owner (or by `owner`). Returns that root, for a fresh session to open.
+ * Read the store at `storage` as another process sees it: a session holds
+ * its store exclusively, so a copy of the file and its WAL is opened, read
+ * by `read`, and removed.
  */
-export function crashedCopy(storage: string, owner?: string): string {
+export const readStoreSnapshot = <A>(
+  storage: string,
+  read: (db: DatabaseSync) => A,
+): A => {
+  const dir = mkdtempSync(join(tmpdir(), 'texra-store-snapshot-'));
+  try {
+    const copy = join(dir, 'texra.db');
+    cpSync(storeFile(storage), copy);
+    const wal = `${storeFile(storage)}-wal`;
+    if (existsSync(wal)) cpSync(wal, `${copy}-wal`);
+    const db = new DatabaseSync(copy);
+    try {
+      return read(db);
+    } finally {
+      db.close();
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+};
+
+/**
+ * A process killed now: what the store at `storage` has committed, and the
+ * run files beside it, copied to a fresh root. Returns that root, for a
+ * fresh session to open.
+ */
+export function crashedCopy(storage: string): string {
   const crashed = join(storage, `crashed-${Date.now()}`);
   const committed = join(storage, 'committed.db');
-  const db = new DatabaseSync(storeFile(storage));
-  let commit: number;
-  try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    commit = Number(
+  const commit = readStoreSnapshot(storage, (db) => {
+    const seq = Number(
       db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'event'").get()
         ?.seq ?? 0,
     );
     db.exec(`VACUUM INTO '${committed}'`);
-  } finally {
-    db.close();
-  }
-  crashAt(committed, crashed, commit, owner);
+    return seq;
+  });
+  crashAt(committed, crashed, commit);
   if (existsSync(join(storage, 'executions')))
     cpSync(join(storage, 'executions'), join(crashed, 'executions'), {
       recursive: true,
@@ -333,10 +348,8 @@ const StoredRowsSchema = Schema.mutable(
 export type StoredRow = (typeof StoredRowsSchema.Type)[number];
 
 /** Every run row the store at `storage` holds, in commit order. */
-export const storedRows = (storage: string): StoredRow[] => {
-  const db = new DatabaseSync(storeFile(storage));
-  try {
-    db.exec('PRAGMA busy_timeout = 5000');
+export const storedRows = (storage: string): StoredRow[] =>
+  readStoreSnapshot(storage, (db) => {
     const rows = db
       .prepare(
         `SELECT e."commit" AS "commit", s.logical_id AS run,
@@ -348,10 +361,7 @@ export const storedRows = (storage: string): StoredRow[] => {
       )
       .all();
     return Schema.decodeUnknownSync(StoredRowsSchema)(rows);
-  } finally {
-    db.close();
-  }
-};
+  });
 
 /** A suite's timeout for real runs on a contended machine: the kernel's
  *  10 seconds is too tight. */
@@ -461,23 +471,6 @@ export const persistentTestSession = (
     TestSession.open(roots, { persistent: true, host: {} }),
     sessionHandleOf,
   );
-
-/** Who holds `runId`'s claim in the store at `storage`: an owner id, or
- *  null when the claim is let go (or the run has no row). */
-export const claimHolder = (storage: string, runId: RunId): string | null => {
-  const db = new DatabaseSync(storeFile(storage));
-  try {
-    db.exec('PRAGMA busy_timeout = 5000');
-    const row = db
-      .prepare(
-        "SELECT owner_id AS owner FROM event_sequence WHERE kind = 'run' AND logical_id = ?",
-      )
-      .get(runId);
-    return typeof row?.owner === 'string' ? row.owner : null;
-  } finally {
-    db.close();
-  }
-};
 
 /** Wait, polling the file, until `ready` holds of the store's rows. */
 export const untilStored = (
@@ -589,14 +582,12 @@ interface CrashedRun {
  * Launch a root run of the bundled `assistant` with `instruction`, let it
  * answer and park waiting for input, then crash: the store's committed
  * state is copied as a killed process leaves it, and a session over the
- * copy opens for the caller's scope (`interactions` attached as its host,
- * `owner` holding the run's claim instead of a dead process).
+ * copy opens for the caller's scope (`interactions` attached as its host).
  */
 export const parkedRunAfterCrash = (
   options: {
     readonly instruction?: string;
     readonly interactions?: HostInteractions;
-    readonly owner?: string;
   } = {},
 ): Effect.Effect<CrashedRun, Error, Sessions | SessionOwner | Scope.Scope> =>
   Effect.gen(function* () {
@@ -607,7 +598,7 @@ export const parkedRunAfterCrash = (
       Effect.gen(function* () {
         const session = yield* persistentTestSession(roots);
         const runId = yield* parkedRoot(session, options.instruction);
-        return { runId, storage: crashedCopy(roots.storage, options.owner) };
+        return { runId, storage: crashedCopy(roots.storage) };
       }),
     );
     const session = yield* persistentTestSession({ ...roots, storage });

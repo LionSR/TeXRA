@@ -27,7 +27,7 @@ import { applyRunRows, type RunHistoryDraft } from '@shared/session/runState';
 import {
   CHILD,
   Log,
-  OWNER,
+  ALL_RUNS,
   PROCESS,
   ROOT,
   T,
@@ -44,8 +44,8 @@ function runView(view: SessionView, id: RunId): RunView {
   return found;
 }
 
-const alive = local({ self: [OWNER] });
-const nobody = local({ dead: [OWNER] });
+const alive = local({ runsHere: ALL_RUNS });
+const nobody = local({ runsHere: [] });
 
 describe('session view update', () => {
   const scenario = buildScenario();
@@ -54,7 +54,6 @@ describe('session view update', () => {
     const withOwner = viewOf([...scenario.pending, alive]);
     expect(runView(withOwner, CHILD).group).toBe('waiting');
     expect(runView(withOwner, CHILD).approval).toBe('own');
-    expect(runView(withOwner, CHILD).readOnly).toBe(false);
     expect(runView(withOwner, ROOT).approval).toBe('descendant');
     expect(runView(withOwner, ROOT).group).toBe('running');
     // The path to the decision is forced open.
@@ -70,7 +69,6 @@ describe('session view update', () => {
     expect(child.group).toBe('interrupted');
     expect(child.approval).toBe('none');
     expect(child.status).toBe(RUN_PHASE.RUNNING);
-    expect(child.readOnly).toBe(false);
     expect(runView(interrupted, ROOT).group).toBe('interrupted');
     expect(runView(interrupted, ROOT).forceExpanded).toBe(true);
     expect(interrupted.requests).toHaveLength(1);
@@ -84,11 +82,6 @@ describe('session view update', () => {
       waiting: 0,
       interrupted: 3,
     });
-
-    // A current claim without a liveness verdict remains held as unprovable.
-    const unknown = viewOf(scenario.pending);
-    expect(runView(unknown, CHILD).group).toBe('waiting');
-    expect(runView(unknown, CHILD).readOnly).toBe(true);
   });
 
   it('ends the turn of a run whose owner died mid-compaction', () => {

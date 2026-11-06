@@ -43,8 +43,9 @@ is the module map by concern. Run-loop rules are in
   `forkRun` (a new root seeded from another run's view); `resumeBlocker` (a
   missing or untrusted agent).
 - **Registry**: `runRegistry` (one entry per run: fiber, loop controls,
-  activation, serial lane; the single in-process liveness authority, with
-  admission, lookup and stop); `runs` (the session's `Runs` as hosts and
+  activation, serial lane; the one in-process answer to which runs are
+  launched here, published to the view as `runsHere`, with admission,
+  lookup and stop); `runs` (the session's `Runs` as hosts and
   tools see them, and a loop's `RunControls`).
 - **Session events**: `sessionServices` (every owner of a session, each its
   own service, as its runs and requests read them); `SessionEvents` (one publisher, the reads, and trace-to-fact translation);
@@ -52,8 +53,8 @@ is the module map by concern. Run-loop rules are in
   `SessionHostInteractions` (the session's host port: diagnostics, approvals,
   retries, user questions, plugin requests, and other notices, and what a
   failed run presents on it).
-- **History and per-call services**: `RunHistory` (claims through
-  `Database`, reads and writes through `SessionLog`); `FollowUps` (pending
+- **History and per-call services**: `RunHistory` (reads and writes
+  through `SessionLog`); `FollowUps` (pending
   follow-up input, consumed one batch at a time); `ModelInvoker` (the one
   caller of the llm `Model`); `storedTurn` (turn conversion at the history
   boundary); `RunCall` and `ToolServices` (one tool invocation's

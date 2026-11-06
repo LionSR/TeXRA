@@ -13,10 +13,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-} from '@shared/session/database';
+import { DatabaseAggregateClosed } from '@shared/session/database';
 import {
   type RunCell,
   type RunHistory,
@@ -163,19 +160,18 @@ const unprepared = (
   });
 };
 
-type Refusal = DatabaseNotOwner | DatabaseClaimRefused;
-/** A lost claim's refusal, worded by `runRefusal`; any other rollback stays
- *  the write failure it is. */
+type Refusal = DatabaseAggregateClosed;
+/** A closed aggregate's refusal, worded by `runRefusal`; any other rollback
+ *  stays the write failure it is. */
 const notOwner =
   (runId: RunId) =>
   <A, E, R>(
     effect: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, Exclude<E, Refusal> | RunHistoryRefused, R> =>
     Effect.mapError(effect, (failure) =>
-      failure instanceof DatabaseClaimRefused ||
-      failure instanceof DatabaseNotOwner
+      failure instanceof DatabaseAggregateClosed
         ? runRefusal(runId, failure)
-        : // cast: the instanceof tests above ruled both refusals out.
+        : // cast: the instanceof test above ruled the refusal out.
           (failure as Exclude<E, Refusal>),
     );
 
@@ -304,8 +300,8 @@ const commit = Effect.fn('RunCell.commit')(function* <E>(
 
 /**
  * One session's run history over its log (`SessionLog`): every row it
- * commits goes through the session's one door, a resume's claim inside the
- * transaction that activates it.
+ * commits goes through the session's one door, a resume's decision inside
+ * the transaction that activates it.
  */
 export function makeRunHistory(
   sessionLog: Pick<SessionLogShape, 'transact' | 'history'>,
@@ -325,10 +321,9 @@ export function makeRunHistory(
   );
 
   /**
-   * A resume's one transaction, over one read: the claim (a dead owner's,
-   * proved dead, or this process's own), the activation's rows, and the
-   * cancellation of the requests no attempt re-enters (`unboundRequests`),
-   * so no surface outlives the process that asked.
+   * A resume's one transaction, over one read: the activation's rows, and
+   * the cancellation of the requests no attempt re-enters
+   * (`unboundRequests`), so no surface outlives the process that asked.
    */
   const activate = <E>(
     run: RunId,
@@ -337,7 +332,6 @@ export function makeRunHistory(
     sessionLog
       .transact((tx) =>
         Effect.gen(function* () {
-          yield* tx.claim(run);
           const before = yield* loaded(
             run,
             applyStored(null, yield* stored(run)),

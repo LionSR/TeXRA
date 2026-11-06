@@ -255,14 +255,10 @@ const DisplayRowDraftSchema = Schema.Union([
    * rests it with no `run.end`, keeping the `resumeId` a tool call continues
    * it by. Listed under its own type (`ROW_KINDS`): a cold
    * listing that dropped it would paint every parked child as busy.
-   * `heldFor`: the delivery id of a result its parent refused while another
-   * process held it, delivered when next admitted; `ends`: that turn's end.
    */
   durable('child.park', {
     phase: Schema.Literals(['parked', 'resumed', 'paused']),
     resumeId: Schema.optional(Schema.String),
-    heldFor: Schema.optional(Schema.String.check(Schema.isMinLength(1))),
-    ends: Schema.optional(Schema.Literals(['completed', 'failed'])),
   }),
   /** A run's title, and who gave it: the model's summary, or the user's
    *  rename, which a later model title does not replace. `usage` is the

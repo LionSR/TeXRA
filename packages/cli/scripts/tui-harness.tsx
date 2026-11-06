@@ -85,11 +85,10 @@ import {
 } from '@shared/runs/runStatus';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import {
+  ALL_RUNS,
   buildScenario,
   viewOf,
   local,
-  OWNER,
-  OTHER_OWNER,
   PROCESS,
   tail,
 } from '@test/shared/session/fanOutScenario';
@@ -1855,26 +1854,21 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const interrupted = harnessRunId('ffffffffffff');
   const nested = harnessRunId('111111111111');
   log.emit(PROCESS, 10_000_000, { type: 'run.activate' });
-  for (const [id, agent, owner, parentId] of [
-    [waiting, 'waiting', OWNER, null],
-    [interrupted, 'interrupted', OTHER_OWNER, null],
-    [nested, 'nested', OTHER_OWNER, interrupted],
+  for (const [id, agent, parentId] of [
+    [waiting, 'waiting', null],
+    [interrupted, 'interrupted', null],
+    [nested, 'nested', interrupted],
   ] as const) {
-    log.emit(
-      id,
-      10_000_000,
-      {
-        type: 'run.start',
-        identity: { kind: 'agent', agent },
-        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-        // The creation commit the database stamps, not a guess: `Log.parent`
-        // refuses a parent that never started.
-        parent: parentId === null ? null : log.parent(parentId),
-        provenance: null,
-      },
-      owner,
-    );
-    log.emit(id, 10_000_000, { type: 'run.activate' }, owner);
+    log.emit(id, 10_000_000, {
+      type: 'run.start',
+      identity: { kind: 'agent', agent },
+      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
+      // The creation commit the database stamps, not a guess: `Log.parent`
+      // refuses a parent that never started.
+      parent: parentId === null ? null : log.parent(parentId),
+      provenance: null,
+    });
+    log.emit(id, 10_000_000, { type: 'run.activate' });
   }
   log.emit(waiting, 10_000_000, {
     type: 'request.opened',
@@ -1893,13 +1887,10 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
     ...events,
     ...log.events.slice(recordedCount).map(tail),
     // `buildScenario` stamped its existence snapshot before these runs
-    // existed, and a run with no claim has no owner: re-read the log so the
-    // three new aggregates carry the owner each was emitted under.
+    // existed: re-read the log so the three new aggregates exist. The
+    // interrupted root and its child run nowhere any more.
     log.drained(),
-    local({
-      self: [OWNER],
-      dead: [OTHER_OWNER],
-    }),
+    local({ runsHere: [...ALL_RUNS, waiting] }),
   ]);
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(

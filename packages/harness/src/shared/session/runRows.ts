@@ -123,7 +123,6 @@ export const freshRunRows = (): RunRows => ({
   end: null,
   removed: null,
   inputClosed: false,
-  heldParks: [],
   park: null,
   report: null,
   result: null,

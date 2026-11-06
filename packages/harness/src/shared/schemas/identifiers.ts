@@ -63,28 +63,8 @@ export const OwnerIdSchema = Schema.String.check(
     },
   ),
 );
-/** A process identity that may hold a claim on an aggregate. */
+/** The identity of the process that wrote a row (`origin`). */
 export type OwnerId = typeof OwnerIdSchema.Type;
-
-/** Decode an owner already validated at the event or transport boundary. */
-export function ownerIdentity(ownerId: OwnerId): {
-  hostname: string;
-  pid: number;
-  processStart: string | null;
-} {
-  const [hostname, pid, processStart] = Schema.decodeUnknownSync(
-    OwnerIdentityJsonSchema,
-  )(ownerId);
-  return { hostname, pid, processStart };
-}
-
-/**
- * A verdict about an owner is a proof or an admission that no proof exists.
- * `unprovable` means "do not touch automatically": every acquire path treats
- * it exactly like `alive`, and the user sees the aggregate as held. The
- * user's explicit deletion of the run is the one path that reaps it.
- */
-export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
 const AggregateKindSchema = Schema.Literals(['run', 'plugin']);
 /** The kind separates lifecycles even when their logical ids coincide:

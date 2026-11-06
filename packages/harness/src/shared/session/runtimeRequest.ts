@@ -70,7 +70,7 @@ export const RuntimeRequestSchema = Schema.Union([
   }),
   /**
    * A stopped run's directory, copied to `to` (workspace-relative) or
-   * removed, under its claim by the process that holds the run's session.
+   * removed, by the process that holds the run's session.
    */
   Schema.Struct({
     kind: Schema.Literal('run.files'),
@@ -246,8 +246,8 @@ export const isOutcomeOf = <K extends RuntimeRequest['kind']>(
 // not yet folded the other's `run.removed`, and a defect would bypass the
 // response path and leave the sender's latch pending forever.
 
-/** Another live owner holds the run this request would act on. */
-export class NotOwner extends Schema.TaggedError<NotOwner>()('NotOwner', {
+/** A launch here holds the run this request would act on. */
+export class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
   runId: RunIdSchema,
 }) {}
 
@@ -300,7 +300,7 @@ export class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
 
 /** The wire form of a request's failure: the classes themselves. */
 export const RequestErrorSchema = Schema.Union([
-  NotOwner,
+  RunActive,
   Unavailable,
   Cancelled,
   Rejected,

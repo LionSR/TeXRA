@@ -44,7 +44,7 @@ The durable layer is correct and stays:
 - A send is one transaction under the run's claim (`Inbox.send`,
   `packages/harness/src/agent/followUp/Inbox.ts:124`). The claim
   (`SessionLog.hold`) is the cross-process fence; a write to a run this
-  process does not hold fails `DatabaseNotOwner`.
+  process does not hold fails `DatabaseAggregateClosed`.
 - A delivered batch commits its `followup.consumed` rows in the same append as
   the user message it becomes (`FollowUps.batchRows`,
   `packages/harness/src/agent/runtime/FollowUps.ts:187`), so a crash leaves a

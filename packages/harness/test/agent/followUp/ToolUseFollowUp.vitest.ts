@@ -117,13 +117,7 @@ function recordedFollowUps(options: { failWrites?: number } = {}) {
         | ((tx: Transaction) => Effect.Effect<A, E>),
     ) =>
       typeof work === 'function'
-        ? publisher.withPermits(1)(
-            work({
-              append,
-              claim: () => Effect.void,
-              release: () => Effect.void,
-            }),
-          )
+        ? publisher.withPermits(1)(work({ append }))
         : publisher.withPermits(1)(runStateAppend(append)(work)),
     runRows: (id, read) =>
       Effect.sync(() => {
@@ -194,7 +188,7 @@ type RunState = 'live' | 'idle';
 
 function fakeSession(state: RunState): Context.Context<SessionServices> {
   if (state === 'idle')
-    vi.spyOn(resumability, 'runRejection').mockReturnValue(
+    vi.spyOn(resumability, 'checkpointRefusal').mockReturnValue(
       Effect.succeed(null),
     );
   recorded = recordedFollowUps();
@@ -226,12 +220,11 @@ function fakeSession(state: RunState): Context.Context<SessionServices> {
   // cast: the fake log serves only what a wake reads.
   const log = {
     records: () => Effect.succeed([]),
-    owner: () => Effect.succeed({ ownerId: null, liveness: null }),
-    hold: () => Effect.void,
   } as unknown as SessionLog['Service'];
   const registry = new RunRegistry({
     view,
     log,
+    runsHere: () => {},
     // cast: the fake reads no setting.
     roots: undefined as unknown as RunRegistryInit['roots'],
     // cast: the fake decision reads no process service, only the session.

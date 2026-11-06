@@ -52,7 +52,6 @@ import { Runs } from '@agent/runtime/runRegistry';
 import {
   startChildRunLoop,
   type ChildRunLoopParams,
-  type NativeChildStrategy,
 } from '@agent/runtime/childRunLoop';
 import { createChildRun } from '@agent/runtime/delegation/childRun';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -212,24 +211,6 @@ const startLoop = (
     return started.fiber;
   });
 
-/** Start a native child's loop: no port, its launch its whole run. Unless
- *  `budgeted`, it is awaited, which takes no budget slot. */
-const startNativeLoop = (
-  runId: RunId,
-  strategy: NativeChildStrategy<FakeTurn>,
-  budgeted = false,
-) =>
-  startChildRunLoop({
-    runId,
-    parentRunId: PARENT_RUN_ID,
-    agentName: 'fake',
-    ...(!budgeted && { awaited: true as const }),
-    strategy,
-  }).pipe(
-    Effect.map((started) => started.fiber),
-    Effect.provide(session),
-  );
-
 /** The run's `run.end` rows, in order. */
 const runEnds = (runId: RunId) =>
   Effect.map(
@@ -361,52 +342,6 @@ describe('childRunLoop E2E fixtures', () => {
             yield* Deferred.succeed(releaseWake, undefined);
             yield* Fiber.join(loop);
             expect(Context.get(session, Runs).get(runId)).toBeUndefined();
-          }),
-      );
-
-      it.effect(
-        'lets a stopped parent go after each turn a native child delivers',
-        () =>
-          Effect.gen(function* () {
-            yield* setUp;
-            const log = Context.get(session, SessionLog);
-            // The parent stops: its driver's hold ends, releasing its claim.
-            yield* Effect.scoped(log.hold(PARENT_RUN_ID, { ends: true }));
-            expect(yield* log.owns(PARENT_RUN_ID)).toBe(false);
-            const runId = loopRunId();
-            yield* log.settled;
-            const owned: boolean[] = [];
-            const strategy: NativeChildStrategy<FakeTurn> = {
-              stageLabel: 'Delivers two turns',
-              isTurnInterrupted: () => false,
-              launch: (_notify, turns) =>
-                Effect.gen(function* () {
-                  for (const value of ['one', 'two']) {
-                    yield* turns.turnPermit(Effect.void);
-                    const { rows, alongside } = yield* turns.finishTurn({
-                      kind: 'interim',
-                      value,
-                    });
-                    // As the run loop commits a turn boundary: the child's
-                    // rows and the parent's delivery in one transaction,
-                    // whose scope is the delivery's hold on the parent.
-                    yield* log.transact((tx) =>
-                      Effect.gen(function* () {
-                        const beside =
-                          alongside === undefined ? [] : yield* alongside;
-                        yield* tx.append([...rows, ...beside]);
-                      }).pipe(Effect.scoped),
-                    );
-                    owned.push(yield* log.owns(PARENT_RUN_ID));
-                  }
-                  return { kind: 'terminal', value: 'done' } as const;
-                }).pipe(Effect.provide(session)),
-              formatDelivery: (turn) =>
-                Effect.succeed(`delivered:${turn.value}`),
-              formatError: () => 'error',
-            };
-            yield* Fiber.join(yield* startNativeLoop(runId, strategy));
-            expect(owned).toStrictEqual([false, false]);
           }),
       );
 

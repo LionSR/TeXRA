@@ -17,7 +17,6 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
-  OwnerIdSchema,
   PermissionPayloadSchema,
   PluginFactDraftSchema,
   blocksCaller,
@@ -93,10 +92,6 @@ export const RunViewSchema = Schema.Struct({
   id: RunIdSchema,
   /** From `run.start`; every run has one. */
   identity: RunIdentitySchema,
-  /** Current sequence-row owner; null when unclaimed. */
-  ownerId: Schema.NullOr(OwnerIdSchema),
-  /** The current claim belongs to this process, independently of parentage. */
-  ownedHere: Schema.Boolean,
   /** The run identity's display name: agent, tool, or workflow name. */
   label: Schema.String,
   /** The run's title: the user's rename, else the AI one-liner. */
@@ -121,8 +116,8 @@ export const RunViewSchema = Schema.Struct({
    *  (`waiting` waits, any other step runs), `child.park` (an agent-CLI
    *  child's own wait row, which has no loop to step), and `run.end` (the
    *  outcome); `ready` before the first activation. An interrupted run
-   *  keeps it and reads as interrupted through the copy; unavailability is
-   *  `readOnly`, never a status. */
+   *  keeps it and reads as interrupted through the copy; unreadable rows
+   *  are a notice, never a status. */
   status: Schema.Union([RunPhaseSchema, Schema.Literal(RUN_LIFECYCLE_READY)]),
   /** Derived from the activation's position: a first activation is
    *  starting, a later one resuming, cleared by the first step. Only a run
@@ -202,8 +197,6 @@ export const RunViewSchema = Schema.Struct({
    *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: Schema.Struct({ total: Count, running: Count, finished: Count }),
   approval: Schema.Literals(['none', 'own', 'descendant']),
-  /** This process cannot act on it: another live owner, or unreadable. */
-  readOnly: Schema.Boolean,
   /** What a host may offer on the run now (`runActions`). */
   actions: Schema.Array(RunActionSchema),
   /** This run or a descendant needs the user; outranks the surface's
@@ -260,17 +253,22 @@ export function rollupOf(
   return rollup;
 }
 
+/** Whether this build cannot read the run's rows (`RunNoticeSchema`). */
+export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
+  run.statusNotice?.kind === 'damaged' ||
+  run.statusNotice?.kind === 'earlierBuild';
+
 /**
  * Whether a run takes a follow-up at all, the one rule every host reads (it
  * decides whether the composer shows). A run with no follow-up support and a
- * run this process may not act on take none; a run still going or waiting
- * takes one, as does a stopped native one with saved steps, which admission
- * resumes from its history. A terminal-backed run (an agent CLI such as
- * codex) reads its messages from the same inbox as any other run, so every
- * host delivers to it alike.
+ * run whose rows this build cannot read take none; a run still going or
+ * waiting takes one, as does a stopped native one with saved steps, which
+ * admission resumes from its history. A terminal-backed run (an agent CLI
+ * such as codex) reads its messages from the same inbox as any other run, so
+ * every host delivers to it alike.
  */
 export function acceptsFollowUp(run: ReadRunView): boolean {
-  if (run.followUpSupport === 'unsupported' || run.readOnly) return false;
+  if (run.followUpSupport === 'unsupported' || isUnreadable(run)) return false;
   if (run.group === 'running' || run.group === 'waiting') return true;
   return (
     run.followUpSupport === 'nativeInteractive' &&
@@ -284,17 +282,15 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
 /**
  * Whether this window can answer a pending request: the one rule the host's
  * attention badge and the request card both read, matching what
- * `SessionRequests.decide` accepts. A run this process may not act on
- * (`readOnly`) takes no answer here. A request that blocks its caller is
+ * `SessionRequests.decide` accepts. A request that blocks its caller is
  * answered by the fiber waiting on it, so only while its run waits here; an
  * interrupted run has to be resumed first. One that does not, at any time.
  */
-export type RequestAnswerability = 'answerable' | 'readOnly' | 'resume';
+export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
   run: ReadRunView,
   payload: PermissionPayload,
 ): RequestAnswerability {
-  if (run.readOnly) return 'readOnly';
   if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
   return 'resume';
 }

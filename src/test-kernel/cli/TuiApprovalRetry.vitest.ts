@@ -65,6 +65,7 @@ import { installedHost } from '@test/support/setupPlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 
 import {
+  holdTestRun,
   publishTestRunStart,
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
@@ -160,6 +161,7 @@ function ensureRun(runId: RunId) {
     const session = yield* sessionHandle;
     publishTestRunStart(session, runId, { parent: root ?? null });
     yield* Context.get(session, SessionLog).settled.pipe(Effect.orDie);
+    yield* holdTestRun(session, runId);
   });
 }
 

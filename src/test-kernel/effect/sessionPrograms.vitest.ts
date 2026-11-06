@@ -22,7 +22,6 @@ import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
-  claimHolder,
   crashedCopy,
   persistentTestSession,
   REAL_RUN_TIMEOUT,
@@ -168,10 +167,8 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(endsOf(storage, parent)).toEqual(['completed']);
             expect(activationsAfter(storage, parent, cut)).toBe(1);
             expect(activationsAfter(storage, child, cut)).toBe(1);
-            for (const runId of [parent, child]) {
-              expect(claimHolder(storage, runId)).toBeNull();
+            for (const runId of [parent, child])
               expect(sdk.held(runId)).toBeUndefined();
-            }
             // Only the embedder's listener is left, and it goes with its scope.
             yield* untilSubscribed(sdk, [child]);
             yield* Scope.close(listener, Exit.void);

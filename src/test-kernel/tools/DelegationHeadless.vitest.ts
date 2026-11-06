@@ -36,7 +36,6 @@ import {
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
 import {
-  claimHolder,
   parkedRoot,
   persistentTestSession,
   REAL_RUN_TIMEOUT,
@@ -182,7 +181,6 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
             );
             const running = yield* Effect.forkChild(runInBand(parent, runId));
             yield* persisting.reached;
-            expect(claimHolder(parent.storage, runId)).not.toBeNull();
             yield* persisting.release;
             const result = yield* Fiber.join(running);
 
@@ -205,7 +203,6 @@ describe('headless delegation', { timeout: REAL_RUN_TIMEOUT }, () => {
             expect(rows.map((row) => row.type)).not.toContain(
               'run.description',
             );
-            expect(claimHolder(parent.storage, result.runId)).toBeNull();
             expect(
               rowOf(parent.storage, result.runId, 'run.result')?.result,
             ).toEqual({ producer: 'subagent', output: result.result.output });

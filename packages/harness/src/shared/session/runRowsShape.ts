@@ -80,9 +80,6 @@ export type RunRows = RunPosition & {
   /** Its input is closed: the latest of `run.activate`, `followup.closed`
    *  and `run.removed` is not an activation. */
   readonly inputClosed: boolean;
-  /** Its `child.park`s in a lifecycle not ended, each with the text of the
-   *  latest `run.report` before it. */
-  readonly heldParks: readonly { park: RowOf<'child.park'>; text: string }[];
   /** Its latest `child.park`: the pause a process child's launch may
    *  reactivate (`resumeId`). */
   readonly park: RowOf<'child.park'> | null;

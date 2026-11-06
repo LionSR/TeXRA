@@ -84,13 +84,6 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
               { startImmediately: true },
             );
           }
-          // Each session claims runs in its own root: paper B never holds
-          // paper A's run.
-          expect(
-            yield* Context.get(sessionB, SessionLog).owns(
-              Schema.decodeUnknownSync(RunIdSchema)('a0da01'),
-            ),
-          ).toBe(false);
           yield* Effect.all([sessions.close(rootsA), sessions.close(rootsB)], {
             concurrency: 'unbounded',
           });

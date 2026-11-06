@@ -305,7 +305,7 @@ interface CallRequests {
       readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
       readonly decision: DecisionOf<P['kind']>;
     },
-    DatabaseNotOwner | CellError
+    DatabaseAggregateClosed | CellError
   >;
 }
 ```
@@ -977,7 +977,7 @@ interface LogOptions {
 A write the store refused: nothing was written.
 
 ```ts
-type LogWriteError = DatabaseNotOwner | DatabaseWriteFailed;
+type LogWriteError = DatabaseAggregateClosed | DatabaseWriteFailed;
 ```
 
 ## makeJsonRpcConnection
@@ -1548,17 +1548,13 @@ class RunHistoryInconsistent extends Schema.TaggedError<RunHistoryInconsistent>(
 ## RunHistoryRefused
 
 A refusal the run history itself decided. Database failures are kept OUT of
-this type: reporting a disk error as a stolen claim is the silent-
+this type: reporting a disk error as a refused run is the silent-
 degradation defect in a different costume, so `open` and `load` keep
 them in their error channel beside it.
 
 Which arms are reachable, and from where:
-- `not-owner`: from a resume's `open`, where the claim proves prior owners
-  dead before moving and a live foreign owner is the
-  `DatabaseClaimRefused` verdict it fails with (a claim taken after that
-  proof is `DatabaseNotOwner`); and from `RunCell.append`,
-  where the session's log refuses a target this process no longer
-  holds open as `DatabaseNotOwner`, nothing written. It is never
+- `not-owner`: from `RunCell.append`, where the session's log refuses a
+  closed target as `DatabaseAggregateClosed`, nothing written. It is never
   synthesised from any other write failure: a disk error stays a
   `DatabaseWriteFailed`. A loop that meets it mid-turn stops with it,
   no retry and no second write.

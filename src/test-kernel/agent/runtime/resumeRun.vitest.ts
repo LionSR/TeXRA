@@ -38,7 +38,6 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { queuedFollowUps } from '@test/support/sessionTestUtils';
 import {
   answersOf,
-  claimHolder,
   crashedCopy,
   parkedAfter,
   parkedRunAfterCrash,
@@ -127,21 +126,18 @@ describe(
         buildPerTest: true,
       })((it) => {
         it.effect(
-          "a store read that fails under a resume's claim fails it with the store's error, releases the claim, activates nothing and keeps the queued input",
+          "a store read that fails under a resume fails it with the store's error, activates nothing and keeps the queued input",
           () =>
             Effect.gen(function* () {
               const { session, runId, storage } = yield* parkedRunAfterCrash();
               yield* send(session, runId, 'Keep this input.');
               const faults = yield* sessionStoreFaults(storage);
-              // Under the claim, the resume reads the run's queued input and
-              // then its lineage (`persistedParentRunId`): that read fails.
-              const claim = yield* faults.holdNext('acquireClaims');
+              // The resume reads the run's queued input and then its lineage
+              // (`persistedParentRunId`): that read fails.
+              const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.flip(resume(runId, { session })),
               );
-              yield* claim.reached;
-              const input = yield* faults.holdNext('readAggregate');
-              yield* claim.release;
               yield* input.reached;
               yield* faults.failNext('readRunRecords');
               yield* input.release;
@@ -149,7 +145,6 @@ describe(
               const error = yield* Fiber.join(resumed);
               expect(error.message).toContain('injected readRunRecords fault');
               expect(activations(storage, runId)).toBe(1);
-              expect(claimHolder(storage, runId)).toBeNull();
               expect(yield* queuedTexts(session, runId)).toEqual([
                 'Keep this input.',
               ]);
@@ -234,37 +229,17 @@ describe(
         );
 
         it.effect(
-          'a run a live process elsewhere holds is refused before the host rearranges',
-          () =>
-            Effect.gen(function* () {
-              // A live pid (this process's parent) whose start identity was
-              // never read: no proof finds it dead.
-              const owner = JSON.stringify(['other-host', process.ppid, null]);
-              const { session, runId, storage } = yield* parkedRunAfterCrash({
-                owner,
-              });
-
-              expect(yield* resume(runId, { session })).toEqual({
-                failed: { kind: 'ownedElsewhere', owner },
-              });
-              expect(activations(storage, runId)).toBe(1);
-            }),
-        );
-        it.effect(
           "a user's stop while a resume decides ends the run cancelled, keeps the stop's reason, and the resume activates nothing",
           () =>
             Effect.gen(function* () {
               const { session, runId, storage } = yield* parkedRunAfterCrash();
               const faults = yield* sessionStoreFaults(storage);
-              // Past its checks under the claim, the resume reads the run's
-              // input before it launches: the stop lands there.
-              const claim = yield* faults.holdNext('acquireClaims');
+              // Past its record checks, the resume reads the run's input
+              // before it launches: the stop lands there.
+              const input = yield* faults.holdNext('readAggregate');
               const resumed = yield* Effect.forkChild(
                 Effect.exit(resume(runId, { session })),
               );
-              yield* claim.reached;
-              const input = yield* faults.holdNext('readAggregate');
-              yield* claim.release;
               yield* input.reached;
 
               const stop = Context.get(session, Runs).stop(runId, 'user');

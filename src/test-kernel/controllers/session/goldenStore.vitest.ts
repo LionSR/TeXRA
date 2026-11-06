@@ -82,6 +82,7 @@ import { REPO_ROOT } from '@test/support/repoScan';
 import { storePluginsLayer } from '@test/support/texraApp';
 import {
   persistentTestSession,
+  readStoreSnapshot,
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
@@ -590,13 +591,6 @@ describe('the golden run killed after its effect', () => {
          WHERE type IN ('run.start', 'run.config') AND aggregate =
            (SELECT id FROM event_sequence WHERE logical_id = ?)`,
         ).run(JSON.stringify(workspace).slice(1, -1), KILLED);
-        // The kill, on this host: an owner whose process is gone.
-        db.prepare(
-          'UPDATE event_sequence SET owner_id = ? WHERE logical_id = ?',
-        ).run(
-          JSON.stringify([os.hostname().toLowerCase(), process.pid, 'killed']),
-          KILLED,
-        );
       });
       writeFileSync(flag, 'texra-cli-run-validation\n');
       yield* AgentCatalog.use((catalog) => catalog.refresh).pipe(Effect.orDie);
@@ -729,7 +723,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     });
   /** The chat's stored rows. */
   const chatRows = (storage: string) =>
-    raw(storage, (db) =>
+    readStoreSnapshot(storage, (db) =>
       db
         .prepare(
           `SELECT e.* FROM event e JOIN event_sequence s ON s.id = e.aggregate

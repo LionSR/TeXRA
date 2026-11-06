@@ -56,7 +56,6 @@ const RUN_STATUS_LABEL = {
   waiting: 'Idle',
   resuming: 'Resuming',
   paused: 'Paused',
-  resultWaiting: 'Result waiting: parent is open elsewhere',
   interrupted: 'Interrupted',
   waitingOnUser: 'Waiting on you',
 } as const satisfies Record<RunStatusKey, string>;
@@ -83,8 +82,6 @@ export function runNoticeText(notice: RunNotice | null): string | null {
       return "This task was written by an earlier build of TeXRA; it can't be opened by this one.";
     case 'interrupted':
       return 'The process running this task stopped before it finished. Resume it to continue.';
-    case 'held':
-      return `Held by another TeXRA process (pid ${notice.pid}). Let it finish or close it; if it is gone, Delete removes the task.`;
     case 'lost':
       return notice.message;
   }

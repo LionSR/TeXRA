@@ -118,7 +118,7 @@ export {
   HostRequestFailure,
   Internal,
   isRequestRefusal,
-  NotOwner,
+  RunActive,
   Rejected,
   Unavailable,
   type RequestError,

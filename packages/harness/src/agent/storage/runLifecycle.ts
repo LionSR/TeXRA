@@ -152,7 +152,7 @@ export interface FinalizeRunInput<R = never> {
   readonly runId: RunId;
   readonly outcome: RunOutcome;
   /** An end no driver here writes (a stop that reached no live target, a
-   *  failed hand-off, a backstop), under a claim it takes itself. */
+   *  failed hand-off, a backstop). */
   readonly ownerless?: boolean;
   /** Why the run stopped, when a person's stop or a shutdown did (a release
    *  names none): recorded on a cancelled end. */
@@ -209,10 +209,9 @@ const cancelledRequests = (
 
 /** A run's end in `tx`'s job (the requests it leaves open, its halt, unread
  *  input, closure, `run.end`, last turn); an unloadable run's, all but the
- *  halt, with a warning. A last turn held for a parent another process has
- *  open lets the run's claim go with it; its deliverer ends it claim-free. */
+ *  halt, with a warning. */
 export const endIn = Effect.fn('endIn')(function* (
-  tx: Pick<SessionTransaction, 'append' | 'release'>,
+  tx: Pick<SessionTransaction, 'append'>,
   input: Ending,
   last?: TransactionPart,
 ) {
@@ -232,12 +231,12 @@ export const endIn = Effect.fn('endIn')(function* (
   const persisted = ended ?? outcome;
   if (ended !== undefined && error !== undefined)
     yield* Effect.logWarning(`Run ${runId} had ended: ${error.message}`);
-  // No end while it had ended or holds a result for delivery; else the
-  // loop's halt, never apart from its end, and the end's rows.
+  // No end while it had ended; else the loop's halt, never apart from its
+  // end, and the end's rows.
   let written: Omit<RunEnd, 'usage'> | null = null;
   let halt: readonly RunHistoryDraft[] = [];
   let closing: readonly RunInputDraft[] = [];
-  if (ended === undefined && lastTurn.held !== true) {
+  if (ended === undefined) {
     const end = runEndDraft(runId, {
       outcome: persisted,
       reason: input.reason,
@@ -270,7 +269,6 @@ export const endIn = Effect.fn('endIn')(function* (
         ? []
         : cancelledRequests(runId, yield* cell.success.current);
     yield* cell.success.append([...cancels, ...halt], Effect.succeed(beside));
-    if (lastTurn.held === true) yield* tx.release(runId);
     return result;
   }
   if (runReadRefusal(cell.failure) === undefined) return yield* cell.failure;
@@ -282,8 +280,8 @@ export const endIn = Effect.fn('endIn')(function* (
 });
 
 /** Ready a run's end, answering whether one stood: an ownerless end
- *  (`cascade`) claims a born run and retires the children its open calls
- *  own; a driver's own end, or a stop whose child is live, is refused. */
+ *  (`cascade`) retires the children its open calls own; a driver's own
+ *  end, or a stop whose child is live, is refused. */
 const beforeEnd = Effect.fn('beforeEnd')(function* (
   runId: RunId,
   cascade: boolean,
@@ -291,7 +289,6 @@ const beforeEnd = Effect.fn('beforeEnd')(function* (
   const log = yield* SessionLog;
   const runs = yield* Runs;
   const facts = yield* log.facts(runId);
-  if (cascade && facts !== null) yield* log.hold(runId, { ends: true });
   for (const child of yield* openOwnedChildren(runId)) {
     if (!cascade || runs.get(child.runId) !== undefined)
       return yield* Effect.fail(
@@ -373,7 +370,7 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* <R = never>(
         .pipe(Effect.catch((e) => Effect.succeed({ rows: [], sent: e })));
       if ('kind' in sent && sent.kind !== 'refused') return { rows };
       const note = `parent not told (${'kind' in sent ? sent.reason : sent.message})`;
-      yield* log.afterCommit(Effect.logWarning(`${runId}: ${note}`));
+      yield* Effect.logWarning(`${runId}: ${note}`);
       return { rows, note };
     });
     const had = [cause, requested.error?.message].filter(Boolean);

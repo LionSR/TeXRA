@@ -45,7 +45,7 @@ import {
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import {
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
 import { SessionLog } from '@shared/session/runHistory';
@@ -387,12 +387,16 @@ const waitingRow = (runId: RunId, phase: 'parked' | 'resumed') =>
  * Accept the next turn: its `child.turn accepted` row, the fact the
  * report/result slots are attributed from, with the `resumed` row that ends
  * the wait. Not best-effort: a refused append is the turn's failure, and
- * `not-owner` stops the loop rather than run under a lost claim.
+ * a refused turn stops the loop.
  */
 const beginTurn = Effect.fn('childRunLoop.beginTurn')(function* <TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   resumed: boolean,
-): Effect.fn.Return<void, DatabaseNotOwner | DatabaseWriteFailed, SessionLog> {
+): Effect.fn.Return<
+  void,
+  DatabaseAggregateClosed | DatabaseWriteFailed,
+  SessionLog
+> {
   const { runId } = loop.params;
   loop.turnIndex += 1;
   loop.turnStart = yield* Clock.currentTimeMillis;
@@ -507,8 +511,7 @@ const endTurns = Effect.fn('childRunLoop.endTurns')(function* <TTurn, R>(
 /** The turns a native run's own loop finishes, on its own fiber, under the
  *  services of the run that calls them. What a turn hands back to run later
  *  carries the caller's services, picked: the parent's delivery runs in the
- *  job committing the turn's batch, and holds the parent's claim for that
- *  job's scope alone. */
+ *  job committing the turn's batch. */
 function nativeTurns<TTurn, R>(
   loop: ChildLoop<TTurn, R>,
   strategy: NativeChildStrategy<TTurn, R>,
@@ -596,7 +599,7 @@ const driveNative = Effect.fn('childRunLoop.driveNative')(function* <TTurn, R>(
   if (
     loop.turnIndex === 0 &&
     loop.failure !== undefined &&
-    !(yield* (yield* SessionLog).owns(runId))
+    (yield* (yield* SessionLog).facts(runId)) === null
   )
     return yield* Effect.fail(ensureError(loop.failure.cause));
   yield* endTurns(loop, turned);
@@ -732,9 +735,8 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
       Effect.ensuring(Effect.sync(() => port.logger.close())),
     );
   }
-  if (outcome !== RUN_OUTCOME.COMPLETED) {
-    if (yield* (yield* SessionLog).owns(runId)) yield* endRun(true);
-  } else if (lastTurn !== undefined) yield* commitPart(lastTurn);
+  if (outcome !== RUN_OUTCOME.COMPLETED) yield* endRun(true);
+  else if (lastTurn !== undefined) yield* commitPart(lastTurn);
   yield* sendStopNotice(loop, params.strategy);
 });
 
@@ -742,7 +744,7 @@ const writeEnd = Effect.fnUntraced(function* <TTurn, R>(
  * The loop's terminal (exit protocol): a stop lands before or after it, so
  * the terminal row, the provider ids and the stage are all handled on every
  * exit; the body's failure propagates as itself, joined by the cleanup's.
- * The parent is woken once the generation let the child's claim go
+ * The parent is woken once the generation let the child's lane go
  * ({@link startChildRunLoop}).
  */
 const endChildLoop = <TTurn, R>(

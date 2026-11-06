@@ -218,7 +218,7 @@ export const rootRunIds = computed(() =>
 export const sessionRunIds = computed((): ReadonlySet<RunId> => {
   const included = new Set(rootRunIds.get());
   for (const run of sessionView().get().runs.values()) {
-    if (run.ownedHere) included.add(run.id);
+    if (run.runsHere) included.add(run.id);
   }
   return included;
 });

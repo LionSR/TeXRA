@@ -483,7 +483,7 @@ export const createHostRunActions = Effect.fn(
                 : { op: 'remove' },
           })
           .pipe(
-            Effect.catchTag('NotOwner', () =>
+            Effect.catchTag('RunActive', () =>
               Effect.fail(
                 new Rejected({
                   reason: 'This run is running or held elsewhere.',

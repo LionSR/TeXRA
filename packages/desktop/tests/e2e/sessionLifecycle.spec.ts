@@ -127,11 +127,6 @@ async function writeCanonicalRunFixtures(
       // These rows belong to a stopped writer. The next process must derive
       // interrupted presentation from the recorded loop position, without
       // rewriting a single row.
-      yield* database.releaseClaims(
-        fixtures.map((runFixture) =>
-          fixture.qualifyAggregateId('run', runFixture.runId),
-        ),
-      );
       return yield* canonicalRows(fixture);
     }),
   );

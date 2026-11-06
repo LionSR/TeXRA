@@ -23,7 +23,6 @@ import {
 import { rootRun, type SessionServices } from '@agent/runtime/rootLaunch';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
-  claimHolder,
   parkedAfter,
   persistentTestSession,
   sessionStoreFaults,
@@ -92,38 +91,9 @@ describe('root launch run ownership', { timeout: REAL_RUN_TIMEOUT }, () => {
 
             const error = yield* Effect.flip(launch(session, runId));
             expect(error.message).toContain('injected appendAll fault');
-            expect(claimHolder(roots.storage, runId)).toBeNull();
             expect(
               storedRows(roots.storage).filter((row) => row.run === runId),
             ).toEqual([]);
-          }),
-      );
-
-      it.effect(
-        'a run whose claim the store refuses after its opening ends failed, naming the refusal',
-        () =>
-          Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
-            const session = yield* persistentTestSession();
-            const runId = generateRunId();
-            const faults = yield* sessionStoreFaults(roots.storage);
-            // The opening's append claims the run; the hold the run takes on
-            // its claim right after is the launch's first `acquireClaims`.
-            yield* faults.failNext('acquireClaims');
-
-            const error = yield* Effect.flip(launch(session, runId));
-            expect(error.message).toContain('injected acquireClaims fault');
-            const end = storedRows(roots.storage).findLast(
-              (row) => row.run === runId && row.type === 'run.end',
-            );
-            expect(end && JSON.parse(end.data)).toMatchObject({
-              outcome: 'failed',
-              error: {
-                message: expect.stringContaining(
-                  'injected acquireClaims fault',
-                ),
-              },
-            });
           }),
       );
     });

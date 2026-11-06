@@ -38,7 +38,6 @@ import {
   type ResumeRefusal,
   type RunId,
 } from '@shared/schemas';
-import { heldElsewhereBy } from '@shared/session/database';
 import { runReadRefusal, SessionLog } from '@shared/session/runHistory';
 import { applyRunRow, isSharedRunRow } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
@@ -54,7 +53,6 @@ import {
   activationIfOpened,
   prepareAgentDefinition,
 } from './AgentLaunchContext';
-import { deliverHeld } from './runLaunchGuard';
 import { startChildRunLoop } from './childRunLoop';
 import {
   registryOf,
@@ -171,7 +169,6 @@ export const decideResume = Effect.fn('decideResume')(function* (
   options: ResumeRunOptions,
   activated: (commit: CommitOrdinal) => Effect.Effect<unknown>,
 ): Effect.fn.Return<ResumeAttempt, Error, AgentRunServices | Scope.Scope> {
-  const log = yield* SessionLog;
   const inbox = yield* Inbox;
   const store = getRunRecords(runId);
   const records = yield* Effect.result(
@@ -188,21 +185,11 @@ export const decideResume = Effect.fn('decideResume')(function* (
   }
   // Deleted, or its input closed, while those reads ran.
   if ((yield* inbox.read(runId)).inputClosed) return REFUSED;
-  // Every resume reads the run's state under its claim and holds it until
-  // the launched run holds its own, so two processes never both launch it,
-  // neither launches from a state read before the other ran, and a host is
-  // refused before it rearranges itself. A claim this process holds, or one
-  // whose owner is provably dead, is taken over.
-  const held = yield* Effect.result(log.hold(runId));
-  if (Result.isFailure(held)) return yield* refusalFor(held.failure, runId);
-  // Whether an open call owns it, read under its claim in this resume's
-  // job, so the answer and the activation below are one decision.
+  // Whether an open call owns it: the answer and the activation below are
+  // one decision, on the run's lane.
   const owner = yield* owningCall(runId);
   if (owner !== null) return { ownedBy: owner.parentRunId };
-  // What its children hold for it, it reads once it runs here.
-  yield* deliverHeld(runId);
-  // Nothing to continue from, or rows this build cannot use; the claim is
-  // this resume's now, so ownership is not asked again.
+  // Nothing to continue from, or rows this build cannot use.
   const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return { failed: rejected };
   // An agent or plugin this process cannot run now refuses the resume with
@@ -251,19 +238,15 @@ const restsWith = (
 
 /**
  * The one reading of a resume's failure, at each step that can fail (its
- * record read, its claim, its launch): a launch already here, a claim a
- * live owner holds, or stored rows this build cannot use refuse the
- * resume; any other failure, the disk's, fails it.
+ * record read, its launch): a launch already here, or stored rows this
+ * build cannot use refuse the resume; any other failure, the disk's,
+ * fails it.
  */
 function refusalFor(
   error: Error,
   runId: RunId,
 ): Effect.Effect<ResumeRunResult, Error> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
-  // A live owner refused the claim, or took it after its owner was proved dead.
-  const owner = heldElsewhereBy(error);
-  if (owner !== null)
-    return Effect.succeed({ failed: { kind: 'ownedElsewhere', owner } });
   const refused = runReadRefusal(error);
   if (refused === undefined) return Effect.fail(error);
   const cause = toErrorMessage(error);
@@ -309,8 +292,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         onAdmitted: (_: RunId, commit: CommitOrdinal) =>
           Effect.asVoid(activated(commit)),
       };
-      // Its parent, read once under the claim: the run's edge for this
-      // activation.
+      // Its parent, read once: the run's edge for this activation.
       const parentRunId = yield* persistedParentRunId(runId);
       let launched: Fiber.Fiber<RunReport | undefined, Error>;
       if (parentRunId === undefined) {
@@ -332,8 +314,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           runId,
           startedAt: yield* Clock.currentTimeMillis,
           workingDirectory: config.workingDirectory ?? undefined,
-          // What a resumed run takes from the resume's caller; its parent was
-          // read under the claim this resume holds until the loop takes it.
+          // What a resumed run takes from the resume's caller.
           resume: {
             ...launchOptions,
             config,

@@ -485,7 +485,6 @@ export class TaskGroupList extends LitElement {
               .stage=${script}
               .view=${this.view}
               .surface=${this.surface}
-              ?readOnly=${this.run?.readOnly === true}
               .runId=${this.runId}
               ?logOpen=${callsOpen}
             ></script-stage>

@@ -12,6 +12,7 @@ import { createHeadlessCliHostInteractions } from '@cli/runtime/approvalAdapter'
 import { SessionLog } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import {
+  holdTestRun,
   publishTestRunStart,
   setTestApprovalPolicy,
 } from '@test/support/sessionTestUtils';
@@ -70,6 +71,7 @@ function ensureRun(runId: RunId) {
     const handle = yield* sessionHandle;
     publishTestRunStart(handle, runId);
     yield* Context.get(handle, SessionLog).settled;
+    yield* holdTestRun(handle, runId);
   });
 }
 

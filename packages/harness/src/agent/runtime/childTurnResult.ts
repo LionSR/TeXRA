@@ -20,11 +20,7 @@ import {
   type ResultMeta,
   type RunId,
 } from '@shared/schemas';
-import type {
-  DatabaseClaimError,
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-} from '@shared/session/database';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import { consumedRow } from '@shared/session/runFacts';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import { SessionLog } from '@shared/session/runHistory';
@@ -63,13 +59,13 @@ export const warn = (
   data: unknown,
 ): Effect.Effect<void> => traceLog(trace, CHANNEL, 'warn', message, data);
 
-/** {@link warn}, once the job this runs in commits; never if it rolls back. */
+/** {@link warn}, from inside the job this runs in: the warning says what
+ *  the job decided, which stands whether or not its rows commit. */
 const warnOnCommit = (
   trace: AgentTrace | undefined,
   message: string,
   data: unknown,
-): Effect.Effect<void, never, SessionLog> =>
-  SessionLog.use((log) => log.afterCommit(warn(trace, message, data)));
+): Effect.Effect<void> => warn(trace, message, data);
 
 /** What a transaction part reads of its session. */
 export type PartServices = SessionLog | Inbox;
@@ -108,16 +104,12 @@ export interface ChildTurnResult {
 }
 
 /**
- * Rows decided inside a job and appended with the job's own; what it holds
- * (a claim) lasts until the job ends. `held`: the parent is open in another
- * process, so the child now waits holding the result, and a last turn's end
- * is not written yet. `note`: text the end's error message adds (a loss
- * notice the parent refused).
+ * Rows decided inside a job and appended with the job's own. `note`: text
+ * the end's error message adds (a loss notice the parent refused).
  */
 export type TransactionPart = Effect.Effect<
   {
     readonly rows: readonly RunInputDraft[];
-    readonly held?: boolean;
     readonly note?: string;
   },
   Error,
@@ -197,10 +189,10 @@ export const parentAdmission = (
   trace: AgentTrace | undefined,
 ): Effect.Effect<
   { readonly rows: readonly RunInputDraft[]; readonly sent: Sent },
-  DatabaseClaimError,
+  never,
   Scope.Scope | PartServices
 > => {
-  const refused = (error: DatabaseNotOwner | DatabaseReadFailed) =>
+  const refused = (error: DatabaseReadFailed) =>
     Effect.as(
       warnOnCommit(trace, `Parent run ${to} is closed or cannot be read.`, {
         parentRunId: to,
@@ -214,8 +206,6 @@ export const parentAdmission = (
   return Inbox.use((inbox) => inbox.admission(to, item, options)).pipe(
     Effect.catchTags({
       DatabaseReadFailed: refused,
-      DatabaseNotOwner: (error) =>
-        error.closed ? refused(error) : Effect.fail(error),
       // A delivery names no caller id, so nothing conflicts with it.
       Conflict: Effect.die,
     }),
@@ -226,15 +216,13 @@ export const parentAdmission = (
  * The parent's half of a turn result, appended with the child's rows; a
  * replay writes nothing. The child's parent edge is read from its records
  * in this job: if a detach committed first, the result stays in the child's
- * report. If another process has the parent open, the child is marked as
- * holding the result (`heldFor`, its end not yet written) for `deliverHeld`.
- * Any other refusal is a warning once the job commits.
+ * report. A refusal is a warning.
  */
 export const deliverIn: (
-  { to, item, end }: ChildDelivery,
+  { to, item }: ChildDelivery,
   trace: AgentTrace | undefined,
 ) => TransactionPart = Effect.fn('deliverIn')(function* (
-  { to, item, end }: ChildDelivery,
+  { to, item }: ChildDelivery,
   trace: AgentTrace | undefined,
 ) {
   const child = item.from.runId;
@@ -247,23 +235,6 @@ export const deliverIn: (
     return { rows: [] };
   }
   const { rows, sent } = yield* parentAdmission(to, item, {}, trace);
-  if (sent.kind === 'refused' && sent.reason === 'ownedElsewhere') {
-    yield* warnOnCommit(trace, 'Result waiting: parent is open elsewhere.', {
-      parentRunId: to,
-    });
-    return {
-      rows: [
-        {
-          type: 'child.park' as const,
-          aggregateId: qualifyAggregateId('run', child),
-          phase: 'parked' as const,
-          heldFor: item.deliveryId,
-          ...(end !== undefined && { ends: end }),
-        },
-      ],
-      held: true,
-    };
-  }
   if (sent.kind === 'refused')
     yield* warnOnCommit(
       trace,
@@ -276,8 +247,7 @@ export const deliverIn: (
 /**
  * One turn result, whole, as the rows of the append that ends its turn: the
  * child's rows, its parent's `followup.queued`, and `waiting`, the row that
- * marks the child as waiting for input, unless a held result's row took its
- * place.
+ * marks the child as waiting for input.
  */
 export const turnResultPart = (
   { rows, delivery }: ChildTurnResult,
@@ -289,7 +259,7 @@ export const turnResultPart = (
     ? Effect.succeed({ rows: [...rows, ...own] })
     : Effect.map(deliverIn(delivery, trace), (parent) => ({
         ...parent,
-        rows: [...rows, ...parent.rows, ...(parent.held === true ? [] : own)],
+        rows: [...rows, ...parent.rows, ...own],
       }));
 };
 

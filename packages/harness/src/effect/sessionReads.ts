@@ -21,7 +21,10 @@ import { SessionRequests } from '@agent/runtime/requestPolicy';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { LiveRun } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
-import { deriveResumability, runRejection } from '@agent/storage/resumability';
+import {
+  checkpointRefusal,
+  deriveResumability,
+} from '@agent/storage/resumability';
 import { listRuns } from '@agent/storage/runListing';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { listRunWorkspaceFiles } from '@agent/storage/runWorkspaceFiles';
@@ -84,7 +87,7 @@ export interface RunRecords {
    *  cannot be read (logged) hold none. */
   readonly readResumable: () => Effect.Effect<boolean>;
   /** Why a resume of it here is refused before its agent is checked
-   *  (`finished`, `ownedElsewhere`, `earlierBuild`, `unusableCheckpoint` or
+   *  (`finished`, `earlierBuild`, `unusableCheckpoint` or
    *  `pluginUnavailable`), or null when it may go ahead; a fact that could
    *  not be read right now fails. */
   readonly readRejection: () => Effect.Effect<ResumeRefusal | null, Error>;
@@ -165,11 +168,11 @@ const deleteRuns =
       for (const { runId, commit } of listed) {
         const removal = yield* Effect.result(
           Context.get(session, SessionRequests)
-            .removeRun(runId, target === 'all' ? 'bulk' : 'single', commit)
+            .removeRun(runId, commit)
             .pipe(Effect.provide(session)),
         );
         if (removal._tag === 'Success') deleted.push(runId);
-        else if (removal.failure._tag === 'NotOwner') active.push(runId);
+        else if (removal.failure._tag === 'RunActive') active.push(runId);
         else failed.push({ runId, error: removal.failure });
       }
       return { listed: listed.length, deleted, active, failed };
@@ -243,7 +246,7 @@ export function sessionReads(
             read(deriveResumability(runId)),
             (decision) => decision.kind === 'checkpoint',
           ),
-        readRejection: () => read(runRejection(runId)),
+        readRejection: () => read(checkpointRefusal(runId)),
         readConversation: () =>
           read(
             readCompletedRunConversation(

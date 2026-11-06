@@ -52,8 +52,8 @@ export const testRunRegistry: Effect.Effect<
       // cast: the registry reads only these members of its log.
       log: {
         transact: () => Effect.succeed([]),
-        hold: () => Effect.void,
       } as unknown as RunRegistryInit['log'],
+      runsHere: () => {},
       roots: testWorkspaceRoots(),
       fork,
       programs: testRunPrograms,

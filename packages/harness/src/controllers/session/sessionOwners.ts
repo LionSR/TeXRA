@@ -31,7 +31,6 @@ import { requestAsks, SessionRequests } from '@agent/runtime/requestPolicy';
 import { decideResume } from '@agent/runtime/resumeRun';
 import { ProjectTools } from '@agent/runtime/loop/step';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
-import { onHeldResult } from '@agent/runtime/runLaunchGuard';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import {
   registryOf,
@@ -152,16 +151,16 @@ const requestsLayer = Layer.effect(
   SessionRequests,
   Effect.gen(function* () {
     const { store, collectDeletions } = yield* SessionStoreParts;
+    const database = yield* Database;
     return sessionRequests({
       asks: yield* requestAsks,
       sessionLog: yield* SessionLog,
       view: yield* SessionViewAccess,
       log: {
-        ...(yield* Database),
-        removeRun: (id, mode, start) =>
-          Effect.tap(store.removeRun(id, mode, start), () => collectDeletions),
+        aggregateState: database.aggregateState,
+        removeRun: (id, start) =>
+          Effect.tap(store.removeRun(id, start), () => collectDeletions),
       },
-      local: (yield* LocalRuntimeSource).ref,
       plugins: yield* ToolRegistry,
       services: yield* Effect.context<RunServices>(),
     });
@@ -194,9 +193,14 @@ const runsLayer = (open: SessionHandleInit) =>
       >();
       // Each run's `.env`, read as it launches.
       const env = workspaceEnvironmentLayer(open.roots.workspace);
+      const local = (yield* LocalRuntimeSource).ref;
       const runs: RunRegistry = new RunRegistry({
         view: yield* SessionViewAccess,
         log: yield* SessionLog,
+        // Set, never updated from a read: each call carries the whole set,
+        // and the fork runs it before this fiber goes on.
+        runsHere: (runIds) =>
+          void fork(SubscriptionRef.set(local, { runsHere: [...runIds] })),
         roots: open.roots,
         fork: (run) => fork(Effect.provide(run, env)),
         programs: { executeAgent, resume: decideResume, finalize: finalizeRun },
@@ -219,7 +223,6 @@ const consumersLayer = (open: SessionHandleInit) =>
         yield* SessionStoreParts;
       const inbox = yield* Inbox;
       const plugins = yield* ToolRegistry;
-      const local = yield* LocalRuntimeSource;
       // The local half of a committed removal; its plugin rows go with it.
       yield* store
         .deliver((runId) => inbox.forget(runId))
@@ -231,11 +234,9 @@ const consumersLayer = (open: SessionHandleInit) =>
       yield* Stream.runForEach(
         store.folded,
         Effect.fnUntraced(function* (event) {
-          yield* onHeldResult(event, consumers);
           yield* announce(event);
           if (store.closed()) return;
-          const { self } = yield* SubscriptionRef.get(local.ref);
-          yield* presentTerminalResult(event, self).pipe(
+          yield* presentTerminalResult(event).pipe(
             Effect.catchCause((cause) =>
               logFailure('Terminal result presentation threw')(
                 Cause.squash(cause),

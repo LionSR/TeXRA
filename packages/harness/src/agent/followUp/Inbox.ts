@@ -1,17 +1,15 @@
 /**
  * The session's follow-up inbox: a run's input is its `followup.queued` rows
  * less its `followup.consumed` ones, read inside the job acting on them, by
- * one reader per run (its generation here); the run's claim is the only
- * lock, and when a row may be read is data on it (`holdUntil`, `RunInput`).
+ * one reader per run (its generation here); the publisher's one job at a
+ * time is the only lock, and when a row may be read is data on it
+ * (`holdUntil`, `RunInput`).
  */
 import { Effect, Result, type Scope } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import { qualifyAggregateId, type RunId } from '@shared/schemas';
-import {
-  heldElsewhereBy,
-  type DatabaseReadFailed,
-} from '@shared/session/database';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import { ancestryRows, runRelation } from '@shared/session/runRelation';
 import type { DraftBlob } from '@shared/session/historyTurns';
 import type { RunInputDraft } from '@shared/session/runState';
@@ -19,12 +17,11 @@ import { consumedRow } from '@shared/session/runFacts';
 import type { Conflict } from '@shared/session/runtimeRequest';
 import { isMessage, type QueuedFollowUp } from '@shared/session/runRows';
 import type { RunRows } from '@shared/session/runRowsShape';
-import {
-  afterCommit,
-  type Append,
-  type SessionEventsShape,
-} from '@shared/session/sessionEvents';
-import type { ClaimError, SessionLogShape } from '@shared/session/sessionLog';
+import type { Append, SessionEventsShape } from '@shared/session/sessionEvents';
+import type {
+  LogWriteError,
+  SessionLogShape,
+} from '@shared/session/sessionLog';
 import type { PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError } from '@utils/errors/errorMessage';
 import { needsWake, RunInput } from './RunInput';
@@ -42,10 +39,10 @@ const CLOSED = Object.freeze({
 } as const);
 /** The session doors the inbox works through (the session layer wires them). */
 export interface InboxPort {
-  /** The session's log: a send is one transaction under the run's claim. */
+  /** The session's log: a send is one transaction. */
   readonly log: Pick<
     SessionLogShape,
-    'transact' | 'runRows' | 'history' | 'hold' | 'settled'
+    'transact' | 'runRows' | 'history' | 'settled'
   >;
   /** Enqueue a job on the session's publisher and return. */
   readonly detach: SessionEventsShape['detach'];
@@ -75,8 +72,8 @@ export type Sent =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'queued'; readonly read: boolean }
   | { readonly kind: 'refused'; readonly reason: Refusal };
-/** Why a send wrote nothing: a closed input, a foreign holder, a non-parent. */
-type Refusal = 'notResumable' | 'ownedElsewhere' | 'notParent';
+/** Why a send wrote nothing: a closed input, a non-parent. */
+type Refusal = 'notResumable' | 'notParent';
 
 /** What a send asks of the row and of the run. */
 export interface SendOptions {
@@ -120,7 +117,7 @@ export class SessionInbox {
     runId: RunId,
     item: InboxItem,
     options: SendOptions = {},
-  ): Effect.Effect<Sent, ClaimError | Conflict> {
+  ): Effect.Effect<Sent, LogWriteError | DatabaseReadFailed | Conflict> {
     if (this.disposed) return Effect.succeed(CLOSED);
     return this.port.log.transact((tx) =>
       this.admit(runId, item, options, tx.append),
@@ -159,9 +156,7 @@ export class SessionInbox {
     this.port.detach(
       Effect.fnUntraced({ self: this }, function* () {
         if (this.readers.has(runId) || queued(yield* this.read(runId))) return;
-        yield* afterCommit(
-          Effect.sync(() => this.notify({ kind: 'run', runId })),
-        );
+        this.notify({ kind: 'run', runId });
       }),
     );
   }
@@ -188,17 +183,16 @@ export class SessionInbox {
     );
   }
 
-  /** Close the run's input (`followup.closed`) under its claim, unless a
-   *  message is queued, read in the same transaction; a failure is logged. */
+  /** Close the run's input (`followup.closed`), unless a message is queued,
+   *  read in the same transaction; a failure is logged. */
   closeInput(runId: RunId): Effect.Effect<void> {
     if (this.disposed) return Effect.void;
     const run = qualifyAggregateId('run', runId);
     return this.port.log
       .transact((tx) =>
         Effect.gen({ self: this }, function* () {
-          yield* this.port.log.hold(runId);
           const input = yield* this.read(runId);
-          if (queued(input)) return;
+          if (queued(input)) return false;
           // A request the run never applied closes with its input.
           yield* tx.append([
             ...input.followUps.map(({ followUpId }) =>
@@ -209,11 +203,15 @@ export class SessionInbox {
             ),
             { type: 'followup.closed', aggregateId: run },
           ]);
-          // Only a closed input that committed ends the reader.
-          yield* afterCommit(Effect.sync(() => this.forget(runId)));
-        }).pipe(Effect.scoped),
+          return true;
+        }),
       )
-      .pipe(Effect.catch(warnWith(`Run ${runId}: closing its input failed`)));
+      .pipe(
+        // Only a closed input that committed ends the reader.
+        Effect.tap((closed) => Effect.sync(() => closed && this.forget(runId))),
+        Effect.asVoid,
+        Effect.catch(warnWith(`Run ${runId}: closing its input failed`)),
+      );
   }
 
   /** A run that takes no more input (deleted: its `run.removed` row closes
@@ -247,48 +245,43 @@ export class SessionInbox {
     item: InboxItem,
     options: SendOptions,
     append: Append,
-  ) => Effect.Effect<Sent, ClaimError | Conflict> = Effect.fn(
-    'SessionInbox.admit',
-  )(
-    { self: this },
-    function* (
-      runId: RunId,
-      item: InboxItem,
-      options: SendOptions,
-      append: Append,
-    ) {
-      const { rows, sent } = yield* this.admission(runId, item, options);
-      if (rows.length > 0) yield* append(rows);
-      return sent;
-    },
-    Effect.scoped,
-  );
+  ) => Effect.Effect<Sent, LogWriteError | DatabaseReadFailed | Conflict> =
+    Effect.fn('SessionInbox.admit')(
+      { self: this },
+      function* (
+        runId: RunId,
+        item: InboxItem,
+        options: SendOptions,
+        append: Append,
+      ) {
+        const { rows, sent } = yield* this.admission(runId, item, options);
+        if (rows.length > 0) yield* append(rows);
+        return sent;
+      },
+      Effect.scoped,
+    );
 
-  /** One send decided in the caller's job under the run's claim: the row
-   *  the job appends with its own, and how it landed (see {@link send}). */
+  /** One send decided in the caller's job: the row the job appends with
+   *  its own, and how it landed (see {@link send}). */
   admission(
     runId: RunId,
     item: InboxItem,
     options: SendOptions,
-  ): Effect.Effect<Admission, ClaimError | Conflict, Scope.Scope> {
+  ): Effect.Effect<Admission, DatabaseReadFailed | Conflict, Scope.Scope> {
     const closed = (input: RunRows) =>
       this.disposed || (!this.readers.has(runId) && input.inputClosed);
     const only = (sent: Sent): Admission => ({ rows: [], sent });
-    // The reader hears a committed row.
+    // The reader hears the row: it reads committed rows, so a wake ahead
+    // of the commit costs it one empty read.
     const landed = (replay: boolean) =>
-      Effect.suspend(() => {
+      Effect.sync((): Sent => {
         const reader = this.readers.get(runId);
-        const sent: Sent = replay
+        reader?.notify();
+        return replay
           ? { kind: 'duplicate' }
           : { kind: 'queued', read: reader !== undefined };
-        return Effect.as(
-          afterCommit(Effect.sync(() => reader?.notify())),
-          sent,
-        );
       });
     return Effect.gen({ self: this }, function* () {
-      if (closed(yield* this.read(runId))) return only(CLOSED);
-      yield* this.port.log.hold(runId);
       const input = yield* this.read(runId);
       if (closed(input)) return only(CLOSED);
       const sender = item.from.kind === 'run' ? item.from.runId : null;
@@ -314,23 +307,12 @@ export class SessionInbox {
           sent: yield* landed(false),
         };
       }
-      // Judged again under the claim: another process may have sent first.
       if (item.caller !== undefined)
         yield* sameAsFirst(this.port.log, runId, row, item.caller);
       return queuedStill
         ? { rows: [], sent: yield* landed(true) }
         : only({ kind: 'duplicate' });
-    }).pipe(
-      Effect.catchIf(
-        (error) => heldElsewhereBy(error) !== null,
-        (error) =>
-          warnWith(
-            `Follow-up for run ${runId} was not queued: another process holds the run.`,
-          )(error).pipe(
-            Effect.as(only({ kind: 'refused', reason: 'ownedElsewhere' })),
-          ),
-      ),
-    );
+    });
   }
 
   /** The run's input, lifecycle and parent as its committed rows say them. */

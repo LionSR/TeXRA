@@ -76,11 +76,10 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
         activation: row,
         end: null,
         inputClosed: false,
-        heldParks: [],
         lifecycles: [...rows.lifecycles, row],
       };
     case 'run.end':
-      return { end: row, heldParks: [], lifecycles: [...rows.lifecycles, row] };
+      return { end: row, lifecycles: [...rows.lifecycles, row] };
     case 'followup.closed':
       return { inputClosed: true };
     case 'run.removed':
@@ -115,13 +114,8 @@ function recordFacts(rows: RunRows, row: SessionEvent): Partial<RunRows> {
         ? label
         : { title: row, ...label };
     }
-    case 'child.park': {
-      const held = { park: row, text: rows.report ?? '' };
-      return {
-        park: row,
-        ...(rows.end === null && { heldParks: [...rows.heldParks, held] }),
-      };
-    }
+    case 'child.park':
+      return { park: row };
     // The shared rows (`applyRunRow`), the transcript tier and the run
     // history record nothing here.
     case 'followup.queued':

@@ -1,7 +1,7 @@
 import { Cause, Context, Deferred, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
-import { runRejection } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/resumability';
 import type { ResumeAttempt, ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import {
@@ -100,8 +100,6 @@ const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
     'This run was written by an earlier build, and this build cannot continue it.',
   pluginUnavailable: 'This run needs a plugin that is not loaded here.',
   readFailed: "This run couldn't be read right now. Try again in a moment.",
-  ownedElsewhere:
-    'This run is live in another process. Send the message there.',
   notResumable:
     'This run cannot accept messages right now. Resume it, or start a new agent task.',
   oneShot:
@@ -326,7 +324,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
       if (!live.readsMessages)
         return { status: 'failed', reason: 'oneShot' } as const;
     } else {
-      const rejection = yield* runRejection(runId).pipe(
+      const rejection = yield* checkpointRefusal(runId).pipe(
         Effect.catch((error) =>
           Effect.logWarning(`Cannot read whether ${runId} can continue`).pipe(
             Effect.annotateLogs({ data: error }),
@@ -354,9 +352,8 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
     );
   }).pipe(withPerKeyLane(inbox.sendLanes, runId));
   if ('status' in sent) return sent;
-  // Another process holds the run, the sender is not its parent, its input
-  // is closed (deleted, or torn down with nothing queued), or the session
-  // is disposed.
+  // The sender is not its parent, its input is closed (deleted, or torn
+  // down with nothing queued), or the session is disposed.
   if (sent.kind === 'refused') return { status: 'failed', reason: sent.reason };
   if (sent.kind === 'queued' && sent.read) return { status: 'sent' };
   // The sender hears the resume start, not the resumed turn end.

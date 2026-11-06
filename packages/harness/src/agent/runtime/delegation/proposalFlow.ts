@@ -25,7 +25,7 @@ import type {
   ToolResult,
 } from '@shared/schemas';
 import type {
-  DatabaseNotOwner,
+  DatabaseAggregateClosed,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
@@ -129,7 +129,7 @@ interface DelegationProposalDecision {
 }
 
 type ProposalRequestError =
-  | DatabaseNotOwner
+  | DatabaseAggregateClosed
   | DatabaseReadFailed
   | DatabaseWriteFailed
   | RunHistoryRefused;

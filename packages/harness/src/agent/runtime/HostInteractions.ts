@@ -10,7 +10,6 @@ import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   aggregateTarget,
   type LaunchNotice,
-  type LocalRuntimeState,
   type RunId,
   type SessionEvent,
 } from '@shared/schemas';
@@ -297,20 +296,18 @@ function presentAgentFailure(
 
 /**
  * The session's one terminal-result presenter, run over each folded row:
- * a `run.end` this process (`self`) authored presents a root run's failure
- * to the attached host, or replays it to the next one. A child's (its
- * attached parent is the view's, which has the run's `run.start` once it
- * ended) is its parent's to report; any other row presents nothing.
+ * a `run.end` presents a root run's failure to the attached host, or
+ * replays it to the next one. A child's (its attached parent is the view's,
+ * which has the run's `run.start` once it ended) is its parent's to report;
+ * any other row presents nothing.
  */
 export const presentTerminalResult = Effect.fn('presentTerminalResult')(
   function* (
     row: SessionEvent,
-    self: LocalRuntimeState['self'],
   ): Effect.fn.Return<void, never, SessionViewAccess | Interactions> {
     const target = aggregateTarget(row.aggregateId);
     const { end } = recordOf(row);
     if (target.kind !== 'run' || end === null || !end.error) return;
-    if (end.origin == null || !self.includes(end.origin)) return;
     if ((yield* SessionViewAccess).run(target.id)?.parentId != null) return;
     yield* presentAgentFailure(yield* Interactions, end.error);
   },

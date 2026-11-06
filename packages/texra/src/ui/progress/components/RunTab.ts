@@ -209,7 +209,6 @@ export class RunTab extends LitElement {
           'is-active': this.active,
           [`tone-${run.tone}`]: true,
           'has-pending-approval': pendingApproval,
-          'is-read-only': run.readOnly,
           'is-unseen': this.unseen,
         })}
       >

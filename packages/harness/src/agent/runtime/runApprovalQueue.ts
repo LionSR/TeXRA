@@ -27,13 +27,8 @@ import {
   grantSource,
 } from '@shared/approvalBypassKind';
 import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
+import {} from '@shared/session/database';
 import {
-  DatabaseClaimRefused,
-  heldElsewhereBy,
-} from '@shared/session/database';
-import {
-  NotOwner,
-  Rejected,
   Unavailable,
   type RequestError,
   type RuntimeRequest,
@@ -181,25 +176,12 @@ export const goalGrant =
   (kinds: readonly ApprovalBypassKind[]) =>
   (grants: ApprovalGrants): ApprovalGrants => ({ ...grants, goal: kinds });
 
-/** How a claim the request needed fails it: `Rejected`, in the claim's own
- *  words, when its holder could not be proven to have exited; else
- *  `NotOwner`, another owner holding the run. */
-export const claimRejection =
-  (runId: RunId) =>
-  (error: unknown): RequestError =>
-    error instanceof DatabaseClaimRefused && error.verdict === 'unprovable'
-      ? new Rejected({ reason: error.message })
-      : new NotOwner({ runId });
-
-/** How a session write the request made fails it: {@link claimRejection}
- *  when another owner holds the run ({@link heldElsewhereBy}), else the
- *  `Unavailable` that `unavailable` describes, a closed run's included. */
+/** How a session write the request made fails it: the `Unavailable` that
+ *  `unavailable` describes, a closed run's included. */
 export const writeRejection =
   (unavailable: ConstructorParameters<typeof Unavailable>[0]) =>
-  (error: unknown): RequestError =>
-    heldElsewhereBy(error) === null
-      ? new Unavailable(unavailable)
-      : claimRejection(unavailable.runId)(error);
+  (): RequestError =>
+    new Unavailable(unavailable);
 
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 type Answer<A, R> = Effect.Effect<A, RequestError, R>;

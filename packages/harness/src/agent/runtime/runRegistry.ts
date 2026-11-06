@@ -2,14 +2,14 @@
  * The session's runs: one owner for everything this process holds for a
  * run and everything a stop does with it.
  *
- * The durable owner of a run is its claim (`SessionLog.hold`, `owns`). What
- * this process holds under it is one activation per run: a launch in flight
- * here, from `start`'s call until the fiber it forked exits, setup and end
- * included. The activation exists exactly that long, so "does this process
- * run it" is one question, `get(runId) !== undefined`, which admission, stop,
- * deletion and follow-up routing all ask. Serialization is `withPerKeyLane`:
- * a generation and the steps on an inactive run (its deletion) take the
- * run's lane in call order.
+ * What this process holds for a run is one activation per run: a launch in
+ * flight here, from `start`'s call until the fiber it forked exits, setup
+ * and end included. The activation exists exactly that long, so "does this
+ * process run it" is one question, `get(runId) !== undefined`, which
+ * admission, stop, deletion and follow-up routing all ask, and which the
+ * session's view reads as `runsHere`. Serialization is `withPerKeyLane`: a
+ * generation and the steps on an inactive run (its deletion) take the run's
+ * lane in call order.
  */
 
 import {
@@ -82,8 +82,11 @@ class RunAdmissionClosed extends Schema.TaggedError<RunAdmissionClosed>()(
 export interface RunRegistryInit {
   /** The session's view: each run's parent edge and phase. */
   readonly view: SessionViewAccess['Service'];
-  /** The session's log: each run's claim and detach batch. */
+  /** The session's log: each run's detach batch. */
   readonly log: SessionLog['Service'];
+  /** Tell the session's view which runs are launched here (`runsHere`),
+   *  called with the whole set as an activation opens or closes. */
+  readonly runsHere: (runIds: readonly RunId[]) => void;
   /** The session's roots: the stop policy's setting slots. */
   readonly roots: WorkspaceRoots;
   /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services; a child's parent is data (`parentRunId`), not fiber ancestry. */
@@ -277,6 +280,7 @@ export class RunRegistry implements RunsShape {
         if (own === undefined) {
           own = { launch, unbornParent: launchParent, attempt };
           this.activations.set(runId, own);
+          this.init.runsHere([...this.activations.keys()]);
           if (attempt) attempt.activation = own;
         } else if (own.launch !== launch) {
           own.launch = launch;
@@ -323,6 +327,7 @@ export class RunRegistry implements RunsShape {
         )
           return;
         this.activations.delete(runId);
+        this.init.runsHere([...this.activations.keys()]);
         this.init.wake(runId);
       });
       return fiber;
@@ -380,7 +385,7 @@ export class RunRegistry implements RunsShape {
             ? operation
             : Effect.withFiber((self) => {
                 activation.fiber = self;
-                return this.claimed(runId, operation);
+                return operation;
               }),
           { startImmediately: true },
         );
@@ -400,25 +405,6 @@ export class RunRegistry implements RunsShape {
       });
       return withPerKeyLane(this.lanes, runId, refuse)(run);
     });
-  }
-
-  /** A generation's run under its claim, let go before its fiber exits (a
-   *  parent woken then reads the child): held from the start if the run
-   *  exists (a resume, a process child), so nothing moves it between its
-   *  launch's read and its run. A run born here holds its birth's claim
-   *  itself, from its opening (`executeAgent`). */
-  private claimed<A, E, R>(
-    runId: RunId,
-    operation: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | Error, R> {
-    const hold = Effect.flatMap(this.init.log.facts(runId), (born) =>
-      born !== null ? this.init.log.hold(runId, { ends: true }) : Effect.void,
-    );
-    return Effect.scoped(
-      Effect.uninterruptibleMask((restore) =>
-        Effect.andThen(hold, restore(operation)),
-      ),
-    );
   }
 
   /** The session's one child-run concurrency budget: the cap on concurrently
@@ -478,9 +464,8 @@ export class RunRegistry implements RunsShape {
    * children). A run this process drives is stopped where it stands,
    * children first; a detaching stop only after the children's `run.detach`
    * commits, or a child completing meanwhile would route its result to the
-   * stopped parent. A run nothing here owns is stopped under its claim,
-   * taken before its children are touched, and given the end the stop owes
-   * it ({@link stopEnd}); a refused claim or row fails it.
+   * stopped parent. A run nothing here owns is given the end the stop owes
+   * it ({@link stopEnd}); a refused row fails it.
    */
   stop(runId: RunId, reason: RunStopReason): RunStop {
     const activation = this.activations.get(runId);
@@ -489,8 +474,6 @@ export class RunRegistry implements RunsShape {
     // waits for the run to drain (`submitFollowUp`); a failed stop unmarks.
     const marked = activation?.stop;
     if (activation !== undefined) this.markStopped(runId, reason);
-    // Something here to stop: a launch.
-    const local = activation !== undefined;
     let reached = false;
     // The child sweep and the root cascade visit each run once.
     const stopHere = (cascade: boolean): boolean => {
@@ -534,11 +517,7 @@ export class RunRegistry implements RunsShape {
         }),
       ),
     );
-    const held = this.init.log.hold(runId, { ends: true });
-    return {
-      accepted: () => reached,
-      settlement: local ? apply : Effect.scoped(Effect.andThen(held, apply)),
-    };
+    return { accepted: () => reached, settlement: apply };
   }
 
   /** The end a stop owes a run no generation here took it for, decided here
@@ -599,51 +578,55 @@ export class RunRegistry implements RunsShape {
   /**
    * Detach all active subagents from a parent, promoting them to top-level:
    * they keep running and deliver through the follow-up queue. One job
-   * decides which children are born and severs those durably (their claims
-   * held), keeping the grants each inherited. The unborn ones have no row to
-   * carry it: once the batch commits (a refused one cuts none), before the
-   * publisher runs any birth job, their activations are cut, which their
-   * birth job reads ({@link bornDetached}): a child is born detached, or
-   * detached by rows. The stop marked the parent before reading its
-   * children, so none is admitted in between.
+   * decides which children are born and severs those durably, keeping the
+   * grants each inherited. The unborn ones have no row to carry it: once
+   * the batch commits (a refused one cuts none), before the publisher runs
+   * any birth job, their activations are cut, which their birth job reads
+   * ({@link bornDetached}): a child is born detached, or detached by rows.
+   * The stop marked the parent before reading its children, so none is
+   * admitted in between.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     const { log } = this.init;
-    return log.transact((tx) =>
-      Effect.gen({ self: this }, function* () {
-        const children = this.childRunIds(parentRunId);
-        // Each born child's kept grants, from its rows and its ancestors'.
-        const kept = new Map<RunId, ApprovalGrants>();
-        for (const id of children) {
-          const facts = yield* log.facts(id);
-          if (facts?.start == null || facts.grants === null) continue;
-          const parent = facts.start.parent?.id ?? parentRunId;
-          const line = yield* ancestryRows((run) => log.facts(run), parent);
-          kept.set(id, grantsKept(grantSource(line), id, parent, facts.grants));
-          yield* log.hold(id);
-        }
-        if (kept.size > 0)
-          yield* tx.append(
-            [...kept].flatMap(([id, snapshot]) => {
-              const aggregateId = qualifyAggregateId('run', id);
-              return [
-                { type: 'run.detach', aggregateId },
-                { type: 'approval.policy', aggregateId, snapshot },
-              ] as const;
-            }),
-          );
+    return log
+      .transact((tx) =>
+        Effect.gen({ self: this }, function* () {
+          const children = this.childRunIds(parentRunId);
+          // Each born child's kept grants, from its rows and its ancestors'.
+          const kept = new Map<RunId, ApprovalGrants>();
+          for (const id of children) {
+            const facts = yield* log.facts(id);
+            if (facts?.start == null || facts.grants === null) continue;
+            const parent = facts.start.parent?.id ?? parentRunId;
+            const line = yield* ancestryRows((run) => log.facts(run), parent);
+            kept.set(
+              id,
+              grantsKept(grantSource(line), id, parent, facts.grants),
+            );
+          }
+          if (kept.size > 0)
+            yield* tx.append(
+              [...kept].flatMap(([id, snapshot]) => {
+                const aggregateId = qualifyAggregateId('run', id);
+                return [
+                  { type: 'run.detach', aggregateId },
+                  { type: 'approval.policy', aggregateId, snapshot },
+                ] as const;
+              }),
+            );
+          return { children, kept };
+        }),
+      )
+      .pipe(
         // Only a child still here: one gone since has no birth left to cut.
-        yield* log.afterCommit(
-          Effect.sync(() => {
-            for (const id of children)
-              if (!kept.has(id)) {
-                const activation = this.activations.get(id);
-                if (activation) activation.unbornParent = null;
-              }
-          }),
-        );
-      }).pipe(Effect.scoped),
-    );
+        Effect.map(({ children, kept }) => {
+          for (const id of children)
+            if (!kept.has(id)) {
+              const activation = this.activations.get(id);
+              if (activation) activation.unbornParent = null;
+            }
+        }),
+      );
   }
 
   // ----------------------------------------------------------------- close

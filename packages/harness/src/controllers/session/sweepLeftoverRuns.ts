@@ -18,8 +18,8 @@ const warning = (message: string, runId: RunId) => (error: unknown) =>
 /**
  * The process runs (background shells, agent CLIs) of the cohort captured
  * before session open that no resume will finish. One left running with no
- * parent, a detach having let it go, is closed as interrupted once its
- * claim shows no live owner ({@link closeLeftoverRun}); one with a parent
+ * parent, a detach having let it go, is closed as interrupted
+ * ({@link closeLeftoverRun}); one with a parent
  * is that parent's to finish as it resumes (`closeLeftoverChildren`). An
  * ended background shell is removed: a shell is not resumable, its end gave
  * its parent its result, and a detached one's report was there to read in
@@ -42,7 +42,7 @@ export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
     }
     if (run.identity.kind !== 'process') continue;
     yield* requests
-      .removeRun(run.id, 'automatic', run.createdAt)
+      .removeRun(run.id, run.createdAt)
       .pipe(
         Effect.catch(
           warning(

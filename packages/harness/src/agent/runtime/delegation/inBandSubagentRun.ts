@@ -26,7 +26,7 @@ import type {
   AgentConfig,
   AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { runRejection } from '@agent/storage/resumability';
+import { checkpointRefusal } from '@agent/storage/resumability';
 import {
   registryOf,
   Runs,
@@ -247,7 +247,7 @@ export const executeSubagentInBand = (
  * Resume a persisted child under the run id it already has and await it as
  * {@link executeSubagentInBand} awaits a launch: the child continues where
  * its last owner stopped, in one cycle, and its typed result is read back
- * from the record. A child this process cannot resume (`runRejection`) is
+ * from the record. A child this process cannot resume (`checkpointRefusal`) is
  * refused first; one it can runs under its stored configuration.
  */
 export const resumeSubagentInBand = (
@@ -256,7 +256,7 @@ export const resumeSubagentInBand = (
   awaitInBand(
     options.runId,
     Effect.gen(function* () {
-      const rejection = yield* runRejection(options.runId);
+      const rejection = yield* checkpointRefusal(options.runId);
       if (rejection !== null)
         return yield* Effect.fail(
           new Error(

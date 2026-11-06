@@ -127,8 +127,8 @@ export class Sessions extends Context.Service<
    * `References.MinimumLogLevel`), and installs none of its own.
    *
    * Build it once per process, as any Effect layer is memoized: a second
-   * live build that opens a root the first holds is refused at open
-   * (`holdProcessRoot`), since both would own its runs.
+   * live build that opens a root the first holds is refused at open, as a
+   * second process is (the store is held exclusively).
    */
   static layer({
     platform,
