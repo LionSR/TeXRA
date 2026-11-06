@@ -351,7 +351,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
     return {
       'service.hello': Effect.fn('handlers.service.hello')(function* () {
         return {
-          protocol: PROTOCOL.version,
+          protocol: PROTOCOL.digest,
           version: control.version,
           pid: process.pid,
           socket: control.socket,

@@ -56,7 +56,6 @@ import {
 } from './handlers';
 import {
   BUILD_VERSION,
-  PROTOCOL,
   ServiceInfoSchema,
   TexraRpcs,
   type ServiceRecord,
@@ -144,13 +143,7 @@ export const serve = Effect.fn('server.serve')(function* (
     );
 
   const startedAt = yield* Clock.currentTimeMillis;
-  const record: ServiceRecord = {
-    pid: process.pid,
-    protocol: PROTOCOL.version,
-    version: BUILD_VERSION,
-    socket,
-    startedAt,
-  };
+  const record: ServiceRecord = { pid: process.pid, socket, startedAt };
   const values = yield* GlobalValues;
   const ended = yield* Deferred.make<ServeExit>();
   // Whether the service is leaving, the task admissions under way, and how

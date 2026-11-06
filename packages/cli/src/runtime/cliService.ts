@@ -45,7 +45,6 @@ import { TEXRA_CONFIG_FILE_NAME } from '@texra/platform/defaults/nodeStorage';
 import { openTexraWorkspaceConfigStores } from '@texra/platform/defaults/nodeStores';
 import {
   BUILD_VERSION,
-  PROTOCOL,
   type ServiceInfo,
 } from '@texra/controllers/server/protocol';
 import type {
@@ -54,6 +53,7 @@ import type {
 } from '@texra/controllers/server/handlers';
 import {
   ensureService,
+  isNewer,
   isOlder,
   linkService,
   probeRecordedService,
@@ -336,7 +336,7 @@ export const linkRunningCliService = Effect.fn('linkRunningCliService')(
       ),
     );
     if (info === null) return undefined;
-    if (info.protocol > PROTOCOL.version)
+    if (isNewer(info))
       return yield* Effect.fail(
         new Error(
           `A newer TeXRA (${info.version}, pid ${info.pid}) serves this storage root; this build (${BUILD_VERSION}) cannot work beside it.`,

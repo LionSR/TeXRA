@@ -2,9 +2,10 @@
  * A window's side of the service: connect over the socket, say hello, and
  * start the service when none answers. Starting is the host's (each host
  * runs the service entry with its own Node), so {@link ensureService}
- * takes it as a program. A service speaking an older protocol is retired:
- * it drains its running tasks while a new one starts. One speaking a newer
- * protocol is left running and refused, and the caller stays in process.
+ * takes it as a program. A service of an older build, or of another
+ * protocol and no newer build, is retired: it drains its running tasks
+ * while a new one starts. One of a newer build speaking another protocol
+ * is left running and refused, and the caller stays in process.
  */
 import { spawn } from 'node:child_process';
 import { closeSync, openSync } from 'node:fs';
@@ -23,7 +24,7 @@ import {
   Stream,
   SubscriptionRef,
 } from 'effect';
-import { lt as semverLt, valid as semverValid } from 'semver';
+import { gt as semverGt, lt as semverLt, valid as semverValid } from 'semver';
 import { RpcClient, RpcSerialization, type RpcClientError } from 'effect/rpc';
 
 import { isOutcomeOf, Rejected } from '@texra-ai/harness';
@@ -82,7 +83,7 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
   {
     reason: Schema.String,
 
-    /** The running service speaks a newer protocol than this client: it
+    /** The running service is a newer build speaking another protocol: it
      *  stays until it exits, so waiting does not bring this client back. */
     newer: Schema.optional(Schema.Literal(true)),
   },
@@ -105,17 +106,31 @@ const NOT_YET_UP = 'not yet up';
 /** How long a service that accepts the connection may take to say hello. */
 const HELLO_TIMEOUT = '10 seconds';
 
-/** A service the caller should retire: an older protocol, or an older
- *  build ({@link BUILD_VERSION}; a development build, `unknown`, never is). */
-export function isOlder(info: ServiceInfo): boolean {
-  if (info.protocol !== PROTOCOL.version)
-    return info.protocol < PROTOCOL.version;
-  return (
-    semverValid(info.version) !== null &&
-    semverValid(BUILD_VERSION) !== null &&
-    semverLt(info.version, BUILD_VERSION)
-  );
-}
+/** Whether the service speaks this build's protocol ({@link PROTOCOL}). */
+export const compatible = (info: ServiceInfo): boolean =>
+  info.protocol === PROTOCOL.digest;
+
+/** Whether both builds are released ones, and `order` holds between the
+ *  service's and this one ({@link BUILD_VERSION}; a development build,
+ *  `unknown`, is neither older nor newer). */
+const builds = (
+  info: ServiceInfo,
+  order: (service: string, own: string) => boolean,
+): boolean =>
+  semverValid(info.version) !== null &&
+  semverValid(BUILD_VERSION) !== null &&
+  order(info.version, BUILD_VERSION);
+
+/** A service of a newer build speaking another protocol: left running,
+ *  and this client refused. */
+export const isNewer = (info: ServiceInfo): boolean =>
+  !compatible(info) && builds(info, semverGt);
+
+/** A service the caller should retire: an older build, or one of another
+ *  protocol that is not a newer build (a development build restarts the
+ *  service it cannot speak to). */
+export const isOlder = (info: ServiceInfo): boolean =>
+  builds(info, semverLt) || (!compatible(info) && !isNewer(info));
 
 /** A client over `socket`, held for the caller's scope. `onDisconnect`
  *  runs whenever the connection ends, or an attempt to open it fails. */
@@ -160,7 +175,7 @@ export function probeService(
 ): Effect.Effect<ServiceInfo | null, ServiceUnavailable> {
   return Effect.scoped(
     Effect.flatMap(connectService(socket), (client) =>
-      client['service.hello']({ protocol: PROTOCOL.version }),
+      client['service.hello']({ protocol: PROTOCOL.digest }),
     ),
   ).pipe(
     Effect.timeout(HELLO_TIMEOUT),
@@ -276,10 +291,11 @@ function retireService(
   );
 }
 
-/** The refusal of a running service that speaks a newer protocol. */
+/** The refusal of a running service of a newer build that speaks another
+ *  protocol. */
 const newerService = (info: ServiceInfo) =>
   new ServiceUnavailable({
-    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) speaks protocol ${info.protocol}; this TeXRA speaks ${PROTOCOL.version}. Update TeXRA, or stop the service with \`texra service stop\`.`,
+    reason: `The running TeXRA service (${info.version}, pid ${info.pid}) is newer than this TeXRA (${BUILD_VERSION}) and speaks another protocol. Update TeXRA, or stop the service with \`texra service stop\`.`,
     newer: true,
   });
 
@@ -304,7 +320,7 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
   if (process.platform === 'win32')
     return yield* new ServiceUnavailable({ reason: WINDOWS_UNSUPPORTED });
   let info = yield* probeRecordedService;
-  if (info !== null && info.protocol > PROTOCOL.version)
+  if (info !== null && isNewer(info))
     return yield* Effect.fail(newerService(info));
   let retired: number | null = null;
   if (info !== null && isOlder(info)) {
@@ -346,9 +362,9 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
     );
     info = yield* probeRecordedService.pipe(
       Effect.flatMap((answer) => {
-        if (answer !== null && answer.protocol > PROTOCOL.version)
+        if (answer !== null && isNewer(answer))
           return Effect.fail(newerService(answer));
-        return answer?.protocol === PROTOCOL.version && answer.pid !== retired
+        return answer !== null && compatible(answer) && answer.pid !== retired
           ? Effect.succeed(answer)
           : Effect.fail(new ServiceUnavailable({ reason: NOT_YET_UP }));
       }),
