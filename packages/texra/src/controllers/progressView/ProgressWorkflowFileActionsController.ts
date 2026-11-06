@@ -1,18 +1,21 @@
 // Node imports
-import { hash } from 'node:crypto';
 import path from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { withLogChannel } from '@texra-ai/harness/host';
+import {
+  reportDiffTimeout,
+  unifiedDiffText,
+  withLogChannel,
+} from '@texra-ai/harness/host';
 import { RunFileService } from '@texra-ai/harness/plugins';
-import { entryTypeIn } from '@texra-ai/harness/node';
+import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
 import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
-import { PrunedNestedMap } from '@texra/utils/core/prunedNestedMap';
+import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
 import type { AppSignals } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
 
@@ -51,21 +54,10 @@ interface ProgressWorkflowFileActionsControllerDeps {
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
   /** The window's run actions this controller starts or follows up. */
-  runs: Pick<HostRunActions, 'merge' | 'sendFollowUp'>;
+  runs: Pick<HostRunActions, 'merge' | 'followUpLauncher'>;
 }
 
 export class ProgressWorkflowFileActionsController {
-  /**
-   * Per-stream digest of each output file's content at compare time. A
-   * digest, not the content: Accept only asks whether the file changed
-   * since. Kept while the file is still an output of its run.
-   */
-  private readonly modelOutputBackups = new PrunedNestedMap<
-    RunId,
-    string,
-    string
-  >();
-
   private readonly deps: ProgressWorkflowFileActionsControllerDeps;
   constructor(deps: ProgressWorkflowFileActionsControllerDeps) {
     this.deps = deps;
@@ -81,7 +73,7 @@ export class ProgressWorkflowFileActionsController {
     const base = request.base ?? undefined;
     switch (request.action) {
       case 'compareOriginal':
-        return this.compareOriginal(request.file, base, request.runId);
+        return this.compareOriginal(request.file, base);
       case 'comparePrevious':
         return this.comparePrevious(request.file, request.prev ?? undefined);
       case 'accept':
@@ -120,21 +112,13 @@ export class ProgressWorkflowFileActionsController {
     ),
   );
 
-  /** `stream` is the run the file belongs to: it keys the compare-time
-   *  backup that a later Accept reads. */
-  compareOriginal(
-    file: string,
-    base?: string,
-    stream?: RunId,
-  ): FileAction<void> {
+  compareOriginal(file: string, base?: string): FileAction<void> {
     return this.executeWithBaseFile(
       file,
       base,
       'Compare original',
-      Effect.fnUntraced({ self: this }, function* (targetFile, baseFile) {
-        if (stream !== undefined) yield* this.backupModelOutput(stream, file);
-        yield* this.deps.host.compareFiles(baseFile, targetFile);
-      }),
+      (targetFile, baseFile) =>
+        this.deps.host.compareFiles(baseFile, targetFile),
     ).pipe(Effect.asVoid);
   }
 
@@ -153,15 +137,10 @@ export class ProgressWorkflowFileActionsController {
   ) => FileAction<void> = Effect.fn(
     'ProgressWorkflowFileActionsController.acceptFile',
   )({ self: this }, function* (file: string, base?: string, activeRun?: RunId) {
-    const backup =
-      file && activeRun
-        ? this.modelOutputBackups.get(activeRun, file)
-        : undefined;
-    // The file about to be accepted: a read that fails fails the accept,
-    // rather than dropping the run's "user modified the output" follow-up.
-    const currentContent =
-      backup === undefined ? undefined : yield* readOutputFile(file);
-
+    // Read before the accept writes: what the user changed of the model's
+    // version, which the chat that launched the task is told.
+    const edit =
+      activeRun && file ? yield* this.userEdit(activeRun, file) : undefined;
     const accepted = yield* this.executeWithBaseFile(
       file,
       base,
@@ -169,24 +148,8 @@ export class ProgressWorkflowFileActionsController {
       (targetFile, baseFile) =>
         this.deps.host.acceptEditedFile(baseFile, targetFile),
     );
-    if (!accepted) return;
-
-    if (
-      activeRun !== undefined &&
-      backup !== undefined &&
-      currentContent !== undefined &&
-      contentDigest(currentContent) !== backup
-    ) {
-      const fileName = path.basename(file);
-      yield* this.deps.runs.sendFollowUp(
-        activeRun,
-        `[System: User modified the model's suggested output for "${fileName}" before accepting. The accepted version differs from the original model output.]`,
-      );
-    }
-
-    if (backup !== undefined && activeRun) {
-      this.modelOutputBackups.delete(activeRun, file);
-    }
+    if (accepted && activeRun && edit !== undefined)
+      yield* this.deps.runs.followUpLauncher(activeRun, edit);
   });
 
   mergeFile(file: string, base?: string): FileAction<void> {
@@ -212,43 +175,56 @@ export class ProgressWorkflowFileActionsController {
     return execute(file, base).pipe(Effect.map((result) => result !== false));
   }
 
-  private backupModelOutput(runId: RunId, file: string): FileAction<void> {
-    if (!file) return Effect.void;
-
-    return Effect.gen({ self: this }, function* () {
-      const content = yield* readOutputFile(file);
-      // A digest lives while its file is still an output of its run: a
-      // removed run, or a round that no longer lists the file, takes its
-      // digests with it, so the map is bounded by outputs that exist.
-      for (const [stream, digests] of [...this.modelOutputBackups.groups()]) {
-        const outputs = new Set(
-          Object.values(this.deps.state.getOutputFiles(stream))
-            .flat()
-            .map((info) => info.location.absolutePath),
-        );
-        for (const tracked of [...digests.keys()]) {
-          if (!outputs.has(tracked))
-            this.modelOutputBackups.delete(stream, tracked);
-        }
-      }
-      this.modelOutputBackups.set(runId, file, contentDigest(content));
+  /**
+   * The note telling a task's launcher what the user changed of the model's
+   * version of `file` (`modelOutputCopyPath`) before accepting it; none
+   * when they changed nothing or the run kept no model version (a run from
+   * an earlier build, or an output outside the workspace and the run).
+   */
+  private userEdit(
+    stream: RunId,
+    file: string,
+  ): Effect.Effect<string | undefined, never, FileSystem.FileSystem> {
+    const output = this.latestOutput(stream, file);
+    const copyPath =
+      output && modelOutputCopyPath(output.round, output.location);
+    if (output === undefined || copyPath === undefined)
+      return Effect.succeed(undefined);
+    const { runDirectory } = new RunFileService(stream, {
+      storage: this.deps.storageRoot,
+      workspace: undefined,
+    });
+    const copy = path.join(runDirectory, copyPath);
+    return Effect.gen(function* () {
+      const kept = yield* readOutputFile(copy).pipe(
+        Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+      );
+      if (kept === undefined) return undefined;
+      const diff = unifiedDiffText(kept, yield* readOutputFile(file));
+      yield* reportDiffTimeout(diff.timeout);
+      return diff.text === undefined
+        ? undefined
+        : `[System: The user edited "${path.basename(file)}" from revision ${output.round + 1} of the document task you launched before accepting it into the workspace. Their changes to the task's output:\n\n\`\`\`diff\n${diff.text}\n\`\`\`]`;
     }).pipe(
-      // Best-effort: backup only informs the accepted-edit follow-up, but a
-      // later Accept then cannot tell the run the user edited the output, so
-      // the miss is a warning.
+      // The accept goes ahead without the note, and the miss is a warning.
       Effect.catch((error) =>
-        Effect.logWarning(`Could not back up model output for ${file}`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        ),
+        Effect.logWarning(
+          `Could not read what the user changed in ${file}: ${toErrorMessage(error)}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(undefined)),
       ),
     );
   }
-}
 
-/** A full sha256 digest of a file's text: what a compare-time backup keeps. */
-function contentDigest(content: string): string {
-  return hash('sha256', content, 'hex');
+  /** The run's newest output at `file`. In-place workflows reuse the same
+   *  workspace path across rounds, so the first match would name an
+   *  earlier round. */
+  private latestOutput(stream: RunId, file: string) {
+    return Object.values(this.deps.state.getOutputFiles(stream))
+      .flat()
+      .filter((info) => info.location.absolutePath === file)
+      .toSorted((a, b) => b.round - a.round)
+      .at(0);
+  }
 }
 
 /**
@@ -257,7 +233,7 @@ function contentDigest(content: string): string {
  * process filesystem rather than a rooted view that would refuse a path the
  * user picked outside the workspace.
  */
-function readOutputFile(file: string): FileAction<string> {
+function readOutputFile(file: string) {
   return Effect.flatMap(Effect.service(FileSystem.FileSystem), (fs) =>
     Effect.map(fs.readFileString(file), (text) =>
       text.replaceAll('\r\n', '\n'),

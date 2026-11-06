@@ -2611,6 +2611,22 @@ type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
     : never;
 ```
 
+## unifiedDiffText
+
+Unified-diff body between two texts (`text` is undefined when they are
+identical), with the pass's {@link DiffHunks.timeout} for the caller to
+report.
+
+Carries no `---`/`+++` file header: every consumer already names the file in
+its own surrounding prose.
+
+```ts
+function unifiedDiffText(
+  oldText: string,
+  newText: string,
+): { readonly text: string | undefined; readonly timeout: string | undefined }
+```
+
 ## UsageAttribution
 
 Who a call's usage is billed to, as the usage log's wire names them. Every

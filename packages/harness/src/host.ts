@@ -112,6 +112,7 @@ export {
   buildDiffHunks,
   countLineChanges,
   reportDiffTimeout,
+  unifiedDiffText,
   type DiffHunks,
   type Hunk,
 } from '@tools/unifiedDiff';

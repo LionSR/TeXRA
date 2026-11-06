@@ -7,6 +7,10 @@
  * from its rows and commits them again; none holds state between calls, so
  * a resumed recipe replays against the rows.
  */
+// Node imports
+import { dirname, join } from 'node:path';
+
+// Third-party imports
 import { Effect, Exit, FileSystem, Schema } from 'effect';
 
 import { defineTool } from '@texra-ai/harness';
@@ -47,6 +51,7 @@ import {
 import { checkExpectedOutputs } from '@texra/agent/output/outputValidation';
 import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
+import { modelOutputCopyPath } from '@texra/shared/constants/workflowOutput';
 import {
   keepReply,
   openDocuments,
@@ -309,6 +314,27 @@ export const DocumentExtractTool = defineTool({
       // A task that names no outputs rewrites its inputs: its outputs descend
       // from them.
       docs.task.outputs.length === 0,
+    );
+    // Without the model's version, a later Accept cannot tell the model
+    // what the user changed: reported, and the revision keeps its outputs.
+    yield* Effect.forEach(
+      round.outputs,
+      Effect.fnUntraced(function* ({ round: outputRound, location }) {
+        const copyPath = modelOutputCopyPath(outputRound, location);
+        if (copyPath === undefined) return;
+        const fs = yield* FileSystem.FileSystem;
+        const copy = join(docs.deps.fileService.runDirectory, copyPath);
+        yield* fs.makeDirectory(dirname(copy), { recursive: true });
+        yield* fs.copyFile(location.absolutePath, copy);
+      }),
+      { discard: true },
+    ).pipe(
+      recoverOutputFailure({
+        logger,
+        level: 'warn',
+        label: "Keeping the model's outputs",
+        recover: () => Effect.void,
+      }),
     );
     checkExpectedOutputs(docs.state, docs.deps, revision);
     const missing = round.missingOutputs;

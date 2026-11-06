@@ -13,11 +13,29 @@ type ProgressWorkflowFileActionsControllerDeps = ConstructorParameters<
   typeof ProgressWorkflowFileActionsController
 >[0];
 
+const EDITED = '/workspace/edited.tex';
+
 function createDeps(
   overrides: Partial<ProgressWorkflowFileActionsControllerDeps['host']>,
 ): ProgressWorkflowFileActionsControllerDeps {
   return {
-    state: { getOutputFiles: () => ({}) },
+    state: {
+      getOutputFiles: () => ({
+        0: [
+          {
+            source: 'edited.tex',
+            location: {
+              kind: 'workspace',
+              absolutePath: EDITED,
+              relativePath: 'edited.tex',
+            },
+            round: 0,
+            lineage: null,
+            diff: null,
+          },
+        ],
+      }),
+    },
     host: {
       compareFiles: () => Effect.void,
       acceptEditedFile: () => Effect.void,
@@ -26,63 +44,51 @@ function createDeps(
       ...overrides,
     },
     storageRoot: '/storage',
-    runs: { merge: () => Effect.void, sendFollowUp: () => Effect.void },
+    runs: { merge: () => Effect.void, followUpLauncher: () => Effect.void },
   };
 }
 
 describe('ProgressWorkflowFileActionsController', () => {
   it.effect(
-    'keeps the accept follow-up backup when the host cancels acceptance',
-    () => {
-      const readResults = [
-        'original model output',
-        'user edited output',
-        'user edited output',
-      ];
-      return Effect.gen(function* () {
+    'sends no accept follow-up when the host cancels acceptance, and one when it accepts',
+    () =>
+      Effect.gen(function* () {
         const followUps: string[] = [];
         const acceptResults = [false, true];
         const deps = createDeps({
           acceptEditedFile: () => Effect.sync(() => acceptResults.shift()),
         });
-        deps.runs.sendFollowUp = (_stream, text) =>
+        deps.runs.followUpLauncher = (_run, text) =>
           Effect.sync(() => {
             followUps.push(text);
           });
         const controller = new ProgressWorkflowFileActionsController(deps);
 
-        yield* controller.compareOriginal(
-          '/workspace/edited.tex',
-          '/workspace/base.tex',
-          RUN,
-        );
-        yield* controller.acceptFile(
-          '/workspace/edited.tex',
-          '/workspace/base.tex',
-          RUN,
-        );
+        yield* controller.acceptFile(EDITED, '/workspace/base.tex', RUN);
 
         expect(followUps).toEqual([]);
 
-        yield* controller.acceptFile(
-          '/workspace/edited.tex',
-          '/workspace/base.tex',
-          RUN,
-        );
+        yield* controller.acceptFile(EDITED, '/workspace/base.tex', RUN);
 
         expect(followUps).toHaveLength(1);
         expect(followUps[0]).toMatch(/edited\.tex/);
+        expect(followUps[0]).toMatch(/\+user edited output/);
       }).pipe(
         Effect.provide(
           Layer.merge(
             FileSystem.layerNoop({
-              readFileString: () =>
-                Effect.sync(() => readResults.shift() ?? ''),
+              // The model's copy the revision kept, and the file the user
+              // changed before accepting.
+              readFileString: (path) =>
+                Effect.succeed(
+                  path.includes('/model/r0/')
+                    ? 'original model output\n'
+                    : 'user edited output\n',
+                ),
             }),
             AppSignals.layer,
           ),
         ),
-      );
-    },
+      ),
   );
 });
