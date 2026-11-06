@@ -12,16 +12,13 @@
  * run is never resumed: a later turn of the same thread is a new run, and
  * a message to one is refused (`USER_FOLLOW_UP_SUPPORT.UNSUPPORTED`).
  */
-import { Cause, Effect, Exit } from 'effect';
+import { Effect, Exit } from 'effect';
 
 import { ToolContext } from '@agent/core/tools/ToolTypes';
 import type { PlatformServices } from '@platform/processRuntime';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
 import { endVerdict } from '@agent/runtime/AgentRunLifecycle';
-import {
-  childRunDescription,
-  createChildTrace,
-} from '@agent/runtime/delegation/childRun';
+import { childRunDescription } from '@agent/runtime/delegation/childRun';
 import {
   registryOf,
   Runs,
@@ -29,7 +26,7 @@ import {
 } from '@agent/runtime/runRegistry';
 import { endRunRows, registerRun } from '@agent/storage/runLifecycle';
 import type { AgentTrace } from '@agent/trace/AgentTrace';
-import type { TraceEmitter } from '@agent/trace/TraceEmitter';
+import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import {
   generateRunId,
@@ -43,10 +40,7 @@ import {
 } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
-import { withLogChannel } from '@logger/effectLog';
 import { ensureError } from '@utils/errors/errorMessage';
-
-const CHANNEL = 'processRun';
 
 /** What one process turn reports as it returns. */
 export interface ProcessReport {
@@ -82,10 +76,11 @@ export interface ProcessChildLaunch {
   readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process' }>;
   readonly config: RunRecord;
   readonly description: string;
-  readonly open: (ctx: {
+  /** The turn, built around the trace of the run the launch registered. */
+  readonly turn: (ctx: {
     readonly logger: AgentTrace;
     readonly runId: RunId;
-  }) => Effect.Effect<ProcessTurn, Error>;
+  }) => ProcessTurn;
 }
 
 /** What a process run's opening answers: its trace and its turn. */
@@ -169,8 +164,7 @@ const endingOf = (
  * (its registration commits in this fiber, so a launch that fails before
  * the run exists fails here with no run behind it), build its turn around
  * its trace, and fork the run on the session's registry. Answers its run
- * id once the run is forked. A turn that cannot be built ends the
- * registered run failed, and fails this with the cause.
+ * id once the run is forked.
  */
 export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
   parent: { readonly runId: RunId; readonly logId: string },
@@ -187,31 +181,8 @@ export const launchProcessChild = Effect.fn('launchProcessChild')(function* (
       parentCall: { callId, card: parent.logId, awaited: false },
       description: childRunDescription(launch.description),
     });
-    const logger = createChildTrace(log, runId);
-    // A turn that cannot be built ends the registered run failed; an end
-    // the store refuses leaves the run to read as interrupted, said here.
-    const turn = yield* launch.open({ logger, runId }).pipe(
-      Effect.onError((cause) =>
-        Effect.sync(() => logger.close()).pipe(
-          Effect.andThen(
-            endRunRows({
-              runId,
-              outcome: RUN_OUTCOME.FAILED,
-              error: classifyAgentError(Cause.squash(cause)),
-              report: null,
-            }),
-          ),
-          Effect.catchCause((refused) =>
-            Effect.logWarning(
-              `Process run ${runId} could not be ended after its turn failed to open; it reads as interrupted.`,
-            ).pipe(
-              Effect.annotateLogs({ data: Cause.squash(refused) }),
-              withLogChannel(CHANNEL),
-            ),
-          ),
-        ),
-      ),
-    );
+    const logger = new TraceEmitter((event) => log.publish(runId, event));
+    const turn = launch.turn({ logger, runId });
     return { logger, turn } satisfies OpenedProcess;
   });
   yield* registryOf(yield* Runs).start(runId, {

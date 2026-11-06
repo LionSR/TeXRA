@@ -260,9 +260,7 @@ export const isUnreadable = (run: Pick<ReadRunView, 'statusNotice'>): boolean =>
  * decides whether the composer shows). A run with no follow-up support and a
  * run whose rows this build cannot read take none; a run still going or
  * waiting takes one, as does a stopped native one with saved steps, which
- * admission resumes from its history. A terminal-backed run (an agent CLI
- * such as codex) reads its messages from the same inbox as any other run, so
- * every host delivers to it alike.
+ * a resume continues from its history.
  */
 export function acceptsFollowUp(run: ReadRunView): boolean {
   if (run.followUpSupport === 'unsupported' || isUnreadable(run)) return false;

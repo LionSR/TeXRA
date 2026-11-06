@@ -128,10 +128,10 @@ export const followPendingRequests = Effect.fn('followPendingRequests')(
  * Answer the runs' requests of `session` with the host's `approve`, until
  * interrupted: every request a waiting run waits on here (the attention rule
  * every host reads), once, through the session's one `request.decide`. A
- * decision the session refuses to record is tried again briefly, then
- * logged and its request offered again on the next view; a handler still
- * deciding a request that left the view (another surface answered it) is
- * interrupted.
+ * decision the session refuses to record is tried again briefly, then said
+ * and its request offered again on the next view that still lists it (one
+ * decided meanwhile, by a grant or another surface, has left the view); a
+ * handler still deciding a request that left the view is interrupted.
  */
 const answerRequests = (
   session: Context.Context<SessionServices>,
@@ -156,22 +156,22 @@ const answerRequests = (
             .pipe(
               Effect.provide(session),
               Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
-              // The session took no decision: decided meanwhile (a grant
-              // turned on, another surface), or a run no fiber here drives,
-              // which its resume asks again. Said, then held until the
-              // view drops the request.
+              Effect.as(true),
+              // The session took no decision: decided meanwhile, a run no
+              // fiber here drives, or a write it refused.
               Effect.catchIf(
                 (error) => error instanceof Unavailable,
                 (error) =>
                   Effect.logInfo(
                     `The decision on request ${pending.requestId} was not recorded: ${error.reason}`,
-                  ).pipe(withLogChannel(CHANNEL)),
+                  ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
               ),
             ),
         ),
-        // A decided request stays held until the view drops it, so the fold
-        // catching up cannot re-ask it.
-        Effect.andThen(Effect.never),
+        // A recorded decision stays held until the view drops its request,
+        // so the fold catching up cannot re-ask it; one not recorded ends
+        // here, asked again on the next view that still lists it.
+        Effect.flatMap((recorded) => (recorded ? Effect.never : Effect.void)),
         // An interrupt is a withdrawal; anything else is logged.
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)

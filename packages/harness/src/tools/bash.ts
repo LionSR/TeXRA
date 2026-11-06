@@ -428,17 +428,15 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
         input.description?.trim() || command,
         ' ',
       ).trim(),
-      open: ({ logger, runId }) =>
-        Effect.succeed(
-          backgroundBashTurn({
-            runId,
-            call: input,
-            timeoutMs,
-            cwd,
-            settings,
-            logger,
-          }),
-        ),
+      turn: ({ logger, runId }) =>
+        backgroundBashTurn({
+          runId,
+          call: input,
+          timeoutMs,
+          cwd,
+          settings,
+          logger,
+        }),
     },
   );
   return executed(

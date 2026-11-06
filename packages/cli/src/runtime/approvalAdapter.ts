@@ -143,7 +143,8 @@ export function createHeadlessCliHostInteractions(
   /** One request, answered by the prompt. A plugin's request is not this
    *  host's to answer: the plugin that opens one, the external inquiry, is
    *  unavailable on the CLI, so one listed was opened by another host in a
-   *  shared session and is answered from its own thread. */
+   *  shared session and is answered there; this handler waits until the
+   *  view drops the request (the answerer interrupts it then). */
   const approve = Effect.fn('approvalAdapter.approve')(function* (
     runId: RunId,
     payload: PermissionPayload,

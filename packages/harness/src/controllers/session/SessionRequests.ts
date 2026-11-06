@@ -97,7 +97,7 @@ const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
 /** One session's requests, as every handler below reads them. */
 interface RequestDeps extends SessionRequestsInit {
   /** One in-process lane per request id, making the pending check, the
-   *  plugin's record and the append one operation: `decide`'s checked append
+   *  plugin's record and the append one operation: `decideRequest`'s checked append
    *  fences only the row, so two surfaces here could both record a verdict. */
   readonly decisionLanes: Map<string, PerKeyLane>;
 }

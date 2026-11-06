@@ -1199,10 +1199,11 @@ interface ProcessChildLaunch {
   readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process' }>;
   readonly config: RunRecord;
   readonly description: string;
-  readonly open: (ctx: {
+  /** The turn, built around the trace of the run the launch registered. */
+  readonly turn: (ctx: {
     readonly logger: AgentTrace;
     readonly runId: RunId;
-  }) => Effect.Effect<ProcessTurn, Error>;
+  }) => ProcessTurn;
 }
 ```
 
@@ -1982,9 +1983,10 @@ anywhere beneath it — the property an SDK embedder wants.
 interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
-  /** No later turn reaches the run: a root that stops after its cycle. A
-   *  child stops after its cycle too, but a delivery or a message resumes
-   *  it, so a result sent to it as a follow-up still arrives. */
+  /** No later turn reaches the run: a root that stops after its cycle, or
+   *  a child its parent's call awaits (the call reads its end and goes on).
+   *  A background child stops after its cycle too, but a delivery or a
+   *  message resumes it, so a result sent to it as a follow-up arrives. */
   readonly oneShot?: boolean;
 }
 ```

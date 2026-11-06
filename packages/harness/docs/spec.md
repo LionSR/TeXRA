@@ -762,7 +762,7 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 - The asker waits on the committed `request.decided` row, read from the tail
   (`agent/runtime/requests.ts#decisionOf`). If the session closes first, the
   asker goes on as cancelled with no row written, and the request stays open
-  (`agent/runtime/requests.ts#closed without a decision`).
+  (`agent/runtime/requests.ts#ended without one`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);

@@ -56,6 +56,9 @@ export const childEndReport = Effect.fn('childEndReport')(function* (
     wallTimeMs,
     workingDirectory: ctx.workingDirectory,
     memoryMisses: report.memoryMisses,
+    // A run resumed for a message reports again: said on the envelope, so
+    // its parent tells the two reports apart.
+    continued: ctx.entry.registration === null,
   };
   switch (report.outcome) {
     case RUN_OUTCOME.CANCELLED:

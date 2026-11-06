@@ -70,7 +70,7 @@ Exports: 127
 - `PluginLayerServices` — `type PluginLayerServices = ToolCatalog | FileSystem.FileSystem | Path.Path | ChildProcessSpawner | AppState | AppSignals; ≡ PluginLayerServices`
 - `PluginRow` — `interface PluginRow { readonly value: JsonValue; readonly parent: RunId | null; }`
 - `PluginToolServices` — `type PluginToolServices = RunServices | ToolContext | WorkspaceFs | StorageFs | Scope.Scope; ≡ PluginToolServices`
-- `ProcessChildLaunch` — `interface ProcessChildLaunch { readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process'; }>; readonly config: RunRecord; readonly description: string; readonly open: (ctx: { readonly logger: AgentTrace; readonly runId: RunId; }) => Effect.Effect<ProcessTurn, Error>; }`
+- `ProcessChildLaunch` — `interface ProcessChildLaunch { readonly identity: Extract<RunIdentity, { kind: 'agent' | 'process'; }>; readonly config: RunRecord; readonly description: string; readonly turn: (ctx: { readonly logger: AgentTrace; readonly runId: RunId; }) => ProcessTurn; }`
 - `ProcessPluginLayer` — `interface ProcessPluginLayer<ROut = never> { readonly layer: Layer.Layer<ROut, never, PluginLayerServices>; readonly drain?: Effect.Effect<void, never, ROut>; }`
 - `ProcessReport` — `interface ProcessReport { readonly report: string; readonly failure?: string; readonly exit?: ProcessExit; }`
 - `ProcessTurn` — `interface ProcessTurn { readonly stageLabel: string; readonly run: Effect.Effect<ProcessReport, Error, PlatformServices>; readonly reportError: (error: Error) => string; }`

@@ -173,12 +173,17 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const inbox = yield* Inbox;
   const runs = yield* Runs;
   const log = yield* SessionLog;
+  const view = yield* SessionViewAccess;
   // From the checks to the row's commit, one send to a run at a time, so a
   // run's messages commit in call order; the wake runs after, so a send that
   // resumes the run does not hold later sends for the resumed turn.
   const sent = yield* Effect.gen(function* () {
     if (yield* sentBefore(runId, item, hold, attach))
       return { status: 'sent' } as const;
+    // A run that takes no input (a process run, a one-shot root) reads
+    // none, live or not: nothing would read the row.
+    if (view.run(runId)?.followUpSupport === 'unsupported')
+      return { status: 'failed', reason: 'notResumable' } as const;
     const live = runs.get(runId);
     if (live === undefined) {
       const rejection = yield* checkpointRefusal(runId).pipe(

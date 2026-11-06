@@ -10,7 +10,11 @@ import type {
   ApprovalGrants,
 } from '@shared/approvalBypassKind';
 import type { ApprovalPolicy } from '@shared/approvalPolicy';
-import type { RunId, SessionEventDraft } from '@shared/schemas';
+import type {
+  RequestDecision,
+  RunId,
+  SessionEventDraft,
+} from '@shared/schemas';
 import type { Effect } from 'effect';
 import type {
   DatabaseAggregateClosed,
@@ -54,6 +58,23 @@ export interface SessionApprovals {
   activationRows(
     runId: RunId,
   ): Effect.Effect<readonly SessionEventDraft[], DatabaseReadFailed>;
+  /**
+   * Record a surface's decision on `requestId` with the grant it came
+   * with, in one transaction: the grant's rows land whatever the request's
+   * state (so a request the run opens once it reads the decision is
+   * approved as it opens), the decision only if the request is still open
+   * (`false`: that lost race, or an id never opened), and the other open
+   * requests the grant covers are approved beside it.
+   */
+  decideUnder(
+    runId: RunId,
+    requestId: string,
+    decision: RequestDecision,
+    edit: (grants: ApprovalGrants) => ApprovalGrants,
+  ): Effect.Effect<
+    boolean,
+    DatabaseAggregateClosed | DatabaseReadFailed | DatabaseWriteFailed
+  >;
   /**
    * The approval policy `runId`'s requests are decided under: the
    * project's persisted `approvalPolicy`, read at each call, narrowed

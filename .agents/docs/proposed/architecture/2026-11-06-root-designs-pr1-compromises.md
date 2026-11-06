@@ -84,8 +84,9 @@ Each item: what the note asked, what landed, why, and what ends it.
    (`wakeIfOwed`) and the resume runs it as an interactive root. The headless
    CLI closes its session when the root ends, so nothing wakes there; an SDK
    embedder holding a session open after a one-shot `start` would see the
-   root resume. Ends with: `wakeIfOwed` reading `run.start.userFollowUpSupport`
-   (`unsupported` for a one-shot root) before resuming.
+   root resume. Ended in review: `submitFollowUp` refuses a run whose
+   `run.start.userFollowUpSupport` is `unsupported` (a headless one-shot
+   root, a process child) before it queues.
 9. **A background child left interrupted by a crash is nobody's to resume.**
    `resumeLeftoverChildren` resumes a parent's cut-short children as the
    parent resumes; a background child whose parent ended first stays
@@ -117,6 +118,54 @@ Each item: what the note asked, what landed, why, and what ends it.
 - `approvalsUnder` answered the changed run alone (§1.3). Fixed: the
   descendants whose grants follow it too.
 
+A second round, two independent reviews of the three commits as landed:
+
+- A grant-carrying approve (the modal's "approve and stop asking") was two
+  requests, `request.decide` then `policy.set`, so the decision could land
+  refused when the grant's transaction answered the request first. Fixed:
+  `Approvals.decideUnder` writes the decision and the grant's rows in one
+  transaction, the decided request excepted from the grant's sweep.
+- The headless answerer held a request forever after the session refused
+  its decision (`Unavailable`: said, then `Effect.never`). Fixed: a refused
+  decision ends the handler's program; only a recorded one is held until
+  the view drops the request.
+- A native child waited on the session's `ChildRunBudget` outside the
+  masked region, so a stop landing in that wait ended no run. Fixed: the
+  permit is taken inside `Effect.exit(restore(...))`, where every exit
+  reaches `endRun`.
+- `sweepLeftoverRuns` removed a background shell a clean close had stopped
+  (its end is `cancelled` under a `shutdown` stop, which the sweep read as
+  ended). Fixed: the sweep reads `cutShort` (the one predicate; exported from
+  `leftoverChildren`), and a shell cut short is reported interrupted, not
+  deleted.
+- A message to a run that takes none (a process child, a headless one-shot
+  root) was queued, and woke it. Fixed: `submitFollowUp` refuses a run whose
+  `followUpSupport` is `unsupported` as not resumable, before the queue.
+- An awaited child's background launches: `oneShot` read `parent === null`,
+  so a subagent run in band (which no later turn reaches either) could
+  launch a background command nobody delivers to. Fixed: `oneShot` is
+  `stopAfterCycle && (parent === null || awaited)`.
+- A parent stopped while its child's opening commits left the child with no
+  `run.stop` row (the registry's `start` wrote the stop only for an opened
+  run). Fixed: the opening's interruption writes the stop rows too
+  (`tapCause` in `RunRegistry.start`), the reason from whether the session
+  is closing.
+- A child resumed for a message reported twice under two delivery ids, and
+  its parent could not tell the second report from the first (§1.7). Fixed:
+  the envelope carries `continued="true"` when the run reported from an
+  activation, not its registration.
+- `ProcessChildLaunch.open` was an Effect every producer wrapped in
+  `Effect.succeed`, with an `onError` branch the harness handled nowhere.
+  Fixed: `turn(ctx): ProcessTurn`, plain; the trace emitter is built inline
+  in the launch.
+- `Interactions.layer` was a static layer constructor no composition used
+  (the session builds its host in `sessionOwnersLayer`). Deleted.
+- Eight comments restated the retired loop (a "lane", a "closing plane", a
+  "terminal-backed run", a "continuous delivery driver", a "pause notice",
+  the executions tool's `send` description, `openRequest`'s claim that an
+  interruption cancels the request, the headless adapter's plugin case).
+  Rewritten to what the code does.
+
 ## 3. Red flags that stand
 
 - **Repetition.** "A grant answers a request of this kind" is read twice:
@@ -144,16 +193,51 @@ Each item: what the note asked, what landed, why, and what ends it.
   same with less.
 - **`USER_FOLLOW_UP_SUPPORT`** is now two values (`unsupported`,
   `nativeInteractive`) for one boolean fact, carried on `run.start`; the
-  harness enforces neither (`acceptsFollowUp` is a view affordance). One
-  fact, one representation would make it a boolean, or delete it once
-  §1.8's `wakeIfOwed` check is the one reader.
+  harness enforces it once, in `submitFollowUp` (`acceptsFollowUp` is a view
+  affordance that reads the same field). One fact, one representation would
+  make it a boolean.
+- **The ten-minute `APPROVAL_HANDLER_TIMEOUT`** (`requestAnswerer`) now
+  bounds the headless operator's prompt as well as a programmatic handler:
+  an operator who answers after ten minutes finds the request denied. The
+  old adapter's own loop had no clock. A host's prompt should carry its own
+  deadline, or none.
+- **`sessionPermission` and `grantAnswers` disagree at two edges.** Super
+  yolo on with bash off opens a request and decides it in the same batch
+  (the guard says ask, the grant answers); a `call` operation's bash-kind
+  request with `allowBypass: false` is asked even under super yolo, where
+  the old lane head let it through. Both follow from the two readings
+  above; one owner ends them.
+- **`resumeOwnedChild`** (an awaited call's resume of its child) repeats
+  `openResume` with fewer checks: no `checkpointRefusal`, no closed-input
+  read, no stop asked meanwhile. Correct today because the call owns the
+  run, and a second site for the same decision.
+- **`awaitChildRun`'s interruption** (the parent stopped while waiting on a
+  child in band) interrupts the child's fiber directly, so the child ends
+  cancelled with no `run.stop` row of its own; its parent's stop is the
+  only record. The registry's `stop` is the one writer of that row;
+  routing the await's interruption through it would make the child's
+  rows say why.
+- **`ProcessReport.failure` beside `ProcessReport.exit`**: a failed exit is
+  said twice, as the exit code and as the failure message the end records.
+  One reading (`exit.code !== 0` is the failure, the message its report)
+  would own it; a provider SDK's error result, which has no exit, keeps
+  `failure`.
+- **`childEndReport`** switches on the child's kind (a background script's
+  notice, a subagent's envelope) in one function; two delivery formats, one
+  function, where the kind is known at the launch.
+- Pre-existing, noted: `Context.merge` of the whole captured context in
+  `sessionOwnersLayer` (the runs' fork runtimes are built under the
+  session's context deliberately; a `Context.pick` would name the services
+  a run needs); `Effect.try` around a parent stage's `end`; `joinOpening`'s
+  swallowed facts read; the `Run ID:`/`Run:` pair on a subagent's receipt.
 
 ## 4. Follow-ups
 
 - Hosts' PR (R6+R10): §1.1 (TUI `approve`), §1.5 (R8's second half), §1.4
   (denied-request notice), §3's `answeredBy`.
-- Harness, small: §1.8 (`wakeIfOwed` and a one-shot root), §3's one
-  `cutShort` predicate, one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
-  boolean.
+- Harness, small: §3's one `cutShort` predicate (`agentChild.standingOf`
+  still reads its own), one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
+  boolean, the handler timeout off the operator's prompt, `resumeOwnedChild`
+  through `openResume`, the await's interruption through `RunRegistry.stop`.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.

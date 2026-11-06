@@ -109,6 +109,8 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
   runId: RunId,
   recorded: ApprovalGrants,
   next: ApprovalGrants,
+  /** The request the same batch decides on its own. */
+  except?: string,
 ) {
   const turnedOn = APPROVAL_BYPASS_KINDS.filter(
     (kind) => grantsOn(next, kind) && !grantsOn(recorded, kind),
@@ -139,6 +141,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     for (const [requestId, request] of Object.entries(requests))
       if (
         request.decision === null &&
+        !(id === runId && requestId === except) &&
         !personOnly(request.payload) &&
         covering.some((kind) => bypassCovers(kind, request.payload.kind))
       )
@@ -150,6 +153,25 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
         });
   }
   return rows;
+});
+
+/** The rows a change of `runId`'s grants writes: none when `edit` leaves
+ *  them as recorded; else the `approval.policy` row and the approvals it
+ *  answers ({@link approvalsUnder}). Read under the transaction's lock. */
+const grantRows = Effect.fn('grantRows')(function* (
+  log: Pick<SessionLogShape, 'runRows' | 'facts'>,
+  view: ApprovalGrantSource<RunId>,
+  runId: RunId,
+  edit: (grants: ApprovalGrants) => ApprovalGrants,
+  except?: string,
+) {
+  const recorded = (yield* log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
+  const next = edit(recorded);
+  if (sameGrants(recorded, next)) return [];
+  return [
+    policyRow(runId, next),
+    ...(yield* approvalsUnder(log, view, runId, recorded, next, except)),
+  ];
 });
 
 /** The session's approvals over its view, its record door and its
@@ -188,8 +210,8 @@ export const sessionApprovals: Effect.Effect<
       return next === null ? [] : [policyRow(runId, next)];
     }),
     change: (runId, edit, rows = []) => {
-      // The claim holder's own grants are folded by the time each change
-      // returns, so a change the view already shows writes nothing.
+      // The view has applied every change by the time it returns, so a
+      // change the view already shows writes nothing.
       const shown = view().policy.get(runId);
       if (
         rows.length === 0 &&
@@ -199,20 +221,37 @@ export const sessionApprovals: Effect.Effect<
         return Effect.void;
       return log.transact((tx) =>
         Effect.gen(function* () {
-          const recorded =
-            (yield* log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
-          const next = edit(recorded);
-          const all: readonly SessionEventDraft[] = sameGrants(recorded, next)
-            ? rows
-            : [
-                ...rows,
-                policyRow(runId, next),
-                ...(yield* approvalsUnder(log, view(), runId, recorded, next)),
-              ];
+          const all: readonly SessionEventDraft[] = [
+            ...rows,
+            ...(yield* grantRows(log, view(), runId, edit)),
+          ];
           if (all.length > 0) yield* runStateAppend(tx.append)(all);
         }),
       );
     },
+    decideUnder: (runId, requestId, decision, edit) =>
+      log.transact((tx) =>
+        Effect.gen(function* () {
+          const aggregateId = qualifyAggregateId('run', runId);
+          const { requests } = yield* log.runRows(aggregateId, 'requests');
+          const open = requests[requestId]?.decision === null;
+          const all: readonly SessionEventDraft[] = [
+            ...(open
+              ? [
+                  {
+                    type: 'request.decided' as const,
+                    aggregateId,
+                    requestId,
+                    decision,
+                  },
+                ]
+              : []),
+            ...(yield* grantRows(log, view(), runId, edit, requestId)),
+          ];
+          if (all.length > 0) yield* runStateAppend(tx.append)(all);
+          return open;
+        }),
+      ),
   };
 });
 
@@ -258,29 +297,30 @@ export const narrows = (change: PolicyChange): boolean =>
  * on approves what else waits behind it in the grant's own transaction
  * (`approvalsUnder`).
  */
+/** The edit a policy change makes to a run's grants: a limit only lowers;
+ *  the delegated-work grant covers the command and edit grants too. */
+const policyEdit = (
+  change: PolicyChange,
+): ((grants: ApprovalGrants) => ApprovalGrants) =>
+  change.field === 'limit'
+    ? (grants) => ({
+        ...grants,
+        limit:
+          grants.limit === 'never' || change.limit === 'never'
+            ? 'never'
+            : 'ask',
+      })
+    : humanGrant(
+        change.bypass === 'superYolo' ? APPROVAL_BYPASS_KINDS : [change.bypass],
+        change.enabled,
+      );
+
 export function setPolicy<A, R>(
   change: PolicyChange,
   decide: Effect.Effect<A, RequestError, R>,
 ): Effect.Effect<A, RequestError, R | Approvals> {
-  // A limit only lowers; the delegated-work grant covers the command and
-  // edit grants too.
-  const edit =
-    change.field === 'limit'
-      ? (grants: ApprovalGrants): ApprovalGrants => ({
-          ...grants,
-          limit:
-            grants.limit === 'never' || change.limit === 'never'
-              ? 'never'
-              : 'ask',
-        })
-      : humanGrant(
-          change.bypass === 'superYolo'
-            ? APPROVAL_BYPASS_KINDS
-            : [change.bypass],
-          change.enabled,
-        );
   return Approvals.use((approvals) =>
-    approvals.change(change.runId, edit),
+    approvals.change(change.runId, policyEdit(change)),
   ).pipe(
     Effect.mapError(
       writeRejection({
@@ -294,28 +334,39 @@ export function setPolicy<A, R>(
 
 /**
  * Decide `req` through `answer`, which `write`s it (did it land?) if it can
- * still be decided. Its `grant` lands first whatever the request's state, so
- * a request the run opens once it reads the decision is approved as it opens.
+ * still be decided. With a `grant`, the decision and the grant are one
+ * transaction (`Approvals.decideUnder`): the grant lands whatever the
+ * request's state, so a request the run opens once it reads the decision
+ * is approved as it opens.
  */
 export const decideUnderGrant = <A, R>(
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   answer: (
-    write: Effect.Effect<boolean, RequestError, SessionLog>,
+    write: Effect.Effect<boolean, RequestError, SessionLog | Approvals>,
   ) => Answer<A, R>,
 ): Answer<A, R | Approvals | SessionLog> => {
   const { runId, requestId, decision, grant } = req;
-  const write = decideRequest(runId, requestId, decision).pipe(
-    Effect.mapError(
-      writeRejection({
-        runId,
-        reason: 'The decision could not be recorded.',
-      }),
-    ),
-  );
-  return grant == null
-    ? answer(write)
-    : setPolicy(
-        { field: 'bypass', runId, bypass: grant, enabled: true },
-        answer(write),
-      );
+  const rejected = writeRejection({
+    runId,
+    reason: 'The decision could not be recorded.',
+  });
+  const write: Effect.Effect<boolean, RequestError, SessionLog | Approvals> =
+    grant == null
+      ? decideRequest(runId, requestId, decision).pipe(
+          Effect.mapError(rejected),
+        )
+      : Approvals.use((approvals) =>
+          approvals.decideUnder(
+            runId,
+            requestId,
+            decision,
+            policyEdit({
+              field: 'bypass',
+              runId,
+              bypass: grant,
+              enabled: true,
+            }),
+          ),
+        ).pipe(Effect.mapError(rejected));
+  return answer(write);
 };

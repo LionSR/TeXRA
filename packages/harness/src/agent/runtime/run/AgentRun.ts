@@ -87,9 +87,10 @@ interface LaunchEntry {
 export interface ToolPolicy {
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
-  /** No later turn reaches the run: a root that stops after its cycle. A
-   *  child stops after its cycle too, but a delivery or a message resumes
-   *  it, so a result sent to it as a follow-up still arrives. */
+  /** No later turn reaches the run: a root that stops after its cycle, or
+   *  a child its parent's call awaits (the call reads its end and goes on).
+   *  A background child stops after its cycle too, but a delivery or a
+   *  message resumes it, so a result sent to it as a follow-up arrives. */
   readonly oneShot?: boolean;
 }
 

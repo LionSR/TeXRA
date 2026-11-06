@@ -71,7 +71,8 @@ export function publishTestRunStart(
       type: 'run.start',
       aggregateId: qualifyAggregateId('run', runId),
       identity: { kind: 'agent', agent: 'chat' },
-      userFollowUpSupport: 'unsupported',
+      // A chat run takes a message, as the runs these suites message do.
+      userFollowUpSupport: 'nativeInteractive',
       parent:
         options.parent == null ? null : { id: options.parent, call: null },
       provenance: null,

@@ -29,6 +29,9 @@ interface DeliveryContext {
   readonly wallTimeMs?: number;
   readonly workingDirectory?: string;
   readonly memoryMisses?: readonly AttachedMemoryMiss[];
+  /** The report of a run resumed for a message (a result it waited on, a
+   *  follow-up), after an earlier report of the same run. */
+  readonly continued?: boolean;
 }
 
 /**
@@ -96,6 +99,7 @@ export function formatSubagentDelivery(
       { name: 'agent', value: agentName },
       ...(recipe !== undefined ? [{ name: 'kind', value: recipe.key }] : []),
       { name: 'status', value: result.outcome },
+      ...(options.continued ? [{ name: 'continued', value: true }] : []),
     ],
     wallTime:
       options.wallTimeMs !== undefined

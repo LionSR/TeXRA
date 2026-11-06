@@ -19,7 +19,7 @@ type InputPoint = 'request' | 'turn' | 'idle';
 
 /**
  * The pending messages a run reads at `at`, in commit order. A row held
- * until an instruction (a child's pause or stop notice) is read only beside
+ * until an instruction (a stopped script's notice) is read only beside
  * one. A row held until the turn ends is not read before a request inside
  * the turn.
  */

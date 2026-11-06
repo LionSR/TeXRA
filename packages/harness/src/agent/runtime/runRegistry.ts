@@ -280,11 +280,22 @@ export class RunRegistry implements RunsShape {
         this.inSession(this.init.programs.stop(runId, reason, true));
       return Effect.uninterruptibleMask((restore) =>
         restore(this.inSession(launch.open)).pipe(
-          Effect.tapCause(() =>
-            Effect.suspend(() =>
-              opening.stop === null
+          // A stop asked meanwhile, or the caller's own interruption (its
+          // parent stopped as the child's rows committed): the run the
+          // opening registered ends on its rows, so none is left with
+          // neither fiber nor end.
+          Effect.tapCause((cause) =>
+            Effect.suspend(() => {
+              const stop =
+                opening.stop ??
+                (Cause.hasInterrupts(cause)
+                  ? this.closedRefusal() === undefined
+                    ? 'user'
+                    : 'shutdown'
+                  : null);
+              return stop === null
                 ? Effect.void
-                : stopRows(opening.stop).pipe(
+                : stopRows(stop).pipe(
                     Effect.catchCause((cause) =>
                       Effect.logWarning(
                         `Run ${runId}: the stop asked as it opened was not recorded`,
@@ -292,8 +303,8 @@ export class RunRegistry implements RunsShape {
                         Effect.annotateLogs({ data: Cause.squash(cause) }),
                       ),
                     ),
-                  ),
-            ),
+                  );
+            }),
           ),
           Effect.flatMap((opened) =>
             Effect.suspend(() => {

@@ -370,8 +370,8 @@ export interface RequestOpening<E> {
  * Ask a person: open the request on its run through `opening.commit`,
  * with the policy's own answer beside it, and wait for a decision its kind
  * takes. The policy's answer returns at once; a person's is read from the
- * row stream. An interruption anywhere in the call closes the request as
- * cancelled, so none is left pending; a session that closes first answers
+ * row stream. A request the run's end leaves open is cancelled by the end's
+ * transaction (`cancelRequestRows`); a session that closes first answers
  * with a cancellation.
  */
 export const openRequest = <P extends PermissionPayload, E = never>(
@@ -408,7 +408,7 @@ export const openRequest = <P extends PermissionPayload, E = never>(
       Effect.flatMap((row) => recordedDecision(payload, row.decision)),
       Effect.catch((cause) =>
         Effect.logWarning(
-          `Request ${requestId} closed without a decision`,
+          `Request ${requestId}: its wait for a decision ended without one`,
         ).pipe(
           Effect.annotateLogs({ data: cause }),
           withLogChannel(CHANNEL),

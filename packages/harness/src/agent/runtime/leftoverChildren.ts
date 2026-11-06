@@ -90,7 +90,7 @@ const reportInterrupted = Effect.fn('reportInterrupted')(function* (
 /** Work the cut left open: no end, or the end a clean close's stop
  *  wrote, as opposed to a run that ended on its own or under a person's
  *  stop. */
-const cutShort = ({ end, stop }: RunRows): boolean =>
+export const cutShort = ({ end, stop }: RunRows): boolean =>
   end === null ||
   (end.outcome === RUN_OUTCOME.CANCELLED && stop?.reason === 'shutdown');
 

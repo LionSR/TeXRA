@@ -4,8 +4,9 @@
  * caller. The refusal is decided from the run's records; then the run is
  * opened in the caller's fiber and forked under its id (`RunRegistry.start`),
  * which answers the commit of its activation. A run a fiber here already
- * drives is refused as not resumable. Recovered children use the same
- * continuous delivery driver as newly launched children.
+ * drives is refused as not resumable. A child a dead process left resumes
+ * here too (`resumeLeftoverChildren`), so its end reaches its parent as it
+ * would have.
  */
 import { Effect, Result, Schema } from 'effect';
 

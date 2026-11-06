@@ -31,9 +31,7 @@ Whether a run takes a follow-up at all, the one rule every host reads (it
 decides whether the composer shows). A run with no follow-up support and a
 run whose rows this build cannot read take none; a run still going or
 waiting takes one, as does a stopped native one with saved steps, which
-admission resumes from its history. A terminal-backed run (an agent CLI
-such as codex) reads its messages from the same inbox as any other run, so
-every host delivers to it alike.
+a resume continues from its history.
 
 ```ts
 function acceptsFollowUp(run: ReadRunView): boolean

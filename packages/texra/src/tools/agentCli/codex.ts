@@ -459,16 +459,14 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     prompt: input.prompt,
     modelRef: run.ref,
     registerFailedMessage: 'Failed to register Codex run.',
-    open: ({ logger, runId }) =>
-      Effect.succeed(
-        buildCodexTurn({
-          thread,
-          logger,
-          runId,
-          prompt: input.prompt,
-          release,
-        }),
-      ),
+    turn: ({ logger, runId }) =>
+      buildCodexTurn({
+        thread,
+        logger,
+        runId,
+        prompt: input.prompt,
+        release,
+      }),
     summaryLabel: 'Codex',
     launchedLine: `Codex agent launched (model: ${run.ref}, effort: ${run.effort ?? 'none'}, sandbox: ${sandboxMode}).${run.note ? ` ${run.note}` : ''}`,
     followUpLine: `Result will be delivered as a follow-up message when the turn completes. The delivery includes the thread_id. Pass it to codex on a later call to continue the thread.`,

@@ -687,7 +687,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             await: Effect.fn('ModelInvoker.await')(function* (requestId) {
               logger.debug('Waiting for manual retry');
               // The answer is the `request.decided` row the decide
-              // command lands; a closing plane cancels.
+              // command lands; a session that closes first cancels.
               const row = yield* decisionOf(
                 runId,
                 requestId,

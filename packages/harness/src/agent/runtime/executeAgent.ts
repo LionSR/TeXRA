@@ -6,7 +6,7 @@
  * which runs the loop with the per-run layer and ends through the one
  * terminal (`endRun`, `AgentRunLifecycle`). A root launch reaches it
  * through `rootRun` (`session.start`), a resume through `resumeRun`, and a
- * child's strategy through `programs.executeAgent`.
+ * child's launch through `startChildRun` (`delegation/childLaunch.ts`).
  */
 import { Clock, Effect, Exit, Fiber, Layer, Scope } from 'effect';
 
@@ -220,7 +220,9 @@ const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(function* (
     persona,
     toolPolicy: {
       stopAfterCycle,
-      oneShot: stopAfterCycle && entry.parent === null,
+      // No later turn reaches a root that stops after its cycle, nor an
+      // awaited child: its parent's call reads its end and goes on.
+      oneShot: stopAfterCycle && (entry.parent === null || entry.awaited),
     },
     logger: agentLogger,
     parentStage,
@@ -328,20 +330,25 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     // fibers waiting on them (`SessionRequests.ask`). The backstop wait is
     // `ensuring`, not a generator `finally`: the driver skips a `finally`
     // after a failed `yield*`, ending the run early.
-    const ended = Effect.uninterruptibleMask((restore) =>
+    // A background child runs under the session's child-run budget; an
+    // awaited one rides its parent's turn, a root takes none. The permit is
+    // taken inside the region whose exit is the terminal: a stop that lands
+    // while the run waits for one still ends it.
+    const { parent, awaited } = launch.entry;
+    const budgeted =
+      parent === null || awaited
+        ? flow
+        : Effect.flatMap(ChildRunBudget, (budget) =>
+            budget.withPermits(1)(flow),
+          );
+    return yield* Effect.uninterruptibleMask((restore) =>
       Effect.flatMap(
         Effect.exit(
-          restore(flow.pipe(settleDescriptionOnExit(sessionDescription))),
+          restore(budgeted.pipe(settleDescriptionOnExit(sessionDescription))),
         ),
         (exit) => endRun(launch, exit),
       ),
     ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
-    // A background child runs under the session's child-run budget; an
-    // awaited one rides its parent's turn, a root takes none.
-    const { parent, awaited } = launch.entry;
-    return parent === null || awaited
-      ? yield* ended
-      : yield* (yield* ChildRunBudget).withPermits(1)(ended);
   }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
   return { activation: opening.activation, run };
 });

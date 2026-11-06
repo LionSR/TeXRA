@@ -86,10 +86,7 @@ interface AgentCliLaunchParams {
   registerFailedMessage: string;
   /** Build the provider's turn around the trace of the run the launch
    *  registered. See {@link buildAgentCliTurn}. */
-  open: (ctx: {
-    logger: AgentTrace;
-    runId: RunId;
-  }) => Effect.Effect<ProcessTurn, Error>;
+  turn: (ctx: { logger: AgentTrace; runId: RunId }) => ProcessTurn;
   /** Names the CLI in the result summary: `Launched <summaryLabel>: <previewLabel(prompt)>`. */
   summaryLabel: string;
   launchedLine: string;
@@ -125,7 +122,7 @@ export const launchAgentCliSession = Effect.fn(
         instruction: params.prompt,
       }),
       description: params.prompt,
-      open: params.open,
+      turn: params.turn,
     })
     .pipe(
       Effect.mapError(

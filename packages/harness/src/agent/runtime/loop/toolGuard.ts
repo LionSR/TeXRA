@@ -5,7 +5,7 @@
  * so a resume reads them back), the final input decoded again, the paths it
  * writes checked, then the policy's one reading ({@link sessionPermission})
  * over that input, whose ask opens the call's request through the run's
- * lane. A tool whose body opens its own request (an edit's review, a plan,
+ * cell. A tool whose body opens its own request (an edit's review, a plan,
  * a delegation proposal) is decided there, after its proposal exists, with
  * the hooks' answer on `RunCall.hook`; a question it asks is no permission.
  * A body's own requests go through `callRequests`.
