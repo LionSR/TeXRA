@@ -88,6 +88,11 @@ documents 的 recipe 已经是 25 行 JS。缺的只是：**把这条路当主�
 
 ## 长期判断
 
+负责人裁决（2026-11-06）：模型会变强，这是设计前提，不是待验证的假设。
+由此，rubric 和通用领域知识现在就删，不以评测为门槛；评测只作回归检查。
+被证伪的下行有界：某个便宜模型在某类论文上确实需要一段 rubric，用户写三
+行 task import 一段文本就有了，不需要为所有人预留 400 行。
+
 模型变强，价值从"对模型说什么"转到四件事：验证器（编译、diff、测试、
 texcount、文献 API）、持久的编排（长 goal、恢复、预算、并行）、用户自己
 积累的程序和项目约定、以及可观测和可审批的执行。提示词会越来越短；凡是
@@ -300,6 +305,62 @@ built-in 太大、改得太勤，用户复制一份 400 行就漂移；两个条
 一个棘轮：built-in 的数量只降不升。新增一个 built-in 要同时交一个 journey
 测试，并写明它为什么不能是 custom 或插件。
 
+### document task 的归宿
+
+15 个带 `task:` 块的文件（含 `write/` 两个和 `critic`）的轮廓：`tools`
+全是 0，轮数全是 1 或 2，结构全是"prefix 放文档，requests 放要求，回复就
+是文档"，两个带模板文件绑定（`files:`）。它们是同一个函数的 15 组参数，
+那个函数今天就是 25 行 JS 的 recipe。
+
+`builtIn:documents` 导出一个原语，现在的 recipe 泛化后的样子：
+
+```js
+revise({
+  files,
+  context,
+  media,
+  instruction,
+  requests, // 每轮一段文字；长度就是轮数
+  persona, // 可选；默认 "You revise LaTeX documents."
+  outputs, // 可选；不给就是原文件名
+  review, // 可选；轮间 critic 的 rubric，默认是 critic.yaml 那 12 行
+  verify,
+}); // 可选；每轮产物的检查函数，失败即下一轮的输入
+```
+
+步骤不变：`document_context`、`agent()` 一次、`document_extract`、
+`document_compile`、`document_diff`，轮间 `document_review`，最后
+`document_propose`。`critic` 不再是 agent，是 `review` 的默认常量。
+
+按参数去重后 15 个文件是 8 个，每个十几行：
+
+| 今天                                  | 之后            | 差别只在                           |
+| ------------------------------------- | --------------- | ---------------------------------- |
+| correct, polish, generic              | `edit.js`       | requests 文字，由 instruction 区分 |
+| criticize, firstread, logic, notation | `annotate.js`   | 无；它们独有的句子不保留           |
+| enhance, devise                       | `enhance.js`    | 两段 requests                      |
+| apply                                 | `apply.js`      |                                    |
+| merge                                 | `merge.js`      |                                    |
+| ocr, transcribe_audio                 | `transcribe.js` | 由媒体文件后缀决定                 |
+| paper2slide                           | `slides.js`     | 模板 import                        |
+| paper2poster                          | `poster.js`     | 三个模板 import                    |
+| critic                                | `review` 参数   |                                    |
+
+代码赢过 YAML 的地方是 `verify`：YAML 只能要求模型"别改别的"，代码可以
+检查。`annotate` 断言 diff 只新增 `\criticize{` 行；`merge` 断言输出含原文
+的每个 `\section`；`edit` 断言 texcount 没有掉一半；`slides` 和 `poster`
+断言带模板能编译。每个几行，失败就是下一轮的输入。
+
+模板不再用 `files:` 绑定变量，而是 `import template from './template_poster.tex'`：
+加载器一条规则，相对 import 一个非 `.js` 文件得到它的文本，和模块一样钉
+在 run 上。
+
+模型自己用同一个原语。用户说"把这篇校对一下"，assistant 不需要目录里有
+`edit`：`const { revise } = await import('builtIn:documents')` 然后一行
+调用。八个 bundled 文件只为两件事存在：picker 里的一次点击，和
+`texra run edit paper.tex`。模型写的临时版本跑通了，`write_file` 进
+`.texra/tasks/` 就是第九个。
+
 ## 删除账
 
 | 删什么                                                                        | 行数（量于 `c4c843a`） | 留什么                                        |
@@ -456,9 +517,10 @@ prompt、每个影响运行的选项和每个引用文件的指纹哈希，范�
    联合；三种来源一个解析器，先只开 `builtIn:`；goal 策略和 documents
    recipe 改走它。同时在 codemode 文档记录 Q8 的收窄。
 2. **工作区 task**：`.texra/tasks/` 来源、ES 模块、`task()` 全局、
-   `texra run <task>`、Tasks 页、`texra tasks types`。先移植 `correct`
-   和合并后的 `annotate`；最后一个 bundled task 移完就删 `task:` 块、
-   Nunjucks、选项表、`document_task`、`revise()`。
+   `texra run <task>`、Tasks 页、`texra tasks types`。先做 `revise` 原语
+   和 `edit.js`、`annotate.js`（"document task 的归宿"一节），journeys 跑
+   一次作回归检查；再移剩下六个；最后一个 bundled task 移完就删 `task:`
+   块、Nunjucks、选项表、`document_task`、`critic.yaml`。
 3. **script-only 翻默认**：补 Q10 两项，翻；回退标志留。
 4. **删补偿层**：一个 PR 删 agent 目录到三个文件、team、workspace 选择、
    skills、customize；`assistant` 成唯一 agent；文档和迁移说明。
@@ -469,8 +531,8 @@ prompt、每个影响运行的选项和每个引用文件的指纹哈希，范�
 2. 保留可选的 persona YAML（文件扫描已有，成本极小），还是只留 bundled 三
    个？推荐：先保留，看一个版本后谁在用。
 3. `prover` 和 `numerics`：先留作独立 agent 文件，还是直接变成 assistant
-   脚本里的 persona 字面量？推荐：直接变，它们的差别是工作方式的描述，
-   不是工具集。
+   脚本里的 persona 字面量？已决（2026-11-06，随"模型会变强"的前提）：
+   直接变，它们的差别是工作方式的描述，不是工具集。
 4. 发现期对 task 模块求值（零工具沙箱）还是静态提取 `description`？推荐：
    求值，一个解析器；顶层必须纯是规则，违反时错误指出来。
 5. 第 1 期先做，还是等 1.0 PRD 的在途线（线 7、9、11）合完？推荐：第 1
