@@ -262,6 +262,21 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
   const resume = options.registration === undefined;
   const prepared = yield* Effect.gen(function* () {
     const launch = yield* buildAgentLaunchContext(definition, runId, options);
+    // Said as the launch opens, before the model binds: a host's e2e reads
+    // the service's log for it, and a launch refused for want of a key
+    // still names the run it was asked for.
+    if (!resume)
+      yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+        Effect.annotateLogs({
+          data: {
+            agent: launch.config.agent,
+            model: launch.config.model,
+            input: launch.config.inputFiles[0] ?? '(none)',
+            outputs: launch.config.outputFiles.length,
+          },
+        }),
+        withLogChannel(CHANNEL),
+      );
     const services = yield* Layer.build(
       modelInvokerLayer().pipe(
         Layer.provideMerge(
@@ -303,24 +318,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
           )
         : Effect.void,
     );
-    const loop = runToolUse({ resume }, opening).pipe(Effect.provide(services));
-    const flow = resume
-      ? loop
-      : Effect.andThen(
-          // The run directory is created by the first write into it.
-          Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-            Effect.annotateLogs({
-              data: {
-                agent: config.agent,
-                model: config.model,
-                input: config.inputFiles[0] ?? '(none)',
-                outputs: config.outputFiles.length,
-              },
-            }),
-            withLogChannel(CHANNEL),
-          ),
-          loop,
-        );
+    const flow = runToolUse({ resume }, opening).pipe(Effect.provide(services));
     // The flow is an Effect: a fiber interruption reaches its provider work
     // directly, and its finalizers run before the resources above are
     // disposed. The run starts only inside the region whose exit is the
