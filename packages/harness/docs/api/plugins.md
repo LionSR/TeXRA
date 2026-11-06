@@ -1017,7 +1017,7 @@ on). A background child stops after its cycle too, but a delivery or a
 message resumes it, so a result sent to it as a follow-up arrives.
 
 ```ts
-const noLaterTurn: (run: Pick<ToolRun, "entry" | "toolPolicy">) => boolean
+const noLaterTurn: (run: Pick<ToolRun, "toolPolicy" | "entry">) => boolean
 ```
 
 ## nullishWithDefault

@@ -112,6 +112,8 @@ export function nativeToolTestLayer(
     fileService: new RunFileService(run.runId, roots),
     callbacks: {},
     awaitedCalls: Semaphore.makeUnsafe(Number.MAX_SAFE_INTEGER),
+    // A root unless the fixture names its parent edge.
+    entry: { parent: null, awaited: false },
     ...runFields,
     runId: run.runId,
     toolPolicy: run.toolPolicy,

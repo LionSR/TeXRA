@@ -32,6 +32,7 @@ import type { RunFileService } from '@common/storage/runStorage';
 import {
   ToolError,
   type PluginRequest,
+  type RunId,
   type ToolResult,
   type ToolDefinition,
   type ToolResultPayload,
@@ -156,10 +157,13 @@ export interface ScriptScope extends ScriptSource {
 declare module '../core/tools/ToolTypes.js' {
   interface ToolRun {
     readonly toolPolicy: ToolPolicy;
-    /** The parent edge this activation runs under, and whether the
-     *  parent's call awaits it: with the policy, what {@link noLaterTurn}
-     *  reads. */
-    readonly entry: Pick<AgentRunShape['entry'], 'parent' | 'awaited'>;
+    /** The parent this activation runs under (null for a root), and
+     *  whether the parent's call awaits it: with the policy, what
+     *  {@link noLaterTurn} reads. */
+    readonly entry: {
+      readonly parent: RunId | null;
+      readonly awaited: boolean;
+    };
     readonly config: AgentConfig;
     /** The provider API-key variables the run's launch brought
      *  (`StartOptions.apiKeys`), which a child it launches takes too. */
