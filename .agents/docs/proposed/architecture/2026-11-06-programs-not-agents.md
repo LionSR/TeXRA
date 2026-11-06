@@ -550,6 +550,34 @@ host 和 CLI 启动 `chat`（默认）或一个 task；SDK 给 `{ system, tools 
   `agent()`。Q2 复用的 key 对 program 子 run 是源码摘要加 args 的文件指纹
   加模型，替代今天的 `agent.name`、`persona`、`task.options`。
 
+## 其他 surface：目录概念今天伸到哪里
+
+逐个面清点"agent、team、skill、document task、编排者"这些概念的触点
+（只读清点于 `c4c843a`；计数为该面的总条目数与其中涉及这些概念的条目数）。
+
+| 面                       | 总数            | 涉及概念                                                                                                                                                                                                                                                 | 本提案之后                                                                                                                                                |
+| ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 设置页                   | 6 页，12 个 tab | `agents` 页的四个 section（library、teams、skills、advanced）；`AgentsTab`、`TeamsTab`、`SkillsTab`、`AgentSelectionPanel`、newer-built-in 提示（`settingsTarget.ts:37`）                                                                                | 一个 `tasks` 页：列文件、显示源码、打开编辑器；advanced 里留"Agents at once"（子运行并发预算）                                                            |
+| 设置页 IPC               | 约 63 种        | 19 种：15 入站（openAgentYaml、setAgentEnabled、createAgent、customizeAgent、applyAgentModePreset、setSkillEnabled…）、4 出站（`packages/texra/src/shared/ipc.ts:47-106`）                                                                               | 约 3 种：列 task、打开 task 文件、打开 tasks 目录                                                                                                         |
+| 进度视图的 host 请求     | 36 种           | `launch`（`launchTarget`、`selectedTeamId`、`agent`、选项表字段）、`agentConfigBanner`、`onboarding.runSetup`、`runCompileFixer`、`polish`（`hostRequest.ts:36-238`）                                                                                    | `launch` 只带 chat 或 task 名加四组文件和指令；`agentConfigBanner` 删；`runCompileFixer` 变 `task('fix-build')`；setup 和 polish 照旧                     |
+| VS Code 命令             | 38 个 id        | `texra.execute`（"Execute Agent"）、`texra.showAgents`、`texra.showTeamSettings`、`texra.runSetupAssistant`、`texra.createSampleProject`                                                                                                                 | `showTeamSettings` 删，`showAgents` 变 `showTasks`，其余保留                                                                                              |
+| 设置目录行               | 约 70 行        | `workspaceAgents`、`hiddenCustomAgents`（repo state，无 UI 行）、`skills.enabled/disabled/disabledSources`、`chat` 的 agent 部分、`codeMode.scriptOnly`、`goal.strategy`、`childRunConcurrencyBudget`                                                    | 前五项删；`scriptOnly` 随 K5-c 删；`goal.strategy` 留（它是程序模块的先例）；并发预算留                                                                   |
+| CLI                      | 23 个命令       | `agents`（list/show/customize/reset/keep）、`team`（list/show/run）、`skills`、`config agents`、`chat --agent`、`run <agent>` 加选项表 flag、`setup`                                                                                                     | `agents`、`team`、`skills`、`config agents`、`--agent` 删；`run <task>` 不带选项 flag；`setup` 留                                                         |
+| SDK 导出                 | 约 515 个名     | 约 40 个概念命名的导出：`AgentCatalog` 一族 6、`WorkspaceAgents` 一族 4、`AgentDirectories` 一族 9、`Skills` 一族 8、`AgentBlock` 2、`Persona`/`InlinePersona`/`AgentSource`/`isTaskConfig`/`AgentScanIssue` 等（`host.ts`、`schemas.ts`、`plugins.ts`） | 全删。`AgentConfig`、`AgentProposal`、`AgentEvent`、`AgentPlatform`、`AgentTrace` 是 run 的词汇，名字不动。这正是 general-package 设计要缩的 `host.ts` 面 |
+| `session.request` 的请求 | 13 种           | 无                                                                                                                                                                                                                                                       | 不变；`StartRequest` 改为 `{ system, tools, instruction }` 或 `{ program, args }`                                                                         |
+| 模型或 host 打开的请求   | 7 种            | `proposal`（`AgentProposalPermission`，子运行的启动审批）                                                                                                                                                                                                | 留；字段从 agentName 和 persona 改为 system 文本和工具列表，审批界面显示它们                                                                              |
+| `docs/guide`             | 32 页           | 16 页超过 20 次提到 agent；重写量最大的是 `built-in-agents`、`custom-agents`、`multi-agent-workflows`、`agent-architecture`、`texra-cli`；`open-source` 和 `configuration` 讲 skills                                                                     | 前四页分别改成 task 参考、写 task、五个编排模式、两类 run；skills 段删                                                                                    |
+| 引用 bundled 名字的代码  | 61 个源文件     | `orchestrator` 32 个文件、`workspaceAgents` 18、`agentTeams` 12、`criticize` 10                                                                                                                                                                          | 随删除消失                                                                                                                                                |
+| 引用 bundled 名字的测试  | 1 个            | `CriticismParser.vitest.ts`，用的是 `\criticize` 宏不是 agent                                                                                                                                                                                            | 无 fixture 要改                                                                                                                                           |
+
+两点值得单独说：
+
+- **测试没有绑在目录上。** 122 个包内测试文件和 197 个根 `src/` 文件里，没
+  有一个 fixture 引用 bundled agent 名或 team。删目录不带来测试搬家。
+- **SDK 的 `host.ts` 面缩一小半。** general-package 设计想把根导出从 246
+  缩到 59，并点名 team 词汇和 `AgentDirectoriesPort.teams` 是留在 harness
+  里的应用词汇；本提案删的约 40 个导出正是那一块，不用另开一条线。
+
 ## 删除账
 
 | 删什么                                                                                      | 行数（量于 `c4c843a`） | 留什么                                        |
