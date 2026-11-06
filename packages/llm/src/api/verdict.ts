@@ -262,21 +262,15 @@ function networkFailed(error: ModelError): boolean {
 /**
  * Where the reply rules out repeating the request that the judged kind's
  * default (`ModelError`) would allow: an overflow, even under a retryable
- * status (a rate limit that mentions tokens is not one to repeat blindly), a
- * status that cannot succeed again, and a rejection the SDK surfaced with no
- * status, which says nothing to repeat for. `undefined` keeps the default.
+ * status (a rate limit that mentions tokens is not one to repeat blindly),
+ * and a status that cannot succeed again. A failure with no status keeps
+ * its kind's default: a reply that could not be read is worth repeating.
+ * `undefined` keeps the default.
  */
-function notRetryable(
-  error: ModelError,
-  reply: Reply,
-  overflow: boolean,
-): false | undefined {
+function notRetryable(reply: Reply, overflow: boolean): false | undefined {
   const { status } = reply;
   const ruledOut =
-    overflow ||
-    (status === undefined
-      ? error.kind === 'provider-rejection' && error.cause instanceof Error
-      : !isRetryableStatus(status));
+    overflow || (status !== undefined && !isRetryableStatus(status));
   return ruledOut ? false : undefined;
 }
 
@@ -360,8 +354,7 @@ export function judgeFailure(
     cause: error.cause,
     // A used-up quota is never repeated as it is: its retry carries the
     // route's switch.
-    retryable:
-      quota === undefined ? notRetryable(error, reply, overflow) : false,
+    retryable: quota === undefined ? notRetryable(reply, overflow) : false,
     ...(reply.status === undefined ? {} : { status: reply.status }),
     ...(quota === undefined ? {} : { quota }),
     ...scopeOf(error, reply, quota),
