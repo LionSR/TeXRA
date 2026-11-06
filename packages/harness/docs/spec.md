@@ -775,8 +775,8 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 The crash-point suite is the source of truth for this section
 (`src/test-kernel/support/crashConformance.ts#crashConformanceSuite`). It runs
 under the harness's built-ins alone
-(`packages/harness/test/controllers/session/crashConformanceResume.vitest.ts#crashConformanceSuite`
-and its siblings, one file per scenario).
+(`packages/harness/test/controllers/session/crashConformanceResume.1.vitest.ts#crashConformanceSuite`
+and its siblings, each a shard of a scenario's crash points).
 
 Its method: drive a clean run over a real store, record the event commit each
 event-writing transaction ended at (the points are deduplicated by commit),

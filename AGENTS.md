@@ -29,7 +29,8 @@ npm run gate              # the static CI jobs: lint + invariants, typecheck + f
 npm run test:watch        # while editing: reruns what a save reaches
 npm run test:changed      # before a commit: suites reachable from uncommitted edits
 npm run test:pure         # before a push (~30s): the host-free tier
-npm test                  # before opening a PR: the full suite, minutes long
+npm test                  # before opening a PR: the full suite, with the crash
+                          # conformance replays the two loops above leave out
 npm run format
 npm run lint
 pre-commit install        # optional hooks (needs `pip install pre-commit`)

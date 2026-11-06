@@ -98,9 +98,13 @@ import {
   AgentConfigSchema,
   qualifyAggregateId,
   aggregateTarget,
+  SessionEventSchema,
   type RunId,
 } from '@shared/schemas';
-import { ProjectDatabases } from '@shared/session/database';
+import {
+  type DatabaseReadFailed,
+  ProjectDatabases,
+} from '@shared/session/database';
 import { generateRunId } from '@shared/schemas';
 import { SessionLog } from '@shared/session/runHistory';
 import { Settings } from '@shared/config/settings';
@@ -340,11 +344,83 @@ const approveAll = (session: Context.Context<SessionServices>, after = 0) =>
     },
   ).pipe(Effect.forkScoped);
 
-/** Wait until `ready` holds of the store's rows. */
+/** Every row type: a run's rows are read whole. */
+const ALL_TYPES = SessionEventSchema.members.map(
+  (schema) => schema.fields.type.literal,
+);
+
+/** What `liveRows` has read of one store: each run aggregate's rows and
+ *  the seq its next read starts from. A store is read by one session, under
+ *  one root, so its rows only grow. */
+const liveCache = new Map<
+  string,
+  Map<string, { rows: Row[]; nextSeq: number; parent: string | null }>
+>();
+
+/**
+ * The run rows of the store an open session holds, read on the session's
+ * own connection (a held store admits no other) and only past what was read
+ * before, in the shape `rowsOf` reads from a store nothing holds.
+ */
+const liveRows = (
+  storage: string,
+): Effect.Effect<Row[], DatabaseReadFailed, ProjectDatabases> =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const db = yield* RcMap.get(yield* ProjectDatabases, storage);
+      let cache = liveCache.get(storage);
+      if (cache === undefined) {
+        cache = new Map();
+        liveCache.set(storage, cache);
+      }
+      const ids = [
+        ...new Set((yield* db.readListing()).map((row) => row.aggregateId)),
+      ].filter((id) => aggregateTarget(id).kind === 'run');
+      for (const id of ids) {
+        const known = cache.get(id) ?? { rows: [], nextSeq: 1, parent: null };
+        const fresh = yield* db.readAggregate(id, known.nextSeq, ALL_TYPES);
+        for (const event of fresh) {
+          if (event.seq < known.nextSeq) continue;
+          if (event.type === 'run.start')
+            known.parent = event.parent?.id ?? null;
+          const {
+            type,
+            aggregateId,
+            commit,
+            seq,
+            origin: _origin,
+            at: _at,
+            ...data
+          } = event;
+          known.rows.push({
+            commit,
+            run: aggregateTarget(aggregateId).id,
+            parent: known.parent,
+            type,
+            data: JSON.stringify(data),
+          });
+          known.nextSeq = seq + 1;
+        }
+        cache.set(id, known);
+      }
+      return [...cache.values()]
+        .flatMap((known) => known.rows)
+        .toSorted((a, b) => a.commit - b.commit);
+    }),
+  );
+
+/** Wait until `ready` holds of the held store's rows, read at each commit. */
 const until = (storage: string, ready: (rows: readonly Row[]) => boolean) =>
-  Effect.gen(function* () {
-    while (!ready(rowsOf(storage))) yield* Effect.sleep(Duration.millis(25));
-  }).pipe(Effect.timeout('30 seconds'));
+  Effect.scoped(
+    Effect.gen(function* () {
+      const db = yield* RcMap.get(yield* ProjectDatabases, storage);
+      yield* SubscriptionRef.changes(db.observedCommit).pipe(
+        Stream.mapEffect(() => liveRows(storage)),
+        Stream.takeUntil(ready),
+        Stream.runDrain,
+      );
+    }),
+  ).pipe(Effect.timeout('30 seconds'));
 
 /** The root's view edits, by cause. */
 const editsOf = (rows: readonly Row[], root: string) =>
@@ -390,21 +466,21 @@ const userSteps = (
   Effect.gen(function* () {
     // A switch, then a compaction, each asked for once: a request whose
     // row is committed is the resumed run's to apply.
-    if (!requested(rowsOf(storage), root, 'model')) {
+    if (!requested(yield* liveRows(storage), root, 'model')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 1));
       const controls = Context.get(session, Runs).get(root)?.controls;
       if (controls === undefined)
         return yield* Effect.die('the parked run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
     }
-    if (!requested(rowsOf(storage), root, 'compact')) {
+    if (!requested(yield* liveRows(storage), root, 'compact')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 1));
       yield* Context.get(session, SessionRequests).request({
         kind: 'run.compact',
         runId: root,
       });
     }
-    if (!rowsOf(storage).some(isFork)) {
+    if (!(yield* liveRows(storage)).some(isFork)) {
       yield* until(
         storage,
         (rows) =>
@@ -417,7 +493,7 @@ const userSteps = (
         at: null,
       });
     }
-    if (bashBypassOf(rowsOf(storage), root) !== 'off') {
+    if (bashBypassOf(yield* liveRows(storage), root) !== 'off') {
       for (const enabled of [true, false]) {
         yield* Context.get(session, SessionRequests).request({
           kind: 'policy.set',
@@ -425,7 +501,7 @@ const userSteps = (
         });
         // Acknowledged means durable: a resume restores the bypass from
         // this row, and an "off" lost to a crash would come back on.
-        const stored = bashBypassOf(rowsOf(storage), root);
+        const stored = bashBypassOf(yield* liveRows(storage), root);
         if (stored !== (enabled ? 'on' : 'off'))
           return yield* Effect.die(
             `the bash bypass was acknowledged ${enabled ? 'on' : 'off'} while its row says ${stored}`,
@@ -810,18 +886,29 @@ const resumeFrom = (
   });
 
 /**
- * The suite's scenarios. Each replays a run from every commit point, tens of
- * seconds apiece, so each runs from its own file: Vitest spreads files, not
- * tests, over its workers and CI shards.
+ * The suite's scenarios. Each replays a run from every commit point, half a
+ * second of CPU apiece, so a scenario's points are spread over files: Vitest
+ * spreads files, not tests, over its workers and CI shards.
  */
 export type CrashScenario = 'resume' | 'child-results';
 
-/** The suite's tests of `scenarios`; the two short ones (a detached
- *  command, one job's appends) run with `child-results`. */
+/** Which of a scenario's crash points one file replays: every `count`th
+ *  from `index`. The clean pass runs in each file. */
+export interface CrashShard {
+  readonly index: number;
+  readonly count: number;
+}
+
+/** The suite's tests of `scenarios` over the points of `shard`; the two
+ *  short ones (a detached command, one job's appends) run with
+ *  `child-results` in the first shard. */
 export function crashConformanceSuite(
   scenarios: readonly CrashScenario[],
+  shard: CrashShard = { index: 0, count: 1 },
 ): void {
   const runs = (scenario: CrashScenario) => scenarios.includes(scenario);
+  const mine = (points: readonly number[]) =>
+    points.filter((_, i) => i % shard.count === shard.index);
   describe('crash-point conformance', () => {
     // The validation host, with the notes the crash run reads and edits.
     const crashHost = Layer.effectDiscard(
@@ -923,7 +1010,7 @@ export function crashConformanceSuite(
                 ).toEqual([]);
 
                 const broken: string[] = [];
-                for (const n of points) {
+                for (const n of mine(points)) {
                   const { prefix, final, refused, effects } = yield* resumeFrom(
                     roots,
                     clean,
@@ -1102,7 +1189,9 @@ export function crashConformanceSuite(
                     .map((row) => row.commit),
                 );
                 const broken: string[] = [];
-                for (const n of points.filter((point) => point >= first)) {
+                for (const n of mine(
+                  points.filter((point) => point >= first),
+                )) {
                   const { prefix, final, refused } = yield* resumeFrom(
                     roots,
                     clean,
@@ -1163,7 +1252,7 @@ export function crashConformanceSuite(
          * which the open reaches first, is the control, its claim a live
          * process's; the second's owner died.
          */
-        if (runs('child-results'))
+        if (runs('child-results') && shard.index === 0)
           it.effect(
             'ends a detached command a dead process left running, once',
             () =>
@@ -1309,7 +1398,7 @@ export function crashConformanceSuite(
          * leaves neither on disk. The cut is the store's files copied while the
          * job holds its transaction open, which is what a kill there leaves.
          */
-        if (runs('child-results'))
+        if (runs('child-results') && shard.index === 0)
           it.effect(
             'a crash between two appends of one job leaves neither',
             () =>
