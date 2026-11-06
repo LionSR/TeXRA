@@ -264,10 +264,9 @@ rather than per finding:
   `allowBypass: false` is still asked under super yolo: a hook's `ask`
   names a person, and both readings honour it; the old lane head's pass
   was the defect.
-- **`resumeOwnedChild`** (an awaited call's resume of its child) repeats
-  `openResume` with fewer checks: no `checkpointRefusal`, no closed-input
-  read, no stop asked meanwhile. Correct today because the call owns the
-  run, and a second site for the same decision.
+- **`resumeOwnedChild`, ended in the hosts' PR.** An awaited call's
+  resume of its child runs `openResume` as its owner, with every check the
+  one resume path makes.
 - **`awaitChildRun`'s interruption** (the parent stopped while waiting on a
   child in band) interrupts the child's fiber directly, so the child ends
   cancelled with no `run.stop` row of its own; its parent's stop is the
@@ -305,9 +304,10 @@ rather than per finding:
   `request.decide`), §1.5 (R8's second half), §1.4 (denied-request
   notice). §3's one reading of a grant landed there (PR 14772).
 - Harness, small: one delivery-id shape, `USER_FOLLOW_UP_SUPPORT` as a
-  boolean, `resumeOwnedChild` through `openResume`, the await's
-  interruption through `RunRegistry.stop`, the close deadline over the stop
-  writes, a hold per agent-CLI turn.
+  boolean, the await's interruption through `RunRegistry.stop` (the
+  registry's `stop` already cascades a stop row to every held descendant;
+  what is left is a tool call interrupted for another reason), the close
+  deadline over the stop writes, a hold per agent-CLI turn.
 - Open question: whether a second turn on a process run is worth a run
   (§1.2); until then the thread is the provider's and the run is the turn.
 - The CLI service and its sessions, read after this PR's review rounds:

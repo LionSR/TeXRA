@@ -53,11 +53,11 @@ export type ResumeHandOff =
   | { readonly ownedBy: RunId };
 
 /** What a resume's caller supplies: the run's extra tools, the provider
- *  keys of the environment it resumes from, and whether it stops after one
- *  cycle. It resumes in the caller's session. */
+ *  keys of the environment it resumes from, its progress callback, and
+ *  whether it stops after one cycle. It resumes in the caller's session. */
 export interface ResumeRunOptions extends Pick<
   ExecuteAgentOptions,
-  'tools' | 'apiKeys'
+  'tools' | 'apiKeys' | 'onProgress'
 > {
   /** Stop the run after one model/tool cycle instead of waiting for
    *  follow-up input. */
@@ -199,11 +199,14 @@ const joinOpening = (
     ),
   );
 
-/** The resume's opening: its decision, then the run's activation. */
-const openResume = Effect.fn('resumeRun.open')(function* (
+/** The resume's opening: its decision, then the run's activation. A child
+ *  an open call of `owner` owns resumes for that call alone: any other
+ *  caller is sent to the owner. */
+export const openResume = Effect.fn('resumeRun.open')(function* (
   runs: RunRegistry,
   runId: RunId,
   options: ResumeRunOptions,
+  owner?: RunId,
 ): Effect.fn.Return<OpenedResume, Error | ResumeRefused, AgentRunServices> {
   const refuse = (answer: ResumeRefusalAnswer) =>
     Effect.fail(new ResumeRefused({ answer }));
@@ -224,8 +227,9 @@ const openResume = Effect.fn('resumeRun.open')(function* (
   // Deleted, or its input closed, while those reads ran.
   if ((yield* inbox.read(runId)).inputClosed) return yield* refuse(REFUSED);
   // Whether an open call owns it: that call's parent resumes instead.
-  const owner = yield* owningCall(runId);
-  if (owner !== null) return yield* refuse({ ownedBy: owner.parentRunId });
+  const owning = yield* owningCall(runId);
+  if (owning !== null && owning.parentRunId !== owner)
+    return yield* refuse({ ownedBy: owning.parentRunId });
   // Nothing to continue from, or rows this build cannot use.
   const rejected = yield* checkpointRefusal(runId);
   if (rejected !== null) return yield* refuse({ failed: rejected });
@@ -248,6 +252,7 @@ const openResume = Effect.fn('resumeRun.open')(function* (
   return yield* executeAgent(definition, runId, {
     tools: options.tools,
     apiKeys: options.apiKeys,
+    onProgress: options.onProgress,
     parentRunId,
   });
 });

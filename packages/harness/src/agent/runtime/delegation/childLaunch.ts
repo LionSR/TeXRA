@@ -24,13 +24,13 @@ import {
   executeAgent,
   type ExecuteAgentOptions,
 } from '@agent/runtime/executeAgent';
+import { openResume } from '@agent/runtime/resumeRun';
 import { RunCall } from '@agent/runtime/RunCall';
 import {
   registryOf,
   Runs,
   type AgentRunServices,
 } from '@agent/runtime/runRegistry';
-import { checkpointRefusal } from '@agent/storage/resumability';
 import { getRunRecords } from '@agent/storage/runRecords';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import {
@@ -83,34 +83,35 @@ export const startChildRun = Effect.fn('startChildRun')(function* (
 });
 
 /**
- * Resume the child `runId` of `parentRunId` that its open call owns (the
- * call is this one, so no other resume is asked whether it may): the run
- * continues from its rows under its stored configuration, one cycle, on
- * the session's registry. Refused when its rows cannot continue.
+ * Resume the child `runId` of `parentRunId` that its open call owns, through
+ * the one resume path (`openResume`, which lets the owner through where it
+ * sends any other caller to the owner): the run continues from its rows
+ * under its stored configuration, one cycle, on the session's registry.
+ * Refused when its rows cannot continue.
  */
 const resumeOwnedChild = Effect.fn('resumeOwnedChild')(function* (
   runId: RunId,
   parentRunId: RunId,
   options: Pick<ExecuteAgentOptions, 'onProgress'>,
 ): Effect.fn.Return<CommitOrdinal, Error, AgentRunServices> {
-  const rejection = yield* checkpointRefusal(runId);
-  if (rejection !== null)
-    return yield* Effect.fail(
-      new Error(
-        `Subagent ${runId} cannot be resumed here (${rejection.kind}).`,
+  const runs = registryOf(yield* Runs);
+  const { opened } = yield* runs.start(runId, {
+    open: openResume(
+      runs,
+      runId,
+      { stopAfterCycle: true, onProgress: options.onProgress },
+      parentRunId,
+    ).pipe(
+      Effect.catchTag('ResumeRefused', ({ answer }) =>
+        Effect.fail(
+          new Error(
+            'failed' in answer
+              ? `Subagent ${runId} cannot be resumed here (${answer.failed.kind}).`
+              : `Subagent ${runId} belongs to an open call of ${answer.ownedBy}.`,
+          ),
+        ),
       ),
-    );
-  const config = yield* getRunRecords(runId).readConfig();
-  if (config === null)
-    return yield* Effect.fail(
-      new Error(`Subagent ${runId} has no stored configuration to resume.`),
-    );
-  const definition = yield* prepareAgentDefinition({
-    config,
-    stopAfterCycle: true,
-  });
-  const { opened } = yield* registryOf(yield* Runs).start(runId, {
-    open: executeAgent(definition, runId, { ...options, parentRunId }),
+    ),
     run: (prepared) => prepared.run,
   });
   return opened.activation;
