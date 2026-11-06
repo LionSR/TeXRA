@@ -32,9 +32,10 @@ const webviewSessionLayer = (key: string) =>
       Layer.provide(
         Layer.effect(
           SessionInputs,
+          // The frames are the runtime reader's own batches, cut for this
+          // webview's `Subscribe`: the arguments are the subscribe's.
           Effect.map(SessionFrames, (frames) => ({
-            read: (aggregates, _fromCommit, previousDebug) =>
-              frames.inputs(aggregates, previousDebug),
+            read: () => frames.inputs(),
           })),
         ),
       ),

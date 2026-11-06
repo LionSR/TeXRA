@@ -42,7 +42,6 @@ import {
   type StateStore,
   replayTrace,
 } from '@texra-ai/harness/host';
-import type { EventsFrame } from '@texra/shared/session/sessionFrames';
 import { WebviewSessions } from '@texra/shared/session/webviewSessionLayer';
 
 import { attachWindowHost } from './windowHost';
@@ -60,28 +59,10 @@ import {
 import type {
   CommitOrdinal,
   TranscriptSubscription,
-  SessionViewInput,
 } from '@texra-ai/harness/transcript';
 
 /** The transcript port of the window's own view. */
 const WINDOW_PORT = 'window';
-
-/** A service frame as the view inputs it carries (not its host snapshot). */
-function frameInputs(frame: EventsFrame): SessionViewInput[] {
-  const inputs: SessionViewInput[] = [];
-  if (frame.debug !== null)
-    inputs.push({ _tag: 'debug', enabled: frame.debug });
-  // The local snapshot before the rows it was read ahead of (`cutFrame`).
-  if (frame.local !== null) inputs.push({ _tag: 'local', local: frame.local });
-  inputs.push(...frame.events, ...frame.chunks);
-  if (frame.existence !== null)
-    inputs.push(
-      frame.replayComplete
-        ? { _tag: 'replay.complete', existence: frame.existence }
-        : { _tag: 'drained', cursor: frame.cursor, existence: frame.existence },
-    );
-  return inputs;
-}
 
 /** The service's client now; `offline` words a call made while the link
  *  holds none, with why it holds none (`ServiceLink.away`). A reconnect
@@ -350,7 +331,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
           workspace,
           subscribe: {
             kind: 'subscribe',
-            session: key,
             generation,
             debug: view.debug,
             cursor: view.cursor,
@@ -471,7 +451,6 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                       workspace,
                       subscribe: {
                         kind: 'subscribe',
-                        session: key,
                         generation: 0,
                         debug: from.debug,
                         cursor: at,
@@ -481,7 +460,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
                   ),
                 ).pipe(
                   Stream.tap((frame) => Ref.set(cursor, frame.cursor)),
-                  Stream.map(frameInputs),
+                  Stream.map((frame) => frame.inputs),
                   Stream.filter((inputs) => inputs.length > 0),
                   // A lost service's stream fails, or is interrupted
                   // when the link closes its connection: either ends

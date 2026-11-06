@@ -61,7 +61,9 @@ function writeProgress(
   aggregate: string,
   includeDebugLogs: boolean,
 ): void {
-  for (const { read, event } of frame.events) {
+  for (const input of frame.inputs) {
+    if (input._tag !== 'event') continue;
+    const { read, event } = input;
     // The listing repeats a run's newest rows; its history and the tail
     // carry each row once.
     if (read === 'listing' || event.aggregateId !== aggregate) continue;
@@ -107,7 +109,6 @@ export function watchTask(
         workspace: task.workspace,
         subscribe: {
           kind: 'subscribe',
-          session: task.workspace,
           generation,
           debug,
           cursor: 0,

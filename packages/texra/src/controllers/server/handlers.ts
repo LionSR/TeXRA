@@ -40,7 +40,6 @@ import {
 } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { loadChatExportInput } from '@texra/agent/export/loadChatExportInput';
-import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
 
 import {
@@ -359,13 +358,12 @@ export const serviceHandlers = TexraRpcs.toLayer(
               () => SubscriptionRef.update(control.watching, (n) => n - 1),
             );
             const { session } = yield* open(workspace);
-            // The client renders its own host state; the service has none.
-            const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);
+            // The frames name the session as the service keys it.
             const key = session.roots.storage;
-            return frameSubscription({ key, view: session.view }, host, {
-              ...subscribe,
-              session: key,
-            });
+            return frameSubscription(
+              { key, view: session.view },
+              { ...subscribe, session: key },
+            );
           }),
         ),
       'task.ended': ({ workspace, runId }) =>

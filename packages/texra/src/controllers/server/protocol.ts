@@ -192,7 +192,11 @@ export const TexraRpcs = RpcGroup.make(
     success: Schema.Array(TaskSummarySchema),
   }),
   Rpc.make('task.watch', {
-    payload: { workspace, subscribe: SubscribeSchema },
+    // `workspace` names the project; the frames name the session.
+    payload: {
+      workspace,
+      subscribe: SubscribeSchema.mapFields(Struct.omit(['session'])),
+    },
     success: EventsFrameSchema,
     error: TaskFailed,
     stream: true,

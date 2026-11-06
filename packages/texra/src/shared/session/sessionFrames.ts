@@ -1,19 +1,19 @@
 /**
  * The bridge between a session runtime and a renderer process: the wire
- * schemas, up and
- * down, and `SessionFrames`, the webview's source of session events.
+ * schemas, up and down, and `SessionFrames`, the webview's source of
+ * session events.
  *
- * Down: an `EventsFrame` carries the rows one `Subscribe` asked for, tagged
- * by the read that delivered them, then the tail; `cursor` is the commit
- * ordinal the framer had drained when it cut the frame and `generation`
- * echoes the `Subscribe` that started it. A `Response` answers one request
- * under its id, and a `SurfaceAction` is the host acting on state the
- * surface owns. Up: `Subscribe`, `runtime.request`, and `host.request`.
+ * Down: an `EventsFrame` carries one batch of the session's view inputs,
+ * as the runtime's reader orders them (`Session.view.watch`): a replay
+ * whole, then each tail read; `cursor` is the commit the reader had
+ * drained when it cut the batch and `generation` echoes the `Subscribe`
+ * that started it. A `HostFrame` carries what the host renders but does
+ * not own. A `Response` answers one request under its id, and a
+ * `SurfaceAction` is the host acting on state the surface owns. Up:
+ * `Subscribe`, `runtime.request`, and `host.request`.
  *
- * `SessionFrames` supplies one ordered queue for the current generation.
- * It collects a replay through its completion marker before releasing it
- * to the view, then delivers each frame's events before its text chunks.
- * A new generation discards the superseded queue and incomplete replay.
+ * `SessionFrames` supplies one ordered queue of batches for the current
+ * generation; a new generation discards the superseded queue.
  */
 import {
   Cause,
@@ -35,13 +35,10 @@ import {
 } from '@texra-ai/harness/schemas';
 import {
   CommitOrdinalSchema,
-  ExistenceReconciliationSchema,
   EventInputSchema,
-  LocalRuntimeStateSchema,
-  TextChunkSchema,
+  SessionViewInputSchema,
   TranscriptSubscriptionSchema,
   type SessionViewInput,
-  type TranscriptSubscription,
 } from '@texra-ai/harness/transcript';
 import { HostRequestSchema } from './hostRequest';
 import { HostSnapshotSchema, type HostSnapshot } from './hostSnapshot';
@@ -70,24 +67,24 @@ export const SubscribeSchema = Schema.Struct({
 });
 export type Subscribe = typeof SubscribeSchema.Type;
 
-/** One frame of a subscription's rows and text, down the wire. */
+/** One batch of a subscription's view inputs, down the wire. */
 export const EventsFrameSchema = Schema.Struct({
   kind: Schema.Literal('events'),
   session: SessionKeySchema,
   generation: GenerationSchema,
+  /** The commit the reader had drained when it cut this batch. */
   cursor: CommitOrdinalSchema,
-  events: Schema.Array(EventInputSchema),
-  chunks: Schema.Array(TextChunkSchema),
-  local: Schema.NullOr(LocalRuntimeStateSchema),
-  host: Schema.NullOr(HostSnapshotSchema),
-  /** Update policy sampled by the process reader for this replay. */
-  debug: Schema.NullOr(Schema.Boolean),
-  /** True on the frame that ends the reads this `Subscribe` started. */
-  replayComplete: Schema.Boolean,
-  /** Only the final frame of a finite read carries its checked claims. */
-  existence: Schema.NullOr(ExistenceReconciliationSchema),
+  inputs: Schema.Array(SessionViewInputSchema),
 });
 export type EventsFrame = typeof EventsFrameSchema.Type;
+
+/** What the host renders but does not own, as its producers write it. */
+export const HostFrameSchema = Schema.Struct({
+  kind: Schema.Literal('host'),
+  session: SessionKeySchema,
+  host: HostSnapshotSchema,
+});
+export type HostFrame = typeof HostFrameSchema.Type;
 
 /** What the host answers a `host.request` with: the pickers and
  *  the drop return the paths they accepted, a polish returns its text, a
@@ -201,36 +198,28 @@ export type UpMessage = typeof UpMessageSchema.Type;
 
 export const DownMessageSchema = Schema.Union([
   EventsFrameSchema,
+  HostFrameSchema,
   ResponseSchema,
   SurfaceActionMessageSchema,
 ]);
 export type DownMessage = typeof DownMessageSchema.Type;
 
-/** One generation's ordered frames; replay is collected before publication. */
+/** One generation's ordered frames. */
 interface FrameRead {
   readonly generation: number;
   readonly queue: Queue.Queue<EventsFrame, Cause.Done>;
 }
 
-/** What a feed holds between frames: the inputs not yet published, and
- *  whether the replay has completed with its debug flag known. */
-interface FrameInputs {
-  debug?: boolean;
-  pending: SessionViewInput[];
-  complete: boolean;
-}
-
 export class SessionFrames extends Context.Service<
   SessionFrames,
   {
-    readonly inputs: (
-      aggregates: readonly TranscriptSubscription[],
-      previousDebug: boolean,
-    ) => Stream.Stream<readonly SessionViewInput[]>;
+    /** The current generation's batches, in arrival order, each whole. */
+    readonly inputs: () => Stream.Stream<readonly SessionViewInput[]>;
     readonly host: SubscriptionRef.SubscriptionRef<HostSnapshot | null>;
     readonly begin: (generation: number) => Effect.Effect<void>;
-    /** Deliver one frame; the caller feeds them in arrival order. */
-    readonly feed: (frame: EventsFrame) => Effect.Effect<void>;
+    /** Deliver one frame; the caller feeds them in arrival order. A frame
+     *  of another generation is dropped. */
+    readonly feed: (frame: EventsFrame | HostFrame) => Effect.Effect<void>;
   }
 >()('@texra/session/SessionFrames') {
   static readonly layer = Layer.effect(
@@ -243,60 +232,10 @@ export class SessionFrames extends Context.Service<
       });
       return {
         host,
-        inputs: (aggregates, previousDebug) =>
+        inputs: () =>
           Stream.unwrap(
             Effect.map(SubscriptionRef.get(current), ({ queue }) =>
-              Stream.fromQueue(queue).pipe(
-                Stream.mapAccum(
-                  (): FrameInputs => ({ pending: [], complete: false }),
-                  (
-                    state,
-                    frame,
-                  ): readonly [FrameInputs, readonly SessionViewInput[][]] => {
-                    if (!state.complete && frame.debug !== null)
-                      state.debug = frame.debug;
-                    // The local snapshot before the rows it was read ahead
-                    // of (`cutFrame`).
-                    if (frame.local)
-                      state.pending.push({ _tag: 'local', local: frame.local });
-                    state.pending.push(...frame.events, ...frame.chunks);
-                    if (frame.existence !== null) {
-                      const marker: SessionViewInput = frame.replayComplete
-                        ? {
-                            _tag: 'replay.complete',
-                            existence: frame.existence,
-                          }
-                        : {
-                            _tag: 'drained',
-                            cursor: frame.cursor,
-                            existence: frame.existence,
-                          };
-                      state.pending.push(marker);
-                    }
-                    if (!state.complete) {
-                      if (!frame.replayComplete || state.debug === undefined)
-                        return [state, []];
-                      const reset = state.debug !== previousDebug;
-                      const prefix: SessionViewInput[] = [
-                        { _tag: 'debug', enabled: state.debug },
-                        {
-                          _tag: 'subscriptions',
-                          set: aggregates.map((entry) => ({
-                            ...entry,
-                            fromSeq: reset ? 0 : entry.fromSeq,
-                          })),
-                        },
-                      ];
-                      return [
-                        { ...state, pending: [], complete: true },
-                        [[...prefix, ...state.pending]],
-                      ];
-                    }
-                    if (frame.existence === null) return [state, []];
-                    return [{ ...state, pending: [] }, [state.pending]];
-                  },
-                ),
-              ),
+              Stream.fromQueue(queue).pipe(Stream.map((frame) => frame.inputs)),
             ),
           ),
         begin: Effect.fn('sessionFrames.begin')(function* (generation) {
@@ -306,9 +245,10 @@ export class SessionFrames extends Context.Service<
           });
         }),
         feed: Effect.fn('sessionFrames.feed')(function* (frame) {
+          if (frame.kind === 'host')
+            return yield* SubscriptionRef.set(host, frame.host);
           const read = yield* SubscriptionRef.get(current);
           if (frame.generation !== read.generation) return;
-          if (frame.host) yield* SubscriptionRef.set(host, frame.host);
           yield* Queue.offer(read.queue, frame);
         }),
       };

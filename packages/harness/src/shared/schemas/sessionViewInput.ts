@@ -96,7 +96,9 @@ export const ExistenceReconciliationSchema = Schema.Struct({
 export type ExistenceReconciliation =
   (typeof ExistenceReconciliationSchema)['Type'];
 
-const SessionViewInputSchema = Schema.Union([
+/** One input of the session view, as the reader orders them: what a frame
+ *  carries across a wire. */
+export const SessionViewInputSchema = Schema.Union([
   EventInputSchema,
   TextChunkSchema,
   Schema.TaggedStruct('debug', { enabled: Schema.Boolean }),

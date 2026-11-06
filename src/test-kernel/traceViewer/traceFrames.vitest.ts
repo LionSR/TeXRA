@@ -1,4 +1,4 @@
-import { assert, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { Schema } from 'effect';
 import {
@@ -29,17 +29,8 @@ function foldTrace(trace: TraceDocument) {
     cursor: 0,
     aggregates: [{ id: AGGREGATE, fromSeq: 0 }],
   });
-  const { existence } = frame;
-  assert.exists(existence);
-  const view = makeSessionViewUpdater('trace').apply([
-    { _tag: 'subscriptions', set: [{ id: AGGREGATE, fromSeq: 0 }] },
-    ...frame.events,
-    {
-      _tag: 'local',
-      local: { runsHere: [] },
-    },
-    { _tag: 'replay.complete', existence },
-  ]);
+  // The frame is the reader's one batch, applied as the view takes it.
+  const view = makeSessionViewUpdater('trace').apply(frame.inputs);
   return view.runs.get(trace.runId);
 }
 
