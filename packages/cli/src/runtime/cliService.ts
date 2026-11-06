@@ -62,7 +62,7 @@ import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { loginShellEnvironment } from './loginShellEnv';
 
 import { cliEnvValue, readCliEntrypointPath } from './cliContext';
-import { silentLogSink } from './logSinks';
+import { silentLogSink, writeTextStderr } from './logSinks';
 import type { CliContext } from './cliContext';
 
 /** The service's own log channel. */
@@ -139,8 +139,9 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       ChildProcessSpawner | FileSystem.FileSystem | Path.Path | StateStores
     >(),
   );
-  // The sessions open now, by storage root, and the load they carry: what
-  // the task list reads and the service's lifetime follows.
+  // The sessions open now, by storage root, and the load they carry (a
+  // project counts as open from its lookup's first read): what the task
+  // list reads and the service's lifetime follows.
   const open = new Map<string, LocalSession>();
   const load = yield* SubscriptionRef.make<ServiceLoad>({
     open: 0,
@@ -167,6 +168,12 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
     | StateStores
   > {
     const projectScope = yield* Effect.scope;
+    // Counted as open from the first read of the lookup, not from the
+    // session's open: the idle decision reads this count, and a project
+    // still opening when the idle deadline passes is one the service
+    // serves, not one it may leave. A failed lookup gives the count back
+    // with its scope.
+    yield* Effect.acquireRelease(count(1, 0), () => count(-1, 0));
     const roots = yield* openRoots(root, projectScope);
     // A project store is held by one process, and one service serves a
     // storage root at a time (the client that replaces a service waits for
@@ -192,15 +199,8 @@ export const cliServiceProjects = Effect.fn('cliServiceProjects')(function* (
       });
     }
     yield* Effect.acquireRelease(
-      Effect.andThen(
-        Effect.sync(() => open.set(session.roots.storage, session)),
-        count(1, 0),
-      ),
-      () =>
-        Effect.andThen(
-          Effect.sync(() => open.delete(session.roots.storage)),
-          count(-1, 0),
-        ),
+      Effect.sync(() => open.set(session.roots.storage, session)),
+      () => Effect.sync(() => open.delete(session.roots.storage)),
     );
     // A run at work holds the project through a lease of the project's
     // own (not one waiting for its next message, which the service's close
@@ -315,9 +315,15 @@ export const linkCliService = Effect.fn('linkCliService')(function* (
 ): Effect.fn.Return<CliServiceLink, never, Scope.Scope | GlobalValues> {
   if (yield* envFlag(NO_SERVICE)) return { none: `${NO_SERVICE} is set` };
   if (process.platform === 'win32') return { none: WINDOWS_UNSUPPORTED };
-  const reach = (reason: string) => ({
-    none: `The TeXRA service could not be reached: ${reason}`,
-  });
+  // A service that should answer and does not is said here, once, on
+  // stderr: every command then works in process, and the ones that fall
+  // back without a word of their own (history, a headless run) would
+  // otherwise hide the cause behind a store another process holds.
+  const reach = (reason: string) => {
+    const none = `The TeXRA service could not be reached: ${reason}`;
+    writeTextStderr(none);
+    return { none };
+  };
   const probed = yield* Effect.result(probeRecordedService);
   if (Result.isFailure(probed)) return reach(probed.failure.reason);
   const info = probed.success;
