@@ -419,7 +419,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // ------------------------------------------------------------- the loop
   const loopBody = Effect.fn('loopBody')(function* (cell: RunCell) {
     // A resumed run first finishes what its children were left as.
-    if (start.resume) yield* resumeLeftoverChildren(runId);
+    if (start.resume) yield* resumeLeftoverChildren();
     for (;;) {
       let state = yield* cell.current;
       const parked =
