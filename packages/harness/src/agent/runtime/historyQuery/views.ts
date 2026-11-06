@@ -56,7 +56,6 @@ export const HISTORY_TABLES = Object.freeze({
     'run_id',
     'invocation_id',
     'attempt',
-    'purpose',
     'model',
     'status',
     'output',
@@ -163,18 +162,11 @@ export const HISTORY_WRITE_SQL = {
   toolEnd: `UPDATE tool_calls SET attempt = ?, status = ?, output = ?,
     value = ?, error = ?, ended_at = ? WHERE position = (${LATEST_CALL})`,
   modelAttempt: `INSERT INTO model_calls
-    (run_id, invocation_id, attempt, purpose, model, status, started_at)
-    VALUES (?, ?, ?, ?, ?, 'running', ?)`,
+    (run_id, invocation_id, attempt, model, status, started_at)
+    VALUES (?, ?, ?, ?, 'running', ?)`,
   modelEnd: `UPDATE model_calls SET status = ?, output = ?, error = ?,
     input_tokens = ?, output_tokens = ?, cost = ?, ended_at = ?
     WHERE run_id = ? AND invocation_id = ? AND attempt = ?`,
-  // A summary's completion is the compaction it wrote: no row names its
-  // attempt, so it closes the run's open summary attempt.
-  summaryEnd: `UPDATE model_calls SET status = 'completed', output = ?,
-    input_tokens = ?, output_tokens = ?, cost = ?, ended_at = ?
-    WHERE position = (
-      SELECT max(position) FROM model_calls WHERE run_id = ?
-        AND purpose = 'summary' AND status IN ('running', 'unknown'))`,
   removeTools: 'DELETE FROM tool_calls WHERE run_id = ?',
   removeModels: 'DELETE FROM model_calls WHERE run_id = ?',
   clearRuns: 'DELETE FROM runs',
@@ -240,5 +232,5 @@ export const replaceRuns = (
 export const HISTORY_VIEW_SUMMARY = `- runs(${HISTORY_TABLES.runs.join(', ')}) - one row per run of this session. status is 'created', 'running', 'waiting', 'interrupted' (not ended, and no live process holds it) or 'ended'; outcome ('completed', 'failed', 'cancelled') is set only when ended. parent_id is NULL for a top-level or detached run; parent_call_position (NULL when parent_id is) is the position of the parent's tool call that launched it (join tool_calls ON tool_calls.position = runs.parent_call_position for its input and result). cost/tokens are the run's own model calls so far. calls_unreadable is NULL, or why this run's calls are missing from tool_calls and model_calls (its stored history does not read in this build).
 - run_tree(${HISTORY_TABLES.run_tree.join(', ')}) - every ancestor of every run; depth 1 is the direct parent.
 - tool_calls(${HISTORY_TABLES.tool_calls.join(', ')}) - one row per tool call a model turn or a script issued; script_call_id is the issuing script call (NULL for a model's call). input and value are JSON text (value: the structured result a script reads). status is 'pending' (its body has not started), 'running', 'unknown' (its body started and its run stopped with no result recorded: it may or may not have taken effect), or how it ended: 'executed', 'failed', 'skipped', 'duplicate'. output is an executed call's text, error a failed one's.
-- model_calls(${HISTORY_TABLES.model_calls.join(', ')}) - one row per model request sent: purpose 'turn' or 'summary' (compaction), attempt counts retries of one invocation. status is 'running', 'unknown' (sent, and its run stopped with no answer recorded), 'completed', 'failed' (error says why) or 'cancelled'. output is a completed request's reply text; for a summary, the text that replaced the history (the model's summary under the heading the compaction adds). A stopped summary records no end, so it reads 'unknown', never 'cancelled'.
+- model_calls(${HISTORY_TABLES.model_calls.join(', ')}) - one row per model request a turn sent; attempt counts retries of one invocation. status is 'running', 'unknown' (sent, and its run stopped with no answer recorded), 'completed', 'failed' (error says why) or 'cancelled'. output is a completed request's reply text. A compaction's summary call is not listed; its cost is on the run's history as the edit that landed it.
 Read only: a write or a second statement is refused. Times are ISO-8601 UTC text. Within a run, position is issue order. A text value longer than ${HISTORY_TEXT_LIMIT} characters is stored cut to its first ${HISTORY_TEXT_LIMIT}, followed by '… [cut: N characters in all]'; a JSON cell still longer than ${HISTORY_JSON_LIMIT} characters is stored as {"cut": N}.`;

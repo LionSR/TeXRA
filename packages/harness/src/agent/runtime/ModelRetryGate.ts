@@ -1,6 +1,7 @@
 import {
   Cause,
   Clock,
+  Context,
   Deferred,
   Effect,
   Exit,
@@ -13,6 +14,13 @@ import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 const MAX_BACKOFF_MS = 5 * 60 * 1000;
+
+/** The process's one retry gate, served by `processLayer`: a 429 cools a
+ *  credential for every run of every project. */
+export class RouteRetries extends Context.Service<
+  RouteRetries,
+  ModelRetryGate
+>()('@texra-ai/harness/RouteRetries') {}
 
 type RoutePhase = 'healthy' | 'cooling' | 'probing';
 

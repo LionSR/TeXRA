@@ -118,7 +118,7 @@ const ROUND = '38638341d36bf19292935f83';
 const CODEX = Schema.decodeUnknownSync(RunIdSchema)('a0000000000b');
 const SCRIPTED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000c');
 /** The agent the script defined (`persona`), named by its `agent()` call. */
-const DEFINED = '8c2d159eddfdf997234dda31';
+const DEFINED = '58828038326e436881c70921';
 /** A headless run, and the fork `texra resume --fork` made of it. */
 const FORK_SOURCE = Schema.decodeUnknownSync(RunIdSchema)('a0000000000e');
 const FORKED = Schema.decodeUnknownSync(RunIdSchema)('a0000000000f');
@@ -463,8 +463,8 @@ describe('the golden 1.0 store', () => {
           openAttempt: state?.invocation != null,
         }));
       // The stop kept where the loop stood: a halt records only the outcome.
-      // The child's note to its one-shot parent was refused, so the parent's
-      // context holds no message from it.
+      // The child's note to its parent was refused (a one-shot parent reads
+      // no message), so no user message joined the cycle.
       expect(yield* stateOf(PARENT)).toEqual({
         at: 'waiting',
         phase: 'waiting',
@@ -709,7 +709,7 @@ describe("the golden chat's resume", { timeout: REAL_RUN_TIMEOUT }, () => {
     return { sent, process: SessionGraph.with([], model) };
   };
   /** The chat's last model response. */
-  const RESPONSE = 589;
+  const RESPONSE = 582;
   /** The golden store, with `rewrite` applied, and a session over it. */
   const goldenSession = (rewrite?: string) =>
     Effect.gen(function* () {
