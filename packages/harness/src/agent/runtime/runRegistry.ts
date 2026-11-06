@@ -307,17 +307,25 @@ export class RunRegistry implements RunsShape {
                 ),
               ),
             );
+      // Whether the fiber opened its activation itself: then a launch
+      // it handed on meanwhile (a resume decided before the fork returned,
+      // its generation launched) is left with its generation.
+      let openedOnFiber = false;
       const fiber = this.init.fork(
         Effect.withFiber((self) => {
           if (refused) return settle(Effect.fail(new RunLive({ runId })));
           const activation = opened(self);
+          openedOnFiber = true;
           // The resume decides on this fiber: what a stop interrupts.
           if (attempt !== undefined) activation.fiber = self;
           return settle(body(activation));
         }).pipe(Effect.provideService(Runs, this)),
       );
       if (refused) return fiber;
-      const activation = opened(fiber);
+      const activation = openedOnFiber
+        ? this.activations.get(runId)
+        : opened(fiber);
+      if (activation === undefined) return fiber;
       // The last launch's exit closes the activation: a deciding resume
       // whose activation was handed on leaves it to its generation.
       fiber.addObserver(() => {

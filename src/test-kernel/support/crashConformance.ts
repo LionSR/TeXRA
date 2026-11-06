@@ -392,15 +392,9 @@ const userSteps = (
     // row is committed is the resumed run's to apply.
     if (!requested(rowsOf(storage), root, 'model')) {
       yield* until(storage, (rows) => parkedAfter(rows, root, 1));
-      // The resumed loop attaches its controls as it starts, after the
-      // resume answered: wait for them, as a host does.
-      const controls = yield* Effect.gen(function* () {
-        for (;;) {
-          const live = Context.get(session, Runs).get(root)?.controls;
-          if (live !== undefined) return live;
-          yield* Effect.sleep(Duration.millis(25));
-        }
-      }).pipe(Effect.timeout('30 seconds'));
+      const controls = Context.get(session, Runs).get(root)?.controls;
+      if (controls === undefined)
+        return yield* Effect.die('the parked run has no live controls');
       yield* controls.switchModel(SWITCH_TO);
     }
     if (!requested(rowsOf(storage), root, 'compact')) {
