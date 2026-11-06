@@ -1,6 +1,6 @@
 ---
 created: 2026-11-03
-status: proposed (item 1 done 2026-11-05, #14742; item 2 open)
+status: proposed (item 1 done 2026-11-05, #14742; item 2 done 2026-11-06)
 ---
 
 # Overlapping responsibilities: git reads and subscription provider facts
@@ -69,7 +69,7 @@ of the harness.
 - `packages/harness/src/shared/model/subscriptionAuth.ts`: the provider ids
   (`SUBSCRIPTION_AUTH_PROVIDERS`); its doc leaves what a person calls each
   subscription to the app.
-- `packages/texra/src/shared/model/subscriptionAuth.ts`: the sign-in status
+- `packages/texra/src/shared/model/subscriptionStatus.ts` (renamed from `subscriptionAuth.ts`): the sign-in status
   schema and account labels (`codexAccountLabel`, `xaiAccountLabel`). Same
   file name, unrelated contents; import paths differ only by `@shared` versus
   `@texra/shared`.
