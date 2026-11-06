@@ -96,6 +96,9 @@ export class ServiceUnavailable extends Schema.TaggedError<ServiceUnavailable>()
      *  digest. Its socket, for the one procedure every build keeps,
      *  `service.stop`. */
     unspoken: Schema.optional(Schema.String),
+    /** The running service accepted the connection and did not answer the
+     *  hello within its deadline. */
+    unanswered: Schema.optional(Schema.Literal(true)),
   },
 ) {
   override get message(): string {
@@ -197,6 +200,7 @@ export function probeService(
           ? Effect.fail(
               new ServiceUnavailable({
                 reason: `The TeXRA service on ${socket} accepts connections but did not answer (${error.message}). Stop it with \`texra service stop\`, or end its process.`,
+                unanswered: true,
               }),
             )
           : Effect.fail(
@@ -387,15 +391,17 @@ export const ensureService = Effect.fn('server.ensureService')(function* (
       ),
     );
     // The service claims the record once it listens, so the record's
-    // changes are the signal to probe on: not claimed yet, or claimed by a
-    // service that accepts but does not answer, both wait for the next
-    // change; a newer build's service that came up meanwhile refuses this
-    // one at once. Past the deadline, the last probe's reason stands; only
-    // "not yet up" reads as the service not answering.
+    // changes are the signal to probe on: not claimed yet waits for the
+    // next change, a claimed one whose hello is not answered in time (a
+    // service still coming up under load) is asked again while the start
+    // window lasts, and a newer build's service that came up meanwhile
+    // refuses this one at once. Past the deadline, the last probe's reason
+    // stands; only "not yet up" reads as the service not answering.
     const lastRefusal = yield* Ref.make(
       new ServiceUnavailable({ reason: NOT_YET_UP }),
     );
     const probed = probeRecordedService.pipe(
+      Effect.retry({ while: (error) => error.unanswered === true }),
       Effect.flatMap((answer) => {
         if (answer !== null && isNewer(answer))
           return Effect.fail(newerService(answer));
