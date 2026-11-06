@@ -71,12 +71,6 @@ export class SessionOwner extends Context.Service<
     ) => Effect.Effect<Context.Context<SessionServices>, SessionOpenError>;
     /** Every session the owner holds, waiting within the close budget. */
     readonly list: Effect.Effect<readonly Context.Context<SessionServices>[]>;
-    /** Whether it still holds the session of `root` whose runs are `runs`:
-     *  that root's entry, never another's. */
-    readonly holds: (
-      root: string,
-      runs: Runs['Service'],
-    ) => Effect.Effect<boolean>;
     /** Close a storage root's session: refuse new runs, stop its own ones
      *  and wait inside `SESSION_CLOSE_DEADLINE_MS`, report those still
      *  live abandoned, flush, release. A root with no open session reports
@@ -98,8 +92,7 @@ type RootLaunch = typeof StartOptionsSchema.Type &
   };
 
 /**
- * START HERE: a root launch, what `session.start` runs. The composition
- * root's `SessionOwner` must still hold the session. It resolves the
+ * START HERE: a root launch, what `session.start` runs. It resolves the
  * model and the definition, commits the run's opening in this fiber
  * (`executeAgent`), and forks the run under its id on the session
  * (`RunRegistry.start`); it answers the commit of that opening. A launch
@@ -113,13 +106,8 @@ type RootLaunch = typeof StartOptionsSchema.Type &
  */
 export const rootRun = Effect.fn('rootRun')(function* (
   launch: RootLaunch,
-): Effect.fn.Return<CommitOrdinal, Error, SessionOwner | SessionServices> {
+): Effect.fn.Return<CommitOrdinal, Error, SessionServices> {
   const runs = yield* Runs;
-  const { storage } = yield* SessionRoots;
-  if (!(yield* (yield* SessionOwner).holds(storage, runs)))
-    return yield* Effect.fail(
-      new Error('This session is closed; open it again to launch a run.'),
-    );
   const { runId, continues, approval } = launch;
   // A chat round takes the human grants of the round it continues, never
   // its launch limit: the round asks with the chat's policy now. A launch

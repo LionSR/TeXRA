@@ -4,7 +4,7 @@ import { closeLeftoverRun } from '@agent/runtime/leftoverChildren';
 import { withLogChannel } from '@logger/effectLog';
 import { isLoopDriven, type RunId } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { RunView } from '@shared/session/sessionView';
+import { SessionViewAccess } from '@shared/session/runHistory';
 
 const CHANNEL = 'LeftoverRunSweep';
 
@@ -25,11 +25,12 @@ const warning = (message: string, runId: RunId) => (error: unknown) =>
  * its parent its result, and a detached one's report was there to read in
  * the session that ended it.
  */
-export const sweepLeftoverRuns = Effect.fn('sweepLeftoverRuns')(function* (
-  cohort: Iterable<RunView>,
-) {
+export const sweepLeftoverRuns = Effect.gen(function* () {
   const requests = yield* SessionRequests;
-  for (const run of cohort) {
+  // The listing as the store holds it at open: a run launched since is
+  // held here, which the closer leaves alone.
+  const { runs } = yield* (yield* SessionViewAccess).read([]);
+  for (const run of runs.values()) {
     if (isLoopDriven(run.identity)) continue;
     if (!isTerminalOutcomePhase(run.status)) {
       if (run.parentId === null)

@@ -22,7 +22,6 @@ import { FetchHttpClient, HttpClient } from 'effect/http';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import { RouteRetries } from '@agent/runtime/run/invocation';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
-import { Runs } from '@agent/runtime/runRegistry';
 import {
   SESSION_CLOSE_DEADLINE_MS,
   sessionEventsLayer,
@@ -451,13 +450,6 @@ const sessionOwnerLayer = Layer.effect(
     return {
       open: (init) => withMap(openSession(init)),
       list: withMap(listSessions),
-      holds: (root, runs) =>
-        withMap(heldSession(root)).pipe(
-          Effect.map(
-            (held) =>
-              held !== undefined && Context.get(held.session, Runs) === runs,
-          ),
-        ),
       close: (root) => withMap(closeSession(root)),
       closeAll,
     };

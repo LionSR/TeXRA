@@ -163,7 +163,6 @@ const start = Effect.fn('start')(function* (
   // opened one stops nobody else's.
   let opened = false;
   return yield* rootRun({ ...input, config, runId }).pipe(
-    Effect.provideService(SessionOwner, owner),
     Effect.provide(session),
     Effect.mapError(runFailure),
     Effect.map((activation) => {
