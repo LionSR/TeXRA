@@ -56,7 +56,6 @@ const subscriptionUnavailable = (
   error: Error,
 ): RouteUnavailable =>
   new RouteUnavailable({
-    reason: 'unavailable',
     message: error.message,
     session: {
       route,
@@ -147,7 +146,6 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
     Effect.mapError(
       (cause) =>
         new RouteUnavailable({
-          reason: 'unavailable',
           message: `Could not read the ${provider} API key: ${cause.message}`,
           cause,
         }),
@@ -155,7 +153,7 @@ const apiKeyCredential = Effect.fn('credentials.apiKey')(function* (
   );
   if (key === undefined) {
     return yield* new RouteUnavailable({
-      reason: 'missing-api-key',
+      missingApiKey: true,
       message: `Missing API key for ${provider}. Set a provider API key in settings.`,
     });
   }

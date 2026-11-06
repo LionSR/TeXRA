@@ -76,7 +76,7 @@ export interface ExternalOpener {
  *
  * Read off what the implementations raise, and nothing else: the desktop's
  * `dialog.showMessageBox(window, …)` and VS Code's dialogs reject when the
- * host's own dialog machinery faults (`presentation-failed`). The CLI's Ink
+ * host's own dialog machinery faults. The CLI's Ink
  * dialog raises none: it is a form in the app's own foreground slot, so
  * there is no foreign dialog to fault.
  *
@@ -95,8 +95,6 @@ export interface ExternalOpener {
 export class PromptFailed extends Schema.TaggedError<PromptFailed>()(
   'PromptFailed',
   {
-    reason: Schema.Literal('presentation-failed'),
-
     /** The port member that could not present, for the caller's own report. */
     member: Schema.Literals(['confirm', 'input']),
     message: Schema.String,

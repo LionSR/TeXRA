@@ -15,7 +15,6 @@ class UnreadableAnthropicKey extends FakeSecrets {
     return key === apiKeySecretName('anthropic')
       ? Effect.fail(
           new SecretsFailed({
-            reason: 'io',
             operation: 'get',
             message: 'keychain locked',
             key,

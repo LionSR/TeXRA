@@ -69,7 +69,7 @@ function classificationOf(
         ...error.session,
         sessionError: error.message,
       };
-    return error.reason === 'missing-api-key'
+    return error.missingApiKey === true
       ? { kind: 'missing-api-key' }
       : undefined;
   }

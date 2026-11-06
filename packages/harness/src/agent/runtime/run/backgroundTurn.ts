@@ -122,7 +122,7 @@ export const submitAndObserve = Effect.fn('ModelInvoker.background')(function* (
   const background = bound.model.background;
   if (background === undefined) {
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'The bound model resolved a background turn it cannot submit.',
     });
   }

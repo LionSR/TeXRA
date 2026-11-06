@@ -477,7 +477,7 @@ describe('canonical Anthropic Messages protocol', () => {
       'X-Api-Key: another-key\nanthropic-version: another-version',
     );
     expect(() => model()).toThrow(
-      expect.objectContaining({ _tag: 'ModelError', kind: 'unsupported' }),
+      expect.objectContaining({ _tag: 'ModelError', kind: 'invalid-request' }),
     );
   });
 });

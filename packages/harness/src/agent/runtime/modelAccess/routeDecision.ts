@@ -70,8 +70,7 @@ interface RouteAsk {
   readonly mode?: ReasoningMode;
 }
 
-const unavailable = (message: string) =>
-  new RouteUnavailable({ reason: 'unavailable', message });
+const unavailable = (message: string) => new RouteUnavailable({ message });
 
 /**
  * Decide the route `config` binds under: the validation model when the build

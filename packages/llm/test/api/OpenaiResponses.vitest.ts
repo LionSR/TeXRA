@@ -167,7 +167,7 @@ describe('native OpenAI Responses protocol', () => {
         expect(
           yield* Effect.flip(completedTurn(model.streamTurn(turn))),
         ).toMatchObject({
-          kind: 'malformed-output',
+          kind: 'provider-rejection',
         });
         for (const log of logs) expect(log).not.toHaveBeenCalled();
       }),

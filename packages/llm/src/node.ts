@@ -113,7 +113,7 @@ const bearer = (credential: ModelCredential, protocol: string) =>
     ? Effect.succeed(credential.apiKey)
     : Effect.fail(
         new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message: `A ChatGPT session token cannot authenticate the ${protocol} protocol.`,
         }),
       );

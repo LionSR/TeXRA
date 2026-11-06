@@ -20,7 +20,7 @@ describe('classifyAgentError', () => {
       label: 'a missing key through a rewrapping cause chain',
       error: new Error('Failed to build the model client', {
         cause: new RouteUnavailable({
-          reason: 'missing-api-key',
+          missingApiKey: true,
           message: 'Missing API key for openai.',
         }),
       }),

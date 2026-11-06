@@ -262,21 +262,15 @@ function networkFailed(error: ModelError): boolean {
 /**
  * Where the reply rules out repeating the request that the judged kind's
  * default (`ModelError`) would allow: an overflow, even under a retryable
- * status (a rate limit that mentions tokens is not one to repeat blindly), a
- * status that cannot succeed again, and a rejection the SDK surfaced with no
- * status, which says nothing to repeat for. `undefined` keeps the default.
+ * status (a rate limit that mentions tokens is not one to repeat blindly),
+ * and a status that cannot succeed again. A failure with no status keeps
+ * its kind's default: a reply that could not be read is worth repeating.
+ * `undefined` keeps the default.
  */
-function notRetryable(
-  error: ModelError,
-  reply: Reply,
-  overflow: boolean,
-): false | undefined {
+function notRetryable(reply: Reply, overflow: boolean): false | undefined {
   const { status } = reply;
   const ruledOut =
-    overflow ||
-    (status === undefined
-      ? error.kind === 'provider-rejection' && error.cause instanceof Error
-      : !isRetryableStatus(status));
+    overflow || (status !== undefined && !isRetryableStatus(status));
   return ruledOut ? false : undefined;
 }
 
@@ -290,19 +284,18 @@ const continuationGone = ({ status, message }: Reply): boolean =>
 /**
  * The failure's kind, refined by what the reply proves. Only a request that
  * chained on a stored response can have lost it: a 404 on one that chained
- * nothing (a missing model) keeps its kind.
+ * nothing (a missing model) keeps its kind. A rate limit is its status
+ * (429) and a used-up quota its `quota`: neither changes the kind.
  */
 function kindOf(
   error: ModelError,
   reply: Reply,
   terminalOverflow: boolean,
-  quota: Quota | undefined,
   chained: boolean,
 ): ModelError['kind'] {
   if (terminalOverflow) return 'context-overflow';
-  if (quota !== undefined) return 'quota-exhausted';
   if (chained && continuationGone(reply)) return 'continuation-gone';
-  return reply.status === 429 ? 'rate-limited' : error.kind;
+  return error.kind;
 }
 
 /** What the failure is evidence about beyond this request, where the reply says. */
@@ -356,10 +349,12 @@ export function judgeFailure(
   const quota = terminalOverflow ? undefined : exhaustedQuota(reply, route);
   return new ModelError({
     ...error,
-    kind: kindOf(error, reply, terminalOverflow, quota, chained),
+    kind: kindOf(error, reply, terminalOverflow, chained),
     message: messageOf(reply, terminalOverflow),
     cause: error.cause,
-    retryable: notRetryable(error, reply, overflow),
+    // A used-up quota is never repeated as it is: its retry carries the
+    // route's switch.
+    retryable: quota === undefined ? notRetryable(reply, overflow) : false,
     ...(reply.status === undefined ? {} : { status: reply.status }),
     ...(quota === undefined ? {} : { quota }),
     ...scopeOf(error, reply, quota),

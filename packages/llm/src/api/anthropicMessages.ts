@@ -128,7 +128,7 @@ const inputPart = Effect.fn('llm.anthropic.inputPart')(function* (
         } as const);
   }
   return yield* new ModelError({
-    kind: 'unsupported',
+    kind: 'invalid-request',
     message:
       'Anthropic supports materialized text, exact image MIME types and PDF bytes, without foreign image detail.',
   });
@@ -199,7 +199,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
           for (const child of part.content) {
             if (child.kind !== 'text')
               return yield* new ModelError({
-                kind: 'unsupported',
+                kind: 'invalid-request',
                 message: 'Anthropic cannot replay foreign refusal content.',
               });
             content.push({ type: 'text', text: child.text });
@@ -234,13 +234,13 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             });
           } else
             return yield* new ModelError({
-              kind: 'unsupported',
+              kind: 'invalid-request',
               message:
                 'Anthropic reasoning requires exact signed or redacted provider evidence.',
             });
         } else
           return yield* new ModelError({
-            kind: 'unsupported',
+            kind: 'invalid-request',
             message:
               'Anthropic cannot replay foreign content evidence or missing call identities.',
           });
@@ -252,7 +252,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   for (const tool of turn.tools) {
     if (tool.parameters.type !== 'object')
       return yield* new ModelError({
-        kind: 'unsupported',
+        kind: 'invalid-request',
         message: `Tool "${tool.name}": Anthropic local tools require JSON object parameter schemas.`,
       });
     tools.push({
@@ -418,7 +418,7 @@ function anthropicWire() {
       if (open || event.delta.container != null)
         return yield* fail(
           'Anthropic returned unsettled content.',
-          'unsupported',
+          'invalid-request',
         );
       stop = event.delta;
       // These counters are cumulative; null/omission means no update, never zero or addition.
@@ -439,7 +439,7 @@ function anthropicWire() {
       if (reason === 'pause_turn')
         return yield* fail(
           'Anthropic paused hosted execution requires a separate supported continuation protocol.',
-          'unsupported',
+          'invalid-request',
         );
       // The one overflow every protocol reports the same way: the error
       // the other providers raise as an HTTP failure. Anthropic billed the
@@ -489,7 +489,7 @@ function anthropicWire() {
       )
         return yield* fail(
           'Anthropic citations, toolsets and nonempty streamed argument placeholders are unsupported.',
-          'unsupported',
+          'invalid-request',
         );
       open = {
         index: next++,
@@ -581,7 +581,7 @@ export function anthropicMessagesModel(
   // The SDK otherwise lets these ambient headers override selected credentials and protocol.
   if (process.env.ANTHROPIC_CUSTOM_HEADERS) {
     throw new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message:
         'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
     });

@@ -45,7 +45,6 @@ const NO_PERSISTED_SECRETS =
 const unpersisted = (operation: 'set' | 'delete', key: string) =>
   Effect.fail(
     new SecretsFailed({
-      reason: 'store-unavailable',
       operation,
       key,
       message: NO_PERSISTED_SECRETS,

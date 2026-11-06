@@ -103,13 +103,13 @@ const normalizeItem = Effect.fn('llm.responses.normalizeItem')(function* (
 ): Effect.fn.Return<Part, ModelError> {
   if (item.status === 'in_progress')
     return yield* new ModelError({
-      kind: 'malformed-output',
+      kind: 'provider-rejection',
       message: 'Unfinished model items cannot form a completed tool exchange.',
     });
   if (item.type === 'function_call') {
     if (item.status === 'incomplete')
       return yield* new ModelError({
-        kind: 'malformed-output',
+        kind: 'provider-rejection',
         message: 'Incomplete local calls are not dispatchable.',
       });
     yield* parseInboundToolArguments(item.arguments, 'The model');
@@ -252,7 +252,7 @@ export const responsesContent = Effect.fn('llm.responses.content')(function* (
           gifFrameCount(Buffer.from(part.base64, 'base64')) !== 1)
       )
         return yield* new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message:
             'Responses takes PNG, JPEG, WEBP and single-frame GIF images; this image attachment is none of those.',
         });
@@ -270,7 +270,7 @@ export const responsesContent = Effect.fn('llm.responses.content')(function* (
     case 'document': {
       if (!documents.accepted)
         return yield* new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message:
             'This Responses route takes no input files, so the document cannot be sent.',
         });
@@ -287,7 +287,7 @@ export const responsesContent = Effect.fn('llm.responses.content')(function* (
     case 'audio':
     case 'video':
       return yield* new ModelError({
-        kind: 'unsupported',
+        kind: 'invalid-request',
         message:
           'Responses takes text, images and documents, not audio or video.',
       });

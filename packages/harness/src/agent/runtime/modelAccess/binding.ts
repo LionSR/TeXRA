@@ -106,7 +106,6 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
     const canned = yield* Effect.serviceOption(ValidationModel);
     if (Option.isNone(canned)) {
       return yield* new RouteUnavailable({
-        reason: 'unavailable',
         message: `Model ${request.modelId} runs on the validation model, which this build does not carry.`,
       });
     }
@@ -136,13 +135,11 @@ export const bindRoute = Effect.fn('bindRoute')(function* (
   }
   if (route.kind === 'validation') {
     return yield* new RouteUnavailable({
-      reason: 'unavailable',
       message: `Model ${request.modelId} routes through ${route.kind}, which the run's ${backend} backend cannot bind.`,
     });
   }
   if (route.kind === 'no-api-key') {
     return yield* new RouteUnavailable({
-      reason: 'unavailable',
       message: `Model "${requested.label}" has no direct API-key provider.`,
     });
   }
