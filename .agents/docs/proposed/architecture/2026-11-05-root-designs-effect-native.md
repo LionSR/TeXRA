@@ -15,7 +15,8 @@ composition and the store (B), the row model and its folds (C), the model call
 path (D), the loop and the tool engine (E), the three hosts (F). The audits,
 with every claim as `path:line` and grepped consumer counts, are in
 [`../../evidence/2026-11-05-design-red-flags/`](../../evidence/2026-11-05-design-red-flags/).
-Effect facts below were read from `node_modules/effect` 4.1.2.
+Effect facts below were read from `node_modules/effect` 4.1.2. Paths are
+relative to `packages/harness/src` unless they start with `packages/`.
 
 This note builds on
 [one fact, one representation](./2026-11-03-one-fact-one-representation.md)
@@ -24,7 +25,7 @@ the representations; this one names the **design decisions that generate
 them** and the structure under which each representation cannot exist. Its
 rule 5, "decide the model before consolidating inside it", is the one the
 tree keeps breaking: `ccf15b4` ("one owner each for run liveness, …") landed
-on the day of this survey and consolidated owners inside `ownerLiveness.ts`,
+on the day of this survey and consolidated owners inside `controllers/session/ownerLiveness.ts`,
 a file O1 deletes whole.
 
 ## Summary
@@ -36,18 +37,18 @@ session's assembly (R7–R8); two are the model path's and the hosts' (R9–R10)
 For each, the Effect-native structure is one primitive the repo already
 depends on, and the deletion list is a consequence, not a goal:
 
-| #   | The decision, as it should be                                                               | The primitive                                                         | What goes                                                                                                         |
-| --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| R1  | One process writes a project store (O1); the store is one connection, one `BEGIN IMMEDIATE` | the SQLite connection                                                 | claims, liveness, `afterCommit`, per-write `storeGate`, two of three tails, `data_version` poll (project)         |
-| R2  | A run this process drives is one fiber; a stop is its interruption plus one row             | `FiberMap<RunId>` in the session scope                                | `Activation`, `StopCause`, `RunControls`, lanes, `awaitDrained`, `stopAll`, `markStopped`, `withInactiveRunStep`  |
-| R3  | A resume is a start from rows; nobody "joins" a resume                                      | the same `FiberMap.run`                                               | `RunAttempt`, `openResume`, `decideResume`, `restsWith`, `wakeRun`, `answered`, `'released'`                      |
-| R4  | A run's end is one transaction; a storage failure fails the fiber                           | `Effect.uninterruptible(log.transact(rows))`                          | the nine-function end chain, `finalizeRun`'s three fallbacks, the halted `run.position`, `lastTurn` hooks         |
-| R5  | Every child is a run that ends; awaited: the call's `tool.result`; background: one message  | `Effect.forkChild` + `Fiber.join`, or `FiberMap.run` + one row        | `childRunLoop.ts`, `child.turn`, `child.park`, 10 of 12 delivery paths, `executions wait`'s prefix scan           |
-| R6  | The view carries three facts; words, groups and offers are one app function                 | one pure fold                                                         | `RUN_PHASE`, `substate`, `group`, `statusKey`, nine derived fields, four row→phase tables                         |
-| R7  | A question to a person is a row of the run, opened and decided through its cell             | `RunCell.append` + the cell's row stream                              | `AskOptions.open`, five `request.decided` writers, three tail waiters, `enqueue`, `approvePendingUnderBypass`     |
-| R8  | A session is one scoped layer; one tail; the writer applies what it wrote                   | `Layer.scoped` + `PubSub` + `Queue.sliding`                           | `SessionStoreParts`, seven piped layers, `folded`/`settlement`, `PublisherJob`, `SessionHostInteractions`         |
-| R9  | Only a turn is row-driven; the `failed` row stores llm's verdict; health is a `Latch`       | `Effect.retry`, `Latch` + `Semaphore(1)`, `ScopedRef`, `Semaphore(1)` | `InvocationDriver`, `modelCall.ts`, `ProviderErrorClassification`, 250 lines of `ModelRetryGate`, `SharedAttempt` |
-| R10 | Hosts bind verbs to one action body; a client holds a `Session`, not pieces of one          | `FiberHandle`, `SessionHost.approve`, `Stream.takeWhile`              | the CLI's run claim, four approval loops, `CliRunReads`, four exit-code writers, the progress drainer             |
+| #   | The decision, as it should be                                                               | The primitive                                                         | What goes                                                                                                                           |
+| --- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | One process writes a project store (O1); the store is one connection, one `BEGIN IMMEDIATE` | the SQLite connection                                                 | claims, liveness, `afterCommit`, per-write `storeGate`, two of three tails, `data_version` poll (project)                           |
+| R2  | A run this process drives is one fiber; a stop is its interruption plus one row             | `FiberMap<RunId>` in the session scope                                | `Activation`, `StopCause`, `RunControls`, lanes, `awaitDrained`, `stopAll`, `markStopped`, `withInactiveRunStep`                    |
+| R3  | A resume is a start from rows; nobody "joins" a resume                                      | the same `FiberMap.run`                                               | `RunAttempt`, `openResume`, `decideResume`, `restsWith`, `wakeRun`, `answered`, `'released'`                                        |
+| R4  | A run's end is one transaction; a storage failure fails the fiber                           | `Effect.uninterruptible(log.transact(rows))`                          | the nine-function end chain, `finalizeRun`'s three fallbacks, the halted `run.position`, `lastTurn` hooks                           |
+| R5  | Every child is a run that ends; awaited: the call's `tool.result`; background: one message  | `Effect.forkChild` + `Fiber.join`, or `FiberMap.run` + one row        | `agent/runtime/childRunLoop.ts`, `child.turn`, `child.park`, 10 of 12 delivery paths, `executions wait`'s prefix scan               |
+| R6  | The view carries three facts; words, groups and offers are one app function                 | one pure fold                                                         | `RUN_PHASE`, `substate`, `group`, `statusKey`, nine derived fields, four row→phase tables                                           |
+| R7  | A question to a person is a row of the run, opened and decided through its cell             | `RunCell.append` + the cell's row stream                              | `AskOptions.open`, five `request.decided` writers, three tail waiters, `enqueue`, `approvePendingUnderBypass`                       |
+| R8  | A session is one scoped layer; one tail; the writer applies what it wrote                   | `Layer.scoped` + `PubSub` + `Queue.sliding`                           | `SessionStoreParts`, seven piped layers, `folded`/`settlement`, `PublisherJob`, `SessionHostInteractions`                           |
+| R9  | Only a turn is row-driven; the `failed` row stores llm's verdict; health is a `Latch`       | `Effect.retry`, `Latch` + `Semaphore(1)`, `ScopedRef`, `Semaphore(1)` | `InvocationDriver`, `agent/runtime/run/modelCall.ts`, `ProviderErrorClassification`, 250 lines of `ModelRetryGate`, `SharedAttempt` |
+| R10 | Hosts bind verbs to one action body; a client holds a `Session`, not pieces of one          | `FiberHandle`, `SessionHost.approve`, `Stream.takeWhile`              | the CLI's run claim, four approval loops, `CliRunReads`, four exit-code writers, the progress drainer                               |
 
 The rule that keeps them from growing back, added to the one-fact note's six:
 
@@ -74,29 +75,29 @@ slice 3 does not describe.
   stitched by six commit coordinates (`level`, `observedCommit`,
   `currentCommit`, `delivered`, `view.cursor`, `foldedRead`), so that every
   `transact` waits for an asynchronous fold of what it just wrote
-  (`sessionStore.ts:253-254`).
+  (`controllers/session/sessionStore.ts:253-254`).
 - A post-commit hook list, `PublisherJob`/`afterCommit`
   (`shared/session/sessionEvents.ts:49-91`, 9 files), needed only because a
   job "may run again whole" under busy retry; and `JobOptions.order`, which
   routes every streamed token through the SQLite write inbox
   (`controllers/session/runTrace.ts:133-135`).
 - `storeGate`'s `SELECT` inside every write transaction
-  (`controllers/session/Database.ts:436-447`, `rowCodec.ts:384-393`), guarding
+  (`controllers/session/Database.ts:436-447`, `controllers/session/rowCodec.ts:384-393`), guarding
   a newer build writing the file concurrently.
-- `mapDatabaseFailure` (`Database.ts:1049-1060`) catching every defect, so an
+- `mapDatabaseFailure` (`controllers/session/Database.ts:1049-1060`) catching every defect, so an
   `invariant()` die inside a batch ("A run must begin with exactly one
   run.start") ends the run as a `DatabaseWriteFailed` with "Rows this run
   published were not written".
 - After O1 two in-process facts remain and both travel through the fold's
   `local` escape hatch: `unreadable` (a store fact round-tripped through
-  memory with dedup, `sessionInputs.ts:250-264`) and `runsHere` (the
+  memory with dedup, `controllers/session/sessionInputs.ts:250-264`) and `runsHere` (the
   registry's set, reaching the fold as `self` compared against the claim
   column).
 
 **Design.** The project store is one connection held by one process for the
 connection's life (`locking_mode = EXCLUSIVE`, slice 3). Its interface:
 `append(rows): Effect<SessionEvent[]>` in one `BEGIN IMMEDIATE`
-(`inImmediateTransaction` in `storeAside.ts:48-63` already is the
+(`inImmediateTransaction` in `controllers/session/storeAside.ts:48-63` already is the
 `acquireUseRelease`), the typed reads, and one `PubSub<SessionEvent[]>` the
 writer publishes to after commit. The writer applies the rows it holds to the
 view updater on its own fiber before returning, so a caller that reads the
@@ -136,9 +137,9 @@ although the one-fact note says nothing does; `stop()` returns
 `{ accepted: () => boolean, settlement }` because a detaching stop learns
 whether it hit anything only after its batch commits. The same fact is read
 again as `runs.stopCause(runId)` from 15 sites, including a background turn's
-cancel decision mid-interrupt (`run/backgroundTurn.ts:99-103`), and as
+cancel decision mid-interrupt (`agent/runtime/run/backgroundTurn.ts:99-103`), and as
 `LiveRun.readsMessages` from `controls.oneShot`, which is the fourth spelling
-of "this run reads input" (E1). The comment share of `runRegistry.ts` is 29%:
+of "this run reads input" (E1). The comment share of `agent/runtime/runRegistry.ts` is 29%:
 "a deciding resume hands its activation to the next launch here (its
 generation, or a parent's reattach), never to a second resume" is a protocol
 in prose.
@@ -152,7 +153,7 @@ the registry has not accepted is "the registry's quiet no-op" (F5).
 
 **Design.** `Runs` is a `FiberMap<RunId, RunReport, Error>` made in the
 session's scope (`FiberMap.make`; the repo already uses one in
-`loop/toolUseDispatch.ts:768` and `effect/requestAnswerer.ts:102`) plus the
+`agent/runtime/loop/toolUseDispatch.ts:768` and `effect/requestAnswerer.ts:102`) plus the
 child-run `Semaphore` it already has.
 
 - `start(runId, program)`: `FiberMap.hasUnsafe` then `RunLive`, else
@@ -179,7 +180,7 @@ child-run `Semaphore` it already has.
   the loop. The `opened` Deferred, `onAdmitted` (four suppliers, all
   `Deferred.succeed`), `activationIfOpened`, `rootRun`'s `raceFirst` under
   `uninterruptibleMask`, `sessionPrograms.start`'s second `onInterrupt`, and
-  the trace buffer held "until the run enters" (`executeAgent.ts:106-134`) go
+  the trace buffer held "until the run enters" (`agent/runtime/executeAgent.ts:106-134`) go
   (B8).
 - The CLI chat's claim is a `FiberHandle<Run>`: pending is non-empty, the run
   id is `rootRunId`, everything else is a view read (F1).
@@ -218,7 +219,7 @@ and the first write refuses the launch instead of starting and stopping it.
 with its batch taken (`restsWith`, `:231-262`), handed to the caller by
 `resumeRun` (`:103-159`) which counts `waiters` down and interrupts the run
 when the last caller leaves before any held it, presented by `answered`
-(`ToolUseFollowUp.ts:248-295`) from `handedOff` and `Deferred.isDoneUnsafe`,
+(`agent/followUp/ToolUseFollowUp.ts:248-295`) from `handedOff` and `Deferred.isDoneUnsafe`,
 and re-entered by `wakeRun` for an owned child's parent. One operation in
 three files, by time; a mutable object crossing module boundaries (the
 AGENTS.md "No shared mutable state" rule); `Deferred` plus counters where
@@ -237,7 +238,7 @@ resume with no caller. A caller that needs "the message was taken" reads
 **Deletes.** `RunAttempt`, `openResume`, `wakeRun`, `answered`,
 `decideResume`, `resumeQueuedToolUse`, `restsWith`, `taken`, `ResumeHandOff`,
 `ResumeAttempt`'s `started/delivered` shape, `refusalFor`'s three branches
-(one typed refusal), `storage/resumability.ts` folded into the pure refusal,
+(one typed refusal), `agent/storage/resumability.ts` folded into the pure refusal,
 `FOLLOW_UP_WAKE_FAILED_MESSAGE`'s two emitters, `viaControls`' wait.
 
 **Gives up.** Reference-counted resumes; the "presentation at the wake"
@@ -251,22 +252,22 @@ explicit resume.
 failedEnd → endWith → endActivation → finalizeRun → beforeEnd → endIn` plus
 `endVerdict`/`stoppedVerdict` (`agent/runtime/AgentRunLifecycle.ts`,
 `agent/storage/runLifecycle.ts`), nine functions in two files, each
-uninterruptible. `finalizeRun` (`runLifecycle.ts:315-397`) survives storage
+uninterruptible. `finalizeRun` (`agent/storage/runLifecycle.ts:315-397`) survives storage
 failure three times: the end with its last turn, then an end carrying a
 "result lost" notice to the parent, then a FAILED backstop, then
 `logError("reads as running")`; `endIn` keeps a raw `append(beside)` beside
 the `RunCell` path the guide calls the one writer. The halted `run.position`
 is written only with `run.end`, carries the same outcome, and its
-`RunPosition.outcome` has no production reader (`loop/rows.ts:83-104`, C3).
+`RunPosition.outcome` has no production reader (`agent/runtime/loop/rows.ts:83-104`, C3).
 The end's rows are drafted in `shared/session/runFacts.ts`, added to in
-`runLifecycle.ts`, edited by object identity in `loop/runProgram.ts:53-74`
+`agent/storage/runLifecycle.ts`, edited by object identity in `agent/runtime/loop/runProgram.ts:53-74`
 (`birthRows` rewrites another module's `run.start`), and opened by a
 three-optional mode on `RunHistory.open` (C8).
 
 **Design.** `endRun(exit)` under `Effect.uninterruptible`: `verdict(exit,
 stopRow)` is pure; the rows (open requests cancelled, consumed input dropped,
 closure, `run.end`) are built by the transaction that commits them, in
-`runLifecycle.ts`, as `birth`, `activate` and `end`, each one `log.transact`
+`agent/storage/runLifecycle.ts`, as `birth`, `activate` and `end`, each one `log.transact`
 deciding its rows from what it reads under the lock; `RunHistory.open` takes
 one `opening` and learns birth from activation by the rows' first kind. A
 failed transaction fails the fiber once, logged; the run then reads as
@@ -293,13 +294,13 @@ as FAILED-with-backstop; the trace viewer's scrubber stops at the end row.
 **Decision today.** A background child has no "finished": it is launched
 without `stopAfterCycle` (`agent/runtime/delegation/subagentRun.ts:320-322`),
 delivers every turn, then blocks on its inbox forever
-(`loop/toolUse.ts:408-446`), so `shouldSkipWait` reads WAITING as "job
+(`agent/runtime/loop/toolUse.ts:408-446`), so `shouldSkipWait` reads WAITING as "job
 delivered" (`tools/executions/waitCoordination.ts:437-443`) and the loop
 carries four `isChild()` branches. "A child finished, here is its result"
 therefore has twelve paths (A's table), over two row vocabularies
 (`followup.queued` versus `child.park`/`child.turn`/`run.report`/`run.result`),
 four wake sites and a five-form delivery-id grammar parsed by prefix in a
-fifth module (`tools/ExecutionsTool.ts:213`). `childRunLoop.ts` (849 lines)
+fifth module (`tools/ExecutionsTool.ts:213`). `agent/runtime/childRunLoop.ts` (849 lines)
 drives two unrelated families (native, process) through a mutable
 `ChildLoop` with a nine-step temporal decomposition of one turn and a
 `settle` callback explained by comment (A5). `child.turn` restates
@@ -317,7 +318,7 @@ fabricated `exitCode: 130`, and `wait` re-derives `working` (E7).
 the fiber (O5):
 
 - awaited: the tool call's fiber `Effect.forkChild`s it (as `awaitInBand`
-  does, `delegation/inBandSubagentRun.ts:286`), `Fiber.join`s, and records
+  does, `agent/runtime/delegation/inBandSubagentRun.ts:286`), `Fiber.join`s, and records
   the child's `run.end` as its `tool.result`; `agentChildRunId`/`earlierChild`
   keep it crash-safe.
 - background: `FiberMap.run` on the session; its `run.end` transaction
@@ -346,9 +347,9 @@ one place and parsed nowhere (A7). The child's `run.end` carries its result;
 **Deletes.** `ChildRunTurns`, `ChildRunBoundary`, `turnPermit`,
 `finishTurn`, `finishLastTurn`, `ExecuteAgentOptions.turns`, `driveNative`,
 `ChildLoop`, `ChildEnd`, `startChildRunLoop`, `startDetachedChildRunLoop`'s
-two branches, `childRunLoop.ts` whole, `awaited`, `LiveRun.readsMessages`,
+two branches, `agent/runtime/childRunLoop.ts` whole, `awaited`, `LiveRun.readsMessages`,
 `suppressAutoDeliveredSubagentReport`, the `wait` prefix scan,
-`waitCoordination.ts`, `child.turn` and `child.park` as row kinds,
+`tools/executions/waitCoordination.ts`, `child.turn` and `child.park` as row kinds,
 `parkSubstate`, `RESTING_SUBSTATES`, `RUN_SUBSTATE.PAUSED/RESULT_WAITING`,
 `RUN_ROW_READS.parks/turns`, `pauseChildRun`, `resumedChildRunId`,
 `ChildRunPause`, `ChildRunPort`, `releaseOwnership`, `interruptedTurn`,
@@ -357,7 +358,7 @@ two branches, `childRunLoop.ts` whole, `awaited`, `LiveRun.readsMessages`,
 `Sent.queued.read`, `SubmitFollowUpResult.wake`, `RunInput.ended`,
 `SessionInbox.disposed`, `run.result` as a kind, `buildResultMeta`,
 `readResultMeta`, `LastTurn`, `TAG_OF`, `launchBackgroundBash`'s twelve
-duplicated lines (A9); `runLaunchGuard.ts` whole (held parks: O1/O5;
+duplicated lines (A9); `agent/runtime/runLaunchGuard.ts` whole (held parks: O1/O5;
 `closeLeftoverRun`: O4 plus a resumed parent's call finding its child
 interrupted through `resumedAttempt`).
 
@@ -424,7 +425,7 @@ break, with a clear error).
 **Decision today.** The request is in `RunState.requests`, but the door that
 writes it is on the session (`SessionRequests`), with the run's cell reachable
 only through `AskOptions.open`, a callback with one supplier
-(`loop/toolGuard.ts:354-372`). So `request.decided` is spelled by five
+(`agent/runtime/loop/toolGuard.ts:354-372`). So `request.decided` is spelled by five
 writers (policy answer, surface, activation cancel, end cancel, the invoker's
 `PERSONAL_RETRY`), waited on by three `log.tail` readers, and
 fitness-checked three times (B5). A bash approval passes through ten steps
@@ -457,7 +458,7 @@ row the receipt reads; `RunControls` goes with it.
 
 **Deletes.** `AskOptions`, `SessionRequestsShape.ask/decide/decision`,
 `requestAsks`, the three tail waiters, two `answerMismatch` sites,
-`DecidedDraft`/`decidedRows`, `PERSONAL_RETRY`, `commandApproval.ts`,
+`DecidedDraft`/`decidedRows`, `PERSONAL_RETRY`, `agent/runtime/loop/commandApproval.ts`,
 `QueuedApproval`, `enqueue`, `approvePendingUnderBypass`, the per-run prompt
 lanes, `allowBypass`'s four writers, `OPERATIONS`' second column,
 `ApprovalPolicyDenial` and its host schema copy, `approvalDenied`,
@@ -518,11 +519,11 @@ plugin's tool cannot name a session tag moves to the table's one cast.
 
 **Decision today.** `runInvocation` is generic over an eight-member
 `InvocationDriver` plus a three-member `Asker` for two callers, and the
-second caller (`run/modelCall.ts`) implements the driver by faking rows with
+second caller (`agent/runtime/run/modelCall.ts`) implements the driver by faking rows with
 an in-memory `Ref<Invocation>`, `requests: {}` and a null asker the loop dies
 on if reached (D1). The `failed` row stores a display vocabulary
 (`ProviderErrorClassification`) and worded text, and the loop branches on the
-re-encoding (`run/compaction.ts:417-421`); eleven places decide "retryable /
+re-encoding (`agent/runtime/run/compaction.ts:417-421`); eleven places decide "retryable /
 which credential / which plan" after O8 (D2). `ModelRetryGate` is a `Latch`
 and a `Semaphore(1)` written by hand with version counters, waiter arrays, a
 probe slot, two `uninterruptibleMask` and `Deferred.makeUnsafe` (D4).
@@ -564,7 +565,7 @@ inside the general bind with a layer per call (D7).
 - `helperCall` resolves its name and calls the general `bind`; `ModelAccess`
   is provided once per session.
 
-**Deletes.** `InvocationDriver`, `Asker`, `ModelCall`, `modelCall.ts`,
+**Deletes.** `InvocationDriver`, `Asker`, `ModelCall`, `agent/runtime/run/modelCall.ts`,
 `reacquire`, `InvocationPurpose`, `isSummaryAttempt`,
 `ProviderErrorClassificationSchema`, `classificationOf`, `PERSONAL_RETRY`,
 `declinedBy`'s request read, `BindRequest.config`, `RouteState.version`,
@@ -590,12 +591,12 @@ verdict kind": 6 today, 3 after.
 ## R10. Hosts bind verbs; a client holds a Session
 
 **Decision today.** The two GUI hosts already share one body
-(`packages/texra/src/controllers/server/openGuiWindow.ts` `answerShared`, 29
+(`packages/texra/src/controllers/session/openGuiWindow.ts` `answerShared`, 29
 kinds) over a verb table; the CLI is a third, unrelated implementation of the
 same actions: five resume entry points with four refusal wordings, three
 copies of "a refused launch shows its notice" (F3). The client reimplements
-the session three times at three widths (`serviceSession.ts` as `Session`,
-`runReads.ts` as `CliRunReads`, `serviceRecords`), with `serviceRunReads`
+the session three times at three widths (`packages/texra/src/controllers/server/serviceSession.ts` as `Session`,
+`packages/cli/src/runtime/runReads.ts` as `CliRunReads`, `serviceRecords`), with `serviceRunReads`
 fabricating `null`/`[]`/`config_missing` for an unknown run (silent
 degradation), and the local path already fakes a `ServiceLink` so the hosts
 carry `GuiSession`/`DesktopProject`/`CliPlatformServices` unions (F4). The
@@ -612,9 +613,23 @@ is "the working directory is one of `roots.workspaces`" in the body. One
 `Session` interface with `records`, `listRuns`, `deleteRuns`; the RPC surface
 mirrors it one-to-one; an unknown run fails with `TaskRecordsFailed`. `Run.result`
 is a projection of the view the client folds. The exit code is one function
-of one fact at the process edge, `exitCodeOf(outcome)` in `bin/texra.ts`. The
-drainer is `Stream.takeWhile(e => e.commit <= stopAt)` with `stopAt` a
-`Deferred` the detach completes. The RPC path carries no generation.
+of one fact at the process edge, `exitCodeOf(outcome)` in `packages/cli/src/bin/texra.ts`. The
+drainer is one bounded read that completes inclusively at the head the detach
+captured: `Stream.takeUntil((e) => e.commit >= stopAt)` over the tail, with
+`stopAt` a `Deferred` the detach completes. `takeWhile(e => e.commit <= stopAt)`
+would not do: it passes the event at the cutoff and pulls again for one past
+it, which an idle durable tail never supplies once the run has finished, so the
+CLI would wait for its final record forever (Effect 4.1.2:
+`Stream.make({ commit: 1 }) ++ Stream.never` completes under the inclusive
+`takeUntil`, not under `takeWhile`). The bound alone cannot see every cutoff:
+the captured head may be a transcript row the store has pruned, which emits no
+display event, and a tail already past the head reads nothing more
+(`packages/cli/src/runtime/sessionProgressSubscription.ts:55-61`). So the
+drainer keeps one observed read cursor, the commit the last forward read
+covered (`drainedTo`, `:140-162`), and finishes when that cursor reaches
+`stopAt` (`:127-138`, `:169-177`), the already-drained and zero-event cases
+included; what goes is the bookkeeping around that cursor, not the cursor. The
+RPC path carries no generation.
 
 **Deletes.** `launchRootRun`'s start/present half, `showFailure`,
 `reportRunFailure`, the five resume wordings, `admitLaunch` from both binding
@@ -622,14 +637,16 @@ tables, `useCurrentFile`'s 68 lines from the extension, `CliRunReads`,
 `localRunReads`, `serviceRunReads`, `noDetail`, `serviceRecords`, the
 `GuiSession` union, `DesktopProject`'s second branch,
 `CliPlatformServices.runSession/reads`, `runEnded`, `task.ended`,
-`answered`/`endOf`, `exitCode.ts` (`setExitCode` 8 sites), `settleExitCode`,
-`CliConfigExecuteResult.exitCode`, `ChatExit.signal`, `delivered`/`stopAt`/
-`drained`/`childrenPending`/`settleIfDrained`/`passed`/`drainedTo`, the
-generation on the RPC path, `runningTasks(projects, parked)`, the ten
+`answered`/`endOf`, `packages/cli/src/commands/_helpers/exitCode.ts` (`setExitCode` 8 sites), `settleExitCode`,
+`CliConfigExecuteResult.exitCode`, `ChatExit.signal`, `delivered`/`drained`/
+`childrenPending`/`settleIfDrained`/`passed` (the cutoff `stopAt` and the
+observed read cursor `drainedTo` stay), the generation on the RPC path, `runningTasks(projects, parked)`, the ten
 `registerCliStateResetHook` singletons' reason to exist.
 
 **Gives up.** Nothing user-visible; the headless resume keeps its usage exit
-code by mapping `Unavailable` once.
+code by mapping `Unavailable` once. The drainer keeps one read cursor beside
+the bounded read: a bound on the event stream alone cannot finish a cutoff
+that names a pruned row or a tail already past the head.
 
 ## Order
 
@@ -672,16 +689,16 @@ singletons in the CLI runtime (F7).
   `addObserver` / `uninterruptibleMask` count in `packages/harness/src` and
   `packages/llm/src` (53 at `ccf15b4`) falls with R2–R4, R8 and R9, and no
   slice raises it.
-- Comment share of `runRegistry.ts`, `AgentRunLifecycle.ts`,
-  `ownerLiveness.ts`, `childRunLoop.ts`, `sharedAttempt.ts` is no longer
+- Comment share of `agent/runtime/runRegistry.ts`, `agent/runtime/AgentRunLifecycle.ts`,
+  `controllers/session/ownerLiveness.ts`, `agent/runtime/childRunLoop.ts`, `packages/llm/src/oauth/sharedAttempt.ts` is no longer
   measurable, because the files are gone; no replacement file explains a
   hand-off protocol in prose.
 - The change-amplification counts above (14 → 4, 22 → 2, 16 → 3, 9 → 3) hold
   on the tree after the slice that claims them.
-- The good modules each audit names stay: `inFlight.ts`'s reducers,
+- The good modules each audit names stay: `shared/session/inFlight.ts`'s reducers,
   `RunCell`/`commit`, `inImmediateTransaction`, `logTails`, `defineTool`,
   `hooksAt`, `resolveStepTools`, `EXECUTION_ROUTES`, `backgroundLifecycle`,
-  `configurationFor`, `verdict.ts`, `RunInput.ts`, `agentChildRunId`,
+  `configurationFor`, `packages/llm/src/api/verdict.ts`, `agent/followUp/RunInput.ts`, `agentChildRunId`,
   `formatDelivery` as a renderer, `followPendingRequests`, `SessionKey` +
   `LayerMap`, `openGuiWindow`'s `answerShared`, `requireAction`, `holdSignals`,
   `hostWindows`, `linkService`.
@@ -707,67 +724,67 @@ singletons in the CLI runtime (F7).
 
 The audits' findings, each with its root; "2nd" marks a second-order item.
 
-| Area | Finding                                                                   | Root |
-| ---- | ------------------------------------------------------------------------- | ---- |
-| L    | `Activation` as a state machine; `start`'s five parameters                | R2   |
-| L    | resume split across three files with a shared mutable `RunAttempt`        | R3   |
-| L    | the claim protocol in twelve call sites                                   | R1   |
-| L    | nine functions to write one `run.end`; `finalizeRun`'s three fallbacks    | R4   |
-| L    | `runLaunchGuard.ts` as a conjoined, vaguely named file                    | R5   |
-| L    | `'released'`; `stop()`'s two-part answer; 28–35% comment share            | R2   |
-| A1   | a background child never ends; twelve delivery paths                      | R5   |
-| A2   | `child.turn`/`child.park` as a second position vocabulary                 | R5   |
-| A3   | the agent-CLI pause as a harness row with a five-method interface         | R5   |
-| A4   | "takes a message now" has eight representations                           | R5   |
-| A5   | `childRunLoop.ts` drives two families through a mutable class             | R5   |
-| A6   | budget acquired through a row-writing permit; a second semaphore          | R5   |
-| A7   | the envelope's shape in four modules, its id grammar in a fifth           | R5   |
-| A8   | `openResume`/`wakeRun` as a counted `Deferred` join that also presents    | R3   |
-| A9   | `launchBackgroundBash` duplicates `launchProcessChild`                    | R5   |
-| A10  | `TransactionPart.note` with no producer; `held` with O1                   | R4   |
-| A11  | an awaited result read three times; `run.result` duplicates `run.end`     | R5   |
-| B1   | the session assembled by time with a services bag                         | R8   |
-| B2   | three tails, six commit coordinates                                       | R1   |
-| B3   | `afterCommit` hook list; `order: true` jobs for streamed text             | R1   |
-| B4   | `unreadable` and `runsHere` through the `local` ref; a cold read's prober | R1   |
-| B5   | five writers of `request.decided`, three waiters, one-caller callback     | R7   |
-| B6   | `mapDatabaseFailure` re-classifies defects; `storeGate` per write         | R1   |
-| B7   | `SessionHostInteractions` as a state machine with a `Proxy`               | R8   |
-| B8   | "the caller let go" handled twice; `onAdmitted` as a callback             | R2   |
-| B9   | deletion: a two-valued mode, a decorated method, a per-call scan          | 2nd  |
-| C1   | `RunView.status` is two facts; the fold re-splits it into eight           | R6   |
-| C2   | row→phase written four times; lifecycle bounds five times                 | R6   |
-| C3   | the halted `run.position` restates `run.end`                              | R4   |
-| C4   | `child.park` as optional fields, duplicated by `child.turn`               | R5   |
-| C5   | grants on two row kinds; `birthRows` rewrites another module's draft      | R4   |
-| C6   | activation accumulated over (`decidedSinceActivation`, `resuming`)        | R6   |
-| C7   | fold errors as strings, a four-arm verdict, a five-reason enum            | R6   |
-| C8   | drafts in `shared`, committed in `storage`, edited in `loop`, by boolean  | R4   |
-| C9   | "can it continue" in four vocabularies                                    | R6   |
-| C10  | `RunRows` as nine reads over one 23-field record; `recordOf`              | 2nd  |
-| D1   | one retry loop, three drivers, two stacked interfaces                     | R9   |
-| D2   | the verdict re-encoded into a display classification the loop reads       | R9   |
-| D3   | background delivery: seven representations, four checks                   | R9   |
-| D4   | `ModelRetryGate` as a hand-rolled Latch + Semaphore                       | R9   |
-| D5   | `swapModel` as `ScopedRef.set` by hand; the bearer on the binding         | R9   |
-| D6   | `SharedAttempt`/`SerializedWrites`/generation for login over refresh      | R9   |
-| D7   | the helper model as a special request in the general bind                 | R9   |
-| D8   | `attemptStarts` WeakMap; a `failed` row for an attempt that did not fail  | R9   |
-| E1   | seven in-memory facts beside the rows (`oneShot`, `opened`, `holding`, …) | R2   |
-| E2   | ten steps, six files, four spellings of "who may answer"                  | R7   |
-| E3   | `hooks.ts`: six single-caller exports, `staleHook`, a view parent walk    | 2nd  |
-| E4   | a script run's five `handedDown` branches; `isTrustedScript` at eight     | 2nd  |
-| E5   | `RunCallShape.session` as a carried context of 13 tags                    | R8   |
-| E6   | the provider's union flattening known by twelve input schemas             | 2nd  |
-| E7   | background output as tagged log rows; a fabricated exit code; `wait`      | R5   |
-| E8   | `HostInteractions` all-optional over a hand-rolled sliding queue          | R8   |
-| E9   | `openStep`'s mode parameter and discarded rows                            | 2nd  |
-| E10  | the script door's `Deferred`-map lane scheduler                           | 2nd  |
-| E11  | `callRequests`' eight parameters; `sessionDescription`'s Deferred         | R7   |
-| F1   | the CLI chat's own run registry beside the view                           | R2   |
-| F2   | the harness's approval loop reimplemented twice, with `decided`           | R7   |
-| F3   | the CLI as a third host-request handler                                   | R10  |
-| F4   | the client reimplements the session three times                           | R10  |
-| F5   | four exit-code writers; the headless shutdown's documented race           | R10  |
-| F6   | the NDJSON drainer's four counters and three fibers                       | R10  |
-| F7   | vestigial generations; `runningTasks(parked)`; CLI singletons             | 2nd  |
+| Area | Finding                                                                                   | Root |
+| ---- | ----------------------------------------------------------------------------------------- | ---- |
+| L    | `Activation` as a state machine; `start`'s five parameters                                | R2   |
+| L    | resume split across three files with a shared mutable `RunAttempt`                        | R3   |
+| L    | the claim protocol in twelve call sites                                                   | R1   |
+| L    | nine functions to write one `run.end`; `finalizeRun`'s three fallbacks                    | R4   |
+| L    | `agent/runtime/runLaunchGuard.ts` as a conjoined, vaguely named file                      | R5   |
+| L    | `'released'`; `stop()`'s two-part answer; 28–35% comment share                            | R2   |
+| A1   | a background child never ends; twelve delivery paths                                      | R5   |
+| A2   | `child.turn`/`child.park` as a second position vocabulary                                 | R5   |
+| A3   | the agent-CLI pause as a harness row with a five-method interface                         | R5   |
+| A4   | "takes a message now" has eight representations                                           | R5   |
+| A5   | `agent/runtime/childRunLoop.ts` drives two families through a mutable class               | R5   |
+| A6   | budget acquired through a row-writing permit; a second semaphore                          | R5   |
+| A7   | the envelope's shape in four modules, its id grammar in a fifth                           | R5   |
+| A8   | `openResume`/`wakeRun` as a counted `Deferred` join that also presents                    | R3   |
+| A9   | `launchBackgroundBash` duplicates `launchProcessChild`                                    | R5   |
+| A10  | `TransactionPart.note` with no producer; `held` with O1                                   | R4   |
+| A11  | an awaited result read three times; `run.result` duplicates `run.end`                     | R5   |
+| B1   | the session assembled by time with a services bag                                         | R8   |
+| B2   | three tails, six commit coordinates                                                       | R1   |
+| B3   | `afterCommit` hook list; `order: true` jobs for streamed text                             | R1   |
+| B4   | `unreadable` and `runsHere` through the `local` ref; a cold read's prober                 | R1   |
+| B5   | five writers of `request.decided`, three waiters, one-caller callback                     | R7   |
+| B6   | `mapDatabaseFailure` re-classifies defects; `storeGate` per write                         | R1   |
+| B7   | `SessionHostInteractions` as a state machine with a `Proxy`                               | R8   |
+| B8   | "the caller let go" handled twice; `onAdmitted` as a callback                             | R2   |
+| B9   | deletion: a two-valued mode, a decorated method, a per-call scan                          | 2nd  |
+| C1   | `RunView.status` is two facts; the fold re-splits it into eight                           | R6   |
+| C2   | row→phase written four times; lifecycle bounds five times                                 | R6   |
+| C3   | the halted `run.position` restates `run.end`                                              | R4   |
+| C4   | `child.park` as optional fields, duplicated by `child.turn`                               | R5   |
+| C5   | grants on two row kinds; `birthRows` rewrites another module's draft                      | R4   |
+| C6   | activation accumulated over (`decidedSinceActivation`, `resuming`)                        | R6   |
+| C7   | fold errors as strings, a four-arm verdict, a five-reason enum                            | R6   |
+| C8   | drafts in `shared`, committed in `storage`, edited in `loop`, by boolean                  | R4   |
+| C9   | "can it continue" in four vocabularies                                                    | R6   |
+| C10  | `RunRows` as nine reads over one 23-field record; `recordOf`                              | 2nd  |
+| D1   | one retry loop, three drivers, two stacked interfaces                                     | R9   |
+| D2   | the verdict re-encoded into a display classification the loop reads                       | R9   |
+| D3   | background delivery: seven representations, four checks                                   | R9   |
+| D4   | `ModelRetryGate` as a hand-rolled Latch + Semaphore                                       | R9   |
+| D5   | `swapModel` as `ScopedRef.set` by hand; the bearer on the binding                         | R9   |
+| D6   | `SharedAttempt`/`SerializedWrites`/generation for login over refresh                      | R9   |
+| D7   | the helper model as a special request in the general bind                                 | R9   |
+| D8   | `attemptStarts` WeakMap; a `failed` row for an attempt that did not fail                  | R9   |
+| E1   | seven in-memory facts beside the rows (`oneShot`, `opened`, `holding`, …)                 | R2   |
+| E2   | ten steps, six files, four spellings of "who may answer"                                  | R7   |
+| E3   | `agent/runtime/loop/hooks.ts`: six single-caller exports, `staleHook`, a view parent walk | 2nd  |
+| E4   | a script run's five `handedDown` branches; `isTrustedScript` at eight                     | 2nd  |
+| E5   | `RunCallShape.session` as a carried context of 13 tags                                    | R8   |
+| E6   | the provider's union flattening known by twelve input schemas                             | 2nd  |
+| E7   | background output as tagged log rows; a fabricated exit code; `wait`                      | R5   |
+| E8   | `HostInteractions` all-optional over a hand-rolled sliding queue                          | R8   |
+| E9   | `openStep`'s mode parameter and discarded rows                                            | 2nd  |
+| E10  | the script door's `Deferred`-map lane scheduler                                           | 2nd  |
+| E11  | `callRequests`' eight parameters; `sessionDescription`'s Deferred                         | R7   |
+| F1   | the CLI chat's own run registry beside the view                                           | R2   |
+| F2   | the harness's approval loop reimplemented twice, with `decided`                           | R7   |
+| F3   | the CLI as a third host-request handler                                                   | R10  |
+| F4   | the client reimplements the session three times                                           | R10  |
+| F5   | four exit-code writers; the headless shutdown's documented race                           | R10  |
+| F6   | the NDJSON drainer's four counters and three fibers                                       | R10  |
+| F7   | vestigial generations; `runningTasks(parked)`; CLI singletons                             | 2nd  |
