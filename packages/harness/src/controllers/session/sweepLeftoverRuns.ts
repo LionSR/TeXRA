@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import { closeLeftoverRun } from '@agent/runtime/leftoverChildren';
 import { withLogChannel } from '@logger/effectLog';
 import { isLoopDriven, type RunId } from '@shared/schemas';

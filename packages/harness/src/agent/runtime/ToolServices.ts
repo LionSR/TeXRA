@@ -33,7 +33,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import { Runs } from './runRegistry';
 import { Interactions } from './HostInteractions';
 import { ProjectTools } from './loop/step';
-import { SessionRequests, workAutoApproved } from './requestPolicy';
+import { SessionRequests, workAutoApproved } from './requests';
 import type { RunCallShape } from './RunCall';
 import type { RouteRetries } from './run/invocation';
 import type { SessionServices } from './rootLaunch';

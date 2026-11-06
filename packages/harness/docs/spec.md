@@ -70,7 +70,7 @@ its kind is its `type` column.
 - **Request**: A decision that may wait on a person: a `request.opened` row,
   closed by one `request.decided` row; an approval policy that answers at once
   commits both in one batch (`shared/schemas/sessionEvent.ts#'request.opened'`,
-  `agent/runtime/requestPolicy.ts#decidedRows`).
+  `agent/runtime/requests.ts#policyDecidedRows`).
 - **Claim**: The write authority over one aggregate: the `owner_id` column of
   its sequence row
   (`controllers/session/storeSchema.ts#CREATE TABLE IF NOT EXISTS event_sequence`).
@@ -402,8 +402,8 @@ write points are normative:
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.failed'`;
   `agent/runtime/run/invocation.ts#runInvocation`).
 - **W7**, `request.opened` / `request.decided`: the opening commits before any
-  wait; a decision commits once (`agent/runtime/requestPolicy.ts#requestAsks`,
-  `#decisionRow`).
+  wait; a decision commits once (`agent/runtime/requests.ts#openRequest`,
+  `#decideRequest`).
 
 **W1.** The invoker MUST commit the attempt's rows, the blobs of its request
 context and the `attempt` row, before it streams or submits the request
@@ -747,20 +747,22 @@ A decision is one of `approve`, `approve_and_goal`, `setup`, `submit`, `answer`,
 ### 8.3 Protocol
 
 - A request's id is part of its payload
-  (`agent/runtime/requestPolicy.ts#payload.data.requestId`). A tool call's
+  (`agent/runtime/requests.ts#payload.data.requestId`). A tool call's
   request id is derived from the response, call, attempt and ordinal, so a
   resumed attempt rejoins the request it left standing
   (`shared/session/inFlight.ts#callRequestId`).
 - The opening and any decision the approval policy gives at once MUST commit in
-  one batch, so no surface lists it pending
-  (`agent/runtime/requestPolicy.ts#decidedRows`).
+  one batch, through the asker's cell, so no surface lists it pending
+  (`agent/runtime/requests.ts#openRequest`); a grant turned on answers every
+  open request it covers in the grant's own transaction
+  (`agent/runtime/runApprovalQueue.ts#approvalsUnder`).
 - A decision MUST commit only if its request is open and undecided; the first
   decision wins, and a later one writes nothing
-  (`agent/runtime/requestPolicy.ts#decisionRow`).
+  (`agent/runtime/requests.ts#decideRequest`).
 - The asker waits on the committed `request.decided` row, read from the tail
-  (`agent/runtime/requestPolicy.ts#isRequestDecision`). If the session closes
-  first, the asker goes on as cancelled with no row written, and the request
-  stays open (`agent/runtime/requestPolicy.ts#closed without a decision`).
+  (`agent/runtime/requests.ts#decisionOf`). If the session closes first, the
+  asker goes on as cancelled with no row written, and the request stays open
+  (`agent/runtime/requests.ts#closed without a decision`).
 - An interrupted asker writes nothing: the request a stopped or failed run
   leaves open is cancelled with the run's end, in the end's batch, so no
   surface keeps offering it (`agent/storage/runLifecycle.ts#cancelledRequests`);

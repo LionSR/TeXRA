@@ -22,7 +22,7 @@ import {
   Interactions,
   type HostInteractions,
 } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { withLogChannel } from '@logger/effectLog';
 import { attentionOf } from '@shared/session/sessionView';
@@ -32,6 +32,7 @@ import {
   blocksCaller,
   type RequestDecision,
 } from '@shared/schemas';
+import { Unavailable } from '@shared/session/runtimeRequest';
 import type {
   PendingRequest,
   SessionView,
@@ -155,6 +156,12 @@ const answerRequests = (
             .pipe(
               Effect.provide(session),
               Effect.retry({ schedule: DECIDE_RETRY, times: 3 }),
+              // Decided meanwhile (a grant turned on, another surface):
+              // the row stands, and the view drops the request.
+              Effect.catchIf(
+                (error) => error instanceof Unavailable,
+                () => Effect.void,
+              ),
             ),
         ),
         // A decided request stays held until the view drops it, so the fold
@@ -209,22 +216,17 @@ const answers = (host: SessionHost): host is AnsweringHost =>
   host.approve !== undefined;
 
 /**
- * `host` as the session's attachment sees it: the host object itself, its
- * members read off it with their receiver (a class-based host keeps its
- * prototype's methods and private state), with the session's `dispose`
- * and, for a host that answers, `approvalPromptsUnavailable: false` laid
- * over it.
+ * `host` as the session's attachment sees it: its presentation members,
+ * bound to it (a class-based host keeps its prototype's methods and private
+ * state), with the session's `dispose` and, for a host that answers,
+ * `approvalPromptsUnavailable: false`.
  */
 function overlay(host: SessionHost, dispose: () => void): HostInteractions {
-  // A `SessionHost` is a `HostInteractions` (every member optional) with an
-  // `approve` the session never reads through this view.
-  const view: HostInteractions = host;
-  return new Proxy(view, {
-    get(target, key) {
-      if (key === 'dispose') return dispose;
-      if (key === 'approvalPromptsUnavailable' && answers(host)) return false;
-      const value: unknown = Reflect.get(target, key, target);
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  });
+  return {
+    ...(host.emit && { emit: host.emit.bind(host) }),
+    approvalPromptsUnavailable: answers(host)
+      ? false
+      : host.approvalPromptsUnavailable === true,
+    dispose,
+  };
 }

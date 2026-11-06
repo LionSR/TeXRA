@@ -17,7 +17,7 @@ import {
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { ExportNode } from '@agent/export/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { LiveRun } from '@agent/runtime/runs';
 import type { SessionServices } from '@agent/runtime/rootLaunch';

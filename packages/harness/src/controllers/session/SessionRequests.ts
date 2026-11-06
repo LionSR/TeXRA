@@ -81,7 +81,6 @@ interface SessionRequestsInit {
   readonly log: SessionRequestLog;
   readonly plugins: ToolTable;
   readonly services: Context.Context<RequestServices | ChildProcessSpawner>;
-  readonly asks: Pick<SessionRequestsShape, 'ask' | 'decide' | 'decision'>;
   readonly sessionLog: SessionLog['Service'];
   readonly view: SessionViewAccess['Service'];
 }
@@ -164,7 +163,7 @@ const pendingOf = (deps: RequestDeps, runId: RunId, requestId: string) =>
     (row) => row.runId === runId && row.requestId === requestId,
   );
 
-const decideRequest = (
+const decideSurfaceRequest = (
   deps: RequestDeps,
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   heldHere: boolean,
@@ -213,7 +212,7 @@ const decideRequest = (
     const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
     const reason = payload && answerMismatch(payload, req.decision, req.grant);
     if (reason) return Effect.fail(new Rejected({ reason }));
-    return decideUnderGrant(req, heldHere, answer);
+    return decideUnderGrant(req, answer);
   });
   return withPerKeyLane(
     deps.decisionLanes,
@@ -273,7 +272,7 @@ const handle = (
         Effect.map((runId): Outcome => ({ kind: 'forked', runId })),
       );
     case 'request.decide':
-      return decideRequest(deps, req, heldHere);
+      return decideSurfaceRequest(deps, req, heldHere);
     case 'request.preview': {
       const payload = pendingOf(deps, req.runId, req.requestId)?.payload;
       return payload?.kind === 'toolEdit'
@@ -286,7 +285,7 @@ const handle = (
         : Effect.succeed({ kind: 'preview', preview: null });
     }
     case 'policy.set':
-      return setPolicy(req.change, heldHere, Effect.succeed(done));
+      return setPolicy(req.change, Effect.succeed(done));
   }
 };
 
@@ -391,7 +390,7 @@ export function sessionRequests(
 
   // cast: each case of `handle` answers with its own kind's outcome.
   const perKind = request as SessionRequestsShape['request'];
-  return { request: perKind, removeRun, ...deps.asks };
+  return { request: perKind, removeRun };
 }
 
 /** A decision for a request no longer pending: decided already, or never opened. */

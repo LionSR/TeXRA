@@ -6,11 +6,9 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import {
   aggregateTarget,
   type LaunchNotice,
-  type RunId,
   type SessionEvent,
 } from '@shared/schemas';
 import { recordOf } from '@shared/session/runRowReads';
@@ -60,13 +58,6 @@ export interface HostInteractions {
    * and when it withholds approval-gated tools from a run.
    */
   readonly approvalPromptsUnavailable?: boolean;
-  /**
-   * The session's approval policy closed a gate on `runId` (a command, edit,
-   * plan, delegation, retry or question) or withheld tools from it. Told
-   * after the fact, so a host can say why nothing was asked; it answers
-   * nothing.
-   */
-  approvalDenied?(denial: ApprovalPolicyDenial, runId: RunId): void;
   dispose?(): void;
 }
 
@@ -206,10 +197,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   get approvalPromptsUnavailable(): boolean {
     return (this.attached ?? this.opened)?.approvalPromptsUnavailable === true;
-  }
-
-  approvalDenied(denial: ApprovalPolicyDenial, runId: RunId): void {
-    (this.attached ?? this.opened)?.approvalDenied?.(denial, runId);
   }
 
   /**

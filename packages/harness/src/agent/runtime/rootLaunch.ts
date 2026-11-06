@@ -31,7 +31,7 @@ import { registryOf, Runs } from './runRegistry';
 import type { SessionHandleInit } from './SessionHandle';
 import type { Interactions } from './HostInteractions';
 import type { ProjectTools } from './loop/step';
-import type { SessionRequests } from './requestPolicy';
+import type { SessionRequests } from './requests';
 
 /**
  * A session's own services: each owner its layer built (`sessionOwners.ts`),

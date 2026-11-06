@@ -49,7 +49,7 @@ import {
   type RunId,
 } from '@texra-ai/harness/schemas';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { openRequest as openRunRequest } from '@agent/runtime/requests';
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -59,6 +59,7 @@ import {
   SessionLog,
   Approvals,
   SessionViewAccess,
+  runStateAppend,
 } from '@shared/session/runHistory';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { installedHost } from '@test/support/setupPlatform';
@@ -171,7 +172,13 @@ function openRequest(runId: RunId, payload: PermissionPayload) {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
     const session = yield* sessionHandle;
-    return yield* Context.get(session, SessionRequests).ask(runId, payload);
+    const log = Context.get(session, SessionLog);
+    return yield* openRunRequest(runId, payload, {
+      commit: (rows) =>
+        log
+          .transact((tx) => runStateAppend(tx.append)(rows))
+          .pipe(Effect.as(log.now())),
+    }).pipe(Effect.provide(session));
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 

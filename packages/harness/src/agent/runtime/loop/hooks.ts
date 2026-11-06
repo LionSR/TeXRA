@@ -42,7 +42,7 @@ import {
 import type { RunHistoryDraft, RunState } from '@shared/session/runState';
 
 import { type RunCell, SessionViewAccess } from '@shared/session/runHistory';
-import { workAutoApproved } from '../requestPolicy';
+import { workAutoApproved } from '../requests';
 import type { SessionServices } from '../rootLaunch';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';

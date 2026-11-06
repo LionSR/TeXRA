@@ -23,7 +23,9 @@ import {
   type ModelBackend,
   type DeclinableUsageRoute,
   type OfferedTool,
+  qualifyAggregateId,
   type RetryErrorInfo,
+  type RunId,
   type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
@@ -237,6 +239,21 @@ export function unboundRequests(state: RunState): readonly string[] {
       : [requestId],
   );
 }
+
+/** The `request.decided` rows that cancel `requestIds` of `runId` with
+ *  `cause`: what a run's end writes for every request it leaves open, and
+ *  a resume's activation for those no attempt re-enters. */
+export const cancelRequestRows = (
+  runId: RunId,
+  requestIds: readonly string[],
+  cause: string,
+): Extract<SessionEventDraft, { type: 'request.decided' }>[] =>
+  requestIds.map((requestId) => ({
+    type: 'request.decided' as const,
+    aggregateId: qualifyAggregateId('run', runId),
+    requestId,
+    decision: { action: 'cancel' as const, cause },
+  }));
 
 /**
  * The routes the run declines once `decided` lands: a retry answered with

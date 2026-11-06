@@ -33,7 +33,7 @@ import {
 import { HistoryQueryStore } from '@agent/runtime/historyQuery/HistoryQuery';
 import { sessionPermission } from '@agent/runtime/loop/toolGuard';
 import { sessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { requestAsks, SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import { ProjectTools } from '@agent/runtime/loop/step';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { stopRun } from '@agent/storage/runLifecycle';
@@ -169,7 +169,6 @@ const requestsLayer = Layer.effect(
     const { store, collectDeletions } = yield* SessionStoreParts;
     const database = yield* Database;
     return sessionRequests({
-      asks: yield* requestAsks,
       sessionLog: yield* SessionLog,
       view: yield* SessionViewAccess,
       log: {

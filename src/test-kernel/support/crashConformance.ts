@@ -92,7 +92,7 @@ import {
   type SessionOwner,
   type SessionServices,
 } from '@agent/runtime/rootLaunch';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { decideRequest, SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
   AgentConfigSchema,
@@ -339,9 +339,9 @@ const approveAll = (session: Context.Context<SessionServices>, after = 0) =>
       if (event.type !== 'request.opened') return Effect.void;
       const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run') return Effect.void;
-      return Context.get(session, SessionRequests)
-        .decide(target.id, event.requestId, { action: 'approve' })
-        .pipe(Effect.ignore);
+      return decideRequest(target.id, event.requestId, {
+        action: 'approve',
+      }).pipe(Effect.provide(session), Effect.ignore);
     },
   ).pipe(Effect.forkScoped);
 
@@ -843,11 +843,10 @@ const resumeFrom = (
             ),
           ).pipe(
             Effect.andThen(
-              Context.get(session, SessionRequests)
-                // cast: the store's logical id of a run aggregate is its RunId.
-                .decide(row.run as RunId, String(json(row).requestId), {
-                  action: 'approve',
-                }),
+              // cast: the store's logical id of a run aggregate is its RunId.
+              decideRequest(row.run as RunId, String(json(row).requestId), {
+                action: 'approve',
+              }).pipe(Effect.provide(session)),
             ),
             Effect.ignore,
           ),

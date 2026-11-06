@@ -8,7 +8,7 @@
  */
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { getRunRecords } from '@agent/storage/runRecords';

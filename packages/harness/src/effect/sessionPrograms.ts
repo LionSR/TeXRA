@@ -22,7 +22,7 @@ import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import {
   rootRun,
   SessionOwner,

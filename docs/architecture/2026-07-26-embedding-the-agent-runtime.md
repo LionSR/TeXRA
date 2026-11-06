@@ -378,7 +378,7 @@ a start option, and `StartOptionsSchema` has no such property. The
 session's `interactions.approvalPromptsUnavailable` getter reads the attached
 host's answer (`HostInteractions.ts:218-222`). Each step
 applies the session's approval policy to it (`liveToolGates`,
-`packages/harness/src/agent/runtime/requestPolicy.ts:186-209`) when it resolves the tools it offers
+`packages/harness/src/agent/runtime/requests.ts`) when it resolves the tools it offers
 (`packages/harness/src/agent/runtime/loop/step.ts:204-207`), so a policy change or a host
 attached mid-run reaches the next step's offer, and a delegated child, which
 runs on its parent's session, and a run the session wakes on its own get the
@@ -412,8 +412,8 @@ answers what its policy leaves open from a terminal prompt
 `packages/cli/src/runtime/approvalAdapter.ts`).
 
 The same holds for a plan, a delegation proposal and a question
-(`policyDecidedRows` in `packages/harness/src/agent/runtime/requestPolicy.ts`,
-whose rows `session.requests.ask` commits beside the `request.opened`).
+(`policyDecidedRows` in `packages/harness/src/agent/runtime/requests.ts`,
+whose rows `openRequest` commits beside the `request.opened`).
 
 ### What ends a wait without a decision
 

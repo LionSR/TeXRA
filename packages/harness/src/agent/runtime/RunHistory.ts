@@ -25,6 +25,7 @@ import {
 import {
   applyRunRows,
   freshRunState,
+  cancelRequestRows,
   isRunStateRow,
   RunHistoryInconsistent,
   unboundRequests,
@@ -336,19 +337,15 @@ export function makeRunHistory(
             run,
             applyStored(null, yield* stored(run)),
           );
-          const aggregateId = qualifyAggregateId('run', run);
-          const cancels = (before === null ? [] : unboundRequests(before)).map(
-            (requestId) => ({
-              type: 'request.decided' as const,
-              aggregateId,
-              requestId,
-              decision: {
-                action: 'cancel' as const,
-                cause: 'The process that asked exited.',
-              },
-            }),
+          const cancels = cancelRequestRows(
+            run,
+            before === null ? [] : unboundRequests(before),
+            'The process that asked exited.',
           );
-          const rows = [...(yield* activation(before)), ...cancels];
+          const rows: readonly SessionEventDraft[] = [
+            ...(yield* activation(before)),
+            ...cancels,
+          ];
           const written =
             rows.length === 0 ? [] : yield* runStateAppend(tx.append)(rows);
           const history = written.filter(isRunStateRow);

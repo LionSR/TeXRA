@@ -221,13 +221,13 @@ export const executeCliConfig: (
     yield* presentationHost
       .attachRunProgressRenderer(session, request.runId)
       .pipe(Scope.provide(presentationScope));
-    const host = yield* createHeadlessCliHostInteractions(session, runContext, {
+    const host = createHeadlessCliHostInteractions(session, runContext, {
       prompting: () => presentationHost.holdForPrompt?.(),
       emit: (event, payload) => {
         if (event === 'requestShowError') failurePresented = true;
         presentationHost.emit(event, payload);
       },
-    }).pipe(Scope.provide(presentationScope));
+    });
     yield* session.attach(host).pipe(Scope.provide(presentationScope));
     if (runContext.outputFormat === 'ndjson') {
       yield* Scope.addFinalizer(

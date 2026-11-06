@@ -33,6 +33,7 @@ import {
   toJsonValue,
   type ToolResult,
 } from '@shared/schemas';
+import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import { callRequestId, type AttemptRequests } from '@shared/session/inFlight';
 import {
@@ -41,7 +42,6 @@ import {
   type CellError,
   type RunCell,
 } from '@shared/session/runHistory';
-import { isRequestDecision } from '@shared/session/runRowReads';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import type {
   ApprovalOperation,
@@ -54,7 +54,7 @@ import { assertWritable, resolveToolPath } from '@tools/pathResolution';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { Interactions } from '../HostInteractions';
-import { recordedDecision, SessionRequests } from '../requestPolicy';
+import { decideRequest, openRequest, recordedDecision } from '../requests';
 import { RunCall, requireToolRun } from '../RunCall';
 import { askCommandApproval, commandRejectedResult } from './commandApproval';
 import type { AgentRunShape } from '../run/AgentRun';
@@ -64,23 +64,22 @@ import type { preToolUse } from './hooks';
 
 const JSON_OBJECT_ARGUMENTS = Schema.Record(Schema.String, Schema.Unknown);
 
-/** Each operation a run asks permission for: the grant that answers it and
- *  what a denial is told as. A call of a tool that declares no `command.grant`
- *  takes the run's delegated-work grant, so a command grant never approves
- *  it. */
+/** Each operation a run asks permission for: the grant that answers it. A
+ *  call of a tool that declares no `command.grant` takes the run's
+ *  delegated-work grant, so a command grant never approves it. */
 const OPERATIONS = {
-  bash: ['bash', 'executable'],
-  call: ['superYolo', 'executable'],
-  toolEdit: ['toolEdit', 'executable'],
-  plan: ['superYolo', 'plan'],
-  proposal: ['superYolo', 'proposal'],
-} as const satisfies Record<ApprovalOperation, unknown>;
+  bash: 'bash',
+  call: 'superYolo',
+  toolEdit: 'toolEdit',
+  plan: 'superYolo',
+  proposal: 'superYolo',
+} as const satisfies Record<ApprovalOperation, ApprovalBypassKind>;
 
 /**
  * The one reading of the policy for an operation of a run, with what the
  * call's `PreToolUse` hooks said: `never`, or an ask nobody can answer,
- * denies whatever a hook said (and is told to the host); else a hook's
- * `ask` asks and its `allow` answers what the policy would ask.
+ * denies whatever a hook said; else a hook's `ask` asks and its `allow`
+ * answers what the policy would ask.
  */
 export const sessionPermission =
   (
@@ -88,7 +87,7 @@ export const sessionPermission =
     interactions: Interactions['Service'],
   ): ApprovalsWithPermission['permission'] =>
   (runId, operation, hook) => {
-    const [grant, kind] = OPERATIONS[operation];
+    const grant = OPERATIONS[operation];
     const canPresent = !interactions.approvalPromptsUnavailable;
     const policy = approvals.policy(runId);
     const decision = decideApproval({
@@ -99,10 +98,8 @@ export const sessionPermission =
     const denied = isApprovalDenied(decision)
       ? decision
       : hook === 'ask' && !canPresent && 'deny-unpresentable';
-    if (denied) {
-      interactions.approvalDenied({ kind, policy }, runId);
+    if (denied)
       return { action: 'deny', reason: approvalPolicyDenialMessage(denied) };
-    }
     return hook ?? (decision === 'allow' ? 'allow' : 'ask');
   };
 
@@ -235,10 +232,10 @@ const rejection = Effect.fn('toolUse.guard')(function* (
   if (answer === 'allow') return undefined;
   const decision =
     answer === 'ask'
-      ? yield* askCommandApproval(run.runId, approvals, requests, {
+      ? yield* askCommandApproval(run.runId, requests, {
           command,
           cwd,
-          grant: hook === 'ask' ? null : OPERATIONS[operation][0],
+          grant: hook === 'ask' ? null : OPERATIONS[operation],
         })
       : answer;
   return decision.action === 'approve'
@@ -300,24 +297,23 @@ export const callRequests = (
   >;
 } => {
   const { runId } = run;
-  const sessionRequests = Context.get(session, SessionRequests);
   const log = Context.get(session, SessionLog);
   const interactions = Context.get(session, Interactions);
   let reentering = standing;
   let opened = raised;
-  // Through the decision authority's own check, so an answer a surface
-  // landed meanwhile stands and the retirement writes nothing. `retireCause`
-  // is why the call no longer asks: a resume that re-entered without it, or
+  // Through the decision's own check, so an answer a surface landed
+  // meanwhile stands and the retirement writes nothing. `retireCause` is
+  // why the call no longer asks: a resume that re-entered without it, or
   // a script that ended before the call settled.
   const retireStanding = Effect.suspend(() => {
     const open = reentering?.request.decision === null ? reentering : null;
     reentering = null;
     if (open === null) return Effect.void;
     return Effect.asVoid(
-      sessionRequests.decide(runId, open.requestId, {
+      decideRequest(runId, open.requestId, {
         action: 'cancel',
         cause: retireCause,
-      }),
+      }).pipe(Effect.provideService(SessionLog, log)),
     );
   });
   const requests: CallRequests = {
@@ -348,26 +344,27 @@ export const callRequests = (
           return recordedDecision(payload, reentered.request.decision).pipe(
             Effect.map(answered),
           );
-        return sessionRequests
-          .ask(runId, payload, {
+        return Effect.flatMap(RunCall, (call) =>
+          openRequest(runId, payload, {
             ...(blobs && { blobs }),
-            open: (rows) => {
-              if (reentered !== null) {
-                // Open already: only what the policy decides commits, and
-                // the decision is read from where the resume read the run.
-                const decided = rows.filter(isRequestDecision);
-                const from = cell.opened.commit;
-                return decided.length === 0
-                  ? Effect.succeed(from)
-                  : commit(decided).pipe(Effect.as(from));
-              }
-              return retireStanding.pipe(
-                Effect.andThen(Effect.sync(() => log.now())),
-                Effect.flatMap((from) => commit(rows).pipe(Effect.as(from))),
-              );
-            },
-          })
-          .pipe(Effect.map(answered));
+            ...(call?.hook && { hook: call.hook }),
+            reentered: reentered !== null,
+            // Open already: only what the policy decides commits, and the
+            // decision is read from where the resume read the run. Fresh:
+            // the standing request of another kind is retired first.
+            commit: (rows) =>
+              reentered !== null
+                ? rows.length === 0
+                  ? Effect.succeed(cell.opened.commit)
+                  : commit(rows).pipe(Effect.as(cell.opened.commit))
+                : retireStanding.pipe(
+                    Effect.andThen(Effect.sync(() => log.now())),
+                    Effect.flatMap((from) =>
+                      commit(rows).pipe(Effect.as(from)),
+                    ),
+                  ),
+          }),
+        ).pipe(Effect.provide(session), Effect.map(answered));
       }),
     post: (requestId, request) =>
       Effect.suspend(() =>

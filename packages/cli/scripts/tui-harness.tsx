@@ -27,7 +27,7 @@ import {
   Secrets,
 } from '@texra-ai/harness/host';
 import { Interactions } from '@agent/runtime/HostInteractions';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { openRequest, SessionRequests } from '@agent/runtime/requests';
 import { queuedRow } from '@agent/followUp/followUpMessages';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
@@ -37,6 +37,7 @@ import { SessionRoots } from '@platform/rootedFs';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   RunHistory,
+  runStateAppend,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
@@ -1183,6 +1184,21 @@ function makeUserQuestionPayload(): UserQuestionPermission {
   };
 }
 
+/** Open one request the way a run asks (`openRequest`): committed through
+ *  the session's log, answered by the surface's `request.decided`. */
+const askHarness = (
+  runId: RunId,
+  payload: PermissionPayload,
+  blobs?: readonly DraftBlob[],
+) =>
+  openRequest(runId, payload, {
+    ...(blobs && { blobs }),
+    commit: (rows) =>
+      session()
+        .log.transact((tx) => runStateAppend(tx.append)(rows))
+        .pipe(Effect.as(session().log.now())),
+  }).pipe(Effect.provide(harnessRuntimeSession));
+
 /** One request the way a run asks: `request.opened` on the run, the modal
  *  reads it off the fold, and the surface's `request.decided` answers it. */
 function requestHarnessApproval(
@@ -1193,9 +1209,7 @@ function requestHarnessApproval(
   blobs?: readonly DraftBlob[],
 ): void {
   void harnessRuntime
-    .runPromise(
-      session().requests.ask(runId, payload, { ...(blobs && { blobs }) }),
-    )
+    .runPromise(askHarness(runId, payload, blobs))
     .then(onSettled)
     .catch((error: unknown) => {
       appendLocalErrorTranscript(
@@ -1492,10 +1506,7 @@ if (SHOW_BASH_APPROVAL) {
   const showApproval = (index = 1) => {
     const permission = makeBashApprovalPayload(index);
     return harnessRuntime.runPromise(
-      session().requests.ask(permission.runId, {
-        kind: 'bash',
-        data: permission,
-      }),
+      askHarness(permission.runId, { kind: 'bash', data: permission }),
     );
   };
   const showRepeatedApprovals = async (): Promise<void> => {

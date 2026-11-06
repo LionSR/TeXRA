@@ -620,10 +620,7 @@ export const serviceSession = Effect.fn('serviceSession')(function* (
     // its prompts, so a handler would be asked nothing.
     attach: (host) =>
       host.approve === undefined
-        ? attachWindowHost(link, workspace, {
-            emit: host.emit,
-            approvalDenied: host.approvalDenied,
-          })
+        ? attachWindowHost(link, workspace, { emit: host.emit })
         : Effect.die(
             new Error(
               "approve handlers are not supported on a service-backed session; the service's windows answer prompts",

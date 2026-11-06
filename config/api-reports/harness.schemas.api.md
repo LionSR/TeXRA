@@ -38,7 +38,6 @@ Exports: 263
 - `ApprovalGrants` — `type ApprovalGrants = typeof ApprovalPolicySnapshotSchema.Type; ≡ { readonly goal: readonly ("bash" | "superYolo" | "toolEdit")[]; readonly limit?: "ask" | "never" | undefined; readonly own: { readonly bash?: "off" | "on" | "parent" | undefined; readonly superYolo?: "off" | "on" | "parent" | undefined; readonly toolEdit?: "off" | "on" | "parent" | undefined; }; }`
 - `ApprovalGrantSource` — `interface ApprovalGrantSource<Id> { readonly runs: ReadonlyMap<Id, { readonly parentId: Id | null; }>; readonly policy: ReadonlyMap<Id, ApprovalGrants>; }`
 - `ApprovalPolicy` — `type ApprovalPolicy = typeof ApprovalPolicySchema.Type; ≡ "ask" | "never" | "yolo"`
-- `ApprovalPolicyDenial` — `type ApprovalPolicyDenial = { readonly policy: ApprovalPolicy; } & ({ readonly kind: 'executable'; } | { readonly kind: 'plan'; } | { readonly kind: 'proposal'; } | { readonly kind: 'withheldTools'; readonly tools: readonly string[]; } | { readonly kind: 'retry'; readonly deny: Exclude<RetryApprovalDecision, 'present'>['deny']; } | { readonly kind: 'humanInput'; readonly deny: Exclude<HumanInputDecision, 'present'>['deny']; }); ≡ ApprovalPolicyDenial`
 - `approvalPolicyDenialMessage` — `function approvalPolicyDenialMessage: (decision: "deny-policy" | "deny-unpresentable") => string`
 - `ApprovalPolicySchema` — `const ApprovalPolicySchema: Literals<readonly ["never", "ask", "yolo"]>`
 - `AttachedMemoryMiss` — `type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type; ≡ { readonly path: string; readonly reason: string; }`
@@ -151,6 +150,7 @@ Exports: 263
 - `planSummaryLine` — `function planSummaryLine: (objective: string) => string`
 - `PluginRequest` — `type PluginRequest = typeof PluginRequestSchema.Type; ≡ { readonly answers: readonly ("answer" | "approve" | "approve_and_goal" | "retry" | "skip" | "submit")[]; readonly blocksCaller: boolean; readonly data: { readonly [x: string]: Json; readonly requestId: string; readonly runId: string & Brand<"RunId">; }; readonly kind: "plugin"; readonly plugin: string; }`
 - `previewLabel` — `function previewLabel: (text: string) => string`
+- `ProcessExit` — `type ProcessExit = typeof ProcessExitSchema.Type; ≡ { readonly code: null | number; readonly signal: null | string; readonly timedOut: boolean; }`
 - `ProgressPermissionKind` — `type ProgressPermissionKind = PermissionPayload['kind']; ≡ "bash" | "planApproval" | "plugin" | "proposal" | "retry" | "toolEdit" | "userQuestion"`
 - `ProposalFileFields` — `interface ProposalFileFields { readonly inputFiles?: readonly string[]; readonly contextFiles?: readonly string[]; readonly mediaFiles?: readonly string[]; readonly outputFiles?: readonly string[]; readonly memories?: readonly string[]; }`
 - `ProposalFileGroup` — `interface ProposalFileGroup { label: string; files: readonly string[]; clickable: boolean; }`

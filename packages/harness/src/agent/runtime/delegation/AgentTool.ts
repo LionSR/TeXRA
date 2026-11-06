@@ -20,7 +20,7 @@ import { readRecipeResult } from '@agent/runtime/recipeResult';
 import { formatSubagentDelivery } from '@agent/runtime/subagentResults';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { RunCall, requireToolRun } from '@agent/runtime/RunCall';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { decisionOf } from '@agent/runtime/requests';
 import type { RunToolCall, ScriptScope } from '@agent/runtime/RunCall';
 import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import {
@@ -201,10 +201,9 @@ const scriptRequest = Effect.fn('AgentTool.scriptRequest')(
     const from = (yield* SessionLog).now();
     const state = yield* (yield* RunHistory).load(runId);
     const { raised, own } = attemptRequests(state?.requests ?? {}, shared);
-    const requests = yield* SessionRequests;
     if (own?.request.decision === null)
       // A session that closes first decides nothing: the next resume asks.
-      return yield* requests.decision(runId, own.requestId, from).pipe(
+      return yield* decisionOf(runId, own.requestId, from).pipe(
         Effect.map((row) => row.decision),
         Effect.catch((cause) =>
           Effect.logWarning(

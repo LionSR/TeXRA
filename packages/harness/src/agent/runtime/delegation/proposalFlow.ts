@@ -15,7 +15,7 @@ import {
   type WorkspaceAgentsStores,
 } from '@agent/index/agentCatalog';
 import { RunCall, type RunToolCall } from '@agent/runtime/RunCall';
-import { recordedDecision } from '@agent/runtime/requestPolicy';
+import { recordedDecision } from '@agent/runtime/requests';
 import { isTrustedScript } from '@agent/core/definition/RunRecord';
 import type {
   AgentProposal,

@@ -30,7 +30,7 @@ import {
   generateRunId,
   qualifyAggregateId,
 } from '@texra-ai/harness/schemas';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { SessionRequests } from '@agent/runtime/requests';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import { validationModelLayer } from '@cli/runtime/validationModel';
 import { SessionViewAccess } from '@shared/session/runHistory';

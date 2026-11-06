@@ -67,8 +67,9 @@ is the module map by concern. Run-loop rules are in
   `deliveryEnvelope` (the XML envelope every child path builds);
   `delegation/` (the child launches: the `agent` tool and `ChildRuns`, a
   detached or process child, and which models a child may use).
-- **Control**: `runApprovalQueue`;
-  `requestPolicy` (what the approval policy decides when a request opens).
+- **Control**: `runApprovalQueue` (a run's grants); `requests` (a run's
+  questions to a person: opened through its cell with the policy's answer,
+  decided once, cancelled with the run's end).
 - **Helper model**: `helperModel` (`helperCall`, the gated, priced and logged
   one-shot path through `ModelAccess`); `helperModelName` (the configured
   helper model, else the app catalog's default; with neither, a run's helper

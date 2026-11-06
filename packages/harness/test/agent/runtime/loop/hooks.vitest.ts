@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { layer } from '@effect/vitest';
-import { Context, Effect, Schema } from 'effect';
+import { Effect, Schema } from 'effect';
 import { assert, describe, expect } from 'vitest';
 
 import { Sessions } from '@texra-ai/harness';
@@ -24,7 +24,7 @@ import {
   generateRunId,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { SessionRequests } from '@agent/runtime/requestPolicy';
+import { decideRequest } from '@agent/runtime/requests';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { rootRun } from '@agent/runtime/rootLaunch';
 import {
@@ -188,11 +188,9 @@ describe('run loop hooks', { timeout: REAL_RUN_TIMEOUT }, () => {
             );
             expect(resumed).toMatchObject({ activation: expect.any(Number) });
             expect(
-              yield* Context.get(session, SessionRequests).decide(
-                runId,
-                pending.requestId,
-                { action: 'approve' },
-              ),
+              yield* decideRequest(runId, pending.requestId, {
+                action: 'approve',
+              }).pipe(Effect.provide(session)),
             ).toBe(true);
             yield* untilStored(
               storage,

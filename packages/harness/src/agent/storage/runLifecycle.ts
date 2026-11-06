@@ -35,10 +35,11 @@ import {
   runEndDraft,
 } from '@shared/session/runFacts';
 import type { RunRows } from '@shared/session/runRowsShape';
-import type {
-  RunHistoryDraft,
-  RunInputDraft,
-  RunState,
+import {
+  cancelRequestRows,
+  type RunHistoryDraft,
+  type RunInputDraft,
+  type RunState,
 } from '@shared/session/runState';
 import type { UnfoldedDraft } from '@shared/session/sessionEvents';
 import type { SessionTransaction } from '@shared/session/sessionLog';
@@ -185,17 +186,12 @@ const cancelledRequests = (
   runId: RunId,
   state: RunState,
 ): readonly RunHistoryDraft[] =>
-  Object.entries(state.requests).flatMap(([requestId, { decision }]) =>
-    decision === null
-      ? [
-          {
-            type: 'request.decided' as const,
-            aggregateId: qualifyAggregateId('run', runId),
-            requestId,
-            decision: { action: 'cancel' as const, cause: 'The run ended.' },
-          },
-        ]
-      : [],
+  cancelRequestRows(
+    runId,
+    Object.entries(state.requests).flatMap(([requestId, { decision }]) =>
+      decision === null ? [requestId] : [],
+    ),
+    'The run ended.',
   );
 
 /**

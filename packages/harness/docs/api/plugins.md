@@ -1352,8 +1352,8 @@ given what the call's hooks said, asks: a `request.opened` on the run
 that names the proposal's content (the original and proposed text with
 their diff) by its address in the session's blob store, stored with the
 row, so every process the request reaches shows the same diff
-(`request.preview`); serialized behind the run's other prompts, answered
-by a surface's `request.decide`. An approve applies the file as the
+(`request.preview`); answered by a surface's `request.decide`, or by the
+edit grant turned on meanwhile. An approve applies the file as the
 person left it: the decision's content, else the proposal.
 
 ```ts

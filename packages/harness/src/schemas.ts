@@ -164,7 +164,6 @@ export {
   ApprovalPolicySchema,
   parseApprovalPolicy,
   type ApprovalPolicy,
-  type ApprovalPolicyDenial,
   type HumanInputDecision,
   type RetryApprovalDecision,
 } from '@shared/approvalPolicy';

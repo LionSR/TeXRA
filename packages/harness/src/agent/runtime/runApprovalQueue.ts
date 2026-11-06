@@ -1,6 +1,6 @@
 /**
- * The session's approvals: the prompt lanes, a run's grants, and how a
- * request's session write or claim fails it.
+ * The session's approvals: a run's grants, and how a request's session
+ * write fails it.
  *
  * A run's grants have one owner, its `approval.policy` rows: a change is an
  * awaited commit of the run's next grants, read back from the rows, never a
@@ -26,27 +26,29 @@ import {
   type ApprovalGrantSource,
   grantSource,
 } from '@shared/approvalBypassKind';
-import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
-import {} from '@shared/session/database';
+import {
+  bypassCovers,
+  qualifyAggregateId,
+  type PermissionPayload,
+  type RunId,
+} from '@shared/schemas';
 import {
   Unavailable,
   type RequestError,
   type RuntimeRequest,
 } from '@shared/session/runtimeRequest';
-import type {
-  QueuedKind,
-  SessionApprovals,
-} from '@shared/session/sessionApprovals';
-import type { UnfoldedDraft } from '@shared/session/sessionEvents';
+import type { SessionApprovals } from '@shared/session/sessionApprovals';
+import type { SessionEventDraft } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import { ancestryRows } from '@shared/session/runRelation';
 import {
   Approvals,
+  runStateAppend,
   SessionLog,
   SessionViewAccess,
 } from '@shared/session/runHistory';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { SessionRequests } from './requestPolicy';
+import type { SessionLogShape } from '@shared/session/sessionLog';
+import { decideRequest } from './requests';
 
 /**
  * A run's grants once it activates again, or null when they stand as
@@ -83,6 +85,50 @@ const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
   snapshot,
 });
 
+/** Whether `grants` turn `kind`'s bypass on by the run's own value or its
+ *  goal's; a kind that follows the ancestry is read live, not here. */
+const grantsOn = (grants: ApprovalGrants, kind: ApprovalBypassKind): boolean =>
+  grants.own[kind] === 'on' || grants.goal.includes(kind);
+
+/** Whether a request says only a person answers it (a hook's ask). */
+const personOnly = (payload: PermissionPayload): boolean =>
+  'allowBypass' in payload.data && !payload.data.allowBypass;
+
+/**
+ * The approval of every request of `runId` still open that a grant `next`
+ * turns on covers: decided in the transaction that records the grant, so
+ * a person who answers "approve and stop asking" answers what waits
+ * behind it too. A request another grant already covered, or one only a
+ * person answers, is left as it is.
+ */
+const approvalsUnder = Effect.fn('approvalsUnder')(function* (
+  log: Pick<SessionLogShape, 'runRows'>,
+  runId: RunId,
+  recorded: ApprovalGrants,
+  next: ApprovalGrants,
+) {
+  const turnedOn = APPROVAL_BYPASS_KINDS.filter(
+    (kind) => grantsOn(next, kind) && !grantsOn(recorded, kind),
+  );
+  if (turnedOn.length === 0) return [];
+  const aggregateId = qualifyAggregateId('run', runId);
+  const { requests } = yield* log.runRows(aggregateId, 'requests');
+  return Object.entries(requests).flatMap(([requestId, request]) =>
+    request.decision === null &&
+    !personOnly(request.payload) &&
+    turnedOn.some((kind) => bypassCovers(kind, request.payload.kind))
+      ? [
+          {
+            type: 'request.decided' as const,
+            aggregateId,
+            requestId,
+            decision: { action: 'approve' as const },
+          },
+        ]
+      : [],
+  );
+});
+
 /** The session's approvals over its view, its record door and its
  *  config. */
 export const sessionApprovals: Effect.Effect<
@@ -94,12 +140,6 @@ export const sessionApprovals: Effect.Effect<
   const log = yield* SessionLog;
   const roots = yield* SessionRoots;
   const view = () => SubscriptionRef.getUnsafe(ref);
-  // One lane per kind and run, which the run's prompts take in turn;
-  // `withPerKeyLane` drops a lane from its map once its last prompt settles.
-  const lanes: Record<QueuedKind, Map<RunId, PerKeyLane>> = {
-    bash: new Map(),
-    toolEdit: new Map(),
-  };
   const bypass: SessionApprovals['bypass'] = (runId, kind) =>
     resolveBypass(view(), runId, kind);
   return {
@@ -113,12 +153,6 @@ export const sessionApprovals: Effect.Effect<
         view(),
         runId,
       ),
-    enqueue: (kind, runId, approval) =>
-      Effect.suspend(() =>
-        approval.grant !== null && bypass(runId, approval.grant) !== null
-          ? approval.bypassed
-          : approval.prompt,
-      ).pipe(withPerKeyLane(lanes[kind], runId)),
     activationRows: Effect.fn('activationRows')(function* (runId) {
       const source = grantSource(
         yield* ancestryRows((id) => log.facts(id), runId),
@@ -145,10 +179,14 @@ export const sessionApprovals: Effect.Effect<
           const recorded =
             (yield* log.facts(runId))?.grants ?? NO_APPROVAL_GRANTS;
           const next = edit(recorded);
-          const all: readonly UnfoldedDraft[] = sameGrants(recorded, next)
+          const all: readonly SessionEventDraft[] = sameGrants(recorded, next)
             ? rows
-            : [...rows, policyRow(runId, next)];
-          if (all.length > 0) yield* tx.append(all);
+            : [
+                ...rows,
+                policyRow(runId, next),
+                ...(yield* approvalsUnder(log, runId, recorded, next)),
+              ];
+          if (all.length > 0) yield* runStateAppend(tx.append)(all);
         }),
       );
     },
@@ -185,45 +223,6 @@ export const writeRejection =
 
 type PolicyChange = Extract<RuntimeRequest, { kind: 'policy.set' }>['change'];
 type Answer<A, R> = Effect.Effect<A, RequestError, R>;
-type BypassChange = Extract<PolicyChange, { field: 'bypass' }>;
-
-/**
- * Approve the run's requests pending under a bypass just turned on. Each
- * decision re-reads the rows, so one decided meanwhile keeps its answer; one
- * offering no grant (another tool's call, a hook's ask) waits for a person;
- * an edit's approval applies the user's edit; one still opening stays.
- */
-const approvePendingUnderBypass = Effect.fn('approvePendingUnderBypass')(
-  function* ({
-    runId,
-    bypass,
-  }: BypassChange): Effect.fn.Return<
-    void,
-    RequestError,
-    SessionViewAccess | SessionRequests
-  > {
-    const { ref } = yield* SessionViewAccess;
-    const requests = yield* SessionRequests;
-    yield* Effect.forEach(
-      SubscriptionRef.getUnsafe(ref).requests.filter(
-        ({ runId: requestRunId, payload }) =>
-          requestRunId === runId &&
-          bypassCovers(bypass, payload.kind) &&
-          !('allowBypass' in payload.data && !payload.data.allowBypass),
-      ),
-      ({ requestId }) =>
-        requests.decide(runId, requestId, { action: 'approve' }),
-      { discard: true },
-    ).pipe(
-      Effect.mapError(
-        writeRejection({
-          runId,
-          reason: 'The pending requests could not be approved.',
-        }),
-      ),
-    );
-  },
-);
 
 /** Whether `change` only narrows a run (a bypass off, a lower limit): open
  *  on any run, live or not, where a widening needs a working run's `grant`. */
@@ -233,18 +232,13 @@ export const narrows = (change: PolicyChange): boolean =>
 /**
  * Apply a grant change (a bypass, or a lower limit) once its `approval.policy`
  * row is durable, then `decide`, the decision it came with. Turning a bypass
- * on then approves what else waits behind it, on a run this process drives,
- * even when `decide` fails. The caller holds the run's claim.
+ * on approves what else waits behind it in the grant's own transaction
+ * (`approvalsUnder`).
  */
 export function setPolicy<A, R>(
   change: PolicyChange,
-  heldHere: boolean,
   decide: Effect.Effect<A, RequestError, R>,
-): Effect.Effect<
-  A,
-  RequestError,
-  R | Approvals | SessionViewAccess | SessionRequests
-> {
+): Effect.Effect<A, RequestError, R | Approvals> {
   // A limit only lowers; the delegated-work grant covers the command and
   // edit grants too.
   const edit =
@@ -271,14 +265,7 @@ export function setPolicy<A, R>(
         reason: 'The approval change could not be saved.',
       }),
     ),
-    Effect.andThen(Effect.exit(decide)),
-    // A run held elsewhere has no fiber here to act on a decision.
-    Effect.tap(() =>
-      change.field === 'bypass' && change.enabled && heldHere
-        ? approvePendingUnderBypass(change)
-        : Effect.void,
-    ),
-    Effect.flatten,
+    Effect.andThen(decide),
   );
 }
 
@@ -289,15 +276,12 @@ export function setPolicy<A, R>(
  */
 export const decideUnderGrant = <A, R>(
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
-  heldHere: boolean,
   answer: (
-    write: Effect.Effect<boolean, RequestError, SessionRequests>,
+    write: Effect.Effect<boolean, RequestError, SessionLog>,
   ) => Answer<A, R>,
-): Answer<A, R | Approvals | SessionViewAccess | SessionRequests> => {
+): Answer<A, R | Approvals | SessionLog> => {
   const { runId, requestId, decision, grant } = req;
-  const write = SessionRequests.use((requests) =>
-    requests.decide(runId, requestId, decision),
-  ).pipe(
+  const write = decideRequest(runId, requestId, decision).pipe(
     Effect.mapError(
       writeRejection({
         runId,
@@ -309,7 +293,6 @@ export const decideUnderGrant = <A, R>(
     ? answer(write)
     : setPolicy(
         { field: 'bypass', runId, bypass: grant, enabled: true },
-        heldHere,
         answer(write),
       );
 };

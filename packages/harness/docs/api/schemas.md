@@ -303,33 +303,6 @@ interface ApprovalGrantSource<Id> {
 type ApprovalPolicy = typeof ApprovalPolicySchema.Type;
 ```
 
-## ApprovalPolicyDenial
-
-What an approval-policy denial closed, as the session reports it to its
-host: a command, edit or plan, a delegation proposal, the approval-gated
-tools withheld from the model when the run resolved its tools, the human
-retry permit after a model error, or a question the model asked the user;
-and the policy that closed it, which a host names in what it says.
-
-```ts
-type ApprovalPolicyDenial = {
-  readonly policy: ApprovalPolicy;
-} & (
-  | { readonly kind: 'executable' }
-  | { readonly kind: 'plan' }
-  | { readonly kind: 'proposal' }
-  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
-  | {
-      readonly kind: 'retry';
-      readonly deny: Exclude<RetryApprovalDecision, 'present'>['deny'];
-    }
-  | {
-      readonly kind: 'humanInput';
-      readonly deny: Exclude<HumanInputDecision, 'present'>['deny'];
-    }
-);
-```
-
 ## approvalPolicyDenialMessage
 
 ```ts
@@ -1365,6 +1338,12 @@ site here already passes text that is one line in practice.
 
 ```ts
 function previewLabel(text: string): string
+```
+
+## ProcessExit
+
+```ts
+type ProcessExit = typeof ProcessExitSchema.Type;
 ```
 
 ## ProgressPermissionKind
