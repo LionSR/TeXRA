@@ -20,7 +20,7 @@ import { SessionLog } from '@shared/session/runHistory';
 import type { UsageLog } from '@shared/usageLog';
 import { descriptionRow } from '@shared/session/runFacts';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import type { RouteRetries } from './run/invocation';
+import type { RouteRetries } from './ModelRetryGate';
 import type { HttpClient } from 'effect/http';
 
 const CHANNEL = 'SessionDescription';

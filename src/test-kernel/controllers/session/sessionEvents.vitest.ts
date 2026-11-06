@@ -1381,7 +1381,6 @@ describe('RunHistory', () => {
             request: '0'.repeat(64),
             invocation: INVOCATION,
             origin: ORIGIN,
-            purpose: 'turn',
           },
         },
       ]);
@@ -1531,7 +1530,6 @@ describe('RunHistory', () => {
                     endpoint: `https://api.example.test/v1?api-key=${SECRET}`,
                   },
                 },
-                purpose: 'turn',
               },
             },
           ])

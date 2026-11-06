@@ -20,8 +20,8 @@ import type { NormalizedUsage } from '@shared/schemas';
 import { turnText } from '@shared/session/runFacts';
 import type { UsageLog } from '@shared/usageLog';
 
+import type { RouteRetries } from './ModelRetryGate';
 import { callModel } from './run/modelCall';
-import type { RouteRetries } from './run/invocation';
 import type { UsageAttribution } from './run/pricing';
 import type { HttpClient } from 'effect/http';
 
@@ -35,9 +35,9 @@ export interface HelperPrompt {
 
 /**
  * One helper call: bind the configured helper model (else `runModel`) for
- * this call alone and run one completion through the one retry loop
- * (`run/invocation.ts`), gated on the process's retry gate, priced and
- * reported to the usage log as `attribution`. No row is written. Returns the
+ * this call alone and run one completion off the rows (`run/modelCall.ts`),
+ * gated on the process's retry gate, priced and reported to the usage log
+ * as `attribution`. No row is written. Returns the
  * turn's assistant text and its priced usage (`null`: the provider reported
  * none), for a caller whose row records what the call cost. `stores` are the
  * asking session's setting slots: the binding, the retry limit and the usage
@@ -72,19 +72,14 @@ export const helperCall = Effect.fn('helperCall')(
         .pipe(Effect.interruptible);
     const held = yield* ScopedRef.fromAcquire(acquire());
     const { turn, usage } = yield* callModel({
-      purpose: 'helper',
       binding: ScopedRef.get(held),
-      reacquire: (failed, renew) =>
-        ScopedRef.set(
-          held,
-          acquire(renew ? failed.subscriptionToken : undefined),
-        ).pipe(
+      renew: (failed) =>
+        ScopedRef.set(held, acquire(failed.subscriptionToken)).pipe(
           Effect.tapError((error) =>
             Effect.logWarning('Could not rebind the helper model').pipe(
               Effect.annotateLogs({ error }),
             ),
           ),
-          Effect.result,
         ),
       ...(retries === undefined ? {} : { retries }),
       request: {
@@ -96,10 +91,8 @@ export const helperCall = Effect.fn('helperCall')(
       },
       settings: stores,
       attribution,
-      // No run's trace: diagnostics go to the Effect logger.
-      logger: null,
-      // A helper call belongs to no run's history.
-      record: null,
+      // No run's trace: a wait is said to the Effect logger.
+      debug: (message) => Effect.logDebug(message),
     });
     // The turn's assistant text, from the same leaf the run loop reads.
     return { text: turnText(turn), usage };

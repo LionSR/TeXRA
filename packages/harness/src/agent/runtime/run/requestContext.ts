@@ -35,7 +35,6 @@ import {
   RunContextSchema,
   Sha256Schema,
   type RunContext,
-  type InvocationPurpose,
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
@@ -123,13 +122,6 @@ function recorded(
   return { agent, request };
 }
 
-/** The address of the recorded context of a request that sends `resolved`:
- *  what its `attempt` row names. */
-export const attemptRequest = (
-  run: Pick<AgentRunShape, 'config' | 'persona'>,
-  resolved: ResolvedTurn,
-): string => sha256(recorded(run, resolved).request);
-
 /**
  * The rows of an attempt that sends `resolved`, the turn the bound model
  * prepared: the blobs the rows do not hold yet, then the `attempt` row, which
@@ -139,7 +131,6 @@ export function attemptRows(
   run: Pick<AgentRunShape, 'runId' | 'config' | 'persona'>,
   state: RunState,
   invocation: InvocationRef,
-  purpose: InvocationPurpose,
   origin: ModelOrigin,
   resolved: ResolvedTurn,
 ): RunHistoryDraft[] {
@@ -157,7 +148,6 @@ export function attemptRows(
       payload: {
         kind: 'attempt',
         invocation,
-        purpose,
         request: sha256(request),
         origin,
       },

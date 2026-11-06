@@ -53,7 +53,7 @@ import {
   UsageLog,
 } from '@texra-ai/harness/host';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
-import { RouteRetries } from '@agent/runtime/run/invocation';
+import { RouteRetries } from '@agent/runtime/ModelRetryGate';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import type { InvokeRequest } from '@agent/runtime/run/requestContext';
 import { ModelInvoker, modelInvokerLayer } from '@agent/runtime/ModelInvoker';

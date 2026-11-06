@@ -273,7 +273,8 @@ export const ROW_KINDS: Readonly<Record<SessionEventDraft['type'], RowKind>> = {
   // accepted operation is its origin and response id alone, with no stream
   // position (an earlier build's operation would have its position silently
   // dropped).
-  'model.message': { version: 13, listing: 'none' },
+  // v14: no `purpose`; a compaction's summary records no attempt.
+  'model.message': { version: 14, listing: 'none' },
   // v2: the causes are `compaction` and `fork` alone (an earlier build's edit
   // of another cause would fail its run as damaged rather than read as that
   // build's).
