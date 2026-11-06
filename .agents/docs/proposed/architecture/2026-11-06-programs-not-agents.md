@@ -249,6 +249,87 @@ tools"。picker 列 chat 和 task；`texra run` 接 task 名或 `chat`。
 `AgentSource` 和插件 agent 加载，并使 1.0 PRD "Agent 文件和 imports"一节
 作废（第四处改口，见下）。
 
+### multi-agent 编排
+
+编排不是被删掉，是回到它本来的形态：一段程序。codemode 文档已经写了
+"`agent()` 是普通工具，所以 fan-out 工作流就是一个脚本"，并以此替掉了
+`delegate_multi_agents` 和五种 `workflow.*` 行。今天的 `orchestrator` 和
+`engineer` 是两段提示词，工具列表完全相同，只是告诉模型"拆任务然后调
+`agent()`"。
+
+留下的是机器：子运行带父边、一次脚本审批覆盖它的所有 `agent()`（Q5）、
+会话级子运行并发预算（`CHILD_RUN_CONCURRENCY_BUDGET`）、goal 的花费上限、
+`executions` 的运行间消息、子报告走 follow-up 收件箱、后台程序、Q2 的结果
+复用、SQL 的 `run_tree` 和 `tool_calls` 视图。没有一个依赖 agent 文件或
+team。
+
+每种模式是几行：
+
+```js
+// fan-out / fan-in
+const [math, cites, code] = await Promise.all([
+  agent('Check every derivation in §3.', {
+    system: REVIEWER,
+    tools: READ_ONLY,
+  }),
+  agent('Verify each citation against refs.bib.', {
+    system: LIBRARIAN,
+    tools: [...READ_ONLY, 'bash'],
+  }),
+  agent('Run the tests and report failures.', { tools: ['bash', 'read_file'] }),
+]);
+
+// pipeline
+const annotated = await task('annotate', { files });
+const applied = await task('apply', from(annotated));
+
+// supervisor loop：builtIn:goal 已经是它，verdict 和花费上限的语义在里面
+const { goal } = await import('builtIn:goal');
+return goal(objective, { maxCostUsd: 5 });
+
+// debate + judge
+const [a, b] = await Promise.all([
+  agent(q, { system: PRO }),
+  agent(q, { system: CON }),
+]);
+return agent(`Judge:\n${a.response}\n---\n${b.response}`, {
+  system: JUDGE,
+  schema: VERDICT,
+});
+
+// 长期后台 + 消息
+const worker = await agent('Watch CI and fix red builds.', {
+  background: true,
+  tools,
+});
+await tools.executions({
+  action: 'send',
+  run: worker.runId,
+  message: 'PR #42 opened.',
+});
+```
+
+team 给过的是一张"编排者可以挑的专家名单"。替代有两层：模型为当下需要的
+专家当场写一段 system 文本（"模型会变强"的直接推论）；需要跨会话复用或带
+专属工具的专家，是一个五行的 task 文件，`task()` 的声明列表就是名单。
+Physicist 团队变成一个目录里的几个 task 文件，放在插件或模板仓库里；
+lean4 的 `leanOrchestrator` 就是一个带 lean 工具的 task。
+
+真正要补的只有发现：编排者今天从"available agents"里挑名字，之后要在脚本
+声明里看到 task 的名字和 `description`，与工具声明并列。这是
+`packages/harness/src/tools/codemode/declarations.ts` 加一段，不是新机制；
+`searchTools` 已经覆盖工具。
+
+不出 `builtIn:orchestration` 库（`fanOut`、`pipeline`、`supervise`）：
+`Promise.all` 就是 fan-out，`task` 加 `from` 就是 pipeline。唯一值得作为库
+出货的模式是 goal，因为它编码了 verdict、暂停原因和花费上限这些 harness
+语义，而它已经在了。
+
+随之删掉：三个编排 persona、`delegationAgentScope`、`cli.teamId`、agent 选
+项上的 `isOrchestrator`；`agent()` 与 `task()`、`self()` 一起作为 `script`
+的全局始终提供，`multi-agent` 插件的开关保留作为用户的一次同意。
+`docs/guide/multi-agent-workflows.md` 改写成上面五个模式。
+
 ### 启动面
 
 picker 列 `assistant` 和 task，仅此。`launchTarget: 'agent' | 'team'` 删，
