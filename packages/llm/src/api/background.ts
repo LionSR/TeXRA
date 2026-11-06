@@ -42,7 +42,7 @@ const boundOperation = Effect.fn('llm.boundOperation')(function* (
     !sameModelOrigin(parsed.success.origin, origin)
   )
     return yield* new ModelError({
-      kind: 'unsupported',
+      kind: 'invalid-request',
       message: 'The remote operation belongs to another model binding.',
     });
   return parsed.success;
@@ -174,7 +174,7 @@ export function backgroundLifecycle<
           parsed.success.deadlineAtMs - (yield* Clock.currentTimeMillis),
         );
         const deadline = new ModelError({
-          kind: 'observation-deadline',
+          kind: 'transport',
           message: 'The original observation deadline has expired.',
         });
         if (!Duration.isPositive(remaining))

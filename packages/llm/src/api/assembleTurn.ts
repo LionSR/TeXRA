@@ -55,7 +55,7 @@ type Folded = Effect.Effect<readonly TurnEvent[], ModelError>;
 const fail = (turn: Assembly, what: string) =>
   Effect.fail(
     new ModelError({
-      kind: 'malformed-output',
+      kind: 'provider-rejection',
       message: `${turn.options.provider} ${what}.`,
     }),
   );
@@ -285,7 +285,7 @@ const complete = Effect.fn('llm.completeTurn')(function* (turn: Assembly) {
   });
   if (!Result.isSuccess(result))
     return yield* new ModelError({
-      kind: 'malformed-output',
+      kind: 'provider-rejection',
       message: `${turn.options.provider} returned inconsistent completed content.`,
       cause: Result.isFailure(result) ? result.failure : undefined,
     });

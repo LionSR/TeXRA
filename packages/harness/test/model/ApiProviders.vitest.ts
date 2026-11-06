@@ -48,7 +48,6 @@ describe('API provider key resolution', () => {
     () =>
       Effect.gen(function* () {
         const readFailure = new SecretsFailed({
-          reason: 'io',
           operation: 'get',
           message: 'credential store unavailable',
         });

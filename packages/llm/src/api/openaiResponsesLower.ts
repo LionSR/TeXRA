@@ -133,7 +133,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
     for (const part of message.content) {
       if (part.evidence != null && !sameModelOrigin(message.origin, turn)) {
         return yield* new ModelError({
-          kind: 'unsupported',
+          kind: 'invalid-request',
           message: 'Provider content evidence belongs to another model origin.',
         });
       }
@@ -142,7 +142,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
           if (part.evidence) {
             if (part.evidence.kind !== 'openai-responses-message') {
               return yield* new ModelError({
-                kind: 'unsupported',
+                kind: 'invalid-request',
                 message: 'Responses cannot replay foreign message evidence.',
               });
             }
@@ -165,7 +165,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             for (const child of part.content) {
               if (child.kind !== 'text') {
                 return yield* new ModelError({
-                  kind: 'unsupported',
+                  kind: 'invalid-request',
                   message:
                     'Responses refusal history requires its original message evidence.',
                 });
@@ -179,7 +179,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
         case 'reasoning': {
           if (part.evidence?.kind !== 'openai-responses-reasoning') {
             return yield* new ModelError({
-              kind: 'unsupported',
+              kind: 'invalid-request',
               message:
                 'Responses reasoning requires its original provider evidence.',
             });
@@ -214,7 +214,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             part.evidence.kind !== 'openai-responses-function-call'
           ) {
             return yield* new ModelError({
-              kind: 'unsupported',
+              kind: 'invalid-request',
               message:
                 'Responses tool history requires local calls without foreign evidence.',
             });

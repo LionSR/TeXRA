@@ -290,19 +290,18 @@ const continuationGone = ({ status, message }: Reply): boolean =>
 /**
  * The failure's kind, refined by what the reply proves. Only a request that
  * chained on a stored response can have lost it: a 404 on one that chained
- * nothing (a missing model) keeps its kind.
+ * nothing (a missing model) keeps its kind. A rate limit is its status
+ * (429) and a used-up quota its `quota`: neither changes the kind.
  */
 function kindOf(
   error: ModelError,
   reply: Reply,
   terminalOverflow: boolean,
-  quota: Quota | undefined,
   chained: boolean,
 ): ModelError['kind'] {
   if (terminalOverflow) return 'context-overflow';
-  if (quota !== undefined) return 'quota-exhausted';
   if (chained && continuationGone(reply)) return 'continuation-gone';
-  return reply.status === 429 ? 'rate-limited' : error.kind;
+  return error.kind;
 }
 
 /** What the failure is evidence about beyond this request, where the reply says. */
@@ -356,10 +355,13 @@ export function judgeFailure(
   const quota = terminalOverflow ? undefined : exhaustedQuota(reply, route);
   return new ModelError({
     ...error,
-    kind: kindOf(error, reply, terminalOverflow, quota, chained),
+    kind: kindOf(error, reply, terminalOverflow, chained),
     message: messageOf(reply, terminalOverflow),
     cause: error.cause,
-    retryable: notRetryable(error, reply, overflow),
+    // A used-up quota is never repeated as it is: its retry carries the
+    // route's switch.
+    retryable:
+      quota === undefined ? notRetryable(error, reply, overflow) : false,
     ...(reply.status === undefined ? {} : { status: reply.status }),
     ...(quota === undefined ? {} : { quota }),
     ...scopeOf(error, reply, quota),

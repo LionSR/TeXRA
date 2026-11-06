@@ -106,7 +106,7 @@ export function filesApiUploads(provider: {
     const parsed = provider.parseUploaded(created);
     if (!Result.isSuccess(parsed))
       return yield* new ModelError({
-        kind: 'malformed-output',
+        kind: 'provider-rejection',
         message: `${provider.providerName} returned an upload without a usable file id.`,
         model: provider.model,
         cause: parsed.failure,

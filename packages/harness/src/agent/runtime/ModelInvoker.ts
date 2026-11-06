@@ -320,7 +320,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           trace.thinking.finalize(undefined);
           trace.output.finalize();
           return yield* new ModelError({
-            kind: 'malformed-output',
+            kind: 'provider-rejection',
             message: EMPTY_RESPONSE_ERROR_MESSAGE,
             partialText: completed.streamedText,
           });
@@ -491,7 +491,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           const background = bound.model.background;
           if (background === undefined) {
             return yield* new ModelError({
-              kind: 'unsupported',
+              kind: 'invalid-request',
               message:
                 'The run resumed onto a model that cannot observe its accepted background operation.',
             });
