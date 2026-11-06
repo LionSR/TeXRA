@@ -1,3 +1,4 @@
+import type { ProcessServices } from '@texra-ai/harness/host';
 import { Effect, Result } from 'effect';
 
 import { Cancelled } from '@texra-ai/harness';
@@ -27,12 +28,12 @@ const SETUP_INSTRUCTION =
  * That refusal is the launch path's to show, and a failure once the run
  * started is its result row's: neither is a failure here.
  */
-export const launchSetup = Effect.fn('launchSetup')(function* <E>(options: {
+export const launchSetup = Effect.fn('launchSetup')(function* <E, R>(options: {
   readonly session: Pick<Session, 'view'>;
   readonly roots: SettingsStores;
   /** This host's launch path for the setup request, which logs and shows a
    *  failure to start (`HostRunActions.runValidated`). */
-  readonly start: (config: AgentConfig) => Effect.Effect<Run, E>;
+  readonly start: (config: AgentConfig) => Effect.Effect<Run, E, R>;
 }) {
   // A second setup conversation, however it was started, would race the
   // first one's installs and config writes.
@@ -89,7 +90,7 @@ export const kickoffDesktopSetup = (options: {
         readonly present: Pick<SessionHostInteractions, 'emit'>;
       })
     | undefined;
-}): Effect.Effect<void, never, Secrets> => {
+}): Effect.Effect<void, never, Secrets | ProcessServices> => {
   const { run } = options;
   if (!run)
     return Effect.logWarning(

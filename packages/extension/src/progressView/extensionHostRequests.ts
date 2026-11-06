@@ -23,7 +23,6 @@ import {
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
-  AgentDirectories,
   type StateStore,
   type StateReadFailed,
   type StateWriteFailed,
@@ -82,7 +81,6 @@ import {
   TRANSCRIPT_EXPORT_FORMAT_CHOICES,
   type TranscriptExportOpenKind,
 } from '@texra/controllers/progressView/exportTranscript';
-import { ApiKeyPromptFailed } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { TranscriptExportFailed } from '@texra/controllers/progressView/transcriptExportFailure';
 import {
   fromHost,
@@ -92,13 +90,12 @@ import {
 import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
-  OwnHostRequest,
+  OwnHostArms,
   SharedHostRequestBindings,
 } from '@texra/controllers/session/openGuiWindow';
 import type { SessionBridge } from '@texra/controllers/session/SessionBridge';
 import type { WindowHost } from '@texra/controllers/server/windowHost';
 import { texraGuideUrl } from '@ui/copy/guide';
-import type { ApiKeyProviderId } from '@texra-ai/llm';
 
 const CHANNEL = 'ExtensionHostRequests';
 
@@ -416,9 +413,10 @@ export const createExtensionHostRequests = Effect.fn(
       runHandler('openSettings', options.openSettings(target)),
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.
-    setApiKey: runHandler('setApiKey', setApiKey(roots)).pipe(
-      Effect.andThen(refreshOnboardingFunnel),
-    ),
+    setApiKey: (provider) =>
+      runHandler('setApiKey', setApiKey(roots, provider)).pipe(
+        Effect.andThen(refreshOnboardingFunnel),
+      ),
     openGuide: (page, anchor) =>
       Effect.asVoid(
         fromHost('env.openExternal', () =>
@@ -427,10 +425,6 @@ export const createExtensionHostRequests = Effect.fn(
           ),
         ),
       ),
-    openCustomAgentDirectory: Effect.gen(function* () {
-      const dir = yield* (yield* AgentDirectories).custom();
-      if (dir) yield* revealFileInOS(dir);
-    }),
     // The banner refresh probes the dependencies again; the banner shows
     // what is missing.
     recheckDependencies: snapshot.refreshHostBanners,
@@ -474,26 +468,19 @@ export const createExtensionHostRequests = Effect.fn(
    * commands run as the programs behind them, so no arm re-enters the
    * runtime between here and the bridge that runs this program.
    */
-  const own = Effect.fn('own')(function* (request: OwnHostRequest) {
-    switch (request.kind) {
-      case 'popOut':
-        yield* options.popOutToEditor();
-        return done;
-      case 'popBack':
-        yield* options.showInSidebar();
-        return done;
-      case 'pickFiles':
-        return yield* pickFiles(request);
-      case 'useCurrentFile':
-        return yield* useCurrentFile(request);
-      case 'addOpenedFiles': {
+  const own: OwnHostArms = {
+    popOut: () => Effect.as(options.popOutToEditor(), done),
+    popBack: () => Effect.as(options.showInSidebar(), done),
+    pickFiles: (request) => pickFiles(request),
+    useCurrentFile: (request) => useCurrentFile(request),
+    addOpenedFiles: (request) =>
+      Effect.map(getOpenedFiles(), (opened): HostOutcome => {
         const allowed = new Set(
           getIncludedExtensions(request.fileType).map(
             normalizeMainViewFileExtension,
           ),
         );
-        const opened = yield* getOpenedFiles();
-        const outcome: HostOutcome = {
+        return {
           kind: 'files',
           paths:
             allowed.size > 0
@@ -502,17 +489,13 @@ export const createExtensionHostRequests = Effect.fn(
                 )
               : opened,
         };
-        return outcome;
-      }
-      case 'gettingStarted':
-        yield* runHandler(request.action, gettingStarted(request.action));
-        return done;
-      case 'workspaceFile':
-        return yield* new Rejected({
-          reason: 'The file editor is a desktop feature.',
-        });
-    }
-  });
+      }),
+    gettingStarted: (request) =>
+      Effect.as(
+        runHandler(request.action, gettingStarted(request.action)),
+        done,
+      ),
+  };
 
   return {
     bindings,
@@ -523,23 +506,7 @@ export const createExtensionHostRequests = Effect.fn(
     runs: {
       revealProgress: options.revealProgress,
       openFinalOutput: (config: AgentConfig, result: RunEnd) =>
-        withProcessServices(
-          runtime,
-          openFinalOutputIfAvailable(roots, config)(result),
-        ),
-      // The set-key prompt either runs or faults, so its failure is the one
-      // failure, as `ApiKeyPromptFailed`.
-      promptForApiKey: (provider: ApiKeyProviderId) =>
-        runHandler('setApiKey', setApiKey(roots, provider)).pipe(
-          Effect.mapError(
-            (failure) =>
-              new ApiKeyPromptFailed({
-                provider,
-                message: 'The host could not ask for a provider API key.',
-                cause: failure,
-              }),
-          ),
-        ),
+        openFinalOutputIfAvailable(roots, config)(result),
     },
     // Each command is named, so a failure carries a tag, never a rejection.
     files: {

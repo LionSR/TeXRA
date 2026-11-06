@@ -16,6 +16,7 @@ import {
 import {
   AgentCatalog,
   getHelperModelName,
+  type ProcessServices,
   type ModelHostFactUnreadable,
   StateReadFailed,
   withLogChannel,
@@ -102,7 +103,7 @@ export interface HostRunActionPorts {
   openFinalOutput(
     config: AgentConfig,
     result: RunEnd,
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, Error, ProcessServices>;
   loadModelOptions(): Effect.Effect<
     Parameters<typeof planCompileFixer>[0]['modelOptions'],
     ModelHostFactUnreadable | StateReadFailed
@@ -129,16 +130,16 @@ export interface HostRunActions {
   runValidated(
     config: AgentConfig,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, Error>;
+  ): Effect.Effect<Run, Error, ProcessServices>;
   /** Merge `editedFile` into `baseFile`: the merge agent's document task on
    *  the helper model, answering once its run is admitted. */
   merge(
     baseFile: string,
     editedFile: string,
-  ): Effect.Effect<void, RequestRefusal | StateReadFailed>;
+  ): Effect.Effect<void, RequestRefusal | StateReadFailed, ProcessServices>;
   resume(
     runId: RunId,
-  ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable>;
+  ): Effect.Effect<void, RequestRefusal | RunConfigUnreadable, ProcessServices>;
   /** The saved setup Run again… opens the launch form on. */
   runAgain(
     runId: RunId,
@@ -153,7 +154,8 @@ export interface HostRunActions {
     | NotificationFailed
     | RequestRefusal
     | RunConfigUnreadable
-    | RunFailure
+    | RunFailure,
+    ProcessServices
   >;
   /** The toolbar's latexdiff may run: the run still offers `files` and is
    *  a document task's with a saved config; else `Rejected`, which the
@@ -262,7 +264,7 @@ export const createHostRunActions = Effect.fn(
   const startAgentRequest = (
     config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<Run, Rejected | Cancelled> =>
+  ): Effect.Effect<Run, Rejected | Cancelled, ProcessServices> =>
     decodeLaunchConfig(config).pipe(
       Effect.flatMap((decoded) =>
         runValidated(decoded, options).pipe(
@@ -274,7 +276,7 @@ export const createHostRunActions = Effect.fn(
   const runAgentRequest = (
     config: AgentConfigInput,
     options?: RunValidatedOptions,
-  ): Effect.Effect<void, Rejected | Cancelled | RunFailure> =>
+  ): Effect.Effect<void, Rejected | Cancelled | RunFailure, ProcessServices> =>
     startAgentRequest(config, options).pipe(
       Effect.flatMap((run) => Effect.asVoid(run.result)),
     );

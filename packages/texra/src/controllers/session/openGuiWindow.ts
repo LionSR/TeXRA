@@ -20,7 +20,6 @@ import {
   Exit,
   FiberSet,
   Layer,
-  Option,
   Scope,
   Stream,
   SubscriptionRef,
@@ -31,15 +30,14 @@ import {
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  type Run,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
 import {
+  AgentDirectories,
   Secrets,
   SessionHostInteractions,
   sessionFsLayer,
-  withLogChannel,
   workspaceEnvironmentLayer,
   type ProcessServices,
   type StorageFs,
@@ -72,7 +70,10 @@ import {
 import { exportRunTranscript } from '@texra/controllers/progressView/exportTranscript';
 import { traceViewerTemplatePath } from '@texra/agent/export/standaloneTraceHtml';
 import { ProgressWorkflowFileActionsController } from '@texra/controllers/progressView/ProgressWorkflowFileActionsController';
-import { ProgressApiKeyRetryController } from '@texra/controllers/progressView/ProgressApiKeyRetryController';
+import {
+  ApiKeyPromptFailed,
+  ProgressApiKeyRetryController,
+} from '@texra/controllers/progressView/ProgressApiKeyRetryController';
 import { linkOutage, type ServiceLink } from '@texra/controllers/server/client';
 import {
   attachWindowHost,
@@ -94,6 +95,7 @@ import {
 } from './hostSnapshotSource';
 import { SessionBridge } from './SessionBridge';
 import type { RunId } from '@texra-ai/harness/schemas';
+import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
 
 /** A window's runs: its project's session, wherever its runs run (here,
@@ -145,6 +147,26 @@ type SharedHostRequest = Extract<
 /** The requests a host answers its own way. */
 export type OwnHostRequest = Exclude<HostRequest, SharedHostRequest>;
 
+/** The arms a host answers its own way, by kind. A kind a host leaves
+ *  out is refused by the shared router, worded once for both hosts. */
+export type OwnHostArms = {
+  readonly [K in OwnHostRequest['kind']]?: (
+    request: Extract<OwnHostRequest, { kind: K }>,
+    port: string,
+  ) => HostVerb<HostOutcome>;
+};
+
+/** What the refusal of an own kind a host lacks names. */
+const OWN_REQUEST_LABEL: Readonly<Record<OwnHostRequest['kind'], string>> = {
+  popOut: 'Pop-out to editor',
+  popBack: 'Pop-out to editor',
+  pickFiles: 'The file picker',
+  useCurrentFile: "The editor's current file",
+  addOpenedFiles: "The editor's open files",
+  gettingStarted: 'Starting a project',
+  workspaceFile: 'The file editor',
+};
+
 const sharedHostRequestKinds: ReadonlySet<HostRequest['kind']> = new Set(
   SHARED_HOST_REQUEST_KINDS,
 );
@@ -182,13 +204,13 @@ export interface SharedHostRequestBindings {
   readonly latexdiff: LatexdiffHost;
   /** Settings at a target, or where it was last left without one. */
   openSettings(target: SettingsTarget | undefined): HostVerb<void>;
-  /** Ask for a provider API key: a prompt on one host, the Models tab on the
-   *  other. The caller re-reads the secret store after this returns. */
-  readonly setApiKey: HostVerb<void>;
+  /** Ask for a provider API key, `provider`'s when a retry names one: a
+   *  prompt on one host, the Models tab on the other. The caller re-reads
+   *  the secret store after this returns. */
+  setApiKey(provider?: ApiKeyProviderId): HostVerb<void>;
   /** Open the guide's `page` in the browser, at its section `anchor` when
    *  one is named (`texraGuideUrl`). */
   openGuide(page: string, anchor?: string): HostVerb<void>;
-  readonly openCustomAgentDirectory: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   readonly openInstallGuide: HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
@@ -216,17 +238,10 @@ interface GuiWindowHost extends Pick<
   'showInfoMessage' | 'showWarningMessage'
 > {
   readonly bindings: SharedHostRequestBindings;
-  own(request: OwnHostRequest, port: string): HostVerb<HostOutcome>;
+  readonly own: OwnHostArms;
   /** What the window does for its project's runs, here or in the service. */
   readonly window: WindowHost;
-  readonly runs: Pick<
-    HostRunActionPorts,
-    'openFinalOutput' | 'revealProgress'
-  > &
-    Pick<
-      ConstructorParameters<typeof ProgressApiKeyRetryController>[0],
-      'promptForApiKey'
-    >;
+  readonly runs: Pick<HostRunActionPorts, 'openFinalOutput' | 'revealProgress'>;
   readonly files: Omit<
     ConstructorParameters<
       typeof ProgressWorkflowFileActionsController
@@ -266,13 +281,7 @@ interface GuiWindowPorts {
   ): Effect.Effect<GuiWindowHost, never, Scope.Scope | ProcessServices>;
 }
 
-const CHANNEL = 'GuiWindow';
-
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
-
-/** How long a run this window started may take to reach the window's view
- *  before the window stops waiting to show it. */
-const SHOW_LAUNCHED_WITHIN = '10 seconds';
 
 /** What the window tells the user after a pack or clean, at which severity
  *  (the latexdiff pack's counterpart is `latexdiffPackMessage`). */
@@ -366,11 +375,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   // it for the same. Its own failures before a run opens, it presents
   // itself.
   const workspace = roots.workspace ?? roots.storage;
-  const present = new SessionHostInteractions();
-  yield* Effect.addFinalizer(() => present.dispose());
-  yield* Effect.acquireRelease(present.use(host.window), (detach) =>
-    Effect.sync(detach),
-  );
+  const present = new SessionHostInteractions(host.window);
   yield* Effect.forkScoped(
     attachWindowHost(runs.link, workspace, host.window, ports.focused),
   );
@@ -390,48 +395,24 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
   });
   yield* Effect.forkScoped(toolEditApprovals.follow);
 
-  /** A run this window started is in the window's view before it is in a
-   *  surface's, whose frames are cut from the session after it, so each
-   *  surface selects the run once its own view holds it, told the commit of
-   *  the first level here that held it. A run the window's view does not
-   *  hold in time is not selected, and the window says so. */
-  const showLaunched = (run: Run) =>
-    Stream.runHead(run.view).pipe(
-      Effect.timeoutOption(SHOW_LAUNCHED_WITHIN),
-      Effect.map(Option.flatten),
-      Effect.flatMap(
-        Option.match({
-          onSome: (level) =>
-            Effect.sync(() =>
-              bridge.surfaceAction({
-                kind: 'selectOnArrival',
-                runId: run.runId,
-                cursor: level.cursor,
-              }),
-            ),
-          onNone: () =>
-            Effect.logWarning(
-              `Run ${run.runId} started, but this window's view did not hold it within ${SHOW_LAUNCHED_WITHIN}`,
-            ).pipe(
-              withLogChannel(CHANNEL),
-              Effect.andThen(
-                host.showWarningMessage(
-                  'The task started, but this window could not show it. Find it in the task list.',
-                ),
-              ),
-              Effect.ignore({ log: 'Warn' }),
-            ),
-        }),
-      ),
-    );
+  /** One program per request, over this session's rooted filesystems and
+   *  its project's `.env`: the root a request writes under is chosen here,
+   *  at the window's edge, once for the whole dispatch. */
+  const requestLayer = Layer.merge(sessionFsLayer(roots), env);
   const runActions = yield* createHostRunActions({
     ...host.runs,
-    // The wait outlives the launch request; the missing-agent warning the
-    // run's agent resolved goes at once.
+    // A run this window started is in the window's view before it is in a
+    // surface's, whose frames are cut from the session after it: each
+    // surface selects the run once its own view holds its activation. The
+    // missing-agent warning the run's agent resolved goes at once.
     launched: (run) =>
-      Effect.forkIn(showLaunched(run), scope).pipe(
-        Effect.andThen(snapshot.clearAgentConfigBanner),
-      ),
+      Effect.sync(() =>
+        bridge.surfaceAction({
+          kind: 'selectOnArrival',
+          runId: run.runId,
+          cursor: run.activation,
+        }),
+      ).pipe(Effect.andThen(snapshot.clearAgentConfigBanner)),
     roots,
     readConfig: (runId: RunId) => session.records(runId).readConfig(),
     present,
@@ -452,12 +433,24 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
     runs: runActions,
   });
 
+  const { bindings } = host;
   const apiKeyRetry = new ProgressApiKeyRetryController({
-    promptForApiKey: host.runs.promptForApiKey,
+    // The set-key verb either runs or faults, so its failure is the one
+    // failure, as `ApiKeyPromptFailed`.
+    promptForApiKey: (provider) =>
+      bindings.setApiKey(provider).pipe(
+        Effect.provide(requestLayer),
+        Effect.mapError(
+          (failure) =>
+            new ApiKeyPromptFailed({
+              provider,
+              message: 'The host could not ask for a provider API key.',
+              cause: failure,
+            }),
+        ),
+      ),
     session,
   });
-
-  const { bindings } = host;
   const latexdiff = latexdiffVerbs({
     host: bindings.latexdiff,
     roots,
@@ -478,6 +471,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       bindings,
       latexdiff,
       showInfo: host.showInfoMessage,
+      openDirectory: host.files.openDirectory,
       exportTranscript: (runId) =>
         exportRunTranscript(runId, {
           pickFormat: host.export.pickFormat,
@@ -490,18 +484,30 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           templatePath: traceViewerTemplatePath(host.export.resourcesPath),
         }),
     });
-  /** One program per request, over this session's rooted filesystems and
-   *  its project's `.env`: the root a request writes under is chosen here,
-   *  at the window's edge, once for the whole dispatch. */
-  const requestLayer = Layer.merge(sessionFsLayer(roots), env);
+  /** An own kind the host binds runs its arm; one it leaves out is
+   *  refused, worded here for both hosts. */
+  const own = (
+    request: OwnHostRequest,
+    port: string,
+  ): HostVerb<HostOutcome> => {
+    const arm = host.own[request.kind];
+    if (arm === undefined)
+      return Effect.fail(
+        new Rejected({
+          reason: `${OWN_REQUEST_LABEL[request.kind]} is not available in this app.`,
+        }),
+      );
+    // cast: the arm bound under `request.kind` takes a request of that kind.
+    return (
+      arm as (request: OwnHostRequest, port: string) => HostVerb<HostOutcome>
+    )(request, port);
+  };
   function handle(
     request: HostRequest,
     port: string,
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     return Effect.provide(
-      isSharedHostRequest(request)
-        ? shared(request, port)
-        : host.own(request, port),
+      isSharedHostRequest(request) ? shared(request, port) : own(request, port),
       requestLayer,
     );
   }
@@ -523,6 +529,8 @@ interface SharedParts extends GuiWindowParts {
   readonly bindings: SharedHostRequestBindings;
   readonly latexdiff: ReturnType<typeof latexdiffVerbs>;
   readonly showInfo: MessageHost['showInfoMessage'];
+  /** Reveal a directory in the host's file manager. */
+  readonly openDirectory: GuiWindowHost['files']['openDirectory'];
   exportTranscript(runId: RunId): HostVerb<void>;
 }
 
@@ -737,7 +745,7 @@ function answerShared(
         return done;
       case 'apiKeyBanner':
         yield* request.action === 'set'
-          ? host.setApiKey
+          ? host.setApiKey()
           : host.openGuide('installation', 'setting-up-api-keys');
         return done;
       case 'agentConfigBanner':
@@ -745,13 +753,21 @@ function answerShared(
           case 'edit':
             yield* host.openSettings('agents/library');
             return done;
-          case 'dir':
+          case 'dir': {
             // Without a custom directory there is nothing to reveal, so the
             // banner's link is the agent settings instead.
-            yield* request.customDirSet === true
-              ? host.openCustomAgentDirectory
-              : host.openSettings('agents/library');
+            if (request.customDirSet !== true) {
+              yield* host.openSettings('agents/library');
+              return done;
+            }
+            const directory = yield* (yield* AgentDirectories).custom();
+            if (!directory)
+              return yield* new Rejected({
+                reason: 'No custom agent directory is set.',
+              });
+            yield* parts.openDirectory(directory);
             return done;
+          }
           case 'docs':
             yield* host.openGuide('custom-agents');
             return done;
@@ -769,7 +785,7 @@ function answerShared(
             yield* host.onboarding.signInChatGpt;
             return done;
           case 'setApiKey':
-            yield* host.setApiKey;
+            yield* host.setApiKey();
             return done;
           case 'skip':
             yield* host.onboarding.skip;
