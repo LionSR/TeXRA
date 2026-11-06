@@ -62,16 +62,20 @@ again", which hits the same socket.
 
 Two designs end it; the owner chooses.
 
-- **One service per storage root, strictly.** A client that finds an
-  older service asks it to drain and waits on a published signal, the
-  socket's close (the client's `onDisconnect` already fires on it), then
-  starts its own; a project is never contended, so a held store at open is
-  an error, never a retry; the record names one socket path. Deletes:
-  `socketFor(pid)`, `removeDeadSockets`, the `retired` exclusion and
-  `NOT_YET_UP`, `STORE_RELEASE_WAIT` and the `storeHeld` retry,
-  `released`, the `hello.draining` field. Gives up: work in the new build
-  while the old build's long tasks finish; the windows show "finishing N
-  tasks before the update" for the drain's length.
+- **One service per storage root, strictly** (chosen by the owner, landed
+  on `simplify/service-one-door`). A client that finds an older service,
+  or one already draining, asks it to drain and waits on a published
+  signal, the socket's close (the client's `onDisconnect` already fires on
+  it), then starts its own; a draining service keeps its record and its
+  socket until it exits; a project is never contended, so a held store at
+  open is an error, never a retry. `hello.draining` is read by every
+  client now, not only by `texra service status`. Deletes: the early
+  record release, the `retired` exclusion, `STORE_RELEASE_WAIT` and the
+  `storeHeld` retry, `askServiceToStop`. Kept: the socket per pid and the
+  dead-socket sweep, since one socket path cannot be unlinked safely by a
+  service that may be racing another's listen (the pid names whose file
+  it is). Gives up: work in the new build while the old build's long tasks
+  finish; the client logs "finishing N running tasks" and waits.
 - **A per-project handoff on a signal.** The drain closes each project's
   session as its last run ends (`Sessions.drain`), and says so as a record
   in the global store, which the successor awaits through the store's
@@ -390,31 +394,38 @@ Design smells:
 
 ## 4. The plan
 
-In order, each a PR that deletes what its root names:
+Two PRs, not five: the two decisions above are made (the owner chose the
+strict handoff and keys with the start), and the rest groups by the files
+it touches, one commit per root inside each PR, as PR 14769 did.
 
-1. **Service lifetime** (§2.2, §2.3, §2.5, §3.2): `RcMap` projects, a
-   draining session that refuses its own starts, signals for idle, drain
-   and stop, the digest as the protocol identity, the dead record fields
-   and the hand-written "once" gone. Harness: the registry's lease per
-   live run and `Sessions.drain`. No behaviour change a user sees.
-2. **One service, one door** (§2.1, §2.4): the upgrade handoff on a
-   signal (the owner chooses strict one-service or the per-project
-   handoff) and the one `linkService`; the chat's restart loop and the
-   resolver copy go with it.
-3. **The session over the wire is the harness's** (R10 with §2.7, §3.1):
-   the frame is `SessionViewInput[]`, the RPCs are `Session`'s members,
-   `runView` lifted onto the trace port serves both sides, `task.ended`
-   and the fabricated end go, `Subscribe.session` goes. The verified
-   defects of §3.1 end here, not by patches: the activation-less end read
-   is a protocol change on a path this deletes.
-4. **Hosts bind verbs** (R10 with §3.3): `GuiSession` goes with the one
-   `Session`; the three hosts' repeated decisions move into the shared
-   body; `openGuiWindow.ts` keeps the router and loses the other four
-   jobs; the presenter is the requesting window's `emit`; a host without
-   `emit` is not a presenter; the toolbar actions fail instead of
-   answering `done`.
-5. **A task's environment** (§2.6): keys with the start. Needs the
-   owner's decision on keys over the socket.
+1. **The service's lifetime, one service, one door** (§2.1 to §2.5, §3.2),
+   PR 14771 on `simplify/service-lifetime`, three commits: the digest as
+   the protocol identity; `RcMap` projects and the service's idle, drain
+   and stop as signals over the projects' load, the admissions and the
+   watch streams (the one-second check, `admitted`, `idleSince`,
+   `released` and the 250 ms flush gone; a five-second deadline on the
+   watch streams' end stays, as a bound); the strict handoff on the
+   socket's close (a draining service keeps its record and socket until it
+   exits, every client reads `hello.draining`, the store retry and the
+   early release go) and the one `linkCliService` the platform calls (a
+   command that runs or lists tasks says `startsService`; the link answers
+   the service or why it holds none; the chat's restart loop and the four
+   other doors go). Kept: the socket per pid and the dead-socket sweep (one
+   path cannot be unlinked safely by a service racing another's listen);
+   the admission as the transport's (a draining session refusing its own
+   starts would be the harness's `Sessions.drain`, which only the
+   per-project handoff needed).
+2. **The hosts** (§2.6, §2.7, §3.1, §3.3; R10 whole): the frame is
+   `SessionViewInput[]`, the RPCs are `Session`'s members, `runView`
+   lifted onto the trace port serves both sides, `task.ended` and the
+   fabricated end go, `Subscribe.session` goes (the verified defects of
+   §3.1 end here, not by patches); `GuiSession` goes with the one
+   `Session`, the three hosts' repeated decisions move into the shared
+   body, `openGuiWindow.ts` keeps the router and loses its other four
+   jobs, the presenter is the requesting window's `emit`, a host without
+   `emit` is not a presenter, the toolbar actions fail instead of
+   answering `done`; and a task's provider keys travel with its start
+   (`StartOptions`, never a row), read by the run's model binding.
 
 Amend R10 in PR 14766 with §2.1 to §2.6 and §3.1 to §3.3: its "Design"
 names the client's three sessions and the hosts' verbs, not the service's

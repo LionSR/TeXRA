@@ -11,14 +11,12 @@ import { randomUUID } from 'node:crypto';
 import {
   Cause,
   Context,
-  Duration,
   Effect,
   Exit,
   Fiber,
   FiberSet,
   Option,
   Result,
-  Schedule,
   Schema,
   Scope,
   Stream,
@@ -30,7 +28,6 @@ import {
   type LocalSession,
   Rejected,
   type Run,
-  type Session,
   type RunEnd,
 } from '@texra-ai/harness';
 import { launchNoticeOf } from '@texra-ai/harness/host';
@@ -65,26 +62,30 @@ export interface ServiceProject {
   readonly session: LocalSession;
 }
 
+/** What the service's projects carry: how many are open, and how many have
+ *  a run at work (not one waiting for its next message). */
+export interface ServiceLoad {
+  readonly open: number;
+  readonly working: number;
+}
+
 /** The projects the service serves: one session per folder, opened on
- *  demand and closed once idle. The host that composes the service builds
- *  each project's roots, so this is its port. */
+ *  demand and released once nothing has held it for a while. The host that
+ *  composes the service builds each project's roots, so this is its port. */
 export class ServiceProjects extends Context.Service<
   ServiceProjects,
   {
     /** The storage root every project's store sits under. */
     readonly storageRoot: string;
     /** The session of `workspace`, opened on first use and leased for the
-     *  caller's scope: a leased session is never closed for idleness. */
+     *  caller's scope: a leased session is never released. */
     readonly open: (
       workspace: string,
     ) => Effect.Effect<ServiceProject, Error, Scope.Scope>;
     /** The sessions open now, by storage root. */
     readonly opened: Effect.Effect<ReadonlyMap<string, LocalSession>>;
-    /** Close, with their stores, the sessions no lease and no run has held
-     *  for `idleFor`; answers the sessions closed. */
-    readonly closeIdle: (
-      idleFor: Duration.Duration,
-    ) => Effect.Effect<readonly Session[]>;
+    /** The load the projects carry now, as it changes. */
+    readonly load: SubscriptionRef.SubscriptionRef<ServiceLoad>;
   }
 >()('@texra/server/ServiceProjects') {}
 
@@ -97,32 +98,33 @@ export class ServiceControl extends Context.Service<
     readonly startedAt: number;
     /** Clients connected now. */
     readonly clients: Effect.Effect<number>;
-    /** A drain is in progress: no new task starts. */
+    /** The service is leaving (a drain or a stop): no new task starts. */
     readonly draining: Effect.Effect<boolean>;
     /** Hold a task's admission for the caller's scope, which a drain
      *  waits for; false, and nothing held, once the service is leaving. */
     readonly admission: Effect.Effect<boolean, never, Scope.Scope>;
+    /** The watch streams open now: the service's socket closes once they
+     *  have ended, so each carries its tasks' last rows. */
+    readonly watching: SubscriptionRef.SubscriptionRef<number>;
     /** Stop now, or drain first; returns once the stop is asked. */
     readonly stop: (drain: boolean) => Effect.Effect<void>;
-    /** How long anything unused is kept: the service with no client and
-     *  no task, and a project's session with no lease and no run held. */
-    readonly idleAfter: Duration.Duration;
   }
 >()('@texra/server/ServiceControl') {}
 
 /** The tasks the service runs now, across its open projects: what its
- *  registry holds live, which an admitted run is before the view applies it.
- *  With `parked` false, only those at work, not a conversation the view
- *  shows waiting for its next message. */
+ *  registry holds live, which an admitted run is before the view applies
+ *  it. `atWork`: only those not waiting for their next message, a run the
+ *  view does not show yet counted as at work. */
 export const runningTasks = Effect.fn('server.runningTasks')(function* (
   projects: Context.Service.Shape<typeof ServiceProjects>,
-  parked = true,
+  atWork = false,
 ): Effect.fn.Return<number> {
   let running = 0;
   for (const session of (yield* projects.opened).values()) {
     const { runs } = session.view.current();
     for (const { runId } of session.held())
-      if (parked || runs.get(runId)?.status !== RUN_PHASE.WAITING) running += 1;
+      if (!atWork || runs.get(runId)?.status !== RUN_PHASE.WAITING)
+        running += 1;
   }
   return running;
 });
@@ -281,21 +283,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
         ({ absolutePaths }) => hosts.filesWritten(absolutePaths),
       ),
     );
-    // A session no client leases and no run holds closes once idle long
-    // enough: a service that lives for weeks keeps only the projects in use.
-    const idleMs = Duration.toMillis(control.idleAfter);
-    yield* Effect.forkScoped(
-      Effect.gen(function* () {
-        for (const session of yield* projects.closeIdle(control.idleAfter))
-          yield* Effect.logInfo(
-            `Closed the idle session of ${session.roots.storage}`,
-          );
-      }).pipe(
-        Effect.repeat(
-          Schedule.spaced(Duration.millis(Math.min(60_000, idleMs / 2))),
-        ),
-      ),
-    );
     const open = (workspace: string) =>
       projects
         .open(workspace)
@@ -351,7 +338,7 @@ export const serviceHandlers = TexraRpcs.toLayer(
     return {
       'service.hello': Effect.fn('handlers.service.hello')(function* () {
         return {
-          protocol: PROTOCOL.version,
+          protocol: PROTOCOL.digest,
           version: control.version,
           pid: process.pid,
           socket: control.socket,
@@ -372,6 +359,12 @@ export const serviceHandlers = TexraRpcs.toLayer(
       'task.watch': ({ workspace, subscribe }) =>
         Stream.unwrap(
           Effect.gen(function* () {
+            // Counted while it runs: the service's socket closes once every
+            // watch has carried its tasks' last rows (`serve.ts`).
+            yield* Effect.acquireRelease(
+              SubscriptionRef.update(control.watching, (n) => n + 1),
+              () => SubscriptionRef.update(control.watching, (n) => n - 1),
+            );
             const { session } = yield* open(workspace);
             // The client renders its own host state; the service has none.
             const host = yield* SubscriptionRef.make<HostSnapshot | null>(null);

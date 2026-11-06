@@ -34,8 +34,7 @@
     "texra-local:build": "corepack pnpm --filter @texra-ai/cli run prepare:trace-viewer-assets && corepack pnpm --filter @texra-ai/cli run bundle && corepack pnpm --filter @texra-ai/cli run copy:resources && corepack pnpm --filter @texra-ai/cli run copy:docs",
     "texra-local:link": "node scripts/link-texra-local.mjs",
     "sync:notice": "node scripts/sync-notice-files.mjs",
-    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts",
-    "protocol:bump": "vitest run --config vitest.config.mjs --mode bump src/test-kernel/schemas/protocolVersion.vitest.ts"
+    "storage:freeze": "vitest run --config vitest.config.mjs --mode freeze src/test-kernel/schemas/rowVersions.vitest.ts"
   },
   "devDependencies": {
     "@effect/language-service": "^0.87.5",

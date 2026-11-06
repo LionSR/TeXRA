@@ -31,7 +31,12 @@ import {
   projectApprovalPolicy,
   type CliContext,
 } from '../runtime/cliContext';
-import { connectCliService, serviceKeysNotice } from '../runtime/cliService';
+import {
+  isLinked,
+  linkClient,
+  serviceKeysNotice,
+  type CliServiceLink,
+} from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';
@@ -76,6 +81,17 @@ function findTask(client: ServiceClient, id: string) {
   );
 }
 
+/** The service's client, through the platform's link; a command that
+ *  holds none fails with why. */
+const serviceClient = (context: CliContext) =>
+  Effect.flatMap(
+    initCliPlatform({ ...context, startsService: true }),
+    ({ service }: { readonly service: CliServiceLink }) =>
+      isLinked(service)
+        ? linkClient(service)
+        : Effect.fail(new Error(service.none)),
+  );
+
 /** One request to the task `id` names, refused as a usage error. */
 function requestTask<R extends RuntimeRequest>(
   context: CliContext,
@@ -83,7 +99,7 @@ function requestTask<R extends RuntimeRequest>(
   request: (runId: RunId) => R,
 ) {
   return Effect.gen(function* () {
-    const { client } = yield* connectCliService(context.storageRoot);
+    const { client } = yield* serviceClient(context);
     const task = yield* findTask(client, id);
     const outcome = yield* requestOnService(
       client,
@@ -114,7 +130,7 @@ const listCommand = defineCliCommand({
   args: { ...GLOBAL_ARGS },
   catchExitCode: CliExitCode.AgentError,
   run: Effect.fn('run')(function* (context) {
-    const { client } = yield* connectCliService(context.storageRoot);
+    const { client } = yield* serviceClient(context);
     const tasks = yield* client['tasks.list']({ all: false });
     emitCliResult(context, {
       json: tasks,
@@ -143,7 +159,7 @@ const attachCommand = defineCliCommand({
           '`texra tasks attach` prints text or NDJSON (`--output-format ndjson`), not JSON.',
       });
     return Effect.gen(function* () {
-      const { client } = yield* connectCliService(context.storageRoot);
+      const { client } = yield* serviceClient(context);
       const task = yield* findTask(client, ctx.args.id);
       const outcome = yield* attachTask(client, task, {
         format: context.outputFormat === 'ndjson' ? 'ndjson' : 'text',
@@ -186,7 +202,13 @@ const startCommand = defineCliCommand({
       return yield* new CliUsageError({
         message: '--instruction must not be empty.',
       });
-    const services = yield* initCliPlatform(context);
+    const services = yield* initCliPlatform({
+      ...context,
+      startsService: true,
+    });
+    if (!isLinked(services.service))
+      return yield* Effect.fail(new Error(services.service.none));
+    const link = services.service;
     // The task runs in the service under the project's persisted policy,
     // with what this command asked for riding the launch
     // (`launchApproval`).
@@ -221,13 +243,10 @@ const startCommand = defineCliCommand({
     };
     const config =
       yield* Schema.decodeUnknownEffect(AgentConfigSchema)(payload);
-    const { runId } = yield* Effect.scoped(
-      Effect.gen(function* () {
-        const { client } = yield* connectCliService(context.storageRoot);
-        return yield* client['task.start']({
-          workspace: context.cwd,
-          start: { config, approval: launchApproval(requested) },
-        });
+    const { runId } = yield* Effect.flatMap(linkClient(link), ({ client }) =>
+      client['task.start']({
+        workspace: context.cwd,
+        start: { config, approval: launchApproval(requested) },
       }),
     ).pipe(Effect.mapError(ensureError));
     const notice = yield* Fiber.join(keys);

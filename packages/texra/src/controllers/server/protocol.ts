@@ -11,7 +11,8 @@
  * they are; a procedure's error is the error class the handler fails with,
  * which the client receives as that class. The procedures:
  *
- * - `service.hello`: the handshake; a client compares `protocol` with its own.
+ * - `service.hello`: the handshake; a client compares `protocol` (the
+ *   digest of every procedure's shapes, {@link PROTOCOL}) with its own.
  * - `service.stop`: stop now (`drain: false`), or stop taking new work and
  *   exit once the running tasks end (`drain: true`, the upgrade path).
  * - `tasks.list`: every task in every project this storage root holds.
@@ -30,8 +31,10 @@
  * - `state.get` / `state.set`: the project's state store, which a window
  *   reads and writes here rather than opening the project's store itself.
  */
+import { createHash } from 'node:crypto';
+
 import { Schema, Struct } from 'effect';
-import { Rpc, RpcGroup } from 'effect/rpc';
+import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
 import {
   AgentConfigSchema,
@@ -81,46 +84,10 @@ import { RUN_LAUNCH_FACT_FIELDS } from './taskList';
 export const BUILD_VERSION: string =
   process.env.TEXRA_BUILD_VERSION || 'unknown';
 
-/** The protocol's version and the shapes it versions. `version` is bumped
- *  whenever a procedure or a payload changes shape: a client newer than the
- *  running service retires it, an older one stays in process. `shapes` holds
- *  each procedure's hash of its payload, success and error JSON Schemas at
- *  that version. `protocolVersion.vitest.ts` fails when one moves, and
- *  `npm run protocol:bump` advances the version and rewrites the hashes
- *  together. A hash sees what JSON Schema shows: an opaque `Schema.declare`
- *  or a `Schema.Json` field moves none. */
-export const PROTOCOL: {
-  readonly version: number;
-  readonly shapes: Readonly<Record<string, string>>;
-} = Object.freeze({
-  version: 66,
-  shapes: Object.freeze({
-    'service.hello': 'b883cf64d52c',
-    'service.stop': '8d19317aa364',
-    'tasks.list': '0ed5b0f3979c',
-    'task.watch': 'da97f2de4070',
-    'task.request': '0372f2fbf97d',
-    'task.start': 'bd10b36a735a',
-    'task.resume': 'ac37fb4d0261',
-    'task.ended': 'e3c36dba0747',
-    'task.config': 'ee42ee67ab23',
-    'task.exportTrace': '1a764b030288',
-    'task.exportInput': 'fefc9f82f1e2',
-    'tasks.history': 'e4adee244fa9',
-    'task.detail': '5608de73fe3c',
-    'task.skills': 'b842fcc8e960',
-    'tasks.delete': 'd798ff938bde',
-    'host.attach': 'd0025be9996a',
-    'state.get': '221cc7263384',
-    'state.set': 'e377b902a4e3',
-    'host.focus': 'fd20627c2222',
-    'host.answer': 'cc171cdead15',
-  }),
-});
-
 /** What `service.hello` and `texra service status` report. */
 export const ServiceInfoSchema = Schema.Struct({
-  protocol: Schema.Int.check(Schema.isGreaterThan(0)),
+  /** The protocol the service speaks: {@link PROTOCOL}'s digest. */
+  protocol: Schema.String.check(Schema.isMinLength(1)),
   /** The build that is serving: the package version. */
   version: Schema.String,
   pid: Schema.Int.check(Schema.isGreaterThan(0)),
@@ -135,10 +102,11 @@ export const ServiceInfoSchema = Schema.Struct({
 });
 export type ServiceInfo = typeof ServiceInfoSchema.Type;
 
-/** The running service's record, claimed once it listens: where a client
- *  finds it. */
+/** The record a storage root's service claims once it listens, where a
+ *  client finds it: a pointer to its socket.
+ *  Its protocol and build are the hello's, read from the socket. */
 const ServiceRecordSchema = ServiceInfoSchema.mapFields(
-  Struct.pick(['pid', 'protocol', 'version', 'startedAt']),
+  Struct.pick(['pid', 'startedAt']),
 ).mapFields(
   Struct.assign({ socket: Schema.String.check(Schema.isMinLength(1)) }),
 );
@@ -213,7 +181,7 @@ const workspace = Schema.String;
 /** The procedures, in one group. */
 export const TexraRpcs = RpcGroup.make(
   Rpc.make('service.hello', {
-    payload: { protocol: Schema.Number },
+    payload: { protocol: Schema.String },
     success: ServiceInfoSchema,
   }),
   Rpc.make('service.stop', { payload: { drain: Schema.Boolean } }),
@@ -376,3 +344,52 @@ export const TexraRpcs = RpcGroup.make(
     payload: { id: Schema.String, answer: HostAnswerSchema },
   }),
 );
+
+/** A procedure's shape: its payload, success and error schemas as JSON
+ *  Schema, digested. A stream's success is its element and its error. What
+ *  JSON Schema does not show (an opaque `Schema.declare`, a `Schema.Json`
+ *  field) is not in the shape. */
+const shapeOf = (rpc: Rpc.AnyWithProps): string => {
+  const success = rpc.successSchema;
+  const schemas = RpcSchema.isStreamSchema(success)
+    ? [rpc.payloadSchema, success.success, success.error, rpc.errorSchema]
+    : [rpc.payloadSchema, success, rpc.errorSchema];
+  return createHash('sha256')
+    .update(
+      JSON.stringify(
+        schemas.map((schema) => Schema.toJsonSchemaDocument(schema)),
+      ),
+    )
+    .digest('hex')
+    .slice(0, 12);
+};
+
+const shapes: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(
+    [...TexraRpcs.requests].map(([tag, rpc]) => [tag, shapeOf(rpc)]),
+  ),
+);
+
+/**
+ * The protocol's identity: `shapes`, each procedure's shape as the module
+ * loads, and `digest`, the digest of all of them. A client and a service
+ * with one digest speak the same protocol; with two, the newer build
+ * retires the older (`isOlder`, `client.ts`), and a build that is neither
+ * (a development build) restarts the service. `service.hello` and
+ * `service.stop` keep their shapes across versions, so an older client can
+ * still stop a newer service (`protocolStability.vitest.ts` pins them).
+ */
+export const PROTOCOL: {
+  readonly digest: string;
+  readonly shapes: Readonly<Record<string, string>>;
+} = Object.freeze({
+  digest: createHash('sha256')
+    .update(
+      JSON.stringify(
+        Object.entries(shapes).toSorted(([a], [b]) => a.localeCompare(b)),
+      ),
+    )
+    .digest('hex')
+    .slice(0, 12),
+  shapes,
+});

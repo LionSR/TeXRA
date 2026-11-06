@@ -20,7 +20,6 @@ import { openNodeWorkspaceRoots, setLogSink } from '@texra-ai/harness/node';
 import { ensureError, GlobalStateKey } from '@texra-ai/harness/schemas';
 import { telemetryNoticeIfDue } from '@telemetry/telemetryNotice';
 import { recordFirstCompletedRun } from '@texra/controllers/onboarding/onboardingFunnel';
-import type { ServiceLink } from '@texra/controllers/server/client';
 import {
   serviceProjectState,
   serviceSession,
@@ -42,7 +41,7 @@ import {
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
 import { holdSignals, type SignalPolicy } from './processSignals';
-import { linkRunningCliService } from './cliService';
+import { isLinked, linkCliService, type CliServiceLink } from './cliService';
 import { localRunReads, serviceRunReads, type CliRunReads } from './runReads';
 import type { CliContext } from './cliContext';
 import type { SettingsStores } from '@texra-ai/harness/host';
@@ -59,7 +58,7 @@ let installed:
   | {
       readonly roots: WorkspaceRoots;
       readonly session: Effect.Effect<LocalSession, SessionOpenError>;
-      readonly service: ServiceLink | undefined;
+      readonly service: CliServiceLink;
       readonly runSession: Effect.Effect<Session, SessionOpenError>;
       readonly reads: CliRunReads;
       readonly shutdownScope: Scope.Closeable;
@@ -83,6 +82,9 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
+  /** The command runs or lists tasks, which the service owns: it starts the
+   *  service when none runs. Any other command links to a running one. */
+  readonly startsService?: boolean;
   /** The caller shows `LocalSession.storeMovedAside` itself: the chat TUI,
    *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
    *  above its header. Otherwise this init prints it to stderr: the
@@ -122,11 +124,12 @@ export type CliPlatformServices = SettingsStores & {
    * nothing can write to fails a command only when it asks for a transcript.
    */
   readonly session: Effect.Effect<LocalSession, SessionOpenError>;
-  /** The storage root's running service, linked for the process's life,
-   *  when one answered at init; the project's state and runs are then its
-   *  ({@link runSession}, {@link reads}), and this process opens no store
-   *  of the project. */
-  readonly service: ServiceLink | undefined;
+  /** The storage root's service, linked for the process's life, when one
+   *  answered at init (or was started, `startsService`); the project's
+   *  state and runs are then its ({@link runSession}, {@link reads}), and
+   *  this process opens no store of the project. Else why none, which the
+   *  caller says. */
+  readonly service: CliServiceLink;
   /** Where the chat's runs and requests land: the service's session when
    *  one holds the project, else {@link session}. */
   readonly runSession: Effect.Effect<Session, SessionOpenError>;
@@ -300,9 +303,11 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         // process links to it for its life and opens no store of the
         // project, as a window does. None running (or none possible) is
         // the in-process path below.
-        const service = yield* linkRunningCliService(context.storageRoot).pipe(
-          Scope.provide(projectScope),
-        );
+        const service = yield* linkCliService(
+          context.storageRoot,
+          context.startsService === true,
+        ).pipe(Scope.provide(projectScope));
+        const link = isLinked(service) ? service : undefined;
         // One process, one project: the process roots are the `--cwd` workspace,
         // over the config provider the startup read already opened — the project
         // `.texra/config.json` layered over the user-level
@@ -314,8 +319,8 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
           workspacePath: context.cwd,
           storageRoot: context.storageRoot,
           config: context.config,
-          ...(service !== undefined && {
-            workspaceState: serviceProjectState(service, context.cwd),
+          ...(link !== undefined && {
+            workspaceState: serviceProjectState(link, context.cwd),
           }),
           stateStores: yield* StateStores,
           globalState,
@@ -345,17 +350,17 @@ export const initCliPlatform = Effect.fn('initCliPlatform')(function* (
         // The service's session of the project, folded here for the
         // process's life, where the chat's runs and the reads go.
         const runSession =
-          service === undefined
+          link === undefined
             ? openSession
             : yield* Effect.cached(
-                serviceSession(service, context.cwd, roots).pipe(
+                serviceSession(link, context.cwd, roots).pipe(
                   Scope.provide(projectScope),
                 ),
               );
         const reads =
-          service === undefined
+          link === undefined
             ? localRunReads(openSession)
-            : serviceRunReads(service, context.cwd);
+            : serviceRunReads(link, context.cwd);
 
         // The one-time telemetry notice: a single stderr line, then a state
         // flag. A quiet run neither prints it nor marks it shown.

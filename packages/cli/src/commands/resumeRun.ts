@@ -16,7 +16,7 @@ import { requestErrorText } from '@ui/copy/requestErrors';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
-import { startCliService } from '../runtime/cliService';
+import { isLinked } from '../runtime/cliService';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
@@ -90,19 +90,12 @@ export const runResumeCommand = Effect.fn('runResumeCommand')(function* (
   fork = false,
 ) {
   // A conversation continues in the service, which every chat is a client
-  // of: started here when none runs, before the platform links to it. A
-  // document task resumes headless, in this process; a service that could
-  // not start is said, since nothing after this would say it.
-  yield* startCliService(context.storageRoot).pipe(
-    Effect.catch((error) =>
-      Effect.sync(() =>
-        writeTextStderr(
-          `The TeXRA service could not be started, so this task runs here: ${error.message}`,
-        ),
-      ),
-    ),
-  );
-  const stores = yield* initCliPlatform(context);
+  // of: the platform starts it when none runs. A document task resumes
+  // headless, in this process; a service this process holds none of is
+  // said, since nothing after this would say it.
+  const stores = yield* initCliPlatform({ ...context, startsService: true });
+  if (!isLinked(stores.service))
+    writeTextStderr(`This task runs here: ${stores.service.none}`);
   const configResult = yield* Effect.result(stores.reads.config(id));
   if (Result.isFailure(configResult)) {
     writeTextStderr(loadFailureMessage(id, configResult.failure));
