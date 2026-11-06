@@ -1127,9 +1127,9 @@ function hasExtension(filePath: string, extension: string): boolean
 ## helperCall
 
 One helper call: bind the configured helper model (else `runModel`) for
-this call alone and run one completion through the one retry loop
-(`run/invocation.ts`), gated on the process's retry gate, priced and
-reported to the usage log as `attribution`. No row is written. Returns the
+this call alone and run one completion off the rows (`run/modelCall.ts`),
+gated on the process's retry gate, priced and reported to the usage log
+as `attribution`. No row is written. Returns the
 turn's assistant text and its priced usage (`null`: the provider reported
 none), for a caller whose row records what the call cost. `stores` are the
 asking session's setting slots: the binding, the retry limit and the usage
