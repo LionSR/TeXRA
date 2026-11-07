@@ -364,10 +364,12 @@ meantime. Flushes for a given file path are serialized through
 {@link writeLanes}, which orders this process's writers; across processes
 the atomic rename is the only guarantee, so two hosts flushing the same file
 in the same instant can still lose one of the two mutations. Reads (`get`,
-`snapshot`, `keys`) still serve this instance's view: open-time
-contents plus its own committed mutations — a `set` still queued behind
-another one has changed nothing yet; they don't observe other writers'
-changes.
+`snapshot`, `keys`) follow the file: each compares its inode, mtime and
+size with the version the view was read from (about a microsecond) and
+re-reads it when they differ, so another process's or another instance's
+write is served; a `set` still queued behind another one has changed
+nothing yet. A changed file that cannot be read keeps the last view and
+is logged once per version of the file.
 
 `set` is the store's own write and is an `Effect`, requirement-free: it
 provides the Node filesystem services its flush reads and writes through, so
@@ -377,32 +379,6 @@ this store serves deliberate configuration files.
 
 ```ts
 class JsonStore
-```
-
-## JsonStoreOptions
-
-How {@link JsonStore.open} treats a file it cannot read, and whether the
-store follows other writers.
-
-```ts
-interface JsonStoreOptions {
-  /**
-   * When set, a file that exists but cannot be read as a JSON object opens as
-   * an empty view and reports the cause here instead of failing the open.
-   * Writes still re-read the file in {@link flush}, so they fail rather than
-   * overwrite what the reader could not parse.
-   */
-  onUnreadable?: (error: Error) => void;
-  /**
-   * Serve other writers' changes: every read first compares the file's
-   * inode, mtime and size with the version it holds (about a microsecond)
-   * and re-reads the file when they differ. A long-lived process that other
-   * processes configure (a background service) opens its stores this way. A
-   * changed file it cannot read keeps the last view and is logged as a
-   * warning, once per version of the file.
-   */
-  follow?: boolean;
-}
 ```
 
 ## LOG_CHANNEL

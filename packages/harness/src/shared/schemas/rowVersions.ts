@@ -111,7 +111,7 @@ export const unavailableFactReason = (fact: {
  *  (each `ValueFamily`). */
 export const CURRENT_VALUE_VERSION = 1;
 
-/** Every arm of `SessionEventDraftSchema`: a new arm without an entry, its
+/** Every arm of `SessionRowDraftSchema`: a new arm without an entry, its
  *  version and its listing class, does not compile. */
 export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // v2: the launching call's id and card are one `parent.call`, with no

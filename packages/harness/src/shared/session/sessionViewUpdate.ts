@@ -42,6 +42,7 @@ import {
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
+  factName,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -709,7 +710,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
     case 'plugin.fact':
       return {
         ...run,
-        facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
+        facts: { ...run.facts, [factName(event)]: event.value },
       };
     case 'run.detach': // the attached parent goes; the launch parent stays
       return run.parentId === null ? run : { ...run, parentId: null };

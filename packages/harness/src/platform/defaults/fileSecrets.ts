@@ -15,7 +15,14 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-import { Cause, Effect, FileSystem, type PlatformError, Stream } from 'effect';
+import {
+  Cause,
+  Effect,
+  Fiber,
+  FileSystem,
+  type PlatformError,
+  Stream,
+} from 'effect';
 
 import { SecretsFailed, type SecretsOperation } from '@texra-ai/llm';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -45,6 +52,36 @@ const keyLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
 const fileNameOf = (key: string): string =>
   encodeURIComponent(key).replace(/^\./, '%2E');
 
+/** A credential store operation's failure at `directory`. */
+function failure(
+  directory: string,
+  operation: SecretsOperation,
+  cause: unknown,
+  key?: string,
+): SecretsFailed {
+  return new SecretsFailed({
+    operation,
+    ...(key !== undefined && { key }),
+    message: `Could not ${operation === 'get' || operation === 'listStoredKeys' ? 'read' : 'write'} the credential store at ${directory}: ${toErrorMessage(cause)}`,
+    cause,
+  });
+}
+
+/** The keys stored under `directory`, staged writes left out. */
+const storedKeys = (
+  directory: string,
+): Effect.Effect<readonly string[], SecretsFailed> =>
+  FileSystem.FileSystem.use((fs) => fs.readDirectory(directory)).pipe(
+    Effect.map((names) =>
+      names
+        .filter((name) => !name.startsWith(STAGED_PREFIX))
+        .map((name) => decodeURIComponent(name)),
+    ),
+    Effect.catchIf(absentReason, () => Effect.succeed([])),
+    Effect.mapError((cause) => failure(directory, 'listStoredKeys', cause)),
+    Effect.provide(nodeFileServices),
+  );
+
 /**
  * A host's handle on the credential directory. `onChanged` is told "re-read
  * this key" after every write of this handle: the process's store announces
@@ -66,7 +103,7 @@ export class FileSecrets implements PlatformSecrets {
     ).pipe(
       Effect.map((value): string | undefined => value),
       Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
-      Effect.mapError((cause) => this.failure('get', cause, key)),
+      Effect.mapError((cause) => failure(this.directory, 'get', cause, key)),
       Effect.provide(nodeFileServices),
     );
   }
@@ -108,18 +145,7 @@ export class FileSecrets implements PlatformSecrets {
   }
 
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
-    return FileSystem.FileSystem.use((fs) =>
-      fs.readDirectory(this.directory),
-    ).pipe(
-      Effect.map((names) =>
-        names
-          .filter((name) => !name.startsWith(STAGED_PREFIX))
-          .map((name) => decodeURIComponent(name)),
-      ),
-      Effect.catchIf(absentReason, () => Effect.succeed([])),
-      Effect.mapError((cause) => this.failure('listStoredKeys', cause)),
-      Effect.provide(nodeFileServices),
-    );
+    return storedKeys(this.directory);
   }
 
   /**
@@ -137,21 +163,18 @@ export class FileSecrets implements PlatformSecrets {
       Effect.logWarning(
         `Stopped watching ${directory}: keys another process saves apply here after a restart (${reason})`,
       );
-    // The watch only lists the directory, so its handle writes nothing.
-    const announceAll = new FileSecrets(directory, () => {})
-      .listStoredKeys()
-      .pipe(
-        Effect.flatMap((keys) => Effect.forEach(keys, announce)),
-        Effect.asVoid,
-        Effect.catch((error) => stopped(error.message)),
-      );
+    const announceAll = storedKeys(directory).pipe(
+      Effect.flatMap((keys) => Effect.forEach(keys, announce)),
+      Effect.asVoid,
+      Effect.catch((error) => stopped(error.message)),
+    );
     return Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       yield* fs.makeDirectory(directory, {
         recursive: true,
         mode: DIRECTORY_MODE,
       });
-      yield* fs.watch(directory).pipe(
+      const watcher = yield* fs.watch(directory).pipe(
         Stream.retry(fileWatchRetrySchedule),
         Stream.map((event) => path.basename(event.path)),
         // A staged file's rename is reported under either name: the key's
@@ -169,7 +192,8 @@ export class FileSecrets implements PlatformSecrets {
         (watching) => Effect.forkScoped(watching, { startImmediately: true }),
       );
       yield* announceAll;
-      return yield* Effect.never;
+      // Held for as long as the watch runs; it ends only once given up.
+      return yield* Fiber.join(watcher);
     }).pipe(
       Effect.scoped,
       Effect.catchCause((cause) =>
@@ -180,19 +204,6 @@ export class FileSecrets implements PlatformSecrets {
 
   private fileOf(key: string): string {
     return path.join(this.directory, fileNameOf(key));
-  }
-
-  private failure(
-    operation: SecretsOperation,
-    cause: unknown,
-    key?: string,
-  ): SecretsFailed {
-    return new SecretsFailed({
-      operation,
-      ...(key !== undefined && { key }),
-      message: `Could not ${operation === 'get' || operation === 'listStoredKeys' ? 'read' : 'write'} the credential store at ${this.directory}: ${toErrorMessage(cause)}`,
-      cause,
-    });
   }
 
   /**
@@ -212,7 +223,9 @@ export class FileSecrets implements PlatformSecrets {
       keyLanes,
       this.fileOf(key),
     )(FileSystem.FileSystem.use(write)).pipe(
-      Effect.mapError((cause) => this.failure(operation, cause, key)),
+      Effect.mapError((cause) =>
+        failure(this.directory, operation, cause, key),
+      ),
       Effect.ensuring(Effect.sync(() => this.onChanged(key))),
       Effect.provide(nodeFileServices),
     );

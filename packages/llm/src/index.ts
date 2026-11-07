@@ -43,20 +43,23 @@ export type {
   TurnResult,
 } from './turn.js';
 export {
-  checkPreparedHistory,
   JsonObjectSchema,
   ModelOriginSchema,
   originOf,
   sameModelOrigin,
   TurnProtocolSchema,
 } from './protocol.js';
+export type { ModelOrigin, TurnUsage } from './protocol.js';
+export {
+  AssistantMessageSchema,
+  checkPreparedHistory,
+  MessageSchema,
+} from './message.js';
 export type {
-  ModelOrigin,
+  AssistantMessage,
+  Continuation,
   PreparedHistoryEntry,
-  TurnUsage,
-} from './protocol.js';
-export { AssistantMessageSchema, MessageSchema } from './message.js';
-export type { AssistantMessage, Continuation } from './message.js';
+} from './message.js';
 export {
   ModelError,
   fillModelError,
@@ -103,7 +106,6 @@ export {
 export type {
   ApiKeyProviderId,
   BackendProviderId,
-  EndpointProviderId,
   ModelProviderPlugin,
   RegionalBaseUrl,
   RegionalProviderId,

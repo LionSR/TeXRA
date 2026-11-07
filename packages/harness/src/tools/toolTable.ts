@@ -249,13 +249,18 @@ export interface ToolTable {
   readonly blocks: ReadonlyMap<string, AgentBlock>;
 }
 
+/** The probe of a switched plugin that names none: it needs nothing. */
+const NEEDS_NOTHING: NonNullable<Plugin['availability']> = {
+  check: () => Effect.succeed({ available: true }),
+};
+
 /**
  * The table over `plugins`, which the app lists in order. A list that
  * spells an id other than lowercase letters, digits and dashes, repeats a
  * plugin id, a tool name or a script module's name, claims an agent-file
- * block another plugin or the persona owns, gives a switch to a plugin
- * with no availability probe, or lacks a plugin another `requires` is a
- * defect of the list, rejected when it is built.
+ * block another plugin or the persona owns, or lacks a plugin another
+ * `requires` is a defect of the list, rejected when it is built. A plugin
+ * with a switch and no availability probe is probed as needing nothing.
  */
 export function toolTable(plugins: readonly Plugin[]): ToolTable {
   const entries = new Map<string, Plugin>();
@@ -271,15 +276,18 @@ export function toolTable(plugins: readonly Plugin[]): ToolTable {
         `plugin id ${JSON.stringify(plugin.id)} is not lowercase letters, digits and dashes.`,
       );
     if (entries.has(plugin.id)) refuse(`plugin ${plugin.id} is listed twice.`);
-    entries.set(plugin.id, plugin);
+    entries.set(
+      plugin.id,
+      plugin.toggle !== undefined && plugin.availability === undefined
+        ? { ...plugin, availability: NEEDS_NOTHING }
+        : plugin,
+    );
     for (const tool of plugin.tools ?? []) {
       const { name } = tool.definition;
       if (byName.has(name))
         refuse(`tool ${name} of plugin ${plugin.id} is already registered.`);
       byName.set(name, tool);
     }
-    if (plugin.availability === undefined && plugin.toggle !== undefined)
-      refuse(`plugin ${plugin.id} has a switch but no availability probe.`);
   }
   const [missing] = plugins.flatMap(({ id, requires }) =>
     (requires ?? []).flatMap((needed) =>

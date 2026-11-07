@@ -4,7 +4,6 @@
 import { Effect, Schema } from 'effect';
 
 // Local imports
-import { ALWAYS_AVAILABLE } from '@texra-ai/harness/plugins';
 import { APP_FACT_KINDS } from '@texra/shared/plugins/appFactKinds';
 import {
   INQUIRY_REQUEST,
@@ -20,7 +19,6 @@ export const externalInquiry: TexraPlugin = {
   tools: [ExternalInquiryTool],
   factKinds: APP_FACT_KINDS['external-inquiry'],
   toggle: 'off',
-  availability: ALWAYS_AVAILABLE,
   // The answer is recorded on the thread and delivered to the run that
   // asked, before the decision commits.
   decision: {

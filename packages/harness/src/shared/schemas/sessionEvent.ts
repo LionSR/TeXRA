@@ -40,7 +40,8 @@ import { RunIdSchema } from './identifiers';
 import { FollowUpDispositionSchema, FollowUpRequestSchema } from './followUp';
 import { RequestPayloadSchema, RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
-import { NormalizedUsageSchema, RunBindingSchema } from './runInput';
+import { RunBindingSchema } from './runInput';
+import { NormalizedUsageSchema } from './usage';
 import {
   RunPositionPayloadSchema,
   ContextEditPayloadSchema,
@@ -350,7 +351,7 @@ const RunHistoryEventDraftSchema = Schema.Union([
   durable('context.blob', { payload: ContextBlobSchema }),
   durable('hook.outcome', { payload: HookOutcomePayloadSchema }),
 ]);
-export const SessionEventDraftSchema = Schema.Union([
+export const SessionRowDraftSchema = Schema.Union([
   ...DisplaySessionEventDraftSchema.members,
   ...RunRecordEventDraftSchema.members,
   ...RunHistoryEventDraftSchema.members,
@@ -381,7 +382,7 @@ export type SessionRow = typeof SessionRowSchema.Type;
  * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
-export type SessionRowDraft = typeof SessionEventDraftSchema.Type;
+export type SessionRowDraft = typeof SessionRowDraftSchema.Type;
 
 /** Aggregate identities introduced by a fact and its declared lifecycle edges. */
 export function referencedAggregates(event: SessionRow): AggregateId[] {

@@ -14,7 +14,6 @@ import {
   Context,
   Effect,
   Exit,
-  Fiber,
   Layer,
   Scope,
 } from 'effect';
@@ -50,10 +49,9 @@ import { openToolUse, runToolUse } from './loop/toolUse';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, type RunLaunch } from './run/AgentRun';
 import {
-  generateSessionDescription,
   getDisplayedInstruction,
   RunLabels,
-  settleDescriptionOnExit,
+  withSessionDescription,
 } from './sessionDescription';
 import type { AgentRunServices } from './runRegistry';
 import type { RunReport } from './runReport';
@@ -350,22 +348,9 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
   const { config } = launch;
   const run = Effect.gen(function* () {
     // A root run of a session that labels its runs gets its description
-    // concurrently with the run, settled before the run ends
-    // (`settleDescriptionOnExit`), so the metadata write cannot recreate a
-    // run deleted by another host. A resumed run whose process died before
-    // its description was written gets one now. A child of the run's
-    // fiber, so the run's stop interrupts it, as it interrupts the run.
+    // beside the run (`withSessionDescription`); a resumed run whose process
+    // died before its description was written gets one now.
     const labelled = launch.entry.parent === null && (yield* RunLabels);
-    const sessionDescription = yield* Effect.forkChild(
-      labelled
-        ? generateSessionDescription(
-            runId,
-            config,
-            definition.agentEntry.description,
-            resume,
-          )
-        : Effect.void,
-    );
     const flow = runToolUse({ resume }, opening).pipe(Effect.provide(services));
     // The flow is an Effect: a fiber interruption reaches its provider work
     // directly, and its finalizers run before the resources above are
@@ -373,9 +358,7 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
     // terminal, so no stop lands between the two: a started run is always
     // finalized. The host's stop is this run fiber's interruption
     // (`RunRegistry.stop`); the requests this run left open are cancelled in
-    // its end's transaction (`cancelRequestRows`). The backstop wait is
-    // `ensuring`, not a generator `finally`: the driver skips a `finally`
-    // after a failed `yield*`, ending the run early.
+    // its end's transaction (`cancelRequestRows`).
     // A background child runs under the session's child-run budget; an
     // awaited one rides its parent's turn, a root takes none. The permit is
     // taken inside the region whose exit is the terminal: a stop that lands
@@ -387,14 +370,22 @@ export const executeAgent = Effect.fn('executeAgent')(function* (
         : Effect.flatMap(ChildRunBudget, (budget) =>
             budget.withPermits(1)(flow),
           );
+    // A labelled run is a root, so its flow takes no budget permit.
+    const described = labelled
+      ? budgeted.pipe(
+          withSessionDescription(
+            runId,
+            config,
+            definition.agentEntry.description,
+            resume,
+          ),
+        )
+      : budgeted;
     return yield* Effect.uninterruptibleMask((restore) =>
-      Effect.flatMap(
-        Effect.exit(
-          restore(budgeted.pipe(settleDescriptionOnExit(sessionDescription))),
-        ),
-        (exit) => endRun(launch, exit),
+      Effect.flatMap(Effect.exit(restore(described)), (exit) =>
+        endRun(launch, exit),
       ),
-    ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
+    );
   }).pipe(Effect.onExit((exit) => Scope.close(scope, exit)));
   return {
     activation: opening.activation,

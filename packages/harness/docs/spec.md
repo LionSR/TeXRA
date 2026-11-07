@@ -263,8 +263,8 @@ corrupt one, never as a read to retry (`shared/session/runHistory.ts#runReadRefu
 
 ## 3. Row kinds
 
-The vocabulary is one Effect Schema union, `SessionEventDraftSchema`, built
-from three groups (`shared/schemas/sessionEvent.ts#SessionEventDraftSchema`).
+The vocabulary is one Effect Schema union, `SessionRowDraftSchema`, built
+from three groups (`shared/schemas/sessionEvent.ts#SessionRowDraftSchema`).
 The groups below follow it. A "folded" kind is one `applyRunRows` reads
 (`shared/session/runState.ts#ROW_HANDLERS`,
 `shared/session/turnRowHandlers.ts#TURN_ROW_HANDLERS`); the fold's reader

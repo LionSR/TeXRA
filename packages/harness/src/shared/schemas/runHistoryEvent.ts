@@ -1,5 +1,5 @@
 /**
- * Payloads for the run-history arms of `SessionEventDraftSchema`. Shapes
+ * Payloads for the run-history arms of `SessionRowDraftSchema`. Shapes
  * only: the arms themselves live in `sessionEvent.ts`, which is the single vocabulary
  * the publisher and both folds switch over.
  *
@@ -20,7 +20,8 @@ import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
 import { Sha256Schema } from './identifiers';
 import { RunOutcomeSchema } from './run';
-import { NormalizedUsageSchema, RunInputSchema } from './runInput';
+import { RunInputSchema } from './runInput';
+import { NormalizedUsageSchema } from './usage';
 import {
   StoredMessageSchema,
   StoredOperationSchema,
@@ -326,6 +327,11 @@ export const ContextEditPayloadSchema = Schema.Struct({
 
 /* ------------------------------------------------------------ script.call */
 
+/** The call id of a script's call: the script's own call id and the call's
+ *  issue order in it. */
+export const scriptCallId = (script: string, seq: number): string =>
+  `${script}/${seq}`;
+
 /**
  * One call a `script` call's guest issued: its arguments, which no response
  * carries, and the facts its dispatch needs, committed with the call's first
@@ -349,7 +355,7 @@ export const ScriptCallPayloadSchema = Schema.Struct({
   /** The guest's latest `phase()` title when it issued the call. */
   phase: Schema.NullOr(Schema.String),
 }).check(
-  Schema.makeFilter((p) => p.callId === `${p.scriptCallId}/${p.seq}`, {
+  Schema.makeFilter((p) => p.callId === scriptCallId(p.scriptCallId, p.seq), {
     message: 'A script call is named by its script and its issue order.',
   }),
 );

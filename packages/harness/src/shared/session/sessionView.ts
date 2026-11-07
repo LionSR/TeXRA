@@ -31,6 +31,7 @@ import {
   WorktreeInfoSchema,
   type RequestPayload,
   type RunId,
+  FactNameSchema,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
 import type {
@@ -90,7 +91,7 @@ export const RunViewSchema = Schema.Struct({
   agentScope: Schema.optional(Schema.NullOr(Schema.Array(Schema.String))),
   /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
    *  undecoded here, read through its plugin's reader. */
-  facts: Schema.Record(Schema.String, JsonValueSchema),
+  facts: Schema.Record(FactNameSchema, JsonValueSchema),
   worktree: Schema.NullOr(WorktreeInfoSchema),
   /** Where its loop stands (`standingAfter`): `ready` before its first
    *  activation and after an end, `running` inside a turn, `waiting`

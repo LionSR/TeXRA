@@ -42,61 +42,65 @@ export interface RegionalBaseUrl {
   readonly international: string;
 }
 
-/** One model provider plugin. */
-export interface ModelProviderPlugin {
+/**
+ * One model provider plugin, by what TeXRA does with it:
+ * - `backend`: an llm-zoo provider a run binds to, over its own HTTP
+ *   endpoint (a default base URL, or a China/international pair the region
+ *   toggle picks), with a direct API key;
+ * - `plan-key`: a coding plan's own key outside llm-zoo (`kimiCode`), read
+ *   from its named variable;
+ * - `unserved`: an llm-zoo provider whose models TeXRA does not serve.
+ */
+export type ModelProviderPlugin = {
   /** Stable, persisted identifier: the llm-zoo provider or API-key id. */
   readonly id: string;
   /** The provider's own name. */
   readonly displayName: string;
-  /** Users can configure a direct API key for this provider. */
-  readonly apiKey?: true;
-  /** Environment variable for the key when it is not `<ID>_API_KEY`. */
-  readonly apiKeyEnvName?: string;
-  /**
-   * Default HTTP base URL, or a China/international pair chosen by the
-   * region toggle. `null`: an llm-zoo provider with no HTTP route of its
-   * own (checked below, so a dropped endpoint is a compile error). Absent:
-   * a plugin outside llm-zoo's `ModelProvider` (`kimiCode`).
-   */
-  readonly baseUrl?: string | RegionalBaseUrl | null;
-}
+} & (
+  | {
+      readonly kind: 'backend';
+      readonly baseUrl: string | RegionalBaseUrl;
+    }
+  | { readonly kind: 'plan-key'; readonly apiKeyEnvName: string }
+  | { readonly kind: 'unserved' }
+);
 
 /** Every model provider, in display order. */
 const MANIFEST = [
   {
     id: 'openai',
     displayName: 'OpenAI',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: OPENAI_DEFAULT_ENDPOINT,
   },
   {
     id: 'anthropic',
     displayName: 'Anthropic',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: 'https://api.anthropic.com',
   },
   {
     id: 'google',
     displayName: 'Google',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: 'https://generativelanguage.googleapis.com',
   },
   {
     id: 'xai',
     displayName: 'xAI',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: XAI_DEFAULT_ENDPOINT,
   },
   {
     id: 'deepseek',
     displayName: 'DeepSeek',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: 'https://api.deepseek.com',
   },
   {
     id: 'moonshot',
     displayName: 'Moonshot',
-    apiKey: true,
+    kind: 'backend',
     // Kimi Code models never reach this: their coding baseUrl wins as the
     // per-model override.
     baseUrl: {
@@ -107,7 +111,7 @@ const MANIFEST = [
   {
     id: 'dashscope',
     displayName: 'Qwen',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: {
       china: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
       international: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
@@ -116,7 +120,7 @@ const MANIFEST = [
   {
     id: 'minimax',
     displayName: 'MiniMax',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: {
       china: 'https://api.minimax.cn/v1',
       international: 'https://api.minimax.io/v1',
@@ -125,7 +129,7 @@ const MANIFEST = [
   {
     id: 'glm',
     displayName: 'GLM',
-    apiKey: true,
+    kind: 'backend',
     // Both regions serve Responses at /api/v1, for API and Coding Plan keys
     // alike (BigModel and Z.AI Codex guides).
     baseUrl: {
@@ -136,24 +140,24 @@ const MANIFEST = [
   {
     id: 'meta',
     displayName: 'Meta',
-    apiKey: true,
+    kind: 'backend',
     baseUrl: 'https://api.meta.ai/v1',
   },
   {
     id: 'kimiCode',
     displayName: 'Kimi Code',
-    apiKey: true,
+    kind: 'plan-key',
     apiKeyEnvName: 'KIMI_CODE_API_KEY',
   },
   {
     id: 'copilot',
     displayName: 'Copilot',
-    baseUrl: null,
+    kind: 'unserved',
   },
   {
     id: 'others',
     displayName: 'Others',
-    baseUrl: null,
+    kind: 'unserved',
   },
 ] as const satisfies readonly ModelProviderPlugin[];
 
@@ -163,7 +167,7 @@ export const MODEL_PROVIDER_PLUGINS: readonly ModelProviderPlugin[] = MANIFEST;
 /** Ids of the providers users can configure a direct API key for. */
 export type ApiKeyProviderId = Extract<
   (typeof MANIFEST)[number],
-  { readonly apiKey: true }
+  { readonly kind: 'backend' | 'plan-key' }
 >['id'];
 
 /**
@@ -172,14 +176,8 @@ export type ApiKeyProviderId = Extract<
  * Order = display order in the settings key rows.
  */
 export const API_KEY_PROVIDER_IDS: readonly ApiKeyProviderId[] = Object.freeze(
-  MANIFEST.flatMap((plugin) => ('apiKey' in plugin ? [plugin.id] : [])),
+  MANIFEST.flatMap((plugin) => (plugin.kind === 'unserved' ? [] : [plugin.id])),
 );
-
-/** Providers with an HTTP endpoint of their own, which a host may override. */
-export type EndpointProviderId = Extract<
-  (typeof MANIFEST)[number],
-  { readonly baseUrl: string | RegionalBaseUrl }
->['id'];
 
 /** Providers with a China and an international platform. */
 export type RegionalProviderId = Extract<
@@ -202,8 +200,9 @@ export const BACKEND_PROTOCOLS = Object.freeze({
   minimax: 'openai-responses',
   glm: 'openai-responses',
   meta: 'openai-responses',
-} satisfies Partial<
-  Record<(typeof MANIFEST)[number]['id'], typeof TurnProtocolSchema.Type>
+} satisfies Record<
+  Extract<(typeof MANIFEST)[number], { readonly kind: 'backend' }>['id'],
+  typeof TurnProtocolSchema.Type
 >);
 
 /** A provider a run's conversation can be bound to: its backend. */
@@ -219,34 +218,17 @@ export function findModelProviderPlugin(
 type AssertNever<T extends never> = T;
 
 /**
- * Every llm-zoo provider with an HTTP endpoint names its protocol; the error
- * names the provider ids a new llm-zoo release added without one.
+ * Every llm-zoo provider is a backend (served, with its endpoint, key and,
+ * through `BACKEND_PROTOCOLS`, its protocol) or unserved (`copilot`,
+ * `others`): a new llm-zoo release's provider fails here, naming its id,
+ * until that is decided, instead of vanishing from the picker.
  */
-type _EveryEndpointProviderNamesAProtocol = AssertNever<
+type _EveryModelProviderIsDecided = AssertNever<
   Exclude<
     `${ModelProvider}`,
-    | BackendProviderId
-    | Extract<(typeof MANIFEST)[number], { readonly baseUrl: null }>['id']
-  >
->;
-
-/**
- * Every llm-zoo provider but `copilot` and `others` (whose models TeXRA does
- * not serve) takes an API key, which makes it a Models-tab source
- * (`API_KEY_PROVIDER_IDS`); a provider added without one fails here until
- * that is decided, instead of vanishing from the picker.
- */
-type _EveryServedProviderTakesAKey = AssertNever<
-  Exclude<`${ModelProvider}`, ApiKeyProviderId | 'copilot' | 'others'>
->;
-
-/**
- * Every llm-zoo provider states its default endpoint, `null` when it has no
- * HTTP route; the error names the provider ids that state none.
- */
-type _EveryModelProviderStatesABaseUrl = AssertNever<
-  Exclude<
-    `${ModelProvider}`,
-    Extract<(typeof MANIFEST)[number], { readonly baseUrl: unknown }>['id']
+    Extract<
+      (typeof MANIFEST)[number],
+      { readonly kind: 'backend' | 'unserved' }
+    >['id']
   >
 >;

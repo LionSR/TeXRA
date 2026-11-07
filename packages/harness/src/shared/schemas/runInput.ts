@@ -1,36 +1,16 @@
 /**
- * The facts a run's rows carry beside its messages: its usage, its input
- * (system text, instruction, activated skills) and what it is bound to.
+ * The facts a run's rows carry beside its messages: its input (system text,
+ * instruction, activated skills) and what it is bound to.
  * Host-neutral so the run history (`runHistoryEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back. The facts read back from those
  * rows are `session/runFacts.ts`.
  */
-import { Schema, Struct } from 'effect';
+import { Schema } from 'effect';
 
 import { ACTIVATED_SKILLS_MAX } from './activeSkills';
 import { Sha256Schema } from './identifiers';
 import { QualifiedSkillNameSchema } from './skillName';
-import { StoredProtocolSchema } from './storedTurn';
-import { DeclinableUsageRouteSchema, TokenUsageStatsSchema } from './usage';
-
-// ---------------------------------------------------------------- usage
-
-/**
- * The priced usage of one model call: the counts under `TurnUsage`'s names,
- * its cost, route and plan ({@link TokenUsageStatsSchema}), and the wire
- * surface and response time of the call. `run/pricing.ts` prices the
- * package's `TurnResult.usage` into this shape.
- */
-export const NormalizedUsageSchema = TokenUsageStatsSchema.mapFields(
-  Struct.assign({
-    /** Response time in milliseconds */
-    responseTimeMs: Schema.Number.check(Schema.isGreaterThanOrEqualTo(0)),
-    /** Wire surface that produced this usage; usage is billed per surface. */
-    provider: StoredProtocolSchema,
-  }),
-);
-/** Normalized, priced usage of one call ({@link NormalizedUsageSchema}). */
-export type NormalizedUsage = typeof NormalizedUsageSchema.Type;
+import { DeclinableUsageRouteSchema } from './usage';
 
 // ------------------------------------------------------------ launch facts
 
@@ -41,18 +21,6 @@ const AttachedMemoryMissSchema = Schema.Struct({
 });
 /** An attached memory the opening could not read ({@link AttachedMemoryMissSchema}). */
 export type AttachedMemoryMiss = typeof AttachedMemoryMissSchema.Type;
-
-/** One skill in a step's catalog, as the prompt lists it, with the plugin
- *  that ships it (null for a core source) and the directory tools may read
- *  while a step lists or activated it (null when the workspace already
- *  holds it). A step discovers its catalog; the system text it sends and
- *  the names it lists are what is recorded. */
-export interface SkillCatalogEntry {
-  readonly plugin: string | null;
-  readonly name: string;
-  readonly text: string;
-  readonly directory: string | null;
-}
 
 // ---------------------------------------------------------- model backend
 

@@ -35,13 +35,16 @@ import {
   RETIRED_PLUGIN_FACTS,
   RETIRED_ROW_KINDS,
   ROW_KINDS,
-  SessionEventDraftSchema,
+  SessionRowDraftSchema,
   SessionRowSchema,
   unavailableFactReason,
   type AggregateId,
   type JsonValue,
   type SessionRow,
   type SessionRowDraft,
+  factName,
+  FactNameSchema,
+  type FactName,
 } from '@shared/schemas';
 import {
   DatabaseRowCorrupt,
@@ -175,7 +178,7 @@ export function prepareEventDraft(input: WithBlobs<SessionRowDraft>): {
   readonly row: EncodedRow;
 } {
   const { blobs = [], ...rest } = input;
-  const draft = Schema.decodeUnknownSync(SessionEventDraftSchema)(rest);
+  const draft = Schema.decodeUnknownSync(SessionRowDraftSchema)(rest);
   return { draft, row: encodeDraft(draft, blobs) };
 }
 
@@ -342,10 +345,10 @@ export function factKindOf(
   commit: number,
   factKinds: FactKinds,
 ): Result.Result<
-  FactKinds[string] | undefined,
+  FactKinds[FactName] | undefined,
   DatabaseStoreNewer | DatabaseRowEarlier
 > {
-  const name = `${fact.plugin}/${fact.kind}`;
+  const name = factName(fact);
   const type = pluginKind(fact.plugin, fact.kind);
   const factKind = factKinds[name];
   if (factKind === undefined && RETIRED_PLUGIN_FACTS.has(name))
@@ -361,7 +364,7 @@ export function factKindOf(
 /** The `stored_kind` entry a plugin value is recorded under: each fact kind
  *  versions its kind on its own. */
 export const pluginKind = (plugin: string, kind: string): string =>
-  `plugin.fact/${plugin}/${kind}`;
+  `plugin.fact/${factName({ plugin, kind })}`;
 
 /** The `stored_kind` entry every current value is recorded under. */
 export const CURRENT_VALUE_KIND = 'current_value';
@@ -371,7 +374,13 @@ export const CURRENT_VALUE_KIND = 'current_value';
 function readableVersion(type: string, factKinds: FactKinds): number {
   if (type === CURRENT_VALUE_KIND) return CURRENT_VALUE_VERSION;
   if (type.startsWith('plugin.fact/'))
-    return factKinds[type.slice('plugin.fact/'.length)]?.version ?? Infinity;
+    return (
+      factKinds[
+        Schema.decodeUnknownSync(FactNameSchema)(
+          type.slice('plugin.fact/'.length),
+        )
+      ]?.version ?? Infinity
+    );
   if (RETIRED_ROW_KINDS.has(type)) return Infinity;
   return hasKind(type) ? ROW_KINDS[type].version : 0;
 }

@@ -27,7 +27,10 @@ import {
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import { Inbox } from '@agent/followUp/Inbox';
-import type { FollowUpBatch, RunInput } from '@agent/followUp/RunInput';
+import type {
+  FollowUpBatch,
+  FollowUpReader,
+} from '@agent/followUp/FollowUpReader';
 import { logUserMessage } from '@agent/trace/helpers';
 import {
   ACTIVATED_SKILLS_MAX,
@@ -78,7 +81,10 @@ interface ConsumeOptions {
 
 export interface FollowUps {
   /** The run's reader: what is pending, read from its rows. */
-  readonly input: Pick<RunInput, 'hasPending' | 'controls' | 'read' | 'next'>;
+  readonly reader: Pick<
+    FollowUpReader,
+    'hasPending' | 'controls' | 'read' | 'next'
+  >;
   /** End the reader: the run stays recoverable, or takes no more input. */
   readonly release: (next: 'recoverable' | 'terminal') => void;
   /**
@@ -107,7 +113,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   const log = yield* SessionLog;
   // Ended with the scope; the run's settleRun ends it first, saying
   // whether the run takes more input.
-  const input = yield* inbox.open(runId);
+  const reader = yield* inbox.open(runId);
 
   /** The canonical user message of one batch: every item's text as its
    *  own part, media parts after it; `kinds[i]` is item i's badges.
@@ -283,12 +289,12 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
   });
 
   return {
-    input,
+    reader,
     // A child takes no more input once its loop ends: its parent resumes it.
     release: (next) =>
       inbox.release(
         runId,
-        input,
+        reader,
         next === 'terminal' || run.entry.parent !== null,
       ),
     consume,
