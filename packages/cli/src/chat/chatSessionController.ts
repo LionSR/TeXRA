@@ -982,7 +982,6 @@ export function createChatSessionController(
       ...(reason !== undefined ? { reason } : {}),
     });
     const route = Effect.gen(function* () {
-      yield* modelConnection.connected;
       if (session.leaving) return returned();
       // The focused agent below the root takes the message.
       const focused = runViewOf(currentView(), selectedRunIdSignal.get());
@@ -1021,6 +1020,9 @@ export function createChatSessionController(
     // uninterruptible, so a message the session took is never also back in
     // the input.
     yield* Effect.gen(function* () {
+      // Waiting for a model happens before the lane, so the exit's drain
+      // (which takes the lane) never waits on a message that is not sent.
+      yield* modelConnection.connected;
       const routed = yield* inOrder(route);
       return Fiber.isFiber(routed)
         ? yield* Effect.uninterruptible(Fiber.join(routed))

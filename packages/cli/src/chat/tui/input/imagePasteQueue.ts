@@ -3,7 +3,7 @@
 // submit, both in a scope the bar's mount owns, so unmounting interrupts them.
 
 // Third-party imports
-import { Effect, FiberHandle, FiberSet, Scope } from 'effect';
+import { Effect, Fiber, FiberHandle, FiberSet, Scope } from 'effect';
 import { useState } from 'react';
 
 // Local imports
@@ -51,20 +51,22 @@ export function useImagePastes(runtime: ProcessRuntime): ImagePastes {
       waiting.state._tag === 'Open' && waiting.state.fiber !== undefined;
     const deferUntilIdle = (action: () => void): boolean => {
       if (!hasPending()) return false;
-      runtime.runSync(
-        FiberHandle.run(
-          waiting,
-          FiberSet.awaitEmpty(inFlight).pipe(
-            Effect.andThen(Effect.sync(action)),
-            // The submit runs in a fiber, where a throw would vanish.
-            Effect.catchDefect((defect) =>
-              Effect.logWarning('The deferred image-paste action failed.').pipe(
-                Effect.annotateLogs({ data: defect }),
-                withLogChannel('cli.tui'),
-              ),
+      if (hasDeferredAction()) return true;
+      // The handle holds only the wait, so the action (which may discard the
+      // draft and clear the handle) runs after the handle let its fiber go.
+      const wait = runtime.runSync(
+        FiberHandle.run(waiting, FiberSet.awaitEmpty(inFlight)),
+      );
+      runtime.runFork(
+        Fiber.join(wait).pipe(
+          Effect.andThen(Effect.sync(action)),
+          // The submit runs in a fiber, where a throw would vanish.
+          Effect.catchDefect((defect) =>
+            Effect.logWarning('The deferred image-paste action failed.').pipe(
+              Effect.annotateLogs({ data: defect }),
+              withLogChannel('cli.tui'),
             ),
           ),
-          { onlyIfMissing: true },
         ),
       );
       return true;
