@@ -269,6 +269,19 @@
           "signature": "export function createDesktopWindows(options: {…}): DesktopWindows {…}"
         }
       ]
+    },
+    {
+      "id": "RT-listing-entry-actions",
+      "candidate": "the run listing entry carries RunView.actions (runActions) in place of resumable/resumeBlocked, so listRuns stops calling deriveResumability",
+      "why": "The two answer different questions. The listing's resumable is deriveResumability's checkpoint: a run that continues from its rows whatever its outcome, so a completed conversation is listed resumable and the CLI resume list enables it, and resumeBlocked carries why rows cannot be continued here (an earlier build, damaged rows, a plugin this process does not load). runActions offers resume only on an interrupted loop-driven run or an unfinished script, and reads the view, which holds no plugin facts, so the listing would disable every finished conversation and lose the blocked reason (packages/harness/example/10-external-plugin.ts asserts it). continuesFromRows is the shared rule both read on purpose, not a second decider.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/storage/runListing.ts",
+          "symbol": "listRuns",
+          "signature": "export const listRuns = Effect.fn('listRuns')(function* (): Effect.fn.Return<AgentRunListingEntry[], Error, SessionLog | SessionViewAccess> {…})"
+        }
+      ]
     }
   ]
 }
