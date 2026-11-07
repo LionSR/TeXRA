@@ -1,12 +1,12 @@
 /**
- * The failures the Effect surface names (`@texra-ai/harness`). Five are
+ * The failures the Effect surface names (`@texra-ai/harness`). Four are
  * defined here — the plugin list the package refuses, the tools a launch
- * refuses, the resume refusal, a trace no reader can take, and the run's own
- * failure. The other launch refusal, an input the launch will not run
- * (`LaunchRefused`), is the agent layer's, which raises it, and three more
- * reach the surface from the session store (`DatabaseOpenFailed`, `DatabaseReadFailed`,
+ * refuses, the resume refusal, and the run's own failure. The other launch
+ * refusal, an input the launch will not run (`LaunchRefused`), is the agent
+ * layer's, which raises it, and three more reach the surface from the
+ * session store (`DatabaseOpenFailed`, `DatabaseReadFailed`,
  * `SessionOptionsConflict`: the `SessionOpenError` union in
- * `@shared/session/database`), for nine in the session lifecycle. The entry
+ * `@shared/session/database`), for eight in the session lifecycle. The entry
  * exports other tagged errors too; `config/api-reports/harness.api.md` lists
  * the whole surface.
  *
