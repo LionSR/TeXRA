@@ -21,6 +21,7 @@ import {
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { UsageLog } from '@texra-ai/harness/host';
 import type { ITool } from '@agent/core/tools/ToolTypes';
+import type { PluginToolServices } from '@agent/runtime/ToolServices';
 import { modelInvokerLayer } from '@agent/runtime/ModelInvoker';
 import { makeRetryGate, RouteRetries } from '@agent/runtime/ModelRetryGate';
 import {
@@ -206,9 +207,14 @@ export const textTurn = (
   finishReason: 'stop' | 'length' = 'stop',
 ): TurnResult => httpTurn(textContent(text), finishReason);
 
-/** A turn that calls tools, after the text the model wrote alongside them. */
+/** A turn that calls tools, each with its `input` (none when absent), after
+ *  the text the model wrote alongside them. */
 export const toolCallTurn = (
-  calls: readonly { readonly id: string; readonly name: string }[],
+  calls: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly input?: Readonly<Record<string, unknown>>;
+  }[],
   text = '',
 ): TurnResult =>
   httpTurn(
@@ -218,7 +224,7 @@ export const toolCallTurn = (
         kind: 'local-call' as const,
         providerCallId: call.id,
         name: call.name,
-        argumentsText: '{}',
+        argumentsText: JSON.stringify(call.input ?? {}),
       })),
     ],
     'tool-calls',
@@ -329,7 +335,7 @@ export function testAgentRun(
 export interface ScriptedRunInit {
   readonly runId: RunId;
   readonly session: Context.Context<SessionServices>;
-  readonly tools?: Record<string, ITool>;
+  readonly tools?: Record<string, ITool<Error, PluginToolServices>>;
   readonly logger?: TraceEmitter;
   /** The model the run is bound to, with the binding's overrides. */
   readonly model: Model;
