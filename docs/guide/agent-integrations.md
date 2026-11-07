@@ -30,7 +30,7 @@ Both integrations follow the same setup flow from the TeXRA Settings.
 
 1. Open **TeXRA: Open Settings** (`Ctrl+Shift+P`) → **Plugins** (<wa-icon library="texra" name="cube"></wa-icon>).
 2. Find the **OpenAI Codex CLI** or **Claude Code CLI** row. When it shows **Needs setup**, the setup actions expand automatically.
-3. Select <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="right-to-bracket"></wa-icon> **Sign in** to OAuth in your browser.
+3. Select <wa-icon library="texra" name="terminal"></wa-icon> **Install in terminal**, then <wa-icon library="texra" name="right-to-bracket"></wa-icon> **Sign in** to OAuth in your browser.
 4. Reopen the dashboard (or select **Re-check** on the **Plugins** page). The status changes to a green <wa-icon library="texra" name="check"></wa-icon> check (tooltip **Ready**) once TeXRA detects the install.
 
 <IntegrationCard />
@@ -45,7 +45,7 @@ Each integration's options live on its row and are scoped to the current workspa
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
 ::: warning Windows
-TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in Terminal** offers there. Codex is unaffected: TeXRA resolves its `codex.exe` inside the npm package itself.
+TeXRA spawns each CLI binary directly in the same environment as the extension host, so it needs a real `.exe`, not one of the `claude` / `.cmd` / `.ps1` shims that a global npm install leaves behind. Claude Code is therefore installed with `winget` (or its native installer) on Windows, which is what **Install in terminal** offers there. Codex is unaffected: TeXRA resolves its `codex.exe` inside the npm package itself.
 
 - **WSL Remote**: open TeXRA inside the WSL window before installing.
 - **Native Windows**: install the CLI on Windows so the real binary is on PATH.
@@ -55,7 +55,7 @@ TeXRA spawns each CLI binary directly in the same environment as the extension h
 
 ### Install and authenticate
 
-- **Install** with `npm install -g @openai/codex`, or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in Terminal** picks Homebrew automatically when you have it, so the button works without a Node install.
+- **Install** with `npm install -g @openai/codex`, or `brew install codex` (macOS), or the official installer linked from [developers.openai.com/codex/cli](https://developers.openai.com/codex/cli). **Install in terminal** picks Homebrew automatically when you have it, so the button works without a Node install.
 - **Sign in** with `codex login` to use ChatGPT Plus / Pro, or set `OPENAI_API_KEY` in the shell you launch VS Code from to bill against an API account.
 
 ### Settings
@@ -78,7 +78,7 @@ delivery. The new prompt joins that Codex session as the next turn.
 ### Install and authenticate
 
 - **Install** with `npm install -g @anthropic-ai/claude-code`, or `brew install --cask claude-code` (macOS), `winget install Anthropic.ClaudeCode` (Windows), or the native installer at [claude.com/code](https://claude.com/code).
-- **Sign in** with `claude login` to use Claude Pro / Max, or set `ANTHROPIC_API_KEY` (Settings → Models → Anthropic, or the environment), or run `claude setup-token` to set `CLAUDE_CODE_OAUTH_TOKEN`. With none of these set, the CLI falls back to any existing `claude login` session.
+- **Sign in** with `claude login` to use Claude Pro / Max, or set `ANTHROPIC_API_KEY` (Settings → Models → API keys → Anthropic, or the environment), or run `claude setup-token` to set `CLAUDE_CODE_OAUTH_TOKEN`. With none of these set, the CLI falls back to any existing `claude login` session.
 
 ### Settings
 
@@ -156,11 +156,12 @@ tools:
   once you approve all agent work for the task, and every call refused
   under Block. A session where approval
   prompts can't be shown (a headless run) is not offered MCP tools.
-- **The server runs only while a run uses it.** TeXRA starts it when the first
-  run that names it begins and stops it when the last such run ends. Editing a
-  server's entry takes effect for runs started afterwards; runs already in
-  progress keep the server they started with. A subagent uses the servers of
-  the run that launched it.
+- **The server starts when a run first uses it.** TeXRA starts it when the
+  first run that names it begins; the project's runs share that one process,
+  which stops 30 minutes after the last run using it ends, or when the session
+  closes. Editing a server's entry takes effect for runs started afterwards;
+  runs already in progress keep the server they started with. A server that
+  failed to start is retried by the project's next top-level run.
 - **Environment.** A server inherits TeXRA's environment minus variables whose
   names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, so your
   provider API keys don't reach it. Pass what a server needs through its `env`.
@@ -181,7 +182,7 @@ The exact error message is shown inline on the row, below its description. Read 
 
 | Message                                        | Fix                                                                                                     |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `@openai/codex-sdk package not found`          | Select **Install in Terminal** again, then **Re-check**.                                                |
+| `@openai/codex-sdk package not found`          | Select **Install in terminal** again, then **Re-check**.                                                |
 | `Codex SDK loaded but native binary not found` | Reinstall in the same environment as the extension host. On Windows, follow the **Windows** note above. |
 | `Platform not supported`                       | Codex ships native binaries for Linux, macOS, and Windows (`x64` / `arm64`). On other hosts, use WSL.   |
 

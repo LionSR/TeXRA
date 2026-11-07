@@ -37,15 +37,15 @@ available.
 ## Add a key or connect a subscription
 
 A credential is the one step no agent can do for you. On a fresh install, the **Connect a model** card in the
-TeXRA panel offers the main access choices:
+TeXRA panel offers the two main access choices; other subscriptions connect from Settings:
 
-1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Models** page
+1. **Use your own API keys**: Anthropic, OpenAI, Google, and more. Open the **Models** page
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
 2. **Use ChatGPT subscription**: OpenAI models through your ChatGPT plan. Open the Settings **Models**
    page and use the **Subscriptions** sign-in section.
-3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
+3. **Another provider subscription** (from Settings, not the card): Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
 
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
