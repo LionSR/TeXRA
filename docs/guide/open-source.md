@@ -23,12 +23,12 @@ TeXRA's client software is licensed under the Apache License 2.0: the agent runt
 [![GitHub](https://img.shields.io/github/stars/texra-ai/llm-zoo)](https://github.com/texra-ai/llm-zoo)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/texra-ai/llm-zoo/blob/main/LICENSE)
 
-Keeping track of LLM pricing, context windows, and capabilities across providers is hard. **llm-zoo** is a single, typed, zero-dependency package covering 140+ models from Claude, GPT, Gemini, DeepSeek, Grok, and more.
+Keeping track of LLM pricing, context windows, and capabilities across providers is hard. **llm-zoo** is a single, typed package (its only peer dependency is `effect`) covering 140+ models from Claude, GPT, Gemini, DeepSeek, Grok, and more.
 
 ### Highlights
 
 - **140+ models** across Anthropic, OpenAI, Google, GLM, DeepSeek, MiniMax, xAI, Moonshot, Meta, DashScope, and others
-- **Zero dependencies**, with full TypeScript support
+- **No dependencies** beyond the `effect` peer dependency, with full TypeScript support
 - **Tree-shakeable** for efficient bundling
 - **Effect Schema** for runtime validation and wire shapes
 - **Always current**: pricing and capabilities are updated regularly
@@ -231,6 +231,6 @@ The scripts also run standalone with [uv](https://docs.astral.sh/uv/) (Python â‰
 
 ## Contributing
 
-The satellite projects below are MIT-licensed and welcome contributions. To report a bug, add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill, open an issue or a pull request on the project's GitHub repository.
+The satellite projects above are MIT-licensed and welcome contributions. To report a bug, add a model to llm-zoo, extend the Mathematica tools, or contribute a new agent skill, open an issue or a pull request on the project's GitHub repository.
 
 - [texra-ai on GitHub](https://github.com/texra-ai)

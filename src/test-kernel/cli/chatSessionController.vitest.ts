@@ -80,10 +80,10 @@ import {
   canStopRootRun,
   TuiSession,
 } from '@cli/chat/tui/state/sessionRunState';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   boundTestSessionView,
   seedView,
@@ -92,11 +92,9 @@ import {
 import type { Outcome } from '@texra-ai/harness';
 
 // The state stores the controller's setting reads land on, as ports of a
-// fake host installed fresh per test rather than a module mock of
+// fake host built fresh per test rather than a module mock of
 // `platform()`: the setting reads (the team name) take the session's own
-// roots, which this file's stub takes from the installed host, and the
-// kernel's setup file installs a host before this file's mocks are
-// registered.
+// roots, which this file's stub takes from the test's host.
 const hostWithMockedStores = FakeHost.layer(
   {},
   {
@@ -145,7 +143,9 @@ function makeSessionContext(): CliContext {
 /** The controller's init over the block's runtime, as the chat entry builds
  *  it. */
 const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
-  Effect.map(SessionGraph.runtime, (runtime): ChatSessionControllerInit => {
+  Effect.gen(function* () {
+    const { roots } = yield* FakeHost;
+    const runtime = yield* SessionGraph.runtime;
     const scope = Scope.makeUnsafe();
     const chatScope = Scope.makeUnsafe();
     onTestFinished(() =>
@@ -156,10 +156,10 @@ const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
         ),
       ),
     );
-    return {
+    const init: ChatSessionControllerInit = {
       // Only when the test brings none: a new session resets the one launch.
       session: overrides.session ?? new TuiSession(),
-      runSession: mocks.sessionStub(),
+      runSession: mocks.sessionStub(roots),
       served: false,
       sessionContext: makeSessionContext(),
       chatScope,
@@ -175,6 +175,7 @@ const makeInit = (overrides: Partial<ChatSessionControllerInit> = {}) =>
       modelConnection: { connected: Effect.void, open: Effect.succeed(false) },
       ...overrides,
     };
+    return init;
   });
 
 const decodeRunId = Schema.decodeUnknownSync(RunIdSchema);
@@ -185,10 +186,11 @@ const installableViewRef = () =>
   Effect.runSync(SubscriptionRef.make(currentView()));
 
 /**
- * Installs the session stub the controller surfaces receive. Every surface is
- * a stub the controller can call; the view's level and changes stream from
- * `installed` when the case gives one, else its level is the one the TUI
- * shows and it streams no changes.
+ * Installs the session stub the controller surfaces receive, over the roots
+ * the init hands it (the test's host's). Every surface is a stub the
+ * controller can call; the view's level and changes stream from `installed`
+ * when the case gives one, else its level is the one the TUI shows and it
+ * streams no changes.
  */
 function installSession(
   installed?: SubscriptionRef.SubscriptionRef<SessionView>,
@@ -197,8 +199,8 @@ function installSession(
     installed === undefined
       ? currentView()
       : SubscriptionRef.getUnsafe(installed);
-  mocks.sessionStub.mockReturnValue({
-    roots: testWorkspaceRoots(),
+  mocks.sessionStub.mockImplementation((roots: WorkspaceRoots) => ({
+    roots,
     // The run's records the chat reads: its saved setup, whether it exists.
     records: (runId: RunId) => {
       const records = mocks.getRunRecords(runId);
@@ -234,7 +236,7 @@ function installSession(
       watch: () => Stream.empty,
       read: () => Effect.sync(current),
     },
-  });
+  }));
 }
 /** A resumed run whose result reads `outcome` when the chat awaits it. */
 const resumedRun = (

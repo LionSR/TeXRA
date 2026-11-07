@@ -69,38 +69,33 @@ export class SubscriptionOAuthCoordinator<
   S extends SubscriptionSession,
 > implements SubscriptionCoordinator<S> {
   /**
-   * One coordinator per credential store for this provider. Refresh tokens
-   * may rotate on use, so callers sharing a store must share one lock.
-   * Replacing the store starts an independent one.
+   * The coordinator of `policy`'s session in `secrets`, with its own lock.
+   * Refresh tokens may rotate on use, so every caller of one store's session
+   * must hold the one coordinator made for it (`SubscriptionAccounts`).
    */
-  static forProvider<S extends SubscriptionSession>(
+  static make<S extends SubscriptionSession>(
+    secrets: CredentialStore,
     policy: SubscriptionOAuthPolicy<S>,
-  ): (secrets: CredentialStore) => SubscriptionCoordinator<S> {
-    const coordinators = new WeakMap<
-      CredentialStore,
-      SubscriptionCoordinator<S>
-    >();
-    return (secrets) => {
-      let coordinator = coordinators.get(secrets);
-      if (coordinator === undefined) {
-        coordinator = new SubscriptionOAuthCoordinator(secrets, policy);
-        coordinators.set(secrets, coordinator);
-      }
-      return coordinator;
-    };
+  ): Effect.Effect<SubscriptionCoordinator<S>> {
+    return Effect.map(
+      Semaphore.make(1),
+      (lock) => new SubscriptionOAuthCoordinator(secrets, policy, lock),
+    );
   }
 
   private readonly secrets: CredentialStore;
   private readonly policy: SubscriptionOAuthPolicy<S>;
   /** Held across every read-then-write of the stored session. */
-  private readonly lock = Semaphore.makeUnsafe(1);
+  private readonly lock: Semaphore.Semaphore;
 
   private constructor(
     secrets: CredentialStore,
     policy: SubscriptionOAuthPolicy<S>,
+    lock: Semaphore.Semaphore,
   ) {
     this.secrets = secrets;
     this.policy = policy;
+    this.lock = lock;
   }
 
   /**

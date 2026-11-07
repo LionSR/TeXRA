@@ -1,5 +1,5 @@
 name: paper2poster
-description: Converts a research paper into a LaTeX conference poster using a provided template.
+description: Converts a research paper into a LaTeX conference poster using TeXRA's bundled template.
 
 prompt: |
   Create a mathematically detailed LaTeX Beamer poster from the research paper. Write for a scientific audience. Present the paper's key points, methods, results, and conclusions in a readable A5 layout.

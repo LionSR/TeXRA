@@ -19,6 +19,7 @@ import {
   Context,
   Deferred,
   Effect,
+  Exit,
   Fiber,
   Schema,
   type Scope,
@@ -137,6 +138,10 @@ export class RunRegistry implements RunsShape {
    *  asked while it opened, so the run ends CANCELLED instead of running.
    *  An entry lives until that start or the session's close. */
   private readonly stoppedBeforeStart = new Map<RunId, RunStopReason>();
+  /** The runs whose stop committed and whose interrupted fiber has not
+   *  ended yet. With `stopping`, a second stop records nothing, so the
+   *  first one's reason stands. */
+  private readonly stopped = new Set<RunId>();
   /** The runs a file operation or a deletion holds, for its lifetime
    *  ({@link withInactiveRun}): a launch arriving meanwhile waits for it. */
   private readonly busy = new Map<RunId, Deferred.Deferred<void>>();
@@ -382,6 +387,7 @@ export class RunRegistry implements RunsShape {
                   // Its parent's edge, read before the run leaves here.
                   const parent = this.attachedParent(runId);
                   this.live.delete(runId);
+                  this.stopped.delete(runId);
                   this.controls.delete(runId);
                   this.publishHeld();
                   this.init.wake(runId);
@@ -461,6 +467,8 @@ export class RunRegistry implements RunsShape {
         return Effect.succeed(true);
       }
       const fiber = this.live.get(runId);
+      if (this.stopping.has(runId) || this.stopped.has(runId))
+        return Effect.succeed(fiber !== undefined);
       this.stopping.add(runId);
       return Effect.gen({ self: this }, function* () {
         const known = yield* this.inSession(
@@ -487,7 +495,7 @@ export class RunRegistry implements RunsShape {
             yield* this.stopHeld(id, reason);
         if (fiber !== undefined) fiber.interruptUnsafe();
         return fiber !== undefined;
-      }).pipe(Effect.ensuring(Effect.sync(() => this.stopping.delete(runId))));
+      }).pipe(Effect.onExit((exit) => this.stopEnded(runId, fiber, exit)));
     });
   }
 
@@ -506,12 +514,36 @@ export class RunRegistry implements RunsShape {
         return Effect.void;
       }
       const fiber = this.live.get(runId);
-      if (fiber === undefined) return Effect.void;
+      if (
+        fiber === undefined ||
+        this.stopping.has(runId) ||
+        this.stopped.has(runId)
+      )
+        return Effect.void;
       this.stopping.add(runId);
       return this.inSession(this.init.programs.stop(runId, reason, false)).pipe(
         Effect.andThen(Effect.sync(() => fiber.interruptUnsafe())),
-        Effect.ensuring(Effect.sync(() => this.stopping.delete(runId))),
+        Effect.onExit((exit) => this.stopEnded(runId, fiber, exit)),
       );
+    });
+  }
+
+  /** A stop of `runId` answered: no longer committing, and, once it
+   *  interrupted the `fiber` still driving it, stopped until that fiber
+   *  ends (its observer lets it go). */
+  private stopEnded(
+    runId: RunId,
+    fiber: AnyFiber | undefined,
+    exit: Exit.Exit<unknown, unknown>,
+  ): Effect.Effect<void> {
+    return Effect.sync(() => {
+      this.stopping.delete(runId);
+      if (
+        Exit.isSuccess(exit) &&
+        fiber !== undefined &&
+        this.live.get(runId) === fiber
+      )
+        this.stopped.add(runId);
     });
   }
 

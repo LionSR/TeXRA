@@ -48,8 +48,7 @@ import {
   REAL_RUN_TIMEOUT,
   validationHost,
 } from '@test/support/storeFaults';
-import { SessionGraph } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 import type { RunId } from '@texra-ai/harness/schemas';
@@ -121,7 +120,7 @@ const packageSession = (session: Context.Context<SessionServices>) =>
       yield* AgentCatalog,
       () => Effect.succeed([]),
     );
-    return yield* sessions.open(testWorkspaceRoots());
+    return yield* sessions.open((yield* FakeHost).roots);
   });
 
 /** What a resume that activated the run answers. */
@@ -450,7 +449,7 @@ const resumedNotesRun = <E = never>(
   ) => Effect.Effect<void, E> = () => Effect.void,
 ) =>
   Effect.gen(function* () {
-    const roots = testWorkspaceRoots();
+    const { roots } = yield* FakeHost;
     const sessions = yield* Sessions;
     const { runId, storage } = yield* Effect.scoped(
       Effect.gen(function* () {

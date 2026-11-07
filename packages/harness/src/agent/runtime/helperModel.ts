@@ -17,6 +17,7 @@ import {
 } from '@agent/runtime/modelAccess/ModelAccess';
 import { RouteUnavailable } from '@common/errors/agentErrors';
 import type { Secrets } from '@platform/secrets';
+import type { SubscriptionAccounts } from '@texra-ai/llm/node';
 import type { SettingsStores } from '@shared/config/settings';
 import type { NormalizedUsage } from '@shared/schemas';
 import { turnText } from '@shared/session/runFacts';
@@ -43,7 +44,8 @@ export interface HelperPrompt {
  * turn's assistant text and its priced usage (`null`: the provider reported
  * none), for a caller whose row records what the call cost. `stores` are the
  * asking session's setting slots: the binding, the retry limit and the usage
- * consent read them, beside the process `Secrets`.
+ * consent read them, beside the process `Secrets` and its subscription
+ * accounts.
  */
 export const helperCall = Effect.fn('helperCall')(
   function* (
@@ -63,7 +65,12 @@ export const helperCall = Effect.fn('helperCall')(
   ): Effect.fn.Return<
     { readonly text: string; readonly usage: NormalizedUsage | null },
     CallFailure | Error,
-    Scope.Scope | HttpClient.HttpClient | UsageLog | RouteRetries | Secrets
+    | Scope.Scope
+    | HttpClient.HttpClient
+    | UsageLog
+    | RouteRetries
+    | Secrets
+    | SubscriptionAccounts
   > {
     const access = yield* Effect.provide(ModelAccess, modelAccessLayer(stores));
     const modelId =

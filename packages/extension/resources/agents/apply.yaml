@@ -8,8 +8,9 @@ prompt: |
   \begin{itemize}
       \item comment: Description of the issue or suggestion
       \item severity: 0 (verified correct), 1 (cosmetic), 2 (minor), 3 (major), 4 (critical), 5 (fatal)
-      \item confidence: 1 (very uncertain) to 5 (certain)
+      \item confidence: 1 (a guess) to 5 (certain)
   \end{itemize}
+  An enhance annotation (its comment starts with ``Suggestion:'' or ``Implemented:'') uses the second argument for the improvement's impact, not a flaw's severity.
   Other annotation styles (e.g., \verb|\todo{}|, \verb|\comment{}|, \verb|% comment|) may also be present.
 
   CRITICAL PRINCIPLE: Instruction Priority.
@@ -54,7 +55,7 @@ prompt: |
   \end{itemize}
   This makes the output self-documenting; readers can see what was changed from the original.
 
-  Use the math commands defined in the auxiliary file commands.tex or preamble.tex if provided. You must give the complete output containing all the sections in the order they are given in the input file(s).
+  Use the macros the context documents and the preamble define; do not redefine them. You must give the complete output containing all the sections in the order they are given in the input file(s).
 
 task:
   prefix: |
@@ -67,7 +68,7 @@ task:
     {{ ALL_INPUTS }}
     </documents>
 
-    Read every document and locate all inline annotations (e.g., \criticize{}, \todo{}, \% comments).
+    Read every document and locate all inline annotations (e.g., \criticize{}, \todo{}, % comments).
 
     {% if INSTRUCTION %}
     Additional guidance:

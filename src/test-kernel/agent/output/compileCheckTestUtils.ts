@@ -1,11 +1,12 @@
 // Node imports
 import * as path from 'node:path';
 
+// Third-party imports
+import { Layer } from 'effect';
+
 // Local imports
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { createRunStorageLocation } from '@texra-ai/harness/host';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { fakePath } from '@test/support/FakePlatform';
 import { FakeHost } from '@test/support/testKernel';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { spiedTrace } from '@test/support/spiedTrace';
@@ -13,37 +14,36 @@ import { TEXRA_APP } from '@test/support/texraApp';
 import type { OutputFileInfo } from '@texra/shared/plugins/documentOutputs';
 import type { runCompileCheck } from '@texra/agent/output/compileCheck';
 import type { FileLocation, RunId } from '@texra-ai/harness/schemas';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING,
   DOCUMENTS_COMPILE_TIMEOUT_SETTING,
 } from '@texra/shared/settingsView/documentsSettings';
 
-export const storagePath = fakePath('storage');
-export const workspacePath = fakePath('workspace');
+/** The rooted filesystems of the test host's roots, over the Node
+ *  filesystem. */
+export const compileFsLayer = Layer.unwrap(
+  FakeHost.useSync(({ roots }) => rootedFsLayer(roots)),
+);
 
-/** The rooted filesystems of the seeded roots, over the Node filesystem. */
-export const compileFsLayer = rootedFsLayer({
-  workspace: workspacePath,
-  storage: storagePath,
-  globalStorage: fakePath('global-storage'),
-});
-
-export function runDir(runId: RunId): string {
-  return path.join(storagePath, 'executions', runId);
+export function runDir(roots: WorkspaceRoots, runId: RunId): string {
+  return path.join(roots.storage, 'executions', runId);
 }
 
 export function runStorageFile(
+  roots: WorkspaceRoots,
   runId: RunId,
   relativePath: string,
 ): FileLocation {
   return createRunStorageLocation(
-    path.join(runDir(runId), relativePath),
+    path.join(runDir(roots, runId), relativePath),
     relativePath,
     runId,
   );
 }
 
 export function outputFile(
+  roots: WorkspaceRoots,
   runId: RunId,
   relativePath: string,
   source: string,
@@ -52,19 +52,19 @@ export function outputFile(
   return {
     source,
     round,
-    location: runStorageFile(runId, relativePath),
+    location: runStorageFile(roots, runId, relativePath),
     lineage: null,
     diff: null,
   };
 }
 
 export function compileContext(
+  roots: WorkspaceRoots,
   runId: RunId,
 ): Parameters<typeof runCompileCheck>[0] {
   return {
-    // The installed fake host's roots: these suites seed and read one host.
-    roots: testWorkspaceRoots(),
-    fileService: new RunFileService(runId, testWorkspaceRoots()),
+    roots,
+    fileService: new RunFileService(runId, roots),
     logger: spiedTrace(),
     runId,
   };
@@ -76,8 +76,6 @@ export function latexHost(files: Record<string, string>) {
   return FakeHost.layer({
     app: TEXRA_APP,
     files,
-    storagePath,
-    workspacePath,
     workspaceState: {
       [DOCUMENTS_COMPILE_AFTER_OUTPUT_SETTING.key]: true,
       [DOCUMENTS_COMPILE_TIMEOUT_SETTING.key]: 30_000,

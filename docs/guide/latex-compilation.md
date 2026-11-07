@@ -40,7 +40,7 @@ TeXRA uses LaTeX Workshop when available. For example, after generating a compar
 
 **Recommended output directory (`%DIR%/build/`):**
 
-To keep auxiliary build files (`.aux`, `.log`, `.pdf`) out of your source directory, open **Settings → LaTeX → Recommended VS Code settings** and click **Apply all**. This sets **LaTeX Output Directory** (`latex-workshop.latex.outDir`) to `%DIR%/build/` and adds `build/` to **Explorer Auto-Reveal Exclude**. You can also set `Latex-workshop: Latex: Out Dir` to `%DIR%/build/` directly in VS Code Settings (`Ctrl+,` / `Cmd+,`).
+To keep auxiliary build files (`.aux`, `.log`, `.pdf`) out of your source directory, open **Settings → LaTeX → VS Code settings** and click **Apply all** under **Recommended VS Code settings**. This sets **LaTeX Output Directory** (`latex-workshop.latex.outDir`) to `%DIR%/build/` and adds `build/` to **Explorer Auto-Reveal Exclude**. You can also set `Latex-workshop: Latex: Out Dir` to `%DIR%/build/` directly in VS Code Settings (`Ctrl+,` / `Cmd+,`).
 
 ## Alternative: online compilers (e.g., Overleaf)
 

@@ -1,10 +1,12 @@
 <script setup>
 // Frameless run-storage file tree for guide/quick-start.md
-// ("Understanding the Output"). A completed run writes one folder per round
-// under run storage; each round holds the three artifact types the section
-// enumerates — the Output file, the Log, and the Diff PDF — and crucially the
-// document keeps its INPUT filename (draft.tex, not output.tex). r0/ is shown
-// expanded with its trio; a collapsed sibling r1/ implies the per-round scheme.
+// ("Understanding the output"). A completed run writes one folder per revision
+// under run storage (packages/texra/src/shared/constants/revisionLayout.ts):
+// r0/ holds the revised document, which keeps its INPUT filename (draft.tex,
+// not output.tex), and the model's reply (output.xml). The files derived from
+// a revision sit beside the revision folders: latexdiff PDFs under diff/r0/
+// and compile logs under compile/. r0/ is shown expanded; the collapsed rows
+// show the sibling folders.
 //
 // Standalone (no MockupFrame): composed inside the shared <MockCard> primitive
 // so the card shell + inline mono header come for free and it flips with the
@@ -19,13 +21,13 @@ const files = [
     role: 'Output',
     note: 'input filename preserved',
   },
-  { name: 'draft.log', kind: 'log', role: 'Log', note: 'process details' },
-  {
-    name: 'draft_polish_r0_diff.pdf',
-    kind: 'pdf',
-    role: 'Diff',
-    note: 'original vs revised',
-  },
+  { name: 'output.xml', kind: 'log', role: 'Reply', note: 'the model reply' },
+];
+
+const siblings = [
+  { name: 'r1/', tag: 'next revision, same layout' },
+  { name: 'diff/r0/', tag: 'latexdiff PDFs' },
+  { name: 'compile/', tag: 'compile logs' },
 ];
 
 const icon = (kind) =>
@@ -37,7 +39,7 @@ const icon = (kind) =>
     class="oat"
     title="run storage"
     icon="folder-opened"
-    sub="r{round}/<input-filename>"
+    sub="r{revision}/<input-filename>"
   >
     <div class="oat-tree">
       <div class="oat-round">
@@ -49,7 +51,7 @@ const icon = (kind) =>
             name="folder-opened"
           ></wa-icon>
           <code class="oat-fld-name">r0/</code>
-          <span class="oat-tag oat-tag--r0">Round 0</span>
+          <span class="oat-tag oat-tag--r0">Revision 0</span>
         </div>
 
         <ul class="oat-files">
@@ -72,7 +74,7 @@ const icon = (kind) =>
         </ul>
       </div>
 
-      <div class="oat-round">
+      <div v-for="d in siblings" :key="d.name" class="oat-round">
         <div class="oat-folder oat-folder--collapsed">
           <span class="oat-dot oat-dot--idle"></span>
           <wa-icon
@@ -80,8 +82,8 @@ const icon = (kind) =>
             library="texra"
             name="folder"
           ></wa-icon>
-          <code class="oat-fld-name oat-fld-name--idle">r1/</code>
-          <span class="oat-tag">next round, same trio</span>
+          <code class="oat-fld-name oat-fld-name--idle">{{ d.name }}</code>
+          <span class="oat-tag">{{ d.tag }}</span>
         </div>
       </div>
     </div>

@@ -69,7 +69,6 @@ import {
   fromHost,
   hostFailure,
 } from '@texra/controllers/session/hostCallFailure';
-import type { HostRunActions } from '@texra/controllers/session/hostRunActions';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
 import type {
   OwnHostArms,
@@ -118,10 +117,6 @@ interface ExtensionHostRequestsOptions {
   /** Reveal the task list for a run this window just started, or name the
    *  run in a toast when it cannot (the run actions' `revealProgress`). */
   readonly revealProgress: (config: AgentConfig) => Effect.Effect<void, Error>;
-  /** The window's launcher (`HostRunActions.runValidated`), which the setup
-   *  assistant's run starts through; it is there once the window has opened,
-   *  so the run waits for it. */
-  readonly launcher: Effect.Effect<HostRunActions['runValidated']>;
   /** The placement commands the sidebar and the editor tab share. */
   popOutToEditor(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
   showInSidebar(): Effect.Effect<void, HostCommandFailure, ProcessServices>;
@@ -375,18 +370,17 @@ export const createExtensionHostRequests = Effect.fn(
       }).pipe(withLogChannel(CHANNEL)),
       // The snapshot follows the flags it reads.
       skip: setOnboardingDeclined(globalState, true),
-      runSetup: Effect.flatMap(options.launcher, (launcher) =>
+      runSetup: (launch) =>
         runHandler(
           'runSetupAssistant',
           launchSetupAssistant(
             roots,
             runSession,
-            launcher,
+            launch.runValidated,
             options.showConnectModel(),
             options.showProgressView(),
           ),
         ),
-      ),
       skipSetup: setFirstRunDone(globalState),
       openGettingStarted: runHandler(
         'openGettingStarted',

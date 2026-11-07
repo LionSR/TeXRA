@@ -1,12 +1,15 @@
 <script setup>
 // Frameless vertical precedence stack for the CLI's config resolution order.
 // The Workspace Defaults section of guide/texra-cli.md states it in one sentence
-// — "Command-line flags override environment variables, environment variables
-// override the workspace file, and the workspace file overrides built-in
-// defaults" — a four-level chain that is easy to misremember read left-to-right.
+// — flags over environment variables over the workspace file over the user
+// configuration file over built-in defaults — a five-level chain that is easy
+// to misremember read left-to-right.
 // Stacking the layers top-to-bottom (highest priority on top) with each layer
-// carrying its concrete example (a --model flag, TEXRA_MODEL, the config.json
-// key, the built-in default) makes the override order spatial and unambiguous.
+// carrying its concrete example (a --model flag, TEXRA_MODEL, the stored
+// `texra.model` key in each file, the built-in default) makes the override
+// order spatial and unambiguous. The approval policy is the exception, stated
+// in the footnote: no project file sets it, and its flag and env var only
+// narrow the stored policy (packages/cli/src/runtime/platform/cliContext.ts).
 //
 // Frameless and .mockup-scoped, so it inherits the shared --mk-* tokens and
 // flips cleanly between the docs light / dark themes. The "winning" value
@@ -29,18 +32,25 @@ const layers = [
     title: 'Environment variables',
     sub: 'shell exports',
     chip: 'TEXRA_MODEL',
-    siblings: ['TEXRA_AGENT', 'TEXRA_OUTPUT_FORMAT', 'TEXRA_APPROVAL_POLICY'],
+    siblings: ['TEXRA_AGENT', 'TEXRA_OUTPUT_FORMAT'],
   },
   {
     icon: 'file-code',
     rank: '3',
     title: 'Workspace file',
     sub: '.texra/config.json',
-    chip: '"model": …',
+    chip: '"texra.model": …',
+  },
+  {
+    icon: 'account',
+    rank: '4',
+    title: 'User configuration file',
+    sub: '~/.texra/v1/global-storage/config.json',
+    chip: '"texra.model": …',
   },
   {
     icon: 'gear',
-    rank: '4',
+    rank: '5',
     title: 'Built-in default',
     sub: 'lowest priority',
     chip: 'deepseek/deepseek-v4-pro',
@@ -52,7 +62,7 @@ const layers = [
   <div
     class="mockup cps"
     role="group"
-    aria-label="CLI config precedence: flags over env over workspace file over built-in defaults"
+    aria-label="CLI config precedence: flags over env over workspace file over user configuration file over built-in defaults"
   >
     <span class="cps-rail" aria-hidden="true">overrides ↓</span>
     <ul class="cps-stack">
@@ -101,9 +111,20 @@ const layers = [
       </li>
     </ul>
   </div>
+  <p class="cps-note">
+    Approval policy: <code>--approval-policy</code>,
+    <code>TEXRA_APPROVAL_POLICY</code> and <code>--no-input</code> only narrow
+    the stored <code>texra.approvalPolicy</code>, which a project file cannot
+    set.
+  </p>
 </template>
 
 <style scoped>
+.cps-note {
+  margin: calc(-1 * var(--mk-space-10)) 0 var(--mk-space-16);
+  font-size: var(--mk-fs-72);
+  color: var(--mk-text-faint);
+}
 .cps {
   display: flex;
   align-items: stretch;

@@ -1,5 +1,5 @@
 name: firstread
-description: First-read pass by a naive linear physicist reading the paper top-to-bottom for the first time. Emits inline \criticize{message}{severity}{confidence} annotations at every reader stop (undefined terms, forward references, unclear citations, missing baselines, logical-coverage gaps, unsupported claims, unparseable or nonsensical prose, AI-jargon, oversold tone, duplicates, process claims to verify, and domain claims needing support). Every annotation pairs the stop with a concrete fix. Output is a self-contained compile-ready LaTeX document.
+description: First-read pass by a non-specialist physicist reading the paper top to bottom. Inserts a \criticize annotation, each with a concrete fix, at every point a linear reader stops (undefined terms, forward references, unsupported claims, unclear prose, oversold tone). Outputs one compile-ready preview document per input.
 
 prompt: |
   Read the research draft once from start to finish as a physicist new to the work. At each point that blocks or distracts a linear reader, insert a \criticize{message}{severity}{confidence} annotation with a concrete fix.
@@ -106,11 +106,11 @@ task:
     {{ INSTRUCTION }}
     </instruction>
 
-    The \criticize annotation, its scale and its definition; add the definition to the preamble if it is not already there:
+    The \criticize annotation and its definition; this pass uses the severity scale in your instructions, not the one in its comment:
     {{ CRITICIZE_CONTENT }}
   requests:
     - |
-      For each input file, produce one self-contained, compile-ready LaTeX document in its own <document name="..."> block. When multiple inputs are passed (e.g. main paper plus appendix), read them linearly in the order given, keep your running reader state across both, and emit one fully self-contained preview document per input. Each output should:
+      For each input file, produce one self-contained, compile-ready LaTeX document. When multiple inputs are passed (e.g. main paper plus appendix), read them linearly in the order given, keep your running reader state across both, and emit one fully self-contained preview document per input. Each output should:
 
       (1) Start with a single-class preamble. Use \documentclass[11pt]{article} for portability, unless the input clearly declares its own \documentclass, in which case mirror that. Avoid \documentclass[...]{revtex4-2} unless the input itself uses it, because revtex's superscriptaddress/floatfix options collide with auto-generated author blocks.
 
@@ -118,7 +118,7 @@ task:
           \usepackage{amsmath,amssymb,amsfonts,graphicx,hyperref,bm,mathtools}
           \usepackage[dvipsnames]{xcolor}
           \usepackage{palatino}
-        Note: xcolor with the dvipsnames option must be its own \usepackage line; do not put [dvipsnames] inside a comma-separated package list.
+        Note: xcolor with the dvipsnames option must be its own \usepackage line; do not put [dvipsnames] inside a comma-separated package list. Load xcolor only once, with this [dvipsnames] line: do not also copy the plain \usepackage{xcolor} line that comes with the \criticize definition.
 
       (3) Define the \criticize macro exactly as the \newcommand line given above defines it (one line, no line breaks).
 
@@ -135,7 +135,7 @@ task:
           Inline naive-physicist annotations. Severity: 5=red, 4=orange, 3=yellow-red, 2=yellow, 1=gray, 0=green. Confidence: faded for 1-2, mid for 3-4, full for 5.
           \end{abstract}
 
-      (5) Place the input content between \maketitle/abstract and \end{document}, reproduced verbatim except for inserted \criticize{message}{severity}{confidence} macros.
+      (5) Place the input's body (what lies between its \begin{document} and \end{document}, or all of it when it has neither) after the abstract and before \end{document}, reproduced verbatim except for inserted \criticize{message}{severity}{confidence} macros.
 
       (6) Do not modify any prose outside the inserted \criticize{...}{...}{...} macros. Do not use markdown code fences. Do not add explanation before or after the XML envelope.
 

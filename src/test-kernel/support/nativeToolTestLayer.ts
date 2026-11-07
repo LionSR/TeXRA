@@ -33,7 +33,7 @@ import { RunHistory } from '@shared/session/runHistory';
 import { NO_FACTS } from '@shared/session/runFacts';
 import { AgentConfigSchema } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeHost } from '@test/support/testKernel';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
 
 /** The run a test call is made under: what every fixture names, plus whatever
@@ -78,7 +78,7 @@ export function nativeToolTestLayer(
 ) {
   return Layer.unwrap(
     Effect.gen(function* () {
-      const roots = options.roots ?? testWorkspaceRoots();
+      const roots = options.roots ?? (yield* FakeHost).roots;
       const { run, origin, workingDirectory, stepRoots } = options;
       const callId = options.callId ?? `call-${crypto.randomUUID()}`;
       // A fixture is the slice of the run its case reads; the run answers for
@@ -111,7 +111,7 @@ export function nativeToolTestLayer(
       // door reads the same runs off the call's session.
       const runs =
         session === undefined
-          ? Layer.effect(Runs, testRunRegistry)
+          ? Layer.effect(Runs, testRunRegistry(roots))
           : Layer.succeed(Runs)(Context.get(session, Runs));
       // A test call is no script's and issues none; under a run it launches
       // children through the door over its own place in the run, and outside
@@ -158,16 +158,15 @@ export function nativeToolTestLayer(
                       .open(runCall.run.runId)
                       .pipe(Effect.orDie),
                     (cell) =>
-                      callRequests(
-                        runCall.run,
-                        runCall.session,
+                      callRequests({
+                        run: runCall.run,
+                        session: runCall.session,
                         cell,
-                        cell.append,
-                        { responseId: runCall.responseId, callId, attempt: 1 },
-                        0,
-                        null,
-                        'The test call ended.',
-                      ).requests,
+                        commit: cell.append,
+                        at: { responseId: runCall.responseId, callId },
+                        entered: { attempt: 1, raised: 0, own: null },
+                        retireCause: 'The test call ended.',
+                      }).requests,
                   );
             return {
               callId,

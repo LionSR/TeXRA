@@ -34,8 +34,7 @@ import {
   untilStored,
   validationHost,
 } from '@test/support/storeFaults';
-import { SessionGraph } from '@test/support/testKernel';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { makeSessions } from '../../../packages/harness/src/effect/sessionPrograms';
 
 /** The model every case runs on: the validation model answers it. */
@@ -51,7 +50,7 @@ const packageSession = (session: Context.Context<SessionServices>) =>
       yield* AgentCatalog,
       () => Effect.succeed([]),
     );
-    return yield* sessions.open(testWorkspaceRoots());
+    return yield* sessions.open((yield* FakeHost).roots);
   });
 
 /** The stored data of a `run.end` row, as far as these cases read it. */
@@ -106,7 +105,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         "R14: resuming a child its parent's open call owns resumes the parent once, names the child, and leaves no listener",
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             // A process killed while the parent's `agent` call runs its child:
             // the child's opening and first response committed, the call open.
             const { parent, child, storage } = yield* Effect.scoped(
@@ -187,7 +186,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         "records a host shutdown's stop of a launch still opening on its run's end",
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const sdk = yield* packageSession(
               yield* persistentTestSession(roots),
             );
@@ -232,7 +231,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         'ends cancelled a launch whose shutdown stop came before it started',
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const sdk = yield* packageSession(
               yield* persistentTestSession(roots),
             );
@@ -258,7 +257,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
         "counts a labelled run's label request in its result and its view alike",
         () =>
           Effect.gen(function* () {
-            const roots = testWorkspaceRoots();
+            const { roots } = yield* FakeHost;
             const sdk = yield* packageSession(
               yield* persistentTestSession(roots),
             );

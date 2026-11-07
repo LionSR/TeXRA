@@ -1,7 +1,7 @@
 import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 
-import { Effect, Layer } from 'effect';
+import { Context, Effect, Layer } from 'effect';
 import {
   DEFAULT_MODEL_CAPABILITIES,
   type ModelConfig,
@@ -11,16 +11,16 @@ import {
 } from '@texra-ai/llm';
 import { Secrets } from '@texra-ai/harness/host';
 import { readModelSettings, routeFactsFor } from '@model/modelSettings';
-import { fakeHostSecrets, installedHost } from '@test/support/setupPlatform';
 import { FakeHost } from '@test/support/testKernel';
+import type { FakeHost as HostRecord } from '@test/support/setupPlatform';
 
 /** The input window the Codex backend grants the fixture model. */
 const CODEX_INPUT_LIMIT = 272_000;
 
-/** The config a model runs with on the ChatGPT subscription. */
-const chatgptConfig = (config: ModelConfig) =>
-  readModelSettings(installedHost().roots).pipe(
-    Effect.provideService(Secrets, fakeHostSecrets),
+/** The config a model runs with on the ChatGPT subscription on `host`. */
+const chatgptConfig = (host: HostRecord, config: ModelConfig) =>
+  readModelSettings(host.roots).pipe(
+    Effect.provide(Secrets.layer(host.secrets)),
     Effect.map((settings) => routeFactsFor(settings, [])),
     Effect.map((facts) =>
       routeConfig(config, {
@@ -58,16 +58,19 @@ describe('provider capabilities', () => {
     'falls back when the configured context window is out of range',
     () =>
       Effect.gen(function* () {
-        yield* Layer.build(
-          FakeHost.layer({
-            config: {
-              'chatgptCodex.preferSubscription': true,
-              'chatgptCodex.contextWindowK': 900,
-            },
-          }),
+        const host = Context.get(
+          yield* Layer.build(
+            FakeHost.layer({
+              config: {
+                'chatgptCodex.preferSubscription': true,
+                'chatgptCodex.contextWindowK': 900,
+              },
+            }),
+          ),
+          FakeHost,
         );
 
-        expect(yield* chatgptConfig(gpt55Config)).toMatchObject({
+        expect(yield* chatgptConfig(host, gpt55Config)).toMatchObject({
           contextWindow: CODEX_INPUT_LIMIT + gpt55Config.maxOutputTokens,
         });
       }),

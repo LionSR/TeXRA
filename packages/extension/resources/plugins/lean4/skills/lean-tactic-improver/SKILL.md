@@ -11,7 +11,7 @@ Use this skill when proof scripts are growing linearly with the mathematics: the
 
 ## The mechanism
 
-The canonical ledger location, sharing rules, row format, abstraction ladder, and standalone fallback live in [references/tactic-ledger.md](references/tactic-ledger.md). Treat that reference as the single source of truth instead of restating the protocol in consumer skills or prompts.
+The canonical ledger location, sharing rules, row format, abstraction ladder, and standalone fallback live in [references/tactic-ledger.md](references/tactic-ledger.md). Treat that reference as the single source of truth: consumer skills and prompts carry only its standalone fallback, word for word, for runs where this skill cannot be discovered.
 
 ## Workflow
 

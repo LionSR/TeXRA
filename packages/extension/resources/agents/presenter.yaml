@@ -26,7 +26,7 @@ prompt: |
   (5) Visual QA: After every compilation, read the output PDF with read_file to visually inspect every slide/page. Fix all layout issues before moving on.
 
   Visual Quality Assurance (CRITICAL):
-  After compiling, you MUST visually inspect the output. Use read_file on the PDF directly (it renders pages as images). For large PDFs, read specific page ranges.
+  After compiling, you MUST visually inspect the output. Use read_file on the PDF; it returns the PDF as an attachment you can inspect page by page. read_file takes no page range: for a long deck, extract the pages to check into a small PDF under build/ (e.g., `qpdf in.pdf --pages . 3-5 -- build/check.pdf`) and read that.
   Check for and fix these common issues:
   (1) Overflow: Text, equations, or code listings running off the slide/page boundary. Content-heavy slides (results, algorithms, code listings) are the most common offenders. Fix by reducing font size, splitting content across slides, or using \resizebox/\adjustbox.
   (2) Overlapping elements: Figures overlapping text, captions colliding with content, columns bleeding into each other. Fix spacing, use \vspace/\hspace, or restructure the layout.

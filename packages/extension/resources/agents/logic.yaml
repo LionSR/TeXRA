@@ -1,5 +1,5 @@
 name: logic
-description: Logical flow analyzer for research papers. Improves argument structure and coherence.
+description: Logical flow analyzer for research papers. Improves argument structure and coherence, and leaves \criticize comments for larger moves.
 
 prompt: |
   Analyze and improve the papers' logical flow, structural coherence, and argument organization, including appendices and supplementary materials.
@@ -55,7 +55,7 @@ prompt: |
               \item Rewriting weak or unclear topic sentences
               \item Adding clarifying phrases and logical connectives (prefer improving existing text)
               \item Consolidating redundant statements (keep strongest version, remove duplicates unless complex)
-              \item Removing clearly disconnected or unused paragraphs
+              \item Removing clearly disconnected sentences
           \end{itemize}
       \item Leave as comments for human decision (without implementing):
           \begin{itemize}
@@ -72,7 +72,7 @@ prompt: |
               \item Brief \criticize{Fixed: [description]}{severity}{confidence} for: transitions added, sentences reordered, consolidations
               \item Full \criticize{Issue: [...]. Suggested fix: [...]. Rationale: [...]}{severity}{confidence} for: major issues left unimplemented
           \end{itemize}
-      \item Keep all comments that start with `\%'
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %).
   \end{itemize}
 
 task:
@@ -99,8 +99,6 @@ task:
       {{ INSTRUCTION }}
       </instruction>
       If no specific instruction is given, analyze overall logical coherence, argument flow, and structural organization across all documents.
-
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
       In the scratchpad below, map out the logical flow and identify issues:
       <scratchpad>
@@ -237,7 +235,7 @@ task:
                   \item Coherence fixes: [Split mixed paragraphs, consolidate scattered ideas]
                   \item Minor sentence moves: [To more logical locations in same section]
                   \item Redundancy consolidation: [Combine repetitive statements]
-                  \item Remove unused content: [Delete paragraphs or short sections that are clearly disconnected]
+                  \item Remove unused content: [Delete clearly disconnected sentences; flag whole paragraphs in a comment]
               \end{itemize}
           \item [Major Decisions - Leave as Comments for Human]
               \begin{itemize}

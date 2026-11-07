@@ -1,5 +1,5 @@
 name: enhance
-description: Mathematical substance enhancer for research papers. Identifies elegant proofs and stronger results.
+description: Mathematical substance enhancer for research papers. Implements tractable stronger results and simpler proofs in the document and leaves \criticize suggestions for harder ones.
 
 prompt: |
   Improve the mathematical substance of the papers, including any appendices and supplementary materials. Look for simpler proofs, stronger results, tractable open questions, and better proof strategies. Do not edit merely for style or presentation.
@@ -60,7 +60,7 @@ prompt: |
       \item Add explanatory text between equation blocks to justify each step and explain the mathematical reasoning.
       \item When implementing a more elegant proof, write out the complete proof with all steps shown explicitly.
       \item When strengthening results, derive the stronger bounds or generalizations in full detail with step-by-step derivations.
-      \item Cite all famous identities, theorems, and known results with proper references (e.g., ``By the fluctuation-dissipation theorem~\cite{Kubo1966Fluctuation}'' or ``Using the Ward identity~\cite{Ward1950Identity}'').
+      \item Name every known identity, theorem, and result you use (e.g., ``By the fluctuation-dissipation theorem''). Cite it only with a key from the provided bibliography; never invent a citation key.
       \item CRITICAL: The text inside \criticize{...}{...}{...} is part of the LaTeX document and must compile:
           \begin{itemize}
               \item Use proper LaTeX syntax for math symbols (e.g., $F_t$ not `F_t')
@@ -70,9 +70,9 @@ prompt: |
           \end{itemize}
       \item Use $...$ for inline equations.
       \item Ensure zero warnings when checked by chktex.
-      \item Preserve inline comments starting with `%'.
+      \item Keep every \LaTeX comment (a line or line tail starting with an unescaped %).
       \item Use non-breaking spaces before citations.
-      \item Use ``\\'' sparingly for paragraph breaks. Do not remove existing ``\\''.
+      \item Separate paragraphs with a blank line. Do not remove existing ``\\''.
   \end{itemize}
 
   Write the explanatory prose around derivations in plain technical English for the paper's reader: lead with the mathematical content, give each step's justification once and concretely (``by periodicity the boundary terms vanish''), use plain verbs, and remark only on the steps a reader would stumble on; routine steps pass without comment.
@@ -101,8 +101,6 @@ task:
       {{ INSTRUCTION }}
       </instruction>
       If no instruction given, look for all opportunities to improve mathematical substance across all documents.
-
-      Output one updated \LaTeX document for each input file, using the matching input filename as the document name.
 
       FIRST PHASE - IDENTIFY IMPROVEMENT OPPORTUNITIES: Analyze the mathematics across all documents to find where results could be strengthened, proofs could be more elegant, or open questions could be resolved.
 
@@ -223,7 +221,7 @@ task:
 
       - [Original brute-force calculation]
         [NEW: Replace with elegant proof showing all steps]
-        By the Ward identity~\cite{Ward1950Identity} for current conservation $\partial_\mu J^\mu = 0$, we can eliminate most diagrams. Starting from the full expression:
+        By the Ward identity for current conservation $\partial_\mu J^\mu = 0$, we can eliminate most diagrams. Starting from the full expression:
         \begin{align}
             \Gamma^{(2)} &= \sum_{i=1}^{15} D_i \\
             &= D_1 + D_2 + \cdots + D_{15}
@@ -247,7 +245,7 @@ task:
 
       LOW CONFIDENCE - Suggest only:
       - [Original statement kept unchanged]
-        \criticize{Suggestion: Could extend to finite $\lambda$ using resummation techniques. Approach: Borel transform the perturbative series, identify singularities in Borel plane, perform lateral Borel resummation. See Marino ``Lectures on non-perturbative effects'' for similar analysis.}{4}{2}
+        \criticize{Suggestion: Could extend to finite $\lambda$ using resummation techniques. Approach: Borel transform the perturbative series, identify singularities in Borel plane, perform lateral Borel resummation. Standard references on resurgence carry out a similar analysis.}{4}{2}
 
       CROSS-DOCUMENT:
       - [Document 1: original result]
@@ -340,7 +338,7 @@ task:
       - Implemented (short derivation in main text):
         [Full new proof written out using symmetry]
         \begin{proof}
-        By current conservation $\partial_\mu J^\mu = 0$, the Ward identity~\cite{Ward1950Identity} gives
+        By current conservation $\partial_\mu J^\mu = 0$, the Ward identity gives
         \begin{align}
             k_\mu \langle J^\mu(k) J^\nu(-k) \rangle &= 0
         \end{align}
@@ -359,20 +357,20 @@ task:
         We now establish existence rigorously (proof in Appendix~\ref{app:existence}).
         [New Appendix A: Existence Proof]
         \begin{proof}
-        Define $T\colon C([0,T]) \to C([0,T])$ by $Tf(t) = f_0 + \int_0^t F(f(s)) \dd s$. We show this is a contraction. For $f,g \in C([0,T])$:
+        Define $T\colon C([0,T]) \to C([0,T])$ by $Tf(t) = f_0 + \int_0^t F(f(s)) \,\mathrm{d}s$. We show this is a contraction. For $f,g \in C([0,T])$:
         \begin{align}
-            \|Tf - Tg\| &= \sup_{t \in [0,T]} \left|\int_0^t [F(f(s)) - F(g(s))] \dd s\right| \\
-            &\leq \int_0^T |F(f(s)) - F(g(s))| \dd s \\
-            &\leq L \int_0^T |f(s) - g(s)| \dd s \\
+            \|Tf - Tg\| &= \sup_{t \in [0,T]} \left|\int_0^t [F(f(s)) - F(g(s))] \,\mathrm{d}s\right| \\
+            &\leq \int_0^T |F(f(s)) - F(g(s))| \,\mathrm{d}s \\
+            &\leq L \int_0^T |f(s) - g(s)| \,\mathrm{d}s \\
             &\leq LT \|f - g\|
         \end{align}
-        For $T < 1/L$, this is a contraction. By the Banach fixed-point theorem~\cite{Banach1922Fixed}, a unique solution exists.
+        For $T < 1/L$, this is a contraction. By the Banach fixed-point theorem, a unique solution exists.
         \end{proof}
         \criticize{Implemented: Added rigorous existence proof in Appendix~\ref{app:existence}.}{3}{4}
 
       - Suggested:
         [Original statement retained]
-        \criticize{Suggestion: Currently assumes solution exists. Could prove existence rigorously using Banach fixed-point theorem: define map $T\colon C([0,T]) \to C([0,T])$ by $Tf(t) = f_0 + \int_0^t F(f(s)) \dd s$, show Lipschitz constant $L < 1$ on suitable ball, apply contraction mapping. Would make result self-contained and provide uniqueness.}{4}{2}
+        \criticize{Suggestion: Currently assumes solution exists. Could prove existence rigorously using Banach fixed-point theorem: define map $T\colon C([0,T]) \to C([0,T])$ by $Tf(t) = f_0 + \int_0^t F(f(s)) \,\mathrm{d}s$, show Lipschitz constant $L < 1$ on suitable ball, apply contraction mapping. Would make result self-contained and provide uniqueness.}{4}{2}
 
       - Resolved:
         [New section added]

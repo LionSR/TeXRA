@@ -289,26 +289,6 @@ export const cancelRequestRows = (
     decision: { action: 'cancel' as const, cause },
   }));
 
-/**
- * The routes the run declines once `decided` lands: a retry answered with
- * the user's own API key declines the route its offer named, on this run's
- * history only, so no concurrent run or stored preference changes.
- */
-function declinedBy(
-  state: RunState,
-  decided: Extract<RunHistoryRow, { type: 'request.decided' }>,
-): RunState['declinedRoutes'] {
-  const opened = state.requests[decided.requestId]?.payload;
-  const offer = opened?.kind === 'retry' ? opened.data.credentialSwitch : null;
-  const { decision } = decided;
-  return decision.action === 'retry' &&
-    decision.credentials === 'personal' &&
-    offer?.kind === 'decline-route' &&
-    !state.declinedRoutes.includes(offer.route)
-    ? [...state.declinedRoutes, offer.route]
-    : state.declinedRoutes;
-}
-
 /** Why a row cannot be applied; `applyRow` adds the row's commit. */
 export type RowRejection = Pick<RunHistoryInconsistent, 'reason' | 'detail'>;
 /** A handler's result: the state after its row, or why it is rejected. */
@@ -350,9 +330,6 @@ const applySharedRow = (
   if (verdict.kind === 'contradiction') return outOfOrder(verdict.detail);
   return Result.succeed({
     ...state,
-    ...(row.type === 'request.decided' && {
-      declinedRoutes: declinedBy(state, row),
-    }),
     ...verdict.rows,
     ...(row.type === 'run.position' &&
       row.payload.at === 'turn.begin' && { answer: '' }),

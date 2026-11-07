@@ -273,10 +273,14 @@ All notable changes to this project will be documented in this file.
   attempt says so and forgets the old registration). On this route the
   agent's tools travel in one `texra` namespace, as OpenAI requires, and a
   forced tool choice is not offered.
-  SDK: `codexCoordinator`, `codexLoginWithLoopback`, `getCodexStatus` and
-  `CodexSession` are `chatgptCoordinator`, `chatgptLoginWithLoopback`,
-  `getChatgptStatus` and `ChatgptSession`; `codexLoginWithDeviceCode` is
-  gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
+  SDK: `codexLoginWithLoopback` and `CodexSession` are
+  `chatgptLoginWithLoopback` and `ChatgptSession`; `codexCoordinator`,
+  `getCodexStatus`, `xaiCoordinator` and `getXaiStatus` are gone: each
+  subscription's session is an account of the `SubscriptionAccounts`
+  service (`@texra-ai/llm/node`), named by the route it bills
+  (`chatgpt-subscription`, `xai-subscription`), which `Secrets.layer` and
+  `Secrets.announcing` serve over the store they provide;
+  `codexLoginWithDeviceCode` is gone; `ModelCredential`'s `codex` member is `chatgpt` and carries no
   account id; `SubscriptionCoordinator.buildAuthorizeRequest` is an Effect
   and `loginWithCode` takes the authorize request and its callback.
 - **SDK: a used-up plan and an unusable subscription carry their facts;

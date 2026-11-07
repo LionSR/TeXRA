@@ -91,6 +91,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
+import type { WindowSetupLaunch } from '@texra/controllers/onboarding/setupLaunch';
 import { type HostCommandFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
@@ -173,7 +174,9 @@ export interface SharedHostCommandBindings {
   readonly onboarding: {
     readonly signInChatGpt: HostVerb<void>;
     readonly skip: HostVerb<void>;
-    readonly runSetup: HostVerb<void>;
+    /** Launch this window's project's setup conversation through the
+     *  window's own launch path. */
+    runSetup(launch: WindowSetupLaunch): HostVerb<void>;
     readonly skipSetup: HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
@@ -664,7 +667,12 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
               yield* bindings.onboarding.skip;
               return done;
             case 'runSetup':
-              yield* bindings.onboarding.runSetup;
+              yield* bindings.onboarding.runSetup({
+                session,
+                roots,
+                runValidated: runActions.runValidated,
+                present,
+              });
               return done;
             case 'skipSetup':
               yield* bindings.onboarding.skipSetup;

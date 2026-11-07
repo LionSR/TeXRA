@@ -25,7 +25,7 @@ All are configured from **Settings → Plugins** (<wa-icon library="texra" name=
 
 <ToolStatusPanel />
 
-<p class="hero-caption">Settings → Plugins: ready tools show a green check (<strong>Ready</strong>); missing tools show a <strong>Needs setup</strong> badge with <strong>Install in Terminal</strong> / <strong>Install</strong> actions. On Settings → LaTeX → Dependencies, missing binaries show a <strong>Not found</strong> tag.</p>
+<p class="hero-caption">Settings → Plugins: ready tools show a green check (<strong>Ready</strong>); missing tools show a <strong>Needs setup</strong> badge with <strong>Install in terminal</strong> / <strong>Install</strong> actions. On Settings → LaTeX → Dependencies, missing binaries show a <strong>Not found</strong> tag.</p>
 
 The same status is one command away in any terminal. `texra doctor` probes
 the same toolchain:
@@ -64,11 +64,10 @@ Formatting does not run on its own after agent execution. The selected formatter
 
 To attach these statistics to the prompt, toggle <wa-icon library="texra" name="symbol-numeric"></wa-icon> **Attach TeX Count** in the Tool Configuration dropdown. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface). Agents with `bash` can also run `texcount` themselves through the shell, for example `texcount -inc main.tex`.
 
-**Modes:**
+**Attach TeX Count** counts each input file on its own. In the VS Code extension, **TeXRA: Count Words in Current TeX File** counts the active file and asks how:
 
-- `separate` (default): count each file independently
-- `include`: follow `\input{}` / `\include{}` directives from the main file
-- `sum`: aggregate totals across multiple top-level files
+- **Count main file only**: count the file on its own
+- **Follow \input/\include and combine**: follow `\input{}` / `\include{}` directives from the main file and combine the counts
 
 ::: warning Requirement
 `texcount` must be on your `PATH`. It ships with most TeX distributions. Check **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>) → **Dependencies**: the **TeXcount** row shows a **Not found** tag when it is missing (texcount is not listed on the Plugins page). Install it with your TeX package manager.
@@ -86,7 +85,7 @@ The `extract_figures` tool finds `\includegraphics` references and returns the i
 
 ### TikZ figures
 
-The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide, and `texra doctor` reports them too:
+The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Plugins page does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide. `texra doctor` reports the compiler rows (`latexmk`, `pdflatex`) but not the image tools:
 
 <TikzDepsHero />
 

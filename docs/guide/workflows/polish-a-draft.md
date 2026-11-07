@@ -65,9 +65,9 @@ texra run polish --input intro.tex --output intro.polished.tex
 
 1. Open `intro.tex`.
 2. Select the TeXRA icon in the Secondary Side Bar.
-3. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick `intro.tex` from the file picker.
-4. Pick **polish** as the agent. Pick a model.
-5. Type the instruction. Select **Execute** (<wa-icon library="texra" name="play"></wa-icon>; Enter also runs it).
+3. Pick **polish** as the agent. Pick a model.
+4. Under **Documents and attachments**, in the **Input** group, select <wa-icon library="texra" name="add"></wa-icon> **Add input files** and pick `intro.tex` from the file picker.
+5. Type the instruction. Select **Start task** (<wa-icon library="texra" name="arrow-up"></wa-icon>; Enter also sends it).
 6. When the run completes, open the diff from the **ProgressBoard**.
 
 Same run, same history, same output files, whichever surface you used.
@@ -117,4 +117,5 @@ iteration. Use **the second** (`r1/`) when the draft is close to final.
 - [Built-in agents](../built-in-agents.md): the full catalog of agents
 - [LaTeX Diff](../latex-diff.md): compiled PDF comparison of revisions
 - [Models](../models.md): picking a model for polish
-- [Configuration](../configuration.md): workspace defaults and reflection
+- [Configuration](../configuration.md): workspace defaults
+- [Agent architecture](../agent-architecture.md): revisions and the optional `--reflect` critic review

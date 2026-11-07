@@ -9,7 +9,6 @@ import {
 import { TraceEmitter } from '@agent/trace/TraceEmitter';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   runStateAppend,
   SessionLog,
@@ -26,7 +25,7 @@ import {
 import { buildRunTranscript } from '@shared/session/transcriptUpdate';
 import { type ApprovalPolicy } from '@shared/approvalPolicy';
 import { generateRunId } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
+import { FakeHost } from '@test/support/testKernel';
 import { APPROVAL_POLICY_SETTING } from '@texra-ai/harness/schemas';
 
 /**
@@ -148,11 +147,10 @@ export function createTestRunTrace(runId: RunId) {
 }
 
 /** Set the approval policy, in the `local` scope its row is written to: the
- *  setting every session over `roots` (by default the installed fake
- *  host's) decides by. */
-export function setTestApprovalPolicy(
+ *  setting every session over the fake host's roots decides by. */
+export const setTestApprovalPolicy = (
   policy: ApprovalPolicy,
-  { config }: Pick<WorkspaceRoots, 'config'> = testWorkspaceRoots(),
-): void {
-  Effect.runSync(config.update(APPROVAL_POLICY_SETTING.key, policy, 'local'));
-}
+): Effect.Effect<void, never, FakeHost> =>
+  Effect.flatMap(FakeHost, ({ roots }) =>
+    roots.config.update(APPROVAL_POLICY_SETTING.key, policy, 'local'),
+  ).pipe(Effect.orDie);

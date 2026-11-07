@@ -6,7 +6,6 @@ import { Glob } from 'glob';
 
 import { expect, vi } from 'vitest';
 
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
@@ -45,7 +44,7 @@ const globWithFailedStat = (
 function withGlobWorkspace(
   run: (
     workspacePath: string,
-  ) => Effect.Effect<void, unknown, PluginToolServices>,
+  ) => Effect.Effect<void, unknown, PluginToolServices | FakeHost>,
 ) {
   return withTempDirEffect('texra-glob-tool-', (workspacePath) =>
     Effect.gen(function* () {
@@ -126,7 +125,8 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
                       'external',
                     ),
                   );
-                  yield* testWorkspaceRoots().workspaceState.update(
+                  const { roots } = yield* FakeHost;
+                  yield* roots.workspaceState.update(
                     TOOL_PATH_PROTECTION_SETTING.key,
                     false,
                   );

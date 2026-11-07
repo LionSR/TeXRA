@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { expect } from 'vitest';
 
 // Local imports
-import { fakePath } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { FakeHost, SessionGraph } from '@test/support/testKernel';
 import { ReadFileTool } from '@tools/ReadTool';
@@ -16,14 +15,15 @@ const LARGE = Array.from({ length: 2500 }, (_, i) => `line ${i + 1}`).join(
 );
 
 const callRead = (input: unknown) =>
-  ReadFileTool.call(input).pipe(
-    Effect.provide(
-      nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+  Effect.flatMap(FakeHost, (host) =>
+    ReadFileTool.call(input).pipe(
+      Effect.provide(
+        nativeToolTestLayer({ workingDirectory: host.path('workspace') }),
+      ),
     ),
   );
 
 const host = FakeHost.layer({
-  workspacePath: fakePath('workspace'),
   files: {
     '/workspace/large.txt': LARGE,
     '/workspace/small.txt': SMALL,

@@ -232,7 +232,7 @@ export const grantHeld = (
 
 /**
  * The run grant `payload` offers: its kind's grant, or null when the opener
- * said only a person answers it (`allowBypass: false`: a hook asked, or a
+ * said only a person answers it (`offersGrant: false`: a hook asked, or a
  * command prompt for another tool's call, whose grant is not the shell's).
  * The one reading every surface renders "approve all in this task" from,
  * and every grant the run holds is checked against.
@@ -242,8 +242,8 @@ export const offeredGrant = (
 ): ApprovalBypassKind | null => {
   const grant = GRANT_OF[payload.kind];
   return grant !== undefined &&
-    'allowBypass' in payload.data &&
-    payload.data.allowBypass
+    'offersGrant' in payload.data &&
+    payload.data.offersGrant
     ? grant
     : null;
 };

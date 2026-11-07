@@ -94,7 +94,10 @@ export const observeBackground = (
       Exit.hasInterrupts(exit)
         ? Effect.flatMap(
             Effect.flatMap(SessionLog, (log) => log.facts(run.runId)),
-            (facts) => (facts?.stop?.reason === 'user' ? cancel : Effect.void),
+            (facts) =>
+              facts?.stop == null || facts.stop.reason === 'shutdown'
+                ? Effect.void
+                : cancel,
           ).pipe(Effect.orDie)
         : Effect.void,
     ),
