@@ -19,6 +19,7 @@ import { assert, describe, expect } from 'vitest';
 
 import { qualifyAggregateId, type RunId } from '@texra-ai/harness/schemas';
 import { Sessions, type LocalSession } from '@texra-ai/harness';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { SessionOwner, type SessionServices } from '@agent/runtime/rootLaunch';
 import {
   crashedCopy,
@@ -43,7 +44,7 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     const owner = yield* SessionOwner;
     const sessions = yield* makeSessions(
       { ...owner, open: () => Effect.succeed(session) },
-      yield* (yield* SessionGraph.runtime).contextEffect,
+      yield* AgentCatalog,
     );
     return yield* sessions.open(testWorkspaceRoots());
   });

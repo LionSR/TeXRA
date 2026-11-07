@@ -7,6 +7,7 @@
  */
 import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
 
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunLabels } from '@agent/runtime/sessionDescription';
@@ -218,10 +219,7 @@ function sessionsLayer(
   const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
-      return yield* makeSessions(
-        yield* SessionOwner,
-        yield* Effect.context<ProcessServices>(),
-      );
+      return yield* makeSessions(yield* SessionOwner, yield* AgentCatalog);
     }),
   ).pipe(
     Layer.provideMerge(ownerProcessLayer({ ...options, appState })),

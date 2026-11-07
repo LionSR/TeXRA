@@ -18,7 +18,7 @@
 import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
-import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
+import { type AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -55,7 +55,7 @@ import {
 import { attachHost } from './requestAnswerer.js';
 import { runView } from './runHandle.js';
 import { sessionReads } from './sessionReads.js';
-import type { ProcessServices, Sessions } from './processLayer.js';
+import type { Sessions } from './processLayer.js';
 import type {
   OpenOptions,
   ResumeInput,
@@ -64,6 +64,8 @@ import type {
   StartInput,
 } from './sessions.js';
 
+/** The agent catalog a start looks a named agent up in. */
+type Catalog = Context.Service.Shape<typeof AgentCatalog>;
 /** A failure of the launch path, as the run's own. */
 const runFailure = (cause: unknown): RunFailure =>
   new RunFailure({ cause, message: toErrorMessage(cause) });
@@ -98,7 +100,7 @@ function admitTools(
 const admitInput = Effect.fn('admitInput')(function* (
   input: StartInput,
   session: Context.Context<SessionServices>,
-  services: Context.Context<AgentCatalog>,
+  catalog: Catalog,
 ): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError | RunFailure> {
   const canAsk = !Context.get(session, Interactions).approvalPromptsUnavailable;
   yield* admitTools(input.tools ?? [], canAsk);
@@ -107,7 +109,7 @@ const admitInput = Effect.fn('admitInput')(function* (
   const { agent } = input;
   const resolved =
     typeof agent === 'string'
-      ? Context.get(services, AgentCatalog).get(agent)
+      ? catalog.get(agent)
       : { name: null, source: 'inline' as const };
   if (!resolved) {
     return yield* new AgentNotFound({
@@ -135,15 +137,14 @@ const admitInput = Effect.fn('admitInput')(function* (
   }).pipe(Effect.mapError(runFailure));
 });
 
-/** Start one run on `session`: a root launch under the process's session
- *  owner, with the run id minted here when the input names none. */
+/** Start one run on `session`: a root launch, with the run id minted here
+ *  when the input names none. */
 const start = Effect.fn('start')(function* (
   session: Context.Context<SessionServices>,
-  services: Context.Context<ProcessServices>,
-  owner: Context.Service.Shape<typeof SessionOwner>,
+  catalog: Catalog,
   input: StartInput,
 ): Effect.fn.Return<Run, LaunchError | RunFailure> {
-  const config = yield* admitInput(input, session, services);
+  const config = yield* admitInput(input, session, catalog);
   const runId = input.runId ?? generateRunId();
   // A supplied id already in the session is refused here; one a launch
   // still opens, its activation refuses (`RunLive`).
@@ -234,14 +235,13 @@ function resume(
  *  holds. */
 function sessionOf(
   session: Context.Context<SessionServices>,
-  services: Context.Context<ProcessServices>,
-  owner: Context.Service.Shape<typeof SessionOwner>,
+  catalog: Catalog,
 ): LocalSession {
   const requests = Context.get(session, SessionRequests);
   return {
     roots: Context.get(session, SessionRoots),
     ...sessionReads(session),
-    start: (input) => start(session, services, owner, input),
+    start: (input) => start(session, catalog, input),
     resume: (runId, input) => resume(session, runId, input),
     run: (runId, activation) => runView(session, runId, activation),
     request: (req) => requests.request(req).pipe(Effect.provide(session)),
@@ -249,16 +249,16 @@ function sessionOf(
   };
 }
 
-/** The package's sessions over the process's owner. `services` is the
- *  process's context, which every run's fiber is provided. */
+/** The package's sessions over the process's owner; `catalog` names the
+ *  agents a start looks up. */
 export function makeSessions(
   owner: Context.Service.Shape<typeof SessionOwner>,
-  services: Context.Context<ProcessServices>,
+  catalog: Catalog,
 ): Effect.Effect<Context.Service.Shape<typeof Sessions>> {
   return Effect.sync(() => {
     const sessionFor = (
       session: Context.Context<SessionServices>,
-    ): LocalSession => sessionOf(session, services, owner);
+    ): LocalSession => sessionOf(session, catalog);
     return {
       // An open asking for the other store than the session's is the
       // owner's refusal. Until a host that can prompt attaches, nobody here
