@@ -22,21 +22,16 @@ import {
 } from '@texra/shared/settingsView/settingsViewMessages';
 import type { SettingsSectionName } from '@texra/shared/settingsView/settingsTarget';
 
-// Local imports - LaTeX toolchain (install guides + commands)
+// Local imports - LaTeX toolchain (dependencies and their install advice)
 import {
-  PDFLATEX_INSTALL_GUIDE,
-  LATEXDIFF_INSTALL_GUIDE,
-  LATEXINDENT_INSTALL_GUIDE,
-  TEXCOUNT_INSTALL_GUIDE,
-  IMAGE_PROCESSING_INSTALL_GUIDE,
-  DEPENDENCY_INSTALL_COMMANDS,
-  hasInstallCommands,
   HOMEBREW_INSTALL_COMMAND,
+  installAdvice,
+  LATEX_DEPENDENCIES,
   LATEX_RECOMMENDED_SETTINGS,
+  type LatexDependency,
   type LatexRecommendedSettingField,
   SCOOP_INSTALL_COMMAND,
-  type InstallCommand,
-  type OSPlatform,
+  type InstallAdvice,
 } from '@texra/shared/constants/latexToolchain';
 
 // Local imports - shared webview toolkit
@@ -63,79 +58,63 @@ import { latexTabStyles } from './LaTeXTab.styles';
 /** Path keys in LatexSettingsStatus for tool paths. */
 type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;
 
-/** Metadata for a dependency shown in the Dependencies section. */
+/** What the Dependencies section says of one dependency: the toolchain's
+ *  dependencies, and LaTeX Workshop, which installs through a VS Code
+ *  command instead. */
 interface DependencyInfo {
-  readonly key: keyof LatexSettingsStatus;
-  readonly name: string;
+  readonly key: LatexDependency | 'latexWorkshop';
   readonly installedDesc: string;
   readonly missingDesc: string;
-  readonly installGuide?: Record<OSPlatform, string>;
   /** Keys to check for detected tool paths (shown when installed). */
   readonly pathKeys?: ToolPathKey[];
-  /** If provided, renders an action button when missing (e.g. VS Code install). */
-  readonly actionCommand?: string;
-  readonly actionLabel?: string;
 }
 
 const DEPENDENCIES: DependencyInfo[] = [
   {
-    key: 'texDistributionInstalled',
-    name: 'TeX Distribution',
+    key: 'compiler',
     installedDesc: 'pdflatex/latexmk detected on PATH.',
     missingDesc:
       'A TeX distribution (TeX Live, MacTeX, or MiKTeX) is required to compile LaTeX documents.',
-    installGuide: PDFLATEX_INSTALL_GUIDE,
     pathKeys: ['pdflatexPath', 'latexmkPath'],
   },
   {
-    key: 'latexWorkshopInstalled',
-    name: 'LaTeX Workshop',
+    key: 'latexWorkshop',
     installedDesc: 'Provides LaTeX compilation, PDF preview, and IntelliSense.',
     missingDesc:
       'Required for LaTeX compilation, PDF preview, and IntelliSense.',
-    actionCommand: SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-    actionLabel: 'Install',
   },
   {
-    key: 'latexdiffInstalled',
-    name: 'latexdiff',
+    key: 'latexdiff',
     installedDesc: 'Enables visual comparison of LaTeX document revisions.',
     missingDesc:
       'Install via your TeX distribution to enable diff comparisons.',
-    installGuide: LATEXDIFF_INSTALL_GUIDE,
     pathKeys: ['latexdiffPath'],
   },
   {
-    key: 'latexindentInstalled',
-    name: 'latexindent',
+    key: 'latexindent',
     installedDesc:
       'Used by agents to clean up formatting after editing your LaTeX source.',
     missingDesc:
       'Without it, agents may produce inconsistent indentation ' +
       'when editing .tex files. Requires Perl.',
-    installGuide: LATEXINDENT_INSTALL_GUIDE,
     pathKeys: ['latexindentPath'],
   },
   {
-    key: 'texcountInstalled',
-    name: 'TeXcount',
+    key: 'texcount',
     installedDesc:
       'Enables word, heading, and figure counting in LaTeX documents.',
     missingDesc:
       'Without it, agents cannot count words or structural elements in your .tex files. ' +
       'Part of most TeX Live distributions.',
-    installGuide: TEXCOUNT_INSTALL_GUIDE,
     pathKeys: ['texcountPath'],
   },
   {
-    key: 'imageProcessingInstalled',
-    name: 'Image Processing',
+    key: 'image',
     installedDesc:
       'Ghostscript + GraphicsMagick/ImageMagick detected for PDF-to-PNG conversion.',
     missingDesc:
       'Needed to generate PNG previews of compiled PDF pages. ' +
       'Requires Ghostscript and either GraphicsMagick or ImageMagick.',
-    installGuide: IMAGE_PROCESSING_INSTALL_GUIDE,
     pathKeys: ['ghostscriptPath', 'graphicsmagickPath'],
   },
 ];
@@ -169,25 +148,10 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
     return this.settings.outDir && this.settings.autoRevealExclude;
   }
 
-  /**
-   * Return the best install command for a missing dependency, or null if no
-   * usable option exists (e.g. required package manager is not installed,
-   * or no commands are defined for this platform).
-   *
-   * Iterates the ranked option list and picks the first whose package
-   * manager is either detected on the system or is `null` (always available).
-   */
-  private getInstallCommand(dep: DependencyInfo): InstallCommand | null {
-    const platform = this.settings.platform;
-    if (!hasInstallCommands(dep.key)) return null;
-    const commands = DEPENDENCY_INSTALL_COMMANDS[dep.key];
-    const options = commands[platform];
-    if (!options?.length) return null;
-    const pm = this.settings.packageManager;
-    return (
-      options.find((cmd) => !cmd.packageManager || cmd.packageManager === pm) ??
-      null
-    );
+  /** How to install `key` on this machine's platform. */
+  private adviceFor(key: LatexDependency): InstallAdvice {
+    const { label, installs } = LATEX_DEPENDENCIES[key];
+    return installAdvice(label, installs, this.settings.platform);
   }
 
   private handleRunInTerminal(command: string): void {
@@ -205,27 +169,35 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
   }
 
   private renderDependencyCard(dep: DependencyInfo): TemplateResult {
-    const installed = this.settings[dep.key];
-    const platform = this.settings.platform;
-    const guideText = dep.installGuide?.[platform] ?? dep.installGuide?.linux;
+    const { key } = dep;
+    const workshop = key === 'latexWorkshop';
+    const installed = workshop
+      ? this.settings.latexWorkshopInstalled
+      : this.settings.installed[key];
+    const name = workshop ? 'LaTeX Workshop' : LATEX_DEPENDENCIES[key].label;
+    const advice = workshop || installed ? null : this.adviceFor(key);
+    const guideText = advice?.guide;
     const detectedPaths = installed ? this.getDetectedPaths(dep) : [];
-    const installCmd = !installed ? this.getInstallCommand(dep) : null;
-    const { actionCommand } = dep;
+    // The command shows once its package manager is detected.
+    const installCmd =
+      advice?.command?.packageManager === this.settings.packageManager
+        ? advice.command
+        : null;
 
     let actionSlot: TemplateResult | typeof nothing;
     if (installed) {
       actionSlot = nothing;
-    } else if (actionCommand) {
+    } else if (workshop) {
       actionSlot = html`
         <wa-button
           appearance="outlined"
           variant="neutral"
           size="s"
-          title="${dep.actionLabel ?? 'Install'}"
-          @click=${() => postMessage(actionCommand)}
+          title="Install"
+          @click=${() =>
+            postMessage(SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP)}
         >
-          ${waIcon('cloud-arrow-down', { slot: 'start' })}
-          ${dep.actionLabel ?? 'Install'}
+          ${waIcon('cloud-arrow-down', { slot: 'start' })} Install
         </wa-button>
       `;
     } else {
@@ -241,7 +213,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
             className: `dependency-icon ${installed ? 'installed' : 'missing'}`,
           })}
           <div class="dependency-info">
-            <div class="dependency-name">${dep.name}</div>
+            <div class="dependency-name">${name}</div>
             <div class="dependency-description">
               ${installed ? dep.installedDesc : dep.missingDesc}
             </div>
@@ -276,7 +248,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
             : nothing
         }
         ${
-          !installed && guideText
+          guideText
             ? html`
                 <wa-details
                   class="collapsible-quiet dependency-guide-details"
@@ -357,7 +329,7 @@ export class LaTeXTab extends SignalWatcher(LitElement) {
 
   private renderDependencies(): TemplateResult {
     const dependencies = this.desktopHost
-      ? DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshopInstalled')
+      ? DEPENDENCIES.filter((dep) => dep.key !== 'latexWorkshop')
       : DEPENDENCIES;
 
     return html`
