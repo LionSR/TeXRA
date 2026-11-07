@@ -75,7 +75,7 @@ export class SettingsViewProvider {
     if (this._view) {
       const panel = this._view;
       panel.reveal(vscode.ViewColumn.One);
-      yield* this.messageHandler.body.postAll;
+      yield* this.messageHandler.body.changed('view');
     } else {
       const panel = vscode.window.createWebviewPanel(
         SettingsViewProvider.viewType,

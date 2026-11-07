@@ -4,14 +4,13 @@
  * the LaTeX toolchain status with its install commands. Installing a VS Code
  * extension and writing VS Code's own settings stay with the host that can.
  */
-import { Effect, Predicate, Semaphore, Stream, SubscriptionRef } from 'effect';
+import { Effect, Predicate, Stream, SubscriptionRef } from 'effect';
 
 import {
   ToolAvailability,
   ToolCatalog,
   withLogChannel,
 } from '@texra-ai/harness/host';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
@@ -22,119 +21,90 @@ import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/sett
 
 import {
   SETTINGS_LOG_CHANNEL,
+  hostStatePage,
   type SettingsHostBindings,
+  type SettingsPresentation,
 } from './settingsHostBindings';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
-/** The Plugins and LaTeX pages: their arms, repaints and opening data. */
+/** The Plugins and LaTeX pages: their arms, their pages, and the follower
+ *  of the tool availability the Plugins page reads. */
 export function settingsToolCommands(ports: {
   readonly roots: Pick<
     WorkspaceRoots,
     'workspace' | 'config' | 'globalState' | 'globalStorage' | 'storageRoot'
   >;
   readonly bindings: SettingsHostBindings;
+  readonly present: Pick<SettingsPresentation, 'changed'>;
   /** The host installs an editor extension a plugin card names. */
   readonly installsExtensions: boolean;
 }) {
   const { bindings, roots, installsExtensions } = ports;
+  const { changed } = ports.present;
+  /** Probe this workspace's tools again; the rows follow what it finds. */
   const refresh = Effect.flatMap(ToolAvailability, (availability) =>
     availability.refresh(roots),
   );
 
-  // Every post of the rows reads its results and builds inside this one
-  // lane: the first paint, a repaint the results follow, a switch's. A slow
-  // build that read older results otherwise lands over a newer page.
-  const rowsLane = Semaphore.makeUnsafe(1);
-  // Results no probe has produced yet stay `undefined` so the build runs the
-  // probes; coercing them to `[]` would render "zero external tools".
-  const buildAndPostPlugins = bindings.post(
-    Effect.flatMap(ToolAvailability, (availability) =>
-      Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
-        Effect.map(
+  const pages = [
+    // Results no probe has produced yet stay `undefined` so the build runs
+    // the probes; coercing them to `[]` would render "zero external tools".
+    // The view shows a spinner until data arrives, so a failed build still
+    // sends an empty page to end it.
+    hostStatePage(
+      'plugins',
+      ['plugins'],
+      Effect.flatMap(ToolAvailability, (availability) =>
+        Effect.flatMap(SubscriptionRef.get(availability.results), (held) =>
           buildPluginRows(
             { ...roots, installsExtensions },
             held.get(roots.workspace),
           ),
-          (built) => ({
-            command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
-            ...built,
-          }),
         ),
-      ),
-    ),
-  );
-  const postPlugins = rowsLane.withPermits(1)(buildAndPostPlugins);
-  const postLatexStatus = bindings.post(
-    Effect.map(
-      Effect.suspend(() =>
-        detectLatexSettingsStatus(bindings.latexEditorStatus()),
-      ),
-      (settings) => ({
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-        settings,
-      }),
-    ),
-  );
-
-  /**
-   * The rows post from the last results on a detached fiber, so a first
-   * probe's network checks (Zotero and others) never hold the first render,
-   * then re-probe; `followToolAvailability` repaints them with what the
-   * re-probe finds. The view shows a spinner until data arrives, so a failed
-   * build still posts an empty page to end it, in the same lane.
-   */
-  const postStartup = Effect.andThen(
-    Effect.forkDetach(
-      buildAndPostPlugins.pipe(
+      ).pipe(
         Effect.catch((error) =>
           Effect.logWarning(
             'The plugin rows could not be built; showing the page empty.',
           ).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel(SETTINGS_LOG_CHANNEL),
-            Effect.andThen(
-              bindings.post(
-                Effect.succeed({
-                  command: SETTINGS_VIEW_COMMANDS.UPDATE_PLUGINS,
-                  rows: [],
-                  mcpWarnings: [
-                    `The plugin list could not be read: ${error.message}`,
-                  ],
-                }),
-              ),
-            ),
+            Effect.as({
+              rows: [],
+              mcpWarnings: [
+                `The plugin list could not be read: ${error.message}`,
+              ],
+            }),
           ),
         ),
-        Effect.ignore({
-          log: 'Warn',
-          message: 'The empty plugin page could not be posted either.',
-        }),
-        withLogChannel(SETTINGS_LOG_CHANNEL),
-        rowsLane.withPermits(1),
-        Effect.andThen(refresh),
       ),
-      { startImmediately: true },
     ),
-    postLatexStatus,
-  );
+    hostStatePage(
+      'latex',
+      ['latex'],
+      Effect.map(
+        Effect.suspend(() =>
+          detectLatexSettingsStatus(bindings.latexEditorStatus()),
+        ),
+        (settings) => ({ settings }),
+      ),
+    ),
+  ];
 
   /**
-   * Repaint the rows whenever this workspace's results change, whoever
-   * probed: a session opening, the Re-check button, a credential write, an
-   * editor extension installed. Runs until interrupted; the host holds it
-   * for the view's life and finishes each repaint.
+   * The rows' input changes whenever this workspace's results change,
+   * whoever probed: a session opening, the Re-check button, a credential
+   * write, an editor extension installed. Runs until interrupted.
    */
-  const followToolAvailability = <E, R>(
-    repaint: (post: typeof postPlugins) => Effect.Effect<void, E, R>,
-  ) =>
-    Effect.flatMap(ToolAvailability, (availability) =>
+  const followToolAvailability = Effect.flatMap(
+    ToolAvailability,
+    (availability) =>
       SubscriptionRef.changes(availability.results).pipe(
         Stream.map((held) => held.get(roots.workspace)),
         Stream.changes,
         Stream.filter(Predicate.isNotUndefined),
-        Stream.runForEach(() => repaint(postPlugins)),
+        Stream.runForEach(() => changed('plugins')),
       ),
-    );
+  );
 
   const handlers = {
     toggleTool: ({ toolId, enabled }) =>
@@ -144,7 +114,7 @@ export function settingsToolCommands(ports: {
         // A plugin's bundled agents follow its switch (`pluginCatalogLayer`):
         // reload them before the rows read who uses what.
         Effect.andThen(bindings.refreshCatalogs()),
-        Effect.andThen(postPlugins),
+        Effect.andThen(changed('plugins')),
       ),
     // The command is looked up from the plugin's card, never taken from
     // the webview.
@@ -170,11 +140,5 @@ export function settingsToolCommands(ports: {
     recheckToolStatus: () => refresh,
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 
-  return {
-    handlers,
-    postStartup,
-    postPlugins,
-    postLatexStatus,
-    followToolAvailability,
-  };
+  return { handlers, pages, refresh, followToolAvailability };
 }

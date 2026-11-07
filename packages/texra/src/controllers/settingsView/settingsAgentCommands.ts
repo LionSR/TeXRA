@@ -32,15 +32,14 @@ import {
   DEFAULT_AGENT_TEMPLATE_TOOLS_YAML,
   renderAgentTemplateString,
 } from '@texra/agent/templates/agentTemplateRenderer';
-import { SETTINGS_VIEW_COMMANDS } from '@texra/shared/ipc';
 import { SettingsAgentCatalogController } from '@texra/controllers/settingsView/SettingsAgentCatalogController';
 import type { SettingsViewInboundHandlerRegistry } from '@texra/controllers/settingsView/settingsViewDispatch';
-import { allSettledVoid } from '@texra/utils/core/allSettledVoid';
 import type { ProcessServices } from '@texra-ai/harness/host';
 
-import type {
-  SettingsHostBindings,
-  SettingsPresentation,
+import {
+  hostStatePage,
+  type SettingsHostBindings,
+  type SettingsPresentation,
 } from './settingsHostBindings';
 
 type HostEffect = Effect.Effect<void, Error, ProcessServices>;
@@ -111,7 +110,7 @@ interface SettingsAgentCommandsPorts {
   readonly present: SettingsPresentation;
 }
 
-/** The Agents page: its arms, its opening data, and its mutation refresh. */
+/** The Agents page: its arms, its pages, and what an agent change runs. */
 export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { bindings, present } = ports;
   const { globalState } = ports.roots;
@@ -133,70 +132,67 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     directories.custom(),
   );
 
-  const postSelection = present.post(
-    Effect.gen(function* () {
-      const { agents, catalog } = yield* page;
-      return {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_SELECTION,
-        agents: yield* catalog.buildSelectionItems(),
-        customAgentIssues: [...agents.scanIssues()],
-      };
-    }),
-  );
-  const postCustomDir = present.post(
-    Effect.gen(function* () {
-      const configuredPath = yield* readCustomAgentDir(globalState);
-      return {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_CUSTOM_AGENT_DIR,
-        path: yield* customDirectory,
-        isDefault: configuredPath === '',
-      };
-    }),
-  );
-  const postPresets = present.post(
-    Effect.gen(function* () {
-      const { catalog, workspaceAgents } = yield* page;
-      return {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_AGENT_MODE_PRESETS,
-        // The setup starter is a selectable agent list, not a team card.
-        presets: (yield* workspaceTeams(ports.roots.repoState)).filter(
-          (preset) => !preset.setupOnly,
-        ),
-        orchestratorAgents: catalog.getOrchestratorAgentNames(),
-        activePresetId: yield* workspaceAgents.getActiveTeamId(),
-      };
-    }),
-  );
+  const pages = [
+    hostStatePage(
+      'agents',
+      ['agents'],
+      Effect.gen(function* () {
+        const { agents, catalog } = yield* page;
+        return {
+          agents: yield* catalog.buildSelectionItems(),
+          customAgentIssues: [...agents.scanIssues()],
+        };
+      }),
+    ),
+    hostStatePage(
+      'customAgentDir',
+      ['agents'],
+      Effect.gen(function* () {
+        const configuredPath = yield* readCustomAgentDir(globalState);
+        return {
+          path: yield* customDirectory,
+          isDefault: configuredPath === '',
+        };
+      }),
+    ),
+    // The presets follow the agents because enabling one agent rewrites the
+    // selection as `custom`, which retires whatever team was applied.
+    hostStatePage(
+      'teams',
+      ['agents'],
+      Effect.gen(function* () {
+        const { catalog, workspaceAgents } = yield* page;
+        return {
+          // The setup starter is a selectable agent list, not a team card.
+          presets: (yield* workspaceTeams(ports.roots.repoState)).filter(
+            (preset) => !preset.setupOnly,
+          ),
+          orchestratorAgents: catalog.getOrchestratorAgentNames(),
+          activePresetId: yield* workspaceAgents.getActiveTeamId(),
+        };
+      }),
+    ),
+  ];
 
-  /**
-   * Repaint the agent list and the team presets, and reload every launcher's
-   * catalogs. A mutation that moved agent files re-reads the registry first,
-   * so nothing below it paints the catalog it replaced. The presets ride
-   * along because enabling one agent rewrites the selection as `custom`,
-   * which retires whatever team was applied.
-   */
-  const refreshAfterAgentMutation = (
-    selectedToolUseAgent?: string,
-    agentCatalogAlreadyFresh = false,
-  ): HostEffect =>
-    Effect.gen(function* () {
-      if (!agentCatalogAlreadyFresh)
-        yield* AgentCatalog.use((agents) => agents.refresh);
-      yield* allSettledVoid<Error, ProcessServices>([
-        postPresets,
-        postSelection,
-        bindings.refreshCatalogs(selectedToolUseAgent),
-      ]);
-    });
+  /** The agents changed: the pages follow, and every launcher's catalogs
+   *  reload, selecting the tool-use root a team just applied named. */
+  const agentsChanged = (selectedToolUseAgent?: string): HostEffect =>
+    Effect.andThen(
+      present.changed('agents'),
+      bindings.refreshCatalogs(selectedToolUseAgent),
+    );
+  /** A mutation moved agent files: the registry is read again first, so
+   *  nothing that follows paints the catalog it replaced. */
+  const agentFilesChanged = Effect.andThen(
+    AgentCatalog.use((agents) => agents.refresh),
+    agentsChanged(),
+  );
 
   // The file tools admit the new directory before the change reports done,
   // so a `creator` run launched right after can write there.
   const afterCustomDirChange = Effect.andThen(
     registerCustomAgentRoot,
-    allSettledVoid<Error, ProcessServices>([
-      postCustomDir,
-      refreshAfterAgentMutation(),
-    ]),
+    agentFilesChanged,
   );
 
   // A delete already in flight for this agent swallows a second click (#9487):
@@ -214,14 +210,14 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             name: message.agentName,
             enabled: message.enabled,
           }),
-        ).pipe(Effect.andThen(refreshAfterAgentMutation(undefined, true))),
+        ).pipe(Effect.andThen(agentsChanged())),
       ),
     setAllAgentsEnabled: (message) =>
       present.reported(
         'Failed to update agent visibility',
         Effect.flatMap(page, ({ catalog }) =>
           catalog.setAllAgentsEnabled(message),
-        ).pipe(Effect.andThen(refreshAfterAgentMutation(undefined, true))),
+        ).pipe(Effect.andThen(agentsChanged())),
       ),
     openAgentYaml: (message) =>
       present.reported(
@@ -291,7 +287,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             );
           if (targetPath === undefined) return;
 
-          yield* refreshAfterAgentMutation();
+          yield* agentFilesChanged;
           yield* bindings.openPath(targetPath);
           yield* present.notice(
             `Created custom copy: ${path.basename(targetPath)}`,
@@ -335,7 +331,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             const { workspaceAgents } = yield* page;
             yield* workspaceAgents.forgetDeletedAgent(message.agentName);
             yield* present.notice(`Deleted custom agent: ${message.agentName}`);
-            yield* refreshAfterAgentMutation();
+            yield* agentFilesChanged;
           }).pipe(
             Effect.ensuring(
               Effect.sync(() => activeDeletions.delete(message.agentName)),
@@ -363,7 +359,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               `${message.agentName} has no newer built-in version to dismiss.`,
             );
           }
-          yield* refreshAfterAgentMutation();
+          yield* agentFilesChanged;
         }),
       ),
     revealAgentFile: (message) =>
@@ -408,7 +404,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
             ports.resourcesPath,
           );
           if (!written.ok) return yield* present.alert(written.message);
-          yield* refreshAfterAgentMutation();
+          yield* agentFilesChanged;
           yield* bindings.openPath(written.filePath);
         }),
       ),
@@ -455,7 +451,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
               const { preset, rootAgent, missingAgents } = result.plan;
               // The team is committed before this repaint, so a failed
               // repaint says the apply itself went through.
-              yield* refreshAfterAgentMutation(rootAgent?.name, true).pipe(
+              yield* agentsChanged(rootAgent?.name).pipe(
                 Effect.mapError(
                   (cause) =>
                     new Error(
@@ -487,7 +483,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           if (!name?.trim()) return;
           const { catalog } = yield* page;
           const preset = yield* catalog.saveCurrentPreset(name);
-          yield* refreshAfterAgentMutation(undefined, true);
+          yield* agentsChanged();
           yield* present.notice(`Saved team "${preset.name}"`);
         }),
       ),
@@ -508,19 +504,10 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
           );
           if (!confirmed) return;
           yield* catalog.deleteCustomPreset(message.presetId);
-          yield* refreshAfterAgentMutation(undefined, true);
+          yield* agentsChanged();
         }),
       ),
   } satisfies Partial<SettingsViewInboundHandlerRegistry>;
 
-  return {
-    handlers,
-    /** The Agents page's opening data. */
-    postStartup: allSettledVoid<Error, ProcessServices>([
-      postPresets,
-      postSelection,
-      postCustomDir,
-    ]),
-    refreshAfterAgentMutation,
-  };
+  return { handlers, pages, agentsChanged };
 }

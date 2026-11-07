@@ -2,10 +2,9 @@
 // change notice, terminal runs, browser state, the diff/pdf/prompt overlays, shell
 // navigation, and logs.
 //
-// This union adds no new wire shape — it composes the per-surface schemas so
-// `installDesktopHostBridge` can dev-assert every `desktop:*` command it
-// multiplexes onto the single renderer-push channel (see
-// `assertKnownOutboundMessage`). Inbound (renderer → main) halves of a
+// This union adds no new wire shape — it composes the per-surface schemas the
+// renderer's route table decodes every `desktop:*` push against, on the one
+// renderer-push channel it shares with the settings view. Inbound (renderer → main) halves of a
 // request/response pair are deliberately excluded: they never cross this
 // channel in the outbound direction.
 //

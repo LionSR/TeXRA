@@ -2,9 +2,6 @@ import { Effect, type Scope } from 'effect';
 import { ipcMain, type BrowserWindow, type IpcMainEvent } from 'electron';
 
 import type { DownMessage } from '@texra/shared/session/sessionFrames';
-import { assertKnownOutboundMessage } from '@texra/shared/utils/dispatcher';
-
-import { DesktopOutboundMessageSchema } from '../shared/desktopOutboundMessages.js';
 import {
   ELECTRON_SESSION_MESSAGE_CHANNEL,
   ELECTRON_SESSION_PUSH_CHANNEL,
@@ -46,15 +43,8 @@ export const installDesktopHostBridge = Effect.fnUntraced(function* (
     window.webContents.send(channel, message);
   };
   return {
-    postToRenderer: (message) => {
-      // Dev/test-only shape check (no-op in prod, see
-      // `assertKnownOutboundMessage`): the desktop-only `desktop:*` commands
-      // (workspace file I/O, terminal, overlays, shell, logs, onboarding,
-      // papers); the settings view's pushes pass through unchecked, as
-      // before.
-      assertKnownOutboundMessage([DesktopOutboundMessageSchema], message);
-      push(ELECTRON_WEBVIEW_PUSH_CHANNEL, message);
-    },
+    // The renderer decodes each push against its own union.
+    postToRenderer: (message) => push(ELECTRON_WEBVIEW_PUSH_CHANNEL, message),
     // Typed `DownMessage`s the session bridge builds: nothing to check.
     postSession: (message) => push(ELECTRON_SESSION_PUSH_CHANNEL, message),
   };
