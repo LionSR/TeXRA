@@ -9,7 +9,7 @@
 import { Effect } from 'effect';
 
 import { selectModel } from '@texra-ai/llm';
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import { AgentCatalog, missingAgentRefusal } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -64,11 +64,13 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
-        : yield* (yield* AgentCatalog).forLaunch(
-            roots,
-            fullConfig.agent,
-            fullConfig.agentSource,
-          );
+        : yield* (yield* AgentCatalog)
+            .forLaunch(roots, fullConfig.agent, fullConfig.agentSource)
+            .pipe(
+              Effect.catchTag('AgentNotFound', (miss) =>
+                Effect.fail(missingAgentRefusal(miss)),
+              ),
+            );
     if (agentEntry.source === 'plugin')
       yield* requirePluginAgentLoads(
         agentEntry,

@@ -116,7 +116,7 @@ export interface AgentCatalogShape {
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    LaunchRefused | AgentCatalogLoadError | StateReadFailed
+    AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
   /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
@@ -230,8 +230,32 @@ const scanInto = Effect.fn('agentCatalog.scanInto')(function* (
 
 /** Why a launch found nothing: the load's failure and the agent files it
  *  skipped. */
+/** No agent answers to `agent` in the settled catalog, rescanned once:
+ *  the catalog's own answer, which a launch turns into its refusal
+ *  ({@link missingAgentRefusal}) and every other reader reads as "not found". */
+export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
+  'AgentNotFound',
+  { agent: Schema.String, message: Schema.String },
+) {}
+
+/** The one refusal of a launch whose agent is missing: the miss's message,
+ *  with the notice that offers the agent setting. */
+export const missingAgentRefusal = ({
+  agent,
+  message,
+}: AgentNotFound): LaunchRefused =>
+  new LaunchRefused({
+    message,
+    notice: { event: 'agentNotFound', payload: { agentName: agent } },
+  });
+
+/** Why `identifier` is missing: the base sentence a launch by name also
+ *  uses, then what kept the catalog from listing it. */
+export const agentMissMessage = (identifier: string): string =>
+  `Could not find agent: ${identifier}`;
+
 const missMessage = (state: CatalogState, identifier: string): string =>
-  `Could not find agent: ${identifier}` +
+  agentMissMessage(identifier) +
   (state.loadFailure === undefined
     ? ''
     : `. The agent catalog did not load: ${state.loadFailure}`) +
@@ -363,12 +387,9 @@ export class AgentCatalog extends Context.Service<
             resolve(stores, identifier, source),
           ));
         if (entry) return entry;
-        return yield* new LaunchRefused({
+        return yield* new AgentNotFound({
+          agent: identifier,
           message: missMessage(state, identifier),
-          notice: {
-            event: 'agentNotFound',
-            payload: { agentName: identifier },
-          },
         });
       });
 

@@ -54,7 +54,7 @@ export function resolveCliRunAgent(
     catalog
       .forLaunch(stores, name)
       .pipe(
-        Effect.catchTag('LaunchRefused', () =>
+        Effect.catchTag('AgentNotFound', () =>
           Effect.fail(
             new CliUsageError({ message: missingAgentMessage(name) }),
           ),

@@ -143,7 +143,7 @@ interface AgentCatalogShape {
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    LaunchRefused | AgentCatalogLoadError | StateReadFailed
+    AgentNotFound | AgentCatalogLoadError | StateReadFailed
   >;
   /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (

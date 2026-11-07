@@ -18,7 +18,12 @@
 import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
-import { AgentCatalog } from '@agent/index/agentCatalog';
+import {
+  AgentCatalog,
+  AgentNotFound,
+  agentMissMessage,
+  missingAgentRefusal,
+} from '@agent/index/agentCatalog';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -120,10 +125,12 @@ const admitInput = Effect.fn('admitInput')(function* (
       ? Context.get(services, AgentCatalog).get(agent)
       : { name: null, source: 'inline' as const };
   if (!resolved) {
-    return yield* new LaunchRefused({
-      message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
-      notice: { event: 'agentNotFound', payload: { agentName: String(agent) } },
-    });
+    return yield* missingAgentRefusal(
+      new AgentNotFound({
+        agent: String(agent),
+        message: agentMissMessage(String(agent)),
+      }),
+    );
   }
   // The schema is the launch's last refusal, and it is a refusal rather
   // than a defect: an input this surface will not accept is the caller's,
