@@ -190,7 +190,9 @@ export const ROW_KINDS: Readonly<Record<SessionRowDraft['type'], RowKind>> = {
   // read without the tier and reset its text named).
   // v8: a retry's failure carries no `userRetryable`; the offer is the
   // `failed` row's own `next`.
-  'request.opened': { version: 8, listing: 'request' },
+  // v9: `allowBypass` is `offersGrant`, what it means: whether the request
+  // offers the run grant of its kind (an earlier build's would fail to read).
+  'request.opened': { version: 9, listing: 'request' },
   // v2: no `setup` arm; a proposal's approve may carry edited files,
   // instruction and options.
   'request.decided': { version: 2, listing: 'request' },

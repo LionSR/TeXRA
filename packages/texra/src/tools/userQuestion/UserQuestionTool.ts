@@ -51,7 +51,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
     requestId,
     questions: input.questions,
     context: input.context ?? undefined,
-    allowBypass: false,
+    offersGrant: false,
     runId,
   };
   const { decision } = yield* requests.open({

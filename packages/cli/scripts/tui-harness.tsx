@@ -1023,7 +1023,7 @@ function makeBashApprovalPayload(index = 1) {
       index === 1 ? 'harness-bash-approval' : `harness-bash-approval-${index}`,
     command: BASH_APPROVAL_COMMAND,
     cwd: HARNESS_CWD,
-    allowBypass: true,
+    offersGrant: true,
     runId: SHOW_SCRIPT_RUNNING
       ? RUNNING_SCRIPT_FIRST_AGENT_RUN_ID
       : HARNESS_RUN_ID,
@@ -1093,7 +1093,7 @@ function makeAgentProposalPayload(): AgentProposalRequest {
     instruction: AGENT_PROPOSAL_INSTRUCTION,
     memories: [],
     workingDirectory: HARNESS_CWD,
-    allowBypass: true,
+    offersGrant: true,
     ...(SCRIPT_PROPOSAL
       ? {
           script: {
@@ -1143,7 +1143,7 @@ function makeUserQuestionPayload(): UserQuestionRequest {
   return {
     requestId: 'harness-user-question',
     runId: HARNESS_RUN_ID,
-    allowBypass: false,
+    offersGrant: false,
     context: USER_QUESTION_CONTEXT,
     questions: [
       {
@@ -1498,7 +1498,7 @@ if (SHOW_EDIT_APPROVAL) {
       path: request.path,
       relativePath: request.path,
       sourceTool: request.sourceTool,
-      allowBypass: true,
+      offersGrant: true,
       runId: request.runId,
       addedLines: lines.added,
       removedLines: lines.removed,
@@ -1955,7 +1955,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
         requestId: 'tree-approval',
         runId: waiting,
         command: 'ls',
-        allowBypass: true,
+        offersGrant: true,
       },
     },
   });
