@@ -76,8 +76,8 @@ export function latexHost(files: Record<string, string>) {
     storagePath,
     workspacePath,
     workspaceState: {
-      [DocumentsStateKey.WORKFLOW_AUTO_COMPILE]: true,
-      [DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS]: 30_000,
+      [DocumentsStateKey.DOCUMENTS_COMPILE_AFTER_OUTPUT]: true,
+      [DocumentsStateKey.DOCUMENTS_COMPILE_TIMEOUT_MS]: 30_000,
     },
   });
 }

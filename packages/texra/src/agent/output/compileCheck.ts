@@ -48,7 +48,7 @@ interface CompileCheckContext {
   runId: RunId;
 }
 
-const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
+const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.documentsCompileTimeoutMs.min;
 
 /** A round's check: the outputs that failed and the PDFs of those that
  *  built, or why it checked nothing, which is never zero failures. A check
@@ -80,7 +80,7 @@ export const compileCheckTimeoutMs = Effect.fn('compileCheckTimeoutMs')(
       MIN_TIMEOUT_MS,
       yield* Settings.get<number>(
         roots,
-        DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+        DocumentsStateKey.DOCUMENTS_COMPILE_TIMEOUT_MS,
       ),
     );
   },
@@ -141,7 +141,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     if (
       !(yield* Settings.get<boolean>(
         ctx.roots,
-        DocumentsStateKey.WORKFLOW_AUTO_COMPILE,
+        DocumentsStateKey.DOCUMENTS_COMPILE_AFTER_OUTPUT,
       ))
     ) {
       return skipped('auto-compile is off');
