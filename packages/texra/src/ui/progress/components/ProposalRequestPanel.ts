@@ -32,7 +32,6 @@ import {
 import {
   DEFINED_AGENT_COPY,
   DELEGATION_APPROVAL_COPY,
-  RUN_GRANT_LABEL,
 } from '@ui/copy/delegationApproval';
 
 // Local imports - shared utils
@@ -94,15 +93,17 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     this.emitAction({ action: 'approve', ...this.modelChange });
   }
 
-  protected override get grant(): RunGrant {
-    return {
-      label: RUN_GRANT_LABEL.superYolo,
-      scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
-      decision: {
-        action: APPROVE_SESSION_ACTION,
-        ...this.modelChange,
-      },
-    };
+  // The grant carries the launch form's model change, and its scope names
+  // the edits and commands the delegated-work grant also turns on.
+  protected override get grant(): RunGrant | null {
+    const offered = super.grant;
+    return (
+      offered && {
+        ...offered,
+        scope: DELEGATION_APPROVAL_COPY.progressViewToggle,
+        decision: { action: APPROVE_SESSION_ACTION, ...this.modelChange },
+      }
+    );
   }
 
   /** What the agent wants to start: the agent and the model. */

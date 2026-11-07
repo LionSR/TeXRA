@@ -50,12 +50,14 @@ import {
   renderSplitButtonMenuParts,
   splitButtonTriggerStyles,
 } from '@ui/wa/splitButton';
-import type {
-  RequestAnswerability,
-  PermissionPayload,
-  RunId,
-  RuntimeRequest,
+import {
+  offeredGrant,
+  type RequestAnswerability,
+  type PermissionPayload,
+  type RunId,
+  type RuntimeRequest,
 } from '@texra-ai/harness/schemas';
+import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 /** The three ways a card declines, each with its one word. */
 const DECLINE_LABEL = {
@@ -171,9 +173,11 @@ export abstract class BaseRequestPanel<
     return 'What should the agent change?';
   }
 
-  /** The run-scoped grant on the primary's ▾ menu, if the kind has one. */
+  /** The run-scoped grant on the primary's ▾ menu: the one the request
+   *  offers (`offeredGrant`), none when only a person answers it. */
   protected get grant(): RunGrant | null {
-    return null;
+    const kind = offeredGrant(this.permission);
+    return kind === null ? null : { label: RUN_GRANT_LABEL[kind] };
   }
 
   /** Kind-specific keys (d, s, r, k …). */

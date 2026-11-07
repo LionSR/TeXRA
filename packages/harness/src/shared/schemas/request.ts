@@ -230,20 +230,38 @@ export const grantHeld = (
   grant: ApprovalBypassKind,
 ): boolean => STANDS_FOR[grant].some(held);
 
-/** Whether a grant `held` answers a request of `kind`. */
-export const grantAnswering = (
-  held: (bypass: ApprovalBypassKind) => boolean,
-  kind: PermissionPayload['kind'],
-): boolean => {
-  const grant = GRANT_OF[kind];
-  return grant !== undefined && grantHeld(held, grant);
+/**
+ * The run grant `payload` offers: its kind's grant, or null when the opener
+ * said only a person answers it (`allowBypass: false`: a hook asked, or a
+ * command prompt for another tool's call, whose grant is not the shell's).
+ * The one reading every surface renders "approve all in this task" from,
+ * and every grant the run holds is checked against.
+ */
+export const offeredGrant = (
+  payload: PermissionPayload,
+): ApprovalBypassKind | null => {
+  const grant = GRANT_OF[payload.kind];
+  return grant !== undefined &&
+    'allowBypass' in payload.data &&
+    payload.data.allowBypass
+    ? grant
+    : null;
 };
 
-/** Whether `bypass` approves requests of `kind`. */
+/** Whether a grant `held` answers `payload`. */
+export const grantAnswering = (
+  held: (bypass: ApprovalBypassKind) => boolean,
+  payload: PermissionPayload,
+): boolean => {
+  const grant = offeredGrant(payload);
+  return grant !== null && grantHeld(held, grant);
+};
+
+/** Whether `bypass` approves `payload`. */
 export const bypassCovers = (
   bypass: ApprovalBypassKind,
-  kind: PermissionPayload['kind'],
-): boolean => grantAnswering((held) => held === bypass, kind);
+  payload: PermissionPayload,
+): boolean => grantAnswering((held) => held === bypass, payload);
 
 /** Whether `decision` is one `request` takes ({@link DecisionOf}). */
 export function decisionFits<P extends AnswerSource>(
@@ -262,8 +280,8 @@ export function decisionFits<P extends AnswerSource>(
 
 /**
  * Why `payload` cannot take this answer, or null when it can: a decision it
- * does not offer, or a session grant that is not an approval its kind's
- * bypass covers.
+ * does not offer, or a run grant that is not an approval of the grant it
+ * offers ({@link offeredGrant}).
  */
 export function answerMismatch(
   payload: PermissionPayload,
@@ -274,7 +292,7 @@ export function answerMismatch(
   const { kind } = payload;
   if (!decisionFits(payload, decision))
     return `A ${kind} request is not answered with "${action}".`;
-  if (grant != null && (action !== 'approve' || !bypassCovers(grant, kind)))
+  if (grant != null && (action !== 'approve' || !bypassCovers(grant, payload)))
     return `A ${kind} request's "${action}" cannot grant the ${grant} bypass.`;
   return null;
 }

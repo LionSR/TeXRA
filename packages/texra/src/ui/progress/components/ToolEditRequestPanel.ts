@@ -14,7 +14,6 @@ import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 import { pluralize } from '@texra-ai/harness/transcript';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
-import { RUN_GRANT_LABEL } from '@ui/copy/delegationApproval';
 
 // Local imports - shared helpers
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -22,7 +21,7 @@ import { selectedItemValue } from '@ui/wa/selectTemplates';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - base class
-import { BaseRequestPanel, type RunGrant } from './BaseRequestPanel';
+import { BaseRequestPanel } from './BaseRequestPanel';
 
 // Local imports - styles
 import { toolEditRequestPanelStyles } from './ToolEditRequestPanel.styles';
@@ -35,10 +34,6 @@ export class ToolEditRequestPanel extends BaseRequestPanel<'toolEdit'> {
     BaseRequestPanel.styles,
     toolEditRequestPanelStyles,
   ];
-
-  protected override get grant(): RunGrant {
-    return { label: RUN_GRANT_LABEL.toolEdit };
-  }
 
   protected override renderAsk(): TemplateResult {
     const { relativePath, path } = this.permission.data;

@@ -120,19 +120,16 @@ export const workAutoApproved = (
     (owners) => decideExecutable(owners, runId) === 'allow',
   );
 
-/** Whether a grant the run holds answers a request of `payload`'s kind
- *  (`grantAnswering`, the guard's reading over the request's kind), unless
- *  the request says only a person answers it (`allowBypass: false`, a
- *  hook's ask). */
+/** Whether a grant the run holds answers `payload`: the grant it offers
+ *  (`grantAnswering`), none when only a person answers it. */
 const grantAnswers = (
   owners: PolicyOwners,
   runId: RunId,
   payload: PermissionPayload,
 ): boolean =>
-  !('allowBypass' in payload.data && !payload.data.allowBypass) &&
   grantAnswering(
     (kind) => owners.approvals.bypass(runId, kind) !== null,
-    payload.kind,
+    payload,
   );
 
 /** The policy's answer for one request, or undefined when a person

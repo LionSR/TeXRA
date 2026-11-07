@@ -28,6 +28,13 @@ export const RUN_GRANT_LABEL = Object.freeze({
   superYolo: `Approve all ${RUN_GRANT_NOUN.superYolo} in this task`,
 } as const satisfies Record<ApprovalBypassKind, string>);
 
+/** The CLI card's `a` row for a grant, in full and where the card is
+ *  compact. */
+export const RUN_GRANT_CLI_ACTION = (kind: ApprovalBypassKind) => ({
+  full: `approve ${RUN_GRANT_NOUN[kind]} for this task`,
+  compact: `all ${RUN_GRANT_NOUN[kind]}`,
+});
+
 /**
  * A grant once given: granting has one home (the approval card's Approve ▾,
  * the CLI card's `a`); the header's read-only chip and the CLI's
@@ -45,8 +52,6 @@ export const RUN_GRANT_COPY = Object.freeze({
 
 /** Host-specific user copy for the delegated-work approval grant. */
 export const DELEGATION_APPROVAL_COPY = Object.freeze({
-  cliAction: 'approve agent work for this task',
-  cliCompactAction: 'all agent work',
   cliExplanation:
     'Press y to approve only this agent. Press a to approve agent work, file edits, and commands for this task. Other prompts still ask.',
   progressViewToggle:

@@ -3,6 +3,7 @@ import { Box, Text, useWindowSize } from 'ink';
 import {
   getModelLabel,
   getProposalFileGroups,
+  offeredGrant,
   type AgentProposalPermission,
 } from '@texra-ai/harness/schemas';
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
@@ -242,7 +243,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       color={COLOR_ACCENT}
       title={title}
       kind="proposal"
-      alwaysAllowLabel={DELEGATION_APPROVAL_COPY.cliAction}
+      grant={offeredGrant({ kind: 'proposal', data: props.payload })}
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">

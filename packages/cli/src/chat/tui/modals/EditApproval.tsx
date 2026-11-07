@@ -20,7 +20,7 @@ import {
   scrollPageRows,
 } from '../render/scrollBounds';
 import { useScrollableOffset } from '../state/useScrollableOffset';
-import type { ToolEditContent } from '@texra-ai/harness/schemas';
+import { offeredGrant, type ToolEditContent } from '@texra-ai/harness/schemas';
 import type { ToolEditApprovalPayload } from '../state/approvalQueue';
 
 const EDIT_DIFF_PADDING = 6;
@@ -66,7 +66,7 @@ export function EditApproval(props: EditApprovalProps): React.JSX.Element {
       color={COLOR_HINT}
       title={title}
       kind="toolEdit"
-      alwaysAllowLabel="approve edits for session"
+      grant={offeredGrant(props.payload)}
       compact={isCompactRows(
         props.availableRows,
         COMPACT_EDIT_APPROVAL_MAX_ROWS,

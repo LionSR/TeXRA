@@ -350,4 +350,6 @@ export {
   UserQuestionPromptSchema,
   type WorkspaceAgentsSelection,
   type WorktreeInfo,
+  // The run grant a request offers, which every surface renders.
+  offeredGrant,
 } from '@shared/schemas';

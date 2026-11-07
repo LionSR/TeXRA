@@ -10,7 +10,7 @@ import {
   ScrollableModalText,
   scrollableModalTextRowsBudget,
 } from './ScrollableModalText';
-import type { BashPermission } from '@texra-ai/harness/schemas';
+import { offeredGrant, type BashPermission } from '@texra-ai/harness/schemas';
 
 interface BashApprovalProps {
   readonly availableRows?: number;
@@ -52,11 +52,7 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       kind="bash"
-      // Another tool's call offers no grant: the one this prompt could turn
-      // on is the run's shell bypass.
-      alwaysAllowLabel={
-        props.payload.allowBypass ? 'approve commands for session' : undefined
-      }
+      grant={offeredGrant({ kind: 'bash', data: props.payload })}
       onDecide={props.onDecide}
     >
       {cwdLine && <Text dimColor>{cwdLine}</Text>}
