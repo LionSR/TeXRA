@@ -36,8 +36,9 @@ export type TraceArm<T extends (typeof TRACE_ROW_TYPES)[number] | 'run.end'> =
 /**
  * The terminal fact as the runtime hands it to in-process consumers
  * (`presentTerminalResult`): the `run.end` row named by
- * its run. Not an {@link AgentEvent} arm: the row is written once by the
- * storage finalizer (`finalizeRun`), never emitted on a trace.
+ * its run. Not an {@link AgentEvent} case: the row is written once by the
+ * run's end (`endRunRows`, `agent/storage/runLifecycle.ts`), never emitted on
+ * a trace.
  */
 export type ResultEvent = TraceArm<'run.end'> & { readonly runId: RunId };
 

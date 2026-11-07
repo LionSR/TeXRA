@@ -142,7 +142,7 @@ export type RunExit = {
 /**
  * The exit protocol, as the release step of the run's acquireUseRelease:
  * the run's input lease, where it holds one. The halt is not written here:
- * it commits with the run's `run.end` (`finalizeRun`), so no reader ever
+ * it commits with the run's `run.end` (`endRunRows`), so no reader ever
  * sees a stopped run without its end.
  */
 export const settleRun =

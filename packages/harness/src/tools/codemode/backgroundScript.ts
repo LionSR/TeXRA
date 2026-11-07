@@ -6,7 +6,7 @@
  * result instead of waiting for a follow-up that never comes.
  * That run is the parent's agent with the parent's tools, model and working
  * directory, opened on the call (`AgentConfig.script`); its result reaches
- * the parent as one follow-up (`createScriptRunStrategy`), and a resume
+ * the parent as one follow-up (`childEndReport`), and a resume
  * replays it from its own rows.
  */
 import { Effect, Schema, ScopedRef } from 'effect';

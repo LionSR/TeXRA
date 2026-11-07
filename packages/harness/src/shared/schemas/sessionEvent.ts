@@ -14,9 +14,9 @@
  * whether a row reaches a renderer is a property of its type
  * (`isDisplaySessionEvent`), not of a second aggregate.
  *
- * Layering: this module lives under `packages/harness/src/shared/schemas` so the fold and the
- * transport stay free of `@agent/*` (`dependencyDirection.vitest.ts` keeps the
- * shared-to-agent allowlist empty).
+ * Layering: this module lives under `packages/harness/src/shared/schemas` so
+ * the view update and the transport stay free of `@agent/*`. Nothing checks
+ * that edge; `shared/` imports no `@agent/*` module by convention.
  */
 import { Schema, Struct, Tuple } from 'effect';
 
@@ -234,7 +234,7 @@ export const PluginFactDraftSchema = durable('plugin.fact', {
 
 /**
  * The durable arms every renderer folds. This is the one declaration of the
- * run vocabulary: the trace's `AgentEvent` (`packages/harness/src/agent/trace/events.ts`) is
+ * run vocabulary: the trace's `AgentEvent` (`shared/session/agentEvent.ts`) is
  * derived from these arms, minus the aggregate qualification. Session-scoped
  * arms carry the session facts with the payload flattened. `run.removed` is
  * the deletion marker: the last row of its aggregate, final.

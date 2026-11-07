@@ -287,6 +287,45 @@
           "signature": "export const ownFactRow = ( { aggregate, ...fact }: ToolFact & { readonly aggregate: string }, runId: RunId, ): OwnFactRow => ({…});"
         }
       ]
+    },
+    {
+      "id": "MCP-failed-start-rcmap-lookup",
+      "candidate": "the MCP pool's failed start held as a failing RcMap lookup, with the failed-key Set deleted",
+      "why": "RcMap has no read that does not acquire: RcMap.has only reports that a key is present, and getOption retains the entry and waits on a start still in flight (RcMap.d.ts, effect 4.1.2). A root run's sweep over the keys would wait up to the start timeout on starts in flight and renew every idle server's lifetime. The rule that a task waits on a dead start only once needs the Set. Found as M2 (round 2, M-harness-tools.md); refused in #14786; re-checked by round 3's V (S9).",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#f-small-items-this-session",
+      "symbols": [
+        {
+          "file": "packages/harness/src/tools/sessionTools.ts",
+          "symbol": "(module header)",
+          "signature": "the failed-start Set beside the RcMap of servers"
+        }
+      ]
+    },
+    {
+      "id": "DISPATCH-script-lanes-semaphore",
+      "candidate": "the script door's per-call Deferred maps (handed, places) replaced by a Semaphore whose permits order the calls",
+      "why": "Semaphore.take(n) lets a smaller later request overtake a larger one queued ahead of it (Semaphore.d.ts:116-117, effect 4.1.2), so a one-permit call would pass the barrier the maps hold; the maps release calls strictly in the order they finished. Found as E10 (round 1, E-loop-tools.md); measured and left in #14788; re-checked by round 3's V (S10).",
+      "ruling": ".agents/docs/evidence/2026-11-07-design-red-flags-round-3/V-compromises.md#still-right",
+      "symbols": [
+        {
+          "file": "packages/harness/src/agent/runtime/loop/toolUseDispatch.ts",
+          "symbol": "slot",
+          "signature": "const slot = (map: Map<number, Deferred.Deferred<void>>, seq: number) => {…}"
+        }
+      ]
+    },
+    {
+      "id": "ARXIV-download-retry-cause-pair",
+      "candidate": "the arXiv download's catchCause/failCause wrapper around Effect.retry replaced by a retry on the typed error, and autoIndent folded into a null formatter",
+      "why": "The cause pair is deliberate: retrying on the typed error alone would drop a cleanup defect that rides beside the failure. autoIndent and a null formatter are two facts: a null formatter with indenting asked for tells the user formatting is off. Found as I8 (round 2, I-latex-documents.md); refused in #14786; re-checked by round 3's V (S9). The tar extraction as a stream stays open as unproven and small.",
+      "ruling": ".agents/docs/proposed/architecture/2026-11-07-red-flags-round-2-and-order.md#f-small-items-this-session",
+      "symbols": [
+        {
+          "file": "packages/texra/src/latex/arxivProcessor.ts",
+          "symbol": "downloadFile",
+          "signature": "function downloadFile( url: string, destBasePath: string, ): Effect.Effect<string, ArxivSourceError, DownloadServices> {…}"
+        }
+      ]
     }
   ]
 }

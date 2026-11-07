@@ -284,8 +284,10 @@ export const recordedDecision = <P extends Parameters<typeof decisionFits>[0]>(
       );
 
 /**
- * Answer a request if it is still open: the one writer of a decision. The
- * check reads the committed rows and the `request.decided` lands in one
+ * Answer a request a person decides, if it is still open. (A cancelled run,
+ * a bypassed approval and a personal-key retry write their own
+ * `request.decided` rows.) The check reads the committed rows and the
+ * `request.decided` lands in one
  * transaction, so two writers answering at once record exactly one;
  * `false` is that lost race, or an id never opened. It reads the run's
  * request rows alone (the `requests` read, through the type index), so a

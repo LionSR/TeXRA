@@ -1,9 +1,9 @@
 /**
  * A host attached to one session of `@texra-ai/harness`: its presentation
  * surface, and its approval handler at work, which requests it is asked
- * (once each) and what is recorded when it does not answer. A request is
- * never left waiting on a handler that failed, threw, or went quiet: that is
- * a denial, with the cause logged.
+ * (once each) and what is recorded when it does not answer. A handler that
+ * fails or throws denies the request, with the cause logged; one that has not
+ * answered yet is waited for, with no deadline.
  */
 import {
   Cause,
