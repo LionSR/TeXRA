@@ -2,7 +2,7 @@
  * Example 02 — Sessions, inline personas, typed launch refusals, and `run.events`.
  *
  * Composes `Sessions.layer({ platform, plugins: harnessBuiltins })`, opens a
- * session, checks an `InlinePersonaSchema` definition, handles an `AgentNotFound`
+ * session, checks an `InlinePersonaSchema` definition, handles a `LaunchRefused`
  * refusal on a missing agent, and runs an inline persona while streaming its
  * `run.events` (through `responseText`) and awaiting `run.result` (`RunEnd`),
  * then reads the ended run's events again, replayed from the session.

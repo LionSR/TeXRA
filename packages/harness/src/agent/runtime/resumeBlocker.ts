@@ -38,7 +38,7 @@ export const resumeBlocker = Effect.fn('resumeBlocker')(function* (
   // miss, so an agent saved a moment ago is found.
   const entry = yield* (yield* AgentCatalog)
     .forLaunch(roots, config.agent, config.agentSource)
-    .pipe(Effect.catchTag('AgentNotFound', () => Effect.void));
+    .pipe(Effect.catchTag('LaunchRefused', () => Effect.void));
   // The catalog lists a plugin's agents only while the plugin loads, so a
   // plugin agent it misses is answered by the plugin's install record.
   // A launch may record the source-qualified spelling (`plugin:acme:x`).

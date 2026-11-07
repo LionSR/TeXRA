@@ -25,11 +25,11 @@ import {
 
 import {
   Internal,
+  LaunchRefused,
   type LocalSession,
   Rejected,
   type RunRecords,
 } from '@texra-ai/harness';
-import { launchNoticeOf } from '@texra-ai/harness/host';
 import { type RunId, toErrorMessage } from '@texra-ai/harness/schemas';
 import { appSignalStream } from '@texra-ai/harness/host';
 import { frameSubscription } from '@texra/controllers/session/SessionFramer';
@@ -130,14 +130,14 @@ const internal = Effect.fn('handlers.internal')(function* (
 /**
  * Run `admission` (a start or a resume) in the service's fiber set, so a
  * client that disconnects never aborts it, and answer once its run is
- * admitted. A failure is `refused`'s to word; the service stopping first
- * is no failure of the task's.
+ * admitted. A start that fails before its run opens has no row to show it:
+ * the window that asked shows it. The service stopping first is no failure
+ * of the task's.
  */
-function admit<A, E>(
+function admit<A, E extends { readonly message: string }>(
   runs: FiberSet.FiberSet,
   admission: Effect.Effect<A, E>,
-  refused: (error: E) => Effect.Effect<never, TaskFailed>,
-): Effect.Effect<A, TaskFailed> {
+): Effect.Effect<A, TaskFailed | LaunchRefused> {
   return FiberSet.run(runs, admission).pipe(
     Effect.flatMap(Fiber.await),
     Effect.flatMap(
@@ -156,7 +156,14 @@ function admit<A, E>(
               ).pipe(
                 Effect.andThen(
                   Option.match(Cause.findErrorOption(cause), {
-                    onSome: refused,
+                    // A refused launch is carried as itself, for the
+                    // window that asked to show with its notice.
+                    onSome: (error) =>
+                      Effect.fail(
+                        error instanceof LaunchRefused
+                          ? error
+                          : new TaskFailed({ message: error.message }),
+                      ),
                     onNone: () =>
                       Effect.fail(
                         new TaskFailed({
@@ -317,15 +324,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
               runs,
               // A service task stays open for its windows' follow-ups.
               session.start({ ...start, interactive: true }),
-              // A start that fails before its run opens has no row to show
-              // it: the window that asked shows it, with its notice.
-              (error) =>
-                Effect.fail(
-                  new TaskFailed({
-                    message: error.message,
-                    notice: launchNoticeOf(error),
-                  }),
-                ),
             );
             return { runId: run.runId, activation: run.activation };
           }),
@@ -398,13 +396,6 @@ export const serviceHandlers = TexraRpcs.toLayer(
             const run = yield* admit(
               runs,
               session.resume(runId, { interactive: true, apiKeys }),
-              (error) =>
-                Effect.fail(
-                  new TaskFailed({
-                    message: error.message,
-                    notice: launchNoticeOf(error),
-                  }),
-                ),
             );
             return { runId: run.runId, activation: run.activation };
           }),

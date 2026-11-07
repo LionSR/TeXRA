@@ -18,13 +18,13 @@ import {
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 import {
+  LaunchRefused,
   RunFailure,
   type Run,
   type Session,
   type StartInput,
 } from '@texra-ai/harness';
 import {
-  launchNoticeOf,
   normalizeProviderError,
   withProcessServices,
   type ProcessRuntime,
@@ -410,13 +410,13 @@ export const executeCliConfig: (
       runResult = { ok: true as const, result: exit.value };
     } else if (!interrupted) {
       const failure = Cause.squash(exit.cause);
-      // The session words a launch's failure as a `RunFailure`; what it
-      // failed with is its cause.
+      // The session words a launch's failure as a `RunFailure` (what it
+      // failed with is its cause), or a refused one as `LaunchRefused`.
       const err = failure instanceof RunFailure ? failure.cause : failure;
-      // Only a classified, already-handled AgentError resolves to a non-zero
-      // exit code here; anything else (e.g. registerRun disk I/O,
-      // workspaceState.update failures) is unexpected and must keep
-      // propagating to bin/texra.ts's crash handler.
+      // Only a refused launch or a classified, already-handled AgentError
+      // resolves to a non-zero exit code here; anything else (e.g.
+      // registerRun disk I/O, workspaceState.update failures) is unexpected
+      // and must keep propagating to bin/texra.ts's crash handler.
       if (err instanceof CliUsageError) {
         refusal = err; // a refused resume: the caller's usage exit
       } else {
@@ -425,9 +425,10 @@ export const executeCliConfig: (
         // notice it carries, any other by its message and classification,
         // which the host words. A run that opened never fails its launch:
         // its end is its `run.end` row's.
-        if (!(err instanceof AgentError)) primaryRunFailure = { error: err };
+        const notice = err instanceof LaunchRefused ? err.notice : undefined;
+        if (!(err instanceof AgentError || err instanceof LaunchRefused))
+          primaryRunFailure = { error: err };
         else if (!failurePresented) {
-          const notice = launchNoticeOf(err);
           if (notice !== undefined)
             presentationHost.emit(notice.event, notice.payload);
           else {

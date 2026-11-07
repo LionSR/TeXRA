@@ -60,7 +60,7 @@ const buildLaunchConfig = Effect.fn('buildLaunchConfig')(function* (
     : yield* catalog.forLaunch(roots, agent).pipe(
         Effect.map((entry) => ({ entry })),
         Effect.catchTags({
-          AgentNotFound: () => Effect.succeed({ entry: null }),
+          LaunchRefused: () => Effect.succeed({ entry: null }),
           AgentCatalogLoadError: (failed) =>
             Effect.succeed({ failed: failed.message }),
         }),

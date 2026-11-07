@@ -3,8 +3,8 @@
  * persona the config carries, or a catalog entry, with its plugin's trust
  * checked), the tools it declares against this build, and its model. A
  * miss is refused here, so no run is registered for a launch that cannot
- * run; an unknown agent or model carries the notice its caller shows
- * (`AgentError.notice`). The run program takes the result (`executeAgent`).
+ * run; an unknown agent or model is a `LaunchRefused` with the notice its
+ * caller shows. The run program takes the result (`executeAgent`).
  */
 import { Effect } from 'effect';
 
@@ -13,7 +13,7 @@ import { AgentCatalog } from '@agent/index/agentCatalog';
 import { agentEntryOf } from '@agent/index/agentYamlScanner';
 import { requirePluginAgentLoads } from '@agent/index/pluginAgents';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import { AgentError } from '@common/errors/agentErrors';
+import { AgentError, LaunchRefused } from '@common/errors/agentErrors';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { SessionRoots } from '@platform/rootedFs';
 import { HARNESS_INSTRUCTION_KEY } from '@shared/schemas';
@@ -30,7 +30,7 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     // One wording, so a surface that shows only text says what the notice
     // says.
     const message = `Model "${modelName}" is not recognized. Review the documentation for supported models.`;
-    return yield* new AgentError({
+    return yield* new LaunchRefused({
       message,
       notice: {
         event: 'requestShowInstruction',
@@ -64,21 +64,11 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     const agentEntry =
       fullConfig.persona != null
         ? agentEntryOf(fullConfig.persona, { source: 'inline', path: '' })
-        : yield* (yield* AgentCatalog)
-            .forLaunch(roots, fullConfig.agent, fullConfig.agentSource)
-            .pipe(
-              Effect.catchTag('AgentNotFound', (missed) =>
-                Effect.fail(
-                  new AgentError({
-                    message: missed.message,
-                    notice: {
-                      event: 'agentNotFound',
-                      payload: { agentName: fullConfig.agent },
-                    },
-                  }),
-                ),
-              ),
-            );
+        : yield* (yield* AgentCatalog).forLaunch(
+            roots,
+            fullConfig.agent,
+            fullConfig.agentSource,
+          );
     if (agentEntry.source === 'plugin')
       yield* requirePluginAgentLoads(
         agentEntry,
