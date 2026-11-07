@@ -480,14 +480,20 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
           return { kind: 'files', paths: attached.paths };
         }
         case 'launch': {
-          // A working directory must be one of the host's open workspace
-          // folders, as the composer lists them.
+          // A working directory must be the window's workspace or one of the
+          // host's open workspace folders, as the composer lists them (the
+          // desktop lists none: its window is its project).
           const asked = request.launch.workingDirectory.trim();
-          const folders = ports.snapshot.workspaceRoots();
+          const folders = [
+            roots.workspace,
+            ...ports.snapshot.workspaceRoots().map((folder) => folder.value),
+          ];
           if (
             asked !== '' &&
             !folders.some(
-              (folder) => path.resolve(folder.value) === path.resolve(asked),
+              (folder) =>
+                folder !== undefined &&
+                path.resolve(folder) === path.resolve(asked),
             )
           )
             return yield* new Rejected({
