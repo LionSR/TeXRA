@@ -167,9 +167,10 @@ export class TuiSession {
 
   /** The root `runId`'s result could not be read (its connection died, or
    *  its end was lost): the chat exits as a failure, unless a later root
-   *  replaces it, whatever a view that stopped updating still shows. */
+   *  replaces it, whatever a view that stopped updating still shows. A
+   *  launch on its way is that later root, so it is left to end. */
   rootFailed(runId: RunId): void {
-    if (rootRunId.get() !== runId) return;
+    if (rootRunId.get() !== runId || launchInFlight() !== undefined) return;
     const launched = Deferred.makeUnsafe<RunId | null>();
     Deferred.doneUnsafe(launched, Effect.succeed(runId));
     rootLaunch.set({ launched, exitCode: CliExitCode.AgentError });

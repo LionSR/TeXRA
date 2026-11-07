@@ -560,6 +560,23 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
     );
 
     it.effect(
+      "keeps a newer launch when the older root's result fails meanwhile",
+      () =>
+        Effect.sync(() => {
+          // Root A's result fails while the chat's next launch, B, is still
+          // on its way: B is newer, so it still names its run when it ends.
+          const session = new TuiSession();
+          rootRunId.set(decodeRunId('a11111'));
+          const launched = session.claimLaunch();
+          assert(launched !== undefined, 'no root is in flight');
+          session.rootFailed(decodeRunId('a11111'));
+          session.endLaunch(launched, { runId: decodeRunId('b22222') });
+
+          expect(rootRunId.get()).toBe('b22222');
+        }),
+    );
+
+    it.effect(
       "keeps a resume's run as the root when an earlier message's reply resumes the old one",
       () =>
         Effect.gen(function* () {
