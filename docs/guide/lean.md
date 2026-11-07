@@ -29,7 +29,7 @@ TeXRA detects the running Lean 4 extension and routes its tools through it, so y
 
 ### <wa-icon library="texra" name="terminal"></wa-icon> In the CLI
 
-Without the VS Code extension host, the CLI spawns and manages its own headless server process (`lake env lean --server`). Each Lake project receives a dedicated process that terminates when its calling run ends (or after an idle timeout of 30 minutes). Ensure `lake` is present on your `PATH`:
+Without the VS Code extension host, the CLI spawns and manages its own headless server process (`lake env lean --server`). Each Lake project receives a dedicated process that stops when the last run using it ends. Ensure `lake` is present on your `PATH`:
 
 1. Install **elan** (the Lean version manager):
    ```bash
@@ -123,14 +123,14 @@ The `lean_file` tool runs file-scoped commands: `restart` (reload the language s
 Download the Mathlib build cache, then build the project.
 ```
 
-The `lean_project` tool runs project-wide commands without a target file, grouped into server control, build operations, and toolchain setup:
+The `lean_project` tool runs project-wide commands without a target file, grouped into server control and build operations:
 
 <LeanProjectCommands />
 
-<p class="hero-caption">Server and build commands run everywhere; the Setup group drives the Lean 4 extension's installers, so it's gated to VS Code. <code>fetch_cache</code> pulls the whole project; <code>fetch_file_cache</code> covers only the current file's imports, which is faster.</p>
+<p class="hero-caption">Both groups run in every build. <code>fetch_cache</code> pulls the whole project; <code>fetch_file_cache</code> covers only the current file's imports, which is faster.</p>
 
-::: warning Setup commands are VS Code-only
-The setup commands drive the Lean 4 extension's installers, so they only work in the VS Code build. In the CLI they fail with a "run the shell command directly" message. Manage your toolchain with `elan` and `lake` directly instead (for example `elan self update`, `elan toolchain install`, or `lake update`). Follow the [Lean install guide](https://leanprover-community.github.io/install/).
+::: tip Toolchain setup
+In VS Code, the setup agent can run the Lean 4 extension's installers (install or update elan, install dependencies, select the default toolchain). In the CLI and desktop builds, manage your toolchain with `elan` and `lake` directly (for example `elan self update`, `elan toolchain install`, or `lake update`). Follow the [Lean install guide](https://leanprover-community.github.io/install/).
 :::
 
 ::: tip Build output

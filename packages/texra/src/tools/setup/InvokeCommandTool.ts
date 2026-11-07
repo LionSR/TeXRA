@@ -9,12 +9,22 @@ import { commandCatalog } from '@texra/shared/commands/catalog';
 // Local file imports
 import { assertInSetupAllowlist, SetupPlatform } from './platform';
 
-/** The commands the setup agent may invoke: the catalog's `setupInvokable` rows. */
-const ALLOWED_COMMANDS: ReadonlySet<string> = new Set(
-  commandCatalog.flatMap((entry) =>
+/** The Lean 4 extension's toolchain installers, each its own prompted flow. */
+const LEAN4_SETUP_COMMANDS = [
+  'lean4.setup.installElan',
+  'lean4.setup.installDeps',
+  'lean4.setup.updateElan',
+  'lean4.setup.selectDefaultToolchain',
+];
+
+/** The commands the setup agent may invoke: the catalog's `setupInvokable`
+ *  rows and the Lean 4 extension's installers. */
+const ALLOWED_COMMANDS: ReadonlySet<string> = new Set([
+  ...commandCatalog.flatMap((entry) =>
     'setupInvokable' in entry ? [entry.id] : [],
   ),
-);
+  ...LEAN4_SETUP_COMMANDS,
+]);
 
 const InvokeCommandInputSchema = Schema.Struct({
   command: Schema.String.check(Schema.isMinLength(1)).annotate({
@@ -68,7 +78,7 @@ export const InvokeCommandTool = defineTool({
   // Offered where the host passes its commands (VS Code).
   hostCapability: 'commands' satisfies keyof SetupPlatform['Service'],
   requiresApproval: true,
-  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), and the arXiv source downloader (texra.downloadArXivSource). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
+  description: `Invoke an allowlisted VS Code command. Use this to hand off to TeXRA's existing UX: the API-key quick-pick (texra.setApiKey), the settings-dashboard tab openers (texra.showDashboard / texra.showModels / texra.showAgents / texra.showMemory / texra.showTeamSettings / texra.showTools / texra.showGitSettings), the sample-project creator (texra.createSampleProject), the Overleaf clone wizard (texra.cloneOverleafProject), the arXiv source downloader (texra.downloadArXivSource), and the Lean 4 extension's toolchain installers (lean4.setup.installElan / lean4.setup.installDeps / lean4.setup.updateElan / lean4.setup.selectDefaultToolchain). Non-allowlisted commands are rejected. To install a VS Code extension (LaTeX Workshop, Lean 4), use \`install_vscode_extension\` instead: it enforces a stricter per-extension allowlist.`,
   schema: InvokeCommandInputSchema,
   execute: invokeCommand,
 });
