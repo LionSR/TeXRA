@@ -112,11 +112,9 @@ function vscodePresenter(
             try: () => vscode.env.clipboard.writeText(url),
             catch: ensureError,
           });
-          yield* Effect.forkDetach(
-            showLoggedInfoMessage(
-              channel,
-              `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
-            ),
+          yield* showLoggedInfoMessage(
+            channel,
+            `Sign-in link copied. Paste it into the browser where you use ${copyTarget}.`,
           );
           return;
         }
@@ -180,11 +178,9 @@ export function signInWithSubscription(
         ),
       );
 
-    yield* Effect.forkDetach(
-      showLoggedInfoMessage(
-        channel,
-        `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
-      ),
+    yield* showLoggedInfoMessage(
+      channel,
+      `${ACCOUNT_OUTCOME.signedInAs(displayName, account.label)} ${displayName} subscription is enabled for ${modelFamily}.`,
     );
     return true;
   }).pipe(

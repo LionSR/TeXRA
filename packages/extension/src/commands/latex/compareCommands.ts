@@ -51,9 +51,7 @@ const replaceFailed = (cause: unknown) =>
  */
 const acceptPorts: CommitAcceptedFilePorts = {
   showInfo: (message) =>
-    Effect.forkDetach(showLoggedInfoMessage(CHANNEL, message)).pipe(
-      Effect.asVoid,
-    ),
+    showLoggedInfoMessage(CHANNEL, message).pipe(Effect.asVoid),
 };
 
 const validateFilesExist = Effect.fnUntraced(function* (
@@ -67,11 +65,9 @@ const validateFilesExist = Effect.fnUntraced(function* (
   ];
   for (const [label, location] of required) {
     if (!(yield* fs.exists(location.absolutePath))) {
-      yield* Effect.forkDetach(
-        showLoggedMessage(
-          CHANNEL,
-          `${label} file not found: ${location.absolutePath}`,
-        ),
+      yield* showLoggedMessage(
+        CHANNEL,
+        `${label} file not found: ${location.absolutePath}`,
       );
       return false;
     }

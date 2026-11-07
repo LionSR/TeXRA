@@ -211,9 +211,7 @@ const prepareFileForDisplay = Effect.fn('openBuild.prepareFileForDisplay')(
 
     const fs = yield* FileSystem.FileSystem;
     if (!(yield* fs.exists(absolutePath))) {
-      yield* Effect.forkDetach(
-        showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`),
-      );
+      yield* showLoggedMessage(CHANNEL, `File not found: ${absolutePath}`);
       return { kind: 'done', delivered: false };
     }
 
