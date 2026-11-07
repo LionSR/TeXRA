@@ -2,11 +2,9 @@
 
 import {
   Cancelled,
-  isRequestRefusal,
   Rejected,
   type LaunchError,
   type RequestError,
-  type RequestRefusal,
   type Run,
   type RunFailure,
   type Session,
@@ -55,6 +53,10 @@ import {
   type CompileFixerPlanFailed,
 } from '../progressView/compileFixer';
 import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
+import {
+  isRequestRefusal,
+  type RequestRefusal,
+} from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'HostRunActions';
 
@@ -382,7 +384,9 @@ export const createHostRunActions = Effect.fn(
     resume: Effect.fn('HostRunActions.resume')(function* (runId) {
       yield* nativeAgentRun(runId, 'resume');
       yield* launch(resumeRun(session, runId)).pipe(
-        Effect.catchTag('RunFailure', () => Effect.fail(new Cancelled())),
+        Effect.catchTag(['RunFailure', 'LaunchRefused'], () =>
+          Effect.fail(new Cancelled()),
+        ),
       );
     }),
     runAgain: (runId) => nativeAgentRun(runId, 'runAgain'),

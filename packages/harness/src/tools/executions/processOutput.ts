@@ -47,7 +47,7 @@ interface ProcessOutputProjection {
  *
  * The command's output is its `process.output` rows, in commit order,
  * concatenated while their stream stays the same, so chunk-split lines are
- * reconstructed without crossing a stream switch. A plain `log` row (the
+ * reconstructed without crossing a stream switch. A plain `log` row (a
  * truncation notice) flushes any pending fragment and renders standalone;
  * every other row is run bookkeeping, not command output.
  */

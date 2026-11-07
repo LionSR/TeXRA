@@ -484,7 +484,7 @@ interface ScriptCallView {
     | { readonly kind: 'notRun' | 'interrupted' }
     | {
         readonly kind: 'request';
-        readonly payload: ReadonlyDeep<PermissionPayload>;
+        readonly payload: ReadonlyDeep<RequestPayload>;
       };
   /** The child run an `agent` call launched: the row opens it. */
   readonly childRunId?: RunId;

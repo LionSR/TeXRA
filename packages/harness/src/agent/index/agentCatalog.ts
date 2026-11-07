@@ -14,6 +14,7 @@ import {
   Schema,
 } from 'effect';
 
+import { LaunchRefused } from '@common/errors/agentErrors';
 import { WorkspaceAgentsController } from '@agent/workspaceAgents/WorkspaceAgentsController';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -47,12 +48,6 @@ import { scanPluginAgents } from './pluginAgents';
 import type { AgentCatalogServices, AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
-
-/** No agent of that name in the catalog, with what the last load said. */
-export class AgentNotFound extends Schema.TaggedError<AgentNotFound>()(
-  'AgentNotFound',
-  { agent: Schema.String, message: Schema.String },
-) {}
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
 export class AgentCatalogLoadError extends Schema.TaggedError<AgentCatalogLoadError>()(
@@ -113,7 +108,7 @@ export interface AgentCatalogShape {
   /**
    * The agent a launch runs, over a settled catalog: the entry an explicit
    * `source` pins, else a visible one, else any. A miss reloads once, then
-   * fails with what the load said.
+   * refuses the launch with what the load said.
    */
   readonly forLaunch: (
     stores: WorkspaceAgentsStores,
@@ -121,7 +116,7 @@ export interface AgentCatalogShape {
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    AgentNotFound | AgentCatalogLoadError | StateReadFailed
+    LaunchRefused | AgentCatalogLoadError | StateReadFailed
   >;
   /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
@@ -368,9 +363,12 @@ export class AgentCatalog extends Context.Service<
             resolve(stores, identifier, source),
           ));
         if (entry) return entry;
-        return yield* new AgentNotFound({
-          agent: identifier,
+        return yield* new LaunchRefused({
           message: missMessage(state, identifier),
+          notice: {
+            event: 'agentNotFound',
+            payload: { agentName: identifier },
+          },
         });
       });
 

@@ -12,7 +12,7 @@
  * workflow body, whose run board already lists every call). Every row is a
  * child of the session view: label, status, tone, latest line, and clock
  * facts come from `view.runs`; the host paints the glyph and the time. The
- * card's open state is the surface's (`Surface.groups`, key
+ * card's open state is the surface's (`RunSurface.groups`, key
  * {@link DISPATCH_GROUP_KEY}); a toggle goes out as a `group` action.
  * Selecting a row is the navigation.
  */
@@ -52,7 +52,7 @@ import { getTimeFormatter } from '../formatters/timestampUtils';
 import { dispatchGroupToggle } from '../utils';
 import type { SessionView, RunView } from '@texra-ai/harness/schemas';
 
-/** The card's key in `Surface.groups` for its run. */
+/** The card's key in `RunSurface.groups` for its run. */
 const DISPATCH_GROUP_KEY = 'dispatch';
 
 @customElement('background-tasks-panel')
@@ -316,7 +316,7 @@ export class BackgroundTasksPanel extends LitElement {
                 >`
           }`;
     const open =
-      this.surface?.groups.get(run.id)?.get(DISPATCH_GROUP_KEY) !== false;
+      this.surface?.runs.get(run.id)?.groups.get(DISPATCH_GROUP_KEY) !== false;
 
     return html`
       <wa-details

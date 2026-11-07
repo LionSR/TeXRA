@@ -1,11 +1,11 @@
 // Node imports
-import { writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 
 // Third-party imports
 import { Effect, Layer } from 'effect';
 import { layer } from '@effect/vitest';
-import { afterAll, expect } from 'vitest';
+import { afterAll, assert, expect } from 'vitest';
 
 // Local imports
 import {
@@ -130,5 +130,46 @@ layer(
         );
         expect(custom?.source).toBe('custom');
       }),
+  );
+
+  // A bundled task that binds template files beside its YAML resolves them
+  // beside its customized copy, so the copy must carry them.
+  it.effect('copies the files a task binds beside its customized copy', () =>
+    Effect.gen(function* () {
+      const catalog = yield* loadCatalog;
+      const bundled = catalog.get('builtIn:paper2poster');
+      assert(bundled, 'the bundled paper2poster task is listed');
+
+      const copy = yield* catalog.customize(bundled, 'copy');
+
+      const template = (file: string) =>
+        Effect.promise(() => readFile(file, 'utf8'));
+      expect(
+        yield* template(resolve(dirname(copy), 'template_poster.tex')),
+      ).toBe(
+        yield* template(resolve(dirname(bundled.path), 'template_poster.tex')),
+      );
+    }),
+  );
+  // Failure mode: several bundled tasks bind one shared file. Customizing a
+  // second one must not be refused for, or overwrite, the copy the first
+  // customization already placed beside the custom agents.
+  it.effect('customizes a second task that binds a shared file', () =>
+    Effect.gen(function* () {
+      const catalog = yield* loadCatalog;
+      const criticize = catalog.get('builtIn:criticize');
+      const enhance = catalog.get('builtIn:enhance');
+      assert(criticize && enhance, 'the bundled criticize and enhance tasks');
+
+      const first = yield* catalog.customize(criticize, 'copy');
+      const shared = resolve(dirname(first), 'criticize.tex');
+      yield* Effect.promise(() => writeFile(shared, '% edited\n'));
+
+      yield* catalog.customize(enhance, 'copy');
+
+      expect(yield* Effect.promise(() => readFile(shared, 'utf8'))).toBe(
+        '% edited\n',
+      );
+    }),
   );
 });

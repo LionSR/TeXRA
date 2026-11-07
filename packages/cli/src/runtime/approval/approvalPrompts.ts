@@ -1,17 +1,13 @@
 import { Effect } from 'effect';
 
-import {
-  withLogChannel,
-  type PerKeyLane,
-  withPerKeyLane,
-} from '@texra-ai/harness/host';
+import { withLogChannel } from '@texra-ai/harness/host';
 import {
   type RequestDecision,
   ensureError,
   toErrorMessage,
 } from '@texra-ai/harness/schemas';
 
-import { type CliContext, type CliPromptRequest } from '../cliContext';
+import { CliInvocation, type CliPromptRequest } from '../cliContext';
 import { askCliQuestion, writeTextStderr } from '../logSinks';
 import { safeTerminalText } from '../terminalText';
 
@@ -47,19 +43,10 @@ export interface CliApprovalContent {
   readonly details?: () => string;
 }
 
-/**
- * One prompt lane per CLI context: a single stdin, so two prompts never read
- * from it at once. Keyed weakly by the context, whose lifetime bounds it.
- */
-const cliPromptLanes = new WeakMap<CliContext, PerKeyLane>();
-function onCliPromptLane(context: CliContext) {
-  return withPerKeyLane(cliPromptLanes, context);
-}
-
 const askCliApprovalQuestion = Effect.fn(
   'approvalPrompts.askCliApprovalQuestion',
-)(function* (context: CliContext, request: CliPromptRequest) {
-  const injected = context.approvalPrompt;
+)(function* (request: CliPromptRequest) {
+  const injected = (yield* CliInvocation).context.approvalPrompt;
   return injected
     ? yield* injected(request)
     : yield* askCliQuestion(
@@ -108,23 +95,21 @@ function isViewDetailsAnswer(answer: string): boolean {
 }
 
 /**
- * Run a CLI prompt on the context's serial prompt lane. Exposed so the
+ * Run a CLI prompt on the invocation's serial prompt lane. Exposed so the
  * user-question handler can interleave its own per-question prompts with
  * approval prompts without overlapping reads from a single stdin.
  */
-export function queueCliApprovalQuestion(
-  context: CliContext,
-  request: CliPromptRequest,
-) {
-  return onCliPromptLane(context)(askCliApprovalQuestion(context, request));
-}
+export const queueCliApprovalQuestion = (request: CliPromptRequest) =>
+  CliInvocation.use(({ onPromptLane }) =>
+    onPromptLane(askCliApprovalQuestion(request)),
+  );
 
 export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
-  context: CliContext,
   content: CliApprovalContent,
   hooks: CliApprovalPromptHooks = {},
 ) {
-  return yield* onCliPromptLane(context)(
+  const { onPromptLane } = yield* CliInvocation;
+  return yield* onPromptLane(
     Effect.gen(function* () {
       const prompt = content.details
         ? 'Approve? [y/N, v view full, or n <feedback>] '
@@ -140,7 +125,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       while (true) {
         answer = yield* whilePrompting(
           hooks,
-          askCliApprovalQuestion(context, {
+          askCliApprovalQuestion({
             summary: content.summary,
             prompt,
           }),
@@ -160,7 +145,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       if (!parsed.accepted && parsed.shouldPromptForFeedback) {
         const feedbackAnswer = yield* whilePrompting(
           hooks,
-          askCliApprovalQuestion(context, {
+          askCliApprovalQuestion({
             summary: '',
             prompt: 'Rejection feedback (optional, Enter to skip): ',
           }),

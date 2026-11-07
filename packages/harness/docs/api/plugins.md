@@ -62,6 +62,10 @@ interface AgentBlock<A = unknown, R = unknown> {
   readonly schema: Schema.Codec<A, unknown>;
   /** How a run of this block's recipe reads to whoever launched it. */
   readonly result?: AgentBlockResult<R>;
+  /** The files the block binds, relative to its agent file: part of the
+   *  agent, so a customized copy carries them and the file's digest covers
+   *  them. */
+  files?(block: A): readonly string[];
 }
 ```
 
@@ -246,20 +250,6 @@ interface BuildFileAttachmentOptions {
 }
 ```
 
-## buildTemplatePassthrough
-
-Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
-
-Agent-creation templates render once when a YAML file is produced, then the
-generated agent renders again at runtime. These tokens must pass through the
-creation render literally so the runtime render can substitute them later.
-A plugin's own variables are not in this fixed list; `throwOnUndefined`
-stays disabled, so a template tolerates their absence.
-
-```ts
-function buildTemplatePassthrough(): Readonly<Record<string, string>>
-```
-
 ## CALL_FIELDS
 
 The fields every child launch takes beside its own: memories, the call's
@@ -290,17 +280,17 @@ interface CallRequests {
    *  resumed call left standing, when it is of this kind, else the
    *  attempt's next derived id. A request is staged under this id before
    *  it opens. */
-  readonly nextId: (kind: PermissionPayload['kind']) => string;
+  readonly nextId: (kind: RequestPayload['kind']) => string;
   /** Open the request (or re-enter the standing one) and wait for its
    *  decision. The returned payload is the request actually answered,
    *  which on resume may differ from the proposal recomputed by the caller.
    *  `blobs` are the strings the payload names by address, stored with its row. */
-  readonly open: <P extends PermissionPayload>(
+  readonly open: <P extends RequestPayload>(
     payload: P,
     blobs?: readonly DraftBlob[],
   ) => Effect.Effect<
     {
-      readonly payload: Extract<PermissionPayload, { kind: P['kind'] }>;
+      readonly payload: Extract<RequestPayload, { kind: P['kind'] }>;
       readonly decision: DecisionOf<P['kind']>;
     },
     DatabaseAggregateClosed | CellError
@@ -488,7 +478,7 @@ refusals. A plugin's request declares its actions on its row, so its
 type admits any decision.
 
 ```ts
-type DecisionOf<K extends PermissionPayload['kind']> =
+type DecisionOf<K extends RequestPayload['kind']> =
   | Extract<
       RequestDecision,
       {
@@ -1681,6 +1671,16 @@ type SubmitFollowUpResult =
   | { status: 'sent' }
   | { status: 'queued' }
   | { status: 'failed'; reason: FollowUpFailureReason };
+```
+
+## TEMPLATE_INPUT_NAMES
+
+The names of the fixed template variables, the keys of
+{@link TemplateInputsSchema}. A plugin that adds variables of its own
+checks them against this list, so none shadows a fixed one.
+
+```ts
+const TEMPLATE_INPUT_NAMES: readonly string[]
 ```
 
 ## TemplateInputs

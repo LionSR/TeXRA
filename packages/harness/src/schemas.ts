@@ -74,6 +74,8 @@ export type {
   InputHistoryRecord,
   SessionStoreMovedAside,
 } from '@shared/session/database';
+// Where a run stands, the pair of `RunView` fields a renderer reads.
+export type { RunStanding } from '@shared/session/runRowReads';
 // A follow-up queued for a run, as its row holds it (`InboxItem.control`).
 export type { QueuedFollowUp } from '@shared/session/runRows';
 // The data shapes the public signatures name: session events and their
@@ -112,7 +114,7 @@ export type {
   ModelBackend,
   NormalizedToolUse,
   OwnerId,
-  PermissionPayload,
+  RequestPayload,
   Persona,
   ProposalFileGroup,
   ProviderError,
@@ -137,7 +139,7 @@ export type {
   ToolCard,
   ToolDefinition,
   ToolEditContent,
-  ToolEditPermission,
+  ToolEditRequest,
   ToolFact,
   ToolUseLog,
   UsageRoute,
@@ -161,10 +163,11 @@ export {
 // resolve against the policy.
 export {
   APPROVAL_BYPASS_KINDS,
+  launchPolicy,
   resolveBypass,
   runBypasses,
-  stricterPolicy,
   type ApprovalBypassKind,
+  type LaunchApproval,
   type ApprovalGrants,
   type ApprovalGrantSource,
 } from '@shared/approvalBypassKind';
@@ -172,7 +175,6 @@ export {
 // answered with, and a run's start as data.
 export {
   Cancelled,
-  Invalid,
   OutcomeSchema,
   Rejected,
   RequestErrorSchema,
@@ -253,11 +255,11 @@ export {
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
-  type AgentProposalPermission,
+  type AgentProposalRequest,
   type AgentScanIssue,
   AgentScanIssueSchema,
   AgentSourceSchema,
-  type BashPermission,
+  type BashRequest,
   blocksCaller,
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
   CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
@@ -302,18 +304,18 @@ export {
   type NormalizedUsage,
   NullableFileFieldsSchema,
   type Plan,
-  type PlanApprovalPermission,
+  type PlanApprovalRequest,
   planOf,
   planSummaryLine,
   type PluginRequest,
-  type ProgressPermissionKind,
+  type RequestKind,
   type ProposalFileFields,
   qualifyAggregateId,
   recipeBlockOf,
   referencedAggregates,
   type RequestDecision,
   RequestShowErrorPayloadSchema,
-  type RetryPermission,
+  type RetryRequest,
   RUN_OUTCOME,
   type RunEndOutput,
   RunEndSchema,
@@ -343,9 +345,13 @@ export {
   TOOL_CALL_STATUS,
   type UserQuestionAnswers,
   UserQuestionAnswersSchema,
-  type UserQuestionPermission,
+  type UserQuestionRequest,
   type UserQuestionPrompt,
   UserQuestionPromptSchema,
   type WorkspaceAgentsSelection,
   type WorktreeInfo,
+  ToolDependencyStatusSchema,
+  type ToolDependencyStatus,
+  // The run grant a request offers, which every surface renders.
+  offeredGrant,
 } from '@shared/schemas';

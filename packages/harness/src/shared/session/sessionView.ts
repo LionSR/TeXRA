@@ -16,7 +16,7 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   JsonValueSchema,
-  PermissionPayloadSchema,
+  RequestPayloadSchema,
   PluginFactDraftSchema,
   blocksCaller,
   RunActionSchema,
@@ -29,7 +29,7 @@ import {
   TaskGroupSchema,
   TokenUsageStatsSchema,
   WorktreeInfoSchema,
-  type PermissionPayload,
+  type RequestPayload,
   type RunId,
 } from '@shared/schemas';
 import type { TranscriptRow } from '@shared/transcript/transcriptRow';
@@ -92,7 +92,7 @@ export const RunViewSchema = Schema.Struct({
    *  undecoded here, read through its plugin's reader. */
   facts: Schema.Record(Schema.String, JsonValueSchema),
   worktree: Schema.NullOr(WorktreeInfoSchema),
-  /** Where its loop stands (`phaseMoveOf`): `ready` before its first
+  /** Where its loop stands (`standingAfter`): `ready` before its first
    *  activation and after an end, `running` inside a turn, `waiting`
    *  between turns. */
   position: RunPositionSchema,
@@ -271,7 +271,7 @@ export function acceptsFollowUp(run: ReadRunView): boolean {
 export type RequestAnswerability = 'answerable' | 'resume';
 export function requestAnswerability(
   run: ReadRunView,
-  payload: PermissionPayload,
+  payload: RequestPayload,
 ): RequestAnswerability {
   if (run.approval === 'own' || !blocksCaller(payload)) return 'answerable';
   return 'resume';
@@ -282,7 +282,7 @@ export function requestAnswerability(
 const PendingRequestSchema = Schema.Struct({
   runId: RunIdSchema,
   requestId: Schema.String,
-  payload: PermissionPayloadSchema,
+  payload: RequestPayloadSchema,
 });
 
 /** A run's queued follow-ups as a composer lists them (`displayText`, else

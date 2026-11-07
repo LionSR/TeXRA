@@ -104,7 +104,7 @@ export {
   ToolsRefused,
 } from './effect/errors.js';
 export type { LaunchError } from './effect/errors.js';
-export { AgentNotFound } from '@agent/index/agentCatalog';
+export { LaunchRefused } from '@common/errors/agentErrors';
 export {
   DatabaseOpenFailed,
   DatabaseReadFailed,
@@ -116,14 +116,10 @@ export type { SessionOpenError } from '@shared/session/database';
 export {
   Cancelled,
   Conflict,
-  HostRequestFailure,
-  Internal,
-  isRequestRefusal,
   RunActive,
   Rejected,
   Unavailable,
   type RequestError,
-  type RequestRefusal,
 } from '@shared/session/runtimeRequest';
 export {
   isOutcomeOf,

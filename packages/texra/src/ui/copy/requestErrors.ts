@@ -2,10 +2,10 @@
  * How a failed runtime request reads in every renderer: the progress view,
  * the desktop and the terminal print this one sentence for each error kind.
  */
-import type { RequestError } from '@texra-ai/harness/schemas';
+import type { BridgeError } from '@texra/shared/session/bridgeErrors';
 
 /** A failed request in words. */
-export function requestErrorText(error: RequestError): string {
+export function requestErrorText(error: BridgeError): string {
   switch (error._tag) {
     case 'Cancelled':
       return 'The request was cancelled.';

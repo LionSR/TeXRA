@@ -106,7 +106,6 @@ export {
   presenterOn,
   type HostInteractions,
   type Notices,
-  launchNoticeOf,
   presentRunFailure,
 } from '@agent/runtime/HostInteractions';
 // One program per pending request a host follows, while the view lists it.

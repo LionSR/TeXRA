@@ -42,12 +42,7 @@ import type { HostSkillOptions } from '@skills/skillSources';
 import type { Plugin } from '@tools/plugins';
 import type { Effect, Stream, Scope, SubscriptionRef } from 'effect';
 
-import type {
-  LaunchError,
-  ResumeRefused,
-  RunFailure,
-  ToolsRefused,
-} from './errors.js';
+import type { LaunchError, ResumeRefused, RunFailure } from './errors.js';
 import type { HeldRun, RunDeletion, RunRecords } from './sessionReads.js';
 
 /** What an embedder composes the process from: its platform, its plugins
@@ -206,9 +201,9 @@ export interface Session {
    * Start a run. Succeeds once the run exists: it is in the view and its
    * events are flowing. A caller that does not get a {@link Run} back has
    * none running, even if interrupted halfway. A failure before then is
-   * returned to you and shown to no host: a launch refused for an unknown
-   * model, or for a `config` naming an unknown agent, carries the notice a
-   * host shows for it (`launchNoticeOf` in `./host`).
+   * returned to you and shown to no host: an input the launch will not run
+   * is a `LaunchRefused`, which for an unknown agent or model carries
+   * the notice a host shows for it.
    */
   readonly start: (
     input: StartInput,
@@ -225,7 +220,7 @@ export interface Session {
   readonly resume: (
     runId: RunId,
     input?: ResumeInput,
-  ) => Effect.Effect<Run, ResumeRefused | ToolsRefused | RunFailure>;
+  ) => Effect.Effect<Run, ResumeRefused | LaunchError | RunFailure>;
   /** Everything else you ask of the session, as one typed request
    *  (`RuntimeRequest` in `./schemas`: send a follow-up, answer an
    *  approval, stop, fork or delete a run, switch its model, and so on).

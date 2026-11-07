@@ -40,11 +40,9 @@ export const launchSetupAssistant = Effect.fn('launchSetupAssistant')(
     // path is deliberately not gated: an explicit user action wins.
     const outcome = yield* launchSetup({ session: runSession, roots, start });
     if (outcome === 'already-running') {
-      yield* Effect.forkDetach(
-        showLoggedInfoMessage(
-          CHANNEL,
-          'The setup assistant is already running. Follow it in the TeXRA panel.',
-        ),
+      yield* showLoggedInfoMessage(
+        CHANNEL,
+        'The setup assistant is already running. Follow it in the TeXRA panel.',
       );
       yield* showTasks.pipe(
         Effect.ignore({ log: 'Warn', message: 'Revealing the task list' }),

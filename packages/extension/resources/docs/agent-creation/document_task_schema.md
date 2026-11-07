@@ -11,6 +11,10 @@ before the final output.
 
 The persona reads the documents only through the revision prompt: `prefix`,
 then each earlier request with its reply, then this revision's request.
+TeXRA ends every request with the reply format it parses: a
+`<documents>` container with one `<document name="...">` per file the
+revision writes (the declared `task.outputs`, or else the input files), in
+order. A request says what to do, never the format.
 
 ## YAML structure
 
@@ -31,9 +35,9 @@ task:
     <instruction>{{ INSTRUCTION }}</instruction>
   requests: # one revision per entry, in order
     - |
-      [Revision 1: plan in <scratchpad>, then emit output as <documents><document name="output.tex">...</document></documents>]
+      [Revision 1: plan in <scratchpad>, then output the revised documents]
     - |
-      [Revision 2: reflect in <scratchpad>, then emit the refined <documents><document name="output.tex">...</document></documents>]
+      [Revision 2: reflect in <scratchpad>, then output the refined documents]
 ```
 
 The file is flat: `name`, `description`, `temperature` and
@@ -55,8 +59,9 @@ there is no reader for the old nested `settings:` / `prompts:` format.
 
 ## Template variables (Nunjucks)
 
-`task.prefix` and each `task.requests` entry receive the variables below.
-The persona `prompt` does not: it is the system prompt of every revision's
+`task.prefix` and each `task.requests` entry receive the run's template
+variables; the ones a task usually needs are below. The persona `prompt`
+does not: it is the system prompt of every revision's
 call, rendered without the task's files.
 
 - `{{ INPUT_FILE }}` — path of the main input file
@@ -65,8 +70,7 @@ call, rendered without the task's files.
 - `{{ ALL_CONTEXTS }}` — XML list of context files (.bib/.bbl, reference papers, .sty/.cls)
 - `{{ LIST_OF_ALL_CONTEXTS }}` — comma-separated list of context file paths
 - `{{ INSTRUCTION }}` — the user's free-text instruction for this run
-- `{{ INPUT_FILES }}` — ordered list of input filenames. Editing agents should
-  output one document for each input, preserving the same names and order. Use
+- `{{ INPUT_FILES }}` — ordered list of input filenames. Use
   `{{ INPUT_FILES | default([], true) | join(", ") }}` for a human-readable list
   (guards against null/absent `INPUT_FILES` so the prompt renders safely).
 - `{{ OUTPUT_FILES }}` — ordered list of declared generated filenames. This is
@@ -92,17 +96,10 @@ variable for any other provider, and an invented one renders as false.
 
 ## Multiple-output agents
 
-All document tasks use the `<documents><document name="...">...</document></documents>` container regardless of whether they produce one file or many; no separate `_multiple` variant is needed. Editing agents iterate over `INPUT_FILES`, while generative agents with fixed output names declare `task.outputs` (exposed as `OUTPUT_FILES`):
-
-```
-<documents>
-{% for output in INPUT_FILES %}
-<document name="{{ output }}">
-% content for {{ output }}
-</document>
-{% endfor %}
-</documents>
-```
+A task that edits its inputs writes one document per input file; a task
+that generates new files declares their names in `task.outputs` (exposed as
+`OUTPUT_FILES`). Either way the reply format TeXRA appends lists the names,
+so no task writes its own `<documents>` skeleton.
 
 ## Example: a `polish` agent
 
@@ -134,17 +131,7 @@ task:
 
   requests:
     - |
-      Brainstorm in <scratchpad>, then output the revised LaTeX inside
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">...</document>
-      {% endfor %}
-      </documents>.
+      Brainstorm in <scratchpad>, then output the revised LaTeX.
     - |
-      Reflect in <scratchpad>, then emit the improved
-      <documents>
-      {% for output in INPUT_FILES %}
-      <document name="{{ output }}">...</document>
-      {% endfor %}
-      </documents>.
+      Reflect in <scratchpad>, then output the improved LaTeX.
 ```

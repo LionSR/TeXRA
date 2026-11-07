@@ -22,12 +22,12 @@ import { findCommand } from '@texra/utils/system/binaryResolver';
 import {
   installAdvice,
   LATEX_TOOL_ENTRIES,
-  normalizePlatform,
   SYSTEM_PACKAGE_MANAGERS,
   type LatexToolName,
   type SystemPackageManager,
 } from '@texra/shared/constants/latexToolchain';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { osPlatformOf } from '@texra/shared/osPlatform';
 
 /**
  * A tool a call needs is not installed: its name and this platform's install
@@ -147,7 +147,7 @@ export const runTool = Effect.fn('toolChecks.runTool')(function* (
       guide: installAdvice(
         LATEX_TOOL_ENTRIES[tool].label ?? tool,
         [tool],
-        normalizePlatform(process.platform),
+        osPlatformOf(process.platform),
       ).guide,
     });
   }

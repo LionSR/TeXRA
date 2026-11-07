@@ -1,12 +1,4 @@
-import {
-  Context,
-  Deferred,
-  Effect,
-  Layer,
-  PubSub,
-  type Scope,
-  Stream,
-} from 'effect';
+import { Context, Effect, Layer, PubSub, type Scope, Stream } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (subscriptions,
@@ -39,7 +31,8 @@ import {
  *   So a signal published in the same synchronous turn that subscribed
  *   reaches nobody — the ordinary `PubSub` rule that a subscription only
  *   receives what is published after it exists, and the reason the suites
- *   here yield once before they publish.
+ *   here yield once before they publish. A caller that must be subscribed
+ *   before it continues calls `subscribe` in its own scope instead.
  *
  * Every signal below records which hosts consume it and — where a host does
  * not — why not. A signal with no such note is the ambiguous middle this file
@@ -218,68 +211,61 @@ export const emitAppSignal = <K extends AppSignal>(
 ): Effect.Effect<void, never, AppSignals> =>
   AppSignals.useSync((signals) => signals.emit(signal, payload));
 
-/** The payloads of `signal` among every signal a subscription reads. */
-const payloadsOf =
-  <K extends AppSignal>(signal: K) =>
-  <R>(
-    events: Stream.Stream<AppSignalEvent, never, R>,
-  ): Stream.Stream<AppSignalPayloads[K], never, R> =>
-    events.pipe(
-      Stream.filter((event) => event.signal === signal),
-      // A generic key cannot carry the key-payload pairing through the hub's
-      // type.
-      // cast: the key matched, so the payload is the one this key declares.
-      Stream.map((event) => event.payload as AppSignalPayloads[K]),
-    );
+/**
+ * Subscribe to `signal` now, in the caller's scope, and stream its payloads
+ * from then on. The subscription is live when this returns, where a stream
+ * run on a forked fiber subscribes only once that fiber starts: for a caller
+ * that must not miss a signal published after it reads the state the signal
+ * announces.
+ */
+export function subscribeAppSignal<K extends AppSignal>(
+  signal: K,
+): Effect.Effect<
+  Stream.Stream<AppSignalPayloads[K]>,
+  never,
+  AppSignals | Scope.Scope
+> {
+  return Effect.map(
+    AppSignals.use((signals) => signals.subscribe),
+    (subscription) =>
+      Stream.fromSubscription(subscription).pipe(
+        Stream.filter((event) => event.signal === signal),
+        // A generic key cannot carry the key-payload pairing through the
+        // hub's type.
+        // cast: the key matched, so the payload is the one this key declares.
+        Stream.map((event) => event.payload as AppSignalPayloads[K]),
+      ),
+  );
+}
 
 /**
  * `signal`'s payloads, as a stream for a host to run where it holds the
  * lifetime: each run subscribes when it starts and unsubscribes when it
  * ends, so it reads what is published after it starts. A caller that must
  * know the subscription is live before it reads the state the signal
- * announces uses {@link onAppSignal} and its `subscribed`.
+ * announces subscribes in its own scope first (`AppSignals`' `subscribe`).
  */
 export function appSignalStream<K extends AppSignal>(
   signal: K,
 ): Stream.Stream<AppSignalPayloads[K], never, AppSignals> {
-  return Stream.unwrap(
-    Effect.map(
-      AppSignals.use((signals) => signals.subscribe),
-      Stream.fromSubscription,
-    ),
-  ).pipe(payloadsOf(signal));
+  return Stream.unwrap(subscribeAppSignal(signal));
 }
 
 /**
  * Deliver `signal` to `listener` until the caller interrupts. The program a
  * host's run edge forks: its scope holds the subscription, so interrupting
  * the fiber unsubscribes, and the `warn` on a failing listener is this
- * module's, not the host's. `subscribed` completes once the subscription is
- * live, for a caller that must not miss a signal published after it reads
- * the state the signal announces.
+ * module's, not the host's.
  */
 export function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
-  subscribed?: Deferred.Deferred<void>,
 ): Effect.Effect<void, never, AppSignals> {
-  return Effect.scoped(
-    Effect.gen(function* () {
-      const subscription = yield* (yield* AppSignals).subscribe;
-      if (subscribed) yield* Deferred.succeed(subscribed, undefined);
-      yield* Stream.fromSubscription(subscription).pipe(
-        payloadsOf(signal),
-        Stream.runForEach((payload) =>
-          Effect.sync(() => listener(payload)).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(
-                `An "${signal}" app-signal subscriber failed`,
-                cause,
-              ),
-            ),
-          ),
-        ),
-      );
-    }),
+  return Stream.runForEach(appSignalStream(signal), (payload) =>
+    Effect.sync(() => listener(payload)).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(`An "${signal}" app-signal subscriber failed`, cause),
+      ),
+    ),
   );
 }

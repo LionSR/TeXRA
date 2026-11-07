@@ -18,7 +18,7 @@ import { html as staticHtml, literal } from 'lit/static-html.js';
 // Local imports - shared schemas
 import {
   requestAnswerability,
-  type PermissionPayload,
+  type RequestPayload,
 } from '@texra-ai/harness/schemas';
 import { INQUIRY_REQUEST } from '@texra/shared/plugins/externalInquiry';
 import type { HostSnapshot } from '@texra/shared/session/hostSnapshot';
@@ -40,10 +40,7 @@ import './UserQuestionPanel';
 type CardTag = ReturnType<typeof literal>;
 
 /** The card element for each of the harness's request kinds. */
-const CARD_TAG: Record<
-  Exclude<PermissionPayload['kind'], 'plugin'>,
-  CardTag
-> = {
+const CARD_TAG: Record<Exclude<RequestPayload['kind'], 'plugin'>, CardTag> = {
   toolEdit: literal`tool-edit-request-panel`,
   bash: literal`bash-request-panel`,
   retry: literal`retry-request-panel`,
@@ -58,7 +55,7 @@ const PLUGIN_CARD_TAG: Readonly<Record<string, CardTag>> = {
   [INQUIRY_REQUEST.plugin]: literal`external-inquiry-panel`,
 };
 
-const cardTag = (permission: PermissionPayload): CardTag | undefined =>
+const cardTag = (permission: RequestPayload): CardTag | undefined =>
   permission.kind === 'plugin'
     ? PLUGIN_CARD_TAG[permission.plugin]
     : CARD_TAG[permission.kind];
@@ -70,7 +67,7 @@ const CARD_MARKER = 'data-request-panel';
  * Stable identity key for a pending request. Retry is keyed by `runId`
  * instead of `requestId`: one pending retry per run, a new one replaces it.
  */
-function requestKey(permission: PermissionPayload): string {
+function requestKey(permission: RequestPayload): string {
   const id =
     permission.kind === 'retry'
       ? permission.data.runId
@@ -105,7 +102,7 @@ export class RequestPanels extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) permissions: PermissionPayload[] = [];
+  @property({ attribute: false }) permissions: RequestPayload[] = [];
 
   /** The run asking: each card reads whether this window can answer it. */
   @property({ attribute: false }) run: RunView | null = null;

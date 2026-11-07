@@ -10,7 +10,7 @@ import {
   RunIdSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
-import { type CliContext } from '@cli/runtime/cliContext';
+import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
 import { SessionLog, RunHistory } from '@shared/session/runHistory';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
@@ -105,7 +105,8 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
 const run = (context: CliContext, id: RunId = RUN_ID) =>
   Effect.flatMap(
     Effect.promise(() => import('@cli/commands/resumeRun')),
-    ({ runResumeCommand }) => runResumeCommand(context, id),
+    ({ runResumeCommand }) =>
+      runResumeCommand(context, id).pipe(provideCliInvocation(context)),
   );
 
 // Live clock: the command runs as its entry runs it.

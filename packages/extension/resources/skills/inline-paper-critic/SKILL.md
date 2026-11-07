@@ -19,8 +19,11 @@ Use this skill for inline technical review of mathematical or derivation-heavy p
 6. If the macro is missing, provide a minimal command definition before inserting annotations:
 
    ```latex
-   \newcommand{\criticize}[3]{\textcolor{red}{\textbf{[#2|#3]} #1}}
+   \usepackage{xcolor}
+   \newcommand{\criticize}[3]{\ifmmode\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{\text{[#1 (S#2/C#3)]}}\else\textcolor{\ifnum#2=5 red\else\ifnum#2=4 orange\else\ifnum#2=3 yellow!80!red\else\ifnum#2=2 yellow!60!black\else\ifnum#2=0 green!60!black\else gray\fi\fi\fi\fi\fi!\ifnum#3<3 30\else\ifnum#3<5 70\else 100\fi\fi!black}{[#1 (S#2/C#3)]}\fi}
    ```
+
+   Severity runs from 5 (fatal: invalidates a main claim) through 4 critical, 3 major, 2 minor and 1 cosmetic to 0 (verified correct); confidence from 1 (a guess) to 5 (certain).
 
    Keep the document's existing color/theme conventions when present.
 

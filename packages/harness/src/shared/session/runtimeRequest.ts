@@ -18,8 +18,8 @@ import { Schema, Struct } from 'effect';
 import {
   APPROVAL_BYPASS_KINDS,
   APPROVAL_POLICY_LIMITS,
+  LaunchApprovalSchema,
 } from '@shared/approvalBypassKind';
-import { ApprovalPolicySchema } from '@shared/approvalPolicy';
 import {
   AgentConfigSchema,
   FollowUpReceiptSchema,
@@ -241,12 +241,11 @@ export const isOutcomeOf = <K extends RuntimeRequest['kind']>(
 };
 
 // How a runtime request fails. Yieldable `Schema.TaggedError`s in the
-// runtime, carried over the RPC edge as themselves (`RequestErrorSchema`);
-// `Invalid` is the arm a bridge that parses requests answers with. A request
-// naming a stream the runtime no longer has is `Unavailable`, never a
-// defect: with two surfaces on one session, one can act from a view that has
-// not yet folded the other's `run.removed`, and a defect would bypass the
-// response path and leave the sender's latch pending forever.
+// runtime, carried over the RPC edge as themselves (`RequestErrorSchema`).
+// A request naming a stream the runtime no longer has is `Unavailable`,
+// never a defect: with two surfaces on one session, one can act from a view
+// that has not yet applied the other's `run.removed`, and a defect would
+// bypass the response path and leave the sender's latch pending forever.
 
 /** A launch here holds the run this request would act on. */
 export class RunActive extends Schema.TaggedError<RunActive>()('RunActive', {
@@ -289,59 +288,18 @@ export class Rejected extends Schema.TaggedError<Rejected>()('Rejected', {
   }
 }
 
-/** A handler died. The cause is in the host log under `ref` (the request
- *  id); the surface hears that the request failed, never the text. */
-export class Internal extends Schema.TaggedError<Internal>()('Internal', {
-  ref: Schema.String,
-}) {}
-
-/** The request could not be parsed: a bridge's answer, never the runtime's. */
-export class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
-  reason: Schema.String,
-}) {}
-
-/** The wire form of a request's failure: the classes themselves. */
+/** How a runtime request fails: the classes themselves, which a wire
+ *  carries as they are. A bridge adds its own (a request it could not parse,
+ *  a handler that died) on its side. */
 export const RequestErrorSchema = Schema.Union([
   RunActive,
   Unavailable,
   Cancelled,
   Rejected,
   Conflict,
-  Invalid,
-  Internal,
 ]);
 /** How a runtime request fails: one of the tagged errors above. */
 export type RequestError = typeof RequestErrorSchema.Type;
-
-/**
- * How a host's request handler fails: with a tagged error, always. Four tags are the refusals the bridge folds
- * onto the wire ({@link RequestRefusal}); every other tag is a defect it
- * logs and answers `Internal` — but it is a *named* defect, so the log says
- * which capability produced it. The bound is structural because the tags a
- * host raises are its own (its lifted capabilities, its preview host, its
- * housekeeping); what every host owes this channel is that each of them is
- * a tag, so a bare `new Error(...)` can no longer reach the fold.
- */
-export interface HostRequestFailure extends Error {
-  readonly _tag: string;
-}
-
-/**
- * A request's refusal, as opposed to its defect: the four a handler may
- * answer the surface with. The bridge folds these onto the wire; every other
- * tag is `Internal`.
- */
-export type RequestRefusal = Cancelled | Unavailable | Rejected | Conflict;
-
-/** Whether a failure is one of the four the bridge answers on the wire. */
-export function isRequestRefusal(error: unknown): error is RequestRefusal {
-  return (
-    error instanceof Cancelled ||
-    error instanceof Unavailable ||
-    error instanceof Rejected ||
-    error instanceof Conflict
-  );
-}
 
 /** What a start takes besides its agent, whichever way the agent is given.
  *  Each is read once, as the run opens: its effect lands in the opening's
@@ -355,14 +313,9 @@ export const StartOptionsSchema = Schema.Struct({
   continues: Schema.optional(RunIdSchema),
   /** Run on the configured helper model instead of the selected one. */
   helperModel: Schema.optional(Schema.Boolean),
-  /** A stricter approval policy for this run (it only narrows the
-   *  project's), and whether the work it delegates starts approved. */
-  approval: Schema.optional(
-    Schema.Struct({
-      policy: Schema.optional(ApprovalPolicySchema),
-      delegated: Schema.optional(Schema.Boolean),
-    }),
-  ),
+  /** Auto-approve this run's work, or narrow its policy (`launchPolicy`).
+   *  Absent, it follows the project's. */
+  approval: Schema.optional(LaunchApprovalSchema),
   /** Keep the run open for follow-up messages after each answer, as a chat
    *  window does. Absent, the run ends after its first answer. */
   interactive: Schema.optional(Schema.Boolean),

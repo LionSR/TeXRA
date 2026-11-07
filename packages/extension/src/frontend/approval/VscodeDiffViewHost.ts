@@ -1,7 +1,11 @@
 import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
-import { type DiffSource, type DiffViewHost } from '@texra/hosts/uiHosts';
+import {
+  type DiffLabel,
+  type DiffSource,
+  type DiffViewHost,
+} from '@texra/hosts/uiHosts';
 import {
   fromHost,
   hostFailure,
@@ -9,7 +13,7 @@ import {
 import type { HostFailed } from '@texra/hosts/uiHosts';
 
 import { firstEventOrTimeout } from '../vscode/vscodeEventWait';
-import type { RequestRefusal } from '@texra-ai/harness';
+import { type RequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 /** How long a reveal waits for the diff's proposed side to become visible. */
 const REVEAL_TIMEOUT_MS = 1500;
@@ -39,14 +43,14 @@ function tabInputFileUri(tab: vscode.Tab): vscode.Uri | null {
 export interface DiffSession {
   original: DiffSource;
   proposed: DiffSource;
-  title: string;
+  label: DiffLabel;
 }
 
 export class VscodeDiffViewHost implements DiffViewHost {
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    { title }: DiffLabel,
   ): Effect.Effect<void, EditorCallFailed> {
     return fromHost('vscode.diff', () =>
       vscode.commands.executeCommand(

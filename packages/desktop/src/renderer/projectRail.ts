@@ -4,6 +4,7 @@
 
 import { attentionOf } from '@texra-ai/harness/schemas';
 import { postMessage } from '@texra/shared/hostBridge';
+import { shownRun } from '@texra/shared/session/surface';
 import type { createSessionSurfaces } from '@ui/progress/sessionSurfaces';
 
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
@@ -75,7 +76,7 @@ export function createProjectRail(deps: {
           .requests.filter(
             (request) =>
               project.display.key !== active ||
-              request.runId !== project.surface.selected,
+              request.runId !== shownRun(project.surface),
           )
           .map((request) => request.requestId),
       );

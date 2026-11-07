@@ -10,12 +10,12 @@ import { endRunRows } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors/agentErrorClassification';
 import { AgentError } from '@common/errors/agentErrors';
 import { withLogChannel } from '@logger/effectLog';
-import { outcomeFromCause } from '@shared/runs/runStatus';
 import type { ResultEvent } from '@shared/session/agentEvent';
 import { SessionLog } from '@shared/session/runHistory';
 import {
   type RunOutcome,
   emptyRunEndOutput,
+  outcomeFromCause,
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';

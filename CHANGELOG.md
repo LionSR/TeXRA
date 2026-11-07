@@ -16,6 +16,12 @@ All notable changes to this project will be documented in this file.
   and `needsUser`), in place of `status`, `substate`, `group`, `statusKey`,
   `tone`, `live`, `working`, `turnOver`, `runsHere`, `durableOutcome` and
   `forceExpanded`; `RUN_PHASE` and the phase predicates are gone.
+- **SDK: a pending request's types are named for requests.**
+  `PermissionPayload` is `RequestPayload`, each `*Permission` case is a
+  `*Request` (`BashRequest`, `ToolEditRequest`, `RetryRequest`,
+  `AgentProposalRequest`, `PlanApprovalRequest`, `UserQuestionRequest`),
+  their schemas follow, and `ProgressPermissionKind` is `RequestKind`. The
+  stored `request.*` rows and their `kind` values are unchanged.
 - **The CLI and the SDK packages need Node.js 22.22.2 or 24.15.** The
   terminal client, `@texra-ai/harness` and `@texra-ai/llm` support Node.js
   22.22.2 or later in 22.x, or 24.15 or later; `texra doctor` reports an

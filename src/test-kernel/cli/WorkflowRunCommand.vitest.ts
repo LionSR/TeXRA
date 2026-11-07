@@ -13,7 +13,7 @@ import { Effect, Context, Schema } from 'effect';
 import type { DocumentsResult } from '@texra/shared/plugins/documentOutputs';
 import { DocumentTaskOptionsSchema } from '@texra/shared/plugins/documents';
 import type { runHeadlessAgent } from '@cli/commands/workflow';
-import type { CliContext } from '@cli/runtime/cliContext';
+import { provideCliInvocation, type CliContext } from '@cli/runtime/cliContext';
 import type {
   CliExecuteOptions,
   CliConfigExecuteResult,
@@ -62,10 +62,14 @@ vi.mock('@cli/runtime/runModel', () => ({
   selectCliRunModel: mocks.selectCliRunModel,
 }));
 
-vi.mock('@cli/commands/_helpers/output', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/commands/_helpers/output')>()),
-  emitCliResult: mocks.emitCliResult,
-}));
+vi.mock('@cli/commands/_helpers/output', async (importOriginal) => {
+  const { Effect } = await import('effect');
+  return {
+    ...(await importOriginal<typeof import('@cli/commands/_helpers/output')>()),
+    emitCliResult: (result: unknown) =>
+      Effect.sync(() => mocks.emitCliResult(result)),
+  };
+});
 
 vi.mock('@cli/runtime/agents', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/agents')>()),
@@ -145,7 +149,7 @@ function workflowProgram(
       instruction: '',
       options: Schema.decodeUnknownSync(DocumentTaskOptionsSchema)({}),
       ...init,
-    });
+    }).pipe(provideCliInvocation(context));
   });
 }
 
@@ -303,7 +307,7 @@ layer(SessionGraph.hosted)('CLI run command, workflow agents', (it) => {
             expect(
               yield* Effect.promise(() => fs.readFile(target, 'utf8')),
             ).toBe('keep-me');
-            const emission = mocks.emitCliResult.mock.calls[0]?.[1];
+            const emission = mocks.emitCliResult.mock.calls[0]?.[0];
             expect(emission?.json).toMatchObject({
               outcome: RUN_OUTCOME.FAILED,
               output: { documents: { outputs: [outputSummary] } },

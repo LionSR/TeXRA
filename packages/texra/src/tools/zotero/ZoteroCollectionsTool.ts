@@ -20,7 +20,6 @@ import { executed } from '@texra-ai/harness/plugins';
 // Local imports - zotero
 import {
   callBetterBibTeX,
-  withZoteroPort,
   BbtLibrarySchema,
   type BbtCollection,
 } from './bbtClient';
@@ -144,14 +143,13 @@ function filterTree(nodes: CollectionNode[], query: string): FilterResult {
   return { tree, matchCount };
 }
 
-const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* (
-  { query, library }: ZoteroCollectionsInput,
-  port: number,
-) {
+const listCollections = Effect.fn('ZoteroCollectionsTool.execute')(function* ({
+  query,
+  library,
+}: ZoteroCollectionsInput) {
   const libraries = yield* callBetterBibTeX(
     'user.groups',
     [true],
-    port,
     Schema.Array(BbtLibrarySchema),
   );
 
@@ -219,5 +217,5 @@ export const ZoteroCollectionsTool = defineTool({
     'To see which collections a paper belongs to, use zotero_search with include_collections instead. ' +
     'Requires Better BibTeX plugin to be installed in Zotero.',
   schema: ZoteroCollectionsInputSchema,
-  execute: withZoteroPort(listCollections),
+  execute: listCollections,
 });

@@ -134,7 +134,7 @@ interface AgentCatalogShape {
   /**
    * The agent a launch runs, over a settled catalog: the entry an explicit
    * `source` pins, else a visible one, else any. A miss reloads once, then
-   * fails with what the load said.
+   * refuses the launch with what the load said.
    */
   readonly forLaunch: (
     stores: WorkspaceAgentsStores,
@@ -142,7 +142,7 @@ interface AgentCatalogShape {
     source?: AgentSource | null,
   ) => Effect.Effect<
     AgentEntry,
-    AgentNotFound | AgentCatalogLoadError | StateReadFailed
+    LaunchRefused | AgentCatalogLoadError | StateReadFailed
   >;
   /** The workspace's agent selection, over this catalog. */
   readonly workspaceAgents: (
@@ -166,7 +166,7 @@ interface AgentCatalogShape {
 ## AgentCustomization
 
 A change to a custom copy of a bundled agent: `copy` writes a new one
-into the custom directory, stamped with the bundled file's digest
+into the custom directory, with the files its blocks bind beside it, stamped with the bundled file's digest
 (`basedOn`), and is refused when one is there; `overwrite` replaces it;
 `keep` re-stamps the user's copy with the changed bundled version, which
 dismisses its newer-version notice and touches nothing else.
@@ -178,8 +178,8 @@ type AgentCustomization = 'copy' | 'overwrite' | 'keep';
 ## AgentCustomizeRefused
 
 `customize` refused the change: the entry has no file of its own to copy
-(`noFile`), its copy would land outside the custom directory (`escapes`),
-a copy is already there (`exists`, at `path`), or a copy has no newer
+(`noFile`), its copy would land outside the custom directory or a file it
+binds lies outside its own directory (`escapes`), a copy is already there (`exists`, at `path`), or a copy has no newer
 bundled version to keep (`current`).
 
 ```ts
@@ -331,7 +331,8 @@ interface AgentEntry {
   path: string; // absolute path to the definition file
   description?: string;
   tools?: string[]; // tool names, for display
-  /** Digest of the definition file; absent on a plugin agent. */
+  /** Digest of the definition file and the files its blocks bind; absent
+   *  on a plugin agent. */
   digest?: string;
   /** A customized copy's `basedOn`: the bundled file's digest it began from. */
   basedOn?: string;
@@ -345,8 +346,8 @@ interface AgentEntry {
 
 ## AgentError
 
-A runtime failure of the agent layer: a launch it refuses, a run that
-ended failed, or a model call that failed as its rows record it.
+A runtime failure of the agent layer: a run that ended failed, a launch
+that could not be built, or a model call that failed as its rows record it.
 
 Host-neutral, so any host can reference it.
 A more specific error should be added only when a concrete thrower and
@@ -357,9 +358,6 @@ catcher exist for it — anything else duplicates the existing
 class AgentError extends Schema.TaggedError<AgentError>()('AgentError', {
   message: Schema.String,
   cause: Schema.optional(Schema.Defect()),
-  /** A refused launch's notice (an unknown model, an unknown agent), which
-   *  the launch's caller shows in place of the generic error. */
-  notice: Schema.optional(LaunchNoticeSchema),
   /** A model failure as the run's rows record it (the run ended on it, or a
    *  helper call raised it), which a host reads in place of this message's
    *  words. */
@@ -442,7 +440,8 @@ Delivery and error order, which this module owns and no caller may vary:
   So a signal published in the same synchronous turn that subscribed
   reaches nobody — the ordinary `PubSub` rule that a subscription only
   receives what is published after it exists, and the reason the suites
-  here yield once before they publish.
+  here yield once before they publish. A caller that must be subscribed
+  before it continues calls `subscribe` in its own scope instead.
 
 Every signal below records which hosts consume it and — where a host does
 not — why not. A signal with no such note is the ambiguous middle this file
@@ -601,7 +600,7 @@ class AppSignals extends Context.Service<
 lifetime: each run subscribes when it starts and unsubscribes when it
 ends, so it reads what is published after it starts. A caller that must
 know the subscription is live before it reads the state the signal
-announces uses {@link onAppSignal} and its `subscribed`.
+announces subscribes in its own scope first (`AppSignals`' `subscribe`).
 
 ```ts
 function appSignalStream<K extends AppSignal>(
@@ -1012,7 +1011,7 @@ Result of running a single external tool check.
 interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly string[];
-  readonly status: 'available' | 'not-found' | 'unknown';
+  readonly status: ToolDependencyStatus;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable explanation from the plugin's check, if any. */
@@ -1304,16 +1303,6 @@ True if `target` is a strict descendant of `base` (excludes `target === base`).
 function isStrictlyWithin(base: string, target: string): boolean
 ```
 
-## launchNoticeOf
-
-The notice a refused launch carries for its caller to show
-(`AgentError.notice`), read through a `Session` start's `RunFailure`;
-undefined for any other failure, which its caller words itself.
-
-```ts
-function launchNoticeOf(error: unknown): LaunchNotice | undefined
-```
-
 ## listRunGeneratedFiles
 
 List the generated (non-KV) files under a run's storage directory, sorted by
@@ -1437,15 +1426,12 @@ const OFFICE_EXTENSIONS: readonly string[]
 Deliver `signal` to `listener` until the caller interrupts. The program a
 host's run edge forks: its scope holds the subscription, so interrupting
 the fiber unsubscribes, and the `warn` on a failing listener is this
-module's, not the host's. `subscribed` completes once the subscription is
-live, for a caller that must not miss a signal published after it reads
-the state the signal announces.
+module's, not the host's.
 
 ```ts
 function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
-  subscribed?: Deferred.Deferred<void>,
 ): Effect.Effect<void, never, AppSignals>
 ```
 
@@ -1731,7 +1717,7 @@ function presentFollowUpResult(
 ## presentRunFailure
 
 Present a failed run from its raw error, replayed to a surface that
-attaches later: a refused launch's notice ({@link launchNoticeOf}), or
+attaches later: a refused launch's notice (`LaunchRefused.notice`), or
 else the primary failure as `prefix` plus its text (a `Rejected`
 request's reason). With no prefix, a model failure is shown as its run
 would record it, its classification beside, which a host may word in its
@@ -2553,21 +2539,22 @@ class ToolAvailability extends Context.Service<
     /** Each workspace root's last results; a dashboard follows its changes. */
     readonly results: SubscriptionRef.SubscriptionRef<AvailabilityResults>;
     /**
-     * Probe every plugin for `inputs`' workspace now and publish the
-     * results, joining the probe in flight for that root. Tools recently
-     * found missing are looked up again, so one installed since shows up.
-     * Each plugin's
-     * probe has its own deadline and reports a failure as `unknown`, so this
-     * never fails.
+     * Probe every plugin for `inputs`' workspace and publish the results:
+     * the round after the one in flight for that root reads `inputs` (or
+     * newer ones another caller asked with), and every caller asking while
+     * it waits shares it. Tools recently found missing are looked up again,
+     * so one installed since shows up. Each plugin's probe has its own
+     * deadline and reports a failure as `unknown`, so this never fails.
      */
     readonly refresh: (
       inputs: ToolProbeInputs,
     ) => Effect.Effect<readonly ExternalToolCheckResult[]>;
     /**
      * Keep `roots`' results for the caller's scope and probe them now,
-     * without waiting: a session holds its roots for its life. Only a held
-     * root's results are kept, and a root's are dropped when its last holder
-     * closes, so the map is bounded by the open sessions.
+     * without waiting: a session holds its roots for its life, and a refresh
+     * holds its root while it waits. Only a held root's results are kept, and
+     * a root's are dropped when its last holder closes, so the map is bounded
+     * by the open sessions and the refreshes in flight.
      */
     readonly hold: (
       roots: ToolProbeInputs,

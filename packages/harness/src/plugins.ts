@@ -185,7 +185,7 @@ export type { ToolPolicy } from '@agent/runtime/run/AgentRun';
 // Renders a prompt template (Nunjucks) with its variables.
 export { renderPrompt } from '@utils/prompt';
 export {
-  buildTemplatePassthrough,
+  TEMPLATE_INPUT_NAMES,
   type TemplateInputs,
   type TemplateOpening,
   type TemplateVars,

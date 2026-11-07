@@ -2,7 +2,7 @@
 import { layer } from '@effect/vitest';
 import { Deferred, Effect, Fiber, Stream, Context } from 'effect';
 import { beforeEach, expect } from 'vitest';
-import { type BashPermission, generateRunId } from '@texra-ai/harness/schemas';
+import { type BashRequest, generateRunId } from '@texra-ai/harness/schemas';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
 
 // Local imports
@@ -21,7 +21,7 @@ import { commandTool } from '@test/agent/progressTestUtils';
 /** Watch bash requests in a scoped fiber, as a real host surface does. */
 function watchBashRequests(session: Context.Context<SessionServices>) {
   return Effect.gen(function* () {
-    const opened: BashPermission[] = [];
+    const opened: BashRequest[] = [];
     const firstOpened = yield* Deferred.make<void>();
     const decisions: Array<() => void> = [];
 

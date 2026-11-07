@@ -1,12 +1,12 @@
 /**
  * What a run's rows say about it, as `runRows.ts` and `runRowReads.ts` fold
- * them: the position the run state copies, the position and pending input
- * the session view keeps, and the records the other readers hold.
+ * them: the row state the run state copies, the row state and pending
+ * input the session view keeps, and the records the other readers hold.
  */
 import type {
   CommitOrdinal,
   FollowUpDisposition,
-  PermissionPayload,
+  RequestPayload,
   PositionAt,
   RequestDecision,
   RunFamily,
@@ -17,7 +17,7 @@ import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
 
 type RequestState = {
-  readonly payload: PermissionPayload;
+  readonly payload: RequestPayload;
   /** The recorded decision: the `request.decided` row's, null while
    *  the request is open. */
   readonly decision: RequestDecision | null;
@@ -27,11 +27,11 @@ type RequestState = {
 };
 
 /**
- * What these rows say about one run's position: everything but its pending
+ * What these rows say about one run's state: everything but its pending
  * input. `RunState` has every field of it, so the run state copies the
  * fields `applyRunRow` returns onto itself.
  */
-export type RunPosition = {
+export type RunRowState = {
   readonly family: RunFamily | null;
   /** Where the loop stands. */
   readonly at: PositionAt | null;
@@ -62,12 +62,12 @@ export type PendingInput = {
 };
 
 /**
- * What the shared rows (`runRows.ts`) say about one run: its position and
+ * What the shared rows (`runRows.ts`) say about one run: its row state and
  * the input it has not taken. The session view keeps one per run and builds
  * its request and follow-up lists from it. The loop reads its pending input
- * from the rows (`Inbox.read`), so `RunState` carries only the position.
+ * from the rows (`Inbox.read`), so `RunState` carries only the row state.
  */
-export type SharedRunRows = RunPosition & PendingInput;
+export type SharedRunRows = RunRowState & PendingInput;
 
 /**
  * What a run's record rows say about it (`runRowsFrom`), each field from the

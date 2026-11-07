@@ -21,9 +21,9 @@ import {
 } from 'effect';
 
 import {
-  Invalid,
   Rejected,
   qualifyAggregateId,
+  type OutcomeSchema,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import type { TranscriptInterest } from '@texra-ai/harness/transcript';
@@ -45,6 +45,7 @@ import {
   WebviewSessions,
 } from '@texra/shared/session/webviewSessionLayer';
 import type { SessionView } from '@texra-ai/harness/schemas';
+import { Invalid, type BridgeError } from '@texra/shared/session/bridgeErrors';
 
 /** One session's graph as `WebviewSessions.open` hands it out. */
 type WebviewGraph = Effect.Success<ReturnType<typeof WebviewSessions.open>>;
@@ -72,22 +73,21 @@ export interface WebviewTransport {
   open(session: string): WebviewSession;
   /** A new generation over the named transcript aggregates. */
   subscribe(session: WebviewSession, aggregates: Subscribe['aggregates']): void;
-  /** Answered on the matching `response` message of its session. Run it
-   *  with {@link run}: closing the session interrupts it, and an answer that
-   *  arrives after is dropped. */
-  request(
-    message: Extract<UpMessage, { requestId: string }>,
-  ): Effect.Effect<Response['result']>;
+  /** Answered by the `runtime.response` of its session under its id. Run
+   *  it with {@link run}: closing the session interrupts it, and an answer
+   *  that arrives after is dropped. */
+  runtimeRequest(
+    message: Extract<UpMessage, { kind: 'runtime.request' }>,
+  ): Effect.Effect<typeof OutcomeSchema.Type, BridgeError>;
+  /** Answered by the `host.response` of its session under its id, as
+   *  {@link runtimeRequest} is; `timeoutMs` passing fails it `Rejected`. */
+  hostRequest(
+    message: Extract<UpMessage, { kind: 'host.request' }>,
+    timeoutMs?: number,
+  ): Effect.Effect<HostOutcome, BridgeError>;
   /** Run `program` as a fiber of the session's scope, so closing the session
    *  interrupts it; a session that is not open runs nothing. */
   run(session: string, program: Effect.Effect<void>): void;
-  /** A `host.request` finished with the host's outcome, or failed with its
-   *  refusal (a session that closes first, or `timeoutMs` passing, is a
-   *  refusal too). */
-  answer(
-    message: Extract<UpMessage, { kind: 'host.request' }>,
-    timeoutMs?: number,
-  ): Promise<HostOutcome>;
   onSurfaceAction(
     listener: (session: string, action: WireSurfaceAction) => void,
   ): void;
@@ -103,13 +103,39 @@ interface OpenSession extends WebviewSession {
   readonly scope: Scope.Closeable;
   /** The shell's transcript set, held for the session's scope. */
   readonly shell: TranscriptInterest;
-  /** This session's requests awaiting their `response`, by request id. Each
+  /** This session's requests awaiting their response, by request id. Each
    *  waits in a fiber of the session's scope and removes its own entry. */
-  readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
+  readonly pending: Map<string, Pending>;
   /** The frames the host sent, in arrival order; one fiber of the session's
    *  scope feeds them to the frames service. */
   readonly inbox: Queue.Queue<EventsFrame | HostFrame>;
 }
+
+/** One request waiting for its response: `answer` takes the response
+ *  that arrived under its id, `fail` a response that could not be read. */
+interface Pending {
+  readonly answer: (response: Response) => void;
+  readonly fail: (error: BridgeError) => void;
+}
+
+/** A response's result as its request's answer. */
+const answerOf = <A>(
+  result:
+    | { readonly ok: true; readonly outcome: A }
+    | {
+        readonly ok: false;
+        readonly error: BridgeError;
+      },
+): Effect.Effect<A, BridgeError> =>
+  result.ok ? Effect.succeed(result.outcome) : Effect.fail(result.error);
+
+/** A response of the other kind: the host's defect, said as `Invalid`. */
+const mismatched = (response: Response) =>
+  Effect.fail(
+    new Invalid({
+      reason: `The host answered with a ${response.kind} for a request of the other kind.`,
+    }),
+  );
 
 /** The routing fields of a down-message that failed its schema: enough to
  *  find the session, generation, or request it was for. */
@@ -156,19 +182,13 @@ export function installWebviewTransport(
     const { kind, session: key, generation, requestId } = envelope.success;
     const session = sessions.get(key);
     if (!session) return;
-    if (kind === 'response' && requestId !== undefined) {
-      const settle = session.pending.get(requestId);
-      if (!settle) return;
-      session.pending.delete(requestId);
-      Deferred.doneUnsafe(
-        settle,
-        Effect.succeed({
-          ok: false,
-          error: new Invalid({
-            reason: 'The host sent a malformed response.',
-          }),
-        }),
-      );
+    if (
+      (kind === 'runtime.response' || kind === 'host.response') &&
+      requestId !== undefined
+    ) {
+      session.pending
+        .get(requestId)
+        ?.fail(new Invalid({ reason: 'The host sent a malformed response.' }));
     } else if (kind === 'events' && generation === session.generation) {
       surfaceListener(key, {
         kind: 'reportError',
@@ -190,17 +210,18 @@ export function installWebviewTransport(
       case 'host':
         deliver(message);
         return;
-      case 'response': {
-        const pending = sessions.get(message.session)?.pending;
-        const settle = pending?.get(message.requestId);
-        if (!pending || !settle) {
+      case 'runtime.response':
+      case 'host.response': {
+        const waiting = sessions
+          .get(message.session)
+          ?.pending.get(message.requestId);
+        if (!waiting) {
           console.warn(
             `[progress] dropped a response to request ${message.requestId} of session ${message.session}: not pending`,
           );
           return;
         }
-        pending.delete(message.requestId);
-        Deferred.doneUnsafe(settle, Effect.succeed(message.result));
+        waiting.answer(message);
         return;
       }
       case 'surface.action':
@@ -218,20 +239,26 @@ export function installWebviewTransport(
     runtime.runFork(Scope.close(session.scope, Exit.void));
   };
 
-  /** One request to the host, waiting for its response; `timeoutMs` turns
-   *  a host that never answers into a `Rejected` (its late answer is then
-   *  dropped). A session closed first interrupts the wait. */
-  const exchange = (
+  /** One request to the host, waiting for its response, which `read`
+   *  turns into the answer; `timeoutMs` turns a host that never answers
+   *  into a `Rejected` (its late answer is then dropped). A session closed
+   *  first interrupts the wait. */
+  const exchange = <A>(
     message: Extract<UpMessage, { requestId: string }>,
+    read: (response: Response) => Effect.Effect<A, BridgeError>,
     timeoutMs?: number,
-  ): Effect.Effect<Response['result']> =>
+  ): Effect.Effect<A, BridgeError> =>
     Effect.suspend(() => {
       const session = sessions.get(message.session);
       if (!session) return Effect.interrupt;
       return Effect.acquireUseRelease(
-        Effect.flatMap(Deferred.make<Response['result']>(), (settled) =>
+        Effect.flatMap(Deferred.make<A, BridgeError>(), (settled) =>
           Effect.sync(() => {
-            session.pending.set(message.requestId, settled);
+            session.pending.set(message.requestId, {
+              answer: (response) =>
+                Deferred.doneUnsafe(settled, read(response)),
+              fail: (error) => Deferred.doneUnsafe(settled, Effect.fail(error)),
+            });
             post(message);
             return settled;
           }),
@@ -243,12 +270,11 @@ export function installWebviewTransport(
                 Effect.timeoutOrElse({
                   duration: timeoutMs,
                   orElse: () =>
-                    Effect.succeed<Response['result']>({
-                      ok: false,
-                      error: new Rejected({
+                    Effect.fail(
+                      new Rejected({
                         reason: 'The host did not answer in time.',
                       }),
-                    }),
+                    ),
                 }),
               ),
         () =>
@@ -258,6 +284,16 @@ export function installWebviewTransport(
       );
     });
 
+  const hostRequest: WebviewTransport['hostRequest'] = (message, timeoutMs) =>
+    exchange(
+      message,
+      (response) =>
+        response.kind === 'host.response'
+          ? answerOf(response.result)
+          : mismatched(response),
+      timeoutMs,
+    );
+
   return {
     receive,
     open(key) {
@@ -265,7 +301,7 @@ export function installWebviewTransport(
       if (held) return held;
       // The graph lives under this scope: closing it releases the LayerMap
       // entry once the last holder leaves.
-      const pending = new Map<string, Deferred.Deferred<Response['result']>>();
+      const pending = new Map<string, Pending>();
       const { scope, graph, shell, inbox } = runtime.runSync(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
@@ -322,37 +358,16 @@ export function installWebviewTransport(
       );
       post(message);
     },
-    request: exchange,
+    runtimeRequest: (message) =>
+      exchange(message, (response) =>
+        response.kind === 'runtime.response'
+          ? answerOf(response.result)
+          : mismatched(response),
+      ),
+    hostRequest,
     run(key, program) {
       const session = sessions.get(key);
       if (session) runtime.runFork(Effect.forkIn(program, session.scope));
-    },
-    // The desktop editor's file I/O awaits its answer as a promise; the
-    // session's close rejects it as interrupted.
-    async answer(message, timeoutMs) {
-      const result = await runtime.runPromise(exchange(message, timeoutMs));
-      if (result.ok) {
-        const { outcome } = result;
-        // The response's outcome is either side's; a host request is
-        // answered with a host outcome, so a runtime one is the host's defect.
-        switch (outcome.kind) {
-          case 'followUp':
-          case 'receipt':
-          case 'forked':
-          case 'preview':
-          case 'runFiles':
-            throw new Error(
-              `The host answered a host request with a runtime outcome (${outcome.kind}).`,
-            );
-          default:
-            return outcome;
-        }
-      }
-      throw new Error(
-        'reason' in result.error
-          ? result.error.reason
-          : `The host could not complete the request (${result.error._tag}).`,
-      );
     },
     onSurfaceAction(listener) {
       surfaceListener = listener;

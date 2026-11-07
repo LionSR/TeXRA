@@ -10,7 +10,7 @@ import { Duration, Effect, type Cause } from 'effect';
 import { Settings } from '@texra-ai/harness/host';
 import { scopedClient } from '@texra-ai/harness/plugins';
 import type { TexraPlugin } from '@texra/tools/registry';
-import { ZOTERO_PORT_KEY } from './bbtClient';
+import { ZOTERO_PORT_KEY, zoteroUrl } from './bbtClient';
 import { ZoteroAddTool } from './ZoteroAddTool';
 import { ZoteroCollectionsTool } from './ZoteroCollectionsTool';
 import { ZoteroExportTool } from './ZoteroExportTool';
@@ -69,7 +69,7 @@ export const zotero: TexraPlugin = {
       // The connector endpoint responds while Zotero runs; the Better
       // BibTeX JSON-RPC endpoint, while that plugin is installed.
       const bbt = yield* probeLocalhost(
-        `http://127.0.0.1:${port}/better-bibtex/json-rpc`,
+        zoteroUrl(port, '/better-bibtex/json-rpc'),
       ).pipe(
         Effect.map(
           (status) => (status >= 200 && status < 300) || status === 405,
@@ -77,7 +77,7 @@ export const zotero: TexraPlugin = {
         Effect.catch(probeUnreachable),
       );
       const connectorUp = yield* probeLocalhost(
-        `http://127.0.0.1:${port}/connector/ping`,
+        zoteroUrl(port, '/connector/ping'),
       ).pipe(Effect.as(true), Effect.catch(probeUnreachable));
       let statusDetail = `Zotero not detected on port ${port}. Make sure Zotero is running.`;
       if (connectorUp)

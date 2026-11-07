@@ -1,7 +1,7 @@
 import {
   countLines,
   truncateSummary,
-  type AgentProposalPermission,
+  type AgentProposalRequest,
 } from '@texra-ai/harness/schemas';
 
 /** How much of the first agent's instruction the request quotes: the full
@@ -10,7 +10,7 @@ const FIRST_AGENT_PREVIEW_CHARS = 80;
 
 /** The script a request for a script's `agent` calls shows: its title, its
  *  source, and the calls it had issued when it asked. */
-type ScriptRequestScript = NonNullable<AgentProposalPermission['script']>;
+type ScriptRequestScript = NonNullable<AgentProposalRequest['script']>;
 
 /**
  * Copy for the request a script's first `agent` call opens, shared by

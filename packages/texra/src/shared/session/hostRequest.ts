@@ -33,6 +33,15 @@ export type GettingStartedAction = typeof GettingStartedActionSchema.Type;
 
 const runScoped = { runId: RunIdSchema };
 
+/** The verbs an output file offers on a workflow run's file list. */
+export const FileActionSchema = Schema.Literals([
+  'compareOriginal',
+  'comparePrevious',
+  'latexdiff',
+  'accept',
+  'merge',
+]);
+
 export const HostRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('openFile'),
@@ -191,13 +200,7 @@ export const HostRequestSchema = Schema.Union([
   Schema.Struct({
     kind: Schema.Literal('fileAction'),
     ...runScoped,
-    action: Schema.Literals([
-      'compareOriginal',
-      'comparePrevious',
-      'latexdiff',
-      'accept',
-      'merge',
-    ]),
+    action: FileActionSchema,
     file: Schema.String.check(Schema.isMinLength(1)),
     base: Schema.optional(Schema.NullOr(Schema.String)),
     prev: Schema.optional(Schema.NullOr(Schema.String)),

@@ -11,7 +11,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 
 // Local imports
 import {
@@ -53,12 +53,13 @@ export const pollIssue = Effect.fn('github.pollIssue')(function* (
   const issuePath = `/repos/${issue.owner}/${issue.repo}/issues/${issue.number}`;
   const [issueRes, commentsRes] = yield* Effect.all(
     [
-      ghGet<unknown>(issuePath, prior?.etags.issue),
-      ghGet<unknown>(
+      ghGet(issuePath, Schema.Unknown, prior?.etags.issue),
+      ghGet(
         withSince(
           `${issuePath}/comments?per_page=100`,
           prior?.comments?.sinceCursor,
         ),
+        Schema.Unknown,
         prior?.etags.comments,
       ),
     ],

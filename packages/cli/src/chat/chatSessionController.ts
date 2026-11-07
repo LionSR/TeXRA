@@ -18,12 +18,11 @@ import {
 } from 'effect';
 
 import {
-  isRequestRefusal,
+  LaunchRefused,
   type RunStopReason,
   type Session,
 } from '@texra-ai/harness';
 import {
-  launchNoticeOf,
   normalizeProviderError,
   presentFollowUpResult,
   type ProcessRuntime,
@@ -98,6 +97,7 @@ import {
 import type { ModelConnection } from './tui/modelConnection';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { SettingsStores } from '@texra-ai/harness/host';
+import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------
 // Controller
@@ -356,7 +356,7 @@ export function createChatSessionController(
   // notices show, any other as the transcript line `text`. The session
   // shows neither: a launch's failure is its caller's to show.
   const showFailure = (error: unknown, text: string): void => {
-    const notice = launchNoticeOf(error);
+    const notice = error instanceof LaunchRefused ? error.notice : undefined;
     if (notice !== undefined)
       presentationHost.emit(notice.event, notice.payload);
     else appendLocalErrorTranscript(text);
@@ -369,7 +369,7 @@ export function createChatSessionController(
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     session.settleExitCode(claim, CliExitCode.AgentError);
-    if (session.exited || session.status() === 'cancelled') return;
+    if (session.exited || session.standing()?.outcome === 'cancelled') return;
     const { classification } = normalizeProviderError(error);
     showFailure(
       error,

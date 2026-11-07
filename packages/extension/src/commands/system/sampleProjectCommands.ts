@@ -48,11 +48,9 @@ export const createSampleProjectWithoutWorkspace: (
 
     const dest = path.join(parentPath, 'texra-sample');
     if (yield* fs.exists(dest)) {
-      yield* Effect.forkDetach(
-        showLoggedInfoMessage(
-          CHANNEL,
-          'A texra-sample folder already exists there — opening it.',
-        ),
+      yield* showLoggedInfoMessage(
+        CHANNEL,
+        'A texra-sample folder already exists there — opening it.',
       );
     } else {
       yield* fs.copy(path.join(extensionPath, 'resources', 'examples'), dest);
@@ -82,22 +80,18 @@ export const createSampleProject: (
     const fs = yield* FileSystem.FileSystem;
     const workspaceFs = yield* WorkspaceFs;
     if (!workspaceFs.root) {
-      yield* Effect.forkDetach(
-        showLoggedMessage(
-          CHANNEL,
-          'Open a workspace to create the sample project.',
-        ),
+      yield* showLoggedMessage(
+        CHANNEL,
+        'Open a workspace to create the sample project.',
       );
       return;
     }
 
     const destFolder = 'texra-sample';
     if (yield* workspaceFs.exists(destFolder)) {
-      yield* Effect.forkDetach(
-        showLoggedInfoMessage(
-          CHANNEL,
-          'Sample project already exists in workspace.',
-        ),
+      yield* showLoggedInfoMessage(
+        CHANNEL,
+        'Sample project already exists in workspace.',
       );
       return;
     }
@@ -108,9 +102,7 @@ export const createSampleProject: (
     yield* workspaceFs.makeDirectory(destFolder, { recursive: true });
     yield* fs.copy(sourcePath, destPath, { overwrite: true });
 
-    yield* Effect.forkDetach(
-      showLoggedInfoMessage(CHANNEL, 'Created TeXRA sample project.'),
-    );
+    yield* showLoggedInfoMessage(CHANNEL, 'Created TeXRA sample project.');
 
     const readmeRelativePath = path.join(destFolder, 'README.md');
     if (yield* workspaceFs.exists(readmeRelativePath)) {

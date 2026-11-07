@@ -36,11 +36,11 @@ import { hash } from 'node:crypto';
 import { Schema, Struct } from 'effect';
 import { Rpc, RpcGroup, RpcSchema } from 'effect/rpc';
 
+import { LaunchRefused } from '@texra-ai/harness';
 import {
   AgentConfigSchema,
   AgentRunListingEntrySchema,
   JsonValueSchema,
-  LaunchNoticeSchema,
   ResumeRefusalSchema,
   RunEndSchema,
   RunIdSchema,
@@ -63,6 +63,7 @@ import {
   EventsFrameSchema,
   SubscribeSchema,
 } from '@texra/shared/session/sessionFrames';
+import { BridgeErrorSchema } from '@texra/shared/session/bridgeErrors';
 import {
   HostAnswerSchema,
   HostCapabilitySchema,
@@ -140,14 +141,15 @@ const TaskAdmitted = Schema.Struct({
   activation: CommitOrdinalSchema,
 });
 
-/** Why `task.start` or `task.resume` did not reach its run. The service
- *  shows it nowhere: the window that asked presents it. */
+/** Why `task.start` or `task.resume` did not reach its run, past a refused
+ *  launch (`LaunchRefused`, carried as itself). The service shows it
+ *  nowhere: the window that asked presents it. */
 export class TaskFailed extends Schema.TaggedError<TaskFailed>()('TaskFailed', {
   message: Schema.String,
-  /** A refused launch's notice (an unknown model, an unknown agent), which
-   *  the window shows in place of the message. */
-  notice: Schema.optional(LaunchNoticeSchema),
 }) {}
+
+/** What `task.start` and `task.resume` fail with. */
+const TaskStartFailed = Schema.Union([TaskFailed, LaunchRefused]);
 
 /** Why a run's records have no answer: the service could not open the
  *  project, or its store refused the read. */
@@ -196,7 +198,7 @@ export const TexraRpcs = RpcGroup.make(
   Rpc.make('task.request', {
     payload: { workspace, request: RuntimeRequestSchema },
     success: OutcomeSchema,
-    error: RequestErrorSchema,
+    error: BridgeErrorSchema,
   }),
   Rpc.make('task.start', {
     /** The start as the window's `session.start` took it, less the window's
@@ -205,7 +207,7 @@ export const TexraRpcs = RpcGroup.make(
     payload: { workspace, start: StartRequestSchema.members[1] },
     /** The run that started: the asked id, or the one the launch resolved. */
     success: TaskAdmitted,
-    error: TaskFailed,
+    error: TaskStartFailed,
   }),
   Rpc.make('task.resume', {
     /** `apiKeys`: as a start carries them (`StartOptions.apiKeys`). */
@@ -216,7 +218,7 @@ export const TexraRpcs = RpcGroup.make(
     },
     /** The run that resumed: the asked one, or the parent that owns it. */
     success: TaskAdmitted,
-    error: TaskFailed,
+    error: TaskStartFailed,
   }),
   /** What the task's activation at `activation` ends with, once it ends:
    *  its stored end (`Run.result`, which fails when none was stored or it

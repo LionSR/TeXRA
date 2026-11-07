@@ -9,10 +9,8 @@ import { repeat } from 'lit/directives/repeat.js';
 import WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type { IconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import {
-  formatDesktopAccelerator,
-  type DesktopPlatform,
-} from '../shared/accelerators';
+import { formatDesktopAccelerator } from '../shared/accelerators';
+import type { OsPlatform } from '@texra/shared/osPlatform';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -41,7 +39,7 @@ interface CommandPaletteController {
 interface DesktopCommandPaletteOptions {
   document: Document;
   actions: DesktopCommandActions;
-  platform: DesktopPlatform;
+  platform: OsPlatform;
 }
 
 // Combobox wiring lives on the wa-input HOST, not its shadow input: ARIA
@@ -323,7 +321,7 @@ export function createDesktopCommandPalette({
 
 function toPaletteEntry(
   entry: DesktopCommandMenuEntry,
-  platform: DesktopPlatform,
+  platform: OsPlatform,
 ): CommandPaletteEntry {
   return {
     id: entry.id,

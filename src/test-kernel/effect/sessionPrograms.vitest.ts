@@ -115,7 +115,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
                   agent: 'golden_parent',
                   instruction: 'Read the notes, plan, delegate.',
                   model: MODEL,
-                  approval: { delegated: true },
+                  approval: 'autoApprove',
                 });
                 yield* untilStored(roots.storage, (rows) =>
                   rows.some(
@@ -236,7 +236,7 @@ describe('the package hands a run over', { timeout: REAL_RUN_TIMEOUT }, () => {
               agent: 'golden_parent',
               instruction: 'Read the notes, plan, delegate.',
               model: MODEL,
-              approval: { delegated: true },
+              approval: 'autoApprove',
             });
             yield* Stream.runDrain(run.view);
             const { usage } = yield* run.result;

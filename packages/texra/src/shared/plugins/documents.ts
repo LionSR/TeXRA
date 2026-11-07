@@ -159,6 +159,8 @@ export type DocumentTask = typeof DocumentTaskSchema.Type;
 export const DOCUMENT_TASK_BLOCK: AgentBlock<DocumentTask> = Object.freeze({
   key: 'task',
   schema: DocumentTaskSchema,
+  files: (task: DocumentTask) =>
+    Object.values(task.files).filter((file) => file !== ''),
 });
 
 /** Whether `run` is a document task: opened on this plugin's recipe, not

@@ -26,7 +26,6 @@ import {
 import { AgentModePresetSchema } from '@texra/shared/agentTeams';
 import {
   LATEX_DEPENDENCIES,
-  OS_PLATFORMS,
   SYSTEM_PACKAGE_MANAGERS,
 } from '@texra/shared/constants/latexToolchain';
 import { ModelAvailabilityFieldsSchema } from '@texra/shared/pickerOptions';
@@ -37,7 +36,7 @@ import {
   SETTINGS_VIEW_COMMANDS,
   WebviewReadyMessageSchema,
 } from '@texra/shared/ipc';
-import { ToolDependencyStatusSchema } from '@texra/shared/tools/toolPlugin';
+import { ToolDependencyStatusSchema } from '@texra-ai/harness/schemas';
 import { TEXRA_SETTINGS } from '@texra/shared/settingsView/texraSettings';
 import { SettingsTargetSchema } from './settingsTarget';
 import { ProfilePageSchema } from './profileViewMessages';
@@ -57,6 +56,7 @@ import {
   PluginActionMessageSchema,
   PluginListItemSchema,
 } from './pluginMessages';
+import { OsPlatformSchema } from '@texra/shared/osPlatform';
 
 /** An absolute URL the host may open. */
 const UrlSchema = Schema.String.check(
@@ -398,7 +398,7 @@ const LatexSettingsStatusSchema = Schema.Struct({
     Schema.Boolean,
   ),
   latexWorkshopInstalled: Schema.Boolean,
-  platform: Schema.Literals(OS_PLATFORMS),
+  platform: OsPlatformSchema,
   pdflatexPath: Schema.NullOr(Schema.String),
   latexmkPath: Schema.NullOr(Schema.String),
   latexdiffPath: Schema.NullOr(Schema.String),

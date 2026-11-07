@@ -26,12 +26,7 @@ import {
   type ApprovalGrantSource,
   grantSource,
 } from '@shared/approvalBypassKind';
-import {
-  bypassCovers,
-  qualifyAggregateId,
-  type PermissionPayload,
-  type RunId,
-} from '@shared/schemas';
+import { bypassCovers, qualifyAggregateId, type RunId } from '@shared/schemas';
 import {
   Unavailable,
   type RequestError,
@@ -90,10 +85,6 @@ const policyRow = (runId: RunId, snapshot: ApprovalGrants) => ({
 const grantsOn = (grants: ApprovalGrants, kind: ApprovalBypassKind): boolean =>
   grants.own[kind] === 'on' || grants.goal.includes(kind);
 
-/** Whether a request says only a person answers it (a hook's ask). */
-const personOnly = (payload: PermissionPayload): boolean =>
-  'allowBypass' in payload.data && !payload.data.allowBypass;
-
 /**
  * The approval of every open request a grant `next` of `runId` turns on
  * covers: the run's own, and those of the descendants whose edge stands
@@ -150,8 +141,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
       if (
         request.decision === null &&
         !(id === runId && requestId === except) &&
-        !personOnly(request.payload) &&
-        covering.some((kind) => bypassCovers(kind, request.payload.kind))
+        covering.some((kind) => bypassCovers(kind, request.payload))
       )
         rows.push({
           type: 'request.decided',

@@ -36,7 +36,6 @@ import {
 } from 'effect';
 
 import {
-  type HostRequestFailure,
   type OutcomeOf,
   type RuntimeRequest,
   type Session,
@@ -48,7 +47,7 @@ import {
   type PendingRequest,
   type RunId,
   type ToolEditContent,
-  type ToolEditPermission,
+  type ToolEditRequest,
 } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { isLatexFile } from '@texra/shared/latexFileTypes';
@@ -60,6 +59,7 @@ import {
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 
@@ -122,7 +122,7 @@ export function readToolEditPreview(
 }
 
 /** A pending tool edit as a host stages it: its prompt and its content. */
-export type ToolEditPreviewRequest = ToolEditPermission & ToolEditContent;
+export type ToolEditPreviewRequest = ToolEditRequest & ToolEditContent;
 
 /** The host view of one staged request, live until its scope closes. */
 export interface ToolEditPreview {
@@ -172,14 +172,14 @@ interface StagedPreview extends LatexPreviewEntry {
   readonly applied: Ref.Ref<boolean>;
 }
 
-type ToolEditRequest = PendingRequest & {
+type PendingToolEdit = PendingRequest & {
   readonly payload: {
     readonly kind: 'toolEdit';
-    readonly data: ToolEditPermission;
+    readonly data: ToolEditRequest;
   };
 };
 
-const isToolEdit = (request: PendingRequest): request is ToolEditRequest =>
+const isToolEdit = (request: PendingRequest): request is PendingToolEdit =>
   request.payload.kind === 'toolEdit';
 
 export class ToolEditApprovalController {
@@ -271,7 +271,7 @@ export class ToolEditApprovalController {
   /** Stage one request, show it when this window is focused, and hold it
    *  until its scope closes. */
   private stage(
-    pending: ToolEditRequest,
+    pending: PendingToolEdit,
   ): Effect.Effect<never, HostRequestFailure, PreviewServices | Scope.Scope> {
     const { session, host, roots } = this.options;
     const { runId, requestId } = pending;
@@ -349,7 +349,7 @@ export class ToolEditApprovalController {
    * before its dispose: the staged files stay, and the report names where.
    */
   private readonly unapplied: (
-    pending: ToolEditRequest,
+    pending: PendingToolEdit,
     preview: ToolEditPreview,
     proposal: string,
     applied: Ref.Ref<boolean>,
@@ -358,7 +358,7 @@ export class ToolEditApprovalController {
   )(
     { self: this },
     function* (
-      pending: ToolEditRequest,
+      pending: PendingToolEdit,
       preview: ToolEditPreview,
       proposal: string,
       applied: Ref.Ref<boolean>,

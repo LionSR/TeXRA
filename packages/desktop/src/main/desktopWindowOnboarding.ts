@@ -14,9 +14,11 @@ import {
   setOnboardingDeclined,
 } from '@texra/controllers/onboarding/onboardingFunnel';
 import { kickoffDesktopSetup } from '@texra/controllers/onboarding/setupLaunch';
-import { hostFailure } from '@texra/controllers/session/hostCallFailure';
+import {
+  hostFailure,
+  type RequestRefusal,
+} from '@texra/controllers/session/hostCallFailure';
 import type { HostFailed } from '@texra/hosts/uiHosts';
-import type { RequestRefusal } from '@texra-ai/harness';
 import type { StateReadFailed, StateWriteFailed } from '@texra-ai/harness/host';
 import type { DesktopProjectRegistry } from './desktopProjects.js';
 import type { DesktopSettingsIpc } from './desktopSettingsIpc.js';

@@ -18,6 +18,7 @@ import {
   applySurfaceAction,
   emptySurface,
   pruneSurface,
+  shownRun,
   type SelectionRule,
   type Surface,
   type SurfaceAction,
@@ -131,7 +132,7 @@ const surface: Signal.Computed<Surface> = computed(() => {
 
 /** The Surface's selection in the TUI's `undefined`-for-none spelling. */
 export const selectedRunId: Signal.Computed<RunId | undefined> = computed(
-  () => surface.get().selected ?? undefined,
+  () => shownRun(surface.get()) ?? undefined,
 );
 
 /** The one writer of `select`. `when` adopts a selection only from a prior
@@ -140,7 +141,7 @@ export function focusRun(
   runId: RunId | null,
   options: { readonly when?: 'unset' | 'local' } = {},
 ): void {
-  const chosen = surfaceChoice.get().selected;
+  const chosen = shownRun(surfaceChoice.get());
   if (options.when === 'unset' && chosen !== null) return;
   if (options.when === 'local' && chosen !== CLI_LOCAL_RUN_ID) return;
   actOnSurface({ kind: 'select', runId });
@@ -162,7 +163,7 @@ export type SessionListRow =
 export const sessionListRows = computed<readonly SessionListRow[]>(() => {
   const view = sessionView().get();
   const included = sessionRunIds.get();
-  const { expanded } = surface.get();
+  const { runs } = surface.get();
   const rows: SessionListRow[] = [];
   const groups: Record<RunSection, RunView[]> = {
     running: [],
@@ -185,7 +186,8 @@ export const sessionListRows = computed<readonly SessionListRow[]>(() => {
     if (included.has(run.id)) groups[runStatus(run).section].push(run);
   }
   const append = (run: RunView, depth: number): void => {
-    const open = needsUser(run, view.runs) || expanded.get(run.id) === true;
+    const open =
+      needsUser(run, view.runs) || runs.get(run.id)?.expanded === true;
     rows.push({ kind: 'run', run, depth, expanded: open });
     if (open) {
       for (const id of run.childIds) {

@@ -16,18 +16,13 @@ import {
   type DesktopCommandActions,
   type DesktopCommandId,
 } from '../shared/desktopCommandSurface.js';
-import type { DesktopPlatform } from '../shared/accelerators';
+import { osPlatformOf } from '@texra/shared/osPlatform';
 
 import type { MenuItemConstructorOptions } from 'electron';
 
-/** The one place Electron's wider platform id is narrowed into the union the
- *  command surface speaks; the renderer derives the same value from
- *  `navigator`. */
-const HOST_PLATFORM: DesktopPlatform = ((): DesktopPlatform => {
-  if (process.platform === 'darwin') return 'darwin';
-  if (process.platform === 'win32') return 'win32';
-  return 'linux';
-})();
+/** The host's OS, as the command surface tells them apart; the renderer
+ *  derives the same value from `navigator`. */
+const HOST_PLATFORM = osPlatformOf(process.platform);
 
 /** Menu template shape produced before Electron materializes native menus. */
 interface DesktopMenuTemplateItem extends Omit<

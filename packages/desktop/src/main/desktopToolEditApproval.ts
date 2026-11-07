@@ -13,7 +13,12 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - types
 import { withLogChannel } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { HostFailed, type DiffSource } from '@texra/hosts/uiHosts';
+import {
+  HostFailed,
+  type DiffLabel,
+  type DiffSource,
+} from '@texra/hosts/uiHosts';
+import { toolEditDiffLabel } from '@ui/copy/toolEditPreview';
 import type {
   ToolEditApprovalHost,
   ToolEditPreview,
@@ -24,10 +29,9 @@ import type { BuildDisplayFn } from '@texra/tools/latex/latexPreview';
 import { writeApprovalTempFiles } from '@texra/tools/approval/tempFileManager';
 import { UNAPPLIED_TOOL_EDIT } from '@ui/copy/toolEditPreview';
 
-import type { HostRequestFailure } from '@texra-ai/harness';
-
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 import type { DesktopSpawn } from './desktopWindows.js';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 type DesktopToolEditApprovalUi = Pick<
   DesktopAgentRunHost,
@@ -41,7 +45,7 @@ type DesktopToolEditApprovalUi = Pick<
   openDiff(
     original: DiffSource,
     proposed: DiffSource,
-    title: string,
+    label: DiffLabel,
     previewId: string,
   ): Effect.Effect<void, Error>;
   /**
@@ -176,7 +180,7 @@ class DesktopToolEditPreview implements ToolEditPreview {
       .openDiff(
         { filePath: this.staged.originalPath },
         { filePath: this.staged.proposedPath },
-        `Tool edit: ${this.request.relativePath}`,
+        toolEditDiffLabel(this.request),
         this.request.requestId,
       )
       .pipe(

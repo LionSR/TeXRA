@@ -28,7 +28,7 @@ import {
 import { liveToolGates } from '@agent/runtime/requests';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
 import { humanGrant } from '@agent/runtime/runApprovalQueue';
-import type { CliContext } from '@cli/runtime/cliContext';
+import { CliInvocation, provideCliInvocation } from '@cli/runtime/cliContext';
 import type { executeCliConfig } from '@cli/runtime/executeCli';
 import { NO_APPROVAL_GRANTS } from '@shared/approvalBypassKind';
 import { SessionLog } from '@shared/session/runHistory';
@@ -192,7 +192,10 @@ const loadExecuteCli = Effect.gen(function* () {
       options: WithoutSession<
         Parameters<typeof runtime.executeCliConfig>[2]
       > = {},
-    ) => runtime.executeCliConfig(config, context, { services, ...options }),
+    ) =>
+      runtime
+        .executeCliConfig(config, context, { services, ...options })
+        .pipe(provideCliInvocation(context)),
   };
 });
 
@@ -248,11 +251,11 @@ function stubExecuteCliDeps(): void {
   mocks.attachScriptPlainOutput.mockReturnValue(Effect.void);
   // The host answers the session's approval question the way the headless
   // adapter does: whether this context can answer a prompt.
-  mocks.createHeadlessCliHostInteractions.mockImplementation(
-    (_session: unknown, context: CliContext) => ({
+  mocks.createHeadlessCliHostInteractions.mockImplementation(() =>
+    CliInvocation.useSync(({ context }) => ({
       emit: mocks.emit,
       approvalPromptsUnavailable: context.mode !== 'interactive',
-    }),
+    })),
   );
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,
@@ -290,7 +293,7 @@ layer(SessionGraph.hosted, { excludeTestServices: true })(
         let seen: boolean | undefined;
         mocks.rootLaunch.mockImplementationOnce(
           async (request: LaunchInput) => {
-            if (request.approval?.delegated) {
+            if (request.approval === 'autoApprove') {
               publishTestRows(session, [
                 {
                   ...runStartRow(request.runId),

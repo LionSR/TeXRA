@@ -23,7 +23,6 @@ import {
   Cancelled,
   Rejected,
   Unavailable,
-  type HostRequestFailure,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -95,6 +94,7 @@ import { findLabelInWorkspace } from './workspaceFileOptions';
 import type { RunId } from '@texra-ai/harness/schemas';
 import type { ApiKeyProviderId } from '@texra-ai/llm';
 import type { HostDraftRequests } from './hostDraftRequests';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** A window's runs: its project's session, wherever its runs run (here,
  *  or in the background service), and the link the window attaches
@@ -249,9 +249,10 @@ function fileOpResultMessage(
 
 /**
  * Open a window of `ports.runs` for the caller's scope. The bridge has a
- * scope of its own, closed off the window's release: it drains the requests
- * in flight when it closes, and a launch request lives as long as its run,
- * so a window that closes neither waits for a run to end nor stops it. The
+ * scope of its own, closed off the window's release: it waits for the
+ * requests in flight when it closes, up to the session's close deadline, and
+ * a launch answers at admission, so a window that closes neither waits for a
+ * run to end nor stops it. The
  * tool-edit previews close with the window, awaited, so their files are gone
  * before the window's release returns.
  */
