@@ -208,5 +208,11 @@ Owners are the round-2 sessions, matched to the files they already know.
 | R3-A. Approvals and launch vocabulary       | U1, U2, U4, Q5                                   | A            | after its last PR |
 
 Within each package, the first commit fixes that package's items from
-section 1. The rules of the round-2 note's "What every owner follows" apply
+section 1. Each report's batched smaller items go with the package that
+owns their files: P8 to R3-B (settings) and R3-E (the llm reasoning
+decision and the model copies); Q8 to R3-Q; R8 to R3-R; S's thin items to
+R3-S; T10 to R3-B (the extension commands) and R3-T (the notice and tool
+messages); U7 to R3-E (the provider copies, the network-failure regex) and
+R3-B (the log-severity sinks, `HostFrameSchema`, `DECLINE_RANK`). An owner
+who drops one records why in its PR body. The rules of the round-2 note's "What every owner follows" apply
 unchanged.

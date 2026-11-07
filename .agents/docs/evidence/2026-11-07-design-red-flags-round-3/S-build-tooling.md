@@ -77,7 +77,7 @@ script, and a conjoined script (`build` = type check + bundle).
 
 **Evidence.**
 
-- **What the gate reads.** `.github/actions/require-green-ci/action.yml:76-81` takes
+- **What the gate reads.** `.github/actions/require-green-ci/action.yml:16-18` takes
   the newest check run named `validate` on the commit, whatever event started it.
 - **What a nightly run checks.** The nightly `schedule` run (`ci.yml:8-9`) validates
   main's tip, but skips invariants, typecheck, build, vscode-host-e2e and
