@@ -5,14 +5,17 @@
  * rather than falling out of the turn's cost (#12316).
  */
 // Third-party imports
+import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
 // Local imports
 import { MODEL_RETRY_MAX_ATTEMPTS_SETTING } from '@texra-ai/harness/schemas';
-import { priceTurnUsage } from '@agent/runtime/run/pricing';
+import { priceTurnUsage, reportUsage } from '@agent/runtime/run/pricing';
 import { routePolicies } from '@agent/runtime/modelAccess/failureInfo';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
+import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { BoundModel } from '@texra-ai/harness/plugins';
+import type { UsageLog } from '@shared/usageLog';
 
 import type { Model, TurnResult } from '@texra-ai/llm';
 
@@ -42,13 +45,16 @@ const unusedModel = new Proxy({} as Model, {
   },
 });
 
+const anthropicConfig = buildTestModelConfig({
+  inputPrice: INPUT_PRICE,
+  outputPrice: OUTPUT_PRICE,
+  capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
+});
+
 const boundAnthropic: BoundModel = {
   modelId: 'test-model',
-  config: buildTestModelConfig({
-    inputPrice: INPUT_PRICE,
-    outputPrice: OUTPUT_PRICE,
-    capabilities: { cacheDiscountFactor: CACHE_DISCOUNT },
-  }),
+  catalogEntry: anthropicConfig,
+  config: anthropicConfig,
   backend: 'anthropic',
   declinedRoutes: [],
   model: unusedModel,
@@ -160,5 +166,60 @@ describe('priceTurnUsage on a GPT-6 turn', () => {
       (172_001 * 4 + 100_000 * 0.4 + 1000 * 15) / 1e6,
       12,
     );
+  });
+});
+
+describe('reportUsage on a Kimi Code plan call', () => {
+  // The plan runs the catalog's `kimi-k3` as the coding endpoint's `k3`,
+  // every rate zeroed; the usage log reports what it would cost at list.
+  const catalogEntry = buildTestModelConfig({
+    id: 'kimi-k3',
+    inputPrice: 3,
+    outputPrice: 15,
+    capabilities: { cacheDiscountFactor: 0.1 },
+  });
+  const boundPlan: BoundModel = {
+    ...boundAnthropic,
+    catalogEntry,
+    config: { ...catalogEntry, id: 'k3', inputPrice: 0, outputPrice: 0 },
+    billing: 'kimi-code-subscription',
+  };
+
+  it('reports the catalog id and the list price the plan did not bill', () => {
+    const logged: Parameters<UsageLog['Service']['log']>[0][] = [];
+    const usageLog: UsageLog['Service'] = {
+      log: (entry) => Effect.sync(() => void logged.push(entry)),
+    };
+
+    Effect.runSync(
+      reportUsage(
+        usageLog,
+        boundPlan,
+        {
+          inputTokens: 1_000_000,
+          outputTokens: 100_000,
+          totalTokens: 1_100_000,
+          cachedInputTokens: 200_000,
+          cacheWriteTokens: null,
+          reasoningTokens: null,
+          toolUsePromptTokens: null,
+          providerUsage: undefined,
+        },
+        1234,
+        { agentName: 'custom', runId: null },
+        makeFakeSettingsStores().stores,
+      ),
+    );
+
+    // 1M input at $3 less 200K cached rebated to 0.1x, plus 100K output at $15.
+    expect(logged).toMatchObject([
+      {
+        model: 'kimi-k3',
+        listCost: 3.96,
+        usageRoute: 'kimi-code-subscription',
+        inputTokens: 800_000,
+        cachedInputTokens: 200_000,
+      },
+    ]);
   });
 });

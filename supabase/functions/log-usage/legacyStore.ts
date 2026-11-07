@@ -10,12 +10,12 @@
  */
 
 import { adminClient } from '../_shared/edgeClients.ts';
-import { storedCost } from '../_shared/equivalentCost.ts';
+import { storedCost } from './equivalentCost.ts';
 import {
   subscriptionSourceForUsage,
   type UsageBatch,
   type UsageLogEntry,
-} from '../_shared/usageValidation.ts';
+} from './usageValidation.ts';
 
 function toDbRows(
   userId: string,

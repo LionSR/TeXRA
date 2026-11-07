@@ -223,6 +223,9 @@ inside model access.
 interface BoundModel extends Binding {
   /** The run's model string (`provider/id[@effort][+pro]`), as its rows name it. */
   readonly modelId: string;
+  /** The catalog entry the model string names, before any route's overlay:
+   *  the id and list prices the usage log reports each call under. */
+  readonly catalogEntry: ModelConfig;
   /** The backend its `run.config` records. */
   readonly backend: ModelBackend;
   /** The subscription routes the run had declined when this binding was

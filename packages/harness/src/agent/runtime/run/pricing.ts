@@ -2,8 +2,8 @@
  * The run's priced usage for one completed turn. The package prices the
  * turn's usage evidence; the price is a runtime fact stamped on the
  * `response` row beside the dispatch facts, so a resumed run's cost is
- * the sum of its rows and nothing else. Each priced call is also reported
- * to the process usage log, which bills per call.
+ * the sum of its rows and nothing else. Each call is also reported to the
+ * process usage log, at its list price.
  */
 import { Effect } from 'effect';
 import { turnCost, type TurnResult } from '@texra-ai/llm';
@@ -63,15 +63,18 @@ export interface UsageAttribution {
 }
 
 /**
- * Report one priced call to the process usage log, which bills per call. It
- * writes no session row: a turn's usage is its `response` row and a
- * compaction's its `context.edit` row. The log cannot fail: its sender
- * owns delivery (queued, batched, retried) and says so when it gives up.
+ * Report one call's usage to the process usage log, under the catalog entry
+ * and at its list price whatever the route billed, so a plan's call reads
+ * what it would have cost on an API key. It writes no session row: a turn's
+ * usage is its `response` row and a compaction's its `context.edit` row.
+ * The log cannot fail: its sender owns delivery (queued, batched, retried)
+ * and says so when it gives up.
  */
 export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
   usageLog: UsageLog['Service'],
   bound: BoundModel,
-  usage: NormalizedUsage | null,
+  usage: TurnResult['usage'],
+  responseTimeMs: number,
   attribution: UsageAttribution,
   { config }: SettingsStores,
 ): Effect.fn.Return<void> {
@@ -80,18 +83,19 @@ export const reportUsage = Effect.fn('pricing.reportUsage')(function* (
   const cachedInputTokens = usage.cachedInputTokens ?? 0;
   yield* usageLog.log(
     {
-      model: bound.config.id,
+      model: bound.catalogEntry.id,
       provider: bound.origin.protocol,
       agentName: attribution.agentName,
-      // Billing needs a real number, so a provider that reported no
-      // cache-miss count is billed the derived estimate (input minus
-      // cache-read). Display never guesses.
-      inputTokens:
-        usage.cacheMissInputTokens ??
-        Math.max(0, usage.inputTokens - cachedInputTokens),
-      outputTokens: usage.outputTokens,
-      cost: Number(usage.cost.toFixed(6)),
-      responseTimeMs: Math.round(usage.responseTimeMs),
+      // The cache-miss input: the reported input less its cache reads.
+      inputTokens: Math.max(0, (usage.inputTokens ?? 0) - cachedInputTokens),
+      outputTokens: usage.outputTokens ?? 0,
+      listCost: Number(
+        turnCost(bound.catalogEntry, usage, {
+          plan: false,
+          tier: bound.serviceTier ?? undefined,
+        }).toFixed(6),
+      ),
+      responseTimeMs: Math.round(responseTimeMs),
       cachedInputTokens,
       reasoningTokens: usage.reasoningTokens ?? 0,
       usageRoute: bound.billing,

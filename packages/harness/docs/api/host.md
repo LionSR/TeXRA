@@ -2639,8 +2639,37 @@ class UsageLog extends Context.Service<
 
 ## UsageLogEntry
 
+One entry of the usage log's wire: a body of the `log-usage-v2` edge
+function, which is its boundary and decodes it
+(`supabase/functions/log-usage-v2/usageBatch.ts`); this side only builds
+it. Field names are the wire's, not `NormalizedUsage`'s.
+
 ```ts
-type UsageLogEntry = typeof UsageLogEntrySchema.Type;
+interface UsageLogEntry {
+  /** A UTC ISO 8601 date-time. */
+  readonly timestamp: string;
+  /** The catalog id, before any route's rewrite. */
+  readonly model: string;
+  /** Wire surface of the turn (`openai-responses`, `anthropic-messages`,
+   *  ...), stored in the `provider` column. */
+  readonly provider: ModelOrigin['protocol'];
+  readonly agentName?: string;
+  /** The route the call was billed through. */
+  readonly usageRoute?: UsageRoute;
+  /** The run id, stored as `stream_id`: the edge function's name for it. */
+  readonly streamId?: string;
+  /** Cache-miss input tokens; the cache reads are `cachedInputTokens`. */
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  /** What the call costs at the catalog's list prices, in USD, whatever
+   *  the route billed: a plan's call is covered by its subscription. */
+  readonly listCost: number;
+  readonly responseTimeMs?: number;
+  readonly cachedInputTokens?: number;
+  readonly reasoningTokens?: number;
+  readonly extensionVersion?: string | undefined;
+  readonly editorType?: string | undefined;
+}
 ```
 
 ## ValidationModel

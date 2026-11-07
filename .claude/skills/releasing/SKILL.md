@@ -69,10 +69,10 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
 
 5. **`llm-zoo` pin.** `packages/llm/package.json` is the one workspace
    manifest that declares `llm-zoo`, pinned exactly; everything else imports
-   the catalog from `@texra-ai/llm`. If the release changes `llm-zoo`, also update the exact
-   pin in `supabase/functions/log-usage/deno.json` and `log-usage-v2/deno.json`, then refresh their adjacent
-   `deno.lock` files. It is easy to miss, since it isn't part of the automated
-   bump.
+   the catalog from `@texra-ai/llm`. The edge functions need no bump:
+   `log-usage-v2` stores the list price the client computed, and
+   `log-usage`'s own pin (`supabase/functions/log-usage/deno.json`) prices
+   only what 0.40 clients send.
 
 ## npm packages: `@texra-ai/llm` and `@texra-ai/harness`
 

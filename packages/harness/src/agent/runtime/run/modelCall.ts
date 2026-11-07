@@ -67,12 +67,16 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* (
       );
     const started = yield* Clock.currentTimeMillis;
     const turn = yield* completedTurn(bound.model.streamTurn(prepared));
-    const usage = priceTurnUsage(
+    const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
+    const usage = priceTurnUsage(bound, turn.usage, responseTimeMs);
+    yield* reportUsage(
+      usageLog,
       bound,
       turn.usage,
-      (yield* Clock.currentTimeMillis) - started,
+      responseTimeMs,
+      call.attribution,
+      call.settings,
     );
-    yield* reportUsage(usageLog, bound, usage, call.attribution, call.settings);
     return { turn, usage };
   });
   return yield* Effect.flatMap(call.binding, (bound) =>

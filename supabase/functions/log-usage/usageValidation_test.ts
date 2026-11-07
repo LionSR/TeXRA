@@ -6,7 +6,7 @@ import {
   subscriptionSourceForUsage,
   UsageBatchSchema,
   UsageLogEntrySchema,
-} from '../_shared/usageValidation.ts';
+} from './usageValidation.ts';
 
 const parseEntry = Schema.decodeUnknownSync(UsageLogEntrySchema);
 const parseBatch = Schema.decodeUnknownSync(UsageBatchSchema);

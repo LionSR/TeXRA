@@ -30,7 +30,7 @@ function usageEntry(model: string) {
     agentName: 'agent',
     inputTokens: 1,
     outputTokens: 1,
-    cost: 0.001,
+    listCost: 0.001,
   };
 }
 
@@ -171,6 +171,54 @@ describe('UsageLogService', () => {
         vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
 
         yield* Effect.promise(() => expectNoOptionalUsageSent());
+      }),
+    );
+  });
+
+  layer(
+    FakeHost.layer(
+      {},
+      { config: new MemoryConfigProvider(TEXRA_SETTINGS.catalog) },
+    ),
+    { buildPerTest: true, excludeTestServices: true },
+  )('delivery', (it) => {
+    // The edge decodes exactly what this client sends, so a rejection means
+    // the deployed edge and the client disagree: the batch waits for them to
+    // agree instead of being dropped.
+    it.effect('keeps a rejected batch and sends it again', () =>
+      Effect.gen(function* () {
+        const fetchMock = vi
+          .fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+            jsonResponse({ success: true, accepted: 1 }),
+          )
+          .mockResolvedValueOnce(
+            jsonResponse({
+              success: false,
+              accepted: 0,
+              error: 'Invalid batch format or entry data',
+              retryable: false,
+              errorCode: 'BATCH_REJECTED',
+              issueCount: 1,
+              issues: [{ path: ['entries', '0', 'listCost'], message: 'x' }],
+            }),
+          );
+        vi.stubGlobal('fetch', fetchMock);
+
+        logUsage(usageEntry('rejected'), testWorkspaceRoots().config);
+        // The first flush, then the first retry one interval later.
+        yield* Effect.promise(() =>
+          vi.advanceTimersByTimeAsync(2 * FLUSH_INTERVAL_MS),
+        );
+
+        const bodies = yield* Effect.promise(() =>
+          Promise.all(
+            fetchMock.mock.calls.map(([, init]) =>
+              new Response(init?.body).json(),
+            ),
+          ),
+        );
+        expect(bodies).toHaveLength(2);
+        expect(bodies[1]).toEqual(bodies[0]);
       }),
     );
   });

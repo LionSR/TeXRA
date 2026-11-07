@@ -385,7 +385,14 @@ export const modelInvokerLayer = (): Layer.Layer<
             contextWindow: bound.config.contextWindow,
           });
         }
-        yield* reportUsage(usageLog, bound, usage, attribution, roots);
+        yield* reportUsage(
+          usageLog,
+          bound,
+          turn.usage,
+          responseTimeMs,
+          attribution,
+          roots,
+        );
         return { kind: 'response', state: next };
       });
 
@@ -648,17 +655,28 @@ export const modelInvokerLayer = (): Layer.Layer<
         // A response the provider billed before refusing it is priced
         // and reported like a turn's, on its `failed` row.
         const started = attemptStarts.get(ref);
-        const usage =
+        const billed =
           error instanceof ModelError &&
           error.usage !== undefined &&
           started !== undefined
-            ? priceTurnUsage(
-                bound,
-                error.usage,
-                (yield* Clock.currentTimeMillis) - started,
-              )
+            ? {
+                usage: error.usage,
+                responseTimeMs: (yield* Clock.currentTimeMillis) - started,
+              }
             : null;
-        yield* reportUsage(usageLog, bound, usage, attribution, roots);
+        const usage =
+          billed === null
+            ? null
+            : priceTurnUsage(bound, billed.usage, billed.responseTimeMs);
+        if (billed !== null)
+          yield* reportUsage(
+            usageLog,
+            bound,
+            billed.usage,
+            billed.responseTimeMs,
+            attribution,
+            roots,
+          );
         yield* cell.append(
           yield* failedRows(cell, ref, info, next, bound, usage, quota),
         );

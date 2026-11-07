@@ -3,8 +3,9 @@
  * usage for analytics.
  *
  * Receives batched usage entries from the TeXRA clients. Each function
- * supplies an owner resolver (`log-usage`: login JWT, released clients;
- * `log-usage-v2`: anonymous install id) and a store that writes the batch.
+ * supplies its wire's batch schema, an owner resolver (`log-usage`: login
+ * JWT, released clients; `log-usage-v2`: anonymous install id) and a store
+ * that writes the batch.
  *
  * Response contract:
  * - Complete writes return success with the exact accepted entry count.
@@ -12,7 +13,9 @@
  *   `success: false`, `accepted: 0`, `retryable: false`, and a stable
  *   `errorCode`; HTTP 200 lets clients predating the retry marker read the
  *   body during rolling deploys. Sanitized validation issues identify the
- *   rejected fields without echoing request values.
+ *   rejected fields without echoing request values. The marker is for
+ *   released clients: the current client keeps and resends any rejected
+ *   batch, since its schema is the one `log-usage-v2` decodes.
  *   Restore HTTP 422 after clients predating #8267 age out under #6981.
  * - Malformed JSON uses the same permanent-rejection body with HTTP 400.
  * - Authentication and operational failures omit the permanent-rejection
@@ -24,11 +27,9 @@ import { Result, Schema, SchemaIssue } from 'effect';
 import { handleCors } from './cors.ts';
 import { adminClient, SUPABASE_ANON_KEY, SUPABASE_URL } from './edgeClients.ts';
 import { jsonResponse } from './responses.ts';
-import { UsageBatchSchema, type UsageBatch } from './usageValidation.ts';
 
 const MAX_REPORTED_VALIDATION_ISSUES = 20;
 const flattenIssues = SchemaIssue.makeFormatterStandardSchemaV1();
-const decodeBatch = Schema.decodeUnknownResult(UsageBatchSchema);
 
 function successResponse(
   req: Request,
@@ -73,14 +74,20 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !adminClient) {
 }
 
 /**
- * Serve usage logging. `resolveOwner` yields the batch owner (null = 401);
+ * Serve usage logging over `batchSchema`, the one thing the two functions'
+ * wires differ in. `resolveOwner` yields the batch owner (null = 401);
  * `store` writes the batch and returns false when it was already stored (a
  * client retry), and throws on failure.
  */
-export function serveLogUsage<Owner>(
+export function serveLogUsage<
+  Owner,
+  Batch extends { readonly entries: readonly unknown[] },
+>(
+  batchSchema: Schema.Codec<Batch, unknown>,
   resolveOwner: (req: Request) => Promise<Owner | null>,
-  store: (owner: Owner, batch: UsageBatch) => Promise<boolean>,
+  store: (owner: Owner, batch: Batch) => Promise<boolean>,
 ): void {
+  const decodeBatch = Schema.decodeUnknownResult(batchSchema);
   Deno.serve(async (req: Request) => {
     const response = handleCors(req);
     if (response) return response;
