@@ -18,7 +18,7 @@
 import { Context, Effect, Schema, SubscriptionRef } from 'effect';
 
 // Each runtime value comes from the module that defines it.
-import { AgentCatalog, AgentNotFound } from '@agent/index/agentCatalog';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { LaunchKeys } from '@agent/runtime/executeAgent';
 import { describeResumeRefusal } from '@agent/runtime/resumeRun';
 import { resumeRun } from '@agent/runtime/resumeRun';
@@ -31,6 +31,7 @@ import {
 } from '@agent/runtime/rootLaunch';
 import { registryOf, Runs } from '@agent/runtime/runRegistry';
 import type { ITool } from '@agent/core/tools/ToolTypes';
+import { LaunchRefused } from '@common/errors/agentErrors';
 import { asksApproval } from '@agent/runtime/agentToolResolution';
 
 // The composition root supplies its existing scoped services privately;
@@ -68,6 +69,15 @@ import type {
 const runFailure = (cause: unknown): RunFailure =>
   new RunFailure({ cause, message: toErrorMessage(cause) });
 
+/** A failure of the launch path: a refused launch as itself, anything
+ *  else as the run's own. */
+const launchFailure = (cause: Error): LaunchRefused | RunFailure =>
+  cause instanceof LaunchRefused ? cause : runFailure(cause);
+
+/** An input its schema rejects, refused as the caller's. */
+const inputRefused = (cause: Schema.SchemaError): LaunchRefused =>
+  new LaunchRefused({ message: cause.message });
+
 /**
  * The refusal the package states from the caller's own input, before
  * anything of the process is touched: on a session nobody answers, a tool
@@ -99,7 +109,7 @@ const admitInput = Effect.fn('admitInput')(function* (
   input: StartInput,
   session: Context.Context<SessionServices>,
   services: Context.Context<AgentCatalog>,
-): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError | RunFailure> {
+): Effect.fn.Return<typeof AgentConfigSchema.Type, LaunchError> {
   const canAsk = !Context.get(session, Interactions).approvalPromptsUnavailable;
   yield* admitTools(input.tools ?? [], canAsk);
   // A host's whole configuration: its launch resolves the agent itself.
@@ -110,21 +120,20 @@ const admitInput = Effect.fn('admitInput')(function* (
       ? Context.get(services, AgentCatalog).get(agent)
       : { name: null, source: 'inline' as const };
   if (!resolved) {
-    return yield* new AgentNotFound({
-      agent: String(agent),
+    return yield* new LaunchRefused({
       message: `Agent "${String(agent)}" was not found in the configured agent directory.`,
+      notice: { event: 'agentNotFound', payload: { agentName: String(agent) } },
     });
   }
   // The schema is the launch's last refusal, and it is a refusal rather
-  // than a defect: an instruction this surface will not accept reaches an
-  // embedder's `catchTag` in the vocabulary the surface names, as the
-  // agent scan's failure above does.
+  // than a defect: an input this surface will not accept is the caller's,
+  // as an unknown agent above is.
   // The run is named as its persona's schema spells the name.
   const persona =
     typeof agent === 'string'
       ? null
       : yield* Schema.decodeUnknownEffect(InlinePersonaSchema)(agent).pipe(
-          Effect.mapError(runFailure),
+          Effect.mapError(inputRefused),
         );
   return yield* Schema.decodeUnknownEffect(AgentConfigSchema)({
     agent: persona?.name ?? resolved.name,
@@ -132,7 +141,7 @@ const admitInput = Effect.fn('admitInput')(function* (
     persona,
     instruction: input.instruction,
     ...(input.model ? { model: input.model } : {}),
-  }).pipe(Effect.mapError(runFailure));
+  }).pipe(Effect.mapError(inputRefused));
 });
 
 /** Start one run on `session`: a root launch under the process's session
@@ -154,9 +163,9 @@ const start = Effect.fn('start')(function* (
     ).runs.has(runId) ||
       Context.get(session, Runs).get(runId) !== undefined)
   )
-    return yield* runFailure(
-      new Error(`Run ${runId} already exists in this session.`),
-    );
+    return yield* new LaunchRefused({
+      message: `Run ${runId} already exists in this session.`,
+    });
   // A caller interrupted while the run opens never holds it: the opening
   // unwinds with it. One interrupted after the run opened, before this
   // hands its handle back, let go of a run that runs: the registry ends it
@@ -166,7 +175,7 @@ const start = Effect.fn('start')(function* (
   return yield* rootRun({ ...input, config, runId }).pipe(
     Effect.provide(session),
     Effect.provideService(LaunchKeys, input.apiKeys ?? {}),
-    Effect.mapError(runFailure),
+    Effect.mapError(launchFailure),
     Effect.map((activation) => {
       opened = true;
       return runView(session, runId, activation);
@@ -180,7 +189,7 @@ const start = Effect.fn('start')(function* (
 });
 
 /** What a resume fails with before its run is handed over. */
-type ResumeError = ResumeRefused | ToolsRefused | RunFailure;
+type ResumeError = ResumeRefused | LaunchError | RunFailure;
 
 /**
  * Continue a persisted run of `session` through the one resume path every
@@ -210,7 +219,7 @@ function resume(
     }).pipe(
       Effect.provide(session),
       Effect.provideService(LaunchKeys, apiKeys ?? {}),
-      Effect.mapError(runFailure),
+      Effect.mapError(launchFailure),
     );
     if ('ownedBy' in resumed)
       return yield* resume(

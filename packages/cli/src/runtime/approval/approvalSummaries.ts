@@ -1,12 +1,12 @@
 import {
   getModelLabel,
   getProposalFileGroups,
-  type AgentProposalPermission,
-  type BashPermission,
-  type RetryPermission,
+  type AgentProposalRequest,
+  type BashRequest,
+  type RetryRequest,
   type ToolEditContent,
-  type ToolEditPermission,
-  type UserQuestionPermission,
+  type ToolEditRequest,
+  type UserQuestionRequest,
   formatHunkLines,
 } from '@texra-ai/harness/schemas';
 import { hiddenRowsText } from '@cli/tui/overflowText';
@@ -124,7 +124,7 @@ export function formatAgentProposalFileGroup(
 
 /** An agent the call defines: its name and tools, then its prompt. */
 function definedAgentLines(
-  proposal: AgentProposalPermission,
+  proposal: AgentProposalRequest,
   promptLines: readonly string[],
 ): readonly string[] {
   if (!proposal.persona) return [];
@@ -136,7 +136,7 @@ function definedAgentLines(
 }
 
 function agentProposalApprovalSummary(
-  proposal: AgentProposalPermission,
+  proposal: AgentProposalRequest,
   instructionLines: readonly string[],
   promptLines: readonly string[],
   boundFileGroups: boolean,
@@ -181,7 +181,7 @@ function agentProposalApprovalSummary(
 }
 
 export function buildAgentProposalApprovalContent(
-  proposal: AgentProposalPermission,
+  proposal: AgentProposalRequest,
 ): CliApprovalContent {
   // A script's request shows its source where a proposal shows its prompt.
   const instructionLines = agentProposalInstructionLines(
@@ -221,17 +221,17 @@ export function buildAgentProposalApprovalContent(
     : { summary };
 }
 
-export function formatRetryRequestMessage(payload: RetryPermission): string {
+export function formatRetryRequestMessage(payload: RetryRequest): string {
   return `Retry requested (${payload.operation}): ${modelFailureText(payload.errorDetails)}`;
 }
 
-export function formatBashApprovalSummary(payload: BashPermission): string {
+export function formatBashApprovalSummary(payload: BashRequest): string {
   const cwd = payload.cwd ? `Directory: ${payload.cwd}\n` : '';
   return `Command requested:\n${cwd}${payload.command}`;
 }
 
 /** What a tool edit's prompt shows: its path and tool, and the diff. */
-type ToolEditPrompt = Pick<ToolEditPermission, 'path' | 'sourceTool'> &
+type ToolEditPrompt = Pick<ToolEditRequest, 'path' | 'sourceTool'> &
   Pick<ToolEditContent, 'hunks'>;
 
 function toolEditDiffLines(request: ToolEditPrompt): readonly string[] {
@@ -283,9 +283,7 @@ export function buildToolEditApprovalContent(
       };
 }
 
-export function formatUserQuestionPrompt(
-  payload: UserQuestionPermission,
-): string {
+export function formatUserQuestionPrompt(payload: UserQuestionRequest): string {
   return payload.questions
     .map((question, index) => {
       const options = question.options

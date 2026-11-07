@@ -23,11 +23,11 @@ import {
   confirmCardCompactChromeRows,
   type ConfirmCardKeyRow,
 } from './ConfirmCardState';
-import type { PlanApprovalPermission } from '@texra-ai/harness/schemas';
+import type { PlanApprovalRequest } from '@texra-ai/harness/schemas';
 
-interface PlanApprovalProps {
+interface PlanRequestProps {
   readonly availableRows?: number;
-  readonly payload: PlanApprovalPermission;
+  readonly payload: PlanApprovalRequest;
   readonly onDecide: (decision: SurfaceDecision) => void;
 }
 
@@ -98,7 +98,7 @@ function isPlanApprovalGoalActionVisible({
   return !compact || visibleBodyRows > 1;
 }
 
-export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
+export function PlanRequest(props: PlanRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { availableRows, onDecide, payload } = props;
   const compact = isCompactPlanApprovalRows(availableRows);

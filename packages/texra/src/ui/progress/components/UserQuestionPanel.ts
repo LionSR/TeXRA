@@ -20,7 +20,7 @@ import { BaseRequestPanel } from './BaseRequestPanel';
 import { userQuestionPanelStyles } from './UserQuestionPanel.styles';
 import type {
   UserQuestionAnswers,
-  UserQuestionPermission,
+  UserQuestionRequest,
   UserQuestionPrompt,
 } from '@texra-ai/harness/schemas';
 
@@ -258,7 +258,7 @@ export class UserQuestionPanel extends BaseRequestPanel<'userQuestion'> {
     this.emitAction({ action: 'submit', answers });
   }
 
-  private hasAnyAnswer(data: UserQuestionPermission): boolean {
+  private hasAnyAnswer(data: UserQuestionRequest): boolean {
     return data.questions.some((_question, index) => {
       if (this.freeText[index]?.trim()) return true;
       return (this.selections[index] ?? []).length > 0;

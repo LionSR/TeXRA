@@ -54,7 +54,7 @@ import {
   isMessage,
   type SharedRunRow,
 } from './runRows';
-import { phaseMoveOf, type PhaseMove } from './runRowReads';
+import { standingAfter, type RunStanding } from './runRowReads';
 import { applyTranscriptEvent } from './transcriptUpdate';
 import {
   applyLiveText,
@@ -669,7 +669,11 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
       // and carries over. Its turn's clock starts here: an interrupted
       // run's old start would count the time nothing ran it.
       return {
-        ...movePhase({ ...run, turnStartedAt: null }, phaseOf(event), event.at),
+        ...applyStanding(
+          { ...run, turnStartedAt: null },
+          standingOf(event),
+          event.at,
+        ),
         turn: null,
         lost: null,
         output: null,
@@ -723,7 +727,7 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
     case 'run.end':
       // The run ended: its outcome and output, and any result its end lost.
       return {
-        ...movePhase(run, phaseOf(event), event.at),
+        ...applyStanding(run, standingOf(event), event.at),
         output: event.output,
         ...(event.error?.kind === 'result-lost'
           ? { lost: event.error.message }
@@ -733,34 +737,38 @@ function applyRunEvent(run: RunView, event: OwnEvent): RunView {
 }
 
 /** The run's loop position, read from what `runRows.ts` recorded, moved to
- *  where {@link phaseMoveOf} puts it. */
+ *  where {@link standingAfter} leaves it. */
 function withPosition(run: RunView, rows: SharedRunRows, row: SharedRunRow) {
   if (rows.family === null || rows.at === null) return run;
   if (row.type === 'run.position' && row.payload.at === 'waiting')
     run = { ...run, forkPoint: row.seq };
   const turn = rows.turn;
-  const move = phaseMoveOf(row);
-  return move === null
+  const standing = standingAfter(row);
+  return standing === null
     ? { ...run, turn }
-    : movePhase({ ...run, turn }, move, row.at);
+    : applyStanding({ ...run, turn }, standing, row.at);
 }
 
-/** The move a lifecycle row makes; only those rows reach here. */
-function phaseOf(row: Parameters<typeof phaseMoveOf>[0]): PhaseMove {
-  const move = phaseMoveOf(row);
-  if (move === null) throw new Error(`${row.type} moves no run phase`);
-  return move;
+/** Where a lifecycle row leaves its run; only those rows reach here. */
+function standingOf(row: Parameters<typeof standingAfter>[0]): RunStanding {
+  const standing = standingAfter(row);
+  if (standing === null) throw new Error(`${row.type} changes no run standing`);
+  return standing;
 }
 
-/** Move the run where a lifecycle row puts it: the one phase writer. Inside
+/** Put the run where a lifecycle row leaves it: the one standing writer. Inside
  *  a turn its clock keeps the turn's start; out of one it clears. */
-function movePhase(run: RunView, move: PhaseMove, at: number): RunView {
+function applyStanding(
+  run: RunView,
+  standing: RunStanding,
+  at: number,
+): RunView {
   return {
     ...run,
-    position: move.position,
-    outcome: move.outcome,
+    position: standing.position,
+    outcome: standing.outcome,
     turnStartedAt:
-      move.position === 'running' ? (run.turnStartedAt ?? at) : null,
+      standing.position === 'running' ? (run.turnStartedAt ?? at) : null,
   };
 }
 
@@ -909,7 +917,7 @@ function applyEvent(
 ): boolean {
   const transcriptChanged =
     read !== 'listing' &&
-    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
+    (isTranscriptEvent(event) || standingAfter(event) !== null)
       ? applyTranscriptRow(u, event)
       : false;
   const listingType = listingKeyOf(event);

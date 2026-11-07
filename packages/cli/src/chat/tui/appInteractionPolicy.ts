@@ -8,14 +8,14 @@ import type { Key } from 'ink';
 // Local imports - TUI state
 import type {
   PendingApproval,
-  PendingApprovalKind,
+  PendingRequestKind,
 } from './state/approvalQueue';
 
 export const FORM_FOREGROUND_MAX_ROWS = 18;
 // Match form sizing for approval modals that already budget or scroll their
 // content. Natural-height approvals stay uncapped until they grow row budgets.
 export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
-  PendingApprovalKind,
+  PendingRequestKind,
   number | undefined
 > = {
   bash: FORM_FOREGROUND_MAX_ROWS,

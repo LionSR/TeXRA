@@ -28,7 +28,7 @@ import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { writeCliResult } from './_helpers/output';
 
 const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
@@ -115,7 +115,7 @@ function buildOverleafClonePorts(
           host: remote.host,
           destination: canonicalWorkspacePath,
         };
-        emitCliResult(context, {
+        writeCliResult(context.outputFormat, {
           json: result,
           ndjson: { kind: 'result', result: { command: 'clone', ...result } },
           text: `${label} project cloned into ${canonicalWorkspacePath}.`,

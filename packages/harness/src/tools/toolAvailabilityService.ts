@@ -11,12 +11,13 @@
 import { Context, type Effect, type Scope, type SubscriptionRef } from 'effect';
 
 import type { ToolProbeInputs } from './toolProbes';
+import type { ToolDependencyStatus } from '@shared/schemas';
 
 /** Result of running a single external tool check. */
 export interface ExternalToolCheckResult {
   readonly id: string;
   readonly tools: readonly string[];
-  readonly status: 'available' | 'not-found' | 'unknown';
+  readonly status: ToolDependencyStatus;
   /** Short status label for the dashboard badge, when the default is too generic. */
   readonly statusLabel?: string;
   /** Human-readable explanation from the plugin's check, if any. */

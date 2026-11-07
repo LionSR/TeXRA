@@ -9,6 +9,7 @@ import { Effect } from 'effect';
 import {
   isRequestRefusal,
   Unavailable,
+  type LaunchRefused,
   type RequestRefusal,
   type Run,
   type RunFailure,
@@ -19,13 +20,14 @@ import type { RunId } from '@texra-ai/harness/schemas';
 /**
  * Resume `runId` on `session`: the run that continues (the one asked for,
  * or the parent that owns it), or the refusal that says why it does not
- * continue, a missing agent or plugin included. A run that fails to start
- * is a `RunFailure`, not a refusal.
+ * continue, a missing agent or plugin included. A launch refused with a
+ * notice to show (an unknown model) is a `LaunchRefused`, and a run that
+ * fails to start a `RunFailure`; neither is a request refusal.
  */
 export const resumeRun = (
   session: Session,
   runId: RunId,
-): Effect.Effect<Run, RequestRefusal | RunFailure> =>
+): Effect.Effect<Run, RequestRefusal | LaunchRefused | RunFailure> =>
   session.resume(runId, { interactive: true }).pipe(
     Effect.catchTags({
       ResumeRefused: (refusal) =>

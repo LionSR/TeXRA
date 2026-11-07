@@ -312,7 +312,6 @@ export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
     const baseResult = {
       ...result,
       output: { ...output, documents },
-      workingDirectory: context.cwd,
       runDirectory,
     };
     // Only completed runs may publish to user-requested destinations. Partial or

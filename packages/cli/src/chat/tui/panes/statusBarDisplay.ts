@@ -44,7 +44,7 @@ import type {
   RunView,
   SessionView,
 } from '@texra-ai/harness/schemas';
-import type { PendingApprovalKind } from '../state/approvalQueue';
+import type { PendingRequestKind } from '../state/approvalQueue';
 
 /** Which approval bypasses are on for a run, its own or inherited. */
 export type BypassState = ReturnType<typeof runBypasses>;
@@ -53,7 +53,7 @@ export type BypassState = ReturnType<typeof runBypasses>;
 type ApprovalQueueStatusKind = 'approval' | 'question' | 'request';
 
 function statusKindForApproval(
-  kind: PendingApprovalKind,
+  kind: PendingRequestKind,
 ): Exclude<ApprovalQueueStatusKind, 'request'> {
   switch (kind) {
     case 'userQuestion':
@@ -70,7 +70,7 @@ function statusKindForApproval(
 }
 
 export function approvalQueueStatusKind(
-  kinds: Iterable<PendingApprovalKind>,
+  kinds: Iterable<PendingRequestKind>,
 ): ApprovalQueueStatusKind {
   let sawApproval = false;
   let sawQuestion = false;

@@ -44,8 +44,8 @@ vi.mock('@cli/chat/tui/state/subscriptionPreference', () => ({
 
 import {
   RunIdSchema,
-  type PermissionPayload,
-  type RetryPermission,
+  type RequestPayload,
+  type RetryRequest,
   type RunId,
 } from '@texra-ai/harness/schemas';
 import {
@@ -171,7 +171,7 @@ function ensureRun(runId: RunId) {
 
 /** Ask through the protocol the TUI host answers: `request.opened` on the
  *  run, settled by the `request.decided` a surface commits. */
-function openRequest(runId: RunId, payload: PermissionPayload) {
+function openRequest(runId: RunId, payload: RequestPayload) {
   return Effect.gen(function* () {
     yield* ensureRun(runId);
     const session = yield* sessionHandle;
@@ -185,14 +185,14 @@ function openRequest(runId: RunId, payload: PermissionPayload) {
   }).pipe(Effect.mapError((cause) => new Error(String(cause))));
 }
 
-function openRetry(permission: RetryPermission) {
+function openRetry(permission: RetryRequest) {
   return openRequest(permission.runId, {
     kind: 'retry',
     data: permission,
   });
 }
 
-function chatGptSubscriptionRetry(label: string): RetryPermission {
+function chatGptSubscriptionRetry(label: string): RetryRequest {
   const message = 'ChatGPT subscription usage limit reached.';
   return {
     requestId: `retry-${label}`,

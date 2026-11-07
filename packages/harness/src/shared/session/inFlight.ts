@@ -20,7 +20,7 @@ import type {
 import { Result } from 'effect';
 
 import type { ModelOrigin, RemoteOperation } from '@texra-ai/llm';
-import type { RunPosition } from './runRowsShape';
+import type { RunRowState } from './runRowsShape';
 import type { HistoryMessage, ModelMessagePayload } from './historyTurns';
 import type { RowRejection } from './runState';
 
@@ -223,7 +223,7 @@ const spentRetries = (failures: readonly (Failure | null)[]): number =>
  */
 export function nextAttempt(
   invocation: Invocation | null,
-  requests: RunPosition['requests'],
+  requests: RunRowState['requests'],
   retries: number,
 ): NextAttempt {
   if (invocation === null) return SEND;
@@ -336,7 +336,7 @@ export interface AttemptRequests {
   readonly raised: number;
   readonly own: {
     readonly requestId: string;
-    readonly request: RunPosition['requests'][string];
+    readonly request: RunRowState['requests'][string];
   } | null;
 }
 
@@ -349,7 +349,7 @@ type ResumedAttempt = AttemptRequests & {
 
 /** What `at` has asked, read off the run's `requests` by derived id. */
 export function attemptRequests(
-  requests: RunPosition['requests'],
+  requests: RunRowState['requests'],
   at: CallAttempt,
 ): AttemptRequests {
   let own: AttemptRequests['own'] = null;
@@ -368,7 +368,7 @@ export function attemptRequests(
  *  the run; a stop's cancel decides nothing). Else the body may have run. */
 export function resumedAttempt(
   state: {
-    readonly requests: RunPosition['requests'];
+    readonly requests: RunRowState['requests'];
     readonly activatedAt: number | null;
   },
   at: Omit<CallAttempt, 'attempt'>,

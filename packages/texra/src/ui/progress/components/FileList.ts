@@ -1,4 +1,5 @@
 // Third-party imports
+import { Schema } from 'effect';
 import {
   getBasename,
   normalizeFilePath,
@@ -27,7 +28,7 @@ import {
   type OutputFileInfo,
   type RoundOutput,
 } from '@texra/shared/plugins/documentOutputs';
-import type { HostRequest } from '@texra/shared/session/hostRequest';
+import { FileActionSchema } from '@texra/shared/session/hostRequest';
 import type { Surface } from '@texra/shared/session/surface';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import type { IconName } from '@ui/wa/iconNames';
@@ -43,17 +44,8 @@ import './LatexdiffResults';
 
 /** The `data-command` of a file name: open it in the editor. */
 const OPEN_FILE = 'openFile';
-/** The file verbs a button carries in its `data-command`. */
-const FILE_VERBS = [
-  'compareOriginal',
-  'comparePrevious',
-  'latexdiff',
-  'accept',
-  'merge',
-] as const satisfies readonly Extract<
-  HostRequest,
-  { kind: 'fileAction' }
->['action'][];
+/** A file verb a button carries in its `data-command`. */
+const isFileAction = Schema.is(FileActionSchema);
 
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
@@ -63,7 +55,7 @@ interface FileActionOptions {
   readonly label: string;
   readonly title: string;
   readonly className: string;
-  readonly command: (typeof FILE_VERBS)[number] | typeof OPEN_FILE;
+  readonly command: typeof FileActionSchema.Type | typeof OPEN_FILE;
   readonly file: string;
   // Unique per (round, file-index); see renderFileActionButton for the id contract.
   readonly idPrefix: string;
@@ -370,8 +362,8 @@ export class FileList extends LitElement {
       );
       return;
     }
-    const action = FILE_VERBS.find((verb) => verb === command);
-    if (action === undefined) {
+    // The buttons below write every verb; another one is a binding bug.
+    if (!isFileAction(command)) {
       console.warn(`Unknown file action: ${command}`);
       return;
     }
@@ -379,7 +371,7 @@ export class FileList extends LitElement {
       SessionUiEvents.host({
         kind: 'fileAction',
         runId,
-        action,
+        action: command,
         file,
         base: base ?? null,
         prev: prev ?? null,
