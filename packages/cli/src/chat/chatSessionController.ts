@@ -104,19 +104,6 @@ import type { SettingsStores } from '@texra-ai/harness/host';
 // ---------------------------------------------------------------------------
 
 /**
- * A chat-session host call this controller drives faulted. The model
- * selection reads the process stores, which does not report a normal outcome
- * this way.
- */
-class ChatSessionCallFailed extends Schema.TaggedError<ChatSessionCallFailed>()(
-  'ChatSessionCallFailed',
-  {
-    message: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {}
-
-/**
  * Hand a run program's own exit to the deferred the root-run slot holds. The
  * slot is claimed before the program that settles it exists, so every launch
  * and resume path ends the same way: success, failure, defect and
@@ -809,18 +796,6 @@ export function createChatSessionController(
               CHAT_API_MODE_MODEL_RECOVERY,
             ),
           },
-        ).pipe(
-          Effect.mapError(
-            (cause) =>
-              // The selection's own failure is the user-facing text: it
-              // names the model, its availability status and the `/key`
-              // recovery. The tag carries that message verbatim, because the
-              // transcript renders `toErrorMessage` of this failure.
-              new ChatSessionCallFailed({
-                message: toErrorMessage(cause),
-                cause,
-              }),
-          ),
         );
         yield* setCliHelperModel(stores.globalState, selection.model);
         return {
