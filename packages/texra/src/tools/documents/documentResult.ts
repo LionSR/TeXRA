@@ -28,7 +28,7 @@ import {
   escapeAttr,
   formatHunkLines,
 } from '@texra-ai/harness/schemas';
-import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
+import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import {
   DocumentsResultSchema,
   type DocumentDiffs,
@@ -90,11 +90,11 @@ function formatOutputFile(
 }
 
 /**
- * Format workflow output files, grouping by round when there are multiple rounds.
+ * Format a document task's output files, grouping by round when there are multiple rounds.
  * When diff info is provided, each <file> element includes a `diff` attribute
  * pointing to the diff file path (readable via /executions/{id}/files/...).
  */
-function formatWorkflowOutputs(
+function formatDocumentOutputs(
   outputs: readonly OutputFileSummary[],
   runId: RunId,
   diffInfos?: ReadonlyMap<string, ResultDiffSummary>,
@@ -129,7 +129,7 @@ function documentsDelivery(value: DocumentsResult, runId: RunId): string[] {
     const diffsByPath = new Map(
       value.diffs.map((diff) => [diff.path, diff] as const),
     );
-    lines.push(...formatWorkflowOutputs(value.outputs, runId, diffsByPath));
+    lines.push(...formatDocumentOutputs(value.outputs, runId, diffsByPath));
   }
   if (value.compileFailures.length > 0) {
     lines.push('<compile-failures>');
@@ -155,7 +155,7 @@ function deliveredFilePath(
 ): string {
   const { originalPath } = output;
   if (originalPath === null || isPathWithin(roots.storage, originalPath)) {
-    return stripWorkflowRoundDir(output.relativePath);
+    return stripRevisionDir(output.relativePath);
   }
   return workspaceRelativePath(roots.workspace, originalPath);
 }
@@ -211,7 +211,7 @@ function truncateDiff(diff: string, maxLines: number): string {
 }
 
 /**
- * Compute diffs for workflow output files and write them to the run's
+ * Compute diffs for a document task's output files and write them to the run's
  * run directory as `.diff` files, in the order of `outputs`.
  *
  * All diffs are written regardless of change size. Large changes (ratio above
@@ -222,7 +222,7 @@ function truncateDiff(diff: string, maxLines: number): string {
  * file whose diff could not be computed is answered in `failed`, so the
  * caller can say so rather than reading it as unchanged.
  */
-const computeAndWriteWorkflowDiffs = Effect.fn('documents.computeDiffs')(
+const computeAndWriteOutputDiffs = Effect.fn('documents.computeDiffs')(
   function* (storageRoot: string, runId: RunId, outputs: OutputFileSummary[]) {
     const fs = yield* FileSystem.FileSystem;
     const computed = yield* Effect.forEach(
@@ -316,7 +316,7 @@ export const computeDocumentDiffs = Effect.fn('documents.diffs')(function* (
 ): Effect.fn.Return<DocumentDiffs, never, FileSystem.FileSystem> {
   if (outputs.length === 0) return {};
   const computed = yield* Effect.result(
-    computeAndWriteWorkflowDiffs(storageRoot, runId, outputs),
+    computeAndWriteOutputDiffs(storageRoot, runId, outputs),
   );
   if (computed._tag === 'Failure') {
     const reason = toErrorMessage(computed.failure);

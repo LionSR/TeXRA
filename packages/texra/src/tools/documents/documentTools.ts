@@ -44,7 +44,7 @@ import { computeOutputDiffStats } from '@texra/agent/output/diffComputation';
 import { revisionLatexdiffs } from '@texra/agent/output/revisionLatexdiffs';
 import { ensureCorrectXmlStructure } from '@texra/agent/output/replyDocuments';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
-import { revisionLayout } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import {
   keepReply,
   openDocuments,

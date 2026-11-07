@@ -2,7 +2,7 @@ import * as path from 'node:path';
 import { normalizeFilePath } from '@texra-ai/harness/schemas';
 
 import { modelConfig } from '@texra-ai/llm';
-import { WORKFLOW_OUTPUT_BASENAME } from '@texra/shared/constants/workflowOutput';
+import { DOCUMENT_OUTPUT_BASENAME } from '@texra/shared/constants/revisionLayout';
 
 function getSafeDocumentPathParts(source: string): {
   dir: string;
@@ -70,8 +70,8 @@ export function getExtractedDocOutputFileName(
   // Guard against an LLM-supplied source like `output.tex` landing directly
   // in roundDir and overwriting the primary output.
   const safeName =
-    safe.dir === '' && safe.name === WORKFLOW_OUTPUT_BASENAME
-      ? `${WORKFLOW_OUTPUT_BASENAME}_extracted`
+    safe.dir === '' && safe.name === DOCUMENT_OUTPUT_BASENAME
+      ? `${DOCUMENT_OUTPUT_BASENAME}_extracted`
       : safe.name;
   return path.posix.join(roundDir, safe.dir, `${safeName}${safe.ext}`);
 }

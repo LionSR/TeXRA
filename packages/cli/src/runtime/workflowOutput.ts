@@ -15,11 +15,11 @@ import {
   type CliRunResult,
   type CliWorkflowRunResult,
 } from '@cli/schemas/cliOutput';
-import { stripWorkflowRoundDir } from '@texra/shared/constants/workflowOutput';
+import { stripRevisionDir } from '@texra/shared/constants/revisionLayout';
 import { getSafeDocumentRelativePath } from '@texra/utils/files/outputFileUtils';
 import {
   documentsResultOf,
-  finalWorkflowOutput,
+  finalDocumentOutput,
   type OutputFileSummary,
 } from '@texra/shared/plugins/documentOutputs';
 
@@ -194,7 +194,7 @@ function outputCopyRelativePathForExpectedOutput(
   expectedRelativePaths: readonly string[],
 ): string {
   const generatedRelativePath = getSafeDocumentRelativePath(
-    stripWorkflowRoundDir(
+    stripRevisionDir(
       toPosixPath(output.relativePath || path.basename(output.absolutePath)),
     ),
   );
@@ -379,7 +379,7 @@ export const resolveWorkflowOutput = Effect.fn('resolveWorkflowOutput')(
       return { ...baseResult, copiedOutputs };
     }
 
-    const finalOutput = finalWorkflowOutput(documents.outputs);
+    const finalOutput = finalDocumentOutput(documents.outputs);
     if (!outputFile || !finalOutput) {
       return baseResult;
     }
@@ -419,7 +419,7 @@ export function formatWorkflowTextResult(result: CliWorkflowRunResult): string {
     return result.copiedOutput;
   }
 
-  const finalOutput = finalWorkflowOutput(result.output.documents.outputs);
+  const finalOutput = finalDocumentOutput(result.output.documents.outputs);
   return finalOutput?.absolutePath ?? result.runDirectory;
 }
 

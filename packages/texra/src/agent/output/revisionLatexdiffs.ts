@@ -26,9 +26,9 @@ import type {
   OutputFileInfo,
 } from '@texra/shared/plugins/documentOutputs';
 import {
-  WORKFLOW_OUTPUT_BASENAME,
+  DOCUMENT_OUTPUT_BASENAME,
   revisionLayout,
-} from '@texra/shared/constants/workflowOutput';
+} from '@texra/shared/constants/revisionLayout';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConfig';
 
@@ -37,7 +37,7 @@ import {
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
 import {
-  getWorkflowAutoCompileTimeoutMs,
+  compileCheckTimeoutMs,
   resolveWorkspaceSourceDir,
 } from './compileCheck';
 import type { OutputDependencies } from './outputFileExtraction';
@@ -134,7 +134,7 @@ export const revisionLatexdiffs = Effect.fn('documents.revisionLatexdiffs')(
     // the latexdiff directory holds no output of that name.
     const layout = revisionLayout(currRound);
     yield* fileService.ensureMirroredInRunSubdir(layout.dir, {
-      protectedStem: WORKFLOW_OUTPUT_BASENAME,
+      protectedStem: DOCUMENT_OUTPUT_BASENAME,
     });
     yield* fileService.ensureMirroredInRunSubdir(layout.diffDir);
 
@@ -325,9 +325,9 @@ const compileDiff = Effect.fn('documents.compileDiff')(function* (
   );
 
   const buildDir = path.join(path.dirname(diffLocation.absolutePath), 'build');
-  // Reuse the workflow compile-check timeout so a hanging diff build
+  // Reuse the compile check's timeout so a hanging diff build
   // is torn down by its scope instead of orphaning latexmk/pdflatex.
-  const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(roots);
+  const timeoutMs = yield* compileCheckTimeoutMs(roots);
   // The diff `.tex` is written under `diff/r{round}/`, away from both the
   // revised round output and the live workspace source. Search the revised
   // round directory first so same-round sibling edits win, then fall back

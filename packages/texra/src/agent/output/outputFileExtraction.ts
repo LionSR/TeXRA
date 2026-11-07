@@ -17,7 +17,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import { Effect, FileSystem } from 'effect';
 
-import { revisionLayout } from '@texra/shared/constants/workflowOutput';
+import { revisionLayout } from '@texra/shared/constants/revisionLayout';
 import {
   OUTPUT_DOCUMENTS_TAG,
   type OutputFileInfo,
@@ -30,7 +30,7 @@ import type { ExpectedDocuments } from './extraction/filenameHeaders';
 import type { AgentTrace, RunFileService } from '@texra-ai/harness/plugins';
 import type { WorkspaceRoots } from '@texra-ai/harness';
 
-/** What the output pipeline reads of the workflow run. */
+/** What the output pipeline reads of the document task's run. */
 export interface OutputDependencies {
   readonly config: AgentConfig;
   /** The documents the launch expects a reply to name. */

@@ -21,8 +21,8 @@ import { Effect, FileSystem } from 'effect';
 import { compileLatex2Pdf, type CompileLatex2PdfResult } from '@latex/texTools';
 import {
   revisionLayout,
-  stripWorkflowRoundDir,
-} from '@texra/shared/constants/workflowOutput';
+  stripRevisionDir,
+} from '@texra/shared/constants/revisionLayout';
 import { DocumentsStateKey } from '@texra/shared/settingsView/documentsSettings';
 import { LATEX_CONFIG_RANGES } from '@texra/shared/constants/latexConfig';
 import {
@@ -73,18 +73,18 @@ const skipped = (reason: string, unverified = false): CompileCheckResult => ({
   unverified,
 });
 
-/** Workflow auto-compile timeout, floored at the config-range minimum. */
-export const getWorkflowAutoCompileTimeoutMs = Effect.fn(
-  'getWorkflowAutoCompileTimeoutMs',
-)(function* (roots: WorkspaceRoots) {
-  return Math.max(
-    MIN_TIMEOUT_MS,
-    yield* Settings.get<number>(
-      roots,
-      DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-    ),
-  );
-});
+/** The compile check's timeout setting, floored at the config-range minimum. */
+export const compileCheckTimeoutMs = Effect.fn('compileCheckTimeoutMs')(
+  function* (roots: WorkspaceRoots) {
+    return Math.max(
+      MIN_TIMEOUT_MS,
+      yield* Settings.get<number>(
+        roots,
+        DocumentsStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
+      ),
+    );
+  },
+);
 
 /**
  * Return a human-readable display name for an output file in compile messages.
@@ -119,16 +119,15 @@ export function resolveWorkspaceSourceDir(
         )
       : undefined;
   const workspaceRelative =
-    runRelative !== undefined &&
-    stripWorkflowRoundDir(runRelative) !== runRelative
-      ? stripWorkflowRoundDir(location.relativePath)
+    runRelative !== undefined && stripRevisionDir(runRelative) !== runRelative
+      ? stripRevisionDir(location.relativePath)
       : location.relativePath;
 
   return path.join(workspaceRoot, path.dirname(workspaceRelative));
 }
 
 /**
- * Compile each .tex output of a round to verify the workflow produced a
+ * Compile each .tex output of a round to verify the document task produced a
  * buildable document. Success is silent; failures write the log tail to
  * the revision's compile log (`revisionLayout(...).compileLog`). Non-root fragments are skipped;
  * a check that compiles nothing says why (`skipped`).
@@ -156,7 +155,7 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
     if (texOutputs.length === 0)
       return skipped('the revision wrote no .tex output');
 
-    const timeoutMs = yield* getWorkflowAutoCompileTimeoutMs(ctx.roots);
+    const timeoutMs = yield* compileCheckTimeoutMs(ctx.roots);
     const failures: CompileFailure[] = [];
     const artifacts: RunStorageFileLocation[] = [];
 
@@ -249,7 +248,7 @@ const compileOne = Effect.fn('documents.compileOne')(function* (
   // Full relative path keeps two outputs sharing a basename distinct
   // (ch1/main.tex vs ch2/main.tex). The revision's own folder is left out,
   // since the log's name already carries the revision.
-  const pathForSafeName = stripWorkflowRoundDir(
+  const pathForSafeName = stripRevisionDir(
     normalizeFilePath(fileLocationDisplayPath(outputFile.location)),
     currentRound,
   );

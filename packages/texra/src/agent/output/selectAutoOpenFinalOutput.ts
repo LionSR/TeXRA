@@ -3,7 +3,7 @@ import { Settings } from '@texra-ai/harness/host';
 import { RUN_OUTCOME } from '@texra-ai/harness/schemas';
 import {
   documentsResultOf,
-  finalWorkflowOutput,
+  finalDocumentOutput,
 } from '@texra/shared/plugins/documentOutputs';
 import { DOCUMENT_TASK_BLOCK } from '@texra/shared/plugins/documents';
 import type { RunEnd } from '@texra-ai/harness';
@@ -20,7 +20,7 @@ import type { SettingsStores } from '@texra-ai/harness/host';
  * - Only a `completed` document task (its recipe runs the documents block)
  *   qualifies — failed or cancelled runs may hold partial outputs.
  * - Gated by `texra.agentOutputs.autoOpenFinal` (default true).
- * - Which file counts as final is {@link finalWorkflowOutput}'s call, shared
+ * - Which file counts as final is {@link finalDocumentOutput}'s call, shared
  *   with the CLI's `--output` copy and text result.
  *
  * Returns `undefined` when nothing should open; the host supplies only its own
@@ -44,6 +44,6 @@ export const selectAutoOpenFinalOutput = Effect.fn('selectAutoOpenFinalOutput')(
       return undefined;
     }
 
-    return finalWorkflowOutput(documents.outputs);
+    return finalDocumentOutput(documents.outputs);
   },
 );

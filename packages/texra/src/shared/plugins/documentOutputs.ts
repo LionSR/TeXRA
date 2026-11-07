@@ -138,7 +138,7 @@ const CompileFailureSchema = Schema.Struct({
  * and callers' output order is not guaranteed to lead with the primary
  * document.
  */
-export function finalWorkflowOutput(
+export function finalDocumentOutput(
   outputs: readonly OutputFileSummary[],
 ): OutputFileSummary | undefined {
   if (outputs.length === 0) return undefined;
