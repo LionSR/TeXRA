@@ -51,18 +51,26 @@ interface CompileCheckContext {
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 /** A round's check: the outputs that failed and the PDFs of those that
- *  built, or why it checked nothing, which is never zero failures. */
+ *  built, or why it checked nothing, which is never zero failures. A check
+ *  with something to compile that could not compile it leaves the revision
+ *  unverified (`unverified`); one turned off or with no `.tex` output does
+ *  not. */
 type CompileCheckResult =
   | {
       readonly _tag: 'checked';
       readonly artifacts: RunStorageFileLocation[];
       readonly failures: CompileFailure[];
     }
-  | { readonly _tag: 'skipped'; readonly reason: string };
+  | {
+      readonly _tag: 'skipped';
+      readonly reason: string;
+      readonly unverified: boolean;
+    };
 
-const skipped = (reason: string): CompileCheckResult => ({
+const skipped = (reason: string, unverified = false): CompileCheckResult => ({
   _tag: 'skipped',
   reason,
+  unverified,
 });
 
 /** Workflow auto-compile timeout, floored at the config-range minimum. */
@@ -165,7 +173,10 @@ export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
       // file: the run leaves no `compile/*.log` to read as a broken build.
       if (result === 'no-compiler') {
         ctx.logger.warn('Compile check skipped: no LaTeX compiler installed');
-        return skipped('no LaTeX compiler (latexmk or pdflatex) is installed');
+        return skipped(
+          'no LaTeX compiler (latexmk or pdflatex) is installed',
+          true,
+        );
       }
       if (result.failure) failures.push(result.failure);
       if (result.artifact) artifacts.push(result.artifact);

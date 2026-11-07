@@ -154,6 +154,13 @@ export const computeOutputDiffStats = Effect.fn(
         }
 
         const base = lineage ? diffBaseLocation : null;
+        // An output of a task that rewrites its inputs revises one of them;
+        // one no input pairs with is recorded as a new document, which the
+        // record cannot tell apart from one, so it is said here.
+        if (lineage && base === null)
+          yield* Effect.logWarning(
+            `The lineage of ${locationPath} (document "${output.source}") could not be paired with any input: it is recorded as a new document, with no base to diff against.`,
+          ).pipe(withLogChannel(CHANNEL));
         const stats = yield* computeDiffStats(base, location);
 
         return {

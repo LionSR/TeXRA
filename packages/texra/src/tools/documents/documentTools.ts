@@ -399,6 +399,7 @@ export const DocumentCompileTool = defineTool({
           Effect.succeed({
             _tag: 'skipped' as const,
             reason: 'the check itself failed',
+            unverified: true,
           }),
       }),
     );
@@ -410,7 +411,7 @@ export const DocumentCompileTool = defineTool({
     );
     const compile: CompileOutcome =
       check._tag === 'skipped'
-        ? check
+        ? { _tag: 'skipped', reason: check.reason }
         : {
             _tag: 'checked',
             failures: check.failures,
@@ -445,14 +446,16 @@ export const DocumentCompileTool = defineTool({
       skipped: compile._tag === 'skipped' ? compile.reason : null,
       rejected: compile._tag === 'checked' && compile.rejected,
     };
-    if (compile._tag === 'skipped') {
-      // The rejection gate sees no failures here, so it says what it skips.
-      const unverified = rejects
-        ? ' Failed compiles are rejected, but this revision is unverified.'
-        : '';
+    if (check._tag === 'skipped') {
+      // The rejection gate sees no failures here, so it says what it skips:
+      // a check that had something to compile and could not.
+      const unverified =
+        rejects && check.unverified
+          ? ' Failed compiles are rejected, but this revision is unverified.'
+          : '';
       return {
         ...executed(
-          `No compile check ran: ${compile.reason}.${unverified}`,
+          `No compile check ran: ${check.reason}.${unverified}`,
           'Not checked',
         ),
         value,
