@@ -652,12 +652,12 @@ export const modelInvokerLayer = (): Layer.Layer<
       ): Effect.fn.Return<void, InvokeError, SessionServices> {
         const info = failureInfo(error, bound.config.provider);
         const quota = error instanceof ModelError ? error.quota : undefined;
-        if (next.kind === 'ask' || next.kind === 'stop')
+        if (next.kind !== 'retry' && next.kind !== 'unchain')
           yield* logProviderError(
             logger,
-            next.kind === 'ask'
-              ? 'Model request failed'
-              : 'Model request failed (no retry available)',
+            next.kind === 'stop'
+              ? 'Model request failed (no retry available)'
+              : 'Model request failed',
             { ...info, rawErrorBody: error.cause },
           );
         // A response the provider billed before refusing it is priced
