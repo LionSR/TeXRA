@@ -251,6 +251,7 @@ is read in 22 places); a decorator that only forwards.
 **Hops:** 3 to 4, from `contextFromArgs` to `defineCliCommand` to a
 command's `run` to its helpers to the reader. 30 forwarding functions in 16
 files, plus 37 `run: (context, ctx) =>` lambdas. **Deep readers:**
+
 - `emitCliResult` and `emitPagedCliResult` (`commands/_helpers/output.ts:39-64,74`),
   which read `.outputFormat`;
 - `cliProgressWriter` (`:17-21`);
@@ -307,16 +308,21 @@ the way must take it.
 context:
 
 ```ts
-export class CliInvocation extends Context.Service<CliInvocation, {
-  readonly context: CliContext;
-  /** `emitCliResult`'s body, with the format captured. */
-  readonly emit: (result: CliResult) => void;
-  readonly emitPaged: (result: CliResult) => Effect.Effect<void>;
-  /** `cliProgressWriter`'s choice, made once. */
-  readonly progress: (text: string) => void;
-  /** The one stdin's lane. */
-  readonly onPromptLane: <A, E, R>(e: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R>;
-}>()('@texra-ai/cli/CliInvocation') {}
+export class CliInvocation extends Context.Service<
+  CliInvocation,
+  {
+    readonly context: CliContext;
+    /** `emitCliResult`'s body, with the format captured. */
+    readonly emit: (result: CliResult) => void;
+    readonly emitPaged: (result: CliResult) => Effect.Effect<void>;
+    /** `cliProgressWriter`'s choice, made once. */
+    readonly progress: (text: string) => void;
+    /** The one stdin's lane. */
+    readonly onPromptLane: <A, E, R>(
+      e: Effect.Effect<A, E, R>,
+    ) => Effect.Effect<A, E, R>;
+  }
+>()('@texra-ai/cli/CliInvocation') {}
 ```
 
 `defineCliCommand` runs `program.pipe(Effect.provideService(CliInvocation,
@@ -542,6 +548,7 @@ controller's selection read.
   `visible` without a scope is `workspaceAgents(stores).getVisibleAgents()`
   (`:271-286`). With a scope, it is a catalog lookup that ignores `stores`
   (`:275-283`).
+
 - Internally, `resolve` takes `stores` only to call `visible` (`:288-304`).
   `forLaunch` takes them only for `resolve` (`:358-370`). A new controller
   is built on every call (`:263-269`).
@@ -590,6 +597,7 @@ view.
 
   Under M8 these become `yield* AppState` in `showInstructionWithSuppress`
   and in the onboarding writers. 12 parameters and fields go.
+
 - **M10 (round 2): `ExecuteCommandBaseOptions.settings` exists for one git
   identity read.** The hop counts M10 did not give:
   - `getTeXCountStats` → `getTeXCount` → `getIndividualCounts` →
@@ -679,14 +687,14 @@ view.
 
 ## Effect-native mapping (checked against `node_modules/effect` 4.1.2 `.d.ts`)
 
-| #   | Today                                                                                   | Effect-native                                                                                       | API (file:line)                                                                                                                                                                                                                                                                |
-| --- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1   | `apiKeys` on `RunLaunch` and `ToolRun`, forwarded at 3 launch doors                       | `LaunchKeys` `Context.Reference` (default `{}`), read in the opening, re-provided on the forked run | `Context.Reference` (`Context.d.ts:1741`, interface `:395-400`); `Effect.provideService` (`Effect.d.ts:12173`); `Effect.provideContext` merges (`internal/effect.js:1366-1368`); the fork's captured context: `FiberMap.runtime` (`FiberMap.d.ts:1140`); `Effect.forkScoped` inherits (`Effect.d.ts:17216`) |
-| 2   | `Effect.context<ProcessServices>()` threaded through 4 calls, and an unread `owner`       | `yield* AgentCatalog` once in the layer; the shape captured                                         | `Layer.effect` (`Layer.d.ts:1166`, effect run in the layer's scope); `Context.Service` (`Context.d.ts:196`)                                                                                                                                                                       |
-| 3   | `CliContext` parameter on 71 functions; a `WeakMap` keyed by it                          | `CliInvocation` `Context.Service`, provided at `defineCliCommand` (or as a layer of K4's runtime)   | `Context.Service` (`Context.d.ts:196`); `Effect.provideService` (`Effect.d.ts:12173`); `Layer.succeed` (`Layer.d.ts:839`)                                                                                                                                                         |
-| 4   | channel strings through 10 helpers, 1 port and 3 options                                 | the fiber's log annotation, named once per program                                                  | `Effect.annotateLogs` (`Effect.d.ts:19258`), `Effect.annotateLogsScoped` (`:19448`), via `withLogChannel` (`effectLog.ts:20-23`)                                                                                                                                                  |
-| 5   | the Zotero `port` through 8 functions                                                    | the transport yields `ToolContext` and reads the setting                                            | `Context.Service` `ToolContext` (`agent/core/tools/ToolTypes.ts:223`); `Effect.flatMap`                                                                                                                                                                                           |
-| 6   | `stores` on three catalog members                                                        | a per-workspace view value, built once by its holder                                                | none (a plain value)                                                                                                                                                                                                                                                              |
+| #   | Today                                                                               | Effect-native                                                                                       | API (file:line)                                                                                                                                                                                                                                                                                             |
+| --- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `apiKeys` on `RunLaunch` and `ToolRun`, forwarded at 3 launch doors                 | `LaunchKeys` `Context.Reference` (default `{}`), read in the opening, re-provided on the forked run | `Context.Reference` (`Context.d.ts:1741`, interface `:395-400`); `Effect.provideService` (`Effect.d.ts:12173`); `Effect.provideContext` merges (`internal/effect.js:1366-1368`); the fork's captured context: `FiberMap.runtime` (`FiberMap.d.ts:1140`); `Effect.forkScoped` inherits (`Effect.d.ts:17216`) |
+| 2   | `Effect.context<ProcessServices>()` threaded through 4 calls, and an unread `owner` | `yield* AgentCatalog` once in the layer; the shape captured                                         | `Layer.effect` (`Layer.d.ts:1166`, effect run in the layer's scope); `Context.Service` (`Context.d.ts:196`)                                                                                                                                                                                                 |
+| 3   | `CliContext` parameter on 71 functions; a `WeakMap` keyed by it                     | `CliInvocation` `Context.Service`, provided at `defineCliCommand` (or as a layer of K4's runtime)   | `Context.Service` (`Context.d.ts:196`); `Effect.provideService` (`Effect.d.ts:12173`); `Layer.succeed` (`Layer.d.ts:839`)                                                                                                                                                                                   |
+| 4   | channel strings through 10 helpers, 1 port and 3 options                            | the fiber's log annotation, named once per program                                                  | `Effect.annotateLogs` (`Effect.d.ts:19258`), `Effect.annotateLogsScoped` (`:19448`), via `withLogChannel` (`effectLog.ts:20-23`)                                                                                                                                                                            |
+| 5   | the Zotero `port` through 8 functions                                               | the transport yields `ToolContext` and reads the setting                                            | `Context.Service` `ToolContext` (`agent/core/tools/ToolTypes.ts:223`); `Effect.flatMap`                                                                                                                                                                                                                     |
+| 6   | `stores` on three catalog members                                                   | a per-workspace view value, built once by its holder                                                | none (a plain value)                                                                                                                                                                                                                                                                                        |
 
 `ConfigProvider.ConfigProvider` is itself a `Context.Reference`
 (`ConfigProvider.d.ts:332`), which is why `withApiKeys`'s
