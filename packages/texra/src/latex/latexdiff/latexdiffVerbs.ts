@@ -15,12 +15,7 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  Rejected,
-  type HostRequestFailure,
-  type Session,
-  type WorkspaceRoots,
-} from '@texra-ai/harness';
+import { Rejected, type Session, type WorkspaceRoots } from '@texra-ai/harness';
 import {
   pathToLocationIn,
   Settings,
@@ -46,6 +41,7 @@ import type { LatexdiffMathMarkupValue } from '@texra/shared/constants/latexConf
 import { latexdiff, latexdiffAgainstCommit } from '../latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
 import { latexdiffPairs } from './diffOperations';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 /** The latexdiff verbs taken against a commit rather than an edited file. */
 type LatexdiffCommitAction = Extract<

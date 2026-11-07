@@ -167,8 +167,13 @@ export function decodeToolUseLog(data: Record<string, unknown>): ToolUseLog {
 export const BASH_TOOL_DEFAULT_TIMEOUT_MS = 120_000;
 
 /**
- * Max chars a background `bash` run records as `process.output` rows before
- * it stops recording and writes a single truncation notice. Lives here
+ * Max chars a background `bash` run records as `process.output` rows as
+ * they arrive, both streams together. Past it the run writes a truncation
+ * notice; a stream that has not yet recorded its first 1,000 characters
+ * (the delivery's head budget) still records them, and the rest is held
+ * back. When the command ends the run writes how much it left out and
+ * records the last 12,000 characters of each stream, so a capped log holds
+ * at most one head and one tail per stream beyond this figure. Lives here
  * because the writer (`tools/bash.ts`) and the reader
  * (`/executions/{id}/output`) must agree on the figure the output header
  * reports.

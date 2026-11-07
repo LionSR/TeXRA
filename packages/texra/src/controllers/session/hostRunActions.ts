@@ -2,11 +2,9 @@
 
 import {
   Cancelled,
-  isRequestRefusal,
   Rejected,
   type LaunchError,
   type RequestError,
-  type RequestRefusal,
   type Run,
   type RunFailure,
   type Session,
@@ -55,6 +53,10 @@ import {
   type CompileFixerPlanFailed,
 } from '../progressView/compileFixer';
 import type { AgentConfig, AgentConfigInput } from '@texra-ai/harness/schemas';
+import {
+  isRequestRefusal,
+  type RequestRefusal,
+} from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'HostRunActions';
 

@@ -15,12 +15,13 @@ import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import { RunFileService } from '@texra-ai/harness/plugins';
 import { absentReason, entryTypeIn } from '@texra-ai/harness/node';
 import { toErrorMessage, type RunId } from '@texra-ai/harness/schemas';
-import { Rejected, type HostRequestFailure } from '@texra-ai/harness';
+import { Rejected } from '@texra-ai/harness';
 import type { HostRequest } from '@texra/shared/session/hostRequest';
 import { revisionLayout } from '@texra/shared/constants/workflowOutput';
 import type { AppSignals, ProcessServices } from '@texra-ai/harness/host';
 import type { HostRunActions } from '../session/hostRunActions';
 import type { RoundOutput } from '@texra/shared/plugins/documentOutputs';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ProgressWorkflowFileActions';
 

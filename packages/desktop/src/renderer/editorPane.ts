@@ -11,12 +11,26 @@
 //
 // File I/O goes over IPC to the main process, which owns the only trustworthy
 // view of the filesystem: the renderer is sandboxed with no node integration.
+// Each file's reads and writes take that file's lane in turn, and a newer
+// request supersedes an older one by interrupting it, so no result needs
+// checking for staleness after it arrives.
 
 import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/tree/tree.js';
 import '@awesome.me/webawesome/dist/components/tree-item/tree-item.js';
+import {
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  FiberHandle,
+  FiberSet,
+  Scope,
+  Semaphore,
+} from 'effect';
 import { html, nothing, render, type TemplateResult } from 'lit';
 
+import { ensureError } from '@texra-ai/harness/schemas';
 import type { Theme } from '@texra/shared/ipc';
 import { loadMonaco, type MonacoModule } from '@ui/monaco/monacoLoader';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
@@ -45,11 +59,10 @@ interface FileState {
   // history and cursor — recreating a model on every switch would lose both.
   model?: TextModel;
   viewState?: NonNullable<ReturnType<CodeEditor['saveViewState']>>;
-  pendingLoad?: Promise<TextModel | undefined>;
-  /** The tail of this path's model-sync lane; see `onModelSyncLane`. */
-  syncTail?: Promise<void>;
-  writeEpoch: number;
-  activeWrites: number;
+  /** The file's reads and writes, one at a time in the order asked: a
+   *  read never lands between a save's write and its bookkeeping, and each
+   *  save sends the base the one before it wrote. */
+  readonly lane: Semaphore.Semaphore;
   /** What this pane last read from or wrote to the file: a save lands only
    *  while the file still holds it. */
   disk?: string;
@@ -59,15 +72,17 @@ interface FileState {
 
 interface EditorPaneCallbacks {
   /** Lists the direct children of one workspace directory for the tree. */
-  listFiles(directory: string): Promise<readonly EditorFileEntry[]>;
-  readFile(path: string): Promise<string>;
+  listFiles(
+    directory: string,
+  ): Effect.Effect<readonly EditorFileEntry[], Error>;
+  readFile(path: string): Effect.Effect<string, Error>;
   /** Writes `contents` while the file still holds `base` (null: whatever
    *  it holds); `changedOnDisk` when something else rewrote it. */
   writeFile(
     path: string,
     contents: string,
     base: string | null,
-  ): Promise<'saved' | 'changedOnDisk'>;
+  ): Effect.Effect<'saved' | 'changedOnDisk', Error>;
   isReadOnly?(path: string): boolean;
   /** Reports dirty state so the tab strip can show its indicator. */
   onDirtyChange(path: string, dirty: boolean): void;
@@ -122,17 +137,49 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   let disposed = false;
   let monaco: MonacoModule | undefined;
   let editor: CodeEditor | undefined;
-  let editorLoad: Promise<CodeEditor | undefined> | undefined;
-  let latestOpenRequest = 0;
   let treeNodes: readonly EditorTreeNode[] = [];
   let openPath: string | undefined;
   let theme: Theme = 'dark';
   let treeError: string | undefined;
   let treeLoading = true;
-  let refreshPromise: Promise<void> | undefined;
-  let refreshQueued = false;
-  let refreshGeneration = 0;
-  let treeRevision = 0;
+  // Everything the pane runs lives in its scope: disposing the pane
+  // interrupts whatever is still in flight.
+  const scope = Scope.makeUnsafe();
+  const { opening, listing, directoryLoads } = Effect.runSync(
+    Effect.gen(function* () {
+      return {
+        /** The open that chooses which file is visible: a newer open
+         *  interrupts it. */
+        opening: yield* FiberHandle.make<void>(),
+        /** The tree's top-level listing: a newer refresh interrupts it. */
+        listing: yield* FiberHandle.make<void>(),
+        /** The folders being listed; a refresh interrupts them all. */
+        directoryLoads: yield* FiberSet.make<void>(),
+      };
+    }).pipe(Scope.provide(scope)),
+  );
+  /** Run `program` in the pane's scope; the promise resolves when it ends,
+   *  however it ends (each program reports its own failures). */
+  const run = (program: Effect.Effect<void>): Promise<void> =>
+    disposed
+      ? Promise.resolve()
+      : Effect.runPromise(
+          Effect.forkIn(program, scope).pipe(
+            Effect.flatMap(Fiber.await),
+            Effect.asVoid,
+          ),
+        );
+  /** Run `program` as the fiber `handle` holds, and wait for it. */
+  const runAs = (
+    handle: FiberHandle.FiberHandle<void>,
+    program: Effect.Effect<void>,
+  ): Promise<void> =>
+    Effect.runPromise(
+      FiberHandle.run(handle, program).pipe(
+        Effect.flatMap(Fiber.await),
+        Effect.asVoid,
+      ),
+    );
   const expandedDirectories = new Set<string>();
   const directoryChildren = new Map<string, readonly EditorTreeNode[]>();
   const loadingDirectories = new Set<string>();
@@ -143,8 +190,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     let file = files.get(path);
     if (!file) {
       file = {
-        writeEpoch: 0,
-        activeWrites: 0,
+        lane: Semaphore.makeUnsafe(1),
         dirty: false,
         syncing: false,
       };
@@ -239,41 +285,50 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (event.target !== event.currentTarget) return;
     if (expanded) {
       expandedDirectories.add(directory.path);
-      void loadDirectory(directory);
+      void run(
+        FiberSet.run(directoryLoads, loadDirectory(directory)).pipe(
+          Effect.asVoid,
+        ),
+      );
     } else {
       expandedDirectories.delete(directory.path);
     }
   }
 
-  async function loadDirectory(directory: EditorTreeDirectory): Promise<void> {
-    if (
-      directoryChildren.has(directory.path) ||
-      loadingDirectories.has(directory.path)
-    ) {
-      return;
-    }
-
-    const revision = treeRevision;
-    loadingDirectories.add(directory.path);
-    directoryErrors.delete(directory.path);
-    renderTree();
-    try {
-      const entries = await callbacks.listFiles(directory.path);
-      if (revision !== treeRevision) return;
-      directoryChildren.set(
-        directory.path,
-        buildEditorDirectoryEntries(entries),
-      );
-    } catch (error) {
-      if (revision !== treeRevision) return;
-      callbacks.onError(error);
-      directoryErrors.add(directory.path);
-    } finally {
-      if (revision === treeRevision) {
-        loadingDirectories.delete(directory.path);
-        renderTree();
+  /** List one folder for the tree. A refresh interrupts it, and clears
+   *  what it would have written. */
+  function loadDirectory(directory: EditorTreeDirectory): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      if (
+        directoryChildren.has(directory.path) ||
+        loadingDirectories.has(directory.path)
+      ) {
+        return Effect.void;
       }
-    }
+      loadingDirectories.add(directory.path);
+      directoryErrors.delete(directory.path);
+      renderTree();
+      return callbacks.listFiles(directory.path).pipe(
+        Effect.match({
+          onSuccess: (entries) => {
+            directoryChildren.set(
+              directory.path,
+              buildEditorDirectoryEntries(entries),
+            );
+          },
+          onFailure: (error) => {
+            callbacks.onError(error);
+            directoryErrors.add(directory.path);
+          },
+        }),
+        Effect.andThen(
+          Effect.sync(() => {
+            loadingDirectories.delete(directory.path);
+            renderTree();
+          }),
+        ),
+      );
+    });
   }
 
   function treeNodeTemplate(node: EditorTreeNode): TemplateResult {
@@ -340,146 +395,97 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     `;
   }
 
-  async function ensureEditor(): Promise<CodeEditor | undefined> {
-    if (editor) return editor;
-    if (editorLoad) return editorLoad;
+  /** Monaco and the pane's editor, made once; a load that failed is tried
+   *  again by the next open. */
+  const [editorOnce, forgetEditor] = Effect.runSync(
+    Effect.cachedInvalidateWithTTL(
+      Effect.tryPromise({ try: () => loadMonaco(), catch: ensureError }).pipe(
+        Effect.map((loadedMonaco) => {
+          monaco = loadedMonaco;
+          editor = loadedMonaco.editor.create(editorHost, {
+            ...monacoPresentationOptions(document.body),
+            theme: applyMonacoTheme(loadedMonaco, theme, document.body),
+            // Monaco measures its own container, and the pane is resized by
+            // splits and divider drags, not only by the window.
+            automaticLayout: true,
+            // Papers and proofs have paragraph-length lines, so wrapping beats
+            // a horizontal scrollbar — but wrap on word boundaries, not
+            // anywhere.
+            wordWrap: 'bounded',
+            wordWrapColumn: 120,
+            wrappingStrategy: 'simple',
+            folding: true,
+          });
+          return { monaco: loadedMonaco, editor };
+        }),
+      ),
+      Duration.infinity,
+    ),
+  );
+  const ensureEditor = editorOnce.pipe(Effect.tapError(() => forgetEditor));
 
-    editorLoad = (async () => {
-      try {
-        const loadedMonaco = await loadMonaco();
-        if (disposed) return undefined;
-        monaco = loadedMonaco;
-        editor = loadedMonaco.editor.create(editorHost, {
-          ...monacoPresentationOptions(document.body),
-          theme: applyMonacoTheme(loadedMonaco, theme, document.body),
-          // Monaco measures its own container, and the pane is resized by splits
-          // and divider drags, not only by the window.
-          automaticLayout: true,
-          // Papers and proofs have paragraph-length lines, so wrapping beats a
-          // horizontal scrollbar — but wrap on word boundaries, not anywhere.
-          wordWrap: 'bounded',
-          wordWrapColumn: 120,
-          wrappingStrategy: 'simple',
-          folding: true,
-        });
-        return editor;
-      } catch (error) {
-        notice.report(undefined, 'load', error);
-        return undefined;
-      } finally {
-        editorLoad = undefined;
-      }
-    })();
-    return editorLoad;
-  }
-
-  async function readCurrentContents(path: string): Promise<string> {
-    // An initial open has no cached model for refresh to update. If a refresh
-    // starts during its read, read again before publishing the new model.
-    let generation = refreshGeneration;
-    let contents = await callbacks.readFile(path);
-    while (generation !== refreshGeneration) {
-      generation = refreshGeneration;
-      contents = await callbacks.readFile(path);
+  /** Put `contents` in `model` without marking the file dirty. */
+  function setClean(file: FileState, model: TextModel, contents: string): void {
+    file.disk = contents;
+    if (model.getValue() === contents) return;
+    file.syncing = true;
+    try {
+      model.setValue(contents);
+    } finally {
+      file.syncing = false;
     }
-    return contents;
   }
 
-  function loadModel(
+  /** The file's model, read from disk on its lane the first time, or
+   *  brought up to date with disk while it has no edits. */
+  function currentModel(
     path: string,
     file: FileState,
     loadedMonaco: MonacoModule,
-  ): Promise<TextModel | undefined> {
-    if (file.pendingLoad) return file.pendingLoad;
-
-    const load = readCurrentContents(path).then((contents) => {
-      if (disposed) return undefined;
-      file.disk = contents;
-      const model = loadedMonaco.editor.createModel(
-        contents,
-        monacoLanguageForPath(path),
-      );
-      // Track dirty per file. `onDidChangeContent` fires for programmatic
-      // edits too, which is correct here: only reads and saves are
-      // programmatic, and both reset the flag explicitly.
-      model.onDidChangeContent(() => {
-        if (file.syncing || file.dirty) return;
-        file.dirty = true;
-        callbacks.onDirtyChange(path, true);
-        renderTree();
-      });
-      file.model = model;
-      return model;
-    });
-    const ownedLoad = load.finally(() => {
-      if (file.pendingLoad === ownedLoad) file.pendingLoad = undefined;
-    });
-    file.pendingLoad = ownedLoad;
-    return ownedLoad;
+  ): Effect.Effect<TextModel, Error> {
+    return file.lane.withPermit(
+      Effect.suspend(() => {
+        const { model } = file;
+        if (model) return Effect.as(syncClean(path, file, model), model);
+        return Effect.map(callbacks.readFile(path), (contents) => {
+          file.disk = contents;
+          const created = loadedMonaco.editor.createModel(
+            contents,
+            monacoLanguageForPath(path),
+          );
+          // Track dirty per file. `onDidChangeContent` fires for programmatic
+          // edits too, which is correct here: only reads and saves are
+          // programmatic, and both reset the flag explicitly.
+          created.onDidChangeContent(() => {
+            if (file.syncing || file.dirty) return;
+            file.dirty = true;
+            callbacks.onDirtyChange(path, true);
+            renderTree();
+          });
+          file.model = created;
+          return created;
+        });
+      }),
+    );
   }
 
-  /**
-   * Run `sync` after every sync already queued for `path`, one at a time.
-   *
-   * The repo's one per-key lane is `withPerKeyLane` (`@utils/core/perKeyQueue`),
-   * but it is an Effect combinator and this renderer runs no Effect programs:
-   * importing `effect` here would make all six of the pane's promise
-   * boundaries Effect-file catch sites to convert to typed recovery, i.e.
-   * rewrite the pane's error handling in a change about lanes. So this is that same hand-off in promise
-   * form — each entrant awaits the tail it found and installs its own.
-   *
-   * The tail waits for the settlement rather than the value, so a failed sync
-   * neither poisons the path's lane nor is swallowed: the failure still
-   * reaches the caller through the returned promise. The lane's tail clears
-   * once its last entrant settles.
-   */
-  function onModelSyncLane(
-    file: FileState,
-    sync: () => Promise<void>,
-  ): Promise<void> {
-    const result = (file.syncTail ?? Promise.resolve()).then(sync);
-    const tail: Promise<void> = Promise.allSettled([result]).then(() => {
-      if (file.syncTail === tail) file.syncTail = undefined;
-    });
-    file.syncTail = tail;
-    return result;
-  }
-
-  function syncCleanModel(
+  /** Re-read a model that has no edits. Run on the file's lane. */
+  function syncClean(
     path: string,
     file: FileState,
     model: TextModel,
-  ): Promise<void> {
-    return onModelSyncLane(file, async () => {
-      if (disposed || file.model !== model || file.dirty) return;
+  ): Effect.Effect<void, Error> {
+    return Effect.suspend(() => {
+      if (file.dirty) return Effect.void;
       const version = model.getVersionId();
-      const generation = refreshGeneration;
-      const writeEpoch = file.writeEpoch;
-      const contents = await callbacks.readFile(path);
-      // The read crosses IPC. Recheck all local state so an edit, save, or
-      // newer refresh can supersede this result while it is in flight.
-      if (
-        disposed ||
-        file.model !== model ||
-        file.dirty ||
-        file.activeWrites > 0 ||
-        model.getVersionId() !== version ||
-        refreshGeneration !== generation ||
-        file.writeEpoch !== writeEpoch
-      ) {
-        return;
-      }
-      // Only a read that is accepted retires an earlier notice, so a save
-      // that failed while this read was in flight keeps its warning.
-      notice.clear(path);
-      file.disk = contents;
-      if (model.getValue() === contents) return;
-      file.syncing = true;
-      try {
-        model.setValue(contents);
-      } finally {
-        file.syncing = false;
-      }
+      return Effect.map(callbacks.readFile(path), (contents) => {
+        // Typing while the read was in flight is newer than it.
+        if (file.dirty || model.getVersionId() !== version) return;
+        // Only a read that is accepted retires an earlier notice, so a save
+        // that failed before it keeps its warning.
+        notice.clear(path);
+        setClean(file, model, contents);
+      });
     });
   }
 
@@ -490,176 +496,190 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     const model = file?.model;
     if (!file || !model) return Promise.resolve();
     const version = model.getVersionId();
-    return onModelSyncLane(file, async () => {
-      const contents = await callbacks.readFile(path);
-      // Typing since the choice is newer than it: keep it, and the file's
-      // base, so its save asks again.
-      if (disposed || file.model !== model || model.getVersionId() !== version)
-        return;
-      file.disk = contents;
-      file.syncing = true;
-      try {
-        model.setValue(contents);
-      } finally {
-        file.syncing = false;
-      }
-      file.dirty = false;
-      callbacks.onDirtyChange(path, false);
-      notice.clear(path);
-      renderTree();
-    });
+    return run(
+      file.lane
+        .withPermit(
+          Effect.map(callbacks.readFile(path), (contents) => {
+            // Typing since the choice is newer than it: keep it, and the
+            // file's base, so its save asks again.
+            if (file.model !== model || model.getVersionId() !== version)
+              return;
+            setClean(file, model, contents);
+            file.dirty = false;
+            callbacks.onDirtyChange(path, false);
+            notice.clear(path);
+            renderTree();
+          }),
+        )
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => notice.report(path, 'reload', error)),
+          ),
+        ),
+    );
   }
 
-  async function open(path: string): Promise<void> {
-    if (disposed) return;
-    const request = ++latestOpenRequest;
-    const target = await ensureEditor();
-    if (!target || !monaco) return;
-    try {
-      const file = fileState(path);
-      let model = file.model;
-      if (!model) {
-        model = await loadModel(path, file, monaco);
-      } else {
-        await syncCleanModel(path, file, model);
-      }
-      // Several tree clicks can race the first Monaco load and IPC reads.
-      // Populate every requested model, but only the newest request may choose
-      // which one is visible.
-      if (!model || disposed || request !== latestOpenRequest) return;
-      if (target.getModel() !== model) {
-        if (openPath) {
-          const state = target.saveViewState();
-          if (state) fileState(openPath).viewState = state;
+  function open(path: string): Promise<void> {
+    if (disposed) return Promise.resolve();
+    // Several tree clicks can race the first Monaco load and the reads: the
+    // newest open interrupts the one before, so only it chooses which file
+    // is visible.
+    return runAs(
+      opening,
+      Effect.gen(function* () {
+        const loaded = yield* ensureEditor.pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.sync(() => notice.report(undefined, 'load', error)),
+              undefined,
+            ),
+          ),
+        );
+        if (!loaded) return;
+        const target = loaded.editor;
+        const file = fileState(path);
+        const model = yield* currentModel(path, file, loaded.monaco);
+        if (target.getModel() !== model) {
+          if (openPath) {
+            const state = target.saveViewState();
+            if (state) fileState(openPath).viewState = state;
+          }
+          target.setModel(model);
+          const state = file.viewState;
+          if (state) target.restoreViewState(state);
         }
-        target.setModel(model);
-        const state = file.viewState;
-        if (state) target.restoreViewState(state);
-      }
-      openPath = path;
-      target.updateOptions({
-        readOnly: callbacks.isReadOnly?.(path) ?? false,
-        readOnlyMessage: {
-          value:
-            'This definition is read-only. Use **Customize** in Settings to edit a copy.',
-        },
-      });
-      notice.clear(path);
-      renderTree();
-    } catch (error) {
-      if (!disposed) notice.report(path, 'open', error);
-    }
+        openPath = path;
+        target.updateOptions({
+          readOnly: callbacks.isReadOnly?.(path) ?? false,
+          readOnlyMessage: {
+            value:
+              'This definition is read-only. Use **Customize** in Settings to edit a copy.',
+          },
+        });
+        notice.clear(path);
+        renderTree();
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => notice.report(path, 'open', error)),
+        ),
+      ),
+    );
   }
 
-  async function refreshOnce(): Promise<void> {
-    treeRevision += 1;
-    const revision = treeRevision;
+  /** The tree's top-level listing, from scratch. */
+  const listTree = Effect.suspend(() => {
     treeLoading = true;
-    expandedDirectories.clear();
-    directoryChildren.clear();
-    loadingDirectories.clear();
-    directoryErrors.clear();
     renderTree();
-    const treeRefresh = (async () => {
-      try {
-        const listedFiles = await callbacks.listFiles('');
-        if (revision !== treeRevision) return;
-        treeNodes = buildEditorDirectoryEntries(listedFiles);
-        treeError = undefined;
-      } catch (error) {
-        if (revision !== treeRevision) return;
-        callbacks.onError(error);
-        treeError = 'Could not list workspace files.';
-      } finally {
-        if (revision === treeRevision) {
+    return callbacks.listFiles('').pipe(
+      Effect.match({
+        onSuccess: (listedFiles) => {
+          treeNodes = buildEditorDirectoryEntries(listedFiles);
+          treeError = undefined;
+        },
+        onFailure: (error) => {
+          callbacks.onError(error);
+          treeError = 'Could not list workspace files.';
+        },
+      }),
+      Effect.andThen(
+        Effect.sync(() => {
           treeLoading = false;
           renderTree();
-        }
-      }
-    })();
-    const modelRefreshes = [...files].flatMap(([path, file]) =>
-      file.model
-        ? [
-            // A failed re-read leaves the editor on the last version read,
-            // still clean, so a later save would overwrite whatever the
-            // agent wrote (or recreate a file it removed): say so.
-            syncCleanModel(path, file, file.model).catch((error: unknown) => {
-              if (!disposed) notice.report(path, 'reload', error);
-            }),
-          ]
-        : [],
+        }),
+      ),
     );
-    await Promise.all([treeRefresh, ...modelRefreshes]);
-  }
+  });
 
+  /** Re-read the tree and every open file from disk. A refresh during
+   *  another interrupts its listing and folder loads; each file's re-read
+   *  queues on its lane, behind a first read still in flight. */
   function refresh(): Promise<void> {
     if (disposed) return Promise.resolve();
-    refreshGeneration += 1;
-    if (refreshPromise) {
-      refreshQueued = true;
-      return refreshPromise;
-    }
-    refreshPromise = (async () => {
-      try {
-        do {
-          refreshQueued = false;
-          await refreshOnce();
-        } while (refreshQueued);
-      } finally {
-        refreshPromise = undefined;
-      }
-    })();
-    return refreshPromise;
+    const tree = FiberSet.clear(directoryLoads).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          expandedDirectories.clear();
+          directoryChildren.clear();
+          loadingDirectories.clear();
+          directoryErrors.clear();
+        }),
+      ),
+      Effect.andThen(FiberHandle.run(listing, listTree)),
+      Effect.flatMap(Fiber.await),
+    );
+    const fileRefreshes = [...files].map(([path, file]) =>
+      file.lane
+        .withPermit(
+          Effect.suspend(() =>
+            file.model ? syncClean(path, file, file.model) : Effect.void,
+          ),
+        )
+        .pipe(
+          // A failed re-read leaves the editor on the last version read, still
+          // clean, so a later save would overwrite whatever the agent wrote
+          // (or recreate a file it removed): say so.
+          Effect.catch((error) =>
+            Effect.sync(() => notice.report(path, 'reload', error)),
+          ),
+        ),
+    );
+    return run(
+      Effect.all([tree, ...fileRefreshes], {
+        concurrency: 'unbounded',
+        discard: true,
+      }),
+    );
   }
 
   /** Save `path`'s buffer. `overwrite`: replace whatever the file holds now,
    *  the user's answer to a save that found it rewritten. A notice's action
-   *  names its own file, never whichever one is open by then. Saves of one
-   *  file take its lane in turn, so each sends the base the one before it
-   *  wrote. */
+   *  names its own file, never whichever one is open by then. */
   function save(path: string | undefined, overwrite = false): Promise<void> {
     const file = path ? files.get(path) : undefined;
     const model = file?.model;
     if (!path || !file || !model || callbacks.isReadOnly?.(path))
       return Promise.resolve();
-    return onModelSyncLane(file, async () => {
-      if (disposed || file.model !== model) return;
-      const savedVersion = model.getVersionId();
-      const contents = model.getValue();
-      file.activeWrites += 1;
-      file.writeEpoch += 1;
-      try {
-        const outcome = await callbacks.writeFile(
-          path,
-          contents,
-          overwrite ? null : (file.disk ?? null),
-        );
-        if (outcome === 'changedOnDisk') {
-          if (!disposed)
-            notice.changedOnDisk(path, {
-              overwrite: () => void save(path, true),
-              reload: () => void reload(path),
-            });
-          return;
-        }
-        file.disk = contents;
-        if (
-          disposed ||
-          file.model !== model ||
-          model.getVersionId() !== savedVersion
+    return run(
+      file.lane
+        .withPermit(
+          Effect.suspend(() => {
+            const savedVersion = model.getVersionId();
+            const contents = model.getValue();
+            return Effect.map(
+              callbacks.writeFile(
+                path,
+                contents,
+                overwrite ? null : (file.disk ?? null),
+              ),
+              (outcome) => {
+                if (outcome === 'changedOnDisk') {
+                  notice.changedOnDisk(path, {
+                    overwrite: () => void save(path, true),
+                    reload: () => void reload(path),
+                  });
+                  return;
+                }
+                file.disk = contents;
+                // Typing during the write is not saved.
+                if (
+                  file.model !== model ||
+                  model.getVersionId() !== savedVersion
+                )
+                  return;
+                file.dirty = false;
+                callbacks.onDirtyChange(path, false);
+                notice.clear(path);
+                renderTree();
+              },
+            );
+          }),
         )
-          return;
-        file.dirty = false;
-        callbacks.onDirtyChange(path, false);
-        notice.clear(path);
-        renderTree();
-      } catch (error) {
-        if (!disposed) notice.report(path, 'save', error);
-      } finally {
-        file.activeWrites -= 1;
-        file.writeEpoch += 1;
-      }
-    });
+        .pipe(
+          Effect.catch((error) =>
+            Effect.sync(() => notice.report(path, 'save', error)),
+          ),
+        ),
+    );
   }
 
   renderTree();
@@ -691,8 +711,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     dispose() {
       disposed = true;
       disposeCommandTooltips();
-      latestOpenRequest += 1;
-      treeRevision += 1;
+      Effect.runFork(Scope.close(scope, Exit.void));
       editor?.dispose();
       editor = undefined;
       for (const file of files.values()) {

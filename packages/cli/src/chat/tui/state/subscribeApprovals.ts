@@ -20,7 +20,6 @@ import {
   type ProcessRuntime,
   type SettingsStores,
 } from '@texra-ai/harness/host';
-import { isRequestRefusal } from '@texra-ai/harness';
 import { toErrorMessage, type PendingRequest } from '@texra-ai/harness/schemas';
 import { promptForCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import type { CliContext } from '@cli/runtime/cliContext';
@@ -50,6 +49,7 @@ import {
   reportRequestDefect,
 } from './transcript';
 import type { Session } from '@texra-ai/harness';
+import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 /**
  * What this host holds for its lifetime: the session its denial notices read

@@ -18,7 +18,6 @@ import {
 } from 'effect';
 
 import {
-  isRequestRefusal,
   LaunchRefused,
   type RunStopReason,
   type Session,
@@ -98,6 +97,7 @@ import {
 import type { ModelConnection } from './tui/modelConnection';
 import type { SkillActivation } from './tui/forms/SkillsListForm';
 import type { SettingsStores } from '@texra-ai/harness/host';
+import { isRequestRefusal } from '@texra/controllers/session/hostCallFailure';
 
 // ---------------------------------------------------------------------------
 // Controller

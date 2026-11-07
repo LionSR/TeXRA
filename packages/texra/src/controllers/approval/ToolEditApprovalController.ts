@@ -36,7 +36,6 @@ import {
 } from 'effect';
 
 import {
-  type HostRequestFailure,
   type OutcomeOf,
   type RuntimeRequest,
   type Session,
@@ -60,6 +59,7 @@ import {
   type LatexPreviewEntry,
 } from '@texra/tools/latex/latexPreview';
 import type { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
+import { type HostRequestFailure } from '@texra/controllers/session/hostCallFailure';
 
 const CHANNEL = 'ToolEditApproval';
 

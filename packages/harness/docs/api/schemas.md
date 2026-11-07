@@ -893,16 +893,6 @@ plugin is referenced in place and has none.
 const InstalledPluginSchema: Struct<{ readonly name: decodeTo<String, String, never, never>; readonly source: String; readonly ref: optional<String>; readonly commit: optional<String>; readonly path: String; readonly skills: $Array<String>; readonly version: optional<String>; readonly description: optional<String>; readonly enabled: Boolean; readonly trust: optional<Struct<{ readonly version: NullOr<String>; readonly digest: String; }>>; }>
 ```
 
-## Invalid
-
-The request could not be parsed: a bridge's answer, never the runtime's.
-
-```ts
-class Invalid extends Schema.TaggedError<Invalid>()('Invalid', {
-  reason: Schema.String,
-})
-```
-
 ## isEmptyUsage
 
 Whether usage stats are all zeros (effectively empty).
@@ -1571,10 +1561,12 @@ type RequestError = typeof RequestErrorSchema.Type;
 
 ## RequestErrorSchema
 
-The wire form of a request's failure: the classes themselves.
+How a runtime request fails: the classes themselves, which a wire
+carries as they are. A bridge adds its own (a request it could not parse,
+a handler that died) on its side.
 
 ```ts
-const RequestErrorSchema: Union<readonly [typeof RunActive, typeof Unavailable, typeof Cancelled, typeof Rejected, typeof Conflict, typeof Invalid, typeof Internal]>
+const RequestErrorSchema: Union<readonly [typeof RunActive, typeof Unavailable, typeof Cancelled, typeof Rejected, typeof Conflict]>
 ```
 
 ## RequestKind

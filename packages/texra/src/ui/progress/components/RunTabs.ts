@@ -12,7 +12,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { when } from 'lit/directives/when.js';
 
 // Local imports
-import type { Surface } from '@texra/shared/session/surface';
+import { shownRun, type Surface } from '@texra/shared/session/surface';
 import { unseenRuns } from '@texra/shared/session/unseenRuns';
 import { SessionUiEvents } from '@texra/shared/session/uiEvents';
 import {
@@ -148,7 +148,7 @@ export class RunTabs extends LitElement {
 
   private isExpanded(run: RunView): boolean {
     if (this.view !== null && needsUser(run, this.view.runs)) return true;
-    return this.surface?.expanded.get(run.id) === true;
+    return this.surface?.runs.get(run.id)?.expanded === true;
   }
 
   /** The tree under a row, at any depth. The rail (`topLevelOnly`) shows
@@ -204,7 +204,7 @@ export class RunTabs extends LitElement {
   override render(): TemplateResult {
     const view = this.view;
     const surface = this.surface;
-    const selected = surface?.selected ?? null;
+    const selected = surface ? shownRun(surface) : null;
     this.unseen = view && surface ? unseenRuns(surface, view) : new Set();
     const needle = (surface?.search ?? '').trim().toLowerCase();
     const top = (view?.order ?? [])

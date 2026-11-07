@@ -16,11 +16,11 @@ import type { RunId, Plan } from '@texra-ai/harness/schemas';
 // Web Awesome native components
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-/** The panel's key in `Surface.groups` for its run. */
+/** The panel's key in `RunSurface.groups` for its run. */
 const GROUP_KEY = 'plan';
 
 /**
- * The panel's open state is the surface's (`Surface.groups`, under the run
+ * The panel's open state is the surface's (`RunSurface.groups`, under the run
  * and `GROUP_KEY`), like the dispatch card's: it survives a run switch and a
  * reload, and a toggle is dispatched, never kept here.
  */
@@ -65,7 +65,7 @@ export class PlanView extends LitElement {
     }
     const open =
       this.runId !== null &&
-      this.surface?.groups.get(this.runId)?.get(GROUP_KEY) === true;
+      this.surface?.runs.get(this.runId)?.groups.get(GROUP_KEY) === true;
 
     // The body is kept to one line so the pre-wrap document gets no
     // template whitespace.
