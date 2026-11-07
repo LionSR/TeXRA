@@ -94,7 +94,7 @@ In-process callers read `session.view.current()` and `session.view.changes`. Acr
 
 ## `TranscriptRow` variants and `ToolRowModel`
 
-A subscribed [`TranscriptView`](./harness/schemas#transcriptview) (`RunView.transcript`) holds `rows` (`readonly TranscriptRow[]`), `taskGroups` (`readonly TaskGroup[]`), and `settledRows` (the leading prefix of finalized rows that an append-only terminal scrollback can print permanently).
+A subscribed [`TranscriptView`](./harness/schemas#transcriptview) (`RunView.transcript`) holds `rows` (`readonly TranscriptRow[]`), `stages` (`readonly Stage[]`), and `settledRows` (the leading prefix of finalized rows that an append-only terminal scrollback can print permanently).
 
 | `TranscriptRow['kind']`                       | Interface                                                                                               | Payload fields                                                                                         |
 | --------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |

@@ -20,14 +20,14 @@ const STDIN_INPUT_TOKEN = '-';
 // LaTeX derives auxiliary filenames from the input basename; leading-dot
 // job names can be rejected by TeX's file-open policy when it writes `.aux`.
 const STDIN_TEMP_PREFIX = 'texra-stdin-';
-export const STDIN_WORKFLOW_INPUT_BASENAME = 'stdin.tex';
+export const STDIN_DOCUMENT_TASK_INPUT_BASENAME = 'stdin.tex';
 /**
  * One wording for "a document task run has no input", said both by the expansion
  * below (a spec that resolves to nothing) and by `texra run`'s pre-flight guard
  * (no `--input` at all), which has to refuse before it probes an output
  * destination into existence.
  */
-export const WORKFLOW_INPUT_REQUIRED_MESSAGE =
+export const DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE =
   'At least one input file is required for a document task.';
 
 function normalizeCliInputPath(candidate: string, cwd: string): string {
@@ -118,7 +118,7 @@ const materializeStdinDocumentTaskInput = Effect.fn(
     (directory) =>
       fs.remove(directory, { recursive: true, force: true }).pipe(Effect.orDie),
   );
-  const inputFile = path.join(inputDir, STDIN_WORKFLOW_INPUT_BASENAME);
+  const inputFile = path.join(inputDir, STDIN_DOCUMENT_TASK_INPUT_BASENAME);
   // Finish this finite local write before the scope removes its directory.
   yield* fs
     .writeFileString(inputFile, text, { flag: 'wx' })
@@ -282,7 +282,7 @@ const finishDocumentTaskInputExpansion = Effect.fn(
   const deduped = [...new Set(expanded)];
   if (deduped.length === 0 && options.allowEmpty !== true) {
     return yield* new CliUsageError({
-      message: WORKFLOW_INPUT_REQUIRED_MESSAGE,
+      message: DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
     });
   }
   return { files: deduped, stdinPath };

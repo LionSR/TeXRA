@@ -66,7 +66,7 @@ function applyStage(
       startTime: d.at,
       status: 'running',
       ...(event.parentId && d.ix.stageIndex.has(event.parentId)
-        ? { parentGroupId: event.parentId }
+        ? { parentStageId: event.parentId }
         : {}),
       ...(event.kind != null ? { kind: event.kind } : {}),
     };

@@ -125,8 +125,8 @@ function transcriptTimeline(
 ): TimelineEntry[] {
   const groupIds = new Set(groups.map((group) => group.id));
   const children = Map.groupBy(
-    groups.filter((group) => group.parentGroupId !== undefined),
-    (group) => group.parentGroupId,
+    groups.filter((group) => group.parentStageId !== undefined),
+    (group) => group.parentStageId,
   );
   const sortedRows = rows.toSorted(compareRows);
   const isGroupedRow = (row: TranscriptRow) =>
@@ -142,7 +142,7 @@ function transcriptTimeline(
     rows: rowsByGroup.get(group.id) ?? [],
   });
   const roots = groups
-    .filter((g) => g.parentGroupId === undefined)
+    .filter((g) => g.parentStageId === undefined)
     .sort(compareGroups)
     .map(node);
   return [

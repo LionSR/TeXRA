@@ -10,7 +10,7 @@ export const StageSchema = Schema.Struct({
   startTime: Schema.Number,
   endTime: Schema.optional(Schema.Number),
   status: StageStatusSchema,
-  parentGroupId: Schema.optional(Schema.String),
+  parentStageId: Schema.optional(Schema.String),
   kind: Schema.optional(StageKindSchema),
 });
 

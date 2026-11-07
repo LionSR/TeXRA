@@ -28,7 +28,7 @@ import {
 } from '@texra/shared/plugins/documentOutputs';
 
 import { CliUsageError, type CliContext } from '../platform/cliContext';
-import { STDIN_WORKFLOW_INPUT_BASENAME } from './documentTaskInputs';
+import { STDIN_DOCUMENT_TASK_INPUT_BASENAME } from './documentTaskInputs';
 import type { AgentConfigPayload } from '@texra-ai/harness/schemas';
 
 type OutputFlag = '--output' | '--output-dir';
@@ -265,7 +265,7 @@ export function inputDerivedOutputFiles(
 
   return inputFiles.map((input) => {
     if (stdinInputPath !== undefined && input === stdinInputPath) {
-      return STDIN_WORKFLOW_INPUT_BASENAME;
+      return STDIN_DOCUMENT_TASK_INPUT_BASENAME;
     }
     if (!path.isAbsolute(input)) return getSafeDocumentRelativePath(input);
     return getSafeDocumentRelativePath(path.relative(absoluteRoot, input));

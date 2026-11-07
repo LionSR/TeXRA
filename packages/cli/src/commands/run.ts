@@ -68,7 +68,7 @@ import {
 import {
   hasMixedStdinDocumentTaskInputSpecs,
   withExpandedRunInputs,
-  WORKFLOW_INPUT_REQUIRED_MESSAGE,
+  DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE,
 } from '../runtime/headless/documentTaskInputs';
 import {
   assertOutputDirAvailable,
@@ -155,7 +155,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // `mkdir -p` their destination before `withExpandedRunInputs` would report
   // it. Refuse first so an invalid command leaves nothing on disk.
   if (init.inputFiles.length === 0) {
-    return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
+    return yield* failUsage(DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE);
   }
   if (init.output && task.outputs.filter(Boolean).length > 1) {
     return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);

@@ -103,8 +103,8 @@ vi.mock('@cli/runtime/headless/documentTaskInputs', () => ({
       return specs.has('-') && specs.size > 1;
     },
   ),
-  STDIN_WORKFLOW_INPUT_BASENAME: 'stdin.tex',
-  WORKFLOW_INPUT_REQUIRED_MESSAGE:
+  STDIN_DOCUMENT_TASK_INPUT_BASENAME: 'stdin.tex',
+  DOCUMENT_TASK_INPUT_REQUIRED_MESSAGE:
     'At least one workflow input file is required.',
 }));
 
