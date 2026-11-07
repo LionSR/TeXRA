@@ -590,9 +590,9 @@ interface Plugin {
 
 The plugin list cannot be composed, for a defect `toolTable` refuses: an
 id that is not lowercase letters, digits and dashes, an id or tool name
-listed twice, a second plugin continuing waiting runs or recording one
-request kind's decisions, or a switch on a plugin with no availability
-probe.
+listed twice, a switch on a plugin with no availability probe, a
+`requires` naming a plugin not listed, an agent-file block owned twice or
+keyed by a persona key, or two script modules of one name.
 
 ```ts
 class PluginsRefused extends Schema.TaggedError<PluginsRefused>()(
