@@ -61,8 +61,12 @@ function boundedOutput(streamName: 'stdout' | 'stderr') {
   let totalChars = 0;
   return {
     append(chunk: string): void {
+      // The head grows only while it holds everything seen: a cut can stop
+      // it one short of its budget (before a split surrogate pair), and a
+      // later chunk appended after that cut would not follow it.
+      if (head.length === totalChars)
+        head = appendHead(head, chunk, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
       totalChars += chunk.length;
-      head = appendHead(head, chunk, TOOL_RESULT_TRUNCATION_HEAD_CHARS);
       tail = appendTail(tail, chunk, TOOL_RESULT_TRUNCATION_TAIL_CHARS);
     },
     text(): string | null {

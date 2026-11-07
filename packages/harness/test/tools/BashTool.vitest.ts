@@ -198,6 +198,37 @@ layer(SessionGraph.hosted, { excludeTestServices: true })('BashTool', (it) => {
     );
 
     it.effect(
+      'keeps a long foreground output head contiguous when its cut splits a surrogate pair',
+      () =>
+        Effect.gen(function* () {
+          // The 4,000-character head budget ends inside the emoji, so the
+          // head stops one short of it; the next chunk is not part of it.
+          const first = `${'a'.repeat(3_999)}😀${'z'.repeat(10)}`;
+          vi.spyOn(execUtils, 'executeCommand').mockImplementation(
+            (_command, options) =>
+              Effect.sync(() => {
+                options?.onStdout?.(first);
+                options?.onStdout?.('b'.repeat(60_000));
+                return {
+                  success: true,
+                  stdout: '',
+                  stderr: '',
+                  timedOut: false,
+                  exitCode: 0,
+                };
+              }),
+          );
+
+          const result = yield* BashTool.call({ command: 'make build' }).pipe(
+            Effect.provide(nativeToolTestLayer()),
+          );
+
+          const [head] = String(result.output ?? '').split('\n\n[... ');
+          assert.equal(head, 'a'.repeat(3_999));
+        }),
+    );
+
+    it.effect(
       'persists a killed background command as interrupted, not failed',
       () =>
         Effect.gen(function* () {
