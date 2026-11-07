@@ -148,8 +148,10 @@ function buildLatexSearchParts(input: {
  * Result of a {@link compileLatex2Pdf} attempt. A discriminated union on `ok`
  * so the type system guarantees {@link LOG_TAIL_LINES}'s worth of the
  * engine's `.log` file tail is present whenever compilation fails, and the
- * path of the non-empty PDF the engine wrote whenever it succeeds — instead of
- * every caller re-deriving that path, or checking the file, its own way.
+ * path of a non-empty PDF where the engine writes whenever it succeeds —
+ * instead of every caller re-deriving that path, or checking the file, its
+ * own way. The file is not proven to be this run's: an earlier build's PDF
+ * in a reused output directory also reads as success.
  */
 export type CompileLatex2PdfResult =
   | { ok: true; pdfPath: string }
@@ -170,8 +172,9 @@ export type CompileLatex2PdfResult =
  * @param roots The session's setting slots
  * @param options Compilation options (channel defaults to module CHANNEL)
  * @returns `{ ok: true, pdfPath } | { ok: false, logTail }` -- `pdfPath` is the
- * absolute path of the non-empty PDF the engine wrote; `logTail` is always
- * populated on failure, including an exit 0 that wrote no PDF.
+ * absolute path of a non-empty PDF where the engine writes (an earlier
+ * build's in a reused output directory counts); `logTail` is always
+ * populated on failure, including an exit 0 that left no PDF.
  * Fails with `ToolMissing` when no engine it drives is installed: a missing
  * latexmk falls back to pdflatex, and a missing pdflatex is that failure.
  */
