@@ -208,20 +208,6 @@ const valueOrDefault = (
         Effect.map(() => Schema.decodeUnknownSync(schema)(undefined)),
       );
 
-/**
- * Read the scope the row is written to: `set` targets `entry.configTarget`,
- * so a global-target row read through the merged `get()` could report a
- * workspace value the settings view can never write.
- */
-function rawConfigValue(
-  entry: StateSettingEntry,
-  config: ConfigProvider,
-): unknown {
-  return entry.configTarget === 'global'
-    ? config.inspect<unknown>(entry.key).globalValue
-    : config.get<unknown>(entry.key);
-}
-
 function inspectEntry(
   entry: StateSettingEntry,
   stores: SettingsStores,
@@ -230,7 +216,7 @@ function inspectEntry(
     const slot = entry.slot;
     return slot === 'config'
       ? Effect.sync(() =>
-          classifyStored(entry.schema, rawConfigValue(entry, stores.config)),
+          classifyStored(entry.schema, stores.config.get<unknown>(entry.key)),
         )
       : Effect.map(stores[slot].get(entry.key), (raw) =>
           classifyStored(entry.schema, raw),
@@ -303,7 +289,7 @@ function inspect<T>(
  */
 function getConfig<T>(config: ConfigProvider, key: string): T {
   const entry = entryOf(config.catalog, key);
-  const stored = classifyStored(entry.schema, rawConfigValue(entry, config));
+  const stored = classifyStored(entry.schema, config.get<unknown>(entry.key));
   // cast: the caller names the row's value type; the row's schema parsed it.
   if (stored.kind === 'value') return stored.value as T;
   // Direct sink write: config reads are synchronous by ruling and this one
