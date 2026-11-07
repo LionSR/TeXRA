@@ -58,16 +58,23 @@ const decodeString = Schema.decodeUnknownSync(Schema.String);
 const decodeHistoryRecord = Schema.decodeUnknownSync(InputHistoryRecordSchema);
 
 /** One current value, decoded by its family's schema; one that no longer
- *  decodes fails the read naming itself. A newer build's values refuse the
- *  store at open (`storeGate`), so no row read here is one. */
-function decodeValue<T>(family: ValueFamily<T>, row: SqlRow): T {
+ *  decodes fails the read naming itself, as a failure the read's caller
+ *  types, never a defect. A newer build's values refuse the store at open
+ *  (`storeGate`), so no row read here is one. */
+function decodeValue<T>(
+  family: ValueFamily<T>,
+  row: SqlRow,
+): Effect.Effect<T, Error> {
   const parsed = Schema.decodeUnknownResult(
     Schema.fromJsonString(family.schema),
   )(decodeString(row.value));
-  if (Result.isSuccess(parsed)) return parsed.success;
-  throw new Error(
-    `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
-  );
+  return Result.isSuccess(parsed)
+    ? Effect.succeed(parsed.success)
+    : Effect.fail(
+        new Error(
+          `Stored ${family.name} value ${String(row.key)} does not match its schema: ${parsed.failure.message}`,
+        ),
+      );
 }
 
 export function currentValues(store: {
@@ -105,8 +112,8 @@ export function currentValues(store: {
     get: (family, key) =>
       query(
         valueRow(family.name, key).pipe(
-          Effect.map((row) =>
-            row === undefined ? undefined : decodeValue(family, row),
+          Effect.flatMap((row) =>
+            row === undefined ? Effect.undefined : decodeValue(family, row),
           ),
         ),
       ),
@@ -117,7 +124,7 @@ export function currentValues(store: {
           wrote = false;
           const row = yield* valueRow(family.name, key);
           const result = change(
-            row === undefined ? undefined : decodeValue(family, row),
+            row === undefined ? undefined : yield* decodeValue(family, row),
           );
           if (Result.isFailure(result) || result.success.length === 1)
             return result;
@@ -130,9 +137,9 @@ export function currentValues(store: {
             wrote = row !== undefined;
             return result;
           }
-          const value = Schema.encodeSync(Schema.fromJsonString(family.schema))(
-            next,
-          );
+          const value = yield* Schema.encodeEffect(
+            Schema.fromJsonString(family.schema),
+          )(next);
           if (row?.value !== value) {
             yield* exec(UPSERT_VALUE, [
               family.name,
@@ -161,11 +168,13 @@ export function currentValues(store: {
           'SELECT key, value FROM current_value WHERE family = ? ORDER BY at DESC',
           [family.name],
         ).pipe(
-          Effect.map((rows) =>
-            rows.map((row) => ({
-              key: decodeString(row.key),
-              value: decodeValue(family, row),
-            })),
+          Effect.flatMap((rows) =>
+            Effect.forEach(rows, (row) =>
+              Effect.map(decodeValue(family, row), (value) => ({
+                key: decodeString(row.key),
+                value,
+              })),
+            ),
           ),
         ),
       ),

@@ -37,6 +37,7 @@ import {
   Exit,
   Fiber,
   Layer,
+  Result,
   Schema,
   Stream,
   SubscriptionRef,
@@ -819,6 +820,22 @@ describe('the session event table and its one publisher', () => {
       }).pipe(Effect.provide(substrate(storage)));
     },
   );
+
+  it.effect('fails the read of a value that no longer decodes, typed', () => {
+    const storage = workspace();
+    return Effect.gen(function* () {
+      const db = yield* Database;
+      const name = 'regression-family';
+      yield* db.values.modify({ name, schema: Schema.String }, 'k', () =>
+        Result.succeed(['written', 'a string'] as const),
+      );
+      // The same family read with a schema its stored value fails.
+      const failed = yield* Effect.flip(
+        db.values.get({ name, schema: Schema.Finite }, 'k'),
+      );
+      expect(failed._tag).toBe('DatabaseReadFailed');
+    }).pipe(Effect.provide(substrate(storage)));
+  });
 
   it.effect('reopens at the committed ordinal and never reuses one', () => {
     const storage = workspace();

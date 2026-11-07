@@ -164,7 +164,7 @@ export interface RowReader<E> {
    *  the store lacks fails the read. */
   readonly blobs: (
     digests: readonly string[],
-  ) => Effect.Effect<ReadonlyMap<string, string>, E>;
+  ) => Effect.Effect<ReadonlyMap<string, string>, E | Error>;
   readonly read: (
     rows: readonly SqlRow[],
     whole: boolean,
@@ -261,12 +261,16 @@ export function rowReader<E>(
           }
           return texts;
         });
+  /** A blob a row names that the store no longer holds readable fails the
+   *  read, typed. */
   const blobs = (digests: readonly string[]) =>
-    Effect.map(inflated(READ_BLOBS, digests), (texts) => {
+    Effect.flatMap(inflated(READ_BLOBS, digests), (texts) => {
       const missing = digests.filter((digest) => !texts.has(digest));
-      if (missing.length > 0)
-        throw new Error(`${path} holds no readable blob ${missing.join(', ')}`);
-      return texts;
+      return missing.length > 0
+        ? Effect.fail(
+            new Error(`${path} holds no readable blob ${missing.join(', ')}`),
+          )
+        : Effect.succeed(texts);
     });
   const read = Effect.fnUntraced(function* (
     rows: readonly SqlRow[],
