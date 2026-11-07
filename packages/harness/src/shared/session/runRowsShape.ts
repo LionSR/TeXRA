@@ -11,7 +11,7 @@ import type {
   RequestDecision,
   RunFamily,
   RunOutcome,
-  SessionEvent,
+  SessionRow,
 } from '@shared/schemas';
 import type { ApprovalGrants } from '@shared/approvalBypassKind';
 import type { QueuedFollowUp } from './runRows';
@@ -42,8 +42,8 @@ export type RunRowState = {
 };
 
 /** The row of kind `T`. */
-export type RowOf<T extends SessionEvent['type']> = Extract<
-  SessionEvent,
+export type RowOf<T extends SessionRow['type']> = Extract<
+  SessionRow,
   { type: T }
 >;
 

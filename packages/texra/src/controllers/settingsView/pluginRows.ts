@@ -12,12 +12,12 @@ import { type WorkspaceRoots } from '@texra-ai/harness';
 import {
   AgentCatalog,
   InstalledPlugins,
-  mcpServerOfToolName,
   mcpConfigPathOf,
   readMcpConfig,
   type ExternalToolCheckResult,
   type PluginEnv,
 } from '@texra-ai/harness/host';
+import { mcpServerOfToolName } from '@texra-ai/harness/transcript';
 import {
   buildToolDashboardItems,
   type DashboardInputs,

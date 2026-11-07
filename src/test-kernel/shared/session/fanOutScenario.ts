@@ -9,7 +9,7 @@ import { Schema } from 'effect';
 import {
   AgentConfigSchema,
   type ApprovalGrants,
-  type DisplaySessionEvent,
+  type DisplayRow,
   emptyRunEndOutput,
   type LocalRuntimeState,
   MESSAGE_TYPES,
@@ -75,7 +75,7 @@ const ROOT_POLICY: ApprovalGrants = {
 
 /** A durable arm without its envelope: what a publisher builds before the
  *  aggregate, seq, commit, owner, and clock are stamped on. */
-type DisplaySessionEventBody = DisplaySessionEvent extends infer E
+type DisplaySessionEventBody = DisplayRow extends infer E
   ? E extends unknown
     ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'origin' | 'at'>
     : never
@@ -84,7 +84,7 @@ type DisplaySessionEventBody = DisplaySessionEvent extends infer E
 /** Seq numbered per aggregate and committed in one session order, the way
  *  the event table keys them. */
 export class Log {
-  readonly events: DisplaySessionEvent[] = [];
+  readonly events: DisplayRow[] = [];
   private readonly seq = new Map<string, number>();
   /** Each run's incarnation uid: what the database stamps on a child's
    *  `run.start.parent` (one run model, section 3.2). */
@@ -96,7 +96,7 @@ export class Log {
     at: number,
     body: DisplaySessionEventBody,
     origin: string | null = OWNER,
-  ): DisplaySessionEvent {
+  ): DisplayRow {
     const key = qualifyAggregateId('run', runId);
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
@@ -113,7 +113,7 @@ export class Log {
       origin,
       at,
       ...body,
-    } as DisplaySessionEvent;
+    } as DisplayRow;
     this.events.push(event);
     return event;
   }
@@ -132,8 +132,8 @@ export class Log {
   /** Finite-read marker for this fixture log: every aggregate its first
    *  facts created exists until its removal. */
   drained(through = this.events.length): SessionViewInput {
-    const present = new Set<DisplaySessionEvent['aggregateId']>();
-    const removed = new Set<DisplaySessionEvent['aggregateId']>();
+    const present = new Set<DisplayRow['aggregateId']>();
+    const removed = new Set<DisplayRow['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
       if (event.seq === 1) present.add(event.aggregateId);
       if (event.type === 'run.removed') {
@@ -153,7 +153,7 @@ export class Log {
   }
 }
 
-export const tail = (event: DisplaySessionEvent): SessionViewInput => ({
+export const tail = (event: DisplayRow): SessionViewInput => ({
   _tag: 'event',
   read: 'all',
   event,

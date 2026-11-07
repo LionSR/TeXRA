@@ -13,7 +13,7 @@ import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@texra-ai/harness/host';
 import { transcriptText } from '@texra-ai/harness/transcript';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, type RequestError } from '@texra-ai/harness/schemas';
 import type { TranscriptRow } from '@cli/chat/tui/state/sessionView';
 import { requestErrorText } from '@ui/copy/requestErrors';
 import {
@@ -26,7 +26,6 @@ import {
   sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
-import type { RequestError } from '@texra-ai/harness';
 import type { RunView, RunId } from '@texra-ai/harness/schemas';
 
 /**

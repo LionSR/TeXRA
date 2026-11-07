@@ -24,7 +24,11 @@ import {
   WireStreamInteractionSchema,
   WireUsageSchema,
 } from './googleInteractionsWire.js';
-import { systemUpdateText } from '../message.js';
+import {
+  answeredCalls,
+  callsAnsweredBy,
+  systemUpdateText,
+} from '../message.js';
 import { backgroundCapable, originOf, sameModelOrigin } from '../protocol.js';
 import {
   ModelError,
@@ -100,8 +104,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
   origin: ModelOrigin,
 ) {
   const steps: Interactions.Step[] = [];
-  let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
-    [];
+  const answered = answeredCalls(messages);
   for (const message of messages) {
     if (message.role === 'system' || message.role === 'user') {
       const content =
@@ -118,9 +121,10 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       // video a tool attached is accepted in a user turn only, so those parts
       // follow the results in one user_input step, each named by its call.
       const carried: Interactions.Content[] = [];
-      for (const result of message.results) {
-        // The canonical grammar guarantees adjacent, complete ordinals.
-        const call = calls[result.callOrdinal];
+      for (const { call, result } of yield* callsAnsweredBy(
+        answered,
+        message,
+      )) {
         const content: Array<
           Interactions.TextContent | Interactions.ImageContent
         > = [];
@@ -139,9 +143,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
       }
       if (carried.length > 0)
         steps.push({ type: 'user_input', content: carried });
-      calls = [];
     } else {
-      calls = [];
       const ids = new Set<string>();
       for (const part of message.content) {
         switch (part.kind) {
@@ -190,7 +192,6 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
               });
             }
             ids.add(part.providerCallId);
-            calls.push(part);
             steps.push({
               type: 'function_call',
               id: part.providerCallId,

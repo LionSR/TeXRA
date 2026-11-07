@@ -29,8 +29,9 @@ import {
   type Model,
   type TurnEvent,
 } from '@texra-ai/llm';
-import { Conflict, type LocalSession, Sessions } from '@texra-ai/harness';
+import { type LocalSession, Sessions } from '@texra-ai/harness';
 import { ValidationModel } from '@texra-ai/harness/host';
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import { resumeRun, type ResumeRunOptions } from '@agent/runtime/resumeRun';
 import { Inbox } from '@agent/followUp/Inbox';
 import type { SessionServices } from '@agent/runtime/rootLaunch';
@@ -52,6 +53,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { TEXRA_APP, texraHosted } from '@test/support/texraApp';
 import { makeSessions } from '../../../../packages/harness/src/effect/sessionPrograms';
 import type { RunId } from '@texra-ai/harness/schemas';
+import { Conflict } from '@texra-ai/harness/schemas';
 
 /** A resume in `session`. */
 const resume = (
@@ -116,7 +118,8 @@ const packageSession = (session: Context.Context<SessionServices>) =>
     const sessions = yield* makeSessions(
       // cast: the owner opens the one session this case holds.
       { open: () => Effect.succeed(session) } as never,
-      yield* (yield* SessionGraph.runtime).contextEffect,
+      yield* AgentCatalog,
+      () => Effect.succeed([]),
     );
     return yield* sessions.open(testWorkspaceRoots());
   });

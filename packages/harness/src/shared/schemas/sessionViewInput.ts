@@ -8,7 +8,7 @@ import { Schema } from 'effect';
 
 import { RunIdSchema } from './identifiers';
 import { AggregateIdSchema } from './identifiers';
-import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
+import { CommitOrdinalSchema, DisplayRowSchema } from './sessionEvent';
 
 /**
  * The read that delivered a durable row: the cold listing, one
@@ -16,7 +16,7 @@ import { CommitOrdinalSchema, DisplaySessionEventSchema } from './sessionEvent';
  */
 export const EventInputSchema = Schema.TaggedStruct('event', {
   read: Schema.Literals(['listing', 'aggregate', 'all']),
-  event: DisplaySessionEventSchema,
+  event: DisplayRowSchema,
 });
 
 /**

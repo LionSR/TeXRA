@@ -29,7 +29,7 @@ import {
 import {
   qualifyAggregateId,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import type { AggregateState, Database } from '@shared/session/database';
 import {
@@ -112,7 +112,7 @@ const removeRunDirectories: (
 );
 
 /** A run's deletion marker. */
-type RemovalMarker = Extract<SessionEvent, { type: 'run.removed' }>;
+type RemovalMarker = Extract<SessionRow, { type: 'run.removed' }>;
 
 /** The session's deletion collector ({@link deletionCollector}). */
 export interface DeletionCollector {

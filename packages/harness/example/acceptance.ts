@@ -78,14 +78,21 @@ const childrenOf = (session: LocalSession, runId: RunId) =>
   );
 
 /** Waits for a run's end, interrupting it past {@link RUN_LIMIT}. */
-const endOf = (run: {
-  readonly result: Effect.Effect<{ readonly outcome?: string }, unknown>;
-  readonly interrupt: Effect.Effect<void>;
-}) =>
+const endOf = (
+  session: LocalSession,
+  run: {
+    readonly runId: RunId;
+    readonly result: Effect.Effect<{ readonly outcome?: string }, unknown>;
+  },
+) =>
   Effect.gen(function* () {
     const end = yield* run.result.pipe(Effect.timeoutOption(RUN_LIMIT));
     if (Option.isNone(end)) {
-      yield* run.interrupt;
+      yield* session.request({
+        kind: 'run.stop',
+        runId: run.runId,
+        reason: 'user',
+      });
       return `timed out after ${RUN_LIMIT}`;
     }
     return end.value.outcome ?? 'unknown';
@@ -186,7 +193,7 @@ const codemode = (dir: string) =>
         instruction: CODEMODE_INSTRUCTION,
         model: route.model,
       });
-      const outcome = yield* endOf(run);
+      const outcome = yield* endOf(session, run);
       const evidence = yield* writeEvidence(dir, session, run.runId, workspace);
       const children = childrenOf(session, run.runId);
       const completed = children.filter(
@@ -289,7 +296,7 @@ const plugin = (dir: string) =>
         instruction: PLUGIN_INSTRUCTION,
         model: route.model,
       });
-      const outcome = yield* endOf(run);
+      const outcome = yield* endOf(session, run);
       const evidence = yield* writeEvidence(dir, session, run.runId, workspace);
       const exported = yield* session.records(run.runId).readTrace();
       const facts =
@@ -525,7 +532,7 @@ const crashResume = (dir: string) =>
           );
 
       const resumed = yield* session.resume(runId);
-      const outcome = yield* endOf(resumed);
+      const outcome = yield* endOf(session, resumed);
       const evidence = yield* writeEvidence(dir, session, runId, workspace);
       const children = childrenOf(session, runId);
       const unchanged: string[] = [];

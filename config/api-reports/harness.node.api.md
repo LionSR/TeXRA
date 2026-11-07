@@ -23,6 +23,7 @@ Exports: 52
 - `homeDirectory` — `const homeDirectory: Effect<string | undefined, never, never>`
 - `inheritedEnv` — `const inheritedEnv: (keep?: "anthropic" | "dashscope" | "deepseek" | "glm" | "google" | "kimiCode" | "meta" | "minimax" | "moonshot" | "openai" | "xai" | undefined) => Effect<Record<string, string>, never, never>`
 - `INPUT_HISTORY_LIMIT` — `const INPUT_HISTORY_LIMIT: 1000`
+- `isNotADirectoryError` — `function isNotADirectoryError: (err: unknown) => boolean`
 - `JsonConfigProvider` — `class JsonConfigProvider { constructor: new ({ workspace, global, local, catalog, }: JsonConfigProviderOptions) => JsonConfigProvider; static: ; instance: catalog: SettingsCatalog; get: <T>(key: string) => T; inspect: <T = unknown>(key: string) => Partial<Record<"globalValue" | "workspaceValue", T>>; update: <T>(key: string, value: T, target?: ConfigTarget) => Effect<void, ConfigWriteFailed, never> }`
 - `JsonConfigProviderOptions` — `interface JsonConfigProviderOptions { workspace: ConfigStore; global: ConfigStore; local: ConfigStore; catalog: SettingsCatalog; }`
 - `JsonStore` — `class JsonStore { constructor: new (filePath: string, data: JsonRecord, follow: boolean) => JsonStore; static: open: (filePath: string, options?: JsonStoreOptions | undefined) => Effect<JsonStore, Error, FileSystem | Path>; instance: filePath: string; get: (key: string) => unknown; keys: () => string[]; set: (key: string, value: unknown) => Effect<void, Error, never>; snapshot: () => Record<string, unknown> }`
@@ -52,7 +53,6 @@ Exports: 52
 - `setLogSink` — `function setLogSink: (next: LogSink | null, options?: { readonly trusted?: boolean | undefined; }) => void`
 - `whichOnExtendedPath` — `function whichOnExtendedPath: (name: string, appDirs: readonly string[]) => null | string`
 - `withExtendedPath` — `function withExtendedPath: <T extends NodeJS.ProcessEnv>(env: T, appDirs: readonly string[]) => T`
-- `WORKSPACE_STORES` — `const WORKSPACE_STORES: ValueFamily<{ readonly root: string; }>`
 - `workspaceRelativePath` — `function workspaceRelativePath: (root: string | undefined, filePath: string) => string`
 - `writeFileAtomic` — `const writeFileAtomic: (target: string, data: Uint8Array<ArrayBufferLike>) => Effect<void, PlatformError, never>`
 - `writeLogLine` — `function writeLogLine: (channel: string, message: string) => void`

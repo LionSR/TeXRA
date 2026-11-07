@@ -16,13 +16,12 @@ import * as RateLimiter from 'effect/persistence/RateLimiter';
 
 // Local imports
 import { defineTool } from '@texra-ai/harness';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, pluralize } from '@texra-ai/harness/schemas';
 import {
   nullishWithDefault,
   executed,
   ToolError,
 } from '@texra-ai/harness/plugins';
-import { pluralize } from '@texra-ai/harness/transcript';
 import { normaliseArxivIdentifier } from '@latex/arxivIdentifier';
 
 /**

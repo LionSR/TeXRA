@@ -7,12 +7,11 @@
  * three builds.
  */
 
+import { LEAN_SERVER_MODE_LABELS } from './leanTypes';
 import {
   formatCompactDuration,
   formatResultCount,
-} from '@texra-ai/harness/transcript';
-
-import { LEAN_SERVER_MODE_LABELS } from './leanTypes';
+} from '@texra-ai/harness/schemas';
 
 export type LeanServerInfo = {
   readonly workspaceRoot: string;

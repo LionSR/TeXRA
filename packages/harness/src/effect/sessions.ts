@@ -17,7 +17,7 @@ import type { AgentEvent } from '@shared/session/agentEvent';
 import type {
   AgentRunListingEntry,
   CommitOrdinal,
-  DisplaySessionEvent,
+  DisplayRow,
   SessionViewInput,
   RequestDecision,
   RunEnd,
@@ -151,8 +151,6 @@ export interface Run {
    * before the read reached it arrives whole, as one chunk.
    */
   readonly events: Stream.Stream<AgentEvent, RunFailure>;
-  /** Stop the run, as the user's `run.stop` does. */
-  readonly interrupt: Effect.Effect<void>;
 }
 
 /** One workspace's runs, the view of them, its store's records, and the
@@ -274,7 +272,7 @@ export interface LocalSession extends Session {
     readonly events: (
       from: CommitOrdinal,
       drained?: SubscriptionRef.SubscriptionRef<CommitOrdinal>,
-    ) => Stream.Stream<DisplaySessionEvent, DatabaseReadFailed>;
+    ) => Stream.Stream<DisplayRow, DatabaseReadFailed>;
   };
   /** The {@link Run} of `runId`'s activation at `activation`, as `start`
    *  or `resume` handed it out: a host that carries a handle across a

@@ -332,8 +332,7 @@ export function testAgentRun(
       parent: null,
       awaited: false,
       registration: null,
-      opening: Effect.succeed([]),
-      entered: () => Effect.void,
+      enter: (commit) => Effect.uninterruptible(commit(Effect.succeed([]))),
       initialUserMessage: 'Do the thing.',
     },
     fileService: new RunFileService(runId, Context.get(session, SessionRoots)),
@@ -393,8 +392,8 @@ export function agentRunTestLayer(init: ScriptedRunInit) {
             parent: init.parentRunId ?? null,
             awaited: false,
             registration: null,
-            opening: Effect.succeed([]),
-            entered: () => Effect.void,
+            enter: (commit) =>
+              Effect.uninterruptible(commit(Effect.succeed([]))),
             initialUserMessage:
               'initialUserMessage' in init
                 ? init.initialUserMessage

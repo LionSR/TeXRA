@@ -1,9 +1,5 @@
 // Local imports - shared formatting
 import {
-  formatCompactTokenCount,
-  formatResultCount,
-} from '@texra-ai/harness/transcript';
-import {
   COLOR_BORDER,
   COLOR_ERROR,
   COLOR_HINT,
@@ -15,6 +11,10 @@ import type { RunTone } from '@ui/copy/runStatus';
 
 // Local imports - TUI state
 import type { PendingRequestKind } from '../state/approvalQueue';
+import {
+  formatCompactTokenCount,
+  formatResultCount,
+} from '@texra-ai/harness/schemas';
 
 /** The app's copy owns status meaning; terminal colors express only its tone. */
 export const CHILD_TONE_COLOR: Readonly<Record<RunTone, string>> =

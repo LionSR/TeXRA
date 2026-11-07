@@ -17,6 +17,7 @@ import {
 } from '@texra-ai/harness/schemas';
 import type { TaskSummary } from '@texra/controllers/server/protocol';
 import {
+  environmentApiKeys,
   requestOnService,
   type ServiceClient,
 } from '@texra/controllers/server/client';
@@ -36,7 +37,6 @@ import {
   linkClient,
   type CliServiceLink,
 } from '../runtime/cliService';
-import { environmentApiKeys } from '@texra/controllers/server/serviceSession';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { getStdoutColumns, writeTextStderr } from '../runtime/logSinks';

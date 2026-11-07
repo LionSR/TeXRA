@@ -42,9 +42,9 @@
 
 // Building the process and opening sessions.
 export { Sessions } from './effect/processLayer.js';
+export type { ProjectView } from './controllers/session/readSessionView.js';
 export type { AgentPlatform } from '@platform/agentPlatform';
 export type { Composition } from './effect/sessions.js';
-export type { Plugin } from '@tools/plugins';
 export type { WorkspaceRoots } from '@platform/workspaceRoots';
 // The fetch model requests go through, merged beneath `Sessions.layer`:
 // a fake model for a test, or the harness's own transport when absent.
@@ -64,15 +64,6 @@ export type {
 // stored conversation's nodes (`records(runId).readConversation()`), a
 // request (`session.request`), and the request an `ApprovalHandler` is
 // asked with and the decision it answers.
-export type { ExportNode } from '@agent/export/schemas';
-export type {
-  CommitOrdinal,
-  DisplaySessionEvent,
-  RequestDecision,
-  RunId,
-} from '@shared/schemas';
-export type { RuntimeCommand } from '@shared/session/runtimeRequest';
-export type { PendingRequest } from '@shared/session/readonlyViews';
 
 // What a run reports while it runs, and how it ended.
 export type { AgentEvent, StreamChunkEvent } from '@shared/session/agentEvent';
@@ -85,7 +76,6 @@ export type {
   RunDeletion,
   RunRecords,
 } from './effect/sessionReads.js';
-export type { AgentRunListingEntry, RunResult } from '@shared/schemas';
 
 // A custom tool, passed to a run as `start({ tools })`.
 export { defineTool, type DefinedTool } from '@tools/core/definition';
@@ -112,14 +102,6 @@ export {
 export type { SessionOpenError } from '@shared/session/database';
 
 // What `session.request` answers, and why it refuses.
-export {
-  Cancelled,
-  Conflict,
-  RunActive,
-  Rejected,
-  Unavailable,
-  type RequestError,
-} from '@shared/session/runtimeRequest';
 export {
   isOutcomeOf,
   type Outcome,

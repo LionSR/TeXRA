@@ -17,8 +17,8 @@ import {
   type AgentConfig,
   type AgentConfigInput,
   type RunId,
+  pluralize,
 } from '@texra-ai/harness/schemas';
-import { pluralize } from '@texra-ai/harness/transcript';
 import { detectGeneratedLatexdiffArtifact } from '@latex/latexdiff/diffFileNameManager';
 import {
   type CompileFailure,

@@ -1,3 +1,4 @@
+import { formatResultCount } from '@texra-ai/harness/schemas';
 /**
  * Platform-agnostic diagnostic formatting utilities.
  *
@@ -5,8 +6,6 @@
  * object matching the `GenericDiagnostic` interface. Both VS Code diagnostics
  * and Lean tool diagnostics satisfy this interface.
  */
-
-import { formatResultCount } from '@texra-ai/harness/transcript';
 
 /**
  * Severity levels, matching `vscode.DiagnosticSeverity` values

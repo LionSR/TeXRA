@@ -33,7 +33,7 @@ import {
   type RuntimeCommand,
 } from '@shared/session/runtimeRequest';
 import type { SessionApprovals } from '@shared/session/sessionApprovals';
-import type { SessionEventDraft } from '@shared/schemas';
+import type { SessionRowDraft } from '@shared/schemas';
 import { Settings } from '@shared/config/settings';
 import { ancestryRows } from '@shared/session/runRelation';
 import {
@@ -129,7 +129,7 @@ const approvalsUnder = Effect.fn('approvalsUnder')(function* (
     runs: view.runs,
     policy: policy.set(runId, next),
   };
-  const rows: SessionEventDraft[] = [];
+  const rows: SessionRowDraft[] = [];
   for (const id of reached) {
     const covering = turnedOn.filter(
       (kind) => id === runId || resolveBypass(after, id, kind) !== null,
@@ -219,7 +219,7 @@ export const sessionApprovals: Effect.Effect<
         return Effect.void;
       return log.transact((tx) =>
         Effect.gen(function* () {
-          const all: readonly SessionEventDraft[] = [
+          const all: readonly SessionRowDraft[] = [
             ...rows,
             ...(yield* grantRows(log, view(), runId, edit)),
           ];
@@ -233,7 +233,7 @@ export const sessionApprovals: Effect.Effect<
           const aggregateId = qualifyAggregateId('run', runId);
           const { requests } = yield* log.runRows(aggregateId, 'requests');
           const open = requests[requestId]?.decision === null;
-          const all: readonly SessionEventDraft[] = [
+          const all: readonly SessionRowDraft[] = [
             ...(open
               ? [
                   {

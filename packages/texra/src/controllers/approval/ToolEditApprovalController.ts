@@ -37,7 +37,6 @@ import {
 
 import {
   type OutcomeOf,
-  type RuntimeCommand,
   type Session,
   type WorkspaceRoots,
 } from '@texra-ai/harness';
@@ -48,6 +47,7 @@ import {
   type RunId,
   type ToolEditContent,
   type ToolEditRequest,
+  type RuntimeCommand,
 } from '@texra-ai/harness/schemas';
 import { HostFailed } from '@texra/hosts/uiHosts';
 import { isLatexFile } from '@texra/shared/latexFileTypes';

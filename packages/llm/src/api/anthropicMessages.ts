@@ -14,6 +14,7 @@ import {
   Result,
   Schema,
   SchemaGetter,
+  type Scope,
   Stream,
 } from 'effect';
 
@@ -27,7 +28,12 @@ import {
 } from '../turn.js';
 import { assembleTurn } from './assembleTurn.js';
 import { boundTurn, fitLimit, resolveTurn } from './turnInput.js';
-import { replayableHistory, systemUpdateText } from '../message.js';
+import {
+  answeredCalls,
+  callsAnsweredBy,
+  replayableHistory,
+  systemUpdateText,
+} from '../message.js';
 import { originOf, sameModelOrigin } from '../protocol.js';
 import { ModelError, fillModelError, sdkModelError } from '../errors.js';
 import {
@@ -156,9 +162,8 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const lowerPart = (part: Parameters<typeof inputPart>[0]) =>
     inputPart(part, (base64) => uploads.fileIdFor(base64, nowMs));
   const messages: MessageParam[] = [];
-  let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
-    [];
   const history = replayableHistory(turn.messages, origin);
+  const answered = answeredCalls(history);
   for (const [index, message] of history.entries()) {
     if (message.role === 'system') {
       // Native where the model takes it and the API admits it: after a user
@@ -181,18 +186,19 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
       });
     } else if (message.role === 'tool') {
       const content: ToolResultBlockParam[] = [];
-      for (const result of message.results) {
+      for (const { call, result } of yield* callsAnsweredBy(
+        answered,
+        message,
+      )) {
         content.push({
           type: 'tool_result',
-          // The canonical grammar guarantees adjacent, complete ordinals.
-          tool_use_id: calls[result.callOrdinal].providerCallId,
+          tool_use_id: call.providerCallId,
           is_error: result.status === 'error',
           content: yield* Effect.forEach(result.content, lowerPart),
         });
       }
       messages.push({ role: 'user', content });
     } else {
-      calls = [];
       const content: ContentBlockParam[] = [];
       for (const part of message.content) {
         if (part.kind === 'message' && part.evidence === undefined) {
@@ -205,7 +211,6 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             content.push({ type: 'text', text: child.text });
           }
         } else if (part.kind === 'local-call' && part.evidence === undefined) {
-          calls.push(part);
           content.push({
             type: 'tool_use',
             id: part.providerCallId,
@@ -560,114 +565,117 @@ function anthropicWire() {
   return { parts, stopped: () => stopped };
 }
 
-/** Stable Messages protocol, without a transcript owner, uploads or SDK emitters. */
-export function anthropicMessagesModel(
-  config: AnthropicMessagesConfiguration,
-  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
-): Model {
-  if (!transport.apiKey) {
-    throw new ModelError({
-      kind: 'invalid-request',
-      message: 'Anthropic Messages requires an explicit API key.',
+/** Stable Messages protocol, without a transcript owner or SDK emitters;
+ *  its uploads live in the caller's scope. */
+export const anthropicMessagesModel = Effect.fn('llm.anthropicMessages.model')(
+  function* (
+    config: AnthropicMessagesConfiguration,
+    transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
+  ): Effect.fn.Return<Model, ModelError, Scope.Scope> {
+    if (!transport.apiKey) {
+      return yield* new ModelError({
+        kind: 'invalid-request',
+        message: 'Anthropic Messages requires an explicit API key.',
+      });
+    }
+    // The SDK otherwise lets these ambient headers override selected credentials and protocol.
+    if (process.env.ANTHROPIC_CUSTOM_HEADERS) {
+      return yield* new ModelError({
+        kind: 'invalid-request',
+        message:
+          'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
+      });
+    }
+    const origin = originOf(config);
+    const client = new Anthropic({
+      apiKey: transport.apiKey,
+      authToken: null,
+      baseURL: config.deployment.endpoint,
+      fetch: transport.fetch,
+      maxRetries: 0,
+      logLevel: 'off',
+      timeout: 600_000,
     });
-  }
-  // The SDK otherwise lets these ambient headers override selected credentials and protocol.
-  if (process.env.ANTHROPIC_CUSTOM_HEADERS) {
-    throw new ModelError({
-      kind: 'invalid-request',
-      message:
-        'Anthropic Messages does not support ANTHROPIC_CUSTOM_HEADERS; the selected binding must determine its request headers.',
-    });
-  }
-  const origin = originOf(config);
-  const client = new Anthropic({
-    apiKey: transport.apiKey,
-    authToken: null,
-    baseURL: config.deployment.endpoint,
-    fetch: transport.fetch,
-    maxRetries: 0,
-    logLevel: 'off',
-    timeout: 600_000,
-  });
-  const uploads = filesApiUploads({
-    providerName: 'Anthropic',
-    model: origin.requestedModel,
-    request: (call) =>
-      Effect.tryPromise({
-        try: (signal) => call(signal, {}),
-        catch: (cause) =>
-          fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
-      }),
-    parseUploaded: (raw) => Schema.decodeUnknownResult(UploadedFileSchema)(raw),
-    create: async (upload, signal) =>
-      client.files.upload(
-        {
-          file: await toFile(
-            Buffer.from(upload.base64, 'base64'),
-            upload.filename,
-            { type: upload.mimeType },
-          ),
-          expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
-        },
-        { signal },
-      ),
-    remove: (fileId, signal) => client.files.delete(fileId, null, { signal }),
-  });
-  const prepareTurn: Model['prepareTurn'] = (request) =>
-    resolveTurn(
-      request,
-      origin,
-      undefined,
-      (input) =>
-        Effect.succeed({
-          controls: {
-            ...fitLimit(config.defaults, input.maxOutputTokens),
-            effort: config.defaults.effort,
-            cache: config.defaults.cache,
-          },
-        }),
-      (turn) => invocationBody(turn, origin, config, uploads),
-    );
-
-  const threads = messageThreads({
-    endpoint: config.deployment.endpoint,
-    open: (body) =>
-      Effect.flatMap(Effect.abortSignal, (signal) =>
+    const uploads = yield* filesApiUploads({
+      providerName: 'Anthropic',
+      model: origin.requestedModel,
+      request: (call) =>
         Effect.tryPromise({
-          try: (): PromiseLike<SdkSource> =>
-            body.thread === undefined
-              ? client.messages.create(body, { signal })
-              : client.beta.messages.create(body, { signal }),
-          catch: sdkFailure,
+          try: (signal) => call(signal, {}),
+          catch: (cause) =>
+            fillModelError(sdkFailure(cause), { model: origin.requestedModel }),
         }),
-      ),
-    lower: (turn) => invocationBody(turn, origin, config, uploads),
-  });
-  const streamTurn: Model['streamTurn'] = (input) =>
-    Stream.unwrap(
-      Effect.gen(function* () {
-        const body = yield* invocationBody(input, origin, config, uploads);
-        const { source, finalize } = yield* threads.send(input, body);
-        const wire = anthropicWire();
-        const chunks = yield* sdkStream(source, sdkFailure);
-        return assembleTurn(
-          chunks.pipe(
-            Stream.mapEffect(wire.parts),
-            // message_stop finishes the response; HTTP EOF is not an additional condition.
-            Stream.takeUntil(() => wire.stopped()),
-          ),
-          { origin, provider: 'Anthropic', finalize },
-        );
-      }).pipe(
-        Effect.mapError((error) =>
-          fillModelError(error, { model: origin.requestedModel }),
+      parseUploaded: (raw) =>
+        Schema.decodeUnknownResult(UploadedFileSchema)(raw),
+      create: async (upload, signal) =>
+        client.files.upload(
+          {
+            file: await toFile(
+              Buffer.from(upload.base64, 'base64'),
+              upload.filename,
+              { type: upload.mimeType },
+            ),
+            expires_in_seconds: FILE_UPLOAD_LIFETIME_SECONDS,
+          },
+          { signal },
         ),
-      ),
-    );
-  return Object.freeze({
-    prepareTurn,
-    streamTurn,
-    uploadFile: uploads.uploadFile,
-    releaseUploads: uploads.releaseUploads,
-  });
-}
+      remove: (fileId, signal) => client.files.delete(fileId, null, { signal }),
+    });
+    const prepareTurn: Model['prepareTurn'] = (request) =>
+      resolveTurn(
+        request,
+        origin,
+        undefined,
+        (input) =>
+          Effect.succeed({
+            controls: {
+              ...fitLimit(config.defaults, input.maxOutputTokens),
+              effort: config.defaults.effort,
+              cache: config.defaults.cache,
+            },
+          }),
+        (turn) => invocationBody(turn, origin, config, uploads),
+      );
+
+    const threads = messageThreads({
+      endpoint: config.deployment.endpoint,
+      open: (body) =>
+        Effect.flatMap(Effect.abortSignal, (signal) =>
+          Effect.tryPromise({
+            try: (): PromiseLike<SdkSource> =>
+              body.thread === undefined
+                ? client.messages.create(body, { signal })
+                : client.beta.messages.create(body, { signal }),
+            catch: sdkFailure,
+          }),
+        ),
+      lower: (turn) => invocationBody(turn, origin, config, uploads),
+    });
+    const streamTurn: Model['streamTurn'] = (input) =>
+      Stream.unwrap(
+        Effect.gen(function* () {
+          const body = yield* invocationBody(input, origin, config, uploads);
+          const { source, finalize } = yield* threads.send(input, body);
+          const wire = anthropicWire();
+          const chunks = yield* sdkStream(source, sdkFailure);
+          return assembleTurn(
+            chunks.pipe(
+              Stream.mapEffect(wire.parts),
+              // message_stop finishes the response; HTTP EOF is not an additional condition.
+              Stream.takeUntil(() => wire.stopped()),
+            ),
+            { origin, provider: 'Anthropic', finalize },
+          );
+        }).pipe(
+          Effect.mapError((error) =>
+            fillModelError(error, { model: origin.requestedModel }),
+          ),
+        ),
+      );
+    return Object.freeze({
+      prepareTurn,
+      streamTurn,
+      uploadFile: uploads.uploadFile,
+    });
+  },
+);

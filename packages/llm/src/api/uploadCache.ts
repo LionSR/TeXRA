@@ -2,14 +2,10 @@
 import { hash } from 'node:crypto';
 
 // Third-party imports
-import { Effect, Result, Schema } from 'effect';
+import { Effect, Result, Schema, type Scope } from 'effect';
 
 // Local imports - canonical model contract
-import {
-  FileUploadSchema,
-  type FileUpload,
-  type UnreleasedUpload,
-} from '../turn.js';
+import { FileUploadSchema, type FileUpload } from '../turn.js';
 import { ModelError } from '../errors.js';
 
 /**
@@ -46,7 +42,12 @@ export interface UploadCache {
   /** The live file id for these bytes, or `null` to send the bytes. */
   readonly fileIdFor: (base64: string, nowMs: number) => string | null;
   readonly uploadFile: (file: FileUpload) => Effect.Effect<void, ModelError>;
-  readonly releaseUploads: () => Effect.Effect<readonly UnreleasedUpload[]>;
+}
+
+/** A file a binding uploaded and could not confirm it deleted. */
+interface UnreleasedUpload {
+  readonly fileId: string;
+  readonly reason: string;
 }
 
 /** Digests one binding keeps, so a document lowered on every turn (and
@@ -73,15 +74,8 @@ const digestMemo = (): ((base64: string) => string) => {
   };
 };
 
-/**
- * The upload cache over a provider whose Files API follows the shape the
- * supported providers share: create a file from the bytes, read an id and an
- * expiry off the response, and treat a 404 on delete as the deletion this
- * asked for. Only the SDK calls, how a response states its expiry, and the
- * provider's name differ, so those are what a binding supplies; the
- * malformed-response ruling and the 404 tolerance are stated once here.
- */
-export function filesApiUploads(provider: {
+/** What a binding supplies of its provider's Files API. */
+interface FilesApi {
   /** Names the provider in the malformed-response message. */
   readonly providerName: string;
   readonly model: string;
@@ -114,7 +108,10 @@ export function filesApiUploads(provider: {
     signal: AbortSignal,
     headers: Readonly<Record<string, string>>,
   ) => Promise<unknown>;
-}): UploadCache {
+}
+
+/** The cache over `provider`, with the release that deletes what it made. */
+function uploadsOver(provider: FilesApi) {
   const send = Effect.fnUntraced(function* (upload: FileUpload) {
     const created = yield* provider.request((signal, headers) =>
       provider.create(upload, signal, headers),
@@ -244,3 +241,37 @@ export function filesApiUploads(provider: {
 
   return { fileIdFor, uploadFile, releaseUploads };
 }
+
+/**
+ * The upload cache over a provider whose Files API follows the shape the
+ * supported providers share: create a file from the bytes, read an id and an
+ * expiry off the response, and treat a 404 on delete as the deletion this
+ * asked for. Only the SDK calls, how a response states its expiry, and the
+ * provider's name differ, so those are what a binding supplies; the
+ * malformed-response ruling and the 404 tolerance are stated once here.
+ *
+ * The cache lives in the binding's scope: as it closes, every file it
+ * uploaded is deleted, and one the provider would not confirm deleted is
+ * logged and left to its own expiry (`FILE_UPLOAD_LIFETIME_SECONDS`).
+ */
+export const filesApiUploads = (
+  provider: FilesApi,
+): Effect.Effect<UploadCache, never, Scope.Scope> =>
+  Effect.map(
+    Effect.acquireRelease(
+      Effect.sync(() => uploadsOver(provider)),
+      (cache) =>
+        cache
+          .releaseUploads()
+          .pipe(
+            Effect.flatMap((unreleased) =>
+              unreleased.length === 0
+                ? Effect.void
+                : Effect.logWarning(
+                    `Could not delete ${unreleased.length} uploaded file(s) when the ${provider.model} binding closed; the provider expires them on its own.`,
+                  ).pipe(Effect.annotateLogs({ unreleased })),
+            ),
+          ),
+    ),
+    ({ fileIdFor, uploadFile }) => ({ fileIdFor, uploadFile }),
+  );

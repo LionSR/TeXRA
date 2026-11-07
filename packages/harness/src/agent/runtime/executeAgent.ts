@@ -114,20 +114,27 @@ const enterRun = Effect.fn('enterRun')(function* (
     held === null ? log.publish(runId, event) : held.push(event),
   );
   yield* Effect.addFinalizer(() => Effect.sync(() => logger.close()));
-  let carried = 0;
-  const opening = Effect.sync((): readonly UnfoldedDraft[] => {
-    const events = held ?? [];
-    carried = events.findIndex((e) => e.type.startsWith('stream.'));
-    if (carried < 0) carried = events.length;
-    return events
-      .slice(0, carried)
-      .flatMap((e) => runEventDraft(runId, e) ?? []);
-  });
-  const entered: RunLaunch['entry']['entered'] = () =>
-    Effect.sync(() => {
-      for (const e of held?.slice(carried) ?? []) log.publish(runId, e);
-      held = null;
+  const enter: RunLaunch['entry']['enter'] = (commit) => {
+    // How many held events the batch took, counted as its job reads them.
+    let carried = 0;
+    const alongside = Effect.sync((): readonly UnfoldedDraft[] => {
+      const events = held ?? [];
+      carried = events.findIndex((e) => e.type.startsWith('stream.'));
+      if (carried < 0) carried = events.length;
+      return events
+        .slice(0, carried)
+        .flatMap((e) => runEventDraft(runId, e) ?? []);
     });
+    return commit(alongside).pipe(
+      Effect.tap(() =>
+        Effect.sync(() => {
+          for (const e of held?.slice(carried) ?? []) log.publish(runId, e);
+          held = null;
+        }),
+      ),
+      Effect.uninterruptible,
+    );
+  };
   const seed = options.registration?.seed ?? null;
   const parent =
     options.registration?.parentRunId ?? options.parentRunId ?? null;
@@ -139,7 +146,7 @@ const enterRun = Effect.fn('enterRun')(function* (
       : ((yield* log.facts(runId))?.parent?.call?.awaited ?? false);
   return {
     logger,
-    entry: { parent, awaited, registration, seed, opening, entered },
+    entry: { parent, awaited, registration, seed, enter },
   };
 });
 

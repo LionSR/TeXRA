@@ -21,6 +21,7 @@ import {
   web,
   definePlugin,
   type ProcessPluginLayer,
+  type Plugin,
 } from '@texra-ai/harness/plugins';
 
 // Local imports
@@ -107,7 +108,6 @@ import { wolfram } from './wolframPlugin';
 import { zotero } from './zotero/plugin';
 import type { InquiryPanelCapability } from './inquiry/ExternalInquiryTool';
 import type { WriteFilter } from '@texra-ai/harness/plugins';
-import type { Plugin } from '@texra-ai/harness';
 
 /** How a user gets a probed plugin's dependency installed and signed in. */
 export interface ToolPluginSetup {

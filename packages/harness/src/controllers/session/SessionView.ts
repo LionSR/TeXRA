@@ -38,7 +38,10 @@ import type { SessionView as ReadonlySessionView } from '@shared/session/readonl
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { makeSessionViewUpdater } from '@shared/session/sessionViewUpdate';
 import type { SessionView } from '@shared/session/sessionView';
-import type { SessionViewAccessShape } from '@shared/session/sessionViewAccess';
+import type {
+  SessionViewAccessShape,
+  TranscriptInterest,
+} from '@shared/session/sessionViewAccess';
 import { TranscriptSubscriptions } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
 
@@ -136,10 +139,11 @@ export class RemoteSessionView extends Context.Service<
     /** The current view, then every later one; as
      *  `SessionViewService.changes`, it ends, or dies, with the updates. */
     readonly changes: Stream.Stream<ReadonlySessionView>;
+    /** Subscribe `set`'s transcripts for the caller's scope; the handle
+     *  replaces the set. */
     readonly subscribe: (
-      port: string,
       set: readonly TranscriptSubscription[],
-    ) => Effect.Effect<void>;
+    ) => Effect.Effect<TranscriptInterest, never, Scope.Scope>;
   }
 >()('@texra-ai/harness/session/RemoteSessionView') {
   /** Fresh per call: two views never share an updater, even in one memo
@@ -156,7 +160,7 @@ export class RemoteSessionView extends Context.Service<
           return {
             current: () => SubscriptionRef.getUnsafe(ref),
             changes,
-            subscribe: subscriptions.set,
+            subscribe: subscriptions.subscribe,
           };
         }),
       ).pipe(
@@ -220,9 +224,21 @@ export const makeSessionViewAccess = Effect.fn(
           ),
         ),
     inputs: inputs.read,
-    subscribe: (port, set) =>
+    // A session whose doors shut takes no new set; a release after the
+    // close only updates the table nothing reads any more.
+    subscribe: (set) =>
       Effect.suspend(() =>
-        closed() ? Effect.void : subscriptions.set(port, set),
+        closed()
+          ? Effect.succeed<TranscriptInterest>({ set: () => Effect.void })
+          : Effect.map(
+              subscriptions.subscribe(set),
+              (held): TranscriptInterest => ({
+                set: (next) =>
+                  Effect.suspend(() =>
+                    closed() ? Effect.void : held.set(next),
+                  ),
+              }),
+            ),
       ),
   };
 });

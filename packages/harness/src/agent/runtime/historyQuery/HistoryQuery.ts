@@ -33,7 +33,7 @@ import {
   type InvocationRef,
   type NormalizedUsage,
   type RunId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import {
@@ -80,11 +80,7 @@ interface HistorySession {
   readonly view: SessionViewAccess['Service'];
 }
 
-type ModelMessage = Extract<SessionEvent, { type: 'model.message' }>;
-
-/** A priced call's token counts and cost, as the tables hold them. */
-const spend = (usage: NormalizedUsage | null | undefined) =>
-  [usage?.inputTokens, usage?.outputTokens, usage?.cost].map((n) => n ?? null);
+type ModelMessage = Extract<SessionRow, { type: 'model.message' }>;
 
 /** The write that ends request `invocation` of `runId`. */
 const modelEnd = (
@@ -93,17 +89,21 @@ const modelEnd = (
   { invocationId, attempt }: InvocationRef,
   status: 'completed' | 'failed' | 'cancelled',
   end: { output?: string; error?: string; usage?: NormalizedUsage | null },
-): HistoryWrite => [
-  'modelEnd',
-  status,
-  end.output ?? null,
-  end.error ?? null,
-  ...spend(end.usage),
-  at,
-  runId,
-  invocationId,
-  attempt,
-];
+): HistoryWrite => ({
+  statement: 'modelEnd',
+  params: {
+    status,
+    output: end.output ?? null,
+    error: end.error ?? null,
+    input_tokens: end.usage?.inputTokens ?? null,
+    output_tokens: end.usage?.outputTokens ?? null,
+    cost: end.usage?.cost ?? null,
+    ended_at: at,
+    run_id: runId,
+    invocation_id: invocationId,
+    attempt,
+  },
+});
 
 /** The writes one `model.message` row makes: a request sent or ended, and
  *  the tool calls a response or a hand-down issues. */
@@ -114,12 +114,30 @@ function modelWrites(
   at: string,
 ): HistoryWrite[] {
   const issue = ({ logId, callId, toolName }: DispatchFacts, input: string) =>
-    toolCall(calls, logId, [runId, callId, null, toolName, cutText(input), at]);
+    toolCall(calls, logId, {
+      run_id: runId,
+      call_id: callId,
+      script_call_id: null,
+      tool: toolName,
+      input: cutText(input),
+      issued_at: at,
+    });
   switch (p.kind) {
     case 'attempt': {
       const { invocationId, attempt } = p.invocation;
       const model = p.origin.requestedModel;
-      return [['modelAttempt', runId, invocationId, attempt, model, at]];
+      return [
+        {
+          statement: 'modelAttempt',
+          params: {
+            run_id: runId,
+            invocation_id: invocationId,
+            attempt,
+            model,
+            started_at: at,
+          },
+        },
+      ];
     }
     case 'failed': {
       const { message } = p.error;
@@ -160,11 +178,14 @@ function modelWrites(
 function toolCall(
   calls: CallPositions,
   card: string,
-  values: readonly (string | number | null)[],
+  call: Omit<
+    Extract<HistoryWrite, { statement: 'toolCall' }>['params'],
+    'position'
+  >,
 ): HistoryWrite {
   calls.last += 1;
   calls.byCard.set(card, calls.last);
-  return ['toolCall', calls.last, ...values];
+  return { statement: 'toolCall', params: { position: calls.last, ...call } };
 }
 
 /** The writes one of `runId`'s history rows makes, from its decoded
@@ -172,33 +193,53 @@ function toolCall(
 function callWrites(
   calls: CallPositions,
   runId: RunId,
-  row: SessionEvent,
+  row: SessionRow,
 ): HistoryWrite[] {
   const at = new Date(row.at).toISOString();
   if (row.type === 'model.message') return modelWrites(calls, runId, row, at);
   if (row.type === 'script.call') {
     const { callId, scriptCallId, toolName, input, logId } = row.payload;
-    const issued = [runId, callId, scriptCallId, toolName, cutJson(input), at];
-    return [toolCall(calls, logId, issued)];
+    return [
+      toolCall(calls, logId, {
+        run_id: runId,
+        call_id: callId,
+        script_call_id: scriptCallId,
+        tool: toolName,
+        input: cutJson(input),
+        issued_at: at,
+      }),
+    ];
   }
   if (row.type === 'tool.intent') {
-    return [['toolStart', row.payload.attempt, at, runId, row.payload.callId]];
+    return [
+      {
+        statement: 'toolStart',
+        params: {
+          attempt: row.payload.attempt,
+          started_at: at,
+          run_id: runId,
+          call_id: row.payload.callId,
+        },
+      },
+    ];
   }
   if (row.type === 'tool.result') {
     const { attempt, disposition, result, callId } = row.payload;
     const done = result.status === 'executed';
     return [
-      [
-        'toolEnd',
-        attempt,
-        disposition,
-        done ? cutText(result.output ?? null) : null,
-        done ? cutJson(result.value) : null,
-        done ? null : cutText(result.error),
-        at,
-        runId,
-        callId,
-      ],
+      {
+        statement: 'toolEnd',
+        params: {
+          attempt,
+          status: disposition,
+          output: done ? cutText(result.output ?? null) : null,
+          value: done ? cutJson(result.value) : null,
+          error: done ? null : cutText(result.error),
+          ended_at: at,
+          run_id: runId,
+          call_id: callId,
+        },
+      },
     ];
   }
   // A run's other history rows (positions, requests, offered tools, blobs,
@@ -335,8 +376,8 @@ export class HistoryQueryStore implements Context.Service.Shape<
         store.fed.delete(id);
         store.unreadable.delete(id);
         yield* append(store, [
-          ['removeTools', id],
-          ['removeModels', id],
+          { statement: 'removeTools', params: { run_id: id } },
+          { statement: 'removeModels', params: { run_id: id } },
         ]);
       }
       for (const run of runs.values()) {

@@ -38,7 +38,7 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type UnreadableRun,
-  type DisplaySessionEvent,
+  type DisplayRow,
   type RunId,
   type TextChunk,
   type TranscriptSubscription,
@@ -74,7 +74,7 @@ import { emptySessionView, isInterrupted, rollupOf } from './sessionView';
 import type { SharedRunRows } from './runRowsShape';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
-type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
+type RunStartEvent = Extract<DisplayRow, { type: 'run.start' }>;
 
 /** One session's view, and the state its updates keep beside it. */
 export interface SessionViewUpdater {
@@ -640,7 +640,7 @@ function applyTextChunk(u: Update, chunk: TextChunk): boolean {
 // ---------------------------------------------------------------------------
 
 /** A durable event `runRows.ts` does not handle, other than a priced turn. */
-type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
+type OwnEvent = Exclude<DisplayRow, SharedRunRow | { type: 'usage' }>;
 
 /** What the event changes on its own run (topology, session-level fields and
  *  the transcript are the caller's). */
@@ -777,7 +777,7 @@ function applyStanding(
 function applySessionFacts(
   u: Update,
   runId: RunId | null,
-  event: DisplaySessionEvent,
+  event: DisplayRow,
 ): void {
   const { view } = u;
   switch (event.type) {
@@ -912,7 +912,7 @@ function relink(u: Update, run: RunView, previousParentId: RunId | null): void {
 /** Apply one durable event. Returns whether it changed anything. */
 function applyEvent(
   u: Update,
-  event: DisplaySessionEvent,
+  event: DisplayRow,
   read: 'listing' | 'aggregate' | 'all',
 ): boolean {
   const transcriptChanged =
@@ -988,7 +988,7 @@ function applyEvent(
 }
 
 /** One transcript or lifecycle row onto a subscribed run's transcript. */
-function applyTranscriptRow(u: Update, event: DisplaySessionEvent): boolean {
+function applyTranscriptRow(u: Update, event: DisplayRow): boolean {
   const applied = u.view.transcriptSeq.get(event.aggregateId);
   if (applied === undefined || event.seq <= applied) return false;
   const runId = runIdOf(event.aggregateId);

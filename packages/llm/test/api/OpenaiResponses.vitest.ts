@@ -154,14 +154,16 @@ describe('native OpenAI Responses protocol', () => {
           'OPENAI_CUSTOM_HEADERS',
           'Authorization: Bearer other-account',
         );
-        expect(construct).toThrow('Ambient OpenAI');
+        expect((yield* Effect.flip(construct())).message).toContain(
+          'Ambient OpenAI',
+        );
         expect(fetch).not.toHaveBeenCalled();
         vi.stubEnv('OPENAI_CUSTOM_HEADERS', '');
         vi.stubEnv('OPENAI_LOG', 'debug');
         const logs = (['debug', 'log', 'info', 'warn', 'error'] as const).map(
           (method) => vi.spyOn(console, method).mockImplementation(() => {}),
         );
-        const model = construct();
+        const model = yield* construct();
         const turn = yield* model.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
         expect(
@@ -228,7 +230,7 @@ describe('native OpenAI Responses protocol', () => {
           .fn<typeof globalThis.fetch>()
           .mockResolvedValueOnce(response(frames))
           .mockResolvedValueOnce(response(events([MESSAGE])));
-        const model = modelWith(fetch);
+        const model = yield* modelWith(fetch);
         const turn = yield* model.prepareTurn(REQUEST);
         assert(turn.mode === 'foreground');
         const collected = yield* Stream.runCollect(model.streamTurn(turn));

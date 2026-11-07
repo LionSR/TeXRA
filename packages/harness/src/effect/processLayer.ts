@@ -5,12 +5,24 @@
  * session the same way. `Sessions.layer` is an embedder's
  * composition of that process from its platform and plugins.
  */
-import { Context, Effect, Layer, type ManagedRuntime } from 'effect';
+import {
+  Context,
+  Effect,
+  FileSystem,
+  Layer,
+  type ManagedRuntime,
+} from 'effect';
+import { ChildProcessSpawner } from 'effect/process/ChildProcessSpawner';
 
+import { AgentCatalog } from '@agent/index/agentCatalog';
 import type { RunServices } from '@agent/runtime/ToolServices';
 import { SessionOwner } from '@agent/runtime/rootLaunch';
 import { RunLabels } from '@agent/runtime/sessionDescription';
 import { globalAppStateLayer } from '@controllers/session/appStateStore';
+import {
+  projectViews,
+  type ProjectView,
+} from '@controllers/session/readSessionView';
 import {
   ownerProcessLayer,
   type ProcessServicesOptions,
@@ -18,10 +30,16 @@ import {
 import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { AgentDirectories, AppState } from '@platform/interfaces';
+import { GlobalValues } from '@platform/processRuntime';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { SessionCloseReport } from '@shared/schemas';
-import type { SessionOpenError } from '@shared/session/database';
+import {
+  type DatabaseReadFailed,
+  ProjectDatabases,
+  type SessionOpenError,
+} from '@shared/session/database';
+import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { HostSkillSources } from '@skills/runtimeSkills';
 import {
   hostSkillContributions,
@@ -29,7 +47,7 @@ import {
 } from '@skills/skillSources';
 import type { ToolCatalog } from '@tools/liveTools';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { toolTable } from '@tools/toolTable';
+import { ToolRegistry, toolTable } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { PluginsRefused } from './errors.js';
@@ -111,6 +129,16 @@ export class Sessions extends Context.Service<
      *  deadline. */
     readonly closeAll: Effect.Effect<readonly SessionCloseReport[]>;
     readonly list: Effect.Effect<readonly LocalSession[]>;
+    /**
+     * Every project under the process's storage root, from the record a
+     * host writes as it opens one: a session this process holds answers
+     * from its live view, any other is read cold from its store. A store
+     * that cannot be read is logged and left out.
+     */
+    readonly projects: Effect.Effect<
+      readonly ProjectView[],
+      DatabaseReadFailed
+    >;
   }
 >()('@texra-ai/harness/Sessions') {
   /**
@@ -218,9 +246,22 @@ function sessionsLayer(
   const sessions = Layer.effect(
     Sessions,
     Effect.gen(function* () {
+      // What a cold read of a project's store needs of the process.
+      const stores = Context.pick(
+        GlobalValues,
+        FileSystem.FileSystem,
+        ChildProcessSpawner,
+        ProjectDatabases,
+        ProcessIdentity,
+        ToolRegistry,
+      )(yield* Effect.context<ProcessServices>());
       return yield* makeSessions(
         yield* SessionOwner,
-        yield* Effect.context<ProcessServices>(),
+        yield* AgentCatalog,
+        (held) =>
+          projectViews(options.storageRoot, held).pipe(
+            Effect.provideContext(stores),
+          ),
       );
     }),
   ).pipe(

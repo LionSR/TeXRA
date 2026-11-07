@@ -20,9 +20,9 @@ import {
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import {
-  isDisplaySessionEvent,
+  isDisplayRow,
   type AggregateId,
-  type SessionEvent,
+  type SessionRow,
 } from '@shared/schemas';
 import { Database, type DatabaseWriteFailed } from '@shared/session/database';
 import { closesRunWindow } from '@shared/session/runRowReads';
@@ -74,11 +74,11 @@ const refusal = (cut: boolean): Error =>
 /** What the publisher keeps open per aggregate, from the rows it commits:
  *  `track` folds a committed batch in, `openWork` reads one aggregate's. */
 function openWorkTracker(): {
-  readonly track: (rows: readonly SessionEvent[]) => void;
+  readonly track: (rows: readonly SessionRow[]) => void;
   readonly openWork: SessionEventsShape['openWork'];
 } {
   const aggregates: OpenWorkByAggregate = new Map();
-  const track = (rows: readonly SessionEvent[]) => {
+  const track = (rows: readonly SessionRow[]) => {
     for (const row of rows) {
       if (row.type === 'run.removed') {
         aggregates.delete(row.aggregateId);
@@ -172,7 +172,7 @@ export const sessionEventsLayer = Layer.effect(
       order = false,
     ): Effect.Effect<A, E | DatabaseWriteFailed> => {
       if (order) return job(ordering);
-      const appended: SessionEvent[] = [];
+      const appended: SessionRow[] = [];
       // Both of `appendAll`'s rejections (a closed aggregate, a failed
       // write) pass through typed, not as defects.
       const append: Append = (events) =>
@@ -290,7 +290,7 @@ export const sessionEventsLayer = Layer.effect(
       openWork,
       listing: () =>
         Stream.fromIterableEffect(log.readListing()).pipe(
-          Stream.filter(isDisplaySessionEvent),
+          Stream.filter(isDisplayRow),
         ),
       all: yield* logTails(log),
     };

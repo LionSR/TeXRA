@@ -17,10 +17,10 @@ import {
   TOOL_CALL_STATUS,
   isPlainAgentIdentity,
   isTranscriptEvent,
-  type SessionEvent,
+  type SessionRow,
   type TaskGroup,
   type ToolUseLog,
-  type TranscriptEvent,
+  type TraceRowFields,
 } from '@shared/schemas';
 import {
   applyCompactionActivityEvent,
@@ -54,7 +54,7 @@ import type { TranscriptView } from './sessionView';
  *  its start opened and writes nothing for a group no start opened. */
 function applyTaskGroup(
   d: Draft,
-  event: Extract<TranscriptEvent, { type: 'stage.start' | 'stage.end' }>,
+  event: Extract<TraceRowFields, { type: 'stage.start' | 'stage.end' }>,
 ): void {
   const at = d.ix.taskGroupIndex.get(event.id);
   let group: TaskGroup;
@@ -87,7 +87,7 @@ function applyTaskGroup(
 // close without an open are dropped. Under the one publisher those rows cannot
 // arrive out of order, so nothing here compensates for a race; the shape is
 // the card's definition.
-function record(d: Draft, event: TranscriptEvent): void {
+function record(d: Draft, event: TraceRowFields): void {
   const { ix } = d;
   switch (event.type) {
     case 'log':
@@ -334,7 +334,7 @@ const isOpenGroup = (group: TaskGroup): boolean => group.status === 'running';
 export function applyTranscriptEvent(
   transcript: TranscriptView,
   work: TranscriptWork,
-  event: SessionEvent,
+  event: SessionRow,
   ctx: TranscriptContext,
 ): TranscriptView {
   const d: Draft = {
@@ -381,7 +381,7 @@ export function applyTranscriptEvent(
  * cold read uses `rows` and `openWork`, never `settledRows`.
  */
 export function buildRunTranscript(
-  events: readonly SessionEvent[],
+  events: readonly SessionRow[],
   debug: boolean,
 ): TranscriptView {
   const work: TranscriptWork = {

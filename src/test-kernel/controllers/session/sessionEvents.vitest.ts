@@ -57,11 +57,11 @@ import {
   qualifyAggregateId,
   type RunId,
   RunIdSchema,
-  type SessionEvent,
-  type SessionEventDraft,
+  type SessionRow,
+  type SessionRowDraft,
   type SessionView,
 } from '@texra-ai/harness/schemas';
-import { LocalRuntimeStateSchema } from '@texra-ai/harness/transcript';
+import { LocalRuntimeStateSchema } from '@shared/schemas';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import { makeRunHistory } from '@agent/runtime/RunHistory';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
@@ -85,7 +85,7 @@ import {
   RunHistoryRefused,
   type RunCell,
 } from '@shared/session/runHistory';
-import { SessionEventSchema } from '@shared/schemas';
+import { SessionRowSchema } from '@shared/schemas';
 import { Database } from '@shared/session/database';
 import type { RunHistoryDraft } from '@shared/session/runState';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
@@ -191,20 +191,20 @@ const settle = (
   SubscriptionRef.changes(view).pipe(Stream.takeUntil(ready), Stream.runDrain);
 
 /** Every row type: `readAggregate` reads only the types it is given. */
-const ROW_TYPES = SessionEventSchema.members.map(
+const ROW_TYPES = SessionRowSchema.members.map(
   (schema) => schema.fields.type.literal,
 );
 
 /** Every row of the aggregates `ids`, in commit order. */
 const rowsOf = (
   db: Database['Service'],
-  ...ids: readonly SessionEvent['aggregateId'][]
+  ...ids: readonly SessionRow['aggregateId'][]
 ) =>
   Effect.forEach(ids, (id) => db.readAggregate(id, 0, ROW_TYPES)).pipe(
     Effect.map((rows) => rows.flat().toSorted((x, y) => x.commit - y.commit)),
   );
 
-const runStart: SessionEventDraft = {
+const runStart: SessionRowDraft = {
   type: 'run.start',
   aggregateId: qualifyAggregateId('run', RUN),
   identity: { kind: 'agent', agent: 'chat' },
@@ -214,13 +214,13 @@ const runStart: SessionEventDraft = {
 };
 
 /** The loop parked on the request below: the phase the fold reads. */
-const waiting: SessionEventDraft = {
+const waiting: SessionRowDraft = {
   type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
   payload: { family: 'toolUse', at: 'waiting' },
 };
 
-const requested: SessionEventDraft = {
+const requested: SessionRowDraft = {
   type: 'request.opened',
   aggregateId: qualifyAggregateId('run', RUN),
   requestId: 'req-1',
@@ -240,7 +240,7 @@ const requested: SessionEventDraft = {
  *  (the pre-cutover importer's position), the plane, the fold, and the
  *  three local sources. */
 const graph = (
-  history: readonly SessionEventDraft[],
+  history: readonly SessionRowDraft[],
   store: Layer.Layer<
     Database,
     never,
@@ -487,7 +487,7 @@ describe('the session event table and its one publisher', () => {
       Layer.fresh,
     );
 
-  const olderStart: SessionEventDraft = {
+  const olderStart: SessionRowDraft = {
     ...runStart,
     aggregateId: qualifyAggregateId('run', OLDER),
   };
@@ -881,7 +881,7 @@ describe('the session event table and its one publisher', () => {
       const storage = workspace();
       const shared = `${'\\frac{a}{b} — ünïcode\n'.repeat(300)}end`;
       const solo = `\uD800${'y'.repeat(4096)}`;
-      const card = (run: RunId, args: object): SessionEventDraft => ({
+      const card = (run: RunId, args: object): SessionRowDraft => ({
         type: 'tool.start',
         aggregateId: qualifyAggregateId('run', run),
         logId: 'call-1',
@@ -1025,7 +1025,7 @@ describe('the session event table and its one publisher', () => {
       ).toBe('DatabaseWriteFailed');
       // Visiting the first asker again must not let its delayed turn-1
       // answer regress state and then admit the former asker's turn-2 open.
-      const staleBatches: SessionEventDraft[][] = [
+      const staleBatches: SessionRowDraft[][] = [
         [
           thread({ status: 'answered' }),
           thread({ parentRunId: OLDER, turnCount: 2 }),
@@ -1086,7 +1086,7 @@ describe('the session event table and its one publisher', () => {
       expect((yield* first.readAggregate(root, 0, ROW_TYPES)).at(-1)).toEqual(
         tombstone,
       );
-      const unrelated: SessionEventDraft = {
+      const unrelated: SessionRowDraft = {
         ...runStart,
         aggregateId: qualifyAggregateId('run', NEWER),
       };

@@ -6,9 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports
-import { Rejected } from '@texra-ai/harness';
 import { absentReason, relativeToRoot } from '@texra-ai/harness/node';
-import { toErrorMessage } from '@texra-ai/harness/schemas';
+import { toErrorMessage, Rejected } from '@texra-ai/harness/schemas';
 
 /**
  * One dropped path, answered with its workspace-relative name or `null` when

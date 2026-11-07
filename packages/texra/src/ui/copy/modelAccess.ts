@@ -8,7 +8,6 @@
  */
 
 import {
-  formatCostUsd,
   transcriptText,
   type ErrorRow,
   type TranscriptText,
@@ -23,6 +22,7 @@ import type {
   TokenUsageStats,
   UsageRoute,
 } from '@texra-ai/harness/schemas';
+import { formatCostUsd } from '@texra-ai/harness/schemas';
 
 /** The words for each `ModelOptionData.availability` kind. */
 export const MODEL_AVAILABILITY_LABEL = {

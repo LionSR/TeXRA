@@ -281,7 +281,7 @@ the display reader, which selects `tool.result` to fill the adjacent `tool.end`
 card's result before it drops the private row
 (`controllers/session/rowReader.ts#DISPLAY_READ_TYPES`, `#settleCards`). The
 private rows themselves are never sent to a renderer
-(`shared/schemas/sessionEvent.ts#isDisplaySessionEvent`).
+(`shared/schemas/sessionEvent.ts#isDisplayRow`).
 
 - `model.message` (folded: yes): One arm per invocation fact: `attempt`,
   `identified`, `accepted`, `cancelled`, `failed`, `response`, `handed-down`,
@@ -359,7 +359,7 @@ also read by `applyRunRows`.
 - `run.position` (folded: yes): Where the loop stands.
 
 The transcript tier is display rows too
-(`shared/schemas/traceEvent.ts#TranscriptEventSchema`):
+(`shared/schemas/traceEvent.ts#TraceRowFieldsSchema`):
 `log`, `stage.start`, `stage.end`, `tool.start` (a call's card opens),
 `tool.end` (it closes), `usage` (one priced turn; a run with a run history
 stores none), `context.state`, `stream.start`, `stream.end`, and
@@ -383,7 +383,7 @@ write points are normative:
   (`agent/runtime/ModelInvoker.ts#'ModelInvoker.attempt'`).
 - **W2**, `model.message` `response`: commits, with `run.position`
   `response.ready`, before any tool call dispatches
-  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.finish'`;
+  (`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`;
   `agent/runtime/loop/toolUse.ts#dispatchPendingResponse`).
 - **W3**, `tool.intent`: commits after PreToolUse hooks and the guard, before
   the body runs, once per attempt
@@ -418,7 +418,7 @@ a loop turn may hold none, or several as the loop calls the model again after
 tool results) MUST commit once, as one `response` row with a fresh `responseId`,
 in the batch that moves the position to `response.ready`. It carries one
 dispatch fact per local call (`agent/runtime/run/tools.ts#dispatchFactsFor`)
-(`agent/runtime/ModelInvoker.ts#'ModelInvoker.finish'`,
+(`agent/runtime/ModelInvoker.ts#'ModelInvoker.consume'`,
 `shared/schemas/runHistoryEvent.ts#DispatchFactsSchema`). The loop MUST dispatch
 only the pending response its fold holds
 (`agent/runtime/loop/toolUse.ts#dispatchPendingResponse`). W2 does not cover a

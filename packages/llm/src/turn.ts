@@ -450,12 +450,6 @@ export type FileUpload = typeof FileUploadSchema.Type;
  */
 export const FILE_UPLOAD_LIFETIME_SECONDS = 86_400;
 
-/** A file a binding uploaded and could not confirm it deleted. */
-export interface UnreleasedUpload {
-  readonly fileId: string;
-  readonly reason: string;
-}
-
 /** A configured executable value; it owns neither conversation nor retry policy. */
 export interface Model {
   prepareTurn(request: TurnRequest): Effect.Effect<ResolvedTurn, ModelError>;
@@ -470,12 +464,6 @@ export interface Model {
    * and sends bytes. Present only where the binding serves a files endpoint.
    */
   uploadFile?(file: FileUpload): Effect.Effect<void, ModelError>;
-  /**
-   * Delete every file `uploadFile` created, concurrently under one deadline,
-   * and forget them, so no later turn can send an id that no longer resolves.
-   * Never fails: what could not be confirmed deleted is returned.
-   */
-  releaseUploads?(): Effect.Effect<readonly UnreleasedUpload[]>;
   readonly background?: {
     submit(
       turn: Extract<ResolvedTurn, { mode: 'background' }>,

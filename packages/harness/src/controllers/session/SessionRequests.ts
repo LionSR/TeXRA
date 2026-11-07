@@ -321,7 +321,7 @@ export function sessionRequests(
           deliveryId: sentFollowUpId(id),
           ...(req.id != null && { caller: req.id }),
         },
-        { hold: req.holdUntil ?? undefined, attach },
+        { hold: req.holdUntil ?? undefined, attach, apiKeys: req.apiKeys },
       ).pipe(
         Effect.catchIf(
           (e): e is Error => !(e instanceof Rejected || e instanceof Conflict),

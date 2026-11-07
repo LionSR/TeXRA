@@ -1,5 +1,4 @@
 // Third-party imports
-import { formatResultCount } from '@texra-ai/harness/transcript';
 import { Effect } from 'effect';
 
 // Local imports
@@ -15,6 +14,7 @@ import {
 import { workspaceTeams, type TeamPreset } from '@texra/shared/agentTeams';
 import { findTeamPreset, type TeamRunPlan } from '@texra/shared/teamPlan';
 import type { AgentEntry, StateStore } from '@texra-ai/harness/host';
+import { formatResultCount } from '@texra-ai/harness/schemas';
 
 type CliTeamRunPlan = TeamRunPlan<AgentEntry>;
 
