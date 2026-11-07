@@ -512,7 +512,7 @@ This lands with H's batched merge of the two classifiers
 (`H-app-tools.md:718-722`).
 
 **What we give up.** One settings read per request instead of per call. It
-is a synchronous `config`-slot read (`shared/config/settings.ts:223-235`),
+is a synchronous `config`-slot read (`shared/config/settings.ts:225-238`),
 and an `add` of N items makes N of them.
 
 **Change amplification.** "A fifth Zotero tool": today `withZoteroPort` and
@@ -604,7 +604,7 @@ view.
 - **K4 (round 2):** the `initCliPlatform(context)` half of finding 3.
 - **D (round 1, `D-model-call.md:588-589`):** `ModelInvoker.call`
   re-provides `UsageLog` and `RouteRetries` that it took from the same
-  context (`ModelInvoker.ts:944-946`).
+  context (`ModelInvoker.ts:941-942`).
 - **G5 (round 2):** `hostRunActions`' pass-through ports and the
   `runAgentRequest` → `startAgentRequest` → `runValidated` options chain
   (`controllers/session/hostRunActions.ts:224-279`). #14796 also touches
