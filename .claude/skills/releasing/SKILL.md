@@ -60,13 +60,12 @@ Stable releases follow the steps below; a preview (`X.Y.Z-preview.N`) follows
    `workflow_dispatch`-only (**not** release-triggered). Build signed
    macOS/Linux/Windows installers and publish them to the public
    `texra-ai/texra-desktop-releases` repo by dispatching it on the tagged
-   commit with `run_desktop_installers`, `run_windows_desktop`,
-   `require_desktop_signing`, and `publish_desktop_release_artifacts` all
-   `true`, **and `release_tag` = `vX.Y.Z`**. The publish job fails closed on
-   an empty `release_tag`, on one that does not match
-   `packages/desktop/package.json`, and on one with no GitHub Release here or
-   whose pre-release flag disagrees with the version, for every dispatch,
-   stable as well as preview.
+   commit with `run_desktop_installers`, `require_desktop_signing`, and
+   `publish_desktop_release_artifacts` all `true`, **and `release_tag` =
+   `vX.Y.Z`**. The publish job fails closed on an empty `release_tag`, on one
+   that does not match `packages/desktop/package.json`, and on one with no
+   GitHub Release here or whose pre-release flag disagrees with the version,
+   for every dispatch, stable as well as preview.
 
 5. **`llm-zoo` pin.** `packages/llm/package.json` is the one workspace
    manifest that declares `llm-zoo`, pinned exactly; everything else imports
@@ -189,7 +188,7 @@ Procedure:
    gh release create cli-vX.Y.Z-preview.N --prerelease --title cli-vX.Y.Z-preview.N --notes-file <notes>
    ```
 
-4. Dispatch `desktop-package.yml` on the tagged commit with the four booleans
+4. Dispatch `desktop-package.yml` on the tagged commit with the three booleans
    `true` and `release_tag` = `vX.Y.Z-preview.N`.
 
 Verify on a throwaway tag before the first real preview of a train:
