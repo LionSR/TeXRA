@@ -1,14 +1,9 @@
 // Third-party imports
 import { Effect } from 'effect';
-import * as vscode from 'vscode';
 
 // Local imports
 import { withLogChannel } from '@texra-ai/harness/host';
-import {
-  ensureError,
-  formatError,
-  toErrorMessage,
-} from '@texra-ai/harness/schemas';
+import { formatError, toErrorMessage } from '@texra-ai/harness/schemas';
 import { openGuidePage } from '@frontend/hosts/VscodeExternalOpener';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { ToolMissing } from '@texra/utils/system/toolChecks';
@@ -120,12 +115,7 @@ export const showLoggedMessageWithDocs = Effect.fn('showLoggedMessageWithDocs')(
     );
     if (selection !== actionLabel) return;
 
-    yield* Effect.tryPromise({
-      try: async () => {
-        await vscode.commands.executeCommand('texra.openDoc', docId);
-      },
-      catch: ensureError,
-    }).pipe(
+    yield* openGuidePage(docId).pipe(
       Effect.catch((err) =>
         Effect.logError(
           `Failed to open documentation: ${toErrorMessage(err)}`,

@@ -41,7 +41,6 @@ import {
 } from '@texra-ai/harness/node';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
 import { appSignalStream, emitAppSignal } from '@texra-ai/harness/host';
-import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
@@ -450,7 +449,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   setupPill.text = '$(rocket) TeXRA: Get Started';
   setupPill.tooltip =
     'Connect a model: sign in with ChatGPT or add a provider API key';
-  setupPill.command = EXTENSION_COMMANDS.RUN_SETUP_ASSISTANT;
+  setupPill.command = 'texra.runSetupAssistant' satisfies ExtensionCommandId;
   setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
   context.subscriptions.push(setupPill);
   // The settings view is built with the commands, after the progress view
