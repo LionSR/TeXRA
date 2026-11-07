@@ -4,11 +4,11 @@
 // this controller is handed.
 //
 // Every exit path enters `leave`, which decides the chat's exit once
-// (`TuiSession.exit`) and does the synchronous part: a signal restores the
+// (`TuiSession.exited`) and does the synchronous part: a signal restores the
 // terminal before its first await, then skips the graceful drain and leaves
 // with the signal's code through the platform's one exit.
 
-import { Cause, Deferred, Effect, Exit, Scope } from 'effect';
+import { Cause, Effect, Exit, FiberHandle, Option, Scope } from 'effect';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -94,31 +94,29 @@ interface SessionExitController {
   readonly handleSigint: () => void;
   /** SIGTSTP / Ctrl-Z handler (restore terminal, then SIGSTOP). */
   readonly handleSigtstp: () => void;
-  /** Leave on the chat's own decision (`/exit`, a Ctrl-C with nothing to
-   *  stop): unmount, then the graceful drain. */
-  readonly requestInputExit: () => void;
-  /** Hold the process signals under this controller's policy. */
-  readonly install: () => void;
-  /** The post-`waitUntilExit` graceful teardown: decides a graceful exit if
-   *  none was decided yet, and finishes once the exit's drain has, with the
-   *  code the chat ends with. */
-  readonly gracefulTeardown: () => Promise<CliExitCode>;
+  /** Leave gracefully unless an exit was already decided (`/exit`, a
+   *  Ctrl-C with nothing to stop, Ink ending): the one exit's result, with
+   *  the code the chat ends with. */
+  readonly exit: () => Promise<CliExitCode>;
 }
 
+/**
+ * The chat's exit controller. It holds the process signals under its policy
+ * from the moment it is made, so the caller makes it exactly when the chat
+ * takes the signals over from the platform.
+ */
 export function createSessionExitController(
   ctx: SessionExitControllerContext,
 ): SessionExitController {
   const { ink, session } = ctx;
 
-  // A second Ctrl-C before this instant leaves at once. The notice is
+  // While its fiber sleeps, a second Ctrl-C leaves at once. The notice is
   // regenerable display state; replacing it must not change whether that
   // second Ctrl-C confirms the exit the first one asked for.
-  let secondCtrlCExitsUntil = 0;
+  const confirmation = ctx.runtime.runSync(
+    Scope.provide(FiberHandle.make<void>(), ctx.chatScope),
+  );
   const terminalJobControlSupported = supportsTerminalJobControl();
-  // The TUI's hold on the signals, released as it leaves.
-  let releaseSignals = (): void => {};
-  // The one run of the exit, started by the path that decides it.
-  let exited: Promise<CliExitCode> | undefined;
   // Persist the reopen hint to native scrollback: the session's root run,
   // through which its children resume too. The view (for the task's usage)
   // is read before resetCliState() clears it, as a snapshot taken while the
@@ -159,8 +157,7 @@ export function createSessionExitController(
   // default runtime (`runCliExit`), off the process runtime the platform's
   // shutdown disposes. A signal exit persists the session and leaves with
   // the signal's code; a graceful one drains the chat first.
-  const exitProgram = Effect.gen(function* () {
-    const cause = yield* Deferred.await(session.exit);
+  const exitProgram = Effect.fn(function* (cause: ChatExit) {
     if (cause.kind === 'signal') {
       // `persistSession` and the shutdown sequence catch their own failures,
       // so the exit is unconditional.
@@ -246,37 +243,37 @@ export function createSessionExitController(
 
   /**
    * Every exit path enters here; the first decides how the chat leaves. The
-   * synchronous part is load-bearing: the signals pass to `leaveAtOnce`, the
-   * pending Ctrl-C confirmation is void, and a signal exit restores the
-   * terminal and prints the hint before the first await, so a stalled flush
-   * cannot strand raw mode or emulator keyboard state.
+   * synchronous part is load-bearing: the signals pass to `leaveAtOnce`
+   * (a later Ctrl-C never reaches the confirmation), and a signal exit
+   * restores the terminal and prints the hint before the first await, so a
+   * stalled flush cannot strand raw mode or emulator keyboard state.
    */
-  const leave = (cause: ChatExit): void => {
-    if (session.leaving) return;
+  const leave = (cause: ChatExit): Promise<CliExitCode> => {
+    if (session.exited) return session.exited;
     releaseSignals();
     holdSignals(leaveAtOnce);
-    secondCtrlCExitsUntil = 0;
     clearTransientNotice();
     ink.unmount();
     if (cause.kind === 'signal') {
       ctx.terminal.release();
       printResumeHintOnExit(snapshotResumeHint());
     }
-    Deferred.doneUnsafe(session.exit, Effect.succeed(cause));
-    exited ??= runCliExit(exitProgram);
+    return (session.exited = runCliExit(exitProgram(cause)));
   };
   const waitForSecondCtrlC = (): void => {
-    secondCtrlCExitsUntil = Date.now() + EXIT_CONFIRMATION_TTL_MS;
     setTransientNotice('Press Ctrl-C again to exit', {
       kind: 'exit',
       resumeId: session.runId,
       ttlMs: EXIT_CONFIRMATION_TTL_MS,
     });
+    ctx.runtime.runSync(
+      FiberHandle.run(confirmation, Effect.sleep(EXIT_CONFIRMATION_TTL_MS)),
+    );
   };
   const handleSigint = (): void => {
     // A second Ctrl-C inside the confirmation window forces the exit.
-    if (Date.now() < secondCtrlCExitsUntil) {
-      leave({ kind: 'signal', exitCode: CliExitCode.Interrupted });
+    if (Option.isSome(FiberHandle.getUnsafe(confirmation))) {
+      void leave({ kind: 'signal', exitCode: CliExitCode.Interrupted });
     } else if (session.canStopVisibleRun()) {
       ctx.interruptActive('user');
       waitForSecondCtrlC();
@@ -287,9 +284,9 @@ export function createSessionExitController(
       // a successful turn should not report SIGINT/130. The platform
       // shutdown's session close still ends the generation with its
       // cancelled `run.end` (see `TuiSession.isResumableIdle`).
-      leave({ kind: 'signal', exitCode: session.exitCode });
+      void leave({ kind: 'signal', exitCode: session.exitCode });
     } else {
-      leave({ kind: 'graceful' });
+      void leave({ kind: 'graceful' });
     }
   };
   // Only interrupt an actively-running turn; an idle/WAITING session is left
@@ -298,7 +295,7 @@ export function createSessionExitController(
     if (session.canStopVisibleRun()) {
       ctx.interruptActive('shutdown');
     }
-    leave({ kind: 'signal', exitCode });
+    void leave({ kind: 'signal', exitCode });
   };
   // Suspend/resume (Ctrl-Z / `kill -TSTP` / `fg`). Raw mode keeps the tty
   // driver from ever turning ^Z into a signal, so App's unified useInput
@@ -319,34 +316,22 @@ export function createSessionExitController(
     ctx.repaintAfterTerminalResume();
   };
 
-  const install = (): void => {
-    // Held right here, not any earlier: everything before this (the platform
-    // init, onboarding, model resolution) ran under the platform's own
-    // policy, so a signal during that window still got a graceful shutdown.
-    // The newest holder answers, so this policy is the sole owner until
-    // `leave` releases it.
-    const policy: SignalPolicy = {
-      SIGINT: handleSigint,
-      SIGTERM: handleTermSignal(CliExitCode.Terminated),
-      SIGHUP: handleTermSignal(129),
-      ...(terminalJobControlSupported && {
-        SIGTSTP: handleSigtstp,
-        SIGCONT: handleSigcont,
-      }),
-    };
-    releaseSignals = holdSignals(policy);
+  // The newest holder answers, so this policy is the sole owner until
+  // `leave` releases it.
+  const policy: SignalPolicy = {
+    SIGINT: handleSigint,
+    SIGTERM: handleTermSignal(CliExitCode.Terminated),
+    SIGHUP: handleTermSignal(129),
+    ...(terminalJobControlSupported && {
+      SIGTSTP: handleSigtstp,
+      SIGCONT: handleSigcont,
+    }),
   };
-
-  const gracefulTeardown = (): Promise<CliExitCode> => {
-    leave({ kind: 'graceful' });
-    return (exited ??= runCliExit(exitProgram));
-  };
+  const releaseSignals = holdSignals(policy);
 
   return {
     handleSigint,
     handleSigtstp,
-    requestInputExit: () => leave({ kind: 'graceful' }),
-    install,
-    gracefulTeardown,
+    exit: () => leave({ kind: 'graceful' }),
   };
 }

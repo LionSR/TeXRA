@@ -369,7 +369,7 @@ export function createChatSessionController(
   const reportRunFailure = (error: unknown, claim: RootRunSettled): void => {
     if (!session.holdsClaim(claim)) return;
     session.settleExitCode(claim, CliExitCode.AgentError);
-    if (session.leaving || session.status() === 'cancelled') return;
+    if (session.exited || session.status() === 'cancelled') return;
     const { classification } = normalizeProviderError(error);
     showFailure(
       error,
@@ -955,7 +955,7 @@ export function createChatSessionController(
       ...(reason !== undefined ? { reason } : {}),
     });
     const route = Effect.gen(function* () {
-      if (session.leaving) return returned();
+      if (session.exited) return returned();
       // The focused agent below the root takes the message.
       const focused = runViewOf(currentView(), selectedRunIdSignal.get());
       if (focused !== undefined && focused.parentId !== null)

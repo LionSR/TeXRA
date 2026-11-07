@@ -390,7 +390,7 @@ export async function runChat(
     stores: services,
     runtime: services.runtime,
     processCwd: process.cwd(),
-    requestInputExit: exitController.requestInputExit,
+    requestInputExit: exitController.exit,
     getApprovalPolicy,
     setApprovalPolicy,
     resetSession: resetSessionForClear,
@@ -677,6 +677,10 @@ export async function runChat(
   // No model yet: the "Connect a model" panel is the first thing on screen.
   if (modelConnectionNeeded.get()) openRegisteredCliSlashForm(commands.login);
 
+  // Making the controller takes the signals over from the platform handler,
+  // not any earlier: everything above (the platform init, onboarding, model
+  // resolution) ran with the platform's own handler still live, so a signal
+  // during that window still got a graceful shutdown.
   const exitController = createSessionExitController({
     ink,
     session,
@@ -706,11 +710,6 @@ export async function runChat(
     repaintAfterTerminalResume: scrollback.restart,
     interruptActive: (reason) => chatController.stop(reason),
   });
-  // Transfer signal ownership from the platform handler and arm this session's
-  // handlers, not any earlier: everything above (the platform init,
-  // onboarding, model resolution) ran with the platform's own handler still
-  // live, so a signal during that window still got a graceful shutdown.
-  exitController.install();
 
   // Interactive resume: kick off the continued tool-use run now that Ink is
   // mounted (so the rehydrated transcript + streamed continuation render) and
@@ -752,10 +751,10 @@ export async function runChat(
   } finally {
     // The exit policy reads the view (a resumable idle root) after it has
     // released the store, so the bridge outlives the chat's scope. The
-    // teardown finishes only on the graceful path, whose drain closes that
-    // scope first (a signal exit ends in process.exit and never returns
-    // here), so nothing subscribed to the view outlives the bridge.
-    exitCode = await exitController.gracefulTeardown();
+    // exit finishes only on the graceful path, whose drain closes that scope
+    // first (a signal exit ends in process.exit and never returns here), so
+    // nothing subscribed to the view outlives the bridge.
+    exitCode = await exitController.exit();
     unbindSessionView();
   }
   return { exitCode };

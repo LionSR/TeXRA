@@ -432,10 +432,7 @@ layer(Layer.provideMerge(boundTestSessionView, SessionGraph.hosted), {
             vi.waitFor(() => expect(session.runId).toBe('aaaaaa')),
           );
           // The user quits while the run still works; its failure lands after.
-          Deferred.doneUnsafe(
-            session.exit,
-            Effect.succeed({ kind: 'graceful' }),
-          );
+          session.exited = Promise.resolve(CliExitCode.Success);
           failing.resolve();
           yield* Fiber.join(resumed);
           yield* Effect.exit(awaitRunSettled(session));

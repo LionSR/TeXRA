@@ -1,5 +1,5 @@
 import { computed, signal } from '@lit-labs/signals';
-import { Deferred, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import { isWorking, type RunId } from '@texra-ai/harness/schemas';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -88,15 +88,11 @@ export class TuiSession {
     rootRunClaim.set(NO_CLAIM);
   }
 
-  /** How the chat leaves, once decided, standing until the process ends:
-   *  the exit controller completes it on every exit path and runs the exit. */
-  readonly exit = Deferred.makeUnsafe<ChatExit>();
-
-  /** The chat is leaving: a message typed now goes back to the input, and a
-   *  run that fails now says nothing. */
-  get leaving(): boolean {
-    return Deferred.isDoneUnsafe(this.exit);
-  }
+  /** The chat's one exit, once an exit path decided it: its result is the
+   *  code the chat ends with. While it is set the chat is leaving: a message
+   *  typed now goes back to the input, and a run that fails now says
+   *  nothing. */
+  exited: Promise<CliExitCode> | undefined;
 
   /** The chat's exit code: a dead session view is a failure on every exit
    *  path; otherwise the claimed run's, as `settleExitCode` wrote it. */
