@@ -106,14 +106,20 @@ option on a shared surface; comments substituting for design (27%).
 built as a fiber-per-root scheduler with its own admission rule, instead of as
 a per-root value that changes.
 
-**The better design.** `RcMap<workspace, Probe>` in the layer scope, where a
-`Probe` is `{ inputs: SubscriptionRef<ToolProbeInputs>; results: SubscriptionRef<ProbeResults | null> }`
-built with one forked fiber `SubscriptionRef.changes(inputs).pipe(Stream.switchMap(probeRound), Stream.runForEach(set results))`.
-`hold(roots)` is `RcMap.get` (scope = the session's) then `inputs.set`;
-`refresh(inputs)` is `inputs.set` then the first `results` change after it;
-the published `results` map is `SubscriptionRef` over the `RcMap`'s live
-entries. The credential relay is one `appSignalStream` fed into every live
-entry's `inputs.set`. Deleted: `ProbeRound`, `lanes`, `held`, `claim`,
+**The better design.** `RcMap.make({ lookup })` in the layer scope, keyed by
+workspace root, where the looked-up resource is
+`{ inputs: SubscriptionRef<ToolProbeInputs>; results: SubscriptionRef<ProbeResults | null> }`
+plus one fiber forked in the entry's scope:
+`SubscriptionRef.changes(inputs).pipe(Stream.switchMap((i) => Stream.fromEffect(probeRound(i))), Stream.runForEach((r) => SubscriptionRef.set(results, r)))`.
+`Stream.switchMap` (4.0.0+) interrupts the previous inner stream when a new
+element arrives, which is the "latest inputs win" rule `ProbeRound.again`
+spells by hand. `hold(roots)` is `RcMap.get` in the session's scope then
+`SubscriptionRef.set(inputs, roots)`; `refresh(inputs)` is the same set then
+`SubscriptionRef.changes(results).pipe(Stream.drop(1), Stream.runHead)`;
+the published `results` is the `RcMap.keys` joined with each entry's
+`results`. The credential relay is
+`appSignalStream('credentialChanged').pipe(Stream.filter(...), Stream.runForEach(...))`
+over the live entries, forked once in the layer scope. Deleted: `ProbeRound`, `lanes`, `held`, `claim`,
 `probeUntilSettled`, `start`'s fork-and-record, the `Queue` and `subscribed`
 Deferred, and `onAppSignal`'s third parameter (1 caller). About 90 of the
 file's 351 lines.
@@ -148,33 +154,44 @@ the map now cannot tell, `holdServer` records the key in a `failed: Set<ServerKe
 (`:117`) is the optional field that carries the state through `HeldServer`,
 `sessionTools.pinStep`'s `failures` (`tools/sessionTools.ts:227-229`) and
 `HeldPlugins.loaded` (`tools/sessionTools.ts:298-301`). The comment at
-`tools/sessionTools.ts:10` already states the primitive's rule: "a failed or
-interrupted build is dropped".
+`tools/sessionTools.ts:10`, "a failed or interrupted build is dropped", is
+false for failures: in Effect 4.1.2 an `RcMap` entry whose lookup failed stays
+in the map with its failure on the entry's `Deferred`, and every later `get`
+or `getOption` "fails with the same error" (`node_modules/effect/src/RcMap.ts:590-595,617`);
+only an interrupted lookup is removed (`removeInterrupted`, `:761-775`). A
+false comment is a bug (root `AGENTS.md`, "Plain names and comments").
 
 **The design decision behind it.** "A start that failed stays failed until the
 project's next root run, so one task waits on a dead start once" (`:21-22`)
 was implemented by lying to the cache and keeping the truth beside it.
 
-**The better design.** Let `acquireMcpServer` fail with `McpStartError`; the
-`RcMap` then drops the entry on its own, and the step that held it reports
-the warning from the failure (the warning text is already built at
-`mcpServer.ts:390`). The "wait on a dead start once per task" rule is then
-either unneeded (a start costs at most `START_TIMEOUT`, and only the step
-that asks pays it) or, if kept, one `Cache` with a short TTL on failures in
-front of the lookup, which Effect provides without a hand-kept set. Deleted:
-`failed`, the `root` parameter of `hold` and `ProjectServers.hold`'s eviction
-loop, `LoadedPluginTools.failure?`, `HeldServer`'s optional, and `loaded`'s
+**The better design.** Let `acquireMcpServer` fail with `McpStartError`: the
+`RcMap` then holds the failure itself (verified above), so the map is the one
+record of "this key failed" and `failed: Set` goes. The "wait on a dead start
+once per task" rule, if kept, is one loop in `hold` at a root run over
+`RcMap.keys` with `Effect.result(RcMap.getOption(servers, key))` and
+`RcMap.invalidate` on a failure: no second set, since the map answers which
+keys failed. If the rule is dropped, `holdServer` invalidates the key on its
+own failure and every step retries, bounded by `START_TIMEOUT`. The step that
+held the key reports the warning from the failure (the text already built at
+`mcpServer.ts:390`). `RcMap` stays the pool: its release is counted per
+borrower's scope (`RcMap.ts:783-800`), which a step mid-call needs;
+`ScopedCache.makeWith`'s exit-dependent `timeToLive`
+(`dist/ScopedCache.d.ts:117-122`) would expire a server by time while a step
+still holds it, so it is not the primitive here. Deleted: `failed`,
+`LoadedPluginTools.failure?`, `HeldServer`'s optional, `loaded`'s
 `string | undefined` map in `HeldPlugins` (the warning list already carries
-the reason). `root: boolean` is passed by two callers
-(`agent/runtime/run/AgentRun.ts:272`, `tools/sessionTools.ts:298`).
+the reason), and the false comment at `sessionTools.ts:10`. `root: boolean`
+stays only if the once-per-task rule stays (two callers,
+`agent/runtime/run/AgentRun.ts:272`, `tools/sessionTools.ts:298`).
 
-**What we give up.** A subagent of a task whose server failed at the root's
-start re-tries the start (bounded by 30 s) instead of reading the root's
-cached failure.
+**What we give up.** With the rule dropped, a subagent of a task whose server
+failed at the root's start re-tries the start (bounded by 30 s) instead of
+reading the root's cached failure; with the rule kept, nothing.
 
 **Change amplification.** "A server whose start should be retried on a
 schedule": today the `failed` set, `hold`'s loop and the success-shaped
-failure: 3 places; after: one `Schedule` on the lookup: 1.
+failure: 3 places; after: `Effect.retry({ schedule })` on the lookup: 1.
 
 **Depends on:** none.
 
@@ -409,12 +426,12 @@ for:
 
 | Site                                                                 | What it holds                                      | Primitive                           |
 | -------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------- |
-| `utils/system/toolUtils.ts:39,53-62` `foundImageTool`                | a memoised probe (misses not memoised)             | `Effect.cached` on success          |
-| `platform/defaults/nodeProcesses.ts:101,111` `linuxBootId`           | a memoised file read                               | `Effect.cached`                     |
-| `platform/defaults/nodeProcesses.ts:214,227-233` `selfIdentity`      | a memoised probe, retried until it succeeds        | `Effect.cached` (success only)      |
-| `platform/defaults/longRunningModelTransport.ts:35,44` `dispatcher`  | one undici agent, built on first use              | a layer-scoped resource             |
-| `platform/defaults/longRunningModelTransport.ts:57,154` `projectDispatchers` | one agent per project proxy policy, never released | `RcMap` keyed by policy            |
-| `tools/web/WebFetchTool.ts:113-119` `dispatcher`                     | a second undici agent, from `process.env` only    | the same resource                   |
+| `utils/system/toolUtils.ts:39,53-62` `foundImageTool`                | a memoised probe (misses not memoised)             | `Effect.cachedWithTTL(probe, (exit) => Exit.isSuccess(exit) ? Duration.infinity : Duration.zero)` |
+| `platform/defaults/nodeProcesses.ts:101,111` `linuxBootId`           | a memoised file read, kept only on success         | the same `cachedWithTTL` with an exit-dependent TTL |
+| `platform/defaults/nodeProcesses.ts:214,227-233` `selfIdentity`      | a memoised probe, retried until it succeeds        | the same `cachedWithTTL` with an exit-dependent TTL |
+| `platform/defaults/longRunningModelTransport.ts:35,44` `dispatcher`  | one undici agent, built on first use              | `Layer.scoped` + `Effect.acquireRelease` (the agent's `close` as the release) |
+| `platform/defaults/longRunningModelTransport.ts:57,154` `projectDispatchers` | one agent per project proxy policy, never released | `RcMap.make({ lookup, idleTimeToLive })` keyed by policy |
+| `tools/web/WebFetchTool.ts:113-119` `dispatcher`                     | a second undici agent, from `process.env` only    | the same `RcMap` entry for the project's policy |
 | `utils/system/platformPaths.ts:76` `cachedExtendedPaths`             | an `LRUCache` of extended PATHs                    | `Context.Reference` (as `ContentHashes` does, `common/plugins/pluginDigest.ts:42-47`) |
 | `platform/defaults/fileSecrets.ts:42`, `platform/defaults/jsonStore.ts:106`, `tools/memory/memoryFileSystem.ts:95`, `tools/approval/approvedWrite.ts:43` | four `PerKeyLanes` maps | `Context.Reference<PerKeyLanes>` with a `Map` default |
 | `logger/logSink.ts:143-144` `sink`, `sinkTrusted`                    | the host's log sink                                | documented host port; stays         |
@@ -430,10 +447,12 @@ project whose `.env` names a proxy sends its model traffic through it and its
 **The design decision behind it.** Each module memoised or pooled for itself
 because no process value owned the fact.
 
-**The better design.** The memos become `Effect.cached` (success-only where
-the comment says a miss must retry: `Effect.cachedWithTTL` with a zero TTL on
-failure is the shape `pluginCatalogLayer` already uses,
-`tools/pluginCatalog.ts:61-70`). The dispatchers become one `RcMap<ProxyPolicy, Dispatcher>`
+**The better design.** The memos become `Effect.cachedWithTTL` with an
+exit-dependent TTL (infinite on success, zero on failure): `Effect.cached`
+alone would memoise the failure too ("its result is computed only once";
+only interruptions are never cached, `dist/Effect.d.ts:13490-13502`), which
+is not what any of the three sites wants; the exit-function form is the shape
+`pluginCatalogLayer` already uses (`tools/pluginCatalog.ts:61-70`). The dispatchers become one `RcMap<ProxyPolicy, Dispatcher>`
 in the process layer, read by both `runModelFetch` and `web_fetch` with the
 project's policy, so the pair collapses to one fact. The four lane maps
 become one `Context.Reference<PerKeyLanes>` each, defaulting to a fresh `Map`,
@@ -548,9 +567,11 @@ twice (once from the watcher's debounce, once from the feed).
 Open PR 14773: this module serves the agent catalog that proposal redesigns;
 sequence after it.
 
-**The better design.** One feed over the four keys, `Stream.take(1)` run in
-the build for the first load (no `Deferred`), the rest forked with
-`Stream.switchMap` on the key that changed; a directory change reloads once.
+**The better design.** One `appState.changes([...four keys])` feed:
+`Stream.take(1)` + `Stream.runDrain` with the reload in the build for the
+first load (no `Deferred`), then the rest forked with `Effect.forkScoped`, the
+directory re-registration and watch under `Stream.switchMap` so a changed
+setting interrupts the previous watcher; a directory change reloads once.
 About 25 lines fewer; `loaded`/`landed` go.
 
 **Depends on:** none.
@@ -612,7 +633,10 @@ option on every `executeCommand` caller (56 files per the refuted
   synchronous `statSync` compare and re-read (`:51-66,189-211`) with a
   `writeLogLine` on failure; the comment says the compare costs "about a
   microsecond", in which case every store should follow and the option is a
-  decision refused. `onUnreadable?: (error) => void` (`:37`; 1 caller,
+  decision refused; the Effect-native form of "follow other writers" is
+  `FileSystem.watch(path)` (`dist/FileSystem.d.ts:324`, a `Stream`) applied
+  into a `SubscriptionRef<JsonRecord>` the reads take from, as
+  `FileSecrets.watch` already does for the secrets directory. `onUnreadable?: (error) => void` (`:37`; 1 caller,
   `packages/texra/src/platform/defaults/nodeStores.ts:91`) is a callback
   where `JsonStore.open` failing and the caller `Effect.catch`ing into
   `JsonStore.empty(path)` is the Effect shape.
@@ -735,3 +759,32 @@ reads under R1/R8.
   `packages/harness/AGENTS.md` "Storage format".
 - `logSink`'s module-level sink: the documented host diagnostic port
   (`logger/logSink.ts:1-18`); a host installs it before any runtime exists.
+
+## Effect-native mapping (verified against node_modules/effect 4.1.2 .d.ts)
+
+| Finding | Hand-rolled today                                                                                       | Effect primitive and the exported API verified                                                                                                                                                                                                                                                                                    | Why it fits                                                                                                                                                      |
+| ------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | `ProbeRound.again` + `lanes` Map + `Semaphore(1)` claim + `Effect.uninterruptible` fork + `while (true)` | `SubscriptionRef.make/set/changes` (`dist/SubscriptionRef.d.ts:93,1102,134`) + `Stream.switchMap` (`dist/Stream.d.ts:2505`, "interrupting the previous stream when a new element arrives", since 4.0.0)                                                                                                                              | latest inputs win and a stale probe cannot finish last, with no flag, no lane and no mask                                                                        |
+| 1       | `held: Map<root, inputs[]>` refcount in `hold`'s `acquireRelease`                                       | `RcMap.make({ lookup })` / `RcMap.get` in the session's scope / `RcMap.keys` (`dist/RcMap.d.ts:215,379,654`)                                                                                                                                                                                                                    | release is counted per borrower scope (`src/RcMap.ts:783-800`); the last session's close drops the root's entry                                                 |
+| 1       | `Queue.unbounded` + `Queue.offerUnsafe` listener + `Deferred subscribed` + `Effect.forever` drain       | `appSignalStream` = `Stream.fromSubscription` (`dist/Stream.d.ts:1217`) over `PubSub.subscribe`, then `Stream.filter`/`Stream.runForEach` (`:5253,15953`)                                                                                                                                                                      | the hub is already a `PubSub`; a stream over its subscription needs no relay queue and no readiness latch                                                       |
+| 2       | `acquireMcpServer` answering `{ tools: new Map(), failure }` + `failed: Set<ServerKey>`                 | a failing lookup under `RcMap.make({ lookup, idleTimeToLive })`; `RcMap.getOption` + `RcMap.invalidate` + `RcMap.keys` (`dist/RcMap.d.ts:520,701,654`). Verified: a failed lookup is kept and re-fails every `get`/`getOption` (`src/RcMap.ts:590-595,617`); only an interrupted one is removed (`:761-775`)                          | the map already remembers a failed key, so the `Set` is the primitive written twice; `ScopedCache.makeWith`'s exit TTL (`dist/ScopedCache.d.ts:117-122`) rejected: no per-borrower release |
+| 3       | four spawn-time scrub policies                                                                          | none: pure data (one `childEnvironment` function over `environment`, a `Context.Reference`, `utils/system/nodeWorkspace.ts:65`)                                                                                                                                                                                                | a decision, not a lifetime                                                                                                                                       |
+| 4       | results scan + `stillRunning` walk + `GOAL_AUTO_APPROVALS` mode                                         | none: a row (the plugin's own `plugin.fact`) read through `SessionLog.facts`; the view's `durableOutcome`                                                                                                                                                                                                                       | one owner per fact; R7's "a question/answer is a row" applies to a launch too                                                                                    |
+| 5       | `getAvailablePaths` switch + per-handler refusals + `HIDDEN_CONFIG_FIELDS_BY_CATEGORY`                  | none: a column on `EXECUTION_ROUTES`                                                                                                                                                                                                                                                                                             | a declarative table with the missing column                                                                                                                      |
+| 6       | `createBoundedOutputCapture` head/tail + `normalizeWhitespace` + `capReached`                           | none new: a projection over the `process.output` rows `SessionLog.display(runId)` already returns (`tools/executions/processOutput.ts:135-137`)                                                                                                                                                                                 | R5's named step: the rows are the one record                                                                                                                     |
+| 7       | `foundImageTool`, `linuxBootId`, `selfIdentity` lets                                                    | `Effect.cachedWithTTL(self, (exit) => Duration)` (`dist/Effect.d.ts:13969`; "the function runs once after each fresh computation, including failures", `:13561-13564`). Not `Effect.cached` (`:13539`): it memoises a failure ("computed only once", `:13490-13502`)                                                             | success-only memo with a retried miss, which is what all three sites hand-roll                                                                                   |
+| 7       | undici `dispatcher` lets and `projectDispatchers` Map                                                   | `Layer.scoped` + `Effect.acquireRelease` (`dist/Effect.d.ts:12676`) for the process agent; `RcMap.make({ lookup, idleTimeToLive })` keyed by proxy policy for per-project agents                                                                                                                                              | a pooled connection agent is a resource with a lifetime; one map answers both `web_fetch` and the model transport                                                |
+| 7       | four module-level `PerKeyLanes` maps, `cachedExtendedPaths` LRU                                         | `Context.Reference(key, { defaultValue })` (`dist/Context.d.ts:1741-1743`), the precedent being `ContentHashes` (`common/plugins/pluginDigest.ts:42-47`)                                                                                                                                                                       | process-wide by default, replaceable per layer, resettable in tests; `withPerKeyLane` itself stays (refuted candidate)                                           |
+| 8       | `WorkspaceRoots.globalStorage/globalState` fields; `AppState.layer` faking `changes`; optional port members | `Context.Service` tags already in place (`GlobalStorageFs`, `AppState`); `Layer.succeed(CommandDirs)` for the app's dirs (`CommandDirs` is a `Context.Reference`, `utils/system/platformPaths.ts:37-40`); a required `changes: Stream` on the SDK's store                                                                      | one owner per fact; a default belongs on the reference, not on the record                                                                                        |
+| 9       | three `appState.changes` feeds + `Deferred loaded` + `Effect.ensuring(reload, landed)`                   | `Stream.merge`-free single feed over four keys; `Stream.take(1)` (`dist/Stream.d.ts:8827`) + `Stream.runDrain` (`:16198`) for the first load; `Stream.switchMap` (`:2505`) for the watcher; `Effect.forkScoped` (`dist/Effect.d.ts:17216`)                                                                                   | "the first element happened" is `take(1)`, not a latch                                                                                                           |
+| 10      | `utils/core/index.ts`, `execUtils.gitAuthorEnv`, `toolUtils`                                            | none: file moves and one option deleted                                                                                                                                                                                                                                                                                          | naming and ownership                                                                                                                                             |
+| 11      | `JsonStore.follow` stat-compare on every `get`; `FileSecrets.watch`'s `Effect.never`                     | `FileSystem.watch` (`dist/FileSystem.d.ts:324`) into `SubscriptionRef`; `Stream.runDrain` as the watch fiber instead of fork + `Effect.never`                                                                                                                                                                                  | a file that others write is a stream of changes, not a poll on read                                                                                             |
+
+Primitives named by the brief and not used by any finding here: `Latch`
+(`dist/Latch.d.ts:189,209,253,303,351` exist; no finding in this area waits on
+a gate; the one readiness `Deferred` the area had, finding 9, is a
+`Stream.take(1)`), `FiberMap` (`dist/FiberMap.d.ts:115,1016,881,1244,1274`;
+the area's fibers are per-`RcMap`-entry and per-stream, so an entry's scope,
+`Scope.fork` (`dist/Scope.d.ts:493`), is their owner, as `sessionTools.follow`
+already does), `Schedule` (`dist/Schedule.d.ts:725,1070,981,1212`; finding 2's
+retry variant is `Effect.retry({ schedule })`, `dist/Effect.d.ts:7132`).

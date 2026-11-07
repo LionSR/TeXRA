@@ -94,12 +94,21 @@ host still assembles the pair by hand.
 live, and what does opening it entail" is answered by every host that
 opens one instead of by the module that knows what a session is.
 
-**The better design.** One `openProjectSession(root, roots, service)` in
-`packages/texra/src/controllers/session/` (area G's directory; the deletion
-is this area's) returning `GuiSession` and running `recordFirstCompletedRun`
-and the moved-aside notice through the window's `emit`. The config-store
-and roots assembly (`openTexraConfigStores` + `openNodeWorkspaceRoots` with
-the service's `workspaceState`) goes with it as `openProjectRoots`. Deleted:
+**The better design.** The window's session is a scoped resource built by
+one layer: `GuiSessionLive = Layer.effect(GuiSession, openProjectSession)`
+(`Layer.effect` runs its effect in the layer's scope, Layer.d.ts:1166;
+`Layer.scoped` does not exist in 4.1.2), where `openProjectSession` is one
+program in `packages/texra/src/controllers/session/` (area G's directory;
+the deletion is this area's): `Effect.acquireRelease(sessions.open(...), close)`
+or `serviceSession(...)`, then `recordFirstCompletedRun` (already
+scope-bound) and the moved-aside notice through the window's `emit`. The
+hosts build the window under `Layer.build`/`Effect.provide` of that layer
+in the scope they already open (`desktopWindow.ts:95-101`,
+`extension.ts:391-397`), so the session closes with the window and nobody
+calls `dispose()` by hand. The config-store and roots assembly
+(`openTexraWorkspaceConfigStores` + `openNodeWorkspaceRoots` with the
+service's `workspaceState`) goes with it as a second `Layer.effect`
+(`WorkspaceRootsLive`). Deleted:
 `extension.ts:198-227,429-451` (~55 lines), `desktopProjects.ts:260-301,373-398`
 (~65 lines), the CLI's copy; `warnInDialog` (2 callers, both this flow).
 Callers write `const window = yield* openProjectSession(root, { service })`.
@@ -227,14 +236,20 @@ the setup agent on the launcher), and in nothing else.
 
 **The better design.** `openGuiWindow` owns one refresher per window: it
 builds `OnboardingFunnelRefresher` from `hasUsableSetupCredential(roots)`
-under the project's environment layer, publishes the state into the
-snapshot itself, forks `followFirstRunDone`, and binds `skip`/`skipSetup`
-once. The extension's `credentialUsable`, `refreshApiKeyStatus`, the
-ordering comment, and `paintSetupPill` as a constructor callback go; the
-pill follows the snapshot's `apiKeyBanner` through the view the provider
-already holds. `runSetup` is one `FiberHandle.run` in the body over the
-window's `runValidated`; the two extension copies and the desktop's boolean
-guard go. Deleted: ~90 lines in `ProgressViewProvider.ts`, ~100 in
+under the project's environment layer, publishes the state into a
+`SubscriptionRef<OnboardingFunnelState>` (`SubscriptionRef.make`, `.changes`:
+SubscriptionRef.d.ts:93,134) that the snapshot and the extension's setup
+pill both follow with one `Stream.runForEach` each, forks
+`followFirstRunDone` (already a `Stream` over `StateStore.changes`), and
+binds `skip`/`skipSetup` once. The extension's `credentialUsable`,
+`refreshApiKeyStatus`, the ordering comment, and `paintSetupPill` as a
+constructor callback go; the desktop's `funnel: State | null` goes because
+the ref is seeded by the first refresh before the window attaches.
+`runSetup` is `FiberHandle.run(setupLaunch, { onlyIfMissing: true })`
+(FiberHandle.d.ts:542-549: a second `run` while the fiber lives is a no-op,
+which is exactly the double-click guard, and the window's scope interrupts
+it) over the window's `runValidated`; the two extension copies and the
+desktop's boolean guard with its `forkDetach` + `ensuring` go. Deleted: ~90 lines in `ProgressViewProvider.ts`, ~100 in
 `desktopWindowOnboarding.ts` (the file reduces to the two verbs),
 `commands.ts:86-103`, `extensionHostRequests.ts:433-461`.
 
@@ -276,10 +291,15 @@ The CLI note's rule, "a notice is presented by the requesting window's
 `emit`", landed one layer up; the layer below still carries the switch.
 
 **The better design.** Ports never present. `openPath`, `openExternal`,
-`openDiff` fail with their tag; one `present(cause)` at the window
-(`reported`) is the only reporter, and the session's `emit` the only
-presenter for run-time failures. One preview host, one diff host, one
-`forProject` record. Deleted: `requestPreviewHost`, `requestDiffHost`,
+`openDiff` fail with their tag; the one presenter is a
+`Context.Reference<Presenter>` (`Context.Reference(key, { defaultValue })`,
+Context.d.ts:1741) whose default logs at warn, which the window provides
+once with its dialogs: a port that needs no presenter takes no optional
+member, and a call site that wants the dialog left out provides nothing
+instead of constructing a second host. `reported` (already
+`Effect.catchCause` → present) is the only report site for a window-level
+program, and the session's `emit` the only presenter for run-time
+failures. One preview host, one diff host, one `forProject` record. Deleted: `requestPreviewHost`, `requestDiffHost`,
 `showErrorMessage?`, `reportFailure`, `openExternalProgram`,
 `openExternalInBackground`, `awaitOrReport`, `reportBackgroundError` (its 9
 callers become `reported` or a log), the `fail()` dialog (`PreviewUnavailable`
@@ -324,6 +344,12 @@ anything; the bridge's absence is modelled as a port that may be missing.
 `openProjectBindings` (it needs only `window`), so `post` is a required
 member and `DesktopOverlayPostOptions.postToRenderer` is `(message) => void`;
 a destroyed window is the binding scope's close, not a per-call check.
+Where the bridge must stay a later event (the preload's `listening`
+handshake), the window holds `Deferred<DesktopHostBridge>`
+(`Deferred.make`/`succeed`/`await`: Deferred.d.ts:152,1405) and `post` is
+`Deferred.await(bridge).pipe(Effect.flatMap(...))`: a show that arrives
+before the renderer waits for it instead of falling back, and the window's
+scope interrupts the wait.
 `tryShowInRenderer` and the `source`/`fallback` pair go; the external
 fallback remains only for the OS editor path when the user asks for it.
 The diff message carries `displayPath` from the request
@@ -363,9 +389,13 @@ rule "which surface a host action lands on" is read in `visibleSurfacePort`
 (set a field, clear it in a callback) when the port is already a `Scope`
 (`Port.scope`, `:106-110`): the scope's close is the fact.
 
-**The better design.** `attach` returns the `Port` and registers, in
-`port.scope`, a finalizer that removes it from one `Map<'sidebar' | 'editor', Port & { view }>`;
-`onDisposed`, `closeSidebarPort`, the three fields go. `visibleSurfacePort`
+**The better design.** The two surfaces are one `FiberMap<'sidebar' | 'editor'>`
+(`FiberMap.make`/`run`/`remove`: FiberMap.d.ts:115,1016,881): `attach`
+is `FiberMap.run(map, id, acquireRelease(attachPort, close) + Effect.never)`,
+VS Code's `onDidDispose` is `FiberMap.remove(map, id)` (interrupts, which
+runs the release), and the provider's `dispose` is the map's scope close.
+`onDisposed`, `closeSidebarPort`, `closePort`, the three fields and the
+`Port.scope` hand-off go. `visibleSurfacePort`
 is the one reader of that map; `RequestAttention` takes
 `surface(): Port | undefined` and `reveal()` instead of six getters.
 Deleted: `sidebarView`, `sidebarPort`, `editor` (as fields), `onDisposed`,
@@ -411,19 +441,26 @@ projection of three sources (the records, the open sessions, the active
 key) instead of one keyed resource map whose state is derived.
 
 **The better design.** `DesktopProjectRecords` is the one owner of
-`remembered`/`recent`; `DesktopProjectsState` carries `open` and
-`activeKey` only, and the menu reads `recent` from the records' own change
-stream (`values.changes`, which the store already exposes for
-`followFirstRunDone`). Projects are an `RcMap<string, DesktopProject>`
-(`lookup: openProjectSession` from finding 1, `idleTimeToLive: none`); `open`
-is `RcMap.get`, `close` is `RcMap.invalidate` then `records.forget`; the
-`Symbol` lane, the four `uninterruptible`s, `syncRecent` and the four
-`readRecent` copies go. Bindings are an `RcMap<string, ProjectBinding>` with
-`lookup: bindProject`; `sync` is `invalidate` for keys the registry no
-longer lists and `get` for new ones, each in its own scope, so `released`
-goes with the scope. The funnel is `SubscriptionRef<OnboardingFunnelState>`
-seeded by the first refresh (finding 3), so `null` goes. Deleted: ~90 lines
-in `desktopProjects.ts`, ~40 in `desktopProjectBindings.ts`.
+`remembered`/`recent`; `DesktopProjectsState` is a
+`SubscriptionRef<{ open, activeKey }>` (SubscriptionRef.d.ts:93) and the
+menu reads `recent` from a change stream over the records (the same shape
+`StateStore.changes([key])` gives `followFirstRunDone`,
+`onboardingFunnel.ts:129`; the `CurrentValues` family needs that member).
+Projects are `RcMap.make({ lookup: openProjectSession })` (RcMap.d.ts:215,
+`idleTimeToLive` omitted: a project is released only by `invalidate`);
+`open` is `RcMap.get(map, root)` in the window's scope (RcMap.d.ts:379;
+a second `get` of an open root shares the entry, so `byRoot` goes), `close`
+is `RcMap.invalidate(map, root)` (RcMap.d.ts:701) then `records.forget` in
+one program; the `Symbol` lane, the four `uninterruptible`s (the map's
+lookup is already run once per key and released by its own scope),
+`syncRecent` and the four `readRecent` copies go. Bindings are a second
+`RcMap.make({ lookup: bindProject })`; `sync` is
+`Stream.runForEach(SubscriptionRef.changes(state), …)` doing `invalidate`
+for keys no longer open and `get` for new ones, each entry in its own scope,
+so `released` goes with the scope. The funnel is
+`SubscriptionRef<OnboardingFunnelState>` seeded by the first refresh
+(finding 3), so `null` goes. Deleted: ~90 lines in `desktopProjects.ts`, ~40
+in `desktopProjectBindings.ts`.
 
 **What we give up.** `RcMap.get` shares an entry while any scope holds it;
 the desktop wants exactly one holder (the window), which is the `invalidate`
@@ -466,18 +503,25 @@ counter per kind of newer request) rather than "the newer request
 interrupts the read".
 
 **The better design.** One `FiberHandle` per file for its in-flight read or
-save (`FiberHandle.run` interrupts the previous; `activeWrites`,
-`writeEpoch`, `refreshGeneration`, `latestOpenRequest` go), one
-`FiberHandle` for the tree listing (`treeRevision` goes), a `Semaphore(1)`
-per file (`onModelSyncLane` and its header go), and `FileState` as a union
-`{ _tag: 'unloaded' } | { _tag: 'loaded', model, disk, dirty }` with the
-view state beside. The pane runs its programs on one renderer runtime (the
-oxlint override allows `Effect.run*` in `packages/desktop/src/`). The
-callbacks (`listFiles`, `readFile`, `writeFile`) become Effects over the
-host bridge, which already answers `workspaceFile` requests as
-`Effect<HostOutcome, Rejected>` on the main side (`desktopWorkspaceIpc.ts:79-81`).
-Deleted: five counters, `onModelSyncLane`, `refreshPromise`/`refreshQueued`,
-`pendingLoad`, `syncTail`, `editorLoad`, about 150 lines of the 705.
+save (`FiberHandle.run` interrupts the previous fiber unless
+`onlyIfMissing`, FiberHandle.d.ts:117,542; `activeWrites`, `writeEpoch`,
+`refreshGeneration`, `latestOpenRequest` go), one `FiberHandle` for the tree
+listing (`treeRevision` goes), `Semaphore.make(1).withPermit` per file
+(Semaphore.d.ts:253,95; `onModelSyncLane` and its header go), and the
+pane's state as one `SubscriptionRef<EditorState>` whose `files` is
+`Map<path, { _tag: 'unloaded' } | { _tag: 'loaded', model, disk, dirty }>`
+with the view state beside: the tree template is one
+`Stream.runForEach(SubscriptionRef.changes(state), renderTree)`, so the
+nine hand-placed `renderTree()` calls go. The pane runs its programs on
+one renderer `ManagedRuntime.make(Layer.empty)` (ManagedRuntime.d.ts:125,
+Layer.d.ts:978; `Effect.run*` is allowed under `packages/desktop/src/`,
+`.oxlintrc.json:185-218` bans only `vscode` and the harness's non-browser
+entries there). The callbacks (`listFiles`, `readFile`, `writeFile`) become
+Effects over the host bridge, which already answers `workspaceFile`
+requests as `Effect<HostOutcome, Rejected>` on the main side
+(`desktopWorkspaceIpc.ts:79-81`). Deleted: five counters, `onModelSyncLane`,
+`refreshPromise`/`refreshQueued`, `pendingLoad`, `syncTail`, `editorLoad`,
+about 150 lines of the 705.
 
 **What we give up.** The pane's six promise `catch` sites become typed
 recovery, which the comment estimated as the cost; the cost is the point.
@@ -509,13 +553,18 @@ open" is modelled as a mutable handle plus a separate "its close in
 flight" plus a separate "what to do after", when a window is one fiber
 whose interruption is its close and whose exit is its release.
 
-**The better design.** `FiberHandle<void>` for the window: `open` is
-`FiberHandle.run(handle, openWindow.pipe(Effect.andThen(Effect.never)))`
-(a no-op while a fiber lives, which is what `current ? Effect.void` does),
-the `closed` event interrupts it, `released` is `FiberHandle.join`, and
-`continueQuit` is a `Deferred<void>` the `before-quit` handler awaits after
-the join; `releasing`, `onClosed`'s hand-off, `Effect.cached`, `quitting`,
-`setImmediate` go. `desktopWindow.ts`'s forward references are resolved by
+**The better design.** `FiberHandle<void>` for the window
+(`FiberHandle.make`, FiberHandle.d.ts:110): `open` is
+`FiberHandle.run(handle, { onlyIfMissing: true })(openWindow.pipe(Effect.andThen(Effect.never)))`
+(FiberHandle.d.ts:542-549: a no-op while a fiber lives, which is what
+`current ? Effect.void` does, and `opening`'s permit did), the `closed`
+event is `FiberHandle.clear(handle)` (`:504`, interrupts and awaits the
+window's scope), `released` is `FiberHandle.awaitEmpty(handle)` (`:774`),
+and `continueQuit` is a `Deferred<void>` the `before-quit` handler
+`Deferred.await`s after `awaitEmpty`; `releasing`, `onClosed`'s hand-off,
+`quitting`, `setImmediate`, the `Semaphore` and the `FiberSet` go.
+`Effect.cached` (Effect.d.ts:13539) stays where it is right: one close for
+many awaiters is exactly what it memoizes. `desktopWindow.ts`'s forward references are resolved by
 building `surface` before `onboarding` takes it, or by passing `settings` as
 a `SubscriptionRef` the surface fills. About 60 lines.
 
@@ -550,8 +599,10 @@ area G) delegates the whole preview lifetime to the host, so each host
 re-implements the lifetime around its one verb.
 
 **The better design.** The controller stages (one `writeApprovalTempFiles`
-into a directory the host names) in a `Scope` per request whose finalizer
-removes the files, builds the title once, and asks the host only for
+into a directory the host names) as `Effect.acquireRelease(stage, remove)`
+in a `Scope.fork` of the request's scope (Scope.d.ts:493; its `close` is
+the one dispose, running close-diff then remove in finalizer order), builds
+the title once, and asks the host only for
 `openDiff(original, proposed, title)`, `closeDiff()`, `openPath()`,
 `focused()`. Both host classes reduce to that record (~40 lines each);
 `DesktopToolEditPreview`, `VscodeToolEditPreview`, `DesktopStagedFiles`,
@@ -602,16 +653,41 @@ are this area's.
   the pty host's `create` is already an Effect program (see "Already
   settled" for what that does and does not reopen).
 - **A log poll** (`renderer/logsPane.ts:294`, `setInterval`) where the main
-  process already pushes `desktop:setLog` on request; the main side can
-  push on the log file's change.
+  process already pushes `desktop:setLog` on request. The main side owns
+  the file: `FileSystem.watch(logPath)` is a `Stream<WatchEvent>`
+  (FileSystem.d.ts:324), debounced (`Stream.debounce`, Stream.d.ts:11372)
+  and `Stream.runForEach`ed into `desktop:setLog` for as long as the logs
+  tab is shown (a `FiberHandle.run` the show/hide route sets and clears);
+  the renderer's interval, `active` and `refreshHandle` go.
 - **The renderer entry's `applyingProjectList` flag** (`renderer/main.ts:181`,
   read at `:316,480,597,621,859`) is a hand-rolled "apply this batch without
-  repainting" transaction over eight module-level `let`s, and
-  `railProjects()` (`:215-218`) overrides the host snapshot's project name
-  with a renderer-persisted rename (`projectName`, `shared/desktopShellState.ts:49`)
+  repainting" transaction over eight module-level `let`s (`shell`,
+  `projectsKnown`, `recentProjects`, `renamingProjectKey`,
+  `shellRenderQueued`, …). One `SubscriptionRef<Shell>` on the renderer's
+  runtime (finding 8's `ManagedRuntime`): `desktop:projects` is a single
+  `SubscriptionRef.update` (SubscriptionRef.d.ts:1248), so one change event
+  reaches the one `Stream.runForEach(SubscriptionRef.changes(shell), rerenderShell)`
+  subscriber and there is no intermediate paint to suppress; the
+  `queueMicrotask` scheduler (`:199-206`) goes with it. `railProjects()`
+  (`:215-218`) overrides the host snapshot's project name with a
+  renderer-persisted rename (`projectName`, `shared/desktopShellState.ts:49`)
   that the main process's window title (`desktopWindowTitle.ts:20-30`) and
   dialogs never see: two owners of a project's name. The rename belongs in
   the records (finding 7) so every surface reads one.
+- **Browser safety of the above.** `SubscriptionRef`, `Stream`,
+  `FiberHandle`, `Deferred`, `Semaphore`, `Scope` and `ManagedRuntime` are
+  core `effect` modules with no Node import; the Node-only surface is
+  `@effect/platform-node` (a separate package) and `effect/process/*`. The
+  renderer and the settings frontend already import `effect` core
+  (`renderer/main.ts:5`, `settingsState.ts:25`) and may import only
+  `@texra-ai/harness/schemas` and `/transcript` (`.oxlintrc.json:201-218`),
+  which is enough: a frontend subscribes by forking one
+  `Stream.runForEach(SubscriptionRef.changes(ref), paint)` on its runtime,
+  and `paint` sets the Lit signals the components already read
+  (`sessionSurfaces.ts:74-76`); nothing in the frontend reaches the
+  harness's `/host` or `/node` entries. The progress frontend under
+  `packages/texra/src/ui/` stays as it is: `Effect.run*` is banned there
+  and its signals are fed by the host bridge, not by a ref.
 
 ---
 
@@ -675,3 +751,36 @@ are this area's.
   event-driven): documented as the state of the world in
   `packages/extension/src/AGENTS.md` "Webviews"; this round found no third
   variant and does not propose unifying them.
+
+## Effect-native mapping (verified against node_modules/effect 4.1.2 .d.ts)
+
+Every row names the exported API as `File.d.ts:line` under
+`node_modules/effect/dist/`. One assumption did not hold: `Layer.scoped` is
+not exported in 4.1.2 (`Layer.d.ts` exports `effect`, `effectDiscard`,
+`succeed`, `build`, `buildWithScope`, `empty`); `Layer.effect` runs its
+effect in the layer's scope, so finding 1 names that instead. Everything
+else assumed in the findings exists as written.
+
+| Finding | Hand-rolled today                                                                                                                      | Effect 4.1.2 API                                                                                                                                                                           | Why it is the thing                                                                                                                                     |
+| ------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | three per-host copies of open-session / record-first-run / moved-aside / `dispose()` by hand                                           | `Layer.effect` (Layer.d.ts:1166) over `Effect.acquireRelease`; `Layer.build` (`:644`) into the window's `Scope` (Scope.d.ts:243 `make`, `:574` `close`)                                     | the session is a resource whose lifetime is the window's scope; the layer is built once per window and released by the scope, not by a `dispose` method |
+| 2       | flows (select, search, confirm, title, tag wrap, cancel reading) in both binding tables                                                 | no primitive: a narrower `SharedHostRequestBindings` of verbs returning `Effect<…, Tag>`; `pickFiles: Effect<readonly string[] \| null>` read once by the body                               | the body decides; ports fail with their own tag (`Schema.TaggedError`, already the pattern)                                                              |
+| 3       | two `OnboardingFunnelRefresher`s, `credentialUsable` cache, boolean double-click guard with `forkDetach` + `ensuring`                  | `SubscriptionRef.make`/`changes` (SubscriptionRef.d.ts:93,134) for the state; `FiberHandle.run(handle, { onlyIfMissing: true })` (FiberHandle.d.ts:542-549) for the launch                  | a ref publishes one state to every follower; a handle holds at most one launch and ignores a second `run` while it lives                                 |
+| 4       | two preview hosts, two diff hosts, `reportFailure`, `showErrorMessage?`, four reporters                                                 | `Context.Reference(key, { defaultValue })` (Context.d.ts:1741) for the presenter; `Effect.catchCause` at one `reported`                                                                     | a service with a sensible default is a Reference (AGENTS.md "Effect"); a port then has no optional presenter and no second instance                       |
+| 5       | `postToRenderer?: boolean \| void`, `reachable()`, `connectRenderer`, `tryShowInRenderer` fallback                                      | ordering (bridge first), else `Deferred.make`/`succeed`/`await` (Deferred.d.ts:152,1405) for the bridge                                                                                     | a value that arrives once and is awaited by many is a Deferred; the window's scope interrupts the wait                                                   |
+| 6       | `sidebarView?`, `sidebarPort?`, `editor?`, `onDisposed` callback, `closePort`/`closeSidebarPort`                                        | `FiberMap.make`/`run`/`remove` (FiberMap.d.ts:115,1016,881) keyed by `'sidebar' \| 'editor'`, each port as `acquireRelease` + `Effect.never`                                                 | a set of things in flight keyed by id is a FiberMap; removing the key releases the port                                                                  |
+| 7       | `recent` copied 4×, `withPerKeyLane(lanes, Symbol())`, 4× `Effect.uninterruptible`, `bindings` Map + `sync` diff, `released` flag, `funnel: State \| null` | `RcMap.make({ lookup })`/`get`/`invalidate` (RcMap.d.ts:215,379,701) for projects and bindings; `SubscriptionRef` (`:93`) for `{ open, activeKey }`; `Stream.runForEach(SubscriptionRef.changes)` (Stream.d.ts:15953) for sync | a keyed resource map opens once per key in its own scope and releases on invalidate; the lanes and the uninterruptible blocks exist to fake that          |
+| 8       | `latestOpenRequest`, `refreshGeneration`, `treeRevision`, `writeEpoch`, `activeWrites`; `onModelSyncLane` promise chain; `FileState` optionals; `refreshPromise`/`refreshQueued` | `FiberHandle.run` (FiberHandle.d.ts:542; interrupts the previous unless `onlyIfMissing`); `Semaphore.make(1).withPermit` (Semaphore.d.ts:253,95); `SubscriptionRef<EditorState>` (`:93,134`); `ManagedRuntime.make` + `runFork` (ManagedRuntime.d.ts:125), `Layer.empty` (Layer.d.ts:978) | "a newer request supersedes the read" is interruption; one lane per key is a semaphore of one permit; the pane's state as one ref makes the render a subscriber |
+| 9       | `current?`, `releasing?`, `continueQuit?`, `quitting`, `setImmediate`, `Semaphore(1)`, `FiberSet` for reopens                           | `FiberHandle.make`/`run({ onlyIfMissing: true })`/`clear`/`awaitEmpty` (FiberHandle.d.ts:110,542,504,774); `Deferred` for continue-quit; `Effect.cached` (Effect.d.ts:13539) stays            | the window is one fiber: `run` is open-if-closed, `clear` is close-and-await, `awaitEmpty` is released; the cached close is the one correct piece today    |
+| 10      | two `stagePreview` + two preview classes + two `dispose(unapplied)`                                                                      | `Effect.acquireRelease` in `Scope.fork` (Scope.d.ts:493) per request, `Scope.addFinalizer` (`:460`) for close-diff                                                                         | staged files are a resource of the request's scope; the controller owns the scope, the host owns four verbs                                              |
+| 11      | `setInterval` log poll; eight renderer `let`s + `applyingProjectList` + `queueMicrotask`                                               | `FileSystem.watch` (FileSystem.d.ts:324) + `Stream.debounce` (Stream.d.ts:11372) on the main side; `SubscriptionRef.update` (`:1248`) + one `changes` subscriber in the renderer              | a file's changes are a stream the main process already has; one ref update is one change event, so there is no intermediate paint to suppress           |
+
+Browser-safe set used by the renderer-side rows (8, 11): `Effect`, `Stream`,
+`SubscriptionRef`, `FiberHandle`, `Deferred`, `Semaphore`, `Scope`,
+`ManagedRuntime`, `Layer.empty`, `Schema`, all under `node_modules/effect/dist/`
+with no Node import; `FileSystem.watch` and `RcMap`-held sessions are
+main-process only. The frontend subscribes by forking one
+`Stream.runForEach(SubscriptionRef.changes(ref), paint)` on its own
+`ManagedRuntime` and lets `paint` set the Lit signals the components read;
+it imports the harness only through `@texra-ai/harness/schemas` and
+`/transcript` (`.oxlintrc.json:201-218`).

@@ -6,11 +6,13 @@ the working tree of 2026-11-06. Paths below are relative to
 over `packages/*/src`. `shared/constants/latexToolchain.ts` (722 lines, 27%
 comments) is area I's ("the toolchain constants") and is not read here.
 
-The one Effect fact this report relies on: `Schema.ReadonlyMap(K, V)` exists
-in the installed Effect and is already used by the harness's own view schema
-(`packages/harness/src/shared/session/sessionView.ts:310,327,332,334`). The
-`node_modules` tree is not present in this checkout, so no other Effect API
-is cited from its sources.
+Every "better design" names the one Effect primitive that is the thing; the
+table at the end ("Effect-native mapping") was verified against
+`node_modules/effect` 4.1.2 `.d.ts` after `corepack pnpm install` finished.
+One correction that verification forced: `Schema.ReadonlyMap`'s *encoded*
+form is still a `ReadonlyMap` (`Schema.d.ts:6959`); its JSON form is the
+schema's `Iso`, entry arrays (`:6972`), reached through `Schema.toIso` /
+`Schema.toCodecIso` (`:12719,12361`). Finding 4 is written against that.
 
 ## Numbers
 
@@ -71,7 +73,7 @@ in app code; a state machine in Sets; a sentinel key.
 **Evidence.**
 
 - `installWebviewTransport` holds an Effect `ManagedRuntime`
-  (`shared/session/webviewSessionLayer.ts:84-93`) and then re-implements
+  (`shared/session/webviewSessionLayer.ts:80-93`) and then re-implements
   request/response on top of `postMessage` by hand: a `pending:
   Map<requestId, Deferred>` per session (`ui/progress/sessionTransport.ts:109`),
   `Deferred.makeUnsafe` per request (`:239`), `Effect.timeoutOrElse` to turn a
@@ -107,8 +109,8 @@ in app code; a state machine in Sets; a sentinel key.
   (`ui/progress/components/RunTabs.ts:90-101`).
 - The transcript subscription re-derives "which transcript am I subscribed
   to" as a joined string compared on every change
-  (`sessionSurfaces.ts:130,148-158,205-207`) and guards the first prune with a
-  captured `beforeReplay` reference (`:187,201`).
+  (`sessionSurfaces.ts:130,144-158,210-212`) and guards the first prune with a
+  captured `beforeReplay` reference (`:187,207`).
 
 **The design decision behind it.** The transport was designed as a decoder of
 host messages into signals, so the Effect runtime it installs is used only to
@@ -117,21 +119,34 @@ superseded, a session closing mid-request) is answered again outside Effect,
 and the surface record absorbs the in-flight state because the Promises have
 nowhere else to put it.
 
-**The better design.** One scoped session: `WebviewSessions.open(key)` already
-returns a graph under a `Scope`. A request is `Effect<Response['result']>`
-run in that scope (`FiberMap<requestId>` or simply `Effect.forkIn(scope)`):
-closing the scope interrupts it, which is the `Cancelled` case; the timeout is
-`Effect.timeout`; the response arrives through one `PubSub<DownMessage>` the
-`receive` function publishes to, and a request is
-`Stream.filter(m => m.kind === 'response' && m.requestId === id)` →
-`Stream.runHead`. In-flight is the existence of the fiber: `sending`,
-`polishing` and `RunTabs.deleting` become reads of a
-`FiberMap<RunId | 'launch', …>` (or one `SubscriptionRef<Set>` the fiber's
-`acquireRelease` maintains), so the add-before/delete-after pairs go. The
-generation is a `Stream.switchMap` over a `SubscriptionRef<Subscribe>`: the
-previous generation's stream is interrupted when the next begins, so no frame
-needs a number to be dropped, and the wire's `generation` field can go once
-the host's framer is cut over (areas G and N).
+**The better design.** Three primitives, each the thing:
+
+- Request/response: `RpcClient.make(group)` over a `RpcClient.Protocol.make`
+  whose `send` is `hostBridge.postMessage` and whose `run` installs the
+  window `message` listener (`rpc/RpcClient.d.ts:140,230,190-193`). The
+  request id, the pending table, the per-session cancellation and the
+  decode of the answer are the protocol's; a request is
+  `Effect<Outcome, RequestError>` and a timeout is `Effect.timeout`
+  (`Effect.d.ts:8266`, fails with `TimeoutError`). `rpc` is `@stability
+  unstable` in 4.1.2; the stable fallback that is still not hand-rolled is
+  one `PubSub<DownMessage>` published by `receive` (`PubSub.d.ts:279,1074`)
+  and a request as `Stream.fromPubSub(bus)` → `Stream.filter(isMyResponse)`
+  → `Stream.runHead` (`Stream.d.ts:1050,5253,15903`), forked with
+  `Effect.forkIn(sessionScope)` (`Effect.d.ts:17126`) so closing the scope
+  is the `Cancelled` case.
+- In flight: a `FiberMap<RunId | 'launch', …>` made in the session scope
+  (`FiberMap.d.ts:115`); `FiberMap.run` drops the entry when the fiber ends
+  (`:1016-1026`) and `FiberMap.has` is the busy read (`:792`). `sending`,
+  `polishing` and `RunTabs.deleting` become `FiberMap.has(map, key)`; the
+  add-before/delete-after pairs go. The composer reads it as a
+  `SubscriptionRef<ReadonlySet<key>>` the map's `acquireRelease` maintains
+  (`SubscriptionRef.d.ts:93,134`), projected to a signal by `toSignal`.
+- The subscription: `Stream.switchMap` over `SubscriptionRef.changes(subscribe$)`
+  (`Stream.d.ts:2505`: "interrupting the previous stream when a new element
+  arrives"): the superseded generation is interrupted, so no frame needs a
+  number to be dropped, and the wire's `generation` field goes once the
+  host's framer is cut over (areas G and N). `transcriptTier`'s string
+  compare becomes `Stream.changes` on the tier.
 
 Deletes (counts over `packages/*/src`): `OpenSession.pending` and the
 `Deferred` per request (1 map, 5 sites), `CANCELLED` (2), the `timeoutMs`
@@ -146,7 +161,7 @@ in-flight sets (8 sites, the literal stays as the record `action.target`),
 **What we give up.** `answer()`'s Promise face for the desktop renderer
 (`packages/desktop/src/renderer/main.ts:194`) becomes an Effect run at that
 host's edge; the desktop is an Effect-run site already. A late host answer is
-dropped either way.
+dropped either way. `rpc`'s instability: pin or take the PubSub form.
 
 **Change amplification.** "A fourth in-flight kind" (say, a rename awaiting
 its answer): today a `Surface` field, two add/delete sites in
@@ -169,14 +184,14 @@ refuse, handled by throwing.
   (`shared/session/sessionFrames.ts:123`): one response shape for both
   `runtime.request` and `host.request`. `answer()` therefore narrows by
   switching on five runtime outcome kinds and throwing "The host answered a
-  host request with a runtime outcome" (`ui/progress/sessionTransport.ts:349-360`),
+  host request with a runtime outcome" (`ui/progress/sessionTransport.ts:349-361`),
   and `settleHost` checks `outcome.kind !== 'files'` and the like per case
-  (`ui/progress/sessionSurfaces.ts:268-290`).
+  (`ui/progress/sessionSurfaces.ts:260-345`).
 - The error travels as `Schema.toEncoded(RequestErrorSchema)` (`sessionFrames.ts:131`)
   although `DownMessageSchema` is decoded once at `receive`
-  (`sessionTransport.ts:181`); `refusal()` decodes the class a second time
+  (`sessionTransport.ts:189`); `refusal()` decodes the class a second time
   with `decodeUnknownSync` (`sessionSurfaces.ts:248`), and `answer()` reads
-  `'reason' in result.error` on the encoded form (`sessionTransport.ts:363`).
+  `'reason' in result.error` on the encoded form (`sessionTransport.ts:365`).
 - A runtime refusal is then written to two places: `Surface.requestError`
   (`sessionSurfaces.ts:255`, the global notice) and `Surface.rejected[runId]`
   (`:450`, the run's own controls). Readers: `requestError` 14 sites in 5
@@ -188,14 +203,16 @@ families' outcome types were then recovered by narrowing in every consumer.
 The error class was kept encoded on the wire for a `postMessage` that strips
 prototypes, but decoded at the wrong layer.
 
-**The better design.** Two response kinds, `runtime.response` and
-`host.response`, each with its own outcome type, or one `Response` whose
-`outcome` is typed by the request the transport correlates it with (a typed
-`request<K>(message): Effect<OutcomeOf<K>>`); `DownMessageSchema` carries
-`RequestErrorSchema` itself so `result.error` is the class after the one
-decode. `requestError` stays as the one notice; `rejected` becomes a
-projection of it keyed by the run the request named (or the notice carries
-the run and the composer reads it): one write.
+**The better design.** The primitive is the typed request: an `RpcGroup`
+with one `Rpc` per request kind, each declaring its own `success` and
+`error` schema (`rpc/Rpc.d.ts`), so `client.launch(...)` is
+`Effect<HostOutcome, RequestError>` and no union needs narrowing; the
+`RequestErrorSchema` class is decoded by the serialization layer
+(`RpcSerialization.json`, `rpc/RpcSerialization.d.ts:120`). Without `rpc`:
+two response kinds, `runtime.response` and `host.response`, and
+`DownMessageSchema` carrying `RequestErrorSchema` itself so `result.error`
+is the class after the one decode. `requestError` stays as the one notice;
+`rejected` is a projection of it keyed by the run the request named.
 
 Deletes: `answer()`'s five-case switch and its throw (12 lines), `refusal()`
 (1 function, 2 callers), the second decode, `Surface.rejected` (1 field, 6
@@ -205,7 +222,7 @@ sites) or `requestError` (the owner chooses which spelling survives).
 
 **Change amplification.** "A new host outcome kind": today the union
 (`sessionFrames.ts`), `answer()`'s switch, and each `settleHost` case that
-must exclude it (3 files); after: the host response's union and the one
+must exclude it (3 files); after: the one `Rpc`'s success schema and the
 case that consumes it (2 files).
 
 **Depends on:** none; naturally lands with finding 1.
@@ -224,10 +241,10 @@ lookup (`editedProposal`) repeated.
   (`:194`). The legal combinations are four states: New task, a run, a run
   arriving (host-selected before the view holds it), and the launch form open
   on a proposal (which requires `selected === null`). Nothing names them.
-- `applySurfaceAction` keeps the invariants by hand: `select` resets
-  `pendingSelection`, `drawerOpen`, `editing` (`:526-533`); `selectNew` resets
-  five fields (`:539-547`); `editProposal` sets `selected: null`, clears
-  `pendingSelection`, sets `editing` and patches `launch` (`:549-557`).
+- `applySurfaceAction` (`:514-612`) keeps the invariants by hand: `select`
+  resets `pendingSelection`, `drawerOpen`, `editing` (`:526-533`); `selectNew`
+  resets five fields (`:539-547`); `editProposal` sets `selected: null`,
+  clears `pendingSelection`, sets `editing` and patches `launch` (`:549-557`).
   `pruneSurface` decides the arriving case and whether the edited proposal is
   still pending (`:349-392`, `editingGone` at `:377`). `editedProposal`
   re-finds the request in `view.requests` for every reader
@@ -241,13 +258,15 @@ with `null` for the empty state, and the two later states (arriving, editing
 a proposal) were added as further nullable fields beside it rather than as
 cases of the one thing.
 
-**The better design.** One field, `shown: { kind: 'new' } | { kind: 'run';
-runId } | { kind: 'arriving'; runId; cursor } | { kind: 'proposal'; runId;
-requestId }`, with `applySurfaceAction`'s three cases each setting `shown`
-and nothing else (the drawer closes on any `shown` change in one place).
-`pruneSurface` maps `arriving` → `run` or `new` and `proposal` → `run` when
-the request is gone; `editedProposal` reads `shown.kind === 'proposal'`.
-Persisted form: `shown` as `{kind:'run'; runId} | {kind:'new'}` only.
+**The better design.** The primitive is a `Schema.TaggedUnion` (AGENTS.md
+"Effect Schema Patterns") held in the surface's one `SubscriptionRef<Surface>`:
+`shown: Shown` with cases `New`, `Run {runId}`, `Arriving {runId, cursor}`,
+`Proposal {runId, requestId}`; `applySurfaceAction`'s three cases each set
+`shown` and nothing else (the drawer closes on any `shown` change in one
+place). `pruneSurface` maps `Arriving` → `Run` or `New` and `Proposal` →
+`Run` when the request is gone; `editedProposal` reads `shown._tag ===
+'Proposal'`. Persisted form: `shown` encoded by the same schema, with
+`Arriving` and `Proposal` mapped to `New` at encode.
 
 Deletes: `pendingSelection` (10 sites), `editing` (4), `ProposalRef`, the
 `editingGone` scan, the four-field resets in three cases.
@@ -264,7 +283,7 @@ case and one `render` branch (2 files).
 
 ---
 
-## Finding 4. Per-run surface state is five parallel maps with a hand-written codec, where `Schema.ReadonlyMap` is already in use next door
+## Finding 4. Per-run surface state is five parallel maps with a hand-written codec, where `Schema.ReadonlyMap` and its `Iso` already do the work
 
 **Red flags:** a reinvented Effect primitive; a mapped type substituting for
 structure; comments substituting for design; two representations of one
@@ -284,9 +303,13 @@ record.
   ten fields) and `persistSurface` (`:291-306`, ten fields again). The header
   explains why: "a `Map` serializes to `{}`, so the persisted form beside it
   is a schema whose maps are entry arrays, rebuilt into `Map`s at load"
-  (`:10-13`). That is exactly what `Schema.ReadonlyMap` encodes and decodes,
-  and the harness's `SessionViewSchema` uses it for four fields
-  (`packages/harness/src/shared/session/sessionView.ts:310-334`).
+  (`:10-13`). That is exactly `Schema.ReadonlyMap`'s `Iso`
+  (`ReadonlyMapIso = ReadonlyArray<readonly [Key["Iso"], Value["Iso"]]>`,
+  `node_modules/effect/dist/Schema.d.ts:6972`), reached with
+  `Schema.toCodecIso(schema)` (`:12361`) or synchronously `Schema.toIso`
+  (`:12719`, "Reading through the `Iso` encodes the schema value, while
+  replacing through it decodes"). The harness already types four view fields
+  with `Schema.ReadonlyMap` (`packages/harness/src/shared/session/sessionView.ts:310-334`).
 - Nine fields are marked "Never persisted" (`:160-208`) inside the same record
   as the persisted ones, so `persistSurface` is also a hand-written `pick`.
 
@@ -295,17 +318,17 @@ everything a view instance owns, keyed per concern rather than per run, and
 its persistence as a separate record because the first bag was not a schema.
 
 **The better design.** `Surface.runs: ReadonlyMap<RunId, RunSurface>` with
-`RunSurface = { draft, expanded, groups, seen, rejected? }` and
-`RunSurfaceSchema` a `Schema.Struct`; the persisted `Surface` *is*
-`Schema.Struct({ shown, launch, runs: Schema.ReadonlyMap(RunIdSchema,
-RunSurfaceSchema), inquiryDrafts: Schema.ReadonlyMap(...), drawerOpen,
-storageHintDismissed, workbench })`, encoded with `Schema.encodeSync` into the
-host state and decoded with the same schema at load (`PersistedState` takes
-a codec already, `shared/state/PersistedState.ts:84`). The transient fields
-(`requestError`, in-flight, `search`, `toolsSheetOpen`) move to a sibling
-`Transient` record or, with finding 1, to the fiber map, so nothing needs a
-"Never persisted" comment. `pruneSurface`'s retain is one
-`Map.filter(runs, (_, id) => view.runs.has(id))`.
+`RunSurface = { draft, expanded, groups, seen }` a `Schema.Struct`; the
+persisted `Surface` *is* `Schema.Struct({ shown, launch, runs:
+Schema.ReadonlyMap(RunIdSchema, RunSurfaceSchema), inquiryDrafts:
+Schema.ReadonlyMap(...), drawerOpen, storageHintDismissed, workbench })`, and
+`PersistedState` (which already takes a codec, `shared/state/PersistedState.ts:84`)
+stores and loads it through `Schema.toCodecIso(SurfaceSchema)`: entry arrays
+in the host state, `Map`s in memory, one declaration. The transient fields
+(`requestError`, in-flight, `search`, `toolsSheetOpen`) move to the
+`FiberMap`/`SubscriptionRef` of finding 1 or a sibling transient record, so
+nothing needs a "Never persisted" comment. `pruneSurface`'s retain is one
+filter over `runs`.
 
 Deletes: `loadSurface` (1 caller), `persistSurface` (1 caller), `entries()`,
 `RunKeyedMapField`, `retain` (5 calls → 1), `withEntry` (5 calls → 1 nested
@@ -313,7 +336,8 @@ update), `EMPTY_DRAFT` spreads in `drafts` reads (4 sites) become a
 `RunSurface` default.
 
 **What we give up.** A per-concern map is marginally cheaper to update than a
-nested record; irrelevant at this size.
+nested record; irrelevant at this size. `toIso` throws on a failing decode,
+so the loud warn-and-reset stays on `PersistedState`'s `Result` path.
 
 **Change amplification.** "A new per-run surface fact" (a per-run composer
 height, say): today a field, a `loadSurface` line, a `persistSurface` line, an
@@ -338,7 +362,7 @@ a tab); two architectures for one need; a false comment.
   (`shared/settingsView/settingsViewMessages.ts:451-469`), each with its own
   `command` literal from `SETTINGS_VIEW_COMMANDS` (`shared/ipc.ts:24-109`, 66
   constants), its own payload shape and, on the frontend, its own handler in
-  `settingsViewHandlers` (`packages/extension/src/settingsView/frontend/messageDispatcher.ts:45-167`,
+  `settingsViewHandlers` (`packages/extension/src/settingsView/frontend/messageDispatcher.ts:46-167`,
   16 cases) writing one or more of 27 module-level `trackedSignal`s
   (`.../settingsState.ts:89-241`).
 - The path of one fact, the GitHub token status: `ipc.ts:77` (constant),
@@ -349,12 +373,13 @@ a tab); two architectures for one need; a false comment.
   files for a three-valued string.
 - The progress view, by contrast, pushes one `HostSnapshot` record
   (`shared/session/hostSnapshot.ts:91-125`) for every host-owned fact the
-  shell reads, and the shell reads it as one property (`ui/progress/ProgressApp.ts:105`).
+  shell reads, held as one `SubscriptionRef<HostSnapshot | null>`
+  (`sessionFrames.ts:228`) and read as one property (`ui/progress/ProgressApp.ts:105`).
   The settings view already has the better shape for seven of its snapshots:
   `snapshotMessage` derives the payload from the catalog
   (`settingsViewMessages.ts:111-124`) and one builder fills it
-  (`shared/settingsView/handlers/settingsSnapshot.ts:20-33`). The other nine
-  push messages (`UPDATE_MODEL_SELECTION`, `UPDATE_AGENT_SELECTION`,
+  (`shared/settingsView/handlers/settingsSnapshot.ts:19-33`). The other
+  fourteen push messages (`UPDATE_MODEL_SELECTION`, `UPDATE_AGENT_SELECTION`,
   `UPDATE_CUSTOM_AGENT_DIR`, `UPDATE_AGENT_MODE_PRESETS`, `UPDATE_SKILLS_LIST`,
   `UPDATE_PLUGINS`, `UPDATE_GITHUB_TOKEN_STATUS`,
   `UPDATE_SUBSCRIPTION_AUTH_STATUS`, `UPDATE_SUBSCRIPTION_USAGE`,
@@ -368,9 +393,8 @@ a tab); two architectures for one need; a false comment.
 - Two `*Loaded` booleans (`gitSettingsLoaded`, `latexSettingsLoaded`,
   `settingsState.ts:217,241`) and a `settingsSnapshotRevisions` counter
   (`:193`, bumped in `messageDispatcher.ts:122-128`) exist to tell "has the
-  first snapshot arrived" apart from "the value is the default": a nullable
-  record (`null` until the first push, as `host$` is in the progress view,
-  `sessionTransport.ts:73`) would carry that.
+  first snapshot arrived" apart from "the value is the default": a `null`
+  initial value, as `host$` has (`sessionTransport.ts:66`), would carry that.
 
 **The design decision behind it.** The settings view grew one message per
 backend concern (memory, profile, models, agents, teams, skills, plugins,
@@ -379,22 +403,23 @@ controller; the frontend mirrored each with a signal. The progress view
 later decided that host-owned data is one record; the settings view never
 adopted the decision.
 
-**The better design.** One `SettingsSnapshot` record schema (`values` of the
-derived snapshots plus `models`, `agents`, `teams`, `skills`, `plugins`,
-`github`, `subscriptions`, `prSubscriptions`, `latex`, `memory` as fields),
-pushed whole or as `Partial<SettingsSnapshot>` patches under one command;
-the frontend holds one `SubscriptionRef`/signal of `SettingsSnapshot | null`
-and tabs read fields. Each controller fills its field instead of posting its
-message; the catalog-derived snapshots stay derived (keep `snapshotMessage`'s
-construction as the field schemas). `SET_TAB` and `UPDATE_MEMORY_PREVIEW`
-(an item-level patch) are the two that are not state and stay as commands.
+**The better design.** The primitive is one `SubscriptionRef<SettingsSnapshot
+| null>` on the frontend (`SubscriptionRef.d.ts:93`), projected to Lit by the
+existing `toSignal` over `SubscriptionRef.changes` (`:134`), fed by one
+`settings.snapshot` message (whole, or `Partial<SettingsSnapshot>` patches
+applied with `SubscriptionRef.update`, `:1248`); on the host, one
+`SubscriptionRef<SettingsSnapshot>` the controllers `update` and one fiber
+that forwards `changes` to the view (`Stream.runForEach`). Tabs read fields.
+The catalog-derived snapshots stay derived (keep `snapshotMessage`'s
+construction as the field schemas). `SET_TAB` and `UPDATE_MEMORY_PREVIEW` (an
+item-level patch) are the two that are not state and stay as commands.
 
 Deletes: 14 `Update*MessageSchema` structs and their union members, 14
 `SETTINGS_VIEW_COMMANDS.UPDATE_*` constants, 14 dispatcher cases, ~22 of the
-27 `trackedSignal`s, `gitSettingsLoaded`/`latexSettingsLoaded`/
-`settingsSnapshotRevisions`, the 16 `bindings.post` sites in
-`controllers/settingsView/*` (8 files), and with them `createDispatcher`'s
-one consumer (finding 6).
+27 `trackedSignal`s and `createTrackedSignalRegistry` with them,
+`gitSettingsLoaded`/`latexSettingsLoaded`/`settingsSnapshotRevisions`, the
+16 `bindings.post` sites in `controllers/settingsView/*` (8 files), and with
+them `createDispatcher`'s one consumer (finding 6).
 
 **What we give up.** Per-message granularity on the wire; a patch of one
 field is the same bytes. The desktop's `unsupported(...)` answers
@@ -402,8 +427,8 @@ field is the same bytes. The desktop's `unsupported(...)` answers
 unaffected.
 
 **Change amplification.** "A new host-pushed settings fact": 7 files today;
-after: the field on the snapshot schema, the controller that fills it, the
-tab that reads it (3 files).
+after: the field on the snapshot schema, the controller that `update`s it,
+the tab that reads it (3 files).
 
 **Depends on:** none. The files it deletes are areas G (`controllers/settingsView/`)
 and N (`settingsView/frontend/`); the shared schema is this area's.
@@ -424,15 +449,15 @@ switch read off `globalThis`; two mechanisms for one need.
   used by one file (`packages/extension/src/settingsView/frontend/SettingsApp.ts:89`).
   Fourteen of its lines are a comment on a missing registry key "(an
   `as`-cast that lies, a dynamically constructed registry, etc.)" (`:105-116`)
-  guarding a case the `HandlerRegistry` type makes a compile error (`:57-62`).
+  guarding a case the `HandlerRegistry` type makes a compile error (`:56-62`).
 - `assertKnownOutboundMessage` (`:203-217`) and `isDevAssertionMode`
   (`:176-187`) run only under `NODE_ENV=test` or `TEXRA_DEV_ASSERTIONS=1`,
-  read `process.env` off `globalThis` to stay browser-safe (`:168-175`), and
+  read `process.env` off `globalThis` to stay browser-safe (`:170-175`), and
   are explained for 40 lines (`:153-202`). Consumers: 2 files in the desktop
   main process. The sender's parameter type (`SettingsViewOutboundMessage`)
   already refuses a payload that does not match the schema at compile time;
   the assertion checks the same thing at run time only in tests.
-- `unsupported()`/`isUnsupported`/`UnsupportedCommandError` (`:17-50`) have
+- `unsupported()`/`isUnsupported`/`UnsupportedCommandError` (`:18-50`) have
   one producer (`desktopSettingsIpc.ts:186-188`) and one consumer that
   branches on the class (`controllers/settingsView/sharedSettingsCommands.ts`).
 - `shared/commands/registry.ts` (105 lines) is a second generic dispatcher
@@ -445,15 +470,16 @@ switch read off `globalThis`; two mechanisms for one need.
 made a library twice, once per message family, and each library then grew
 guards for failure modes its own types exclude.
 
-**The better design.** With finding 5 there is one outbound message and no
-outbound dispatcher. Inbound, the two host edges (`SettingsViewMessageHandler`,
-`desktopSettingsIpc`) write
-`Schema.decodeUnknownResult(SettingsViewInboundMessageSchema)(raw)` and
-`handlers[message.command](message)` inline (3 lines each); `Unsupported`
-stays as a 10-line value type if the desktop's "not on this host" answer is
-wanted as data, else it is a handler that returns the reason. The dev-only
-assertion is deleted: the compile-time type is the check.
-`shared/commands/registry.ts` stays as the one command dispatcher.
+**The better design.** The primitive is the schema itself:
+`Schema.decodeUnknownResult(SettingsViewInboundMessageSchema)` at the two
+host edges (`SettingsViewMessageHandler`, `desktopSettingsIpc`) followed by
+`handlers[message.command](message)` (3 lines each); the `Result` is the
+failure channel, no `onError` callback. With finding 5 there is no outbound
+dispatcher at all. `Unsupported` stays as a 10-line value type if the
+desktop's "not on this host" answer is wanted as data, else it is a handler
+that returns the reason. The dev-only assertion is deleted: the compile-time
+type is the check. `shared/commands/registry.ts` stays as the one command
+dispatcher.
 
 Deletes: `createDispatcher`, `DispatcherFn`, the defense-in-depth block,
 `isUnrecognizedCommand` (1 consumer, which exists only because the desktop
@@ -494,17 +520,18 @@ component. R6 lists the harness's fields and the hosts' re-derivations
   `circle-exclamation`, warning `triangle-exclamation`),
   `BackgroundTasksPanel.ts:60-66` (`TONE_ICONS`: danger `circle-xmark`,
   warning `circle-dot`). The two icon tables disagree on two of five tones.
-- `RunTab.ts:174-179` re-decides "needs approval" from `run.approval !==
+- `RunTab.ts:174-181` re-decides "needs approval" from `run.approval !==
   'none'` ahead of `tone`; `RunTabs.ts:212` groups by `run.group`;
   `TaskGroupList.ts:366` reads `group === 'interrupted'` and `:580`
   `working`; 24 files in `ui/` read one of `statusKey`, `group`, `tone`,
   `status`, `durableOutcome`, `working`, `live`, `statusNotice`.
 
 **The better design.** R6's: `position`, `outcome`, `holder`, `pendingRequest`,
-`actions` on the view; one app function in `ui/copy/runStatus.ts` returns
-`{ word, tone, glyph, indicatorClass }`; the three tables collapse into that
-function's one `tone → glyph` row, and `canContinue`/`idle` become
-`actions.includes(...)` reads.
+`actions` on the view; one pure function in `ui/copy/runStatus.ts` returns
+`{ word, tone, glyph, indicatorClass, section }` (the primitive here is the
+view's one fold, R6's; the UI adds nothing but words); the three tables
+collapse into that function's one `tone → glyph` row, and `canContinue`/`idle`
+become `actions.includes(...)` reads.
 
 Deletes: `TONE_INDICATOR_CLASS`, both `TONE_ICONS`, `canContinue`, `idle`,
 `RUN_GROUP_LABELS`/`RUN_GROUP_ORDER`'s dependence on `group` (the function
@@ -528,7 +555,7 @@ case; two mechanisms for one need; shared mutable state; 31% comments.
 
 - `SPINNER_ICON_NAME = '__spinner__'` widens `IconName` with a magic string
   (`ui/progress/formatters/htmlBuilders.ts:155`; 5 sites in 3 files) so that
-  `renderIconOrSpinner` can branch on it (`:180-188`). Every caller already
+  `renderIconOrSpinner` can branch on it (`:179-188`). Every caller already
   holds the boolean it stands for (`running`, `toolFormatters.ts:78-80`).
 - `triStateStatusIcon` recognises `'running'` and `'in_progress'` because "it
   therefore has to recognize both producer vocabularies: the Codex turn
@@ -548,7 +575,7 @@ case; two mechanisms for one need; shared mutable state; 31% comments.
   `buildPath(section)` would own the switch.
 - Comments: a 20-line explanation of `<wa-details>`' keydown handling
   (`:92-116`) and the "IMPORTANT: Lit templates preserve whitespace" notice
-  twice in this file (`:5,327`) and again in `toolFormatters.ts:13-15` and
+  twice in this file (`:5,327`) and again in `toolFormatters.ts:13-15`,
   `helpers.ts:4-6`, `toolSections.ts:11-12`: a formatting rule the formatter
   (oxfmt) could hold, repeated as prose in five files.
 - Two tooltip mechanisms: `renderActionButtonParts` emits `<wa-tooltip for=id>`
@@ -577,9 +604,13 @@ language)` with the header always; `buildCopyButton` and a separate
 `buildLabeledCopyButton` or one call site that passes its own content; one
 `buildPath(section)`. One tooltip: `wa-tooltip` for every action button
 (`id` becomes required on icon buttons, which is also what `aria` wants) and
-`TooltipController.ts` is deleted (2 callers). One copy feedback: the
-controller, with `copyWithFeedback` deleted (2 callers move to a
-`copy-button` element or the controller).
+`TooltipController.ts` is deleted (2 callers). One copy feedback, and its
+timer is Effect's, not a hand-rolled debounce: a `copy-button` element whose
+controller runs `copy.pipe(Effect.andThen(Effect.sleep(COPY_RESET)))` under
+a `FiberHandle` (`FiberHandle.d.ts:110,542`: a new copy interrupts the
+previous reset), forked on the webview's `ManagedRuntime` (`runFork`,
+`ManagedRuntime.d.ts:125`); `copyWithFeedback`'s dataset protocol and
+`createFlushableDebounce`'s copy consumer go.
 
 Deletes: `SPINNER_ICON_NAME` (5 sites), `triStateStatusIcon`'s second
 vocabulary, `showLanguage`/`showCopy`/`labeled`, two of three path builders,
@@ -618,34 +649,35 @@ in the data (facts split by concern and rejoined per round).
   shape the plugin started from.
 - `ExternalInquiryPanel` keeps its own `answerText`/`sessionLinksText` plus a
   `draftRestored` flag and a debounce that writes them back to
-  `Surface.inquiryDrafts` (`ExternalInquiryPanel.ts:70-83,98-113`), while
-  `SessionComposer` "holds no draft of its own" (`SessionComposer.ts:14-15`)
+  `Surface.inquiryDrafts` (`ExternalInquiryPanel.ts:70-83,98-115`), while
+  `SessionComposer` "holds no draft of its own" (`SessionComposer.ts:15`)
   and reads the surface on every render. Two owners of a draft in one
   shell. It also decodes `permission.data` with `decodeUnknownSync` and caches
-  the result by reference (`:116-126`) because the view hands it a `JsonValue`
+  the result by reference (`:119-127`) because the view hands it a `JsonValue`
   record for a plugin request.
 - `RequestPanels.requestKey` decides that "Retry is keyed by `runId` instead
   of `requestId`: one pending retry per run, a new one replaces it"
-  (`RequestPanels.ts:70-79`): an identity rule of the request model written
+  (`RequestPanels.ts:69-79`): an identity rule of the request model written
   in the renderer. The view's `requests` list could carry stable keys (or a
   retry could keep its id).
 - `TaskGroupList.transcriptTimeline` re-roots groups whose parent is absent
-  (`TaskGroupList.ts:119-121,511-514`), a shape the group rows could refuse
+  (`TaskGroupList.ts:119-121,509-514`), a shape the group rows could refuse
   (a `parentGroupId` must name a group in the same transcript, else it is
   `null`).
 - `generatePastedImageName` mints `pasted_<Date.now()>_<6 hex>.<ext>` in the
   renderer (`shared/utils/pastedImageName.ts:7`) and the host stores under
   that name (`savePastedImage` → `savedImage.fileName`,
-  `sessionFrames.ts:97-100`): the name is an identity the store should mint
+  `sessionFrames.ts:101-104`): the name is an identity the store should mint
   (content address or sequence), returned in the outcome as it already is.
 
-**The better design.** `RunView.facts` → `documentRoundsOf(run)` is passed as
-`rounds` to `FileList` (one property); `documentsOf` is deleted (2 callers)
-and `sortedRounds`/`failureByPath` with it. The inquiry panel reads
-`surface.inquiryDrafts.get(key)` for its field values and dispatches
-`inquiryDraft` on input as the composer does; `draftRestored` and the
-debounce go (the surface's `PersistedState` write is already debounced by
-the host). Pending request keys: the harness gives a retry a stable
+**The better design.** The primitive is the view's one record: `RunView.facts`
+→ `documentRoundsOf(run)` is passed as `rounds` to `FileList` (one property);
+`documentsOf` is deleted (2 callers) and `sortedRounds`/`failureByPath` with
+it. The inquiry panel reads `surface.inquiryDrafts.get(key)` for its field
+values and dispatches `inquiryDraft` on input as the composer does;
+`draftRestored` and the debounce go (the surface write is one
+`SubscriptionRef.update`, and the host state write it feeds is already
+coalesced). Pending request keys: the harness gives a retry a stable
 `requestId` per run (R7's row) or the view carries `key`. Group rows: refuse
 an orphan at the fold. Pasted names: the host answers with the name it chose
 from the bytes; the renderer sends `{ ext, base64 }`.
@@ -673,7 +705,7 @@ representations; a hand-ordered list.
 - `extensionRegistry?: true` (`shared/commands/catalog.ts:34`) is set on 25
   of the 28 non-desktop rows; its only reader is a type,
   `Extract<..., { extensionRegistry: true }>`
-  (`packages/extension/src/commands/extensionCommandHandlers.ts:47-53`), used
+  (`packages/extension/src/commands/extensionCommandHandlers.ts:47-52`), used
   to make `EXTENSION_COMMAND_HANDLERS` `satisfies Record<…>` (`:166`). The
   handler map's keys *are* the membership; the flag exists to let the type
   checker compare the map against itself. The three untagged rows
@@ -697,7 +729,8 @@ representations; a hand-ordered list.
 the three comment commands in their own module) and the desktop's; the
 palette merges them. `commandKeybindings` is `catalog.filter(r =>
 r.keybinding)` in catalog order. `setupInvokable` moves to the tool as its
-list of ids, typed over `CommandId`.
+list of ids, typed over `CommandId`. (Plain data; no runtime primitive
+applies.)
 
 Deletes: `extensionRegistry` (26 sites), `host` (10 sites and the filter),
 `commandKeybindingOrder` and the throw, `SettingsTabCommandId`'s cast (the
@@ -720,7 +753,7 @@ no flag to forget.
 
 - **`hostSnapshot.banners`** spells "shown" as `{ visible }` assigned onto
   records whose data fields are `optional(NullOr(...))`
-  (`shared/session/hostSnapshot.ts:22,29-32,49-51,115-118`): `dependency:
+  (`shared/session/hostSnapshot.ts:22,30-33,49-51,115-118`): `dependency:
   MissingTool[] | null` and `agentConfig: {...} | null` would carry the
   visibility in the type (two representations of "is there a banner").
 - **`surfaceDecision.approvalDecisionArm`** throws when `runId === ''`
@@ -746,19 +779,65 @@ no flag to forget.
 - **`TerminalOutput.writeTerminalText`** races xterm's write callback
   against a 100 ms `setTimeout` inside `new Promise`
   (`ui/progress/components/TerminalOutput.ts:303-311`): a wait with a
-  guessed bound, where `terminal.write(text, cb)` alone is the completion.
-- **`subscribeToSignalChanges`** (`shared/signals.ts:76-110`) is a hand-rolled
+  guessed bound, where `terminal.write(text, cb)` alone is the completion
+  (`Effect.callback` with `Effect.timeout` if a bound is wanted).
+- **`subscribeToSignalChanges`** (`shared/signals.ts:81-110`) is a hand-rolled
   watcher with microtask coalescing and a re-arm-in-`finally` rule explained
   in 12 lines; its two consumers (`sessionSurfaces.ts:201`, settings state)
   could be `Stream`s off the `SubscriptionRef`s the runtime already holds,
-  since `toSignal` (`:17-37`) is the one bridge the file says should exist.
+  since `toSignal` (`:18-37`) is the one bridge the file says should exist.
 - **`ipc.ts:95`** false comment (finding 5).
+
+---
+
+## Effect-native mapping (verified against node_modules/effect 4.1.2 .d.ts)
+
+`corepack pnpm install` completed while this report was being written; every
+signature below was read from `node_modules/effect/dist/*.d.ts`. Line
+numbers are into those files.
+
+| Hand-rolled today                                                                                                                              | Effect primitive                                                                                                                                                                                                                                                                                      | Note                                                                                                                                                                                                         |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OpenSession.pending: Map<id, Deferred>` + `Deferred.makeUnsafe` per request + `requestId()` + `CANCELLED` + `Cause.hasInterruptsOnly` (F1)     | `RpcClient.make(group)` over `RpcClient.Protocol.make({ send, run })` (`rpc/RpcClient.d.ts:140,230,190-193`): `send` is `hostBridge.postMessage`, `run` the window listener; ids, correlation and per-client cancellation are the protocol's                                                           | `@stability unstable`; stable fallback: `PubSub.make` + `Stream.fromPubSub` → `filter` → `runHead` (`PubSub.d.ts:279`, `Stream.d.ts:1050,5253,15903`) forked with `Effect.forkIn(scope)` (`Effect.d.ts:17126`) |
+| `Effect.timeoutOrElse` building a `Rejected` by hand (F1)                                                                                       | `Effect.timeout` (`Effect.d.ts:8266`, fails with `TimeoutError`) mapped once at the edge                                                                                                                                                                                                              |                                                                                                                                                                                                              |
+| `Surface.sending` / `Surface.polishing` Sets, add-before/delete-after; `RunTabs.deleting` (F1)                                                 | `FiberMap<RunId \| 'launch', …>` in the session scope (`FiberMap.d.ts:115`); `FiberMap.run` removes on completion (`:1016-1026`); busy is `FiberMap.has` (`:792`); a `SubscriptionRef<ReadonlySet<key>>` kept by `Effect.acquireRelease` (`Effect.d.ts:12676`) for the composer                       | the composer reads the ref through `toSignal` (`shared/signals.ts:18`)                                                                                                                                       |
+| `WebviewSession.generation` + `SessionFrames.begin` + `Subscribe.generation` + `EventsFrame.generation` + host echo (F1)                        | `Stream.switchMap` over `SubscriptionRef.changes(subscribe$)` (`Stream.d.ts:2505` "interrupting the previous stream when a new element arrives"; `SubscriptionRef.d.ts:134`)                                                                                                                          | host side: the bridge's replay fiber is already interrupted per `Subscribe` (`SessionBridge.ts:250-253`); with `switchMap` the number is redundant on both ends                                                |
+| `held.get(key) !== entry` after an `await` (F1)                                                                                                 | `Effect.forkIn(sessionScope)` (`Effect.d.ts:17126`: "interrupted when the scope is closed"); `Scope.make`/`Scope.close` already used (`sessionTransport.ts:281,225`)                                                                                                                                   |                                                                                                                                                                                                              |
+| `subscribedTranscript` string compare (F1)                                                                                                     | `Stream.changes` (`Stream.d.ts:13273`) on the tier derived from the view and surface refs                                                                                                                                                                                                              |                                                                                                                                                                                                              |
+| `Response.result.outcome: Union([Outcome, HostOutcome])` + `answer()`'s narrowing throw + `toEncoded(RequestErrorSchema)` + `refusal()` (F2)   | one `Rpc` per request kind with its own `success`/`error` schema (`rpc/Rpc.d.ts`); `RpcSerialization.json` decodes the error class (`rpc/RpcSerialization.d.ts:120`)                                                                                                                                   | without `rpc`: two response kinds and `RequestErrorSchema` inside `DownMessageSchema`                                                                                                                        |
+| `selected` / `pendingSelection` / `editing` nullable trio (F3)                                                                                  | `Schema.TaggedUnion` `Shown` inside the one `SubscriptionRef<Surface>` (`SubscriptionRef.d.ts:93,1248`)                                                                                                                                                                                               | pure data; the ref is the one owner                                                                                                                                                                           |
+| five `ReadonlyMap<RunId, _>` fields + `RunKeyedMapField` + `loadSurface`/`persistSurface` + `entries()` (F4)                                    | `Schema.ReadonlyMap(RunIdSchema, RunSurfaceSchema)` (`Schema.d.ts:6981`) persisted through its `Iso` (`ReadonlyMapIso`, `:6972`) with `Schema.toCodecIso` (`:12361`) or `Schema.toIso` (`:12719`)                                                                                                       | **correction:** `ReadonlyMap`'s `Encoded` is still a `ReadonlyMap` (`:6959`); the entries form is the `Iso`. The harness uses `Schema.ReadonlyMap` for four view fields (`sessionView.ts:310-334`), in memory |
+| 14 `UPDATE_*` messages + 27 `trackedSignal`s + `createTrackedSignalRegistry` + `*Loaded` flags + `settingsSnapshotRevisions` (F5)                | one `SubscriptionRef<SettingsSnapshot \| null>` (`SubscriptionRef.d.ts:93`) fed by `update` (`:1248`), projected by `toSignal` over `changes` (`:134`); on the host one `SubscriptionRef` whose `changes` a `Stream.runForEach` (`Stream.d.ts:15953`) forwards to the view                              | mirrors `SessionFrames.host` (`sessionFrames.ts:228`), the one pattern the progress view already has                                                                                                         |
+| `createDispatcher` + defense-in-depth + `assertKnownOutboundMessage` + `isDevAssertionMode` (F6)                                                | `Schema.decodeUnknownResult(Union)` at the two host edges; the `Result` is the failure channel                                                                                                                                                                                                         | `shared/commands/registry.ts` stays as the one command dispatcher                                                                                                                                             |
+| `copyWithFeedback`'s `dataset.copyResetTimeoutId` + `CopyButtonController`'s `createFlushableDebounce` (F8)                                     | `FiberHandle` (`FiberHandle.d.ts:110,542`: a new `run` interrupts the previous) around `copy.pipe(Effect.andThen(Effect.sleep(COPY_RESET)))`, forked on the webview `ManagedRuntime` (`ManagedRuntime.d.ts:125`)                                                                                       | `TooltipController`'s delay is the same shape, or goes with the controller (one tooltip)                                                                                                                     |
+| `ExternalInquiryPanel`'s `answerText`/`draftRestored`/debounce (F9)                                                                            | the surface's `SubscriptionRef.update` on input; the component holds nothing                                                                                                                                                                                                                          | as `SessionComposer` already does                                                                                                                                                                             |
+| `subscribeToSignalChanges` watcher + microtask coalescing (batched)                                                                             | `Stream.zipLatest`/`Stream.runForEach` over the three `SubscriptionRef.changes` the transport already exposes, through the one `toSignal` bridge                                                                                                                                                      |                                                                                                                                                                                                              |
+| `TerminalOutput.writeTerminalText`'s `new Promise` + 100 ms race (batched)                                                                     | `Effect.callback` over `terminal.write(text, cb)`, `Effect.timeout` if a bound is wanted                                                                                                                                                                                                              |                                                                                                                                                                                                              |
+| `TickerController` (`setInterval` + `Date.now()`)                                                                                              | keep: a render clock, not state; a `Stream.tick`/`Schedule.spaced` fiber would be the same thing with a runtime dependency a leaf controller does not need                                                                                                                                             | good                                                                                                                                                                                                         |
+| `webviewSessionLayer.ts` `LayerMap.Service` + `Layer.fresh` + `ManagedRuntime.make` (`LayerMap.d.ts:316`, `Layer.d.ts:3494`)                    | keep: already the primitive                                                                                                                                                                                                                                                                           | good                                                                                                                                                                                                         |
+| `toSignal` (`Stream.runForEachArray` → `signal.set`, `Fiber.interrupt` on dispose; `shared/signals.ts:18-37`)                                  | keep: the one Effect→Lit bridge; every ref above reaches a component through it                                                                                                                                                                                                                       | good                                                                                                                                                                                                         |
+
+**Browser safety.** None of the modules named above (`Effect`, `Stream`,
+`PubSub`, `SubscriptionRef`, `FiberMap`, `FiberHandle`, `Scope`,
+`ManagedRuntime`, `Schema`, `LayerMap`) import a `node:` module in its
+`.d.ts` (`grep -l 'from "node:'` over those files returns nothing), and the
+webview bundles already run `ManagedRuntime`, `LayerMap`, `SubscriptionRef`,
+`Queue`, `Stream` and `Scope` today (`shared/session/webviewSessionLayer.ts`,
+`sessionFrames.ts`, `sessionTransport.ts`). `rpc/RpcClient` with a custom
+`Protocol.make` is browser-safe (its `send`/`run` are the caller's); only
+`makeProtocolHttp`/`makeProtocolSocket`/`makeProtocolWorker` bring platform
+services, and none is needed over `postMessage`. What the frontend reads: one
+`SubscriptionRef` per record (`view$`, `surface$`, `host$`, and for the
+settings view `settings$`) projected to a Lit signal by `toSignal`; no
+component or module-level store beside them (`trackedSignal` registries,
+`TooltipController`'s globals, `RunTabs.deleting`, `ExternalInquiryPanel`'s
+fields all go).
 
 ---
 
 ## Good modules in this area
 
-- `shared/session/surface.ts` `applySurfaceAction` (`:519-612`): one pure
+- `shared/session/surface.ts` `applySurfaceAction` (`:514-612`): one pure
   reducer over one action union that components and the host's
   `surface.action` both speak; the right owner for every interaction fact,
   which is why findings 3 and 4 are about its fields, not its shape.
@@ -777,6 +856,9 @@ no flag to forget.
   `applyStateSettingUpdate`: one write path for three surfaces.
 - `shared/session/webviewSessionLayer.ts`: a `LayerMap` per session key over
   one `ManagedRuntime`; the Effect-native half of finding 1.
+- `shared/session/sessionFrames.ts` `SessionFrames.host`: a
+  `SubscriptionRef<HostSnapshot | null>` as the one host record; the shape
+  finding 5 copies.
 - `shared/signals.ts` `toSignal`: the one meeting point between Effect and
   Lit, with `dispose` as the fiber's interrupt.
 - `shared/state/PersistedState.ts`: decodes with the schema, warns and resets
@@ -801,7 +883,7 @@ no flag to forget.
 - `PersistedState`'s warn-and-reset: AGENTS.md "Silent degradation" allows a
   logged reset on non-authoritative view state.
 - `clipboardImages.readFileAsBase64`'s `new Promise`: a `FileReader` callback
-  boundary, converted once.
+  boundary, converted once (`Effect.callback` would be the same boundary).
 - The R6 fields the UI reads (`group`, `tone`, `statusKey`, `status`, ...):
   found in round 1 (C1, C2, C9); finding 7 adds only the UI-side count and
   the disagreeing tables.
@@ -809,7 +891,8 @@ no flag to forget.
   the desktop (`packages/desktop/src/renderer/settingsDialog.ts:4`): AGENTS.md
   lists it as a VS Code-free zone; area N's.
 - `flushableDebounce`'s re-entrancy rule: documented against a measured
-  library defect (`shared/utils/flushableDebounce.ts:12-18`); its three
-  consumers are UI timers (tooltip delay, copy reset, draft save), two of
-  which finding 8 and finding 9 delete.
+  library defect (`shared/utils/flushableDebounce.ts:12-18`); of its three
+  consumers, finding 8 replaces the copy reset with a `FiberHandle`, the
+  tooltip delay goes with the controller, and finding 9 deletes the inquiry
+  draft save, after which the module has no consumer.
 - `shared/constants/latexToolchain.ts`: area I's.

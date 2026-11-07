@@ -10,9 +10,9 @@ are relative to `packages/texra/src/tools` unless they start with `packages/`.
 Consumer counts are over `packages/*/src`; the non-production corpus is
 `src/test-kernel`, `packages/*/test`, `docs`.
 
-The checkout has no `node_modules`, so Effect API claims below are anchored
-in the repo's own uses of the primitive (counted in Numbers) and in the
-root-designs note's facts from effect 4.1.2, not re-read from the package.
+Effect API claims below are verified against `node_modules/effect` 4.1.2
+(`dist/*.d.ts`, and `dist/RcMap.js` for one release rule); the mapping table
+at the end lists the exact exports.
 
 ## Numbers
 
@@ -115,16 +115,24 @@ on beside it. Neither side is the owner, so both keep a copy and the
 protocol above keeps the copies equal.
 
 **The better design.** A subscription is a reference-counted scoped resource
-keyed by its target, and a run's binding is a reference held in a scope.
-`RcMap.make((target) => pollResource(target))` per process, where the
-resource forks the target's own poll fiber in the map's resource scope and
-owns a `PubSub<string>` of its events; `bind(runId, target, inbox)` is
-`RcMap.get(map, target)` in a scope closed by the inbox's close plus
-`PubSub.subscribe` feeding `inbox.send`; the last release ends the fiber.
-The cap is a count check before `get`. A target the server says is closed
-fails its own fiber, which the map drops. The run's annotation level is a
-field of the binding, read at delivery. The repo already uses `RcMap` for
-exactly this shape (31 refs; `packages/harness/src/shared/session/database.ts`,
+keyed by its target, and a run's binding is a reference held in a scope: the
+primitive is `RcMap`. `RcMap.make({ lookup, idleTimeToLive: 0 })` once per
+process (in the plugin's `processLayer`), where `lookup(target)` builds the
+target's resource in the entry's own scope: `PubSub.unbounded<string>()` for
+its events and `Effect.forkScoped` of the poll fiber, which is one
+`pollOnce(target)` under `Effect.repeat({ schedule: Schedule.fixed(GITHUB_POLL_INTERVAL_MS) })`
+with the failure delay (`Effect.sleep(jitteredExponentialBackoffMs(…))`)
+inside its `catchTags`. `bind(runId, target, inbox)` is
+`RcMap.get(map, target)` (an `Effect<A, E, Scope>`) run in a scope the inbox's
+close closes, plus `Stream.fromPubSub(events).pipe(Stream.runForEach(inbox.send))`
+forked in that scope; the last release ends the fiber (`idleTimeToLive: 0`
+closes the entry when its count reaches zero, `RcMap.js:283-291`). The cap is
+a count check before `get`. A target the server says is closed fails its own
+fiber, which `RcMap.invalidate` drops. The run's annotation level is a field
+of the binding, read at delivery. In-flight deliveries stay in one
+`FiberSet` (`FiberSet.run`, `FiberSet.awaitEmpty` under `Effect.timeout` for
+the drain). The repo already uses `RcMap` for this shape (31 refs;
+`packages/harness/src/shared/session/database.ts`,
 `packages/cli/src/runtime/cliService.ts`).
 
 What is deleted: `PollingSourceBase` as a class (its `subscriptions`,
@@ -203,13 +211,16 @@ against a failure between it and the next write.
 
 **The better design.** A tick is `fetch(prior) → responses` (the I/O, which
 may fail as a whole) followed by a pure
-`apply(prior, responses) → { next, events }` (the fold), and the per-target
-fiber replaces its state atomically with `next` and emits `events` after.
-A prior of `undefined` is the seed: `apply` with no prior records cursors and
-emits nothing. The check-runs page cache is a field of `next` like any other,
-so there is no staging and no commit site; `fetchAllCheckRuns` returns the
-pages it read and the fold decides what to keep. `prCheckRunDomain.ts` is
-already this shape and becomes the fold's inner functions.
+`apply(prior, responses) → { next, events }` (the fold); the per-target
+fiber holds its state in one `Ref<State | undefined>` (`Ref.make`, `Ref.get`
+before the fetch, `Ref.set(next)` after the fold, then `PubSub.publishAll`
+of `events`), so there is one write per tick and no partial state is ever
+observable. A prior of `undefined` is the seed: `apply` with no prior records
+cursors and emits nothing. The check-runs page cache is a field of `next`
+like any other, so there is no staging and no commit site;
+`fetchAllCheckRuns` returns the pages it read and the fold decides what to
+keep. `prCheckRunDomain.ts` is already this shape and becomes the fold's
+inner functions.
 
 What is deleted: `stagedCache`, `FetchAllCheckRunsResult`,
 `commitStagedCheckRunsCache`, `seedFirstTick` (`PRPollingSource.ts:489-548`),
@@ -271,7 +282,8 @@ runtime.
 **The better design.** `pollOne: Effect<void, GitHubRequestError | SecretsFailed, GitHubServices>`
 and `fetchAllCheckRuns`/`fetchAnnotations` typed the same way (they already
 are inside; only the final `catchCause` erases it); `handleFailure` is one
-`Effect.catchTags({ GitHubAuthError, GitHubPermanentError, GitHubRateLimitError, GitHubTransientError, SecretsFailed })`.
+`Effect.catchTags({ GitHubAuthError, GitHubPermanentError, GitHubRateLimitError, GitHubTransientError, SecretsFailed })`
+(`Effect.d.ts:4558`), the primitive for a tagged-union channel.
 A defect in one target's fiber ends that fiber and is logged by its
 supervisor; nothing is "skipped for every subscription". `validateOrSkip`
 stays the one place a malformed 200 body is accepted as "no change".
@@ -329,11 +341,12 @@ services instead of three cases of one.
 `Schema.TaggedUnion` of `repo | pull | issue` with one string codec
 (`Schema.decodeTo` over the path form) used by the tool's input, the map
 key (finding 1), the settings controller and the formatters (which take the
-target, not `slug, number`). One registry keyed by the target; the
-disambiguation of `/issues/N` is one `resolveTarget` that returns the
-`pull` case when GitHub says so, and `unsubscribe` is one lookup. The caps
-stay a function of the case. `GitHubSubscriptions` is one map plus
-`drain`.
+target, not `slug, number`). One registry keyed by the target's encoded string (the one place the
+string is made: `Schema.encodeSync(SubscriptionTarget)`), since `RcMap`
+keys by `Equal`/`Hash`; the disambiguation of `/issues/N` is one
+`resolveTarget` that returns the `pull` case when GitHub says so, and
+`unsubscribe` is one lookup. The caps stay a function of the case.
+`GitHubSubscriptions` is one `RcMap` plus `drain`.
 
 What is deleted: the three `keyOf` functions, `PollingSourceLike.has`,
 `knownPR`/`knownIssue` (`:278-283`), the "try both" unsubscribe, the
@@ -397,14 +410,21 @@ data (`owners`) instead of being a reference the run holds, so the pool
 needs its own count to know when the run-owned reference ends, and the tool
 needs a once-per-run hook to tell it.
 
-**The better design.** A run's first Lean call takes `servers.get(root)` in
-the run's scope (`ToolRun.scope`, which `leanRunId` already uses) and keeps
-it there; every call still leases in its own scope. The map's count is the
-only count: the run's end closes its scope, the count drops, and the idle
-time-to-live (or `invalidate`) ends the server. The pool's `make` holds no
+**The better design.** The primitive is the one already there: the
+`LayerMap`'s `RcMap` (`servers.rcMap`, `LayerMap.d.ts:80`) and its
+reference count. A run's first Lean call takes `servers.contextEffect(root)`
+(an `Effect<…, Scope>`, `LayerMap.d.ts:88`) with the run's scope provided
+(`Scope.provide(run.scope)`, `Scope.d.ts:313`; `ToolRun.scope` is what
+`leanRunId` already reaches) and keeps that reference for the run's life;
+every call still leases in its own scope. The map's count is the only
+count: the run's end closes its scope, the count drops, and the idle
+time-to-live ends the server (`RcMap.js:283-310`). The pool's `make` holds no
 `entries`, no `stopped` flag; an interrupted call is an interruption, as the
-harness treats every interrupted tool call. The EMFILE path becomes
-`RcMap.invalidate` of every other root (released when its leases end).
+harness treats every interrupted tool call. The EMFILE path and
+`restart_server` are `LayerMap.invalidate(root)` (`LayerMap.d.ts:103`): an
+in-use entry is removed from the map and closed when its last reference
+releases (`RcMap.js:406-413`, `:283-287`), which is exactly today's
+"stop when the final lease ends" without the `stopWhenIdle` flag.
 
 What is deleted: `RootEntry`, `EMPTY_ENTRY`, `updateEntry`, `liveEntries`,
 `release`, `lease`'s uninterruptible region, `stopSessionsForRun` (9 refs / 4
@@ -415,11 +435,14 @@ in three implementations, `adapterStopped`, `foldStopped`, `failStopped`,
 values (the field becomes `toolchain: boolean`, or the setup guidance moves
 into the message at the one site that raises it).
 
-**What we give up.** A run-owned server stops at the idle time-to-live after
-the run ends instead of at once (today's `stopNow`); a shorter TTL for the
-direct pool (the thirty minutes in `directLspAdapter.ts:48` is for run-less
-callers) keeps the file table honest. The EMFILE eviction invalidates busy
-roots too, after their leases end; today it skips them (`:228-233`).
+**What we give up.** With one count, a run-owned server stops at the idle
+time-to-live after its last reference ends instead of at once (today's
+`stopNow`); `idleTimeToLive: 0` gives the immediate stop and then a
+run-less call (a host invocation outside a run, whose lease is the call's)
+restarts the server each time. Either is one rule instead of two; the
+thirty minutes in `directLspAdapter.ts:48` is for the second case only.
+The EMFILE eviction invalidates busy roots too, after their leases end;
+today it skips them (`:228-233`).
 
 **Change amplification.** A new port operation (document symbols) touches
 today `leanLanguageServices.ts`, `leanServerPool.ts` (with `runId` and
@@ -456,15 +479,21 @@ to this structure. 15 of the area's 23 `Deferred.` uses are here.
 file" is modelled as a wake-up signal plus mutable fields instead of as a
 value that changes.
 
-**The better design.** One `SubscriptionRef<FileState>` per open file, where
+**The better design.** One `SubscriptionRef<FileState>` per open file
+(`SubscriptionRef.make`, `SubscriptionRef.d.ts:93`), where
 `FileState = { version, diagnostics, progress }` and the notification
-handlers are `SubscriptionRef.update`. `waitForElaboration(file)` is
-`SubscriptionRef.changes(ref)` piped through `Stream.takeUntil(s => s.progress === 'elaborated')`,
-with `Stream.debounce(400ms)` as the quiet window for a server that reports
-no progress, under one `Effect.timeout(DIAGNOSTICS_WAIT)`; the result is the
-ref's current value. Closing the server's scope interrupts the waiters;
-`restartFile` replaces the ref. `SubscriptionRef.` has 152 uses in the repo
-and `Stream.debounce` 5 (`packages/extension/src/progressView/ProgressViewProvider.ts`).
+handlers are `SubscriptionRef.update` (`:1248`). `waitForElaboration(file)`
+is `SubscriptionRef.changes(ref)` (`:134`; it emits the current value first,
+then every change) piped through
+`Stream.takeUntil(s => s.progress === 'elaborated')` (`Stream.d.ts:9088`)
+and `Stream.runDrain` (`:16198`), raced with the quiet window, which is the
+same changes through `Stream.debounce(DIAGNOSTICS_QUIET_WINDOW_MS)`
+(`:11372`) filtered to "unreported with diagnostics" and `Stream.take(1)`;
+the whole wait under `Effect.timeout(DIAGNOSTICS_WAIT)` (`Effect.d.ts:8266`)
+and the result is `SubscriptionRef.get`. Closing the server's scope
+interrupts the waiters; `restartFile` replaces the ref. `SubscriptionRef.`
+has 152 uses in the repo and `Stream.debounce` 5
+(`packages/extension/src/progressView/ProgressViewProvider.ts`).
 
 What is deleted: `OpenedFile.next`, `wakeWaiters`, `abandonFiles`,
 `LeanSessionDisposed`'s second meaning (and likely the class: the first
@@ -502,8 +531,9 @@ strings. `startedAt: Date.now()` (`:76`) is formatted against another
 separate table rather than read from the services that are the servers.
 
 **The better design.** `listServers` is derived: the direct pool answers
-from its map's keys and each server's `ended` state (plus the start time the
-server holds); the VS Code bridge answers from the extension's clients.
+from `RcMap.keys(servers.rcMap)` (`RcMap.d.ts:654`) and each server's
+`Deferred.isDone(ended)` (`Deferred.d.ts:1324`) plus the start time the
+server holds; the VS Code bridge answers from the extension's clients.
 `LeanServerInfo` stays as the shape; `LeanServerRoster`,
 `createLeanServerRoster` (6 refs / 4 files), `register`/`update`/`unregister`,
 `serverSequence` go. `isLeanServerActive` (3 / 2) stays as a predicate on
@@ -546,9 +576,10 @@ from our point of view", `leanServerPool.ts:534-535`; `directLspAdapter.ts:92-93
 can do, so each host fills the holes with an optional, an error branch or an
 ignored argument.
 
-**The better design.** The port is the language-server operations every
-adapter has (diagnostics, three position requests, restart file, build/clean/
-cache). The four setup rows move to the setup plugin's allowlist as VS Code
+**The better design.** No primitive is missing here; the fix is the
+contract. The port is the language-server operations every adapter has
+(diagnostics, three position requests, restart file, build/clean/cache).
+The four setup rows move to the setup plugin's allowlist as VS Code
 commands (where `install_vscode_extension` already lives), and the `Setup`
 group leaves the `lean_project` prose; `navigateToFirstError` is an editor
 capability on `EditorHost` (finding 9), not a Lean one; `stopSessionsForRun`
@@ -606,13 +637,18 @@ each by hand.
 
 **The better design.** One rule: a host passes a partial record of host
 services (`{ inlineComments?, editors?, setup?, lean?, inquiries? }`);
-`texraPlugins` turns each present member into its service layer and the
-plugin's `HostCapabilities` from presence by one function, so a tool's
-`hostCapability` names the service key and nothing else restates it. The
-inquiry panel is the presence of a service (the inquiry decision surface the
-two hosts with a progress view provide), not `true`. The plugin id becomes
-`github`; the one persisted key that named it is a preference 1.0 does not
-carry over.
+`texraPlugins` turns each present member into its `Layer.succeed(Tag)(value)`
+(`Layer.d.ts:839`; a member that needs a resource is a `Layer.effect` whose
+effect may use `Scope`, `Layer.d.ts:1166`, since 4.1.2 has no `Layer.scoped`)
+and the plugin's `HostCapabilities` from presence by one function, so a
+tool's `hostCapability` names the service key and nothing else restates it.
+`HostCapabilities` itself is the shape AGENTS.md calls a
+`Context.Reference` (`Context.d.ts:1741`, `defaultValue: () => ({ of: () => new Set() })`):
+a plugin that serves nothing serves nothing, instead of `serves(() => [])`
+(that tag is the harness's, area M). The inquiry panel is the presence of a
+service (the inquiry decision surface the two hosts with a progress view
+provide), not `true`. The plugin id becomes `github`; the one persisted key
+that named it is a preference 1.0 does not carry over.
 
 What is deleted: `inquiryPanel?: true`, the `serves()` helper's three
 hand-written lists, `InlineCommentCapability`/`InquiryPanelCapability`/
@@ -650,14 +686,23 @@ or serve `agentCli/` (`support/externalBinaryUtils.ts`, consumed by
 `agentCli/claudeAgentImport.ts` and `codexImport.ts`); sequence that part
 against the proposal.
 
-**The better design.** `arxiv`'s `processLayer` serves the limiter (an Effect
-`RateLimiter` in its waiting mode if the installed version has one, else a
-`Semaphore(1)` plus `Clock` in the layer); `ArxivSearchTool` yields it.
-Deleted: `nextRequestAt`, `awaitArxivSlot`, the comment. The same move is
-the answer for `support/externalBinaryUtils.ts:656`'s per-process cache
-(`createCachedBinaryResolver`), which is a process-lifetime memo held at
-module level for the same reason, and for `lean/direct/lakeCommands.ts:211`'s
-module-level `workspaceLanes` (the pool's `make` is its home).
+**The better design.** `arxiv`'s `processLayer` serves Effect's
+`RateLimiter` (`RateLimiter.layer` over `RateLimiter.layerStoreMemory`,
+`persistence/RateLimiter.d.ts:94`, as the GitHub layer already composes it)
+and `ArxivSearchTool` runs the request under
+`consume({ algorithm: 'fixed-window', onExceeded: 'delay', window: '3 seconds', limit: 1, key: 'arxiv' })`
+(`:47-54`; `'delay'` sleeps until a token is free, `:139-140`): the queue of
+waiters, arrival order and interruption are the limiter's. Deleted:
+`nextRequestAt`, `awaitArxivSlot`, the comment. The same move answers
+`support/externalBinaryUtils.ts:255`'s `createCachedBinaryResolver`, whose
+"cache a hit for the process, retry a miss" is exactly
+`Effect.cachedWithTTL((exit) => Exit.isSuccess(exit) && exit.value !== undefined ? Duration.infinity : Duration.zero)`
+(`Effect.d.ts:13625`, the TTL computed from the `Exit`), built once in the
+agent-CLI plugin's `processLayer`; and `lean/direct/lakeCommands.ts:30`'s
+module-level `workspaceLanes`, which is a `Semaphore.make(1)`
+(`Semaphore.d.ts:253`, `withPermits`, `:79`) held by the root's `LeanServer`
+service, since `runLake` already leases the server for the command
+(`leanServerPool.ts:419-424`).
 
 **What we give up.** Nothing.
 
@@ -675,7 +720,7 @@ import the module singleton; after, it yields the plugin's service.
   both branch on timeout and `isTransportReason`; the connector returns a
   value-channel `ConnectorResult` (`:331-333`) so `addItem` can report per
   item. One `zoteroRequestFailure(error, port, timeout): ToolError` and a
-  typed failure with `Effect.result` at the per-item site; the uninterruptible
+  typed failure, with `Effect.result` (`Effect.d.ts:3560`) at the per-item site; the uninterruptible
   region (`:438`) and its 25-line justification stay (see "Already settled").
 - **Snapshot-or-metadata decided by scanning the fields.** `ZoteroItemSchema`
   admits nine optionals and a `check` for "url or title" (`zotero/ZoteroAddTool.ts:39-107`);
@@ -754,3 +799,33 @@ import the module singleton; after, it yields the plugin's service.
   noted, not proposed here.
 - `withZoteroPort` (`bbtClient.ts:50-64`): four callers, one setting; a
   wrapper that earns its place.
+
+---
+
+## Effect-native mapping (verified against node_modules/effect 4.1.2 .d.ts)
+
+| # | Hand-rolled today | Effect primitive | Exact API verified | Why it fits |
+| --- | --- | --- | --- | --- |
+| 1 | `subscriptions` Map + `listeners` Set + `pollLoopStop` Deferred + `onKeysChanged`/`Disposable` hand-off + `notes[]` (`PollingSourceBase.ts:54-61,171-183,249-256,472-516`; `RunSubscriptionRegistry.ts:66,234-261`) | `RcMap` keyed by target; `PubSub` per entry; `Effect.forkScoped` poll fiber; `FiberSet` for deliveries | `RcMap.make({ lookup, idleTimeToLive, capacity })` → `Effect<RcMap, never, Scope \| R>` (`RcMap.d.ts:215`); `RcMap.get(map, key)` → `Effect<A, E, Scope>` (`:379`); `RcMap.invalidate` (`:701`; a removed in-use entry closes on its last release, `RcMap.js:406-413,283-287`); `RcMap.has` (`:822`), `RcMap.keys` (`:654`); `PubSub.unbounded({ replay? })` (`PubSub.d.ts:444`), `PubSub.subscribe` → `Effect<Subscription, never, Scope>` (`:1437`), `Stream.fromPubSub` (`Stream.d.ts:1050`); `FiberSet.make`/`run`/`awaitEmpty` (`FiberSet.d.ts:106,457,686`); `Effect.repeat({ schedule })` (`Effect.d.ts:14660`), `Schedule.fixed` (`Schedule.d.ts:786`) | the count of bindings is the lifetime of the poll; no second table, no stop signal, no fiberless log queue |
+| 2 | in-place mutation of `state` through the fetch; `stagedCache` + `commitStagedCheckRunsCache` (`PRPollingSource.ts:277-281,384,546`; `checkRunsClient.ts:65-76`) | one `Ref<State \| undefined>` per target, written once per tick after a pure fold | `Ref.make` (`Ref.d.ts:154`), `Ref.update`/`Ref.modify` (`:603,409`); `PubSub.publishAll` (`PubSub.d.ts:1309`) | one write point; partial state cannot be observed, so nothing is "staged" |
+| 3 | `PollHookRejected` wrapper + `cause.reasons[0]._tag === 'Fail'` unwraps + `instanceof` on `unknown` (`PollingSourceBase.ts:555-618,631-658`; `PRPollingSource.ts:701-706,793-805`) | the typed channel `GitHubRequestError \| SecretsFailed` and `Effect.catchTags` | `Effect.catchTags` (`Effect.d.ts:4558`), `Effect.catchTag` (`:4392`) | the tags already exist at `ghGet`; classification is a `_tag` switch, defects die |
+| 4 | `PATH_RE`, `prRef`/`issueRef`, three `keyOf`, `key.includes('/pulls/')` (`githubSubscriptionTool.ts:164`; `githubPaths.ts:13-20`; `controllers/settingsView/githubSubscriptions.ts:78-83`) | one `Schema.TaggedUnion` with one string codec | `Schema.TaggedUnion` (`Schema.d.ts:5340`), `Schema.decodeTo(to, { decode, encode })` (`:4674-4675`), `Schema.Union` (`:4147`) | one owner of the grammar; the registry keys by the codec's encoded string |
+| 5 | `RootEntry{server?, owners, leases, stopWhenIdle}` + `liveEntries` prune + `stopSessionsForRun` + `stopRegistered` WeakSet + `foldStopped` (`leanServerPool.ts:115-123,200-226,284-325,359-397`; `LspTools.ts:499-539`; `directLspAdapter.ts:143-181`) | the `LayerMap`'s own `RcMap` count; a lease held in the run's `Scope` | `LayerMap.make(lookup, { idleTimeToLive })` (`LayerMap.d.ts:148-149`), `LayerMap.rcMap` (`:80`), `contextEffect(key)` → `Effect<Context, E, Scope>` (`:88`), `invalidate(key)` (`:103`); `Scope.provide` (`Scope.d.ts:313`), `Scope.addFinalizer(scope, fin)` (`:460`); release rule `RcMap.js:279-310` | one count per server; the run's scope is the owner; invalidate-then-release-on-zero is today's `stopWhenIdle` |
+| 6 | `OpenedFile.next` Deferred re-armed per notification, `for(;;)` wait with `timeoutOption(400ms)`, `abandonFiles` (`leanServer.ts:204-215,333-345,588-617`) | `SubscriptionRef` per file; `Stream.takeUntil` + `Stream.debounce` under `Effect.timeout` | `SubscriptionRef.make` (`SubscriptionRef.d.ts:93`), `update` (`:1248`), `changes` → `Stream<A>` emitting the current value first (`:134` and its doc); `Stream.takeUntil(pred, { excludeLast? })` (`Stream.d.ts:9088`), `Stream.debounce(duration)` (`:11372`), `Stream.runDrain` (`:16198`), `Stream.timeout` (`:2917`); `Effect.timeout` → `E \| TimeoutError` (`Effect.d.ts:8266`) | the file's state is a value that changes; waiting is reading its stream; disposal is scope interruption |
+| 7 | `createLeanServerRoster` Map + status strings + `serverSequence` (`leanServerRegistry.ts:27,63-95`; `leanServer.ts:224-225`) | derive from `RcMap.keys` and `Deferred.isDone` | `RcMap.keys` (`RcMap.d.ts:654`), `Deferred.isDone` (`Deferred.d.ts:1324`) | the map and the server already hold the facts |
+| 8 | optional port members, VS Code-only rows in `LEAN_PROJECT_COMMANDS` (`leanLanguageServices.ts:96-113`; `leanTypes.ts:66-102`) | none (a contract) | — | not a primitive problem |
+| 9 | six host hand-off shapes, `inquiryPanel: true`, `serves(() => [...])` ×3 (`registry.ts:241-247,259-270,322-339,408-417`; `editorHost.ts:120-123`) | `Layer.succeed`/`Layer.effect` per present host service; `Context.Reference` for a defaulted capability set | `Layer.succeed` (`Layer.d.ts:839`), `Layer.effect(Tag)(effect)` with `Scope` excluded from `R` (`:1166`; no `Layer.scoped` export in 4.1.2: `build`, `buildWithScope`, `effect`, `effectContext`, `unwrap` are the scoped forms), `Context.Reference(key, { defaultValue })` (`Context.d.ts:1741`) | presence of a service is the capability; a default-empty reference needs no `serves` |
+| 10 | module-level `SynchronizedRef` sleep-until (`ArxivSearchTool.ts:68-76`); `createCachedBinaryResolver` (`externalBinaryUtils.ts:255`); module `workspaceLanes` (`lakeCommands.ts:30`) | `RateLimiter` in a `processLayer`; `Effect.cachedWithTTL` with an `Exit`-computed TTL; `Semaphore(1)` in the server's scope | `RateLimiter.consume({ algorithm, onExceeded: 'delay' \| 'fail', window, limit, key })` (`persistence/RateLimiter.d.ts:47-54`), `RateLimiter.layer`/`layerStoreMemory` (`:94`); `Effect.cachedWithTTL((exit) => Duration.Input)` (`Effect.d.ts:13625`), `Effect.cachedInvalidateWithTTL` (`:14030`); `Semaphore.make(permits)` (`Semaphore.d.ts:253`), `withPermits` (`:79`) | process-lifetime state belongs to the plugin's process layer, which the harness already builds and tears down |
+| 11 | `ConnectorResult` value-channel error beside `ToolError` (`bbtClient.ts:331-333`) | typed failure + `Effect.result` at the per-item site | `Effect.result` → `Effect<Result<A, E>>` (`Effect.d.ts:3560`) | one classifier, one channel |
+
+Corrections made while verifying: `Layer.scoped` does not exist in 4.1.2
+(finding 9 names `Layer.effect`, whose `R` excludes `Scope`); `Effect.repeat`
+takes `{ schedule, while, until, times }` options (`Effect.d.ts:14515`
+`namespace Repeat`), which is what `PollingSourceBase.ts:499-506` already
+uses, so finding 1 keeps `Schedule.fixed` and moves only the failure delay
+into the fiber; `RcMap.invalidate` on an in-use entry defers the close to
+the last release (`RcMap.js:406-413`), so finding 5's EMFILE path keeps
+today's "after the lease ends" semantics with no flag; `Effect.cachedWithTTL`
+takes a TTL computed from the `Exit`, which expresses "hits forever, misses
+retried" exactly, so finding 10 replaces the `SynchronizedRef` memo with it
+instead of a layer-held `Ref`.

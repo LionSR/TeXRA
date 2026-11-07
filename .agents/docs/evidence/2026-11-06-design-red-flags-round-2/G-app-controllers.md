@@ -8,8 +8,9 @@ the working tree at `73e0225` (after the rebase that landed #14774–#14776;
 `hosts/uiHosts.ts` was re-read after it). Paths are relative to
 `packages/texra/src` unless they start with `packages/`. Consumer counts are
 over `packages/*/src`; non-production over `src/test-kernel`,
-`packages/*/test`, `docs`. `node_modules` is absent in this checkout, so an
-Effect API is cited only where the repo already uses it.
+`packages/*/test`, `docs`. Effect APIs are verified against
+`node_modules/effect` 4.1.2 `.d.ts` (installed mid-audit; the mapping at the
+end lists each one); a repo use cited beside one is precedent, not proof.
 
 Open PR 14713 (open, not merged) changes `controllers/session/hostRunActions.ts`
 (+22/−7) and `controllers/progressView/ProgressWorkflowFileActionsController.ts`
@@ -118,9 +119,10 @@ very interruption that is the fiber's one signal.
 - The LaTeX previews take a `Scope` (or run under `Effect.scoped` with
   `Effect.addFinalizer` for each temp file) instead of an array they push
   onto; "already finished" cannot happen inside a scope that is still open.
-  `withLatexOperation`'s boolean becomes `Semaphore.make(1)` per entry with
-  `withPermitIfAvailable`, and its `raceFirst(settled)` goes: the scope's
-  close interrupts the operation.
+  `withLatexOperation`'s boolean becomes a `FiberHandle` per entry run with
+  `FiberHandle.run(handle, operation, { onlyIfMissing: true })` (a second
+  click while one runs is a no-op, as today), and its `raceFirst(settled)`
+  goes: the scope's close interrupts the handle.
 - The approval runs in the request fiber that already is uninterruptible,
   and `handleAction` answers when `request.decide` has been recorded; the
   `forkIn(entry.scope)` and four of the five `uninterruptible` go. The
@@ -131,9 +133,9 @@ very interruption that is the fiber's one signal.
   `answeredBy` on `request.decided`, the release reads the run's rows
   (`session.records`/the view's decided requests) instead of a Ref written
   after the fact; until R7, the Ref stays and the re-read of `requests`
-  (`:375-380`) goes, because the finalizer's cause says which close it is
-  (the window's scope closes with its own exit; a request drop is an
-  interrupt from the follower).
+  (`:375-380`) goes, because `Effect.addFinalizer((exit) => …)` hands the
+  finalizer the exit it closes under (the window's scope closes with its own
+  exit; a request drop is the follower's interrupt).
 
 **Deleted:** `LatexPreviewEntry.settled`, `.isSettled`, `.workspaceTempCleanup`,
 `.latexOperationInProgress`, `.onError` (0 other builders), `registerCleanup`
@@ -481,8 +483,8 @@ as `sharedSettingsCommands.ts:453` already follows, `Stream.mapEffect(probe)`),
 mapped through `deriveOnboardingFunnelState` and `Stream.changes` (8 uses).
 The window pipes it into the snapshot ref's `onboarding` field (finding 3):
 one owner. The extension's "select the setup agent on entering `setup`" is
-its own `Stream.zipWithPrevious`-style filter on that stream, not a field
-the desktop ignores. `clearDeclined` is written where a credential appears
+its own `Stream.zipWithPrevious` filter on that stream, not a field the
+desktop ignores. `clearDeclined` is written where a credential appears
 (the same signal), or dropped (see below).
 
 **Deleted:** `OnboardingFunnelRefresher`, `lane`, `rerunRequested`,
@@ -528,9 +530,10 @@ response `{ ok: false, error: wireError(...) }` is built at four sites
 
 **The better design.** `PortEntry.fiber` is a `FiberHandle` made in the
 port's `framers` scope; `subscribe` is `FiberHandle.run(handle, frames)`.
-`held` is a `Queue.unbounded<SurfaceActionMessage>` plus a `Deferred<void>`
-"subscribed" (or `Effect.makeLatch` if present in this Effect version) that
-`act` awaits before `port.send`; the `null` sentinel goes. The closed-bridge
+`held` is a `Latch` (`Latch.make`, opened by the first `Subscribe`) that
+`act` passes through `Latch.whenOpen` before `port.send`, so a message sent
+before the surface mounts waits instead of being queued by hand; the `null`
+sentinel goes. The closed-bridge
 refusal is one check on the bridge's own `Scope` before forking. Requests
 are forked into a `FiberSet` the bridge joins under the close deadline
 (`Effect.timeout`), not masked: a close waits, then interrupts what is
@@ -570,7 +573,9 @@ nine; `postAll` (`:323-334`) is the startup copy of the same set; `followRepaint
 a boolean that is `true` at `:217,224,458,490,511` and defaulted at
 `:198,294,338,366,411`: "did I already refresh" as a parameter.
 `allSettledVoid` (`utils/core/allSettledVoid.ts`, 4 consumers) is the glue
-for these fan-outs. The one page that follows its input as a stream,
+for these fan-outs; its header's reason for existing beside
+`Effect.all(…, { mode: 'result' })` (a defect still fails the call) stands,
+so it goes with its callers, not by replacement. The one page that follows its input as a stream,
 `followToolAvailability` (`settingsToolCommands.ts:127-137`,
 `SubscriptionRef.changes(availability.results)` → `Stream.changes` →
 repaint), is the shape the rest should have. The body also takes
@@ -632,12 +637,14 @@ The repo already uses `Schedule`, `Effect.retry` and `Queue` here; what is
 hand-rolled is the pipeline between them.
 
 **The better design.** `Queue.sliding<QueuedUsageEntry>(1000)` →
-`Stream.fromQueue` → a grouping by size or interval (`Stream.groupedWithin`
-in Effect 3; verify the Effect 4 name) → `Stream.mapEffect((batch) => sendBatch(batch).pipe(Effect.retry(backoff)))`
-→ `Stream.runDrain`, forked in the layer's scope. The per-entry consent
-re-read stays in `sendBatch`. Shutdown is `Queue.shutdown` (end the stream)
-then `Fiber.join` under `Effect.timeout(5s)`; the "once at warn" flags are
-`Schedule.tapOutput` on the first retry.
+`Stream.fromQueue` → `Stream.groupedWithin(batchSize, flushIntervalMs)` →
+`Stream.mapEffect((batch) => sendBatch(batch).pipe(Effect.retry(backoff)))`
+→ `Stream.runDrain`, forked with `Effect.forkScoped` in the layer's scope.
+The per-entry consent re-read stays in `sendBatch`. Shutdown is `Queue.end`
+(the stream completes after the last batch) then `Fiber.join` under
+`Effect.timeout(5s)`. The "once at warn, then debug" flags go: the backoff
+already quiets the loop, so every undelivered batch logs once per attempt
+through `Effect.tapError` before `Effect.retry`.
 
 **Deleted:** the array and its shift, `triggers`, `requestFlush`,
 `backgroundFlushActive`, `flushTimer`, `retryBatch`, `RetryBatch`,
@@ -849,3 +856,43 @@ rather than `Clock`; the one caller names an archive folder.
 - `common/files/*`, `agent/export/*`, `agent/templates/*`, `platform/defaults/*`,
   `utils/text/*`, `utils/git/*`, `utils/diagnostics/*`: read; tables and
   pure functions with no finding.
+
+---
+
+## Effect-native mapping (verified against node_modules/effect 4.1.2 .d.ts)
+
+Every "better design" above names the one primitive that is the thing. The
+`.d.ts` line is where the export was read; "repo" names an existing use.
+
+| Finding | Hand-rolled today                                                                                                                                                 | Effect primitive                                                                                                                                                                                                                                       | Verified                                                                                                                                   |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1       | `settled` Deferred + `isSettled` + `staged` Map beside `followPendingRequests`'s per-request fiber                                                                  | the request's `Scope` (the fiber `FiberMap.run` gives it): `Effect.scoped` + `Effect.addFinalizer((exit) => …)`; nothing else says "finished"                                                                                                            | `Effect.addFinalizer` takes the exit (Effect.d.ts:12852); `FiberMap.run … onlyIfMissing` (FiberMap.d.ts:1016); repo: requestAnswerer.ts:99-114 |
+| 1       | `LatexPreviewEntry.workspaceTempCleanup` array + `registerCleanup`                                                                                                   | `Effect.acquireRelease` per temp file in the same scope                                                                                                                                                                                                | Effect.d.ts:12676                                                                                                                          |
+| 1       | `latexOperationInProgress` boolean mutex + `raceFirst(Deferred.await(settled))`                                                                                     | `FiberHandle` per entry: `FiberHandle.run(handle, op, { onlyIfMissing: true })`; the scope's close interrupts it                                                                                                                                         | FiberHandle.d.ts:110 (`make`), :542 (`run`, "unless `onlyIfMissing`"); repo: 9 `FiberHandle.` uses                                         |
+| 1       | five `Effect.uninterruptible` + `forkIn(entry.scope)` around the approval                                                                                           | the request fiber the bridge already runs (today itself masked, finding 7); the approval returns when `request.decide` records                                                                                                                         | Effect.d.ts:14415 (`uninterruptible`, kept at one site: the bridge's or `FiberSet.join`)                                                   |
+| 2       | `Take.result`/`Take.settled` Deferreds (`makeUnsafe`, `doneUnsafe` ×3), `stopping`/`cancelled` booleans, `takeFiber: Fiber \| null`, `forkDetach`                    | `FiberHandle` in the process scope: `FiberHandle.run(handle, take, { onlyIfMissing: true })` + `FiberHandle.join` for Start, `FiberHandle.clear` for Cancel; Stop is a `Latch` the take `Latch.await`s after sox starts                                   | FiberHandle.d.ts:110/542/504/746; Latch.d.ts:189 (`make`), :209 (`open`), :351 (`whenOpen`)                                                 |
+| 2       | `listeners: Set<fn>` + `subscribe`/`notify`                                                                                                                         | `SubscriptionRef<Recording \| null>`; windows read `SubscriptionRef.changes`                                                                                                                                                                            | SubscriptionRef.d.ts:93/134; repo: 27 `SubscriptionRef.changes` uses                                                                       |
+| 3       | eleven `let`s + `publish` closure + `refreshLane` Semaphore + `guarded` exit collector + `onError` callback; the window's own `SubscriptionRef<HostSnapshot \| null>` | one `SubscriptionRef<HostSnapshot>`; each producer ends in `SubscriptionRef.update(ref, (s) => ({ ...s, field }))`; bursty inputs go through `Stream.debounce` into `Stream.runForEach(update)`; a failed producer `Effect.ignore({ log: 'Warn' })`s      | SubscriptionRef.d.ts:1248 (`update`), :1324 (`updateEffect`); Stream.d.ts:11372 (`debounce`), :15953 (`runForEach`); Effect.d.ts:7737 (`ignore`) |
+| 3       | `apiKeyBanner?` / `dependencyBanner?` / `gettingStartedBanner?: true` / `workspaceRoots?` as capabilities                                                          | required producers (`Effect.succeed({ visible: false })` on a host without one); R8's "a required boolean", not an absent member                                                                                                                       | —                                                                                                                                          |
+| 4       | `SharedParts` thirteen-member bag; `SHARED_HOST_REQUEST_KINDS` restating `OWN_REQUEST_LABEL`'s complement                                                           | not a primitive: the window record itself, and one list (`Exclude<HostRequest, OwnHostRequest>`)                                                                                                                                                       | —                                                                                                                                          |
+| 5       | three `presentRunFailure` sites, two end hooks, five `Effect.ignore` tails, `scope`/`present`/`readConfig`/`loadModelOptions` ports, `revealProgress?`             | one `launch(program)` body: `Effect.tapError` once, `Effect.forkIn(whenEnded(run), windowScope)` once; the body `yield* Scope.Scope`, builds `workspaceEnvironmentLayer(roots.workspace)` and takes `emit` and `revealProgress: Effect`                   | Effect.d.ts:17126 (`forkIn`); the session's `records` port (sessions.ts:192) is the config read                                             |
+| 6       | `OnboardingFunnelRefresher`: `rerunRequested` boolean + `Semaphore.makeUnsafe(1)` + `current`; the state copied into a desktop `SubscriptionRef` and the extension's snapshot | `Stream.zipLatest(flags.changes([…]), credentialProbe)` → `Stream.map(derive)` → `Stream.changes` → the snapshot ref's `update`; the extension's agent selection is `Stream.zipWithPrevious` + `Stream.filter` on that stream                                 | Stream.d.ts:4909 (`zipLatest`), :13273 (`changes`), :4811 (`zipWithPrevious`), :3227 (`concat` for the initial probe); repo: `Stream.zipLatest` 1, `Stream.changes` 8 |
+| 7       | `PortEntry.fiber: Fiber \| null` + manual `Fiber.interrupt(previous)` before the next replay                                                                        | `FiberHandle` in the port's `framers` scope: `FiberHandle.run(handle, frames)` interrupts the previous fiber by contract                                                                                                                                | FiberHandle.d.ts:542 ("the previous fiber is interrupted unless `onlyIfMissing`")                                                          |
+| 7       | `held: SurfaceActionMessage[] \| null` drained on `Subscribe`                                                                                                         | `Latch` opened by the first `Subscribe`; `act` = `Latch.whenOpen(latch, send)`                                                                                                                                                                         | Latch.d.ts:189/209/351                                                                                                                     |
+| 7       | `Effect.uninterruptible` around every request so the bridge "drains"                                                                                                | requests in a `FiberSet` made in the bridge's scope; close = `FiberSet.join`/`awaitEmpty` under `Effect.timeout`, then the scope's interrupt                                                                                                             | FiberSet.d.ts:106 (`make`), :457 (`run`), :686 (`awaitEmpty`); Effect.d.ts:8266 (`timeout`)                                                |
+| 7       | three `scope.state._tag === 'Closed'` reads after `Scope.fork`                                                                                                       | one check on the bridge's own `Scope.state` before forking (a public field, Scope.d.ts:47), or `Scope.addFinalizer` on the bridge scope at `make` so a closed bridge is one fact                                                                        | Scope.d.ts:47/460/493                                                                                                                      |
+| 8       | per-mutation repaint lists, `stateSnapshotPosters`, `postAll` + `followRepaints`, `refreshAfterAgentMutation(…, alreadyFresh)` boolean, `allSettledVoid` fan-outs  | one `Stream<message>` per page: `Stream.concat(Stream.make(void), input)` → `Stream.mapEffect(build)` → `Stream.runForEach(bindings.post)`, where `input` is `appSignalStream`, `state.changes(keys)` or `SubscriptionRef.changes`; `Effect.forkScoped` each | Stream.d.ts:3227/648/1843/15953; Effect.d.ts:17216 (`forkScoped`); repo: `settingsToolCommands.ts:127-137`                                   |
+| 9       | `queue: Entry[]` with `shift()` at 1000; `triggers` Queue(1, dropping) + `backgroundFlushActive`; `flushTimer: Fiber \| null`; `retryBatch` + `keepForRetry`; `drainAndStop`'s warning fiber | `Queue.sliding(1000)` → `Stream.fromQueue` → `Stream.groupedWithin(batchSize, flushIntervalMs)` → `Stream.mapEffect(send.pipe(Effect.retry(Schedule.exponential(…).pipe(Schedule.modifyDelay(min)))))` → `Stream.runDrain`, `Effect.forkScoped`; shutdown `Queue.end` + `Fiber.join` under `Effect.timeout` | Queue.d.ts:501 (`sliding`), :1120 (`end`); Stream.d.ts:1017 (`fromQueue`), :11832 (`groupedWithin`), :16198 (`runDrain`); Effect.d.ts:7132 (`retry`); Schedule.d.ts:725/909 |
+| 10      | nine error tags with unread `member`/`step`/`kind` fields                                                                                                           | not a primitive: one `Schema.TaggedError` (`HostFailed`) for the host ports, presented by the existing presenters                                                                                                                                      | —                                                                                                                                          |
+| 11c     | `backupModelOutput`'s sweep of every run's digests on each write                                                                                                   | release on the event: a `Scope` per run's digests closed when the view drops the run (`Effect.addFinalizer`), or `RcMap` keyed by run with `idleTimeToLive` if the host wants a grace period                                                            | RcMap.d.ts:215/701; repo: 31 `RcMap.` uses                                                                                                 |
+| 11g     | `SubscriptionUsageService.usageCache` made lazily with `this.cache ??=`                                                                                              | keep `Cache.makeWith` (the good module), but make it once in the service's `Layer.effect` instead of on first read                                                                                                                                     | Cache.d.ts:176; Layer.d.ts:1166 (`Layer.effect`; there is no `Layer.scoped` in 4.1.2, `Layer.effect` excludes `Scope` from `R`)             |
+| 11h     | `foundTools` LRUCache and `packageManagerAvailability` Map at module level                                                                                          | `Effect.cachedWithTTL` per probe held by the `ToolAvailability` service, or a `Cache.make` in its layer                                                                                                                                                | Effect.d.ts:13625; Cache.d.ts:250                                                                                                          |
+
+Not replaced, deliberately: `Semaphore.makeUnsafe(1)` lanes stay where a
+whole read-build-post must be ordered (`settingsToolCommands.ts:47`,
+`withPerKeyLane` in `sharedSettingsCommands.ts:286-295`, per the refuted
+`EFF-ADOPT-per-key-lane-semaphore`); `Cache.makeWith` with `timeToLive` in
+`SubscriptionUsageService` is already the primitive; `Effect.all(…, { mode: 'result' })`
+(Effect.d.ts:286, :309) does not subsume `allSettledVoid`'s defect handling,
+so that helper is deleted by losing its callers (finding 8), not by
+replacement.

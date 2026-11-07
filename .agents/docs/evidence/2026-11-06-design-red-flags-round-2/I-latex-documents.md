@@ -12,9 +12,15 @@ files over `packages/*/src` (production) and `src/test-kernel`,
 
 The area is Effect-native already: no `new Promise`, no `async`, no timers, no
 `Date.now()`, no `catch {}`; one `.then(` and one `AbortSignal`, both in
-`latex/arxivProcessor.ts` (finding 8). The design problems are not fiber
-fights. They are **one record mutated by six modules**, **one fact stored two
-or three ways**, and **a layout grammar every step re-spells**.
+`latex/arxivProcessor.ts` (finding 8), and one hand-rolled request lifetime
+(a cleanup array, a `Deferred` read with `isDoneUnsafe`, an in-progress
+boolean) in `tools/latex/latexPreview.ts` (finding 11). The rest of the
+design problems are not fiber fights. They are **one record mutated by six
+modules**, **one fact stored two or three ways**, and **a layout grammar every
+step re-spells**. Every "better design" below names the Effect 4.1.2
+primitive that is the thing, or says the computation is pure LaTeX text
+handling and stays plain TypeScript; the table at the end lists the exact
+exports verified in `node_modules/effect`.
 
 ## Numbers
 
@@ -114,9 +120,17 @@ round's shape, its reset and its commit spread to every phase. The
 rows-as-state rule the plugin already follows between calls
 (`documentTools.ts:1-9`) stops at the call boundary.
 
-**The better design.** A round is a value. Each document tool computes the
-next `RoundOutput` from the previous one and what it did, and commits
-`rounds.with(revision, next)`:
+**The better design.** A round is a value. The Effect primitive that holds a
+tool call's state between calls is the one the plugin already uses: the fact
+row (`ToolResult.facts`, read back with `ChildRuns.fact`). Within one call
+the steps are sequential `Effect.fn` functions over that value; no `Ref` is
+wanted here, because a `Ref<RoundOutput>` shared by the steps would be the
+mutable map again with a lock, and the comment at `documentState.ts:108-113`
+says no two steps of one run ever run concurrently. (A `SubscriptionRef`
+would be right only if a view subscribed to the round mid-call; the view
+reads the committed row.) Each document tool computes the next `RoundOutput`
+from the previous one and what it did, and commits `rounds.with(revision,
+next)`:
 
 - `document_extract` returns `{ outputs, missing, reply }` from a pure
   `recoverDocuments` (finding 7) plus the diff-stat pass, and the round is
@@ -194,12 +208,18 @@ pre-run location: its snapshot when one exists, else the file itself"
 `ensureMirroredInRunSubdir` derives the snapshot path from the relative path
 (`:445-448`, `originalSnapshotPath(relativePath)`).
 
-**The better design.** Lineage is one field, `document: FileLocation | null`,
-the workspace document the output revises (a new document has none). The diff
-base is a function, `fileService.diffBaseOf(document)` (the snapshot when the
-run has one, else the document), owned by the harness's storage module, and
-every reader (`latexdiffPairs`, `computeDiffStats`, the UI's compare action,
-the critic's review) calls it. `OutputFileSummary.originalPath` becomes
+**The better design.** Lineage is one field in the schema,
+`document: Schema.NullOr(FileLocationSchema)`, the workspace document the
+output revises (a new document has none); the `Schema.Struct` is the one
+owner of the shape and the `FileLineageSchema` pair goes. The diff base is a
+pure path function, `fileService.diffBaseOf(document)` (the snapshot when the
+run has one, else the document), plain TypeScript owned by the harness's
+storage module beside `originalSnapshotPath`, and every reader
+(`latexdiffPairs`, `computeDiffStats`, the UI's compare action, the critic's
+review) calls it. The one hand-rolled Effect primitive on this path is in the
+harness, not here: `prepareRunWorkspace`'s `if (this.preparedBaseFiles)
+return` memo (`runStorage.ts:113,153`) is `Effect.cached` (area M's file;
+noted for the ordering). `OutputFileSummary.originalPath` becomes
 `document: string | null` (workspace-relative), so `deliveredFilePath` and the
 CLI's suffix match are deleted. DELETE `diffBase`, `getEffectiveDiffBase` (4),
 `toWorkspaceOrigin`, the single-input fallback (fold into
@@ -268,17 +288,21 @@ conflict in that file.
 other outcomes (skipped, errored, unchecked) were bolted on as return values
 and sentinels rather than added to the record.
 
-**The better design.** The round records its check: `compile: null | { skipped:
-string } | { failures: CompileFailure[] }` (a `Schema.Union`; `skipped` is a
-message, since nothing branches on it). `document_review` and
-`revisionPrompt` read the round; the recipe no longer passes `checked`;
-`CompileSkip`, `COMPILE_SKIPPED`, `skippedCompileCheck` (2) and the sentinel
-go. The backstop collapses into `compileOne`'s one `Effect.catch` (a defect is
-a defect; `catchCause` that re-raises interrupts is the fiber model being
-fought) and a failure without a log has `log: null`. "A failed compile
-rejects the revision" is decided once, at `document_compile`: the tool
-records `rejected: boolean` on the round (the setting read there, once), and
-`revisionPrompt`, `document_propose` and the critic read the field.
+**The better design.** The round records its check as a schema union,
+`compile: Schema.NullOr(Schema.TaggedUnion({ skipped: { reason: Schema.String },
+checked: { failures: Schema.Array(CompileFailureSchema), rejected:
+Schema.Boolean } }))` (`skipped.reason` is a message, since nothing branches
+on it). `document_review` and `revisionPrompt` read the round; the recipe no
+longer passes `checked`; `CompileSkip`, `COMPILE_SKIPPED`,
+`skippedCompileCheck` (2) and the sentinel go. The backstop collapses into
+`compileOne`'s one `Effect.catch`: `catch` handles typed failures only
+(Effect.d.ts:4301-4337), so interruption and defects already pass through it
+and the `catchCause` + `Cause.hasInterrupts` re-raise is the fiber model being
+fought; a failure without a log has `log: Schema.NullOr(FileLocationSchema)`.
+"A failed compile rejects the revision" is decided once, at
+`document_compile`: the tool reads the setting there, records `rejected`, and
+`revisionPrompt`, `document_propose` and the critic read the field. Log
+reading and the excerpt format stay plain TypeScript over `FileSystem`.
 
 **What we give up.** `document_compile`'s `checked`/`skipped` fields in
 `scriptReturns` (a script reads `compile` instead); a setting toggled mid-task
@@ -338,15 +362,21 @@ a script can read, so a flattened copy was made and then became the thing the
 CLI and the auto-open read, although every host and the CLI already hold the
 session view the fact lives in.
 
-**The better design.** The fact is the one record. The recipe returns a
-reference (`{ runId }`, or nothing: the launching model's delivery reads the
-fact through `ChildRuns.fact`, which `openDocuments` already uses at
-`documentState.ts:165`). `DocumentsResult` survives only as the delivery
-projection built at the delivery site (`DOCUMENT_TASK_RESULT.delivery`),
-never persisted; `selectAutoOpenFinalOutput` and the CLI read
-`documentsOf(view.runs.get(runId))`. DELETE `documentsResultOf` (3),
+**The better design.** The fact is the one record, and its row is the Effect
+primitive already in place: the plugin's `factKinds` schema decoded once at
+the row boundary with `Schema.decodeUnknownSync` (`documents.ts:119-122`) and
+read through `ChildRuns.fact` (which `openDocuments` already uses at
+`documentState.ts:165`). The recipe returns a reference (`{ runId }`, or
+nothing: the launching model's delivery reads the fact). `DocumentsResult`
+survives only as the delivery projection built at the delivery site
+(`DOCUMENT_TASK_RESULT.delivery`), a pure function, never persisted;
+`selectAutoOpenFinalOutput` and the CLI read
+`documentsOf(view.runs.get(runId))`. The row schemas are plain
+`Schema.Struct`s with every field required: the five `withDecodingDefault`s
+are compatibility readers and go, so an older row fails at decode as
+`DOCUMENTS_OUTPUT_KIND`'s comment promises. DELETE `documentsResultOf` (3),
 `DocumentsResultSchema` as a persisted shape, `withDocuments`, the five
-`withDecodingDefault`s, and the CLI's "ended without its documents" defect.
+defaults, and the CLI's "ended without its documents" `Effect.die`.
 
 **What we give up.** A script's `document_task(...)` promise resolving with
 the outputs inline; it would resolve with `{ runId }` and read the fact (the
@@ -403,12 +433,17 @@ as a string convention rather than as a value, so every writer of a derived
 file (log, PDF, diff) recomputes the revision's folder and every reader of a
 run-storage path parses it back out.
 
-**The better design.** `RunFileService` (or a small `Revision` value it hands
-out) owns the layout: `revision(n).dir`, `.reply`, `.compileLog(document)`,
-`.pdf(document)`, `.diffDir`, and `documentOf(location)` for the one reader
-that needs the inverse. Writers ask for paths; readers use `source`. DELETE
-`stripWorkflowRoundDir` (5), the regex in `DOCUMENTS_MODULE` (it reads
-`output.source` or the summary's `document` field from finding 2),
+**The better design.** The grammar has one owner that both renders and
+parses it: `const RevisionDir = Schema.TemplateLiteralParser(['r',
+Schema.NumberFromString])`, so `Schema.encodeSync(RevisionDir)(['r', n])` is
+the directory name and `Schema.decodeUnknownResult(RevisionDir)` is the one
+inverse, with no hand regex. `RunFileService` (or a small `Revision` value it
+hands out, plain TypeScript over that schema) owns the layout:
+`revision(n).dir`, `.reply`, `.compileLog(document)`, `.pdf(document)`,
+`.diffDir`, `.modelCopy(document)`, and `documentOf(location)` for the one
+reader that needs the inverse. Writers ask for paths; readers use `source`.
+DELETE `stripWorkflowRoundDir` (5), the regex in `DOCUMENTS_MODULE` (it
+reads `output.source` or the summary's `document` field from finding 2),
 `resolveWorkspaceSourceDir`'s strip, and the hand-built `r${…}` strings (4).
 `formatRoundLabel` renders "Revision N", not `r<N>`.
 
@@ -469,20 +504,26 @@ implemented once for the run (with mirroring and PDFs) and once for a host
 button, and the service underneath was decomposed into stages rather than
 into one function that takes a `cwd` and returns a path or a typed error.
 
-**The better design.** One `latexdiff(pair, options)` Effect in `latex/latexdiff.ts`
-that fails with `LatexdiffFailed` (the tagged error `diffCommandExecutor.ts:58-77`
-already defines) or `ToolMissing`, and succeeds with the diff path; the
-command, the `--flatten` retry and the post-processing are private functions
-of that module. The run's `document_diff` is the one orchestrator; the hosts'
-"latexdiff this run" verb opens `round.latexdiffs` from the view and runs the
-one orchestrator only for rounds that recorded none (or with a different
-markup, which is then its one parameter). DELETE `DiffCommandExecutor`,
+**The better design.** One `Effect.fn('latexdiff')(pair, options)` in
+`latex/latexdiff.ts` that fails with the `Schema.TaggedError`s the module
+already defines or needs (`LatexdiffFailed`, `diffCommandExecutor.ts:58-77`;
+`ToolMissing`; a new `NoDocumentEnvironment`) and succeeds with the diff
+path; the command, the `--flatten` fallback (`Effect.catchIf(isBibliographyError,
+() => attempt(false))`, as `diffCommandExecutor.ts:247-257` already writes it)
+and the post-processing (pure text transforms, plain TypeScript) are private
+functions of that module. The run's `document_diff` is the one orchestrator,
+written as `Stream.fromIterable(pairs).pipe(Stream.mapEffect(latexdiff, {
+concurrency: 1 }), Stream.tap(report))` so progress is the stream's own
+elements rather than a `DiffProgressReporter` port; the hosts' "latexdiff
+this run" verb opens `round.latexdiffs` from the view and runs the one
+orchestrator only for rounds that recorded none (or with a different markup,
+which is then its one parameter). DELETE `DiffCommandExecutor`,
 `DiffFileProcessor`, `LaTeXdiffService` as classes (4 `new` sites become
-calls), `runLatexdiffForRun` (2), `DiffRunResult`, `DiffProgressReporter`
-(2; progress reports per recorded pair come from the one orchestrator's
-`Stream`), `LatexDiffManager.logLatexdiffResult` and the second catch. The
+calls; the per-instance `channel` string becomes `withLogChannel` at each
+caller), `runLatexdiffForRun` (2), `DiffRunResult`, `DiffProgressReporter`
+(2), `LatexDiffManager.logLatexdiffResult` and the second catch. The
 `LaTeXdiffResult` union with its `'missing-document-environment'` reason
-becomes a typed error the two callers that skip it catch by tag.
+becomes the tagged error the two callers that skip it `Effect.catchTag`.
 
 **What we give up.** A host diff with a math-markup setting changed after the
 run (the verb reruns for that round: kept as the one option). The `channel`
@@ -531,8 +572,11 @@ piece it needs from `inputFiles.length` and `outputFiles.length`.
 task and the launch: `{ names: string[], sole: string | null, rewritesInputs:
 boolean }`. `recoverDocuments(response, expected, baseContents)` is a pure
 function in `agent/output/extraction/` that runs the tiers as a list and
-returns `{ documents, unmatched }`; the tool reads base contents for the
-similarity tier and writes the files. `XmlOutputManager` becomes two
+returns `{ documents, unmatched }`. This is LaTeX text recovery and stays
+plain TypeScript: no Effect primitive belongs inside it. The tool, an
+`Effect.fn`, reads the base contents for the similarity tier
+(`Effect.forEach(..., { concurrency })`) and writes the files, which is where
+the `FileSystem` boundary is. `XmlOutputManager` becomes two
 functions; the fenced-block and header tiers take `expected` instead of four
 options (`filenameHeaders.ts` `extractFilenameHeaderDocuments` options:
 `roundDir`, `labelFiles`, `synthesisName`, `coalesceRepeatedName`, the last
@@ -595,12 +639,23 @@ threaded through five functions; two representations of one choice.
 promise rather than as the stream it also is, and the retry was written
 against the cause to keep a cleanup failure visible.
 
-**The better design.** Extraction as a stream pipeline (`fs.stream` →
-`NodeSink.fromWritable(tar.x)`) under `Effect.timeout`; retry over the typed
-error; progress as a `Stream<string>` or a span annotation the host renders;
-`autoIndent` deleted (2 callers), `formatter: null` is the switch. DELETE the
-three closure variables, the late join, both cause wrappers, and the
-`progressCallback` parameter on four functions.
+**The better design.** Extraction as a stream pipeline:
+`fs.stream(tarPath).pipe(Stream.run(NodeSink.fromWritable({ evaluate: () =>
+tar.x({ cwd: destDir }), onError })))` under `Effect.timeout(EXTRACT_TIMEOUT)`;
+`tar.x` without `file` is an `Unpack`, a `Parser` with `write`/`end`
+(`node_modules/tar/dist/esm/parse.d.ts:81-88`, the `NodeJS.WritableStream`
+shape the sink names), and interruption destroys the writable through the
+sink's own finalizer, so there is no signal, no filter and no late join.
+Retry over the typed error: `Effect.retry({ while: (e) => e._tag ===
+'ArxivSourceTransientError', schedule, times })`; `while` is typed over `E`
+(Effect.d.ts:7072), so the two cause wrappers go. Progress as a stream the
+host consumes: `downloadArxivSource` becomes `Stream.callback<ArxivProgress |
+ArxivDone, ArxivSourceError>((queue) => program(queue))`, the program
+`Queue.offer`s its progress and its result and the two hosts
+`Stream.runForEach` it; the `progressCallback` parameter on four functions
+goes. `autoIndent` deleted (2 callers), `formatter: null` is the switch. The
+staging-directory finalizer (`Effect.addFinalizer`, `:643-647`) and the
+`makeDirectory`-as-claim (`:568-581`) are already the right shape and stay.
 
 **What we give up.** The "distinct late tar failure" after a timeout: with a
 destroyed writable there is none to report.
@@ -633,10 +688,14 @@ TypeScript, so the decode validates nothing the type did not (AGENTS.md:
 "validate only at real boundaries").
 
 **The better design.** `compileLatex2Pdf` succeeds only when the PDF it names
-is a non-empty regular file; otherwise `{ ok: false, logTail }` with the
-reason first. The schema becomes a plain options type with defaults in the
-signature. DELETE the three post-checks (LatexMediaManager loses ~40 lines,
-TikzPictureManager its path re-derivation, compiledPdfArtifacts its stat).
+is a non-empty regular file (one `fs.stat` after the engine exits, inside the
+`Effect.fn`); otherwise `{ ok: false, logTail }` with the reason first. No new
+primitive: the boundary already is an `Effect.fn` over `FileSystem` and
+`ChildProcessSpawner`; the change is where the one check lives. The schema
+becomes a plain options type with defaults in the signature (pure input from
+TypeScript callers, no decode). DELETE the three post-checks
+(LatexMediaManager loses ~40 lines, TikzPictureManager its path
+re-derivation, compiledPdfArtifacts its stat).
 
 **What we give up.** Nothing; a compile that "succeeded" with no PDF was
 already reported as a skip by every caller that noticed.
@@ -670,7 +729,11 @@ rows themselves (`:348-448`) are one owner with four per-consumer columns
 the table is sound. The file is 722 lines because the advice is prose.
 
 **The better design.** One structured install record per tool: `{ brew?,
-apt?, scoop?, url?, tlmgr?, notes? }` on the catalog row. The guide text
+apt?, scoop?, url?, tlmgr?, notes? }` on the catalog row, an `as const
+satisfies` table like `LATEX_TOOLS` itself; this is static data and pure
+rendering, so no Effect primitive and no runtime schema belongs here (a
+`Schema.Struct` would validate a literal the compiler already checks). The
+guide text
 (`ToolMissing`'s message, the LaTeX tab's card) and the copy/run command are
 both rendered from it by one function per platform. The settings-status keys
 become the catalog names (`installed: Record<LatexToolName, boolean>` plus the
@@ -694,7 +757,71 @@ because the brief names the toolchain constants under I.
 
 ---
 
-## Finding 11. Batched: smaller flags, each one PR
+## Finding 11. The LaTeX preview re-implements the request's scope with a cleanup array, a Deferred and a boolean
+
+**Red flags:** reinvented Effect primitives (`Scope.addFinalizer` as an
+array of effects run at the end; scope closure as `Deferred.await` raced with
+`isDoneUnsafe` checks; a `Semaphore(1)` as a boolean); state machine in
+mutable fields; `*Unsafe` cluster.
+
+**Evidence.** `tools/latex/latexPreview.ts:47-73` declares `LatexPreviewEntry`
+with `isSettled: () => boolean`, `settled: Deferred<void>`,
+`workspaceTempCleanup: Array<Effect<void>>`, `latexOperationInProgress:
+boolean` and `onError`. `registerCleanup` (`:141-150`) pushes a cleanup onto
+the array "or runs it now if the entry already finished";
+`createTempFileWithCleanup` (`:241-254`) wraps a write and that push in
+`Effect.uninterruptible` so "a finished request interrupting between them
+would leave a file nothing deletes"; `withLatexOperation` (`:156-181`) sets
+and clears the boolean under `Effect.ensuring`, races the operation with
+`Deferred.await(entry.settled)` and sorts interrupt-only causes by hand;
+`:298` and `:377` re-check `isSettled()` before opening a build. The owner,
+`controllers/approval/ToolEditApprovalController.ts:288-331`, already holds
+a `Scope` (`:288`, stored on the entry at `:312`) and forks the build into it
+(`Effect.forkIn(..., entry.scope)`, `:262-266,423-427`), then builds the
+Deferred (`:289`), the array (`:291`), runs the array in `Effect.ensuring`
+(`:305`), and completes the Deferred with `Deferred.doneUnsafe` from an
+`acquireRelease` release (`:326-332`). The scope and its hand-rolled twin
+live side by side.
+
+**The design decision behind it.** The preview programs were written to run
+on a fiber the controller races, so "the request finished" had to be
+observable from inside them; the request's scope, which the controller
+already closes, was not handed to them.
+
+**The better design.** The entry carries only `scope: Scope` (it already
+does). A temp file's removal is `Scope.addFinalizer(entry.scope,
+deleteWithAuxFiles(tempPath))` right after the write, which replaces
+`registerCleanup`, the array and the `uninterruptible` wrapper (a finalizer
+added to a closed scope runs at once: that is the "or run it now" case). A
+preview is `Effect.forkIn(program, entry.scope)`, so the scope's close
+interrupts it, which replaces `Effect.raceFirst(Deferred.await(settled))`,
+`isSettled()` and the two mid-program checks. "One LaTeX operation at a
+time" is `Semaphore.make(1)` on the entry and
+`Semaphore.withPermitsIfAvailable(1)` around the program (a second click
+gets `Option.none` and does nothing), which replaces the boolean and its
+`ensuring`. `onError` stays as the one host port. DELETE `isSettled`,
+`settled`, `workspaceTempCleanup`, `latexOperationInProgress`,
+`registerCleanup`, the `Deferred.isDoneUnsafe`/`doneUnsafe` pair in the
+controller and the `Cause.hasInterruptsOnly` branch (interruption of a scoped
+fiber needs no handler). `fs.makeTempFileScoped` is **not** the temp-file
+primitive here: its release removes the temp file's directory recursively
+(`platform-node-shared/dist/NodeFileSystem.js:348-351`), and these files sit
+beside the user's document.
+
+**What we give up.** Nothing visible; the "Preview failed" message still
+comes from `onError`.
+
+**Change amplification.** "A third preview operation" (say, a word count of
+the proposal): today it must take the entry, check `isSettled` twice,
+register its temp files and go through `withLatexOperation`: 1 file, 4
+protocol points. After: one `forkIn` under the permit, 1 point.
+
+**Depends on:** none (the controller's half is area G's file; the entry
+type and both programs are this area's).
+
+---
+
+## Finding 12. Batched: smaller flags, each one PR
 
 - **`replacement/helpers.ts` is fourteen generators under a vague name, nine
   with one call site** (`generateXmlLatexConversions`, `generateLatexToXmlConversions`,
@@ -728,10 +855,14 @@ because the brief names the toolchain constants under I.
   implementation.)
 - **`taskFileSnapshots`** (`documentState.ts:268-291`): a module-level
   `WeakMap` keyed by `run.opening` to read a task's template files once per
-  opening. The opening is the harness's; the plugin's read-once belongs on
-  the launch (the task's `files` resolved into the recipe's `script.options`,
-  or a `ToolRun`-scoped `Cache`), not in a module global AGENTS.md says to
-  avoid. (Shared mutable state; reinvented cache.)
+  opening. The read is one `Effect` the activation wants memoized:
+  `Effect.cached(taskFileVars(task, entry.path))` evaluated once where the
+  opening is built and carried on it, or, if the plugin must own it, a
+  `Cache.make({ lookup: taskFileVars, capacity })` provided by the plugin's
+  layer (`Layer.effect(TaskFiles)(Cache.make(...))`; `Layer.effect` already
+  excludes `Scope` from its requirements, Layer.d.ts:1206, so no separate
+  `Layer.scoped` exists or is needed). Either replaces a module global
+  AGENTS.md says to avoid. (Shared mutable state; reinvented cache.)
 - **`staleDiffFileLocation(original, outputPath, original)`**
   (`acceptedFileTarget.ts:316`): the third argument equals the first at one
   of two callers; the function's first `if` (`:289-291`) is that caller's
@@ -817,3 +948,38 @@ because the brief names the toolchain constants under I.
 - `OpenOptions`-style launch toggles in `LatexMediaManager.processInputFiles`
   (`autoExtractFigure`, `autoExtractTikzFigure`, `autoCompileInputPdf`): the
   user's launch options from the settled table, not special-case knobs.
+
+## Effect-native mapping (verified against node_modules/effect 4.1.2 .d.ts)
+
+Paths are under `node_modules/effect/dist/` unless noted; `platform-node` is
+`@effect/platform-node` 4.1.2, which re-exports `@effect/platform-node-shared`
+4.1.2. Pure LaTeX text handling (recovery tiers, replacement rules, diff
+post-processing, bibliography parsing) is plain TypeScript and has no row.
+
+| Finding | Hand-rolled today | Effect primitive | Verified export | Why it fits |
+| ------- | ----------------- | ---------------- | --------------- | ----------- |
+| 1 | `OutputState` mutable `Map`, `ensureRoundData`, five setters, `roundsFrom/ToPersisted` | the fact row between calls; `Effect.fn` over values within a call; no `Ref` | `ToolResultSchema.facts` (`packages/harness/src/shared/schemas/toolResult.ts:189`); `Effect.fn` (Effect.d.ts:18880); `Ref.update`/`modify` exist (Ref.d.ts:603,409) and are not wanted | the steps are sequential and the row is the one store; a `Ref` would re-create the shared map with a lock |
+| 2 | `original` + `diffBase` + `getEffectiveDiffBase` + path-recovery readers | one `Schema.NullOr(FileLocationSchema)` field; `diffBaseOf` as a pure path function; `Effect.cached` for the harness memo | `Schema.NullOr` (Schema.d.ts:4210); `Schema.Struct` (:3026); `Effect.cached: <A,E,R>(self) => Effect<Effect<A,E,R>>` (Effect.d.ts:13539) | the snapshot is a function of the document, so the schema holds one fact; `cached` is the memo `preparedBaseFiles` hand-writes (`runStorage.ts:113,153`) |
+| 3 | `CompileSkip` returned to the script, `checked` passed back, `log === output` sentinel, `catchCause` backstop | `Schema.TaggedUnion` for `compile`; `Effect.catch` for typed failures only | `Schema.TaggedUnion(casesByTag)` (Schema.d.ts:5340); `catch_ as catch` (Effect.d.ts:4301,4337); `Effect.catchCause` (:5218) left unused | a union is the three outcomes as data; `catch` already lets interruption and defects through, so the `Cause.hasInterrupts` re-raise is redundant |
+| 4 | `DocumentsResult` persisted beside the fact; five `withDecodingDefault`s | the fact row decoded once at the row boundary; required fields | `Schema.decodeUnknownSync` (Schema.d.ts, `documents.ts:119-122` uses it); `Schema.withDecodingDefault` (Schema.d.ts:4996) deleted at five sites | one owner per fact; a default on a persisted field is a compatibility reader AGENTS.md retires |
+| 5 | `r${round}` built at 4 sites, parsed by `stripWorkflowRoundDir` at 5, a regex in script source | `Schema.TemplateLiteralParser(['r', Schema.NumberFromString])` as the one grammar; `encodeSync`/`decodeUnknownResult` as render and parse | `Schema.TemplateLiteralParser` (Schema.d.ts:2423, "supports transformed parts"); `Schema.NumberFromString` (:7523); `Schema.encodeSync` (:1902) | a parser schema renders and parses from one declaration, so no site re-spells the prefix |
+| 6 | `LaTeXdiffService` + `DiffCommandExecutor` + `DiffFileProcessor` classes; `LaTeXdiffResult` union; `DiffProgressReporter`; two orchestrators | one `Effect.fn` failing with `Schema.TaggedError`s; `Effect.catchTag` at the skip sites; `Effect.catchIf` for the `--flatten` fallback; `Stream.fromIterable(pairs)` + `Stream.mapEffect` + `Stream.tap` for progress | `Schema.TaggedError` (Schema.d.ts:11985); `Effect.catchTag` (Effect.d.ts:4392); `Effect.catchIf` (:5517); `Stream.fromIterable` (Stream.d.ts:846), `mapEffect` (:1843), `tap` (:2124), `runForEach` (:15953) | a typed error replaces a result union nobody branches on but two; the stream's elements are the progress a host renders, so no reporter port |
+| 7 | five recovery tiers branching on `outputFiles.length` | none inside: pure TypeScript `recoverDocuments(response, expected, baseContents)`; `Effect.forEach` with `concurrency` at the file-reading boundary | `Effect.forEach` (Effect.d.ts:972) | text recovery is pure computation; the one effectful step is reading base files |
+| 8 | `tar.x` promise joined by hand (`pending`, `signal`, `rejected`, `.then(`); `catchCause`/`failCause` sandwich around `Effect.retry`; `progressCallback` on five functions | `fs.stream` → `Stream.run(NodeSink.fromWritable({ evaluate, onError }))` under `Effect.timeout`; `Effect.retry({ while })` over the typed error; `Stream.callback` + `Queue.offer` for progress | `FileSystem.stream` (FileSystem.d.ts:297), `.sink` (:275); `NodeSink.fromWritable: <E, A>(options: { evaluate: LazyArg<Writable \| NodeJS.WritableStream>; onError; endOnDone? }) => Sink<void, A, never, E>` (platform-node-shared NodeSink.d.ts:29-34); `Stream.run` (Stream.d.ts:15611); `Effect.timeout` raising `Cause.TimeoutError` (Effect.d.ts:8266, Cause.d.ts:1481); `Retry.Options.while?: (error: E) => boolean` (Effect.d.ts:7072); `Schedule.exponential` (Schedule.d.ts:725), `Schedule.jittered` (:981); `Stream.callback: (f: (queue: Queue<A, E \| Done>) => Effect<unknown, E, R \| Scope>) => Stream<A, E>` (Stream.d.ts:595); `Queue.offer` (Queue.d.ts:608) | the sink's finalizer destroys the writable on interruption, so the abort protocol disappears; `while` is typed over `E`, so the attempt's one typed failure is enough and the cause wrappers were compensating for nothing; a stream of progress is consumed, not called back |
+| 9 | three callers re-verify the PDF after `ok: true`; options decoded by schema per internal call | one `fs.stat` inside the existing `Effect.fn`; plain options type | `FileSystem.stat` (FileSystem.d.ts:282); `Schema.decodeUnknownSync` deleted at `texTools.ts:194` | the boundary that owns "compiled" owns "the PDF exists"; a TypeScript caller needs no decode |
+| 10 | install prose parsed back by `combineGuides`; a second command table; a second tool naming | none: an `as const satisfies` record per catalog row, rendered by one pure function | — | static data the compiler checks; a runtime schema would validate a literal |
+| 11 | `workspaceTempCleanup` array + `registerCleanup`; `settled` Deferred + `isDoneUnsafe` + `raceFirst(Deferred.await)`; `latexOperationInProgress` boolean; `Effect.uninterruptible` around write-and-register | `Scope.addFinalizer(entry.scope, cleanup)`; `Effect.forkIn(program, entry.scope)`; `Semaphore.make(1)` + `Semaphore.withPermitsIfAvailable(1)` | `Scope.addFinalizer: (scope, finalizer: Effect<unknown>) => Effect<void>` (Scope.d.ts:460); `Effect.forkIn` (Effect.d.ts:17126, already used at `ToolEditApprovalController.ts:262,423`); `Semaphore.make: (permits) => Effect<Semaphore>` (Semaphore.d.ts:253), `withPermitsIfAvailable` (:474); `Deferred.isDoneUnsafe` (Deferred.d.ts:1340) and `doneUnsafe` (:1604) are the `*Unsafe` cluster deleted | a scope's close runs its finalizers and interrupts its forks, which is the whole protocol the entry re-implements; a permit is the boolean with its release built in |
+| 12 (`taskFileSnapshots`) | module-level `WeakMap` keyed by the opening | `Effect.cached` on the opening, or `Cache.make({ lookup })` in the plugin's layer | `Effect.cached` (Effect.d.ts:13539); `Cache.make: (options: { lookup, capacity, timeToLive? }) => ...` (Cache.d.ts:250); `Layer.effect(Key)(effect) => Layer<I, E, Exclude<R, Scope>>` (Layer.d.ts:1206): **`Layer.scoped` does not exist in 4.1.2**, `Layer.effect` is already scoped | a memoized effect is what the WeakMap stands in for |
+| 12 (`recoverOutputFailure`) | a catch-and-log combinator with a per-caller `level` | none once rounds are values; where a recovery stays, `Effect.catch` + the trace call at the site | `catch_ as catch` (Effect.d.ts:4337); `Effect.tapError` (:6413) | a combinator whose only variation is constant per caller is a parameter for a fact the call site holds |
+| settled | `acceptedFileTarget.ts:160-175` staged write, rename, `onError` remove, `uninterruptible` | keep | `fs.makeTempFileScoped` (FileSystem.d.ts:191-195) is **not** a fit: its release removes the temp directory recursively (`platform-node-shared/dist/NodeFileSystem.js:345-352`) | the current shape is acquire-use-release in miniature, beside the user's file, where a temp directory must not appear |
+| settled | `arxivProcessor.ts:224-234` retry schedule; `:643-647` staging finalizer; `:568-581` `makeDirectory` as the ownership claim | keep | `Effect.retry` with `schedule` + `times` (Effect.d.ts:7074-7075); `Effect.addFinalizer` (:12852); `Effect.scoped` (:12567) | already the primitive; only the cause wrappers around it go (finding 8) |
+
+Corrections made while verifying: (a) `Layer.scoped` is not an export in
+4.1.2; `Layer.effect` returns `Layer<I, E, Exclude<R, Scope>>`, so the
+plugin-layer alternative in finding 12 names `Layer.effect`. (b)
+`fs.makeTempFileScoped` was a candidate for `acceptedFileTarget`'s staged
+sibling and for `latexPreview`'s temp files; its release removes a whole
+directory, so neither design uses it. (c) `Effect.makeSemaphore` is not the
+4.1.2 spelling; it is `Semaphore.make` from `effect/Semaphore`. (d)
+`Effect.retry`'s `while` is typed over the error, not the cause, which is
+what makes finding 8's wrappers deletable rather than merely movable.
