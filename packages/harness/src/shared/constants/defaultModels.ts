@@ -21,7 +21,7 @@ export const DEFAULT_AGENT_MODEL = 'openai/gpt-6.1-sol';
  * it is literal data, replaced here when an llm-zoo bump retires or
  * deprecates an entry.
  */
-// `ModelOptionsBasic.vitest.ts` fails such a bump.
+// `PinnedModels.vitest.ts` fails such a bump.
 export const DEFAULT_MODELS: readonly string[] = [
   // The picker / new-chat default leads. Do not lead with Gemini — GPT is the
   // quality default.
