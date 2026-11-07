@@ -64,7 +64,6 @@ function applyStage(
       name: event.label,
       startTime: d.at,
       outcome: null,
-      ...(event.kind != null ? { kind: event.kind } : {}),
     };
   } else {
     if (at === undefined) return;

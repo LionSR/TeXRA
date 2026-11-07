@@ -272,7 +272,6 @@ const commit = (
           type: 'stage.start',
           id: script.stageId,
           label: stage.title ?? 'Script',
-          kind: 'script',
         }),
       );
     if (script !== null && recordOf(dispatch, state, fact.callId) === null)

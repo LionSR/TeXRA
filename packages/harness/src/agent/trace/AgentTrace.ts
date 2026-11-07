@@ -17,12 +17,6 @@ import type { AgentEvent } from '@shared/session/agentEvent';
  *  trace until the trace closes. */
 export type AgentTraceSink = (event: AgentEvent) => void;
 
-/** Options accepted by `openStage`. */
-export interface StageOptions {
-  /** Semantic stage kind consumed by host progress surfaces. */
-  readonly kind?: 'run' | 'session';
-}
-
 /** Handle returned by `openStage`. */
 export interface StageHandle {
   /** Stage id. */
@@ -106,7 +100,7 @@ export interface AgentTrace {
   output(stream: 'stdout' | 'stderr', text: string): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
-  openStage(label: string, options?: StageOptions): StageHandle;
+  openStage(label: string): StageHandle;
   /**
    * Open a streaming message. `stream.start` marks the moment the phase the
    * stream represents actually began — emit it at the provider's phase

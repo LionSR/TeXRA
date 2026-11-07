@@ -128,12 +128,10 @@ function transcriptTimeline(
     (row) => row.groupId,
   );
   const ungrouped = sortedRows.filter((row) => !isGroupedRow(row));
-  const roots = groups
-    .toSorted(compareGroups)
-    .map((group): GroupTree => ({
-      group,
-      rows: rowsByGroup.get(group.id) ?? [],
-    }));
+  const roots = groups.toSorted(compareGroups).map((group): GroupTree => ({
+    group,
+    rows: rowsByGroup.get(group.id) ?? [],
+  }));
   return [
     ...ungrouped.map((row) => ({ key: row.id, time: row.timestamp, row })),
     ...roots.map((tree) => ({

@@ -35,7 +35,6 @@ import type {
   AgentTraceSink,
   LogOptions,
   StageHandle,
-  StageOptions,
   StreamHandle,
   StreamOptions,
   ToolCardHandle,
@@ -117,14 +116,9 @@ export class TraceEmitter implements AgentTrace {
 
   // ─── Stages ────────────────────────────────────────────────────────
 
-  openStage(label: string, options: StageOptions = {}): StageHandle {
+  openStage(label: string): StageHandle {
     const id = crypto.randomUUID();
-    this.emit({
-      type: 'stage.start',
-      id,
-      label,
-      kind: options.kind,
-    });
+    this.emit({ type: 'stage.start', id, label });
     return new StageHandleImpl(this, id);
   }
 

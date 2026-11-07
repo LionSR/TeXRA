@@ -212,7 +212,6 @@ export function buildScenario({ proposal = false } = {}) {
     type: 'stage.start',
     id: SCRIPT_STAGE,
     label: 'review',
-    kind: 'script',
   });
   // The script's one `agent` call: its card opens under the script's stage
   // and launches the child.
