@@ -7,7 +7,7 @@ import {
 } from '@texra-ai/harness/schemas';
 
 // Third-party imports
-import { Effect, FileSystem, type PlatformError } from 'effect';
+import { Effect, FileSystem, Option, type PlatformError } from 'effect';
 
 // Local imports
 import {
@@ -127,6 +127,8 @@ interface AcceptEditedFileReplacePorts<
 /**
  * Write `editedLocation`'s content into `target`, emitting a workspace-write
  * notification, cleaning up the stale diff companion, and reporting success.
+ * Answers the content it wrote, read once, so a caller describing the
+ * accepted file reads exactly what was written.
  * Runs once the target has been resolved and confirmed. `targetExisted`
  * (whether the target already had content, for the "replaced" vs "created"
  * wording) is the caller's to compute, since it already needs it to word its
@@ -143,7 +145,7 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   targetExisted: boolean,
   ports: CommitAcceptedFilePorts<E>,
 ): Effect.fn.Return<
-  void,
+  string,
   E | PlatformError.PlatformError,
   FileSystem.FileSystem | AppSignals
 > {
@@ -198,6 +200,7 @@ const commitAcceptedFile = Effect.fn('commitAcceptedFile')(function* <E>(
   yield* ports.showInfo(
     buildAcceptSuccessMessage(targetFileName, editedPath, targetExisted),
   );
+  return editedContent;
 });
 
 /** The file's content, or `undefined` for a file that is not there. */
@@ -213,9 +216,10 @@ const contentOrMissing = Effect.fn('acceptedFileTarget.contentOrMissing')(
 
 /**
  * Resolve the accept target beside the base file, confirm the write, then
- * commit it via {@link commitAcceptedFile}. Returns whether the write
- * happened (false when the user declined the confirmation). Shared by the
- * desktop file actions and the VS Code compare command.
+ * commit it via {@link commitAcceptedFile}. Answers the content written,
+ * or none when nothing was (the user declined, or the target changed while
+ * the confirmation was open). The workflow toolbar's accept, on both
+ * hosts, runs it with the host's confirmation.
  */
 export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
   function* <E>(
@@ -223,7 +227,7 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
     editedLocation: FileLocation,
     ports: AcceptEditedFileReplacePorts<E>,
   ): Effect.fn.Return<
-    boolean,
+    Option.Option<string>,
     E | PlatformError.PlatformError,
     FileSystem.FileSystem | AppSignals
   > {
@@ -243,7 +247,7 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
         targetExists,
       ),
     );
-    if (!confirmed) return false;
+    if (!confirmed) return Option.none();
 
     // The confirmation was given to the target as it was when the dialog
     // opened; the dialog can stay open for minutes. A save to the target
@@ -252,16 +256,17 @@ export const acceptEditedFileReplace = Effect.fn('acceptEditedFileReplace')(
       yield* ports.showInfo(
         `${target.targetFileName} changed while the confirmation was open; nothing was written. Accept again to replace the current content.`,
       );
-      return false;
+      return Option.none();
     }
-    yield* commitAcceptedFile(
-      baseLocation,
-      editedLocation,
-      target,
-      !isNewFile || targetExists,
-      ports,
+    return Option.some(
+      yield* commitAcceptedFile(
+        baseLocation,
+        editedLocation,
+        target,
+        !isNewFile || targetExists,
+        ports,
+      ),
     );
-    return true;
   },
 );
 

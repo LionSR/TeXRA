@@ -351,6 +351,7 @@ export const openGuiWindow = Effect.fn('openGuiWindow')(function* (
       return run === undefined ? {} : documentsOf(run).files;
     },
     storageRoot: roots.storage,
+    workspace: roots.workspace,
     host: { ...host.files, showInfo: host.showInfoMessage },
     runs: runActions,
   });

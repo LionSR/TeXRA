@@ -33,10 +33,7 @@ import {
 import { workspaceRelativePath } from '@texra-ai/harness/node';
 import { toErrorMessage, type AgentConfig } from '@texra-ai/harness/schemas';
 import { openLatexdiffs } from '@commands/latex/latexdiffCommands';
-import {
-  handleAcceptEdited,
-  handleCompare,
-} from '@commands/latex/compareCommands';
+import { handleCompare } from '@commands/latex/compareCommands';
 import { findCommitInHistory } from '@commands/git/gitCommands';
 import { openFile, openLabel } from '@commands/files/openFileCommands';
 import {
@@ -467,8 +464,8 @@ export const createExtensionHostRequests = Effect.fn(
           'compare',
           handleCompare(at(base), at(edited), diffRefresh),
         ),
-      acceptEditedFile: (base: string, edited: string) =>
-        runFileAction('acceptEdited', handleAcceptEdited(at(base), at(edited))),
+      confirmAccept: (message: string) =>
+        vscodeUi.confirm(message, { confirmLabel: 'Replace file' }),
       openDirectory: revealFileInOS,
     },
     export: {

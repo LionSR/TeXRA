@@ -18,16 +18,10 @@ import {
   type PresentationEventHandlers,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
-  pathToLocationIn,
 } from '@texra-ai/harness/host';
 import { toErrorMessage } from '@texra-ai/harness/schemas';
-import { acceptEditedFileReplace } from '@latex/acceptedFileTarget';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  ExternalOpenFailed,
-  type NotificationFailed,
-  type PromptFailed,
-} from '@texra/hosts/uiHosts';
+import { ExternalOpenFailed } from '@texra/hosts/uiHosts';
 
 import { hostFailure } from '@texra/controllers/session/hostCallFailure';
 import type { HostSnapshotSource } from '@texra/controllers/session/hostSnapshotSource';
@@ -238,15 +232,7 @@ export const createDesktopHostRequests = Effect.fn('createDesktopHostRequests')(
                   }),
               ),
             ),
-        acceptEditedFile: (baseFile: string, editedFile: string) =>
-          acceptEditedFileReplace<PromptFailed | NotificationFailed>(
-            pathToLocationIn(roots.workspace, baseFile),
-            pathToLocationIn(roots.workspace, editedFile),
-            {
-              confirm: (message) => host.confirmAcceptFile(message),
-              showInfo: (message) => host.showInfoMessage(message),
-            },
-          ),
+        confirmAccept: (message: string) => host.confirmAcceptFile(message),
         openDirectory: (directory: string) => host.openPath(directory),
       },
       export: {
